@@ -1,0 +1,343 @@
+{
+    "鞍座": {
+        "IsSuccess": true,
+        "Datas": [
+            {
+                "Id": "m_AllowableStressSaddle",
+                "Name": "鞍座材料许用应力",
+                "Value": "181",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress",
+                "Name": "允许载荷",
+                "Value": "340",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Saddle_h",
+                "Name": "鞍式支座高度h",
+                "Value": "200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_l1",
+                "Name": "l1",
+                "Value": "940",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "b1",
+                "Name": "b1",
+                "Value": "170",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "s1",
+                "Name": "s1",
+                "Value": "14",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "腹板",
+                "Name": "腹板",
+                "Value": "12",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "l3",
+                "Name": "l3",
+                "Value": "213",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "b2",
+                "Name": "b2",
+                "Value": "140",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "b3",
+                "Name": "b3",
+                "Value": "200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "s3",
+                "Name": "s3",
+                "Value": "12",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "弧长",
+                "Name": "弧长",
+                "Value": "1410",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "b4",
+                "Name": "b4",
+                "Value": "330",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "s4",
+                "Name": "s4",
+                "Value": "8",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "e",
+                "Name": "e",
+                "Value": "59",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "间距l2",
+                "Name": "间距l2",
+                "Value": "600",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "间距l4",
+                "Name": "间距l4",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "螺孔d",
+                "Name": "螺孔d",
+                "Value": "27",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "螺纹M",
+                "Name": "螺纹M",
+                "Value": "M24",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "螺栓数量",
+                "Name": "螺栓数量",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "孔长l",
+                "Name": "孔长l",
+                "Value": "40",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "鞍式支座质量",
+                "Name": "鞍式支座质量",
+                "Value": "89",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "鞍式支座质量不带垫板",
+                "Name": "鞍式支座质量不带垫板",
+                "Value": "89",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "增加100mm高度增加的质量",
+                "Name": "增加100mm高度增加的质量",
+                "Value": "13.9",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressSaddle",
+                "Name": "鞍座材料许用应力",
+                "Value": "181",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress",
+                "Name": "允许载荷",
+                "Value": "340",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Saddle_h",
+                "Name": "鞍式支座高度h",
+                "Value": "200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_l1",
+                "Name": "l1",
+                "Value": "940",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "b1",
+                "Name": "b1",
+                "Value": "170",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "s1",
+                "Name": "s1",
+                "Value": "14",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "腹板",
+                "Name": "腹板",
+                "Value": "12",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "l3",
+                "Name": "l3",
+                "Value": "213",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "b2",
+                "Name": "b2",
+                "Value": "140",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "b3",
+                "Name": "b3",
+                "Value": "200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "s3",
+                "Name": "s3",
+                "Value": "12",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "弧长",
+                "Name": "弧长",
+                "Value": "1410",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "b4",
+                "Name": "b4",
+                "Value": "330",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "s4",
+                "Name": "s4",
+                "Value": "8",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "e",
+                "Name": "e",
+                "Value": "59",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "间距l2",
+                "Name": "间距l2",
+                "Value": "600",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "间距l4",
+                "Name": "间距l4",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "螺孔d",
+                "Name": "螺孔d",
+                "Value": "27",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "螺纹M",
+                "Name": "螺纹M",
+                "Value": "M24",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "螺栓数量",
+                "Name": "螺栓数量",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "孔长l",
+                "Name": "孔长l",
+                "Value": "40",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "鞍式支座质量",
+                "Name": "鞍式支座质量",
+                "Value": "89",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "鞍式支座质量不带垫板",
+                "Name": "鞍式支座质量不带垫板",
+                "Value": "89",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "增加100mm高度增加的质量",
+                "Name": "增加100mm高度增加的质量",
+                "Value": "13.9",
+                "Desc": "",
+                "ReportOutput": null
+            }
+        ]
+    }
+}

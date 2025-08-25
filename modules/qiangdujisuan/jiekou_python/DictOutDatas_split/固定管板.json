@@ -1,0 +1,1757 @@
+{
+    "固定管板": {
+        "IsSuccess": true,
+        "Datas": [
+            {
+                "Id": "工况1：TSH1",
+                "Name": "公称直径",
+                "Value": "1000",
+                "Desc": "公称直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH2",
+                "Name": "材料类型",
+                "Value": "锻件",
+                "Desc": "材料类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH3",
+                "Name": "钢材种类",
+                "Value": "非合金钢和合金钢",
+                "Desc": "钢材种类",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH4",
+                "Name": "材料标准",
+                "Value": "NB/T 47008",
+                "Desc": "材料标准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH5",
+                "Name": "材料牌号",
+                "Value": "16Mn",
+                "Desc": "材料牌号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH6",
+                "Name": "设计压力",
+                "Value": "-1",
+                "Desc": "设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH7",
+                "Name": "壳程设计压力",
+                "Value": "-0.5",
+                "Desc": "壳程设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH8",
+                "Name": "设计温度",
+                "Value": "300",
+                "Desc": "设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH9",
+                "Name": "壳程设计温度",
+                "Value": "200",
+                "Desc": "壳程设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH10",
+                "Name": "液柱静压力",
+                "Value": "0",
+                "Desc": "液柱静压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH11",
+                "Name": "是否可以保证在任何情况下管壳程压力都能同时作用",
+                "Value": "False",
+                "Desc": "是否可以保证在任何情况下管壳程压力都能同时作用",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH12",
+                "Name": "换热管使用场合",
+                "Value": "介质易爆/极度危害/高度危害",
+                "Desc": "换热管使用场合",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH13",
+                "Name": "换热管与管板连接方式",
+                "Value": "焊接",
+                "Desc": "换热管与管板连接方式",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH14",
+                "Name": "管板名义厚度",
+                "Value": "93",
+                "Desc": "管板名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH15",
+                "Name": "管板外径",
+                "Value": "863",
+                "Desc": "管板外径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH16",
+                "Name": "管板强度削弱系数",
+                "Value": "0.4",
+                "Desc": "管板强度削弱系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH17",
+                "Name": "设计温度下管板材料许用应力",
+                "Value": "123",
+                "Desc": "设计温度下管板材料许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH18",
+                "Name": "设计温度下管板材料弹性模量",
+                "Value": "183000",
+                "Desc": "设计温度下管板材料弹性模量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH19",
+                "Name": "壳程侧结构槽深",
+                "Value": "0",
+                "Desc": "壳程侧结构槽深",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH20",
+                "Name": "管程侧隔板槽深",
+                "Value": "6",
+                "Desc": "管程侧隔板槽深",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH21",
+                "Name": "管程计算用设计压力 Pt'",
+                "Value": "-1",
+                "Desc": "管程计算用设计压力 Pt'",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH22",
+                "Name": "壳程计算用设计压力 Ps'",
+                "Value": "-0.5",
+                "Desc": "壳程计算用设计压力 Ps'",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH23",
+                "Name": "管板布管区面积At",
+                "Value": "470328.193991821",
+                "Desc": "管板布管区面积At",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH24",
+                "Name": "管板布管区当量直径Dt",
+                "Value": "773.847824571638",
+                "Desc": "管板布管区当量直径Dt",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH25",
+                "Name": "管板计算压力Pd",
+                "Value": "0.5",
+                "Desc": "管板计算压力Pd",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH26",
+                "Name": "系数ρt",
+                "Value": "0.913202530766625",
+                "Desc": "系数ρt",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH27",
+                "Name": "系数Cc",
+                "Value": "0.292782075784126",
+                "Desc": "系数Cc",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH28",
+                "Name": "最小厚度δmin",
+                "Value": "12",
+                "Desc": "最小厚度δmin",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH29",
+                "Name": "计算厚度δ",
+                "Value": "37.9032984923955",
+                "Desc": "计算厚度δ",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH30",
+                "Name": "设计厚度",
+                "Value": "45.9032984923955",
+                "Desc": "设计厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH31",
+                "Name": "名义厚度 δn'",
+                "Value": "48",
+                "Desc": "名义厚度 δn'",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH32",
+                "Name": "管板重量-毛坯",
+                "Value": "427.035596481646",
+                "Desc": "管板重量-毛坯",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TSH33",
+                "Name": "管板重量-成品",
+                "Value": "348.195856218254",
+                "Desc": "管板重量-成品",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK1",
+                "Name": "垫片材料类型",
+                "Value": "垫片材料类型",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK2",
+                "Name": "垫片钢材种类",
+                "Value": "垫片钢材种类",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK3",
+                "Name": "垫片材料标准",
+                "Value": "垫片材料标准",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK4",
+                "Name": "垫片材料牌号",
+                "Value": "垫片材料牌号",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK5",
+                "Name": "设计压力",
+                "Value": "-1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK6",
+                "Name": "壳程设计压力",
+                "Value": "-0.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK7",
+                "Name": "设计温度",
+                "Value": "300",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK8",
+                "Name": "壳程设计温度",
+                "Value": "200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK9",
+                "Name": "液柱静压力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK10",
+                "Name": "垫片与密封面接触外径",
+                "Value": "863",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK11",
+                "Name": "垫片与密封面接触内径",
+                "Value": "825",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK12",
+                "Name": "垫片厚度",
+                "Value": "3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK13",
+                "Name": "压紧面形式",
+                "Value": "1a或1b",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK14",
+                "Name": "垫片接触面宽度",
+                "Value": "19",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK15",
+                "Name": "基本密封宽度",
+                "Value": "9.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK16",
+                "Name": "有效密封宽度",
+                "Value": "7.8",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：GSK17",
+                "Name": "垫片压紧力作用中心圆直径",
+                "Value": "847.4",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB1",
+                "Name": "换热管材料类型",
+                "Value": "钢管",
+                "Desc": "换热管材料类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB2",
+                "Name": "换热管钢材种类",
+                "Value": "非合金钢和合金钢",
+                "Desc": "换热管钢材种类",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB3",
+                "Name": "换热管材料标准",
+                "Value": "GB/T 9948",
+                "Desc": "换热管材料标准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB4",
+                "Name": "换热管材料牌号",
+                "Value": "10(GB9948)",
+                "Desc": "换热管材料牌号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB5",
+                "Name": "管程设计压力",
+                "Value": "-1",
+                "Desc": "管程设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB6",
+                "Name": "壳程设计压力",
+                "Value": "-0.5",
+                "Desc": "壳程设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB7",
+                "Name": "管程设计温度",
+                "Value": "300",
+                "Desc": "管程设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB8",
+                "Name": "壳程设计温度",
+                "Value": "200",
+                "Desc": "壳程设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB9",
+                "Name": "管程腐蚀裕量",
+                "Value": "2",
+                "Desc": "管程腐蚀裕量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB10",
+                "Name": "壳程腐蚀裕量",
+                "Value": "2",
+                "Desc": "壳程腐蚀裕量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB11",
+                "Name": "液柱静压力",
+                "Value": "0",
+                "Desc": "液柱静压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB12",
+                "Name": "换热管外径",
+                "Value": "25",
+                "Desc": "换热管外径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB13",
+                "Name": "换热管壁厚",
+                "Value": "2",
+                "Desc": "换热管壁厚",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB14",
+                "Name": "换热管中心距",
+                "Value": "32",
+                "Desc": "换热管中心距",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB15",
+                "Name": "内孔焊焊接接头系数",
+                "Value": "0.85",
+                "Desc": "内孔焊焊接接头系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB16",
+                "Name": "换热管与管板胀接长度或焊脚高度",
+                "Value": "3.5",
+                "Desc": "换热管与管板胀接长度或焊脚高度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB17",
+                "Name": "换热管是否钢材",
+                "Value": "True",
+                "Desc": "换热管是否钢材",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB18",
+                "Name": "胀接管孔是否开槽",
+                "Value": "True",
+                "Desc": "胀接管孔是否开槽",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB19",
+                "Name": "管端是否卷边",
+                "Value": "True",
+                "Desc": "管端是否卷边",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB20",
+                "Name": "换热管根数",
+                "Value": "220",
+                "Desc": "换热管根数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB21",
+                "Name": "设计温度下换热管材料许用应力",
+                "Value": "89",
+                "Desc": "设计温度下换热管材料许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB22",
+                "Name": "设计温度下换热管材料弹性模量",
+                "Value": "183000",
+                "Desc": "设计温度下换热管材料弹性模量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB23",
+                "Name": "设计温度下换热管材料屈服强度",
+                "Value": "133",
+                "Desc": "设计温度下换热管材料屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB24",
+                "Name": "一根换热管管壁金属横截面积",
+                "Value": "144.51326206513",
+                "Desc": "一根换热管管壁金属横截面积",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB25",
+                "Name": "换热管的轴向应力：只有壳程设计压力ps，管程设计压力pt = 0",
+                "Value": "1.69836956521739",
+                "Desc": "换热管的轴向应力：只有壳程设计压力ps，管程设计压力pt = 0",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB26",
+                "Name": "换热管的轴向应力：只有管程设计压力pt，壳程设计压力ps = 0",
+                "Value": "-2.39673913043478",
+                "Desc": "换热管的轴向应力：只有管程设计压力pt，壳程设计压力ps = 0",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB27",
+                "Name": "换热管的轴向应力：壳程设计压力ps和管程设计压力pt同时作用",
+                "Value": "-0.698369565217391",
+                "Desc": "换热管的轴向应力：壳程设计压力ps和管程设计压力pt同时作用",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB28",
+                "Name": "换热管的轴向应力最大值",
+                "Value": "2.39673913043478",
+                "Desc": "换热管的轴向应力最大值",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB29",
+                "Name": "内孔焊连接的换热管许用轴向应力",
+                "Value": "75.65",
+                "Desc": "内孔焊连接的换热管许用轴向应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB30",
+                "Name": "换热管与管板连接的拉脱力",
+                "Value": "1.26",
+                "Desc": "换热管与管板连接的拉脱力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：TUB31",
+                "Name": "拉脱力许用值",
+                "Value": "44.5",
+                "Desc": "拉脱力许用值",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST内压1",
+                "Name": "换热管名义厚度",
+                "Value": "2",
+                "Desc": "换热管名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST内压2",
+                "Name": "单根换热管重量kg",
+                "Value": "4",
+                "Desc": "单根换热管重量kg",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST内压3",
+                "Name": "换热管有效厚度",
+                "Value": "2",
+                "Desc": "换热管有效厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST内压4",
+                "Name": "换热管内压强度计算厚度δc",
+                "Value": "0.0700280112044818",
+                "Desc": "换热管内压强度计算厚度δc",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST内压5",
+                "Name": "换热管最大允许工作压力",
+                "Value": "15.4782608695652",
+                "Desc": "换热管最大允许工作压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST内压6",
+                "Name": "换热管设计温度下的计算应力",
+                "Value": "2.875",
+                "Desc": "换热管设计温度下的计算应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST外压1",
+                "Name": "换热管名义厚度",
+                "Value": "2",
+                "Desc": "换热管名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST外压2",
+                "Name": "单根换热管重量kg",
+                "Value": "4",
+                "Desc": "单根换热管重量kg",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST外压3",
+                "Name": "换热管有效厚度",
+                "Value": "2",
+                "Desc": "换热管有效厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST外压4",
+                "Name": "外压计算长度",
+                "Value": "3000",
+                "Desc": "外压计算长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST外压5",
+                "Name": "确定Do/δe",
+                "Value": "12.5",
+                "Desc": "确定Do/δe",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST外压6",
+                "Name": "确定L/Do",
+                "Value": "120",
+                "Desc": "确定L/Do",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST外压7",
+                "Name": "换热管外压强度计算厚度δc",
+                "Value": "0.491",
+                "Desc": "换热管外压强度计算厚度δc",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST外压8",
+                "Name": "外压应变系数A",
+                "Value": "0.008",
+                "Desc": "外压应变系数A",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST外压9",
+                "Name": "外压应力系数B",
+                "Value": "94.0945454545455",
+                "Desc": "外压应力系数B",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST外压10",
+                "Name": "许用外压力",
+                "Value": "11.0561090909091",
+                "Desc": "许用外压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST水压试验1",
+                "Name": "换热管名义厚度",
+                "Value": "2",
+                "Desc": "换热管名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST水压试验2",
+                "Name": "单根换热管重量kg",
+                "Value": "4",
+                "Desc": "单根换热管重量kg",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST水压试验3",
+                "Name": "换热管有效厚度",
+                "Value": "2",
+                "Desc": "换热管有效厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST水压试验4",
+                "Name": "外压计算长度",
+                "Value": "3000",
+                "Desc": "外压计算长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST水压试验5",
+                "Name": "确定Do/δe",
+                "Value": "12.5",
+                "Desc": "确定Do/δe",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST水压试验6",
+                "Name": "确定L/Do",
+                "Value": "120",
+                "Desc": "确定L/Do",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST水压试验7",
+                "Name": "换热管外压强度计算厚度δc",
+                "Value": "0.465",
+                "Desc": "换热管外压强度计算厚度δc",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST水压试验8",
+                "Name": "外压应变系数A",
+                "Value": "0.008",
+                "Desc": "外压应变系数A",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST水压试验9",
+                "Name": "外压应力系数B",
+                "Value": "125.857142857143",
+                "Desc": "外压应力系数B",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：ST水压试验10",
+                "Name": "许用外压力",
+                "Value": "14.7882142857143",
+                "Desc": "许用外压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB1",
+                "Name": "换热管排列方式(0:30°;1:60°;2:90°;3:45°)",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB2",
+                "Name": "折流板切口方向(0:水平；1:竖直)",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB3",
+                "Name": "沿水平隔板槽一侧的排管根数",
+                "Value": "26",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB4",
+                "Name": "沿竖直隔板槽一侧的排管根数",
+                "Value": "13",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB5",
+                "Name": "水平隔板槽两侧相邻管中心距",
+                "Value": "44",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB6",
+                "Name": "垂直隔板槽两侧相邻管中心距",
+                "Value": "100",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB7",
+                "Name": "管/壳程布置型式",
+                "Value": "4.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB8",
+                "Name": "是否交叉布管",
+                "Value": "True",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB9",
+                "Name": "交叉管排1最两端管孔中心距",
+                "Value": "769.33",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB10",
+                "Name": "交叉管排1实际管孔数量",
+                "Value": "12",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB11",
+                "Name": "交叉管排2最两端管孔中心距",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB12",
+                "Name": "交叉管排2实际管孔数量",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB13",
+                "Name": "交叉管排3最两端管孔中心距",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB14",
+                "Name": "交叉管排3实际管孔数量",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB15",
+                "Name": "单个管孔布管区域面积A0",
+                "Value": "886.784",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB16",
+                "Name": "交叉管排水平或竖直方向管间距SH",
+                "Value": "55.42563",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB17",
+                "Name": "交叉布管区域补充面积Ac",
+                "Value": "1667.51092",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：RTB18",
+                "Name": "管板分程处面积Ad",
+                "Value": "80143.23399",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH1",
+                "Name": "公称直径",
+                "Value": "1000",
+                "Desc": "公称直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH2",
+                "Name": "材料类型",
+                "Value": "锻件",
+                "Desc": "材料类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH3",
+                "Name": "钢材种类",
+                "Value": "非合金钢和合金钢",
+                "Desc": "钢材种类",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH4",
+                "Name": "材料标准",
+                "Value": "NB/T 47008",
+                "Desc": "材料标准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH5",
+                "Name": "材料牌号",
+                "Value": "16Mn",
+                "Desc": "材料牌号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH6",
+                "Name": "设计压力",
+                "Value": "-1",
+                "Desc": "设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH7",
+                "Name": "壳程设计压力",
+                "Value": "-0.5",
+                "Desc": "壳程设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH8",
+                "Name": "设计温度",
+                "Value": "300",
+                "Desc": "设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH9",
+                "Name": "壳程设计温度",
+                "Value": "200",
+                "Desc": "壳程设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH10",
+                "Name": "液柱静压力",
+                "Value": "0",
+                "Desc": "液柱静压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH11",
+                "Name": "是否可以保证在任何情况下管壳程压力都能同时作用",
+                "Value": "False",
+                "Desc": "是否可以保证在任何情况下管壳程压力都能同时作用",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH12",
+                "Name": "换热管使用场合",
+                "Value": "介质易爆/极度危害/高度危害",
+                "Desc": "换热管使用场合",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH13",
+                "Name": "换热管与管板连接方式",
+                "Value": "焊接",
+                "Desc": "换热管与管板连接方式",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH14",
+                "Name": "管板名义厚度",
+                "Value": "93",
+                "Desc": "管板名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH15",
+                "Name": "管板外径",
+                "Value": "863",
+                "Desc": "管板外径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH16",
+                "Name": "管板强度削弱系数",
+                "Value": "0.4",
+                "Desc": "管板强度削弱系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH17",
+                "Name": "设计温度下管板材料许用应力",
+                "Value": "123",
+                "Desc": "设计温度下管板材料许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH18",
+                "Name": "设计温度下管板材料弹性模量",
+                "Value": "183000",
+                "Desc": "设计温度下管板材料弹性模量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH19",
+                "Name": "壳程侧结构槽深",
+                "Value": "0",
+                "Desc": "壳程侧结构槽深",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH20",
+                "Name": "管程侧隔板槽深",
+                "Value": "6",
+                "Desc": "管程侧隔板槽深",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH21",
+                "Name": "管程计算用设计压力 Pt'",
+                "Value": "-1",
+                "Desc": "管程计算用设计压力 Pt'",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH22",
+                "Name": "壳程计算用设计压力 Ps'",
+                "Value": "-0.5",
+                "Desc": "壳程计算用设计压力 Ps'",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH23",
+                "Name": "管板布管区面积At",
+                "Value": "470328.193991821",
+                "Desc": "管板布管区面积At",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH24",
+                "Name": "管板布管区当量直径Dt",
+                "Value": "773.847824571638",
+                "Desc": "管板布管区当量直径Dt",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH25",
+                "Name": "管板计算压力Pd",
+                "Value": "0.5",
+                "Desc": "管板计算压力Pd",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH26",
+                "Name": "系数ρt",
+                "Value": "0.913202530766625",
+                "Desc": "系数ρt",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH27",
+                "Name": "系数Cc",
+                "Value": "0.292782075784126",
+                "Desc": "系数Cc",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH28",
+                "Name": "最小厚度δmin",
+                "Value": "12",
+                "Desc": "最小厚度δmin",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH29",
+                "Name": "计算厚度δ",
+                "Value": "37.9032984923955",
+                "Desc": "计算厚度δ",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH30",
+                "Name": "设计厚度",
+                "Value": "45.9032984923955",
+                "Desc": "设计厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH31",
+                "Name": "名义厚度 δn'",
+                "Value": "48",
+                "Desc": "名义厚度 δn'",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH32",
+                "Name": "管板重量-毛坯",
+                "Value": "427.035596481646",
+                "Desc": "管板重量-毛坯",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TSH33",
+                "Name": "管板重量-成品",
+                "Value": "348.195856218254",
+                "Desc": "管板重量-成品",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK1",
+                "Name": "垫片材料类型",
+                "Value": "垫片材料类型",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK2",
+                "Name": "垫片钢材种类",
+                "Value": "垫片钢材种类",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK3",
+                "Name": "垫片材料标准",
+                "Value": "垫片材料标准",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK4",
+                "Name": "垫片材料牌号",
+                "Value": "垫片材料牌号",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK5",
+                "Name": "设计压力",
+                "Value": "-1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK6",
+                "Name": "壳程设计压力",
+                "Value": "-0.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK7",
+                "Name": "设计温度",
+                "Value": "300",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK8",
+                "Name": "壳程设计温度",
+                "Value": "200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK9",
+                "Name": "液柱静压力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK10",
+                "Name": "垫片与密封面接触外径",
+                "Value": "863",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK11",
+                "Name": "垫片与密封面接触内径",
+                "Value": "825",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK12",
+                "Name": "垫片厚度",
+                "Value": "3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK13",
+                "Name": "压紧面形式",
+                "Value": "1a或1b",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK14",
+                "Name": "垫片接触面宽度",
+                "Value": "19",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK15",
+                "Name": "基本密封宽度",
+                "Value": "9.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK16",
+                "Name": "有效密封宽度",
+                "Value": "7.8",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：GSK17",
+                "Name": "垫片压紧力作用中心圆直径",
+                "Value": "847.4",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB1",
+                "Name": "换热管材料类型",
+                "Value": "钢管",
+                "Desc": "换热管材料类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB2",
+                "Name": "换热管钢材种类",
+                "Value": "非合金钢和合金钢",
+                "Desc": "换热管钢材种类",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB3",
+                "Name": "换热管材料标准",
+                "Value": "GB/T 9948",
+                "Desc": "换热管材料标准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB4",
+                "Name": "换热管材料牌号",
+                "Value": "10(GB9948)",
+                "Desc": "换热管材料牌号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB5",
+                "Name": "管程设计压力",
+                "Value": "-1",
+                "Desc": "管程设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB6",
+                "Name": "壳程设计压力",
+                "Value": "-0.5",
+                "Desc": "壳程设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB7",
+                "Name": "管程设计温度",
+                "Value": "300",
+                "Desc": "管程设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB8",
+                "Name": "壳程设计温度",
+                "Value": "200",
+                "Desc": "壳程设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB9",
+                "Name": "管程腐蚀裕量",
+                "Value": "2",
+                "Desc": "管程腐蚀裕量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB10",
+                "Name": "壳程腐蚀裕量",
+                "Value": "2",
+                "Desc": "壳程腐蚀裕量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB11",
+                "Name": "液柱静压力",
+                "Value": "0",
+                "Desc": "液柱静压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB12",
+                "Name": "换热管外径",
+                "Value": "25",
+                "Desc": "换热管外径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB13",
+                "Name": "换热管壁厚",
+                "Value": "2",
+                "Desc": "换热管壁厚",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB14",
+                "Name": "换热管中心距",
+                "Value": "32",
+                "Desc": "换热管中心距",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB15",
+                "Name": "内孔焊焊接接头系数",
+                "Value": "0.85",
+                "Desc": "内孔焊焊接接头系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB16",
+                "Name": "换热管与管板胀接长度或焊脚高度",
+                "Value": "3.5",
+                "Desc": "换热管与管板胀接长度或焊脚高度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB17",
+                "Name": "换热管是否钢材",
+                "Value": "True",
+                "Desc": "换热管是否钢材",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB18",
+                "Name": "胀接管孔是否开槽",
+                "Value": "True",
+                "Desc": "胀接管孔是否开槽",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB19",
+                "Name": "管端是否卷边",
+                "Value": "True",
+                "Desc": "管端是否卷边",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB20",
+                "Name": "换热管根数",
+                "Value": "220",
+                "Desc": "换热管根数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB21",
+                "Name": "设计温度下换热管材料许用应力",
+                "Value": "89",
+                "Desc": "设计温度下换热管材料许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB22",
+                "Name": "设计温度下换热管材料弹性模量",
+                "Value": "183000",
+                "Desc": "设计温度下换热管材料弹性模量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB23",
+                "Name": "设计温度下换热管材料屈服强度",
+                "Value": "133",
+                "Desc": "设计温度下换热管材料屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB24",
+                "Name": "一根换热管管壁金属横截面积",
+                "Value": "144.51326206513",
+                "Desc": "一根换热管管壁金属横截面积",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB25",
+                "Name": "换热管的轴向应力：只有壳程设计压力ps，管程设计压力pt = 0",
+                "Value": "1.69836956521739",
+                "Desc": "换热管的轴向应力：只有壳程设计压力ps，管程设计压力pt = 0",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB26",
+                "Name": "换热管的轴向应力：只有管程设计压力pt，壳程设计压力ps = 0",
+                "Value": "-2.39673913043478",
+                "Desc": "换热管的轴向应力：只有管程设计压力pt，壳程设计压力ps = 0",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB27",
+                "Name": "换热管的轴向应力：壳程设计压力ps和管程设计压力pt同时作用",
+                "Value": "-0.698369565217391",
+                "Desc": "换热管的轴向应力：壳程设计压力ps和管程设计压力pt同时作用",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB28",
+                "Name": "换热管的轴向应力最大值",
+                "Value": "2.39673913043478",
+                "Desc": "换热管的轴向应力最大值",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB29",
+                "Name": "内孔焊连接的换热管许用轴向应力",
+                "Value": "75.65",
+                "Desc": "内孔焊连接的换热管许用轴向应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB30",
+                "Name": "换热管与管板连接的拉脱力",
+                "Value": "1.26",
+                "Desc": "换热管与管板连接的拉脱力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：TUB31",
+                "Name": "拉脱力许用值",
+                "Value": "44.5",
+                "Desc": "拉脱力许用值",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST内压1",
+                "Name": "换热管名义厚度",
+                "Value": "2",
+                "Desc": "换热管名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST内压2",
+                "Name": "单根换热管重量kg",
+                "Value": "4",
+                "Desc": "单根换热管重量kg",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST内压3",
+                "Name": "换热管有效厚度",
+                "Value": "2",
+                "Desc": "换热管有效厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST内压4",
+                "Name": "换热管内压强度计算厚度δc",
+                "Value": "0.0700280112044818",
+                "Desc": "换热管内压强度计算厚度δc",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST内压5",
+                "Name": "换热管最大允许工作压力",
+                "Value": "15.4782608695652",
+                "Desc": "换热管最大允许工作压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST内压6",
+                "Name": "换热管设计温度下的计算应力",
+                "Value": "2.875",
+                "Desc": "换热管设计温度下的计算应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST外压1",
+                "Name": "换热管名义厚度",
+                "Value": "2",
+                "Desc": "换热管名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST外压2",
+                "Name": "单根换热管重量kg",
+                "Value": "4",
+                "Desc": "单根换热管重量kg",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST外压3",
+                "Name": "换热管有效厚度",
+                "Value": "2",
+                "Desc": "换热管有效厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST外压4",
+                "Name": "外压计算长度",
+                "Value": "3000",
+                "Desc": "外压计算长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST外压5",
+                "Name": "确定Do/δe",
+                "Value": "12.5",
+                "Desc": "确定Do/δe",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST外压6",
+                "Name": "确定L/Do",
+                "Value": "120",
+                "Desc": "确定L/Do",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST外压7",
+                "Name": "换热管外压强度计算厚度δc",
+                "Value": "0.491",
+                "Desc": "换热管外压强度计算厚度δc",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST外压8",
+                "Name": "外压应变系数A",
+                "Value": "0.008",
+                "Desc": "外压应变系数A",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST外压9",
+                "Name": "外压应力系数B",
+                "Value": "94.0945454545455",
+                "Desc": "外压应力系数B",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST外压10",
+                "Name": "许用外压力",
+                "Value": "11.0561090909091",
+                "Desc": "许用外压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST水压试验1",
+                "Name": "换热管名义厚度",
+                "Value": "2",
+                "Desc": "换热管名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST水压试验2",
+                "Name": "单根换热管重量kg",
+                "Value": "4",
+                "Desc": "单根换热管重量kg",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST水压试验3",
+                "Name": "换热管有效厚度",
+                "Value": "2",
+                "Desc": "换热管有效厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST水压试验4",
+                "Name": "外压计算长度",
+                "Value": "3000",
+                "Desc": "外压计算长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST水压试验5",
+                "Name": "确定Do/δe",
+                "Value": "12.5",
+                "Desc": "确定Do/δe",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST水压试验6",
+                "Name": "确定L/Do",
+                "Value": "120",
+                "Desc": "确定L/Do",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST水压试验7",
+                "Name": "换热管外压强度计算厚度δc",
+                "Value": "0.465",
+                "Desc": "换热管外压强度计算厚度δc",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST水压试验8",
+                "Name": "外压应变系数A",
+                "Value": "0.008",
+                "Desc": "外压应变系数A",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST水压试验9",
+                "Name": "外压应力系数B",
+                "Value": "125.857142857143",
+                "Desc": "外压应力系数B",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：ST水压试验10",
+                "Name": "许用外压力",
+                "Value": "14.7882142857143",
+                "Desc": "许用外压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB1",
+                "Name": "换热管排列方式(0:30°;1:60°;2:90°;3:45°)",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB2",
+                "Name": "折流板切口方向(0:水平；1:竖直)",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB3",
+                "Name": "沿水平隔板槽一侧的排管根数",
+                "Value": "26",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB4",
+                "Name": "沿竖直隔板槽一侧的排管根数",
+                "Value": "13",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB5",
+                "Name": "水平隔板槽两侧相邻管中心距",
+                "Value": "44",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB6",
+                "Name": "垂直隔板槽两侧相邻管中心距",
+                "Value": "100",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB7",
+                "Name": "管/壳程布置型式",
+                "Value": "4.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB8",
+                "Name": "是否交叉布管",
+                "Value": "True",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB9",
+                "Name": "交叉管排1最两端管孔中心距",
+                "Value": "769.33",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB10",
+                "Name": "交叉管排1实际管孔数量",
+                "Value": "12",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB11",
+                "Name": "交叉管排2最两端管孔中心距",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB12",
+                "Name": "交叉管排2实际管孔数量",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB13",
+                "Name": "交叉管排3最两端管孔中心距",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB14",
+                "Name": "交叉管排3实际管孔数量",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB15",
+                "Name": "单个管孔布管区域面积A0",
+                "Value": "886.784",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB16",
+                "Name": "交叉管排水平或竖直方向管间距SH",
+                "Value": "55.42563",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB17",
+                "Name": "交叉布管区域补充面积Ac",
+                "Value": "1667.51092",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：RTB18",
+                "Name": "管板分程处面积Ad",
+                "Value": "80143.23399",
+                "Desc": "",
+                "ReportOutput": null
+            }
+        ]
+    }
+}

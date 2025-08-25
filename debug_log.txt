@@ -1,0 +1,219 @@
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[get_input_must_var] 获取第 0 行的输入项
+[get_input_must_var] 编号: 235235, 名称: 235235, 设备位号: 235325, 设计阶段: 详细设计, 设计版次: 23532452
+[check_existing_product] 存在: False
+[save_new_product] 准备保存第 0 行产品
+[save_new_product] 查询项目保存路径...
+[save_new_product] 产品文件夹路径: 235235\14234_253245\235235_235235_235325
+[save_new_product] 创建产品文件夹并写入文件
+[save_new_product] 模板文件复制完成: 235235\14234_253245\235235_235235_235325\条件输入数据表.xlsx
+[save_new_product] 写入数据库
+[save_new_product] 保存完成，更新状态
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[get_input_must_var] 获取第 0 行的输入项
+[get_input_must_var] 编号: 412432, 名称: 21412, 设备位号: 41242134, 设计阶段: 详细设计, 设计版次: 12424
+[check_existing_product] 存在: False
+[save_new_product] 准备保存第 0 行产品
+[save_new_product] 查询项目保存路径...
+[save_new_product] 产品文件夹路径: 14124\15123_421341\412432_21412_41242134
+[save_new_product] 创建产品文件夹并写入文件
+[save_new_product] 模板文件复制完成: 14124\15123_421341\412432_21412_41242134\条件输入数据表.xlsx
+[save_new_product] 写入数据库
+[save_new_product] 保存完成，更新状态
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[get_input_must_var] 获取第 0 行的输入项
+[get_input_must_var] 编号: 2355, 名称: 34523, 设备位号: 2352, 设计阶段: 详细设计, 设计版次: 235
+[check_existing_product] 存在: False
+[save_new_product] 准备保存第 0 行产品
+[save_new_product] 查询项目保存路径...
+[save_new_product] 产品文件夹路径: 2352\25235_36346\2355_34523_2352
+[save_new_product] 创建产品文件夹并写入文件
+[save_new_product] 模板文件复制完成: 2352\25235_36346\2355_34523_2352\条件输入数据表.xlsx
+[save_new_product] 写入数据库
+[save_new_product] 保存完成，更新状态
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑

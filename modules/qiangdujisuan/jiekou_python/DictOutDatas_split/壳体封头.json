@@ -1,0 +1,917 @@
+{
+    "壳体封头": {
+        "IsSuccess": true,
+        "Datas": [
+            {
+                "Id": "工况1：EHB1",
+                "Name": "封头公称直径",
+                "Value": "1000",
+                "Desc": "封头公称直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB2",
+                "Name": "封头类型代号",
+                "Value": "EHB",
+                "Desc": "封头类型代号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB3",
+                "Name": "椭圆形封头与圆筒的连接型式",
+                "Value": "A",
+                "Desc": "椭圆形封头与圆筒的连接型式",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB4",
+                "Name": "是否以外径为基准",
+                "Value": "True",
+                "Desc": "是否以外径为基准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB5",
+                "Name": "设计压力",
+                "Value": "1.6",
+                "Desc": "设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB6",
+                "Name": "设计温度",
+                "Value": "200",
+                "Desc": "设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB7",
+                "Name": "耐压试验类型",
+                "Value": "1",
+                "Desc": "耐压试验类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB8",
+                "Name": "耐压试验温度",
+                "Value": "20",
+                "Desc": "耐压试验温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB9",
+                "Name": "液柱静压力",
+                "Value": "0",
+                "Desc": "液柱静压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB10",
+                "Name": "最大允许工作压力(输入)",
+                "Value": "0",
+                "Desc": "最大允许工作压力(输入)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB11",
+                "Name": "计算压力",
+                "Value": "1.6",
+                "Desc": "计算压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB12",
+                "Name": "椭圆形封头计算内径",
+                "Value": "980",
+                "Desc": "椭圆形封头计算内径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB13",
+                "Name": "椭圆形封头计算外径",
+                "Value": "1000",
+                "Desc": "椭圆形封头计算外径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB14",
+                "Name": "椭圆形封头内曲面深度",
+                "Value": "240",
+                "Desc": "椭圆形封头内曲面深度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB15",
+                "Name": "椭圆形封头外曲面深度",
+                "Value": "250",
+                "Desc": "椭圆形封头外曲面深度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB16",
+                "Name": "椭圆形封头直边高度",
+                "Value": "25",
+                "Desc": "椭圆形封头直边高度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB17",
+                "Name": "与椭圆形封头连接圆筒内直径",
+                "Value": "980",
+                "Desc": "与椭圆形封头连接圆筒内直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB18",
+                "Name": "与椭圆形封头连接圆筒厚度",
+                "Value": "10",
+                "Desc": "与椭圆形封头连接圆筒厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB19",
+                "Name": "材料类型",
+                "Value": "板材",
+                "Desc": "材料类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB20",
+                "Name": "材料牌号",
+                "Value": "Q345R",
+                "Desc": "材料牌号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB21",
+                "Name": "材料标准",
+                "Value": "GB/T 713.2",
+                "Desc": "材料标准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB22",
+                "Name": "材料设计温度下许用应力",
+                "Value": "189",
+                "Desc": "材料设计温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB23",
+                "Name": "材料耐压试验温度下许用应力",
+                "Value": "189",
+                "Desc": "材料耐压试验温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB24",
+                "Name": "材料设计温度下屈服强度",
+                "Value": "345",
+                "Desc": "材料设计温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB25",
+                "Name": "材料试验温度下屈服强度",
+                "Value": "345",
+                "Desc": "材料试验温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB26",
+                "Name": "腐蚀余量",
+                "Value": "3",
+                "Desc": "腐蚀余量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB27",
+                "Name": "材料厚度负偏差",
+                "Value": "0.3",
+                "Desc": "材料厚度负偏差",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB28",
+                "Name": "焊接接头系数",
+                "Value": "1",
+                "Desc": "焊接接头系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB29",
+                "Name": "封头成型厚度减薄率%",
+                "Value": "11",
+                "Desc": "封头成型厚度减薄率%",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB30",
+                "Name": "封头冲压减薄量",
+                "Value": "1.1",
+                "Desc": "封头冲压减薄量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB31",
+                "Name": "椭圆形封头设计余量1",
+                "Value": "3",
+                "Desc": "椭圆形封头设计余量1",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB32",
+                "Name": "椭圆形封头设计余量2",
+                "Value": "1",
+                "Desc": "椭圆形封头设计余量2",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB33",
+                "Name": "椭圆形封头设计余量",
+                "Value": "1",
+                "Desc": "椭圆形封头设计余量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB34",
+                "Name": "圆筒设计余量1",
+                "Value": "3",
+                "Desc": "圆筒设计余量1",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB35",
+                "Name": "圆筒设计余量2",
+                "Value": "1",
+                "Desc": "圆筒设计余量2",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB36",
+                "Name": "圆筒设计余量",
+                "Value": "1",
+                "Desc": "圆筒设计余量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB37",
+                "Name": "是否覆层",
+                "Value": "True",
+                "Desc": "是否覆层",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB38",
+                "Name": "覆层复合方式",
+                "Value": "轧制复合",
+                "Desc": "覆层复合方式",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB39",
+                "Name": "椭圆形封头覆层厚度",
+                "Value": "0",
+                "Desc": "椭圆形封头覆层厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB40",
+                "Name": "椭圆形封头存在覆层时的焊接凹槽深度（凸面加直边段）",
+                "Value": "2",
+                "Desc": "椭圆形封头存在覆层时的焊接凹槽深度（凸面加直边段）",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB41",
+                "Name": "椭圆形封头凸面覆层结合面剥离减薄厚度",
+                "Value": "0",
+                "Desc": "椭圆形封头凸面覆层结合面剥离减薄厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB42",
+                "Name": "椭圆形封头直边段覆层结合面剥离减薄厚度",
+                "Value": "0",
+                "Desc": "椭圆形封头直边段覆层结合面剥离减薄厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB43",
+                "Name": "椭圆形封头厚度不小于与其连接圆筒厚度",
+                "Value": "6",
+                "Desc": "椭圆形封头厚度不小于与其连接圆筒厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB44",
+                "Name": "是否采用拼(板)接成形",
+                "Value": "False",
+                "Desc": "是否采用拼(板)接成形",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB45",
+                "Name": "椭圆形封头有效厚度 ",
+                "Value": "5.6",
+                "Desc": "椭圆形封头有效厚度 ",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB46",
+                "Name": "椭圆形封头名义厚度 ",
+                "Value": "10",
+                "Desc": "椭圆形封头名义厚度 ",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB47",
+                "Name": "椭圆形封头耐压试验系数",
+                "Value": "1.25",
+                "Desc": "椭圆形封头耐压试验系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB48",
+                "Name": "椭圆形封头耐压试验压力",
+                "Value": "2",
+                "Desc": "椭圆形封头耐压试验压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB49",
+                "Name": "椭圆形封头设计温度下的计算应力",
+                "Value": "145.621825396825",
+                "Desc": "椭圆形封头设计温度下的计算应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB50",
+                "Name": "椭圆形封头耐压试验下最大总体薄膜应力",
+                "Value": "182.027281746032",
+                "Desc": "椭圆形封头耐压试验下最大总体薄膜应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB51",
+                "Name": "椭圆形封头压力试验允许通过的应力",
+                "Value": "310.5",
+                "Desc": "椭圆形封头压力试验允许通过的应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB52",
+                "Name": "椭圆形封头形状系数K",
+                "Value": "1.02806712962963",
+                "Desc": "椭圆形封头形状系数K",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB53",
+                "Name": "椭圆形封头内压强度计算厚度",
+                "Value": "3.89081812186533",
+                "Desc": "椭圆形封头内压强度计算厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB54",
+                "Name": "是否可能发生屈曲",
+                "Value": "否",
+                "Desc": "是否可能发生屈曲",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB55",
+                "Name": "内压屈曲计算厚度(解析法)",
+                "Value": "-",
+                "Desc": "内压屈曲计算厚度(解析法)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB56",
+                "Name": "内压屈曲计算厚度(经验法)",
+                "Value": "-",
+                "Desc": "内压屈曲计算厚度(经验法)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB57",
+                "Name": "椭圆形封头计算厚度",
+                "Value": "3.89081812186533",
+                "Desc": "椭圆形封头计算厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB58",
+                "Name": "椭圆形封头最大允许工作压力",
+                "Value": "2.09520724038216",
+                "Desc": "椭圆形封头最大允许工作压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB59",
+                "Name": "封头直边段(圆筒)计算厚度",
+                "Value": "4.21496311907271",
+                "Desc": "封头直边段(圆筒)计算厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB60",
+                "Name": "封头直边段(圆筒)有效厚度",
+                "Value": "6.7",
+                "Desc": "封头直边段(圆筒)有效厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB61",
+                "Name": "封头直边段(圆筒)最大允许工作压力",
+                "Value": "2.54968287526427",
+                "Desc": "封头直边段(圆筒)最大允许工作压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB62",
+                "Name": "封头直边段(圆筒)最大设计温度下的计算应力",
+                "Value": "118.602985074627",
+                "Desc": "封头直边段(圆筒)最大设计温度下的计算应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB63",
+                "Name": "封头直边段(圆筒)最小名义厚度",
+                "Value": "9",
+                "Desc": "封头直边段(圆筒)最小名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB64",
+                "Name": "直边段耐压试验下最大总体薄膜应力",
+                "Value": "148.253731343284",
+                "Desc": "直边段耐压试验下最大总体薄膜应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB65",
+                "Name": "直边段压力试验允许通过的应力",
+                "Value": "310.5",
+                "Desc": "直边段压力试验允许通过的应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB66",
+                "Name": "直边段设计温度下最大总体薄膜应力 [σ]tΦ",
+                "Value": "189",
+                "Desc": "直边段设计温度下最大总体薄膜应力 [σ]tΦ",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB67",
+                "Name": "径比K2=Do/Di",
+                "Value": "1.02040816326531",
+                "Desc": "径比K2=Do/Di",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB68",
+                "Name": "椭圆形封头容积 m^3",
+                "Value": "0.142059154603901",
+                "Desc": "椭圆形封头容积 m^3",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：EHB69",
+                "Name": "椭圆形封头质量 kg",
+                "Value": "66.6477100486623",
+                "Desc": "椭圆形封头质量 kg",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB1",
+                "Name": "封头公称直径",
+                "Value": "1000",
+                "Desc": "封头公称直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB2",
+                "Name": "封头类型代号",
+                "Value": "EHB",
+                "Desc": "封头类型代号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB3",
+                "Name": "椭圆形封头与圆筒的连接型式",
+                "Value": "A",
+                "Desc": "椭圆形封头与圆筒的连接型式",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB4",
+                "Name": "是否以外径为基准",
+                "Value": "True",
+                "Desc": "是否以外径为基准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB5",
+                "Name": "设计压力",
+                "Value": "-0.5",
+                "Desc": "设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB6",
+                "Name": "设计温度",
+                "Value": "200",
+                "Desc": "设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB7",
+                "Name": "耐压试验类型",
+                "Value": "1",
+                "Desc": "耐压试验类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB8",
+                "Name": "耐压试验温度",
+                "Value": "20",
+                "Desc": "耐压试验温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB9",
+                "Name": "液柱静压力",
+                "Value": "0",
+                "Desc": "液柱静压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB10",
+                "Name": "最大允许工作压力(输入)",
+                "Value": "0",
+                "Desc": "最大允许工作压力(输入)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB11",
+                "Name": "计算压力",
+                "Value": "0.5",
+                "Desc": "计算压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB12",
+                "Name": "椭圆形封头计算内径",
+                "Value": "980",
+                "Desc": "椭圆形封头计算内径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB13",
+                "Name": "椭圆形封头计算外径",
+                "Value": "1000",
+                "Desc": "椭圆形封头计算外径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB14",
+                "Name": "椭圆形封头内曲面深度",
+                "Value": "240",
+                "Desc": "椭圆形封头内曲面深度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB15",
+                "Name": "椭圆形封头外曲面深度",
+                "Value": "250",
+                "Desc": "椭圆形封头外曲面深度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB16",
+                "Name": "椭圆形封头直边高度",
+                "Value": "25",
+                "Desc": "椭圆形封头直边高度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB17",
+                "Name": "与椭圆形封头连接圆筒内直径",
+                "Value": "980",
+                "Desc": "与椭圆形封头连接圆筒内直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB18",
+                "Name": "与椭圆形封头连接圆筒厚度",
+                "Value": "10",
+                "Desc": "与椭圆形封头连接圆筒厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB19",
+                "Name": "材料类型",
+                "Value": "板材",
+                "Desc": "材料类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB20",
+                "Name": "材料牌号",
+                "Value": "Q345R",
+                "Desc": "材料牌号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB21",
+                "Name": "材料标准",
+                "Value": "GB/T 713.2",
+                "Desc": "材料标准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB22",
+                "Name": "材料设计温度下许用应力",
+                "Value": "189",
+                "Desc": "材料设计温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB23",
+                "Name": "材料耐压试验温度下许用应力",
+                "Value": "189",
+                "Desc": "材料耐压试验温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB24",
+                "Name": "材料设计温度下屈服强度",
+                "Value": "345",
+                "Desc": "材料设计温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB25",
+                "Name": "材料试验温度下屈服强度",
+                "Value": "345",
+                "Desc": "材料试验温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB26",
+                "Name": "腐蚀余量",
+                "Value": "3",
+                "Desc": "腐蚀余量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB27",
+                "Name": "材料厚度负偏差",
+                "Value": "0.3",
+                "Desc": "材料厚度负偏差",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB28",
+                "Name": "焊接接头系数",
+                "Value": "1",
+                "Desc": "焊接接头系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB29",
+                "Name": "封头成型厚度减薄率%",
+                "Value": "11",
+                "Desc": "封头成型厚度减薄率%",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB30",
+                "Name": "封头冲压减薄量",
+                "Value": "1.1",
+                "Desc": "封头冲压减薄量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB31",
+                "Name": "椭圆形封头设计余量1",
+                "Value": "3",
+                "Desc": "椭圆形封头设计余量1",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB32",
+                "Name": "椭圆形封头设计余量2",
+                "Value": "1",
+                "Desc": "椭圆形封头设计余量2",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB33",
+                "Name": "椭圆形封头设计余量",
+                "Value": "1",
+                "Desc": "椭圆形封头设计余量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB34",
+                "Name": "圆筒设计余量1",
+                "Value": "3",
+                "Desc": "圆筒设计余量1",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB35",
+                "Name": "圆筒设计余量2",
+                "Value": "1",
+                "Desc": "圆筒设计余量2",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB36",
+                "Name": "圆筒设计余量",
+                "Value": "1",
+                "Desc": "圆筒设计余量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB37",
+                "Name": "是否覆层",
+                "Value": "True",
+                "Desc": "是否覆层",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB38",
+                "Name": "覆层复合方式",
+                "Value": "轧制复合",
+                "Desc": "覆层复合方式",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB39",
+                "Name": "椭圆形封头覆层厚度",
+                "Value": "0",
+                "Desc": "椭圆形封头覆层厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB40",
+                "Name": "椭圆形封头存在覆层时的焊接凹槽深度（凸面加直边段）",
+                "Value": "2",
+                "Desc": "椭圆形封头存在覆层时的焊接凹槽深度（凸面加直边段）",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB41",
+                "Name": "椭圆形封头凸面覆层结合面剥离减薄厚度",
+                "Value": "0",
+                "Desc": "椭圆形封头凸面覆层结合面剥离减薄厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB42",
+                "Name": "椭圆形封头直边段覆层结合面剥离减薄厚度",
+                "Value": "0",
+                "Desc": "椭圆形封头直边段覆层结合面剥离减薄厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB43",
+                "Name": "椭圆形封头厚度不小于与其连接圆筒厚度",
+                "Value": "6",
+                "Desc": "椭圆形封头厚度不小于与其连接圆筒厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB44",
+                "Name": "是否采用拼(板)接成形",
+                "Value": "False",
+                "Desc": "是否采用拼(板)接成形",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB45",
+                "Name": "椭圆形封头有效厚度 ",
+                "Value": "10",
+                "Desc": "椭圆形封头有效厚度 ",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB46",
+                "Name": "椭圆形封头名义厚度 ",
+                "Value": "10",
+                "Desc": "椭圆形封头名义厚度 ",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB47",
+                "Name": "椭圆形封头耐压试验系数",
+                "Value": "1.25",
+                "Desc": "椭圆形封头耐压试验系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB48",
+                "Name": "椭圆形封头耐压试验压力",
+                "Value": "0.625",
+                "Desc": "椭圆形封头耐压试验压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB49",
+                "Name": "椭圆形封头设计温度下的计算应力",
+                "Value": "25.3126446759259",
+                "Desc": "椭圆形封头设计温度下的计算应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB50",
+                "Name": "椭圆形封头耐压试验下最大总体薄膜应力",
+                "Value": "31.6408058449074",
+                "Desc": "椭圆形封头耐压试验下最大总体薄膜应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB51",
+                "Name": "椭圆形封头压力试验允许通过的应力",
+                "Value": "310.5",
+                "Desc": "椭圆形封头压力试验允许通过的应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB52",
+                "Name": "W=Do/2ho",
+                "Value": "2",
+                "Desc": "W=Do/2ho",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB53",
+                "Name": "椭圆形封头的当量球壳外半径",
+                "Value": "900",
+                "Desc": "椭圆形封头的当量球壳外半径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB54",
+                "Name": "椭圆形封头长短轴比值决定的系数K1",
+                "Value": "0.9",
+                "Desc": "椭圆形封头长短轴比值决定的系数K1",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB55",
+                "Name": "椭圆形封头外压计算厚度",
+                "Value": "5.06",
+                "Desc": "椭圆形封头外压计算厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB56",
+                "Name": "外压应变系数A",
+                "Value": "0.00138888888888889",
+                "Desc": "外压应变系数A",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB57",
+                "Name": "外压应力系数B",
+                "Value": "148.777777777778",
+                "Desc": "外压应力系数B",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB58",
+                "Name": "许用外压力",
+                "Value": "1.65308641975309",
+                "Desc": "许用外压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB59",
+                "Name": "径比K2=Do/Di",
+                "Value": "1.02040816326531",
+                "Desc": "径比K2=Do/Di",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB60",
+                "Name": "椭圆形封头容积 m^3",
+                "Value": "0.142059154603901",
+                "Desc": "椭圆形封头容积 m^3",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：EHB61",
+                "Name": "椭圆形封头质量 kg",
+                "Value": "66.6477100486623",
+                "Desc": "椭圆形封头质量 kg",
+                "ReportOutput": null
+            }
+        ]
+    }
+}

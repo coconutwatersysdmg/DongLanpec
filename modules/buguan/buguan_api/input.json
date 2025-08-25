@@ -1,0 +1,12 @@
+{
+    "LB_DN":"1200","LB_Di":"1200",
+    "LB_TubePassCount":"2","LB_IsRangeCenter":"0",
+    "LB_TotalTubesCountNeed":"980","LB_TubeD":"25",
+    "LB_TubeThick":"2","LB_RangeType":"0",
+    "LB_TubeLong":"6000","LB_BaffleDirection":"1",
+    "LB_BafflePerStr":"20","LB_BaffleToODistance":"360",
+    "LB_S":"32","LB_SN":"44","LB_BaffleOD":"0",
+    "LB_BPBThick":"6","LB_HEType":"0",
+    "LB_SNH":"44","LB_DL":"0","LB_TieRodD":"0","LB_ClapboardType":"0",
+    "LB_SlipWayHeight":"20","LB_SlipWayThick":"10","LB_SlipWayAngle":"30"
+}

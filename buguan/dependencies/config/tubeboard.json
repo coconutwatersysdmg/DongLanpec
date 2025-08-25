@@ -1,0 +1,136 @@
+[{
+	"ConnectType": 1,
+	"ConnectTypeName": "强度焊接加贴胀",
+	"ImageList": [{
+		"Id": "2",
+		"Name": "",
+		"Value": "",
+		"ImagePath":"application\\picture\\TubeDistribution\\2.png",
+		"ParamList": [
+			{ "Id":"HJ_A","Name":"管程侧不胀接长度A","Value":15},
+			{ "Id":"HJ_B","Name":"壳程侧不胀接长度B","Value":3},
+			{ "Id":"HJ_C","Name":"管程侧坡口角度C","Value":45},
+			{ "Id":"HJ_E","Name":"焊脚外伸高度E","Value":1.5},
+			{ "Id":"HJ_F","Name":"焊脚高度上偏差F","Value":0.5},
+			{ "Id":"HJ_G","Name":"管程侧坡口深度G","Value":3.5},
+			{ "Id":"HJ_H","Name":"壳程侧坡口深度H","Value":1},
+			{ "Id":"HJ_K","Name":"壳程侧坡口角度K","Value":30},
+			{ "Id":"HJ_L","Name":"换热管伸出管板长度L","Value":4.5},
+			{ "Id":"HJ_X","Name":"贴胀长度X","Value":60}
+		]
+	}, {
+		"Id": "3",
+		"Name": "",
+		"Value": "",
+		"ImagePath":"application\\picture\\TubeDistribution\\3.png",
+		"ParamList": [
+			{ "Id":"HJ_A","Name":"管程侧不胀接长度A","Value":15},
+			{ "Id":"HJ_B","Name":"壳程侧不胀接长度B","Value":3},
+			{ "Id":"HJ_C","Name":"管程侧坡口角度C","Value":45},
+			{ "Id":"HJ_E","Name":"焊脚外伸高度E","Value":1.5},
+			{ "Id":"HJ_F","Name":"焊脚高度上偏差F","Value":0.5},
+			{ "Id":"HJ_G","Name":"管程侧坡口深度G","Value":3.5},
+			{ "Id":"HJ_H","Name":"壳程侧坡口深度H","Value":1},
+			{ "Id":"HJ_K","Name":"壳程侧坡口角度K","Value":30},
+			{ "Id":"HJ_L","Name":"换热管伸出管板长度L","Value":4.5},
+			{ "Id":"HJ_X","Name":"贴胀长度X","Value":60},
+			{ "Id":"HJ_J","Name":"管板管程侧覆层厚度J","Value":6}
+		]
+	}]
+}, {
+	"ConnectType": 2,
+	"ConnectTypeName": "机械强度胀接加密封焊",
+	"ImageList": [{
+		"Id": "4",
+		"Name": "",
+		"Value": "",
+		"ImagePath":"application\\picture\\TubeDistribution\\4.png",
+		"ParamList": [
+			{ "Id":"HJ_A","Name":"管程侧不胀接长度A","Value":15},
+			{ "Id":"HJ_B","Name":"壳程侧不胀接长度B","Value":3},
+			{ "Id":"HJ_C","Name":"管程侧坡口角度C","Value":45},
+			{ "Id":"HJ_E","Name":"焊脚外伸高度E","Value":1.5},
+			{ "Id":"HJ_F","Name":"焊脚高度上偏差F","Value":0.5},
+			{ "Id":"HJ_G","Name":"管程侧坡口深度G","Value":3.5},
+			{ "Id":"HJ_H","Name":"壳程侧坡口深度H","Value":1},
+			{ "Id":"HJ_K","Name":"壳程侧坡口角度K","Value":30},
+			{ "Id":"HJ_L","Name":"换热管伸出管板长度L","Value":4.5},
+			{ "Id":"HJ_X","Name":"贴胀长度X","Value":60,"Tip":"最小胀接长度取管板名义厚度减去3mm的差值与50mm二者的小值"},
+			{ "Id":"HJ_M","Name":"胀接槽定位尺寸M","Value":8},
+			{ "Id":"HJ_N","Name":"胀接槽宽度N","Value":3},
+			{ "Id":"HJ_P","Name":"胀接槽间距P","Value":6},
+			{ "Id":"HJ_Q","Name":"胀接槽宽度Q","Value":3},
+			{ "Id":"HJ_T","Name":"胀接槽深度T","Value":2}
+		]
+	}, {
+		"Id": "5",
+		"Name": "",
+		"Value": "",
+		"ImagePath":"application\\picture\\TubeDistribution\\5.png",
+		"ParamList": [
+			{ "Id":"HJ_A","Name":"管程侧不胀接长度A","Value":15},
+			{ "Id":"HJ_B","Name":"壳程侧不胀接长度B","Value":3},
+			{ "Id":"HJ_C","Name":"管程侧坡口角度C","Value":45},
+			{ "Id":"HJ_E","Name":"焊脚外伸高度E","Value":1.5},
+			{ "Id":"HJ_F","Name":"焊脚高度上偏差F","Value":0.5},
+			{ "Id":"HJ_G","Name":"管程侧坡口深度G","Value":3.5},
+			{ "Id":"HJ_H","Name":"壳程侧坡口深度H","Value":1},
+			{ "Id":"HJ_K","Name":"壳程侧坡口角度K","Value":30},
+			{ "Id":"HJ_L","Name":"换热管伸出管板长度L","Value":4.5},
+			{ "Id":"HJ_X","Name":"贴胀长度X","Value":60,"Tip":"最小胀接长度取管板名义厚度减去3mm的差值与50mm二者的小值"},
+			{ "Id":"HJ_M","Name":"胀接槽定位尺寸M","Value":8},
+			{ "Id":"HJ_N","Name":"胀接槽宽度N","Value":3},
+			{ "Id":"HJ_P","Name":"胀接槽间距P","Value":6},
+			{ "Id":"HJ_Q","Name":"胀接槽宽度Q","Value":3},
+			{ "Id":"HJ_T","Name":"胀接槽深度T","Value":2},
+			{ "Id":"HJ_J","Name":"管板管程侧覆层厚度J","Value":6}
+		]
+	}]
+}, {
+	"ConnectType": 3,
+	"ConnectTypeName": "强度胀接",
+	"ImageList": [{
+		"Id": "6",
+		"Name": "",
+		"Value": "",
+		"ImagePath":"application\\picture\\TubeDistribution\\6.png",
+		"ParamList": [
+			{ "Id":"HJ_B","Name":"壳程侧不胀接长度B","Value":3},
+			{ "Id":"HJ_C","Name":"管程侧坡口角度C","Value":45},
+			{ "Id":"HJ_H","Name":"壳程侧坡口深度H","Value":1},
+			{ "Id":"HJ_K","Name":"壳程侧坡口角度K","Value":30},
+			{ "Id":"HJ_L","Name":"换热管伸出管板长度L","Value":4.5},
+			{ "Id":"HJ_X","Name":"强度胀接长度X","Value":60,"Tip":"最小胀接长度取管板名义厚度减去3mm的差值与50mm二者的小值"},
+			{ "Id":"HJ_Y","Name":"贴胀长度Y","Value":15},
+			{ "Id":"HJ_M","Name":"胀接槽定位尺寸M","Value":8},
+			{ "Id":"HJ_N","Name":"胀接槽宽度N","Value":3},
+			{ "Id":"HJ_P","Name":"胀接槽间距P","Value":6},
+			{ "Id":"HJ_Q","Name":"胀接槽宽度Q","Value":3},
+			{ "Id":"HJ_T","Name":"胀接槽宽度T","Value":2},
+			{ "Id":"HJ_U","Name":"管程侧坡口深度U","Value":1}
+		]
+	}, {
+		"Id": "7",
+		"Name": "",
+		"Value": "",
+		"ImagePath":"application\\picture\\TubeDistribution\\7.png",
+		"ParamList": [
+			{ "Id":"HJ_B","Name":"壳程侧不胀接长度B","Value":3},
+			{ "Id":"HJ_C","Name":"管程侧坡口角度C","Value":45},
+			{ "Id":"HJ_H","Name":"壳程侧坡口深度H","Value":1},
+			{ "Id":"HJ_K","Name":"壳程侧坡口角度K","Value":30},
+			{ "Id":"HJ_L","Name":"换热管伸出管板长度L","Value":4.5},
+			{ "Id":"HJ_X","Name":"强度胀接长度X","Value":60,"Tip":"最小胀接长度取管板名义厚度减去3mm的差值与50mm二者的小值"},
+			{ "Id":"HJ_Y","Name":"贴胀长度Y","Value":15},
+			{ "Id":"HJ_S","Name":"胀接槽定位尺寸S","Value":3},
+			{ "Id":"HJ_N","Name":"胀接槽宽度N","Value":3},
+			{ "Id":"HJ_M","Name":"胀接槽定位尺寸M","Value":8},
+			{ "Id":"HJ_P","Name":"胀接槽宽度P","Value":6},
+			{ "Id":"HJ_Q","Name":"胀接槽间距Q","Value":3},
+			{ "Id":"HJ_W","Name":"胀接槽宽度W","Value":3},
+			{ "Id":"HJ_T","Name":"胀接槽宽度T","Value":2},
+			{ "Id":"HJ_U","Name":"管程侧坡口深度U","Value":1},
+			{ "Id":"HJ_J","Name":"管板管程侧覆层厚度J","Value":10},
+		]
+	}]
+}]

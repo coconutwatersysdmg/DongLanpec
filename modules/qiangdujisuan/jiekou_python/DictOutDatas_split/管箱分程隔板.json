@@ -1,0 +1,511 @@
+{
+    "管箱分程隔板": {
+        "IsSuccess": true,
+        "Datas": [
+            {
+                "Id": "工况1：管箱分程隔板1",
+                "Name": "管程设计压力",
+                "Value": "2.5",
+                "Desc": "管程设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板2",
+                "Name": "壳程设计压力",
+                "Value": "1.6",
+                "Desc": "壳程设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板3",
+                "Name": "管程设计温度",
+                "Value": "250",
+                "Desc": "管程设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板4",
+                "Name": "壳程设计温度",
+                "Value": "200",
+                "Desc": "壳程设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板5",
+                "Name": "材料类型",
+                "Value": "板材",
+                "Desc": "材料类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板6",
+                "Name": "钢材种类",
+                "Value": "非合金钢和合金钢",
+                "Desc": "钢材种类",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板7",
+                "Name": "材料标准",
+                "Value": "GB/T 713.2",
+                "Desc": "材料标准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板8",
+                "Name": "材料牌号",
+                "Value": "Q345R",
+                "Desc": "材料牌号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板9",
+                "Name": "材料厚度负偏差",
+                "Value": "0.3",
+                "Desc": "材料厚度负偏差",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板10",
+                "Name": "公称直径",
+                "Value": "1000",
+                "Desc": "公称直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板11",
+                "Name": "管箱分程隔板名义厚度",
+                "Value": "12",
+                "Desc": "管箱分程隔板名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板12",
+                "Name": "管箱分程隔板两侧压力差值",
+                "Value": "0.05",
+                "Desc": "管箱分程隔板两侧压力差值",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板13",
+                "Name": "管箱分程隔板结构尺寸长边a",
+                "Value": "967",
+                "Desc": "管箱分程隔板结构尺寸长边a",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板14",
+                "Name": "管箱分程隔板结构尺寸长边b",
+                "Value": "1630",
+                "Desc": "管箱分程隔板结构尺寸长边b",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板15",
+                "Name": "管箱分程隔板结构型式",
+                "Value": "三边固定一边简支",
+                "Desc": "管箱分程隔板结构型式",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板16",
+                "Name": "管箱分程隔板尺寸系数",
+                "Value": "0.115316564417178",
+                "Desc": "管箱分程隔板尺寸系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板17",
+                "Name": "耐压试验温度",
+                "Value": "20",
+                "Desc": "耐压试验温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板18",
+                "Name": "腐蚀裕量(双面)",
+                "Value": "4",
+                "Desc": "腐蚀裕量(双面)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板19",
+                "Name": "管箱分程隔板的最小名义厚度",
+                "Value": "12",
+                "Desc": "管箱分程隔板的最小名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板20",
+                "Name": "材料试验温度下许用应力",
+                "Value": "189",
+                "Desc": "材料试验温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板21",
+                "Name": "材料设计温度下许用应力",
+                "Value": "167",
+                "Desc": "材料设计温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板22",
+                "Name": "材料试验温度下屈服强度",
+                "Value": "345",
+                "Desc": "材料试验温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板23",
+                "Name": "材料设计温度下屈服强度",
+                "Value": "250",
+                "Desc": "材料设计温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板24",
+                "Name": "管箱分程隔板设计余量",
+                "Value": "0",
+                "Desc": "管箱分程隔板设计余量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板25",
+                "Name": "管箱分程隔板计算厚度",
+                "Value": "7.82014109760349",
+                "Desc": "管箱分程隔板计算厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板26",
+                "Name": "管箱分程隔板有效厚度",
+                "Value": "7.7",
+                "Desc": "管箱分程隔板有效厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板27",
+                "Name": "管箱圆筒长度",
+                "Value": "1200",
+                "Desc": "管箱圆筒长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板28",
+                "Name": "管箱法兰高度（焊端至密封面）",
+                "Value": "155",
+                "Desc": "管箱法兰高度（焊端至密封面）",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板29",
+                "Name": "封头高度（内侧）",
+                "Value": "250",
+                "Desc": "封头高度（内侧）",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板30",
+                "Name": "封头直边段长度",
+                "Value": "25",
+                "Desc": "封头直边段长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板31",
+                "Name": "分程隔板径向长度",
+                "Value": "967",
+                "Desc": "分程隔板径向长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板32",
+                "Name": "分程隔板轴长度",
+                "Value": "1630",
+                "Desc": "分程隔板轴长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板33",
+                "Name": "隔板数量",
+                "Value": "1",
+                "Desc": "隔板数量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板34",
+                "Name": "分程隔板通液孔直径",
+                "Value": "6",
+                "Desc": "分程隔板通液孔直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板35",
+                "Name": "通液孔中心线偏移管箱轴线的距离",
+                "Value": "0",
+                "Desc": "通液孔中心线偏移管箱轴线的距离",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管箱分程隔板36",
+                "Name": "通液孔中心线偏移隔板管箱法兰侧端面的距离",
+                "Value": "1305",
+                "Desc": "通液孔中心线偏移隔板管箱法兰侧端面的距离",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板1",
+                "Name": "管程设计压力",
+                "Value": "-1",
+                "Desc": "管程设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板2",
+                "Name": "壳程设计压力",
+                "Value": "-0.5",
+                "Desc": "壳程设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板3",
+                "Name": "管程设计温度",
+                "Value": "300",
+                "Desc": "管程设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板4",
+                "Name": "壳程设计温度",
+                "Value": "200",
+                "Desc": "壳程设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板5",
+                "Name": "材料类型",
+                "Value": "板材",
+                "Desc": "材料类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板6",
+                "Name": "钢材种类",
+                "Value": "非合金钢和合金钢",
+                "Desc": "钢材种类",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板7",
+                "Name": "材料标准",
+                "Value": "GB/T 713.2",
+                "Desc": "材料标准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板8",
+                "Name": "材料牌号",
+                "Value": "Q345R",
+                "Desc": "材料牌号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板9",
+                "Name": "材料厚度负偏差",
+                "Value": "0.3",
+                "Desc": "材料厚度负偏差",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板10",
+                "Name": "公称直径",
+                "Value": "1000",
+                "Desc": "公称直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板11",
+                "Name": "管箱分程隔板名义厚度",
+                "Value": "12",
+                "Desc": "管箱分程隔板名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板12",
+                "Name": "管箱分程隔板两侧压力差值",
+                "Value": "0.05",
+                "Desc": "管箱分程隔板两侧压力差值",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板13",
+                "Name": "管箱分程隔板结构尺寸长边a",
+                "Value": "967",
+                "Desc": "管箱分程隔板结构尺寸长边a",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板14",
+                "Name": "管箱分程隔板结构尺寸长边b",
+                "Value": "1595",
+                "Desc": "管箱分程隔板结构尺寸长边b",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板15",
+                "Name": "管箱分程隔板结构型式",
+                "Value": "三边固定一边简支",
+                "Desc": "管箱分程隔板结构型式",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板16",
+                "Name": "管箱分程隔板尺寸系数",
+                "Value": "0.120107210031348",
+                "Desc": "管箱分程隔板尺寸系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板17",
+                "Name": "耐压试验温度",
+                "Value": "20",
+                "Desc": "耐压试验温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板18",
+                "Name": "腐蚀裕量(双面)",
+                "Value": "4",
+                "Desc": "腐蚀裕量(双面)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板19",
+                "Name": "管箱分程隔板的最小名义厚度",
+                "Value": "12",
+                "Desc": "管箱分程隔板的最小名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板20",
+                "Name": "材料试验温度下许用应力",
+                "Value": "189",
+                "Desc": "材料试验温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板21",
+                "Name": "材料设计温度下许用应力",
+                "Value": "153",
+                "Desc": "材料设计温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板22",
+                "Name": "材料试验温度下屈服强度",
+                "Value": "345",
+                "Desc": "材料试验温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板23",
+                "Name": "材料设计温度下屈服强度",
+                "Value": "230",
+                "Desc": "材料设计温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板24",
+                "Name": "管箱分程隔板设计余量",
+                "Value": "0",
+                "Desc": "管箱分程隔板设计余量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板25",
+                "Name": "管箱分程隔板计算厚度",
+                "Value": "8.15903665177252",
+                "Desc": "管箱分程隔板计算厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板26",
+                "Name": "管箱分程隔板有效厚度",
+                "Value": "7.7",
+                "Desc": "管箱分程隔板有效厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板27",
+                "Name": "管箱圆筒长度",
+                "Value": "1200",
+                "Desc": "管箱圆筒长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板28",
+                "Name": "管箱法兰高度（焊端至密封面）",
+                "Value": "120",
+                "Desc": "管箱法兰高度（焊端至密封面）",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板29",
+                "Name": "封头高度（内侧）",
+                "Value": "250",
+                "Desc": "封头高度（内侧）",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板30",
+                "Name": "封头直边段长度",
+                "Value": "25",
+                "Desc": "封头直边段长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板31",
+                "Name": "分程隔板径向长度",
+                "Value": "967",
+                "Desc": "分程隔板径向长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板32",
+                "Name": "分程隔板轴长度",
+                "Value": "1595",
+                "Desc": "分程隔板轴长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板33",
+                "Name": "隔板数量",
+                "Value": "1",
+                "Desc": "隔板数量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板34",
+                "Name": "分程隔板通液孔直径",
+                "Value": "6",
+                "Desc": "分程隔板通液孔直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板35",
+                "Name": "通液孔中心线偏移管箱轴线的距离",
+                "Value": "0",
+                "Desc": "通液孔中心线偏移管箱轴线的距离",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管箱分程隔板36",
+                "Name": "通液孔中心线偏移隔板管箱法兰侧端面的距离",
+                "Value": "1270",
+                "Desc": "通液孔中心线偏移隔板管箱法兰侧端面的距离",
+                "ReportOutput": null
+            }
+        ]
+    }
+}

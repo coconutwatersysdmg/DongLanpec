@@ -1,0 +1,1204 @@
+{
+    "管程出口接管": {
+        "IsSuccess": true,
+        "Datas": [
+            {
+                "Id": "工况1：管程出口接管1",
+                "Name": "接管名义厚度",
+                "Value": "9",
+                "Desc": "接管名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管2",
+                "Name": "开孔元件公称直径",
+                "Value": "1000",
+                "Desc": "开孔元件公称直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管3",
+                "Name": "开孔元件是否以外径为基准",
+                "Value": "True",
+                "Desc": "开孔元件是否以外径为基准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管4",
+                "Name": "接管是否以外径为基准",
+                "Value": "False",
+                "Desc": "接管是否以外径为基准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管5",
+                "Name": "壳体/平盖 内/外径(开孔中心处)",
+                "Value": "1000",
+                "Desc": "壳体/平盖 内/外径(开孔中心处)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管6",
+                "Name": "接管内/外径",
+                "Value": "50",
+                "Desc": "接管内/外径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管7",
+                "Name": "开孔所属位置",
+                "Value": "1",
+                "Desc": "开孔所属位置",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管8",
+                "Name": "接管类型",
+                "Value": "1",
+                "Desc": "接管类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管9",
+                "Name": "开孔个数",
+                "Value": "1",
+                "Desc": "开孔个数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管10",
+                "Name": "开孔方位",
+                "Value": "2",
+                "Desc": "开孔方位",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管11",
+                "Name": "补强类型",
+                "Value": "5",
+                "Desc": "补强类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管12",
+                "Name": "接管与壳体连接结构型式",
+                "Value": "1",
+                "Desc": "接管与壳体连接结构型式",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管13",
+                "Name": "设计压力",
+                "Value": "2.5",
+                "Desc": "设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管14",
+                "Name": "液柱静压力",
+                "Value": "0",
+                "Desc": "液柱静压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管15",
+                "Name": "用户自定义MAWP",
+                "Value": "0",
+                "Desc": "用户自定义MAWP",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管16",
+                "Name": "计算压力",
+                "Value": "2.5",
+                "Desc": "计算压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管17",
+                "Name": "设计温度",
+                "Value": "250",
+                "Desc": "设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管18",
+                "Name": "耐压试验温度",
+                "Value": "20",
+                "Desc": "耐压试验温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管19",
+                "Name": "正常操作工况下操作温度变化范围",
+                "Value": "20",
+                "Desc": "正常操作工况下操作温度变化范围",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管20",
+                "Name": "设计温度下接管材料的平均热膨胀系数",
+                "Value": "1.256E-05",
+                "Desc": "设计温度下接管材料的平均热膨胀系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管21",
+                "Name": "设计温度下开孔元件材料的平均热膨胀系数",
+                "Value": "1.256E-05",
+                "Desc": "设计温度下开孔元件材料的平均热膨胀系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管22",
+                "Name": "|(αR-αV)ΔT|",
+                "Value": "0",
+                "Desc": "|(αR-αV)ΔT|",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管23",
+                "Name": "开孔元件内径",
+                "Value": "970",
+                "Desc": "开孔元件内径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管24",
+                "Name": "开孔元件外径",
+                "Value": "1000",
+                "Desc": "开孔元件外径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管25",
+                "Name": "开孔元件材料类型",
+                "Value": "板材",
+                "Desc": "开孔元件材料类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管26",
+                "Name": "开孔元件材料牌号",
+                "Value": "Q345R",
+                "Desc": "开孔元件材料牌号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管27",
+                "Name": "开孔元件钢材种类",
+                "Value": "非合金钢和合金钢",
+                "Desc": "开孔元件钢材种类",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管28",
+                "Name": "开孔元件材料试验温度下许用应力",
+                "Value": "189",
+                "Desc": "开孔元件材料试验温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管29",
+                "Name": "开孔元件材料设计温度下许用应力",
+                "Value": "167",
+                "Desc": "开孔元件材料设计温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管30",
+                "Name": "开孔元件材料试验温度下屈服强度",
+                "Value": "345",
+                "Desc": "开孔元件材料试验温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管31",
+                "Name": "开孔元件材料设计温度下屈服强度",
+                "Value": "250",
+                "Desc": "开孔元件材料设计温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管32",
+                "Name": "开孔元件腐蚀裕量",
+                "Value": "1",
+                "Desc": "开孔元件腐蚀裕量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管33",
+                "Name": "开孔元件焊接接头系数",
+                "Value": "1",
+                "Desc": "开孔元件焊接接头系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管34",
+                "Name": "开孔元件覆层厚度",
+                "Value": "0",
+                "Desc": "开孔元件覆层厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管35",
+                "Name": "开孔元件带覆层结合面剥离减薄厚度",
+                "Value": "0",
+                "Desc": "开孔元件带覆层结合面剥离减薄厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管36",
+                "Name": "筒体名义厚度",
+                "Value": "15",
+                "Desc": "筒体名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管37",
+                "Name": "壳体开孔削弱所需要的补强面积（正压/负压）",
+                "Value": "425.422458250919",
+                "Desc": "壳体开孔削弱所需要的补强面积（正压/负压）",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管38",
+                "Name": "开孔元件计算厚度",
+                "Value": "7.31523378582202",
+                "Desc": "开孔元件计算厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管39",
+                "Name": "开孔元件有效厚度",
+                "Value": "13.7",
+                "Desc": "开孔元件有效厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管40",
+                "Name": "开孔元件有效厚度(嵌入式计算时)",
+                "Value": "12",
+                "Desc": "开孔元件有效厚度(嵌入式计算时)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管41",
+                "Name": "接管中心线至筒体轴线距离(偏心距)",
+                "Value": "0",
+                "Desc": "接管中心线至筒体轴线距离(偏心距)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管42",
+                "Name": "接管中心线与法线夹角(包括封头)",
+                "Value": "0",
+                "Desc": "接管中心线与法线夹角(包括封头)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管43",
+                "Name": "接管内径",
+                "Value": "50",
+                "Desc": "接管内径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管44",
+                "Name": "接管外径",
+                "Value": "68",
+                "Desc": "接管外径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管45",
+                "Name": "接管实际外伸长度",
+                "Value": "105",
+                "Desc": "接管实际外伸长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管46",
+                "Name": "接管实际内伸长度",
+                "Value": "0",
+                "Desc": "接管实际内伸长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管47",
+                "Name": "接管材料类型",
+                "Value": "锻件",
+                "Desc": "接管材料类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管48",
+                "Name": "接管材料牌号",
+                "Value": "16Mn",
+                "Desc": "接管材料牌号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管49",
+                "Name": "接管钢材种类",
+                "Value": "非合金钢和合金钢",
+                "Desc": "接管钢材种类",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管50",
+                "Name": "接管材料试验温度下许用应力",
+                "Value": "178",
+                "Desc": "接管材料试验温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管51",
+                "Name": "接管材料设计温度下许用应力",
+                "Value": "137",
+                "Desc": "接管材料设计温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管52",
+                "Name": "接管材料试验温度下屈服强度",
+                "Value": "305",
+                "Desc": "接管材料试验温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管53",
+                "Name": "接管材料设计温度下屈服强度",
+                "Value": "205",
+                "Desc": "接管材料设计温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管54",
+                "Name": "接管腐蚀裕量",
+                "Value": "3",
+                "Desc": "接管腐蚀裕量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管55",
+                "Name": "接管材料减薄率",
+                "Value": "10",
+                "Desc": "接管材料减薄率",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管56",
+                "Name": "接管厚度负偏差",
+                "Value": "0",
+                "Desc": "接管厚度负偏差",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管57",
+                "Name": "接管设计余量",
+                "Value": "10",
+                "Desc": "接管设计余量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管58",
+                "Name": "接管焊接接头系数",
+                "Value": "1",
+                "Desc": "接管焊接接头系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管59",
+                "Name": "接管覆层复合方式",
+                "Value": "轧制复合",
+                "Desc": "接管覆层复合方式",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管60",
+                "Name": "接管覆层厚度",
+                "Value": "0",
+                "Desc": "接管覆层厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管61",
+                "Name": "接管带覆层时的焊接凹槽深度",
+                "Value": "0",
+                "Desc": "接管带覆层时的焊接凹槽深度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管62",
+                "Name": "接管覆层结合面剥离减薄厚度",
+                "Value": "0",
+                "Desc": "接管覆层结合面剥离减薄厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管63",
+                "Name": "开孔补强自定义补强面积裕量百分比",
+                "Value": "20",
+                "Desc": "开孔补强自定义补强面积裕量百分比",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管64",
+                "Name": "接管最小有效外伸高度系数",
+                "Value": "0.8",
+                "Desc": "接管最小有效外伸高度系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管65",
+                "Name": "焊缝面积A3焊脚高度系数",
+                "Value": "0.7",
+                "Desc": "焊缝面积A3焊脚高度系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管66",
+                "Name": "计算厚度",
+                "Value": "7.31523378582202",
+                "Desc": "计算厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管67",
+                "Name": "开孔削弱所需要的补强面积（正压/负压）",
+                "Value": "425.422458250919",
+                "Desc": "开孔削弱所需要的补强面积（正压/负压）",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管68",
+                "Name": "内伸接管的腐蚀裕量",
+                "Value": "0",
+                "Desc": "内伸接管的腐蚀裕量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管69",
+                "Name": "壳体多余金属面积",
+                "Value": "343.783340107116",
+                "Desc": "壳体多余金属面积",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管70",
+                "Name": "接管多余金属面积",
+                "Value": "204.045660166076",
+                "Desc": "接管多余金属面积",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管71",
+                "Name": "补强区内的焊缝面积(含嵌入式接管焊缝面积)",
+                "Value": "49",
+                "Desc": "补强区内的焊缝面积(含嵌入式接管焊缝面积)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管72",
+                "Name": "补强面积（实际）",
+                "Value": "596.829000273192",
+                "Desc": "补强面积（实际）",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管73",
+                "Name": "实际开孔补强面积裕量百分比",
+                "Value": "40.2909011261402",
+                "Desc": "实际开孔补强面积裕量百分比",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管74",
+                "Name": "筒体额外需要考虑覆层的厚度（由接管覆层厚度引起）",
+                "Value": "0",
+                "Desc": "筒体额外需要考虑覆层的厚度（由接管覆层厚度引起）",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管75",
+                "Name": "接管投影类型",
+                "Value": "2",
+                "Desc": "接管投影类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管76",
+                "Name": "接管有效宽度B",
+                "Value": "112",
+                "Desc": "接管有效宽度B",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管77",
+                "Name": "接管有效补强外伸长度",
+                "Value": "22.4499443206436",
+                "Desc": "接管有效补强外伸长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管78",
+                "Name": "接管有效补强内伸长度",
+                "Value": "0",
+                "Desc": "接管有效补强内伸长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管79",
+                "Name": "接管强度削弱系数",
+                "Value": "0.820359281437126",
+                "Desc": "接管强度削弱系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管80",
+                "Name": "接管开孔直径(所计算截面的开孔直径)",
+                "Value": "56",
+                "Desc": "接管开孔直径(所计算截面的开孔直径)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管81",
+                "Name": "接管开孔最大计算直径",
+                "Value": "56",
+                "Desc": "接管开孔最大计算直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管82",
+                "Name": "接管开孔最小计算直径",
+                "Value": "56",
+                "Desc": "接管开孔最小计算直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管83",
+                "Name": "接管开孔长径与短径之比",
+                "Value": "1",
+                "Desc": "接管开孔长径与短径之比",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管84",
+                "Name": "(圆形)接管强度的计算厚度",
+                "Value": "0.460405156537753",
+                "Desc": "(圆形)接管强度的计算厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管85",
+                "Name": "(圆形)接管内压强度的计算厚度",
+                "Value": "0.460405156537753",
+                "Desc": "(圆形)接管内压强度的计算厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：管程出口接管86",
+                "Name": "接管有效厚度",
+                "Value": "6",
+                "Desc": "接管有效厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管1",
+                "Name": "接管名义厚度",
+                "Value": "9",
+                "Desc": "接管名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管2",
+                "Name": "开孔元件公称直径",
+                "Value": "1000",
+                "Desc": "开孔元件公称直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管3",
+                "Name": "开孔元件是否以外径为基准",
+                "Value": "True",
+                "Desc": "开孔元件是否以外径为基准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管4",
+                "Name": "接管是否以外径为基准",
+                "Value": "False",
+                "Desc": "接管是否以外径为基准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管5",
+                "Name": "壳体/平盖 内/外径(开孔中心处)",
+                "Value": "1000",
+                "Desc": "壳体/平盖 内/外径(开孔中心处)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管6",
+                "Name": "接管内/外径",
+                "Value": "50",
+                "Desc": "接管内/外径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管7",
+                "Name": "开孔所属位置",
+                "Value": "1",
+                "Desc": "开孔所属位置",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管8",
+                "Name": "接管类型",
+                "Value": "1",
+                "Desc": "接管类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管9",
+                "Name": "开孔个数",
+                "Value": "1",
+                "Desc": "开孔个数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管10",
+                "Name": "开孔方位",
+                "Value": "2",
+                "Desc": "开孔方位",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管11",
+                "Name": "补强类型",
+                "Value": "5",
+                "Desc": "补强类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管12",
+                "Name": "接管与壳体连接结构型式",
+                "Value": "1",
+                "Desc": "接管与壳体连接结构型式",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管13",
+                "Name": "设计压力",
+                "Value": "-1",
+                "Desc": "设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管14",
+                "Name": "液柱静压力",
+                "Value": "0",
+                "Desc": "液柱静压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管15",
+                "Name": "用户自定义MAWP",
+                "Value": "0",
+                "Desc": "用户自定义MAWP",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管16",
+                "Name": "计算压力",
+                "Value": "1",
+                "Desc": "计算压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管17",
+                "Name": "设计温度",
+                "Value": "300",
+                "Desc": "设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管18",
+                "Name": "耐压试验温度",
+                "Value": "20",
+                "Desc": "耐压试验温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管19",
+                "Name": "正常操作工况下操作温度变化范围",
+                "Value": "20",
+                "Desc": "正常操作工况下操作温度变化范围",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管20",
+                "Name": "设计温度下接管材料的平均热膨胀系数",
+                "Value": "1.29E-05",
+                "Desc": "设计温度下接管材料的平均热膨胀系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管21",
+                "Name": "设计温度下开孔元件材料的平均热膨胀系数",
+                "Value": "1.29E-05",
+                "Desc": "设计温度下开孔元件材料的平均热膨胀系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管22",
+                "Name": "|(αR-αV)ΔT|",
+                "Value": "0",
+                "Desc": "|(αR-αV)ΔT|",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管23",
+                "Name": "开孔元件内径",
+                "Value": "970",
+                "Desc": "开孔元件内径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管24",
+                "Name": "开孔元件外径",
+                "Value": "1000",
+                "Desc": "开孔元件外径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管25",
+                "Name": "开孔元件材料类型",
+                "Value": "板材",
+                "Desc": "开孔元件材料类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管26",
+                "Name": "开孔元件材料牌号",
+                "Value": "Q345R",
+                "Desc": "开孔元件材料牌号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管27",
+                "Name": "开孔元件钢材种类",
+                "Value": "非合金钢和合金钢",
+                "Desc": "开孔元件钢材种类",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管28",
+                "Name": "开孔元件材料试验温度下许用应力",
+                "Value": "189",
+                "Desc": "开孔元件材料试验温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管29",
+                "Name": "开孔元件材料设计温度下许用应力",
+                "Value": "153",
+                "Desc": "开孔元件材料设计温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管30",
+                "Name": "开孔元件材料试验温度下屈服强度",
+                "Value": "345",
+                "Desc": "开孔元件材料试验温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管31",
+                "Name": "开孔元件材料设计温度下屈服强度",
+                "Value": "230",
+                "Desc": "开孔元件材料设计温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管32",
+                "Name": "开孔元件腐蚀裕量",
+                "Value": "1",
+                "Desc": "开孔元件腐蚀裕量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管33",
+                "Name": "开孔元件焊接接头系数",
+                "Value": "1",
+                "Desc": "开孔元件焊接接头系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管34",
+                "Name": "开孔元件覆层厚度",
+                "Value": "0",
+                "Desc": "开孔元件覆层厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管35",
+                "Name": "开孔元件带覆层结合面剥离减薄厚度",
+                "Value": "0",
+                "Desc": "开孔元件带覆层结合面剥离减薄厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管36",
+                "Name": "筒体名义厚度",
+                "Value": "15",
+                "Desc": "筒体名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管37",
+                "Name": "壳体开孔削弱所需要的补强面积（正压/负压）",
+                "Value": "0",
+                "Desc": "壳体开孔削弱所需要的补强面积（正压/负压）",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管38",
+                "Name": "开孔元件计算厚度",
+                "Value": "0",
+                "Desc": "开孔元件计算厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管39",
+                "Name": "开孔元件有效厚度",
+                "Value": "13.7",
+                "Desc": "开孔元件有效厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管40",
+                "Name": "开孔元件有效厚度(嵌入式计算时)",
+                "Value": "12",
+                "Desc": "开孔元件有效厚度(嵌入式计算时)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管41",
+                "Name": "接管中心线至筒体轴线距离(偏心距)",
+                "Value": "0",
+                "Desc": "接管中心线至筒体轴线距离(偏心距)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管42",
+                "Name": "接管中心线与法线夹角(包括封头)",
+                "Value": "0",
+                "Desc": "接管中心线与法线夹角(包括封头)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管43",
+                "Name": "接管内径",
+                "Value": "50",
+                "Desc": "接管内径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管44",
+                "Name": "接管外径",
+                "Value": "68",
+                "Desc": "接管外径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管45",
+                "Name": "接管实际外伸长度",
+                "Value": "105",
+                "Desc": "接管实际外伸长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管46",
+                "Name": "接管实际内伸长度",
+                "Value": "0",
+                "Desc": "接管实际内伸长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管47",
+                "Name": "接管材料类型",
+                "Value": "锻件",
+                "Desc": "接管材料类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管48",
+                "Name": "接管材料牌号",
+                "Value": "16Mn",
+                "Desc": "接管材料牌号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管49",
+                "Name": "接管钢材种类",
+                "Value": "非合金钢和合金钢",
+                "Desc": "接管钢材种类",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管50",
+                "Name": "接管材料试验温度下许用应力",
+                "Value": "178",
+                "Desc": "接管材料试验温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管51",
+                "Name": "接管材料设计温度下许用应力",
+                "Value": "123",
+                "Desc": "接管材料设计温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管52",
+                "Name": "接管材料试验温度下屈服强度",
+                "Value": "305",
+                "Desc": "接管材料试验温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管53",
+                "Name": "接管材料设计温度下屈服强度",
+                "Value": "185",
+                "Desc": "接管材料设计温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管54",
+                "Name": "接管腐蚀裕量",
+                "Value": "3",
+                "Desc": "接管腐蚀裕量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管55",
+                "Name": "接管材料减薄率",
+                "Value": "10",
+                "Desc": "接管材料减薄率",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管56",
+                "Name": "接管厚度负偏差",
+                "Value": "0",
+                "Desc": "接管厚度负偏差",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管57",
+                "Name": "接管设计余量",
+                "Value": "10",
+                "Desc": "接管设计余量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管58",
+                "Name": "接管焊接接头系数",
+                "Value": "1",
+                "Desc": "接管焊接接头系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管59",
+                "Name": "接管覆层复合方式",
+                "Value": "轧制复合",
+                "Desc": "接管覆层复合方式",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管60",
+                "Name": "接管覆层厚度",
+                "Value": "0",
+                "Desc": "接管覆层厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管61",
+                "Name": "接管带覆层时的焊接凹槽深度",
+                "Value": "0",
+                "Desc": "接管带覆层时的焊接凹槽深度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管62",
+                "Name": "接管覆层结合面剥离减薄厚度",
+                "Value": "0",
+                "Desc": "接管覆层结合面剥离减薄厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管63",
+                "Name": "开孔补强自定义补强面积裕量百分比",
+                "Value": "20",
+                "Desc": "开孔补强自定义补强面积裕量百分比",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管64",
+                "Name": "接管最小有效外伸高度系数",
+                "Value": "0.8",
+                "Desc": "接管最小有效外伸高度系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管65",
+                "Name": "焊缝面积A3焊脚高度系数",
+                "Value": "0.7",
+                "Desc": "焊缝面积A3焊脚高度系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管66",
+                "Name": "计算厚度",
+                "Value": "0",
+                "Desc": "计算厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管67",
+                "Name": "开孔削弱所需要的补强面积（正压/负压）",
+                "Value": "0",
+                "Desc": "开孔削弱所需要的补强面积（正压/负压）",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管68",
+                "Name": "内伸接管的腐蚀裕量",
+                "Value": "0",
+                "Desc": "内伸接管的腐蚀裕量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管69",
+                "Name": "壳体多余金属面积",
+                "Value": "734.964705882353",
+                "Desc": "壳体多余金属面积",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管70",
+                "Name": "接管多余金属面积",
+                "Value": "216.575933446209",
+                "Desc": "接管多余金属面积",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管71",
+                "Name": "补强区内的焊缝面积(含嵌入式接管焊缝面积)",
+                "Value": "49",
+                "Desc": "补强区内的焊缝面积(含嵌入式接管焊缝面积)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管72",
+                "Name": "补强面积（实际）",
+                "Value": "1000.54063932856",
+                "Desc": "补强面积（实际）",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管73",
+                "Name": "实际开孔补强面积裕量百分比",
+                "Value": "∞",
+                "Desc": "实际开孔补强面积裕量百分比",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管74",
+                "Name": "筒体额外需要考虑覆层的厚度（由接管覆层厚度引起）",
+                "Value": "0",
+                "Desc": "筒体额外需要考虑覆层的厚度（由接管覆层厚度引起）",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管75",
+                "Name": "接管投影类型",
+                "Value": "2",
+                "Desc": "接管投影类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管76",
+                "Name": "接管有效宽度B",
+                "Value": "112",
+                "Desc": "接管有效宽度B",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管77",
+                "Name": "接管有效补强外伸长度",
+                "Value": "22.4499443206436",
+                "Desc": "接管有效补强外伸长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管78",
+                "Name": "接管有效补强内伸长度",
+                "Value": "0",
+                "Desc": "接管有效补强内伸长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管79",
+                "Name": "接管强度削弱系数",
+                "Value": "0.803921568627451",
+                "Desc": "接管强度削弱系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管80",
+                "Name": "接管开孔直径(所计算截面的开孔直径)",
+                "Value": "56",
+                "Desc": "接管开孔直径(所计算截面的开孔直径)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管81",
+                "Name": "接管开孔最大计算直径",
+                "Value": "56",
+                "Desc": "接管开孔最大计算直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管82",
+                "Name": "接管开孔最小计算直径",
+                "Value": "56",
+                "Desc": "接管开孔最小计算直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管83",
+                "Name": "接管开孔长径与短径之比",
+                "Value": "1",
+                "Desc": "接管开孔长径与短径之比",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管84",
+                "Name": "(圆形)接管强度的计算厚度",
+                "Value": "0",
+                "Desc": "(圆形)接管强度的计算厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：管程出口接管85",
+                "Name": "接管有效厚度",
+                "Value": "6",
+                "Desc": "接管有效厚度",
+                "ReportOutput": null
+            }
+        ]
+    }
+}

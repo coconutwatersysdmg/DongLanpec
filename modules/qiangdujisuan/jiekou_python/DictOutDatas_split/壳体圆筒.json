@@ -1,0 +1,1008 @@
+{
+    "壳体圆筒": {
+        "IsSuccess": true,
+        "Datas": [
+            {
+                "Id": "工况1：YT1",
+                "Name": "圆筒名义厚度",
+                "Value": "15",
+                "Desc": "圆筒名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT2",
+                "Name": "圆筒公称直径",
+                "Value": "1000",
+                "Desc": "圆筒公称直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT3",
+                "Name": "圆筒内/外径(圆筒公称直径)",
+                "Value": "1000",
+                "Desc": "圆筒内/外径(圆筒公称直径)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT4",
+                "Name": "圆筒计算外压长度选用的类型",
+                "Value": "a-1",
+                "Desc": "圆筒计算外压长度选用的类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT5",
+                "Name": "是否按外径计算",
+                "Value": "True",
+                "Desc": "是否按外径计算",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT6",
+                "Name": "设计压力",
+                "Value": "1.6",
+                "Desc": "设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT7",
+                "Name": "液柱静压力",
+                "Value": "0",
+                "Desc": "液柱静压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT8",
+                "Name": "用户自定义MAWP",
+                "Value": "0",
+                "Desc": "用户自定义MAWP",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT9",
+                "Name": "计算压力",
+                "Value": "1.6",
+                "Desc": "计算压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT10",
+                "Name": "设计温度",
+                "Value": "200",
+                "Desc": "设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT11",
+                "Name": "耐压试验温度",
+                "Value": "20",
+                "Desc": "耐压试验温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT12",
+                "Name": "圆筒外径",
+                "Value": "1000",
+                "Desc": "圆筒外径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT13",
+                "Name": "圆筒内径",
+                "Value": "970",
+                "Desc": "圆筒内径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT14",
+                "Name": "是否带平焊设备法兰",
+                "Value": "False",
+                "Desc": "是否带平焊设备法兰",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT15",
+                "Name": "管箱两侧平焊法兰个数",
+                "Value": "1",
+                "Desc": "管箱两侧平焊法兰个数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT16",
+                "Name": "平焊设备法兰总厚度nxtf",
+                "Value": "0",
+                "Desc": "平焊设备法兰总厚度nxtf",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT17",
+                "Name": "圆筒使用位置",
+                "Value": "壳体圆筒",
+                "Desc": "圆筒使用位置",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT18",
+                "Name": "与圆筒连接的封头类型",
+                "Value": "无",
+                "Desc": "与圆筒连接的封头类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT19",
+                "Name": "换热器类型",
+                "Value": "BEU",
+                "Desc": "换热器类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT20",
+                "Name": "接管类型",
+                "Value": "不带接管",
+                "Desc": "接管类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT21",
+                "Name": "接管内径",
+                "Value": "0",
+                "Desc": "接管内径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT22",
+                "Name": "接管中心线处的最小深度",
+                "Value": "0",
+                "Desc": "接管中心线处的最小深度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT23",
+                "Name": "圆筒长度",
+                "Value": "6390",
+                "Desc": "圆筒长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT24",
+                "Name": "与圆筒连接的椭圆形封头直边段长度",
+                "Value": "25",
+                "Desc": "与圆筒连接的椭圆形封头直边段长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT25",
+                "Name": "椭圆形封头/球形封头内径深度/锥形封头长度",
+                "Value": "0",
+                "Desc": "椭圆形封头/球形封头内径深度/锥形封头长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT26",
+                "Name": "材料类型",
+                "Value": "板材",
+                "Desc": "材料类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT27",
+                "Name": "钢材种类",
+                "Value": "非合金钢和合金钢",
+                "Desc": "钢材种类",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT28",
+                "Name": "材料标准",
+                "Value": "GB/T 713.2",
+                "Desc": "材料标准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT29",
+                "Name": "材料牌号",
+                "Value": "Q345R",
+                "Desc": "材料牌号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT30",
+                "Name": "材料试验温度下许用应力",
+                "Value": "189",
+                "Desc": "材料试验温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT31",
+                "Name": "材料设计温度下许用应力",
+                "Value": "183",
+                "Desc": "材料设计温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT32",
+                "Name": "材料试验温度下屈服强度",
+                "Value": "345",
+                "Desc": "材料试验温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT33",
+                "Name": "材料设计温度下屈服强度",
+                "Value": "275",
+                "Desc": "材料设计温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT34",
+                "Name": "腐蚀裕量",
+                "Value": "1",
+                "Desc": "腐蚀裕量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT35",
+                "Name": "钢材厚度负偏差",
+                "Value": "0.3",
+                "Desc": "钢材厚度负偏差",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT36",
+                "Name": "圆筒设计余量1",
+                "Value": "0",
+                "Desc": "圆筒设计余量1",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT37",
+                "Name": "圆筒设计余量2",
+                "Value": "0",
+                "Desc": "圆筒设计余量2",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT38",
+                "Name": "圆筒设计余量",
+                "Value": "0",
+                "Desc": "圆筒设计余量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT39",
+                "Name": "焊接接头系数",
+                "Value": "1",
+                "Desc": "焊接接头系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT40",
+                "Name": "压力试验类型",
+                "Value": "1",
+                "Desc": "压力试验类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT41",
+                "Name": "耐压试验系数",
+                "Value": "0",
+                "Desc": "耐压试验系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT42",
+                "Name": "覆层复合方式",
+                "Value": "轧制复合",
+                "Desc": "覆层复合方式",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT43",
+                "Name": "圆筒覆层厚度",
+                "Value": "0",
+                "Desc": "圆筒覆层厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT44",
+                "Name": "圆筒带覆层时的焊接凹槽深度",
+                "Value": "0",
+                "Desc": "圆筒带覆层时的焊接凹槽深度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT45",
+                "Name": "圆筒覆层结合面剥离减薄深度",
+                "Value": "0  堆焊时凹槽深度应为0，即不考虑凹槽深度。",
+                "Desc": "圆筒覆层结合面剥离减薄深度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT46",
+                "Name": "圆筒重量kg",
+                "Value": "2329",
+                "Desc": "圆筒重量kg",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT47",
+                "Name": "圆筒容积m^3",
+                "Value": "4.72208943310081",
+                "Desc": "圆筒容积m^3",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT48",
+                "Name": "内压圆筒计算长度",
+                "Value": "1200",
+                "Desc": "内压圆筒计算长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT49",
+                "Name": "圆筒径比K=Do/Di",
+                "Value": "1.03092783505155",
+                "Desc": "圆筒径比K=Do/Di",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT50",
+                "Name": "圆筒内压强度计算厚度δc",
+                "Value": "4.3525571273123",
+                "Desc": "圆筒内压强度计算厚度δc",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT51",
+                "Name": "圆筒最大允许工作压力",
+                "Value": "5.08384872756768",
+                "Desc": "圆筒最大允许工作压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT52",
+                "Name": "圆筒设计温度下的计算应力",
+                "Value": "57.5941605839416",
+                "Desc": "圆筒设计温度下的计算应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT53",
+                "Name": "圆筒有效厚度",
+                "Value": "13.7",
+                "Desc": "圆筒有效厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT54",
+                "Name": "圆筒压力试验压力",
+                "Value": "0",
+                "Desc": "圆筒压力试验压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT55",
+                "Name": "圆筒耐压试验下圆筒的应力",
+                "Value": "0",
+                "Desc": "圆筒耐压试验下圆筒的应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT56",
+                "Name": "压力试验允许通过的应力",
+                "Value": "310.5",
+                "Desc": "压力试验允许通过的应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT57",
+                "Name": "设计温度下的弹性模量Et",
+                "Value": "191000",
+                "Desc": "设计温度下的弹性模量Et",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT58",
+                "Name": "泊松比ν",
+                "Value": "0.3",
+                "Desc": "泊松比ν",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT59",
+                "Name": "圆筒外半径Ro",
+                "Value": "500",
+                "Desc": "圆筒外半径Ro",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT60",
+                "Name": "判断设计温度是否小于蠕变温度",
+                "Value": "True",
+                "Desc": "判断设计温度是否小于蠕变温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT61",
+                "Name": "外半径与有效厚度的比值Ro/δe",
+                "Value": "36.4963503649635",
+                "Desc": "外半径与有效厚度的比值Ro/δe",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT62",
+                "Name": "理想弹性圆筒轴向压缩临界应力σcr",
+                "Value": "3167.39776946891",
+                "Desc": "理想弹性圆筒轴向压缩临界应力σcr",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT63",
+                "Name": "材料的塑性影响系数β",
+                "Value": "0.086822060257405",
+                "Desc": "材料的塑性影响系数β",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT64",
+                "Name": "圆筒的结构特征系数ω",
+                "Value": "77.2068035275966",
+                "Desc": "圆筒的结构特征系数ω",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT65",
+                "Name": "圆筒第二类、第三类屈曲的分界点ωE",
+                "Value": "287.032551654867",
+                "Desc": "圆筒第二类、第三类屈曲的分界点ωE",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT66",
+                "Name": "圆筒第一类、第二类屈曲的分界点ωP",
+                "Value": "117.18054852058",
+                "Desc": "圆筒第一类、第二类屈曲的分界点ωP",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT67",
+                "Name": "理想圆筒轴向压缩临界应力σacr",
+                "Value": "275",
+                "Desc": "理想圆筒轴向压缩临界应力σacr",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT68",
+                "Name": "圆筒轴向压缩临界应力折减因子ρ",
+                "Value": "0.9",
+                "Desc": "圆筒轴向压缩临界应力折减因子ρ",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT69",
+                "Name": "安全系数nab",
+                "Value": "2",
+                "Desc": "安全系数nab",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况1：YT70",
+                "Name": "圆筒许用轴向压缩应力[σ]crt",
+                "Value": "123.75",
+                "Desc": "圆筒许用轴向压缩应力[σ]crt",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT1",
+                "Name": "圆筒名义厚度",
+                "Value": "15",
+                "Desc": "圆筒名义厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT2",
+                "Name": "圆筒公称直径",
+                "Value": "1000",
+                "Desc": "圆筒公称直径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT3",
+                "Name": "圆筒内/外径(圆筒公称直径)",
+                "Value": "1000",
+                "Desc": "圆筒内/外径(圆筒公称直径)",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT4",
+                "Name": "圆筒计算外压长度选用的类型",
+                "Value": "a-1",
+                "Desc": "圆筒计算外压长度选用的类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT5",
+                "Name": "是否按外径计算",
+                "Value": "True",
+                "Desc": "是否按外径计算",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT6",
+                "Name": "设计压力",
+                "Value": "-0.5",
+                "Desc": "设计压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT7",
+                "Name": "液柱静压力",
+                "Value": "0",
+                "Desc": "液柱静压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT8",
+                "Name": "用户自定义MAWP",
+                "Value": "0",
+                "Desc": "用户自定义MAWP",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT9",
+                "Name": "计算压力",
+                "Value": "0.5",
+                "Desc": "计算压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT10",
+                "Name": "设计温度",
+                "Value": "200",
+                "Desc": "设计温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT11",
+                "Name": "耐压试验温度",
+                "Value": "20",
+                "Desc": "耐压试验温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT12",
+                "Name": "圆筒外径",
+                "Value": "1000",
+                "Desc": "圆筒外径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT13",
+                "Name": "圆筒内径",
+                "Value": "970",
+                "Desc": "圆筒内径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT14",
+                "Name": "是否带平焊设备法兰",
+                "Value": "False",
+                "Desc": "是否带平焊设备法兰",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT15",
+                "Name": "管箱两侧平焊法兰个数",
+                "Value": "1",
+                "Desc": "管箱两侧平焊法兰个数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT16",
+                "Name": "平焊设备法兰总厚度nxtf",
+                "Value": "0",
+                "Desc": "平焊设备法兰总厚度nxtf",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT17",
+                "Name": "圆筒使用位置",
+                "Value": "壳体圆筒",
+                "Desc": "圆筒使用位置",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT18",
+                "Name": "与圆筒连接的封头类型",
+                "Value": "无",
+                "Desc": "与圆筒连接的封头类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT19",
+                "Name": "换热器类型",
+                "Value": "BEU",
+                "Desc": "换热器类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT20",
+                "Name": "接管类型",
+                "Value": "不带接管",
+                "Desc": "接管类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT21",
+                "Name": "接管内径",
+                "Value": "0",
+                "Desc": "接管内径",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT22",
+                "Name": "接管中心线处的最小深度",
+                "Value": "0",
+                "Desc": "接管中心线处的最小深度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT23",
+                "Name": "圆筒长度",
+                "Value": "6390",
+                "Desc": "圆筒长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT24",
+                "Name": "与圆筒连接的椭圆形封头直边段长度",
+                "Value": "25",
+                "Desc": "与圆筒连接的椭圆形封头直边段长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT25",
+                "Name": "椭圆形封头/球形封头内径深度/锥形封头长度",
+                "Value": "0",
+                "Desc": "椭圆形封头/球形封头内径深度/锥形封头长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT26",
+                "Name": "材料类型",
+                "Value": "板材",
+                "Desc": "材料类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT27",
+                "Name": "钢材种类",
+                "Value": "非合金钢和合金钢",
+                "Desc": "钢材种类",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT28",
+                "Name": "材料标准",
+                "Value": "GB/T 713.2",
+                "Desc": "材料标准",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT29",
+                "Name": "材料牌号",
+                "Value": "Q345R",
+                "Desc": "材料牌号",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT30",
+                "Name": "材料试验温度下许用应力",
+                "Value": "189",
+                "Desc": "材料试验温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT31",
+                "Name": "材料设计温度下许用应力",
+                "Value": "183",
+                "Desc": "材料设计温度下许用应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT32",
+                "Name": "材料试验温度下屈服强度",
+                "Value": "345",
+                "Desc": "材料试验温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT33",
+                "Name": "材料设计温度下屈服强度",
+                "Value": "275",
+                "Desc": "材料设计温度下屈服强度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT34",
+                "Name": "腐蚀裕量",
+                "Value": "1",
+                "Desc": "腐蚀裕量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT35",
+                "Name": "钢材厚度负偏差",
+                "Value": "0.3",
+                "Desc": "钢材厚度负偏差",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT36",
+                "Name": "圆筒设计余量1",
+                "Value": "0",
+                "Desc": "圆筒设计余量1",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT37",
+                "Name": "圆筒设计余量2",
+                "Value": "0",
+                "Desc": "圆筒设计余量2",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT38",
+                "Name": "圆筒设计余量",
+                "Value": "0",
+                "Desc": "圆筒设计余量",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT39",
+                "Name": "焊接接头系数",
+                "Value": "1",
+                "Desc": "焊接接头系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT40",
+                "Name": "压力试验类型",
+                "Value": "1",
+                "Desc": "压力试验类型",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT41",
+                "Name": "耐压试验系数",
+                "Value": "0",
+                "Desc": "耐压试验系数",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT42",
+                "Name": "覆层复合方式",
+                "Value": "轧制复合",
+                "Desc": "覆层复合方式",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT43",
+                "Name": "圆筒覆层厚度",
+                "Value": "0",
+                "Desc": "圆筒覆层厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT44",
+                "Name": "圆筒带覆层时的焊接凹槽深度",
+                "Value": "0",
+                "Desc": "圆筒带覆层时的焊接凹槽深度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT45",
+                "Name": "圆筒覆层结合面剥离减薄深度",
+                "Value": "0  堆焊时凹槽深度应为0，即不考虑凹槽深度。",
+                "Desc": "圆筒覆层结合面剥离减薄深度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT46",
+                "Name": "圆筒重量kg",
+                "Value": "2329",
+                "Desc": "圆筒重量kg",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT47",
+                "Name": "圆筒容积m^3",
+                "Value": "4.72208943310081",
+                "Desc": "圆筒容积m^3",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT48",
+                "Name": "外压圆筒计算长度",
+                "Value": "6390",
+                "Desc": "外压圆筒计算长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT49",
+                "Name": "外压推荐最大允许长度",
+                "Value": "0",
+                "Desc": "外压推荐最大允许长度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT50",
+                "Name": "确定Do/δe",
+                "Value": "72.992700729927",
+                "Desc": "确定Do/δe",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT51",
+                "Name": "确定L/Do",
+                "Value": "0",
+                "Desc": "确定L/Do",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT52",
+                "Name": "圆筒外压强度计算厚度δc",
+                "Value": "2.762",
+                "Desc": "圆筒外压强度计算厚度δc",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT53",
+                "Name": "外压应变系数A",
+                "Value": "0.11681457046603",
+                "Desc": "外压应变系数A",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT54",
+                "Name": "外压应力系数B",
+                "Value": "181",
+                "Desc": "外压应力系数B",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT55",
+                "Name": "许用外压力",
+                "Value": "2.4797",
+                "Desc": "许用外压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT56",
+                "Name": "圆筒有效厚度",
+                "Value": "13.7",
+                "Desc": "圆筒有效厚度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT57",
+                "Name": "圆筒压力试验压力",
+                "Value": "0",
+                "Desc": "圆筒压力试验压力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT58",
+                "Name": "圆筒耐压试验下圆筒的应力",
+                "Value": "0",
+                "Desc": "圆筒耐压试验下圆筒的应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT59",
+                "Name": "压力试验允许通过的应力",
+                "Value": "310.5",
+                "Desc": "压力试验允许通过的应力",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT60",
+                "Name": "设计温度下的弹性模量Et",
+                "Value": "191000",
+                "Desc": "设计温度下的弹性模量Et",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT61",
+                "Name": "泊松比ν",
+                "Value": "0.3",
+                "Desc": "泊松比ν",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT62",
+                "Name": "圆筒外半径Ro",
+                "Value": "500",
+                "Desc": "圆筒外半径Ro",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT63",
+                "Name": "判断设计温度是否小于蠕变温度",
+                "Value": "True",
+                "Desc": "判断设计温度是否小于蠕变温度",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT64",
+                "Name": "外半径与有效厚度的比值Ro/δe",
+                "Value": "36.4963503649635",
+                "Desc": "外半径与有效厚度的比值Ro/δe",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT65",
+                "Name": "理想弹性圆筒轴向压缩临界应力σcr",
+                "Value": "3167.39776946891",
+                "Desc": "理想弹性圆筒轴向压缩临界应力σcr",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT66",
+                "Name": "材料的塑性影响系数β",
+                "Value": "0.086822060257405",
+                "Desc": "材料的塑性影响系数β",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT67",
+                "Name": "圆筒的结构特征系数ω",
+                "Value": "77.2068035275966",
+                "Desc": "圆筒的结构特征系数ω",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT68",
+                "Name": "圆筒第二类、第三类屈曲的分界点ωE",
+                "Value": "287.032551654867",
+                "Desc": "圆筒第二类、第三类屈曲的分界点ωE",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT69",
+                "Name": "圆筒第一类、第二类屈曲的分界点ωP",
+                "Value": "117.18054852058",
+                "Desc": "圆筒第一类、第二类屈曲的分界点ωP",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT70",
+                "Name": "理想圆筒轴向压缩临界应力σacr",
+                "Value": "275",
+                "Desc": "理想圆筒轴向压缩临界应力σacr",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT71",
+                "Name": "圆筒轴向压缩临界应力折减因子ρ",
+                "Value": "0.9",
+                "Desc": "圆筒轴向压缩临界应力折减因子ρ",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT72",
+                "Name": "安全系数nab",
+                "Value": "2",
+                "Desc": "安全系数nab",
+                "ReportOutput": null
+            },
+            {
+                "Id": "工况2：YT73",
+                "Name": "圆筒许用轴向压缩应力[σ]crt",
+                "Value": "123.75",
+                "Desc": "圆筒许用轴向压缩应力[σ]crt",
+                "ReportOutput": null
+            }
+        ]
+    }
+}

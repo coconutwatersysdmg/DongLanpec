@@ -1,0 +1,3224 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>UDS.Common</name>
+    </assembly>
+    <members>
+        <member name="M:UDS.Common.Collections.SortMap.IsLoop(UDS.Common.Collections.SortMapNode,System.Collections.Generic.List{System.String}@)">
+            <summary>
+            是否循环
+            </summary>
+            <param name="node"></param>
+            <param name="loopList"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Collections.SortMap.AddChildren(System.String,System.String[])">
+            <summary>
+            添加后置节点
+            </summary>
+            <param name="owner"></param>
+            <param name="children"></param>
+            <exception cref="T:UDS.Common.Exceptions.LoopException">造成了循环路径</exception>
+        </member>
+        <member name="M:UDS.Common.Collections.SortMap.AddChildren(System.String,System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            添加后置节点
+            </summary>
+            <param name="owner"></param>
+            <param name="children"></param>
+            <exception cref="T:UDS.Common.Exceptions.LoopException">造成了循环路径</exception>
+        </member>
+        <member name="M:UDS.Common.Collections.SortMap.AddParents(System.String,System.String[])">
+            <summary>
+            添加前置节点
+            </summary>
+            <param name="owner"></param>
+            <param name="parents"></param>
+            <exception cref="T:UDS.Common.Exceptions.LoopException">造成了循环路径</exception>
+        </member>
+        <member name="M:UDS.Common.Collections.SortMap.AddParents(System.String,System.Collections.Generic.IEnumerable{System.String})">
+            <summary>
+            添加前置节点
+            </summary>
+            <param name="owner"></param>
+            <param name="parents"></param>
+            <exception cref="T:UDS.Common.Exceptions.LoopException">造成了循环路径</exception>
+        </member>
+        <member name="M:UDS.Common.Collections.SortMap.Remove(System.String)">
+            <summary>
+            移除节点
+            </summary>
+            <param name="key"></param>
+        </member>
+        <member name="M:UDS.Common.Collections.SortMap.RemovePath(System.String,System.String)">
+            <summary>
+            移除节点关系
+            </summary>
+            <param name="start"></param>
+            <param name="end"></param>
+        </member>
+        <member name="M:UDS.Common.Collections.SortMap.GetSortNodes">
+            <summary>
+            获取排序后的节点列表
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Collections.SortMap.GetNode(System.String)">
+            <summary>
+            获取指定节点
+            </summary>
+            <param name="key"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Collections.SortMap.Sort(System.Int32)">
+            <summary>
+            排序
+            </summary>
+            <param name="step"></param>
+        </member>
+        <member name="M:UDS.Common.Collections.SortMap.GetRoots">
+            <summary>
+            获取Root节点
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Collections.SortMap.ToSortString(System.Boolean)">
+            <summary>
+            生成排序字符串，使用前需要先排序
+            </summary>
+            <param name="showOrder"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Collections.XmlDictionary`2">
+            <summary>
+            可Xml序列化字典
+            </summary>
+            <typeparam name="TKey"></typeparam>
+            <typeparam name="TValue"></typeparam>
+        </member>
+        <member name="M:UDS.Common.Collections.XmlDictionary`2.GetSchema">
+            <summary>
+            保留方法，不应该使用，实现IXmlSerializable方法，返回null
+            </summary>
+            <returns>null</returns>
+        </member>
+        <member name="M:UDS.Common.Collections.XmlDictionary`2.ReadXml(System.Xml.XmlReader)">
+            <summary>
+            从xml生成对象
+            </summary>
+            <param name="reader"></param>
+        </member>
+        <member name="M:UDS.Common.Collections.XmlDictionary`2.WriteXml(System.Xml.XmlWriter)">
+            <summary>
+            将对象转换为xml形式
+            </summary>
+            <param name="writer"></param>
+        </member>
+        <member name="T:UDS.Common.Config">
+            <summary>
+            配置文件解析对象
+            </summary>
+             <!--By:侯龙超 2017/09/29-->
+        </member>
+        <member name="M:UDS.Common.Config.#ctor(System.String)">
+            <summary>
+            构造配置文件解析对象
+            </summary>
+            <param name="configFile">配置文文件路径</param>
+            <exception cref="T:System.IO.FileNotFoundException"></exception>
+             <!--By:侯龙超 2017/09/29-->
+        </member>
+        <member name="P:UDS.Common.Config.Item(System.String)">
+            <summary>
+            获得<paramref name="key"/>所对应的<see cref="T:UDS.Common.ConfigItem"/>
+            如果没有找到对应的<paramref name="key"/>,则返回一个所有属性为空的<see cref="T:UDS.Common.ConfigItem"/>
+            </summary>
+            <param name="key">键</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Config.ContainsKey(System.String)">
+            <summary>
+            确定是否包含指定的键
+            </summary>
+            <param name="key">键</param>
+            <returns>是否包含</returns>
+        </member>
+        <member name="P:UDS.Common.Config.Desc">
+            <summary>
+            配置文件说明
+            </summary>
+        </member>
+        <member name="T:UDS.Common.ConfigItem">
+            <summary>
+            配置项
+            </summary>
+             <!--By:侯龙超 2017/09/29-->
+        </member>
+        <member name="P:UDS.Common.ConfigItem.Key">
+            <summary>
+            键
+            </summary>
+        </member>
+        <member name="P:UDS.Common.ConfigItem.Value">
+            <summary>
+            值
+            </summary>
+        </member>
+        <member name="P:UDS.Common.ConfigItem.Describe">
+            <summary>
+            描述
+            </summary>
+        </member>
+        <member name="M:UDS.Common.ConfigItem.#ctor(System.String,System.String,System.String)">
+            <summary>
+            构造配置项
+            </summary>
+            <param name="key">键</param>
+            <param name="value">值</param>
+            <param name="describe">描述</param>
+             <!--By:侯龙超 2017/09/29-->
+        </member>
+        <member name="T:UDS.Common.Diagnostics.PerformanceWatcher">
+            <summary>
+            性能监视器
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Diagnostics.PerformanceWatcher.StartAutoSample(System.Action{UDS.Common.Diagnostics.PerformanceSample},System.Double)">
+            <summary>
+            启动自动取样
+            </summary>
+            <param name="callback">取样回调</param>
+            <param name="interval">取样间隔</param>
+        </member>
+        <member name="M:UDS.Common.Diagnostics.PerformanceWatcher.NextSample">
+            <summary>
+            执行一次取样，并重新计数
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Diagnostics.PerformanceWatcher.#ctor(System.String,System.Action{System.Int64})">
+            <summary>
+            创建监视器
+            </summary>
+            <param name="watchName">监控名</param>
+            <param name="elapsedMillisecondsCallback">执行毫秒计数</param>
+        </member>
+        <member name="M:UDS.Common.Diagnostics.PerformanceWatcher.Dispose">
+            <summary>
+            释放监视器
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Diagnostics.PerformanceSample">
+            <summary>
+            性能取样
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Diagnostics.PerformanceSample.StartTime">
+            <summary>
+            启动时间
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Diagnostics.PerformanceSample.EndTime">
+            <summary>
+            结束时间
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Diagnostics.PerformanceSample.EnterCounter">
+            <summary>
+            进入数量统计
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Diagnostics.PerformanceSample.SampleItems">
+            <summary>
+            取样列表
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Diagnostics.PerformanceSampleItem">
+            <summary>
+            性能取样项
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Diagnostics.PerformanceSampleItem.Name">
+            <summary>
+            项目名
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Diagnostics.PerformanceSampleItem.UseMilliseconds">
+            <summary>
+            取样用时列表
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Exceptions.BusinessException">
+            <summary>
+            业务异常
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Exceptions.BusinessException.ErrorNo">
+            <summary>
+            异常编号
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Exceptions.BusinessException.ErrorMsg">
+            <summary>
+            异常消息
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.BusinessException.#ctor(System.String,System.String)">
+            <summary>
+            业务异常
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.BusinessException.#ctor(System.String,System.String,System.Object[])">
+            <summary>
+            业务异常
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.BusinessException.#ctor(System.String,System.String,System.Exception)">
+            <summary>
+            业务异常
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.BusinessException.#ctor(System.String,System.Exception,System.String,System.Object[])">
+            <summary>
+            业务异常
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Exceptions.CalculateException">
+            <summary>
+            计算出错异常
+            </summary>
+            2017/12/25  HouLongchao    Init
+            
+        </member>
+        <member name="P:UDS.Common.Exceptions.CalculateException.CalculatePath">
+            <summary>
+            被计算的表达式
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.CalculateException.#ctor(System.String)">
+            <summary>
+            计算异常
+            </summary>
+            <param name="calculatePath">被计算的表达式</param>
+        </member>
+        <member name="M:UDS.Common.Exceptions.CalculateException.#ctor(System.String,System.String)">
+            <summary>
+            计算异常
+            </summary>
+            <param name="calculatePath">被计算的表达式</param>
+            <param name="message">异常信息</param>
+        </member>
+        <member name="M:UDS.Common.Exceptions.CalculateException.#ctor(System.String,System.String,System.Exception)">
+            <summary>
+            计算异常
+            </summary>
+            <param name="calculatePath">被计算的表达式</param>
+            <param name="message">异常信息</param>
+            <param name="innerException">内部异常</param>
+        </member>
+        <member name="T:UDS.Common.Exceptions.CloneException`1">
+            <summary>
+            克隆异常泛型类型
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Exceptions.CloneException`1.CloneObject">
+            <summary>
+            被克隆对象
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.CloneException`1.#ctor(`0)">
+            <summary>
+            构造方法
+            </summary>
+            <param name="cloneObject">被克隆对象</param>
+        </member>
+        <member name="M:UDS.Common.Exceptions.CloneException`1.#ctor(`0,System.String)">
+            <summary>
+            构造方法
+            </summary>
+            <param name="cloneObject">被克隆对象</param>
+            <param name="message">异常信息</param>
+        </member>
+        <member name="M:UDS.Common.Exceptions.CloneException`1.#ctor(`0,System.String,System.Exception)">
+            <summary>
+            构造方法
+            </summary>
+            <param name="cloneObject">被克隆对象</param>
+            <param name="message">异常信息</param>
+            <param name="innerException">内部异常</param>
+        </member>
+        <member name="T:UDS.Common.Exceptions.CloneException">
+            <summary>
+            克隆异常
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Exceptions.CloneException.CloneObject">
+            <summary>
+            被克隆的对象
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.CloneException.#ctor(System.Object)">
+            <summary>
+            构造方法
+            </summary>
+            <param name="cloneObject">被克隆对象</param>
+        </member>
+        <member name="M:UDS.Common.Exceptions.CloneException.#ctor(System.Object,System.String)">
+            <summary>
+            构造方法
+            </summary>
+            <param name="cloneObject">被克隆对象</param>
+            <param name="message">异常信息</param>
+        </member>
+        <member name="M:UDS.Common.Exceptions.CloneException.#ctor(System.Object,System.String,System.Exception)">
+            <summary>
+            构造方法
+            </summary>
+            <param name="cloneObject">被克隆对象</param>
+            <param name="message">异常信息</param>
+            <param name="innerException">内部异常</param>
+        </member>
+        <member name="T:UDS.Common.Exceptions.ExpressionException">
+            <summary>
+            表达式异常
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Exceptions.FrameException">
+            <summary>
+            框架异常
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.FrameException.#ctor">
+            <summary>
+            框架异常
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.FrameException.#ctor(System.String)">
+            <summary>
+            框架异常
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.FrameException.#ctor(System.String,System.Exception)">
+            <summary>
+            框架异常
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.FrameException.#ctor(System.Runtime.Serialization.SerializationInfo,System.Runtime.Serialization.StreamingContext)">
+            <summary>
+            框架异常
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Exceptions.HttpRequestException">
+            <summary>
+            Http请求异常
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Exceptions.HttpRequestException.ErrorNo">
+            <summary>
+            异常编号
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Exceptions.HttpRequestException.ErrorMsg">
+            <summary>
+            异常消息
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.HttpRequestException.#ctor(System.String,System.String)">
+            <summary>
+            Http请求异常
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.HttpRequestException.#ctor(System.String,System.String,System.Exception)">
+            <summary>
+            Http请求异常
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Exceptions.StatusCodeException">
+            <summary>
+            Http状态码异常
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Exceptions.StatusCodeException.Code">
+            <summary>
+            异常编号
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Exceptions.StatusCodeException.ErrorMsg">
+            <summary>
+            异常消息
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.StatusCodeException.#ctor(System.Int32,System.String)">
+            <summary>
+            Http请求异常
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Exceptions.UDSException">
+            <summary>
+            UDS异常父类
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.UDSException.#ctor">
+            <summary>
+            UDS异常空构造
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Exceptions.UDSException.#ctor(System.String)">
+            <summary>
+            UDS异常
+            </summary>
+            <param name="message">异常信息</param>
+        </member>
+        <member name="M:UDS.Common.Exceptions.UDSException.#ctor(System.String,System.Exception)">
+            <summary>
+            UDS异常
+            </summary>
+            <param name="message">异常信息</param>
+            <param name="innerException">内部异常</param>
+        </member>
+        <member name="M:UDS.Common.Exceptions.UDSException.#ctor(System.Runtime.Serialization.SerializationInfo,System.Runtime.Serialization.StreamingContext)">
+            <summary>
+            UDS异常
+            </summary>
+            <param name="info"></param>
+            <param name="context"></param>
+        </member>
+        <member name="T:UDS.Common.Expressions.BinaryExpression">
+            <summary>
+            二元运算符表达式
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Expressions.ConstantExpression">
+            <summary>
+            常量表达式
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Expressions.Expression">
+            <summary>
+            表达式树
+            </summary>
+            <summary>
+            表达式树
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.FromFormula(System.String)">
+            <summary>
+            从字符串构建表达式树
+            </summary>
+            <param name="formula"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.AnalysisBuild(UDS.Common.Expressions.Operator,System.Collections.Generic.Stack{UDS.Common.Expressions.Expression},System.Collections.Generic.Stack{UDS.Common.Expressions.Operator})">
+            <summary>
+            分析构建二元运算符，里面会比较二元运算符优先级
+            </summary>
+            <param name="currentOperator"></param>
+            <param name="expressionStack"></param>
+            <param name="operatorStack"></param>
+            <exception cref="T:UDS.Common.Exceptions.ExpressionException"></exception>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.TryBinaryBuild(UDS.Common.Expressions.Operator,System.Collections.Generic.Stack{UDS.Common.Expressions.Expression})">
+            <summary>
+            尝试解析构建二元运算树
+            </summary>
+            <param name="op"></param>
+            <param name="expressionStack"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.TryFunctionBuild(System.String,System.Int32,System.Collections.Generic.Stack{UDS.Common.Expressions.Operator})">
+            <summary>
+            尝试解析函数运算符
+            </summary>
+            <param name="formula"></param>
+            <param name="index"></param>
+            <param name="operatorStack"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.TryFunctionBuild(UDS.Common.Expressions.Operator,System.Collections.Generic.Stack{UDS.Common.Expressions.Expression},System.Collections.Generic.Stack{UDS.Common.Expressions.Operator})">
+            <summary>
+            尝试构建函数树
+            </summary>
+            <param name="op"></param>
+            <param name="expressionStack"></param>
+            <param name="operatorStack"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.TryFunctionSeparatorBuild(System.Collections.Generic.Stack{UDS.Common.Expressions.Expression},System.Collections.Generic.Stack{UDS.Common.Expressions.Operator})">
+            <summary>
+            尝试构建多元函数树
+            </summary>
+            <param name="expressionStack"></param>
+            <param name="operatorStack"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.TryNumBuild(System.String,System.Int32,System.Collections.Generic.Stack{UDS.Common.Expressions.Expression})">
+            <summary>
+            尝试解析出数字
+            </summary>
+            <param name="formula"></param>
+            <param name="index"></param>
+            <param name="expressionStack"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.TryBooleanBuild(System.String,System.Int32,System.Collections.Generic.Stack{UDS.Common.Expressions.Expression})">
+            <summary>
+            尝试解析出Boolean
+            </summary>
+            <param name="formula"></param>
+            <param name="index"></param>
+            <param name="expressionStack"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.TryConstantBuild(System.String,System.Int32,System.Collections.Generic.Stack{UDS.Common.Expressions.Expression})">
+            <summary>
+            尝试解析出常量，如PI()
+            </summary>
+            <param name="formula"></param>
+            <param name="index"></param>
+            <param name="expressionStack"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.TryStringBuild(System.String,System.Int32,System.Collections.Generic.Stack{UDS.Common.Expressions.Expression})">
+            <summary>
+            尝试解析出字符串
+            </summary>
+            <param name="formula"></param>
+            <param name="index"></param>
+            <param name="expressionStack"></param>
+            <returns></returns>
+            <exception cref="T:UDS.Common.Exceptions.ExpressionException"></exception>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.TryVariableBuild(System.String,System.Int32,System.Collections.Generic.Stack{UDS.Common.Expressions.Expression})">
+            <summary>
+            尝试从字符串<paramref name="formula"/>中位置<paramref name="index"/>的位置开始构建变量
+            </summary>
+            <param name="formula"></param>
+            <param name="index"></param>
+            <param name="expressionStack"></param>
+            <returns>返回新的位置index，如果返回的位置与传入的相同则表示没有获取到</returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.TryRangeBuild(System.String,System.Int32,System.Collections.Generic.Stack{UDS.Common.Expressions.Expression})">
+            <summary>
+            尝试从字符串<paramref name="formula"/>中位置<paramref name="index"/>的位置开始构建区间
+            </summary>
+            <param name="formula"></param>
+            <param name="index"></param>
+            <param name="expressionStack"></param>
+            <returns>返回新的位置index，如果返回的位置与传入的相同则表示没有获取到</returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.TryCommentTrim(System.String,System.Int32)">
+            <summary>
+            尝试去掉注释
+            </summary>
+            <param name="formula"></param>
+            <param name="index"></param>
+            <returns></returns>
+        </member>
+        <member name="P:UDS.Common.Expressions.Expression.InvokeResult">
+            <summary>
+            Invoke 执行后的结果
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.Invoke">
+            <summary>
+            执行表达式树，获得运算结果
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.CheckParameters(UDS.Common.Expressions.Parameters)">
+            <summary>
+            检查表达式所需参数是否都在参数列表中
+            </summary>
+            <param name="parameters"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.Invoke(UDS.Common.Expressions.Parameters)">
+            <summary>
+            执行表达式树，获得运算结果
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.Expression.From(System.String)">
+            <summary>
+            从字符串构建表达式树
+            <code>
+            支持：
+            + - * / % ^ ()
+            &amp;&amp; ||
+            &gt; &gt;= &lt; &lt;= == !=
+            CEILING(_) FLOORING(_)
+            MAX(_,_,..) MIN(_,_,..)
+            NOT(_) AND(_,_,..) OR(_,_,..)
+            IF(_,_,_)
+            IN(_,_,..)
+            CONCAT(_,..)
+            SWITCH(_,_:_,_:_,..) SWITCHC(_,_:_,_:_,..)
+            SUBSTR(_,_,_) SUBNUM(_,_,_)
+            </code>
+            </summary>
+            <param name="formula"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Expressions.ExpressionNewton">
+            <summary>
+            牛顿法解析
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionNewton.NewtonSolve(UDS.Common.Expressions.Expression,System.String,UDS.Common.Expressions.Parameters,System.Collections.Generic.List{System.Decimal})">
+            <summary>
+            牛顿法求解一元函数
+            </summary>
+            <param name="expression">要求解的表达式</param>
+            <param name="resultVariable">要求的变量</param>
+            <param name="parameters">常量参数</param>
+            <param name="sends"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionNewton.Derivative(UDS.Common.Expressions.Expression,System.String,UDS.Common.Expressions.Parameters)">
+            <summary>
+            求表达式<paramref name="expression"/>的导函数
+            </summary>
+            <param name="expression">求导的表达式</param>
+            <param name="resultVariable">表达式中的求解变量</param>
+            <param name="parameters">其它参数</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionFunctionDefinitions.GetText">
+            <summary>
+            文本函数
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionFunctionDefinitions.GetNumber">
+            <summary>
+            数值函数
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionFunctionDefinitions.GetValue">
+            <summary>
+            参数函数
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionFunctionDefinitions.GetIf">
+            <summary>
+            判断函数
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionFunctionDefinitions.GetBoolean">
+            <summary>
+            逻辑函数
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionFunctionDefinitions.GetMath">
+            <summary>
+            数学函数
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionFunctionDefinitions.GetArray">
+            <summary>
+            参数数组函数
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Expressions.ExpressionSetting">
+            <summary>
+            表达式设置
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionSetting.SetSetting(UDS.Common.Expressions.ExpressionSetting)">
+            <summary>
+            自定义一个表达式设置
+            </summary>
+            <param name="setting"></param>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionSetting.AreEquals(System.Double,System.Double)">
+            <summary>
+             比较两个数字是否相等
+            </summary>
+            <param name="valueA"></param>
+            <param name="valueB"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionSetting.AreEquals(System.Decimal,System.Decimal)">
+            <summary>
+             比较两个数字是否相等
+            </summary>
+            <param name="valueA"></param>
+            <param name="valueB"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionSetting.IsStringChar(System.Char)">
+            <summary>
+             检查指定字符是否为一个有效字符串字符，如果没有字符串结束限定符时生效
+            </summary>
+            <param name="c"></param>
+            <returns></returns>
+        </member>
+        <member name="P:UDS.Common.Expressions.ExpressionSetting.HasStringStartChar">
+            <summary>
+            是否含有字符串开始限定符，默认为<c>true</c>
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Expressions.ExpressionSetting.HasStringEndChar">
+            <summary>
+            是否含有字符串结束限定符，默认为<c>true</c>
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Expressions.ExpressionSetting.StringStartChar">
+            <summary>
+            字符串开始限定符，默认为英文单引号<c>'</c>
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Expressions.ExpressionSetting.StringEndChar">
+            <summary>
+            字符串结束限定符，默认为英文单引号<c>'</c>
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionSetting.DecodeString(System.String)">
+            <summary>
+            解码字符串
+            </summary>
+            <param name="value"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionSetting.EncodeString(System.String)">
+            <summary>
+            编码字符串
+            </summary>
+            <param name="value"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionSetting.IsVariableNameChar(System.Char)">
+            <summary>
+            检查指定字符是否为变量名的有效字符，如果没有变量结束限定符时生效
+            </summary>
+            <param name="c"></param>
+            <returns></returns>
+        </member>
+        <member name="P:UDS.Common.Expressions.ExpressionSetting.HasVariableStartChar">
+            <summary>
+            是否含有变量开始限定符，默认为<c>true</c>
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Expressions.ExpressionSetting.HasVariableEndChar">
+            <summary>
+            是否含有变量结束限定符，默认为<c>true</c>
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Expressions.ExpressionSetting.VariableStartChar">
+            <summary>
+            变量开始限定符，默认为左花括号<c>{</c>
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Expressions.ExpressionSetting.VariableEndChar">
+            <summary>
+            变量结束限定符，默认为右花括号<c>{</c>
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionSetting.DecodeVariable(System.String)">
+            <summary>
+            解码变量
+            </summary>
+            <param name="value"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionSetting.EncodeVariable(System.String)">
+            <summary>
+            编码变量
+            </summary>
+            <param name="value"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionSetting.ConvertDecimal(System.Decimal)">
+            <summary>
+            转换decimal计算返回值
+            应用场景：计算出IsNaN或者为无穷值等特殊值时进行转换处理为有效值
+            </summary>
+            <param name="result"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionSetting.ToString(System.DateTime)">
+            <summary>
+            日期转字符串
+            </summary>
+            <param name="dateTime"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionSetting.ToString(System.Boolean)">
+            <summary>
+            Boolean 转字符串
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionSetting.ToString(System.Object)">
+            <summary>
+            对象转字符串
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="P:UDS.Common.Expressions.ExpressionSetting.DivideZero">
+            <summary>
+            除0设置，默认整体返回0
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Expressions.ExpressionSetting.CheckVariableExist">
+            <summary>
+            检查变量是否存在
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.DivideZero.ReturnZero">
+            <summary>
+            除法整体返回0
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.DivideZero.Throw">
+            <summary>
+            抛异常
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Expressions.ExpressionType">
+            <summary>
+            表达式类型
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Data">
+            <summary>
+            数据
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Variable">
+            <summary>
+            变量
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.StringConstant">
+            <summary>
+            字符串常量
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.RangeConstant">
+            <summary>
+            区间范围
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.NumberConstant">
+            <summary>
+            数值常量
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.BooleanConstant">
+            <summary>
+            Boolean常量
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Add">
+            <summary>
+            加法
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Subtract">
+            <summary>
+            减法
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Multiply">
+            <summary>
+            乘法
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Divide">
+            <summary>
+            除法
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Ceiling">
+            <summary>
+            向上取整
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Flooring">
+            <summary>
+            向下取整
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Rounding">
+            <summary>
+            四舍五入
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Max">
+            <summary>
+            最大值
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Min">
+            <summary>
+            最小值
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Greater">
+            <summary>
+            大于
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.GreaterEqual">
+            <summary>
+            大于等于
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Less">
+            <summary>
+            小于
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.LessEqual">
+            <summary>
+            小于等于
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Equal">
+            <summary>
+            等于
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.NotEqual">
+            <summary>
+            不等于
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Power">
+            <summary>
+            指数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Modulo">
+            <summary>
+            取模
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.BooleanAnd">
+            <summary>
+            与运算
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.BooleanOr">
+            <summary>
+            或运算
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.FunctionAnd">
+            <summary>
+            方法与
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.FunctionOr">
+            <summary>
+            方法或
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Not">
+            <summary>
+            非
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.If">
+            <summary>
+            条件计算
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.In">
+            <summary>
+            是否存在于指定列表
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Switch">
+            <summary>
+            数据匹配 Switch
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.SwitchC">
+            <summary>
+            数据包含匹配 SwitchC
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Concat">
+            <summary>
+            合并字符串
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.SubStr">
+            <summary>
+            子串获取
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.SubNum">
+            <summary>
+            子串转数字
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Left">
+            <summary>
+            从左侧截取字符串
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Right">
+            <summary>
+            从右侧截取字符串
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Length">
+            <summary>
+            获取字符串长度
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.FIND">
+            <summary>
+            获取指定字符下标
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Reverse">
+            <summary>
+            字符串取反 REVERSE(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.DateTime">
+            <summary>
+            日期时间
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.Get">
+            <summary>
+            获取数据，如果没有则返回默认值
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.AsNum">
+            <summary>
+            作为数字
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.ToNum">
+            <summary>
+            转为数字
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.ToStr">
+            <summary>
+            转为字符串
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.META">
+            <summary>
+            获取属性
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.DATAMETA">
+            <summary>
+            获取数据属性
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.ABS">
+            <summary>
+            绝对值函数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.SIN">
+            <summary>
+            正弦函数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.ASIN">
+            <summary>
+            反正弦函数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.COS">
+            <summary>
+            余弦函数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.ACOS">
+            <summary>
+            反余弦函数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.TAN">
+            <summary>
+            正切函数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.ATAN">
+            <summary>
+            反正切函数 
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.ATAN2">
+            <summary>
+            反余切函数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.SINH">
+            <summary>
+            双曲正弦函数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.COSH">
+            <summary>
+            双曲余弦函数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.TANH">
+            <summary>
+            双曲正切函数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.RAD">
+            <summary>
+            角度转弧度
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.DEG">
+            <summary>
+            弧度转角度 
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.LOG">
+            <summary>
+            自然对数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.LOG10">
+            <summary>
+            常用对数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.EXP">
+            <summary>
+            指数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.FACT">
+            <summary>
+            阶乘
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.SQRT">
+            <summary>
+            平方根 
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.MOD">
+            <summary>
+            取余数函数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.POW">
+            <summary>
+            指数函数
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.PI">
+            <summary>
+            圆周率
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.HasValue">
+            <summary>
+            含有数据
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.IsNumber">
+            <summary>
+            是否是数字
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.IsStart">
+            <summary>
+            是否以指定字符串开始 ISSTART(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.IsEnd">
+            <summary>
+            是否以指定字符串结束 ISEND(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.IsMatch">
+            <summary>
+            是否可以用指定正则匹配 ISMATCH(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.ASUM">
+            <summary>
+            数组求和
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.AINDEX">
+            <summary>
+            数据元素获取
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.AMATCH">
+            <summary>
+            数组元素位置获取
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.ACOUNT">
+            <summary>
+            数组数量获取
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.AMAX">
+            <summary>
+            数组最大值 AMAX(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.AMIN">
+            <summary>
+            数组最小值 AMIN(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.AMAXDIFF">
+            <summary>
+            数组最大相邻差 AMAXDIFF(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.ExpressionType.AMINDIFF">
+            <summary>
+            数组最小相邻差 AMINDIFF(
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Expressions.ExpressionTypeExtension">
+            <summary>
+            表达式类型扩展方法
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Expressions.ExpressionTypeExtension.GetPriority(UDS.Common.Expressions.ExpressionType)">
+            <summary>
+            获取优先级
+            </summary>
+            <param name="expressionType"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Expressions.FunctionExpression">
+            <summary>
+            函数表达式
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Expressions.MatchType">
+            <summary>
+            从字符串中匹配出的类型
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.MatchType.None">
+            <summary>
+            什么都没有匹配到呢
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.MatchType.Value">
+            <summary>
+            匹配了一个值
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.MatchType.Function">
+            <summary>
+            匹配了一个方法
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.MatchType.LeftBracket">
+            <summary>
+            匹配了一个左括号
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.MatchType.RightBracket">
+            <summary>
+            匹配了一个右括号
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.MatchType.BinaryOperator">
+            <summary>
+            匹配了一个二元运算符
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.MatchType.Separator">
+            <summary>
+            匹配了一个分隔符 ,
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Expressions.Metadata">
+            <summary>
+            元数据
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Expressions.Metadata.TryGetValue(System.String,System.String@)">
+            <summary>
+            尝试获取值
+            </summary>
+            <param name="key"></param>
+            <param name="value"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Expressions.DataMetadata">
+            <summary>
+            数据元数据
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Expressions.DataMetadata.TryGetDataValue(System.String,System.String,System.String@)">
+            <summary>
+            尝试获取数据值
+            </summary>
+            <param name="data"></param>
+            <param name="key"></param>
+            <param name="value"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Expressions.Operator">
+            <summary>
+            操作符
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Add">
+            <summary>
+            加 +
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Subtract">
+            <summary>
+            减 -
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Multiply">
+            <summary>
+            乘 *
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Divide">
+            <summary>
+            除 /
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Ceiling">
+            <summary>
+            向上取整 CEILING(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Flooring">
+            <summary>
+            向下取整 FLOORING(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Rounding">
+            <summary>
+            四舍五入 ROUNDING(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Max">
+            <summary>
+            最大值 MAX(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Min">
+            <summary>
+            最小值 MIN(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Greater">
+            <summary>
+            大于 >
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.GreaterEqual">
+            <summary>
+            大于等于 >=
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Less">
+            <summary>
+            小于 &lt;
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.LessEqual">
+            <summary>
+            小于等于 &lt;=
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Equal">
+            <summary>
+            等于 ==
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.NotEqual">
+            <summary>
+            不等于 !=
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Power">
+            <summary>
+            指数 ^
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Modulo">
+            <summary>
+            取余 %
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.BooleanAnd">
+            <summary>
+            与 &amp;&amp;
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.BooleanOr">
+            <summary>
+            或 ||
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Not">
+            <summary>
+            非 NOT(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.FunctionAnd">
+            <summary>
+            与运算 AND(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.FunctionOr">
+            <summary>
+            或运算 OR(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.If">
+            <summary>
+            条件判断 IF(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.In">
+            <summary>
+            给的值是否在指定列表中 IN(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Switch">
+            <summary>
+            匹配方法 SWITCH(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.SwitchC">
+            <summary>
+            匹配方法 SWITCHC(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Concat">
+            <summary>
+            合并多个字符串 CONCAT(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.SubStr">
+            <summary>
+            字串获取 SUBSTR(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.SubNum">
+            <summary>
+            字串转数字 SUBNUM(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Left">
+            <summary>
+            从左侧截取字符串 LEFT(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Right">
+            <summary>
+            从右侧截取字符串 RIGHT(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Length">
+            <summary>
+            获取字符串长度 LENGTH(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.FIND">
+            <summary>
+            获取指定字符下标 FIND(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Reverse">
+            <summary>
+            字符串取反 REVERSE(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.ABS">
+            <summary>
+            绝对值函数 ABS(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.SIN">
+            <summary>
+            正弦函数 SIN(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.ASIN">
+            <summary>
+            反正弦函数 ASIN(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.COS">
+            <summary>
+            余弦函数 COS(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.ACOS">
+            <summary>
+            反余弦函数 ACOS(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.TAN">
+            <summary>
+            正切函数 TAN(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.ATAN">
+            <summary>
+            反正切函数 ATAN(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.ATAN2">
+            <summary>
+            反余切函数 ATAN2(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.SINH">
+            <summary>
+            双曲正弦函数 SINH(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.COSH">
+            <summary>
+            双曲余弦函数 COSH(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.TANH">
+            <summary>
+            双曲正切函数 TANH(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.RAD">
+            <summary>
+            角度转弧度 RAD(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.DEG">
+            <summary>
+            弧度转角度 DEG(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.LOG">
+            <summary>
+            自然对数 LOG(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.LOG10">
+            <summary>
+            常用对数 LOG(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.EXP">
+            <summary>
+            e的指数次幂 EXP(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.FACT">
+            <summary>
+            阶乘 FACT(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.SQRT">
+            <summary>
+            平方根 SQRT(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.MOD">
+            <summary>
+            取余数 MOD(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.POW">
+            <summary>
+            指数 POW(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.PI">
+            <summary>
+            圆周率 PI(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.DateTime">
+            <summary>
+            日期时间 DATETIME(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Get">
+            <summary>
+            获取值 GET(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.AsNum">
+            <summary>
+            作为数字  ASNUM(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.ToNum">
+            <summary>
+            转为数字  TONUM(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.ToStr">
+            <summary>
+            转为字符串 TOSTR(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.META">
+            <summary>
+            获取属性 META(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.DATAMETA">
+            <summary>
+            获取数据属性 DATAMETA(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.HasValue">
+            <summary>
+            含有值 HASVALUE(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.IsNumber">
+            <summary>
+            是否为数字 ISNUMBER(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.IsStart">
+            <summary>
+            是否以指定字符串开始 ISSTART(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.IsEnd">
+            <summary>
+            是否以指定字符串结束 ISEND(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.IsMatch">
+            <summary>
+            是否可以用指定正则匹配 ISMATCH(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.ASUM">
+            <summary>
+            数组求和 ASUM(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.AINDEX">
+            <summary>
+            数据元素获取 AINDEX(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.AMATCH">
+            <summary>
+            数组元素位置获取 AMATCH(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.ACOUNT">
+            <summary>
+            数组数量获取 ACOUNT(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.AMAX">
+            <summary>
+            数组最大值 AMAX(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.AMIN">
+            <summary>
+            数组最小值 AMIN(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.AMAXDIFF">
+            <summary>
+            数组最大相邻差 AMAXDIFF(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.AMINDIFF">
+            <summary>
+            数组最小相邻差 AMINDIFF(
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.Separator">
+            <summary>
+            分隔符 ,
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.LeftBracket">
+            <summary>
+            左括号
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Expressions.Operator.RightBracket">
+            <summary>
+            右括号
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Expressions.OperatorExtension">
+            <summary>
+            操作符扩展方法
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Expressions.OperatorExtension.GetPriority(UDS.Common.Expressions.Operator)">
+            <summary>
+            获取优先级
+            </summary>
+            <param name="op"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Expressions.Parameter">
+            <summary>
+            参数项
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Expressions.Parameter.Type">
+            <summary>
+            参数类型 <see cref="T:UDS.Common.Expressions.ParameterType"/>
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Expressions.Parameter.Data">
+            <summary>
+            数据
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Expressions.Parameter.Metadata">
+            <summary>
+            元数据
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Expressions.Parameter.DataMetadata">
+            <summary>
+            数据元数据
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Expressions.Parameters">
+            <summary>
+            参数字典
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Expressions.ParameterType">
+            <summary>
+            参数类型
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Expressions.ResultExpression">
+            <summary>
+            返回值表达式
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Expressions.ResultExpression.DataType">
+            <summary>
+            返回值类型
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Expressions.ResultExpression.Data">
+            <summary>
+            返回值
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Expressions.ResultExpression.IsNumber">
+            <summary>
+            判断返回值是否是数字
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Expressions.ResultExpression.IsNumberList">
+            <summary>
+            判断返回值是否是数字列表
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="P:UDS.Common.Expressions.ResultExpression.NumberResult">
+            <summary>
+            以decimal类型获取返回值
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Expressions.ResultExpression.NumberListResult">
+            <summary>
+            以decimal列表获取返回值
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Expressions.ResultExpression.IsList">
+            <summary>
+            判断返回值是否是一个列表
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="P:UDS.Common.Expressions.ResultExpression.ListResult">
+            <summary>
+            以列表形式获得返回值
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Expressions.ResultExpression.IsBoolean">
+            <summary>
+            是否为布尔类型
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="P:UDS.Common.Expressions.ResultExpression.BooleanResult">
+            <summary>
+            以bool类型获取返回值
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Expressions.ResultExpression.IsDateTime">
+            <summary>
+            是否为日期时间类型
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="P:UDS.Common.Expressions.ResultExpression.DateTimeResult">
+            <summary>
+            日期时间
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Expressions.ResultType">
+            <summary>
+            返回值类型
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Expressions.VariableExpression">
+            <summary>
+            变量表达式
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Extends.DoubleExt">
+            <summary>
+            <see cref="T:System.Double"/>的扩展方法
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Extends.DoubleExt.ToChinese(System.Double)">
+            <summary>
+            转换为中文表述
+            </summary>
+            <param name="num"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Extends.EnumExt">
+            <summary>
+            枚举扩展
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Extends.EnumExt.GetDescription(System.Enum)">
+            <summary>
+            获取枚举类型的描述
+            </summary>
+            <param name="enumeration"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Extends.JsonSerializerExt">
+            <summary>
+            Json序列化扩展
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Extends.JsonSerializerExt.FromJson``1(System.String)">
+            <summary>
+            Json转对象
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="json"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.JsonSerializerExt.ToJson(System.Object)">
+            <summary>
+            对象转JSON
+            </summary>
+            <param name="obj"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.JsonSerializerExt.ToJson(System.Object,Newtonsoft.Json.JsonSerializerSettings)">
+            <summary>
+            对象转Json
+            </summary>
+            <param name="obj"></param>
+            <param name="settings"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Extends.ObjectExt">
+            <summary>
+            <see cref="T:System.Object"/>相关扩展方法
+            </summary>
+            <remarks>By:侯龙超 2017/09/29</remarks>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToDateTime(System.Object)">
+            <summary>
+            将对象转换成<see cref="T:System.DateTime"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToDateTime(System.Object,System.DateTime)">
+            <summary>
+            将对象转换成<see cref="T:System.DateTime"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <param name="defaultValue">默认值</param>
+            <returns>如果转换失败，返回默认值，否则返回转换后的值</returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToDateTimeNullable(System.Object)">
+            <summary>
+            将对象转换成<see cref="T:System.Nullable`1"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToDateTimeOffset(System.Object)">
+            <summary>
+            将对象转换成<see cref="T:System.DateTimeOffset"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToDateTimeOffset(System.Object,System.DateTimeOffset)">
+            <summary>
+            将对象转换成<see cref="T:System.DateTimeOffset"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <param name="defaultValue">默认值</param>
+            <returns>如果转换失败，返回默认值，否则返回转换后的值</returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToDateTimeOffsetNullable(System.Object)">
+            <summary>
+            将对象转换成<see cref="T:System.Nullable`1"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToInt(System.Object)">
+            <summary>
+            将对象转换成<see cref="T:System.Int32"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToInt(System.Object,System.Int32)">
+            <summary>
+            将对象转换成<see cref="T:System.Int32"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <param name="defaultValue">转换失败的默认值</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToIntNullable(System.Object)">
+            <summary>
+            将对象转换成<see cref="T:System.Nullable`1"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToLong(System.Object)">
+            <summary>
+            将对象转换成<see cref="T:System.Int64"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToLong(System.Object,System.Int32)">
+            <summary>
+            将对象转换成<see cref="T:System.Int64"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <param name="defaultValue">转换失败的默认值</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToLongNullable(System.Object)">
+            <summary>
+            将对象转换成<see cref="T:System.Nullable`1"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToDouble(System.Object)">
+            <summary>
+            将对象转换成<see cref="T:System.Double"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToDouble(System.Object,System.Double)">
+            <summary>
+            将对象转换成<see cref="T:System.Double"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <param name="defaultValue">默认值</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToDoubleNullable(System.Object)">
+            <summary>
+            将对象转换成<see cref="T:System.Nullable`1"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToDecimal(System.Object)">
+            <summary>
+            将对象转换成<see cref="T:System.Decimal"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToDecimal(System.Object,System.Decimal)">
+            <summary>
+            将对象转换成<see cref="T:System.Decimal"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <param name="defaultValue">默认值</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToDecimalNullable(System.Object)">
+            <summary>
+            将对象转换成<see cref="T:System.Nullable`1"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToBool(System.Object)">
+            <summary>
+            将对象转换成<see cref="T:System.Boolean"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToBool(System.Object,System.Boolean)">
+            <summary>
+            将对象转换成<see cref="T:System.Boolean"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <param name="defaultValue">默认值</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.ToBoolNullable(System.Object)">
+            <summary>
+            将对象转换成<see cref="T:System.Nullable`1"/>类型
+            </summary>
+            <param name="obj">需要转换的对象</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.DeepClone``1(``0)">
+            <summary>
+            深度拷贝, 通过Json序列化反序列化实现
+            </summary>
+            <typeparam name="T">对象类型</typeparam>
+            <param name="obj">需要拷贝的对象</param>
+            <exception cref="T:UDS.Common.Exceptions.CloneException">Clone异常</exception>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.IsNull(System.Object)">
+            <summary>
+            判断对象是否为空
+            </summary>
+            <param name="obj">对象</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.ObjectExt.IsNotNull(System.Object)">
+            <summary>
+            判断对象不是空
+            </summary>
+            <param name="obj"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Extends.StringExt">
+            <summary>
+            字符串操作
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.Join(System.Collections.Generic.IEnumerable{System.String},System.String)">
+            <summary>
+            使用<paramref name="separator"/>字符拼接字符串数组<paramref name="values"/>
+            </summary>
+            <param name="values"></param>
+            <param name="separator"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.ToHump(System.String)">
+            <summary>
+            将下划线<code>_</code>分隔的字符串转换为驼峰命名<code>HeadUpperHeadUpper</code>
+            </summary>
+            <param name="text"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.ToOnlyHump(System.String)">
+            <summary>
+            将下划线<code>_</code>分隔的字符串转换为驼峰命名<code>Head_Upper_Head_Upper</code>（不移除 _ ）
+            </summary>
+            <param name="text"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.ToUpperHead(System.String)">
+            <summary>
+            将首字母转换为大写，其它保持不变
+            </summary>
+            <param name="str">源字符串</param>
+            <returns>首字母大写的字符串</returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.MatchesCount(System.String,System.String)">
+            <summary>
+            相同字符串的数量
+            </summary>
+            <param name="source">字符串</param>
+            <param name="pattern">相比较字符串</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.SubstringToSx(System.String,System.Int32)">
+            <summary>
+            截取字符并显示<code>...</code>符号
+            </summary>
+            <param name="str">截取字符串</param>
+            <param name="length">要截取的长度</param>
+            <returns>string</returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.ConvertEncoding(System.String,System.Text.Encoding,System.Text.Encoding)">
+            <summary>
+            转换字符串编码
+            </summary>
+            <param name="str">要转换的字符串</param>
+            <param name="srcEncoding">源编码</param>
+            <param name="dstEncoding">目标编码</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsNullOrEmpty(System.String)">
+            <summary>
+            是否为空
+            </summary>
+            <param name="source">字符串</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsNotNullOrEmpty(System.String)">
+            <summary>
+            是否不为空
+            </summary>
+            <param name="source">字符串</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsNullOrWhiteSpace(System.String)">
+            <summary>
+            字符串是否为空或空字符串
+            </summary>
+            <param name="source"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsNotNullOrWhiteSpace(System.String)">
+            <summary>
+            字符串是否不为空或空字符串
+            </summary>
+            <param name="source"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsUrlAddress(System.String)">
+            <summary>
+            是否是url地址
+            </summary>
+            <param name="checkStr">字符串</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsEmail(System.String)">
+            <summary>
+            判断是否是正确的电子邮件格式
+            </summary>
+            <param name="source">字符串</param>
+            <returns>bool</returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsIdCard(System.String)">
+            <summary>
+            判断是否是正确的身份证编码格式
+            </summary>
+            <param name="source">字符串</param>
+            <returns>bool</returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsPostcode(System.String)">
+            <summary>
+            判断是否是正确的邮政编码格式
+            </summary>
+            <param name="source">字符串</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsMatchRegex(System.String,System.String)">
+            <summary>
+            是否匹配正则表达式，匹配返回true，否则false
+            </summary>
+            <param name="source">字符串</param>
+            <param name="regex">正则表达式</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsIp(System.String)">
+            <summary>
+            判断字符串是否是IP，如果是返回True，不是返回False
+            </summary>
+            <param name="source">字符串</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsHasChinese(System.String)">
+            <summary>
+            是否包含中文或全角字符
+            </summary>
+            <param name="checkStr">字符串</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsAllChinese(System.String)">
+            <summary>
+            是否是中文
+            </summary>
+            <param name="checkStr">字符串</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsInt(System.String)">
+            <summary>
+            是否为正整数
+            </summary>
+            <param name="intStr">字符串</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsIntWithZero(System.String)">
+            <summary>
+            非负整数
+            </summary>
+            <param name="intStr">字符串</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsNumber(System.String)">
+            <summary>
+            是否是数字
+            </summary>
+            <param name="checkStr">字符串</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsDecimal(System.String)">
+            <summary>
+            是否是Decimal类型数据
+            </summary>
+            <param name="checkStr">字符串</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsDateTime(System.String)">
+            <summary>
+            是否是DateTime类型数据
+            识别格式 yyyy-MM-dd HH:mm:ss
+            </summary>
+            <param name="checkStr">字符串</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsLegalXmlChar(System.Int32)">
+            <summary>
+            判断是否是XML 1.0允许的字符
+            </summary>
+            <param name="character">字符串</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Extends.StringExt.IsLegalXmlChar(System.String)">
+            <summary>
+            判断是否是合法的 XML 1.0标准允许的字符串 true：标准 false：包含不标准的字符
+            </summary>
+            <param name="xml">xml</param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Manager.TimedTaskManager">
+            <summary>
+            定时任务管理器
+            </summary>
+            <author> Hou Longchao </author>
+        </member>
+        <member name="M:UDS.Common.Manager.TimedTaskManager.Init">
+            <summary>
+            以指定周期初始化<see cref="T:UDS.Common.Manager.TimedTaskManager"/>，将会在指定周期调用一次注册事件
+            以第一次初始化为准，之后调用该方法将不起作用
+            默认周期为1s
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Manager.TimedTaskManager.Init(System.TimeSpan)">
+            <summary>
+            以指定周期初始化<see cref="T:UDS.Common.Manager.TimedTaskManager"/>，将会在指定周期调用一次注册事件
+            以第一次初始化为准，之后调用该方法将不起作用
+            </summary>
+            <param name="period">周期</param>
+        </member>
+        <member name="M:UDS.Common.Manager.TimedTaskManager.RegisterCallback(System.Action{System.DateTime})">
+            <summary>
+            注册回调方法，以<see cref="M:UDS.Common.Manager.TimedTaskManager.Init(System.TimeSpan)"/>初始化时指定的周期执行此回调
+            </summary>
+            <param name="callback">回调</param>
+        </member>
+        <member name="M:UDS.Common.Manager.TimedTaskManager.RegisterCallback(System.Action{System.DateTime},System.Action{System.Exception})">
+            <summary>
+            注册回调方法，以<see cref="M:UDS.Common.Manager.TimedTaskManager.Init(System.TimeSpan)"/>初始化时指定的周期执行此回调
+            </summary>
+            <param name="callback">回调</param>
+            <param name="exception">回调异常</param>
+        </member>
+        <member name="M:UDS.Common.Manager.TimedTaskManager.SetGlobalException(System.Action{System.Exception})">
+            <summary>
+            设置全局异常，当任何回调出现异常时都会执行该回调
+            </summary>
+            <param name="exception"></param>
+        </member>
+        <member name="T:UDS.Common.Models.PageData`1">
+            <summary>
+            分页数据
+            </summary>
+            <typeparam name="TEntity"></typeparam>
+        </member>
+        <member name="P:UDS.Common.Models.PageData`1.PageIndex">
+            <summary>
+            页码
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Models.PageData`1.PageSize">
+            <summary>
+            页大小
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Models.PageData`1.TotalCount">
+            <summary>
+            总数
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Models.PageData`1.Data">
+            <summary>
+            数据
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Models.PageSearch">
+            <summary>
+            分页搜索
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Models.PageSearch.PageIndex">
+            <summary>
+            第几页
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Models.PageSearch.PageSize">
+            <summary>
+            页大小
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Models.UserBaseInfo">
+            <summary>
+            用户基础信息
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Models.UserBaseInfo.UserId">
+            <summary>
+            用户Id
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Models.UserBaseInfo.UserName">
+            <summary>
+            用户名
+            </summary>
+        </member>
+        <member name="T:UDS.Common.MySql.SqlProvider">
+            <summary>
+            常用sql
+            </summary>
+        </member>
+        <member name="M:UDS.Common.MySql.SqlProvider.GetTableSql(System.String)">
+            <summary>
+            构建获取指定数据库<paramref name="databaseName"/>中所有表信息的sql脚本，
+            该sql查询出来的数据可以映射到对象<see cref="T:UDS.Common.MySql.Table"/>中
+            </summary>
+            <param name="databaseName"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.MySql.SqlProvider.GetTableColumnsSql(System.String,System.String)">
+            <summary>
+            构建获取指定数据库<paramref name="databaseName"/>中指定表<paramref name="tableName"/>的所有列信息的sql脚本，
+            该sql查询出来的数据可以映射到对象<see cref="T:UDS.Common.MySql.TableColumn"/>中
+            </summary>
+            <param name="databaseName"></param>
+            <param name="tableName"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.MySql.Table">
+            <summary>
+            表
+            </summary>
+        </member>
+        <member name="P:UDS.Common.MySql.Table.TABLE_NAME">
+            <summary>
+            表明
+            </summary>
+        </member>
+        <member name="P:UDS.Common.MySql.Table.TABLE_TYPE">
+            <summary>
+            表类型
+            </summary>
+        </member>
+        <member name="P:UDS.Common.MySql.Table.TABLE_COMMENT">
+            <summary>
+            表描述
+            </summary>
+        </member>
+        <member name="T:UDS.Common.MySql.TableColumn">
+            <summary>
+            表列信息
+            </summary>
+        </member>
+        <member name="P:UDS.Common.MySql.TableColumn.TABLE_NAME">
+            <summary>
+            表明
+            </summary>
+        </member>
+        <member name="P:UDS.Common.MySql.TableColumn.COLUMN_NAME">
+            <summary>
+            列名
+            </summary>
+        </member>
+        <member name="P:UDS.Common.MySql.TableColumn.IS_NULLABLE">
+            <summary>
+            是否可空
+            </summary>
+        </member>
+        <member name="P:UDS.Common.MySql.TableColumn.DATA_TYPE">
+            <summary>
+            字段类型
+            </summary>
+        </member>
+        <member name="P:UDS.Common.MySql.TableColumn.COLUMN_COMMENT">
+            <summary>
+            列描述
+            </summary>
+        </member>
+        <member name="P:UDS.Common.MySql.TableColumn.COLUMN_KEY">
+            <summary>
+            主键/外键
+            </summary>
+        </member>
+        <member name="P:UDS.Common.MySql.TableColumn.CHARACTER_MAXIMUM_LENGTH">
+            <summary>
+            字段长度
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Utils.AttributeUtil">
+            <summary>
+            Attribute工具
+            </summary>
+            <remarks>By:侯龙超 2017/11/12</remarks>
+        </member>
+        <member name="M:UDS.Common.Utils.AttributeUtil.GetMemberAttribute``1(System.Linq.Expressions.Expression{System.Func{System.Object}})">
+            <summary>
+            获得 Member 的自定义属性 <typeparamref name="TAttr"/>
+            </summary>
+            <typeparam name="TAttr">自定义<see cref="T:System.Attribute"/></typeparam>
+            <param name="expression"> Member 的空lambda表达式,如 ()=>user.Name </param>
+            <returns>指定的<typeparamref name="TAttr"/></returns>
+        </member>
+        <member name="T:UDS.Common.Utils.CheckUtil">
+            <summary>
+            常用校验工具
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Utils.CheckUtil.IsInt(System.String)">
+            <summary>
+            是否是整数
+            </summary>
+            <param name="num">需要校验的数字字符串</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.CheckUtil.IsDouble(System.String)">
+            <summary>
+            是否为实数
+            </summary>
+            <param name="num">需要校验的数字字符串</param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Utils.DirectoryUtil">
+            <summary>
+            文件夹工具
+            </summary>
+            <remarks>By:侯龙超 2017/09/29</remarks>
+        </member>
+        <member name="M:UDS.Common.Utils.DirectoryUtil.Copy(System.String,System.String,System.Action{System.String,System.String})">
+            <summary>
+            文件夹拷贝方法
+            </summary>
+            <param name="source">拷贝源</param>
+            <param name="target">目标目录</param>
+            <param name="fileCopyCallback">文件拷贝回调<![CDATA[<源文件全路径，目标文件全路径>]]></param>
+            <remarks>By:侯龙超 2017/09/29</remarks>
+        </member>
+        <member name="M:UDS.Common.Utils.DirectoryUtil.Move(System.String,System.String)">
+            <summary>
+            文件夹移动
+            </summary>
+            <param name="source">源文件夹</param>
+            <param name="target">目标文件夹</param>
+        </member>
+        <member name="T:UDS.Common.Utils.EmailUtil">
+            <summary>
+            邮件工具
+            </summary>
+            <author>2018-03-19 Hou LongChao</author>
+        </member>
+        <member name="M:UDS.Common.Utils.EmailUtil.InitGlobalConfig(UDS.Common.Utils.EmailConfig)">
+            <summary>
+            初始化全局Email配置
+            </summary>
+            <param name="emailConfig">Email配置</param>
+        </member>
+        <member name="M:UDS.Common.Utils.EmailUtil.SendEmail(System.String,System.String,System.String,System.String,System.Collections.Generic.IList{System.String})">
+            <summary>
+            使用全局Email配置发送邮件
+            </summary>
+            <param name="to">接收人邮箱，多个邮箱用逗号(,)或分号(;)分隔</param>
+            <param name="subject">邮件主题</param>
+            <param name="body">邮件内容</param>
+            <param name="cc">抄送人地址，多个邮箱用逗号(,)或分号(;)分隔</param>
+            <param name="attachs">附件路径</param>
+        </member>
+        <member name="M:UDS.Common.Utils.EmailUtil.SendEmail(UDS.Common.Utils.EmailConfig,System.String,System.String,System.String,System.String,System.Collections.Generic.IList{System.String})">
+            <summary>
+            发送邮件
+            </summary>
+            <param name="emailConfig">邮件配置</param>
+            <param name="to">接收人邮箱，多个邮箱用逗号(,)或分号(;)分隔</param>
+            <param name="subject">邮件主题</param>
+            <param name="body">邮件内容</param>
+            <param name="cc">抄送人地址，多个邮箱用逗号(,)或分号(;)分隔</param>
+            <param name="attachs">附件路径</param>
+        </member>
+        <member name="T:UDS.Common.Utils.EmailConfig">
+            <summary>
+            邮件配置
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Utils.EmailConfig.MailFrom">
+            <summary>
+            发件人邮箱
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Utils.EmailConfig.DisplyName">
+            <summary>
+            邮件标题
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Utils.EmailConfig.SubjectSuffix">
+            <summary>
+            邮件主题后缀
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Utils.EmailConfig.MailUser">
+            <summary>
+            邮件服务器账户名
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Utils.EmailConfig.MailPassword">
+            <summary>
+            邮件服务器密码
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Utils.EmailConfig.MailHost">
+            <summary>
+            SMTP邮件服务器
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Utils.EmailConfig.MailPort">
+            <summary>
+            SMTP邮件服务器端口
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Utils.EmailConfig.IsBodyHtml">
+            <summary>
+            正文是否是html格式
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Utils.EmailConfig.SubjectEncoding">
+            <summary>
+            主题内容编码
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Utils.EmailConfig.BodyEncoding">
+            <summary>
+            邮件正文编码
+            </summary>
+        </member>
+        <member name="P:UDS.Common.Utils.EmailConfig.MailPriority">
+            <summary>
+            邮件优先权
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Utils.EmailConfig.#ctor(System.String,System.String,System.String,System.String,System.String,System.String)">
+            <summary>
+            Email配置
+            </summary>
+            <param name="mailHost">Email服务器地址</param>
+            <param name="mailUser">Email用户名</param>
+            <param name="mailPassword">Email密码</param>
+            <param name="mailFrom">Email发送邮箱</param>
+            <param name="displayName">邮件显示名称</param>
+            <param name="subjectSuffix">邮件主题后缀</param>
+        </member>
+        <member name="T:UDS.Common.Utils.EncryptionUtil">
+            <summary>
+            加密算法
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Utils.EncryptionUtil.MD5(System.String)">
+            <summary>
+            MD5
+            </summary>
+            <param name="str"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.EncryptionUtil.MD5(System.IO.Stream)">
+            <summary>
+            MD5
+            </summary>
+            <param name="stream"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.EncryptionUtil.SHA1(System.String)">
+            <summary>
+            SHA1
+            </summary>
+            <param name="str"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.EncryptionUtil.SHA1(System.IO.Stream)">
+            <summary>
+            SHA1
+            </summary>
+            <param name="stream"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.EncryptionUtil.SHA256(System.String)">
+            <summary>
+            SHA256
+            </summary>
+            <param name="str"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.EncryptionUtil.SHA256(System.IO.Stream)">
+            <summary>
+            SHA256
+            </summary>
+            <param name="stream"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Utils.ExpressionUtil">
+            <summary>
+            表达式 Util
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Utils.ExpressionUtil.True``1">
+            <summary>
+            一个返回True的表达式
+            </summary>
+            <typeparam name="T"></typeparam>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.ExpressionUtil.False``1">
+            <summary>
+            一个返回False的表达式
+            </summary>
+            <typeparam name="T"></typeparam>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.ExpressionUtil.Or``1(System.Linq.Expressions.Expression{System.Func{``0,System.Boolean}},System.Linq.Expressions.Expression{System.Func{``0,System.Boolean}})">
+            <summary>
+            表达式或运算
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="expr1"></param>
+            <param name="expr2"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.ExpressionUtil.And``1(System.Linq.Expressions.Expression{System.Func{``0,System.Boolean}},System.Linq.Expressions.Expression{System.Func{``0,System.Boolean}})">
+            <summary>
+            表达式与运算
+            </summary>
+            <typeparam name="T"></typeparam>
+            <param name="expr1"></param>
+            <param name="expr2"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Utils.FileUtil">
+            <summary>
+            文件操作工具
+            </summary>
+            <remarks>By:侯龙超 2017/09/29</remarks>
+        </member>
+        <member name="M:UDS.Common.Utils.FileUtil.Copy(System.String,System.String,System.Boolean,System.Int32)">
+            <summary>
+            拷贝文件
+            </summary>
+            <param name="sourceFileName">源文件</param>
+            <param name="destFileName">目标文件</param>
+            <param name="overwrite">是否覆盖，默认true</param>
+            <param name="retry">拷贝出错时重试次数，每次间隔3秒</param>
+            <remarks>By:侯龙超 2017/09/29</remarks>
+        </member>
+        <member name="M:UDS.Common.Utils.FileUtil.Move(System.String,System.String,System.Int32)">
+            <summary>
+            移动文件
+            </summary>
+            <param name="sourceFileName">原文件</param>
+            <param name="destFileName">目标文件</param>
+            <param name="retry">移动出错时重试次数，每次间隔3秒</param>
+            <!-- 2017/12/29     HouLongchao     Init -->
+        </member>
+        <member name="T:UDS.Common.Utils.Http.HttpUrlUtil">
+            <summary>
+            HttpUrl工具
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Utils.Http.HttpUrlUtil.DictionaryToHttpUrlParam(System.Collections.Generic.IDictionary{System.String,System.Object})">
+            <summary>
+            参数字典转url参数字符串
+            </summary>
+            <param name="paramDict"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Utils.MathCalculator">
+            <summary>
+            数学计算器
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Utils.MathCalculator.OpType">
+            <summary>
+            操作类型
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Utils.MathCalculator.OpType.Data">
+            <summary>
+            数据
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Utils.MathCalculator.OpType.Add">
+            <summary>
+            加
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Utils.MathCalculator.OpType.Subtract">
+            <summary>
+            减
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Utils.MathCalculator.OpType.Multiply">
+            <summary>
+            乘
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Utils.MathCalculator.OpType.Divide">
+            <summary>
+            除
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Utils.MathCalculator.OpType.LeftBracket">
+            <summary>
+            左括号
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Utils.MathCalculator.OpType.RightBracket">
+            <summary>
+            右括号
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Utils.MathCalculator.OpType.Separator">
+            <summary>
+            分隔符
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Utils.MathCalculator.OpType.Ceiling">
+            <summary>
+            向上取整
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Utils.MathCalculator.OpType.Floor">
+            <summary>
+            向下取整
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Utils.MathCalculator.OpType.Max">
+            <summary>
+            最大值
+            </summary>
+        </member>
+        <member name="F:UDS.Common.Utils.MathCalculator.OpType.Min">
+            <summary>
+            最小值
+            </summary>
+        </member>
+        <member name="T:UDS.Common.Utils.MathCalculator.Metadata">
+            <summary>
+            元数据
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Utils.MathCalculator.Calculate(System.String)">
+            <summary>
+            计算
+            </summary>
+            <param name="formula"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.MathCalculator.GetNextNum(System.String@,System.Int32@)">
+            <summary>
+            获取从<paramref name="index"/>开始的下一个数字
+            </summary>
+            <param name="formula"></param>
+            <param name="index"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.MathCalculator.GetNextSymbol(System.String@,System.Int32@)">
+            <summary>
+            获取从<paramref name="index"/>开始的下一个数学符号
+            </summary>
+            <param name="formula"></param>
+            <param name="index"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Utils.MathUtil">
+            <summary>
+            数学相关工具
+            </summary>
+            2017/11/19    HouLongchao     Init
+        </member>
+        <member name="F:UDS.Common.Utils.MathUtil.THRESHOLD">
+            <summary>
+            浮点数比较阈值
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Utils.MathUtil.CalculatePath(System.String)">
+            <summary>
+            计算一个支持括号的四则运算字符串
+            </summary>
+            <param name="path">支持括号的四则运算字符串，以及CEILING()向上取整，FLOOR()向下取整, MAX(A,B), MIN(A,B)</param>
+            <returns></returns>
+            <exception cref="M:UDS.Common.Utils.MathUtil.CalculatePath(System.String)"></exception>
+        </member>
+        <member name="M:UDS.Common.Utils.MathUtil.AreEqual(System.Double,System.Double)">
+            <summary>
+            比较两个浮点数在标准阈值<see cref="F:UDS.Common.Utils.MathUtil.THRESHOLD"/>范围内是否相等
+            </summary>
+            <param name="a"></param>
+            <param name="b"></param>
+            <returns></returns>
+            2017/11/19  HouLongchao     Init
+        </member>
+        <member name="M:UDS.Common.Utils.MathUtil.PassCodition(System.String)">
+            <summary>
+            判断条件表达式是否为真
+            </summary>
+            <param name="codition">条件表达式</param>
+            <returns></returns>
+            <exception cref="M:UDS.Common.Utils.MathUtil.CalculatePath(System.String)"></exception>
+            2017/12/25  HouLongchao     支持字符串比较
+        </member>
+        <member name="M:UDS.Common.Utils.MathUtil.PassCondition(System.String)">
+            <summary>
+            
+            </summary>
+            <param name="condition"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Utils.RangeUtil">
+            <summary>
+            区间工具
+            </summary>
+            2017/11/19  HouLongchao     Init
+        </member>
+        <member name="M:UDS.Common.Utils.RangeUtil.IsRange(System.String)">
+            <summary>
+            判断给定的字符串是否为一个区间字符串
+            </summary>
+            <param name="range">区间字符串 (0.00,0.00) [0.00,0.00) (0.00,0.00] [0.00,0.00]</param>
+            <returns></returns>
+            2017/11/19  HouLongchao     Init
+        </member>
+        <member name="M:UDS.Common.Utils.RangeUtil.IsInRange(System.Double,System.String)">
+            <summary>
+            判断给定的数字是否在制定区间中
+            </summary>
+            <param name="num">需要判断的数字</param>
+            <param name="range">区间字符串 (0.00,0.00) [0.00,0.00) (0.00,0.00] [0.00,0.00]</param>
+            <returns></returns>
+            2017/11/19  HouLongchao     Init
+        </member>
+        <member name="M:UDS.Common.Utils.RangeUtil.IsInRange(System.Decimal,System.String)">
+            <summary>
+            判断给定的数字是否在制定区间中
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Utils.RangeUtil.Intersection(System.String[])">
+            <summary>
+            区间取交集
+            </summary>
+            <param name="range"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.RangeUtil.Union(System.String[])">
+            <summary>
+            区间取并集
+            </summary>
+            <param name="ranges"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Utils.RegistryUtil">
+            <summary>
+            注册表工具
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Utils.RegistryUtil.RegisterUrlStartSchema(System.String,System.String)">
+            <summary>
+            注册URL启动Schema
+            </summary>
+            <param name="schema">启动标识</param>
+            <param name="exe">注册启动的程序</param>
+        </member>
+        <member name="M:UDS.Common.Utils.RegistryUtil.DeleteUrlStartSchema(System.String)">
+            <summary>
+            删除URL启动Schema
+            </summary>
+            <param name="schema">启动标识</param>
+        </member>
+        <member name="T:UDS.Common.Utils.RSAUtil">
+            <summary>
+            RSA工具
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Utils.RSAUtil.GenerateKey">
+            <summary>
+            生成密钥
+            </summary>
+            <returns>(公钥，私钥)</returns>
+        </member>
+        <member name="M:UDS.Common.Utils.RSAUtil.Encrypt(System.Security.Cryptography.RSAParameters,System.Byte[])">
+            <summary>
+            加密
+            </summary>
+            <param name="rsaKey">密钥</param>
+            <param name="data">需要加密的数据</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.RSAUtil.Encrypt(System.Security.Cryptography.RSAParameters,System.String)">
+            <summary>
+            加密
+            </summary>
+            <param name="rsaKey">密钥</param>
+            <param name="data">需要加密的数据</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.RSAUtil.Decrypt(System.Security.Cryptography.RSAParameters,System.Byte[])">
+            <summary>
+            解密
+            </summary>
+            <param name="rsaKey">密钥</param>
+            <param name="data">需要解密的数据</param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.RSAUtil.Decrypt(System.Security.Cryptography.RSAParameters,System.String)">
+            <summary>
+            解密
+            </summary>
+            <param name="rsaKey">密钥</param>
+            <param name="data">需要解密的数据</param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Utils.StackTraceUsageUtil">
+            <summary>
+            堆栈使用信息工具
+            </summary>
+        </member>
+        <member name="M:UDS.Common.Utils.StackTraceUsageUtil.GetClassFullName(System.Int32)">
+            <summary>
+            获得调用该方法的类名
+            </summary>
+            <param name="skipFrame"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.StackTraceUsageUtil.GetMethodName(System.Int32)">
+            <summary>
+            获得调用该方法的方法名
+            </summary>
+            <param name="skipFrame"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.StackTraceUsageUtil.GetFileName(System.Int32)">
+            <summary>
+            获得调用该方法的文件名
+            </summary>
+            <param name="skipFrame"></param>
+            <returns></returns>
+        </member>
+        <member name="M:UDS.Common.Utils.StackTraceUsageUtil.GetFileLineNumber(System.Int32)">
+            <summary>
+            获得调用该方法时所在文件行数
+            </summary>
+            <param name="skipFrame"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.Common.Utils.VersionUtil">
+            <summary>
+            版本相关工具
+            </summary>
+            <remarks>By:侯龙超 2017/09/29</remarks>
+        </member>
+        <member name="M:UDS.Common.Utils.VersionUtil.CompareVersion(System.String,System.String)">
+            <summary>
+            比较 version 大小，高位优先，长度随后
+            </summary>
+            <code>
+            Assert.IsTrue(VersionUtils.CompareVersion("1.0", "1.0.0.0") == 0);
+            Assert.IsTrue(VersionUtils.CompareVersion("1.0.0", "1.0.0.0") &lt; 0);
+            Assert.IsTrue(VersionUtils.CompareVersion("1.0.0.0", "1.0.0") &gt; 0);
+            Assert.IsTrue(VersionUtils.CompareVersion("1.0.2.0", "1.0.0.0") &gt; 0);
+            Assert.IsTrue(VersionUtils.CompareVersion("1.0.2.0", "1.0") &gt; 0);
+            Assert.IsTrue(VersionUtils.CompareVersion("2.0", "1.0") &gt; 0);
+            </code>
+            
+            <param name="v1str">version1</param>
+            <param name="v2str">version2</param>
+            <returns>-1,0,1</returns>
+            <remarks>By:侯龙超 2017/09/29</remarks>
+        </member>
+        <member name="T:UDS.EventBus.Abstractions.IDynamicIntegrationEventHandler">
+            <summary>
+            动态事件处理器
+            </summary>
+        </member>
+        <member name="M:UDS.EventBus.Abstractions.IDynamicIntegrationEventHandler.Handle(System.Object)">
+            <summary>
+            处理
+            </summary>
+            <param name="eventData"></param>
+            <returns></returns>
+        </member>
+        <member name="T:UDS.EventBus.Abstractions.IEventBus">
+            <summary>
+            事件总线
+            </summary>
+        </member>
+        <member name="M:UDS.EventBus.Abstractions.IEventBus.Publish(UDS.EventBus.Events.IntegrationEvent)">
+            <summary>
+            发布一个事件
+            </summary>
+            <param name="event"></param>
+        </member>
+        <member name="M:UDS.EventBus.Abstractions.IEventBus.Subscribe``2">
+            <summary>
+            订阅事件
+            </summary>
+            <typeparam name="T"></typeparam>
+            <typeparam name="TH"></typeparam>
+        </member>
+        <member name="M:UDS.EventBus.Abstractions.IEventBus.SubscribeDynamic``1(System.String)">
+            <summary>
+            订阅事件
+            </summary>
+            <typeparam name="TH"></typeparam>
+            <param name="eventName">事件名称</param>
+        </member>
+        <member name="M:UDS.EventBus.Abstractions.IEventBus.UnsubscribeDynamic``1(System.String)">
+            <summary>
+            退订事件
+            </summary>
+            <typeparam name="TH"></typeparam>
+            <param name="eventName"></param>
+        </member>
+        <member name="M:UDS.EventBus.Abstractions.IEventBus.Unsubscribe``2">
+            <summary>
+            推定事件
+            </summary>
+            <typeparam name="T"></typeparam>
+            <typeparam name="TH"></typeparam>
+        </member>
+        <member name="T:UDS.EventBus.Abstractions.IIntegrationEventHandler`1">
+            <summary>
+            事件处理器
+            </summary>
+            <typeparam name="TIntegrationEvent"></typeparam>
+        </member>
+        <member name="T:UDS.EventBus.Abstractions.IIntegrationEventHandler">
+            <summary>
+            事件处理器
+            </summary>
+        </member>
+        <member name="T:UDS.EventBus.Events.IntegrationEvent">
+            <summary>
+            集成事件
+            </summary>
+        </member>
+        <member name="M:UDS.EventBus.Events.IntegrationEvent.#ctor">
+            <summary>
+            集成事件
+            </summary>
+        </member>
+        <member name="M:UDS.EventBus.Events.IntegrationEvent.#ctor(System.Guid,System.DateTime)">
+            <summary>
+            集成事件
+            </summary>
+            <param name="id"></param>
+            <param name="createDate"></param>
+        </member>
+        <member name="P:UDS.EventBus.Events.IntegrationEvent.Id">
+            <summary>
+            Id
+            </summary>
+        </member>
+        <member name="P:UDS.EventBus.Events.IntegrationEvent.CreationDate">
+            <summary>
+            创建时间
+            </summary>
+        </member>
+        <member name="T:UDS.EventBus.IEventBusSubscriptionsManager">
+            <summary>
+            事件订阅管理器
+            </summary>
+        </member>
+        <member name="T:UDS.EventBus.InMemoryEventBusSubscriptionsManager">
+            <summary>
+            事件订阅管理器 - 内存版
+            </summary>
+            <summary>
+            事件订阅者管理
+            </summary>
+        </member>
+        <member name="M:UDS.EventBus.InMemoryEventBusSubscriptionsManager.AddDynamicSubscription``1(System.String)">
+            <summary>
+            添加订阅
+            </summary>
+            <typeparam name="TH"></typeparam>
+            <param name="eventName"></param>
+        </member>
+        <member name="M:UDS.EventBus.InMemoryEventBusSubscriptionsManager.AddSubscription``2">
+            <summary>
+            添加订阅
+            </summary>
+            <typeparam name="T"></typeparam>
+            <typeparam name="TH"></typeparam>
+        </member>
+        <member name="M:UDS.EventBus.InMemoryEventBusSubscriptionsManager.RemoveDynamicSubscription``1(System.String)">
+            <summary>
+            移除订阅
+            </summary>
+            <typeparam name="TH"></typeparam>
+            <param name="eventName"></param>
+        </member>
+        <member name="M:UDS.EventBus.InMemoryEventBusSubscriptionsManager.RemoveSubscription``2">
+            <summary>
+            移除订阅
+            </summary>
+            <typeparam name="T"></typeparam>
+            <typeparam name="TH"></typeparam>
+        </member>
+        <member name="T:UDS.EventBus.InMemoryEventBusSubscriptionsManager.SubscriptionInfo">
+            <summary>
+            订阅者信息
+            </summary>
+        </member>
+    </members>
+</doc>

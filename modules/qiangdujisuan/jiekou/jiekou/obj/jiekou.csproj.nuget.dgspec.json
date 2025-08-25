@@ -1,0 +1,58 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\Users\\zifeng qi\\Desktop\\main window\\main window\\modules\\qiangdujisuan\\jiekou\\jiekou\\jiekou.csproj": {}
+  },
+  "projects": {
+    "C:\\Users\\zifeng qi\\Desktop\\main window\\main window\\modules\\qiangdujisuan\\jiekou\\jiekou\\jiekou.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\zifeng qi\\Desktop\\main window\\main window\\modules\\qiangdujisuan\\jiekou\\jiekou\\jiekou.csproj",
+        "projectName": "jiekou",
+        "projectPath": "C:\\Users\\zifeng qi\\Desktop\\main window\\main window\\modules\\qiangdujisuan\\jiekou\\jiekou\\jiekou.csproj",
+        "packagesPath": "C:\\Users\\zifeng qi\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\zifeng qi\\Desktop\\main window\\main window\\modules\\qiangdujisuan\\jiekou\\jiekou\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\zifeng qi\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net472"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net472": {
+            "targetAlias": "net472",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net472": {
+          "targetAlias": "net472",
+          "dependencies": {
+            "Newtonsoft.Json": {
+              "target": "Package",
+              "version": "[13.0.3, )"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.403\\RuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,81 @@
+[{
+	"Key": "2",
+	"Value": "application\\picture\\TubeDistribution\\TubePattern\\2.png",
+	"Classify": "2",
+	"IsDefault": true,
+	"ShimType":[
+		{"Key":"088","Value":"2A"},
+		{"Key":"091","Value":"1A"},
+		{"Key":"089","Value":"1A"},
+		{"Key":"090","Value":"1A"},
+		{"Key":"101","Value":"2A"},
+	]
+}, {
+	"Key": "4_1",
+	"Value": "application\\picture\\TubeDistribution\\TubePattern\\4_1.png",
+	"Classify": "4",
+	"ShimType":[
+		{"Key":"088","Value":"4B"},
+		{"Key":"091","Value":"2A"},
+		{"Key":"089","Value":"1A"},
+		{"Key":"090","Value":"1A"},
+		{"Key":"101","Value":"4B"},
+	]
+}, {
+	"Key": "4_2",
+	"Value": "application\\picture\\TubeDistribution\\TubePattern\\4_2.png",
+	"Classify": "4",
+	"IsDefault": true,
+	"ShimType":[
+		{"Key":"088","Value":"4A"},
+		{"Key":"091","Value":"2A"},
+		{"Key":"089","Value":"1A"},
+		{"Key":"090","Value":"1A"},
+		{"Key":"101","Value":"4A"},
+	]
+}, {
+	"Key": "4_3",
+	"Value": "application\\picture\\TubeDistribution\\TubePattern\\4_3.png",
+	"Classify": "4",
+	"ShimType":[
+		{"Key":"088","Value":"4A"},
+		{"Key":"091","Value":"2A"},
+		{"Key":"089","Value":"1A"},
+		{"Key":"090","Value":"1A"},
+		{"Key":"101","Value":"4A"},
+	]
+}, {
+	"Key": "6_1",
+	"Value": "application\\picture\\TubeDistribution\\TubePattern\\6_1.png",
+	"Classify": "6",
+	"IsDefault": true,
+	"ShimType":[
+		{"Key":"088","Value":"6C"},
+		{"Key":"091","Value":"6D"},
+		{"Key":"089","Value":"1A"},
+		{"Key":"090","Value":"1A"},
+		{"Key":"101","Value":"6C"},
+	]
+}, {
+	"Key": "6_2",
+	"Value": "application\\picture\\TubeDistribution\\TubePattern\\6_2.png",
+	"Classify": "6",
+	"ShimType":[
+		{"Key":"088","Value":"6A"},
+		{"Key":"091","Value":"6B"},
+		{"Key":"089","Value":"1A"},
+		{"Key":"090","Value":"1A"},
+		{"Key":"101","Value":"6A"},
+	]
+}, {
+	"Key": "6_3",
+	"Value": "application\\picture\\TubeDistribution\\TubePattern\\6_3.png",
+	"Classify": "6",
+	"ShimType":[
+		{"Key":"088","Value":"6A"},
+		{"Key":"091","Value":"6B"},
+		{"Key":"089","Value":"1A"},
+		{"Key":"090","Value":"1A"},
+		{"Key":"101","Value":"6A"},
+	]
+}]

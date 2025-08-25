@@ -1,0 +1,4235 @@
+{
+    "管箱法兰": {
+        "IsSuccess": true,
+        "Datas": [
+            {
+                "Id": "校核成功:实际使用的螺栓总截面积>=需要的螺栓总截面积",
+                "Name": "输出提示",
+                "Value": "校核成功:实际使用的螺栓总截面积>=需要的螺栓总截面积",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:轴向应力",
+                "Name": "输出提示",
+                "Value": "校核成功:轴向应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:径向应力",
+                "Name": "输出提示",
+                "Value": "校核成功:径向应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:切向应力",
+                "Name": "输出提示",
+                "Value": "校核成功:切向应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:综合应力",
+                "Name": "输出提示",
+                "Value": "校核成功:综合应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:预紧状态刚度<= 1",
+                "Name": "输出提示",
+                "Value": "校核成功:预紧状态刚度<= 1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:操作状态刚度<= 1",
+                "Name": "输出提示",
+                "Value": "校核成功:操作状态刚度<= 1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:实际使用的螺栓总截面积>=需要的螺栓总截面积2",
+                "Name": "输出提示",
+                "Value": "校核成功:实际使用的螺栓总截面积>=需要的螺栓总截面积",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:轴向应力2",
+                "Name": "输出提示",
+                "Value": "校核成功:轴向应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:径向应力2",
+                "Name": "输出提示",
+                "Value": "校核成功:径向应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:切向应力2",
+                "Name": "输出提示",
+                "Value": "校核成功:切向应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:综合应力2",
+                "Name": "输出提示",
+                "Value": "校核成功:综合应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:预紧状态刚度<= 12",
+                "Name": "输出提示",
+                "Value": "校核成功:预紧状态刚度<= 1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:操作状态刚度<= 12",
+                "Name": "输出提示",
+                "Value": "校核成功:操作状态刚度<= 1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "Fl1",
+                "Name": "法兰",
+                "Value": "优先法兰",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TypeofExchange",
+                "Name": "换热器型号",
+                "Value": "BEU",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_P_s",
+                "Name": "壳程设计压力",
+                "Value": "1.6",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_T_s",
+                "Name": "壳程设计温度",
+                "Value": "200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_P_t",
+                "Name": "管程设计压力",
+                "Value": "2.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_T_t",
+                "Name": "管程设计温度",
+                "Value": "250",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Density_s",
+                "Name": "壳程液柱密度",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Density_t",
+                "Name": "管程液柱密度",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "IfPLiquid",
+                "Name": "是否考虑液柱静压力",
+                "Value": "True",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TypeofFl",
+                "Name": "法兰类型",
+                "Value": "整体法兰2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MtlType",
+                "Name": "法兰材料类型",
+                "Value": "锻件",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MtlName",
+                "Name": "法兰材料牌号",
+                "Value": "16Mn",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C2",
+                "Name": "法兰材料腐蚀裕量",
+                "Value": "3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C1",
+                "Name": "法兰材料负偏差",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SealingfaceNumber",
+                "Name": "压紧面形状序号",
+                "Value": "1a",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_IfC2",
+                "Name": "法兰盘是否考虑腐蚀裕量",
+                "Value": "True",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlBigEndEffective",
+                "Name": "法兰颈部大端有效厚度",
+                "Value": "41",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlLittleEndEffective",
+                "Name": "法兰颈部小端有效厚度",
+                "Value": "27.3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Di",
+                "Name": "法兰名义内径",
+                "Value": "1000",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DoFl",
+                "Name": "法兰名义外径",
+                "Value": "1200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Omiga",
+                "Name": "法兰压紧面压紧宽度ω",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_h",
+                "Name": "法兰颈部高度",
+                "Value": "55",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnComposition",
+                "Name": "覆层厚度",
+                "Value": "0.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SorT",
+                "Name": "管程还是壳程",
+                "Value": "壳程",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_IfMiddle",
+                "Name": "法兰为夹持法兰",
+                "Value": "True",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_NameFl",
+                "Name": "法兰位置",
+                "Value": "壳体法兰",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FAxial",
+                "Name": "轴向外力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MForce",
+                "Name": "外力矩",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_IfMethod",
+                "Name": "任意式法兰是否按活套法兰计算",
+                "Value": "False",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_HeightWelding",
+                "Name": "焊缝高度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_l",
+                "Name": "焊缝长度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DepthWelding",
+                "Name": "焊缝深度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TypeGasket1or2",
+                "Name": "垫片序号",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialNameGasket",
+                "Name": "垫片材料牌号",
+                "Value": "复合柔性石墨波齿金属板(不锈钢)",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_m",
+                "Name": "垫片系数",
+                "Value": "3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_y",
+                "Name": "比压力",
+                "Value": "69",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_ThicknessGasket",
+                "Name": "垫片厚度",
+                "Value": "3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_EffectiveDoGasket",
+                "Name": "垫片有效外径",
+                "Value": "1063",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_EffectiveDiGasket",
+                "Name": "垫片有效内径",
+                "Value": "1023",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DoGasket",
+                "Name": "垫片名义外径",
+                "Value": "1060",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiGasket",
+                "Name": "垫片名义内径",
+                "Value": "1020",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_S_SeparatorPlate",
+                "Name": "分程隔板处垫片有效密封面积",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_br",
+                "Name": "垫片分程隔板肋条有效密封宽度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_GasketNumber",
+                "Name": "垫片代号",
+                "Value": "2.1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SeparatorPlateW",
+                "Name": "隔条位置尺寸",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Db",
+                "Name": "螺栓中心圆直径",
+                "Value": "1152",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialNameBolt",
+                "Name": "螺栓材料牌号",
+                "Value": "35CrMo",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_dB",
+                "Name": "螺栓公称直径",
+                "Value": "M22",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_n",
+                "Name": "螺栓数量",
+                "Value": "68",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnCylinder",
+                "Name": "圆筒名义厚度",
+                "Value": "30",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiCylinder",
+                "Name": "圆筒名义内径",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DoCylinder",
+                "Name": "圆筒名义外径",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C1_cylinder",
+                "Name": "圆筒材料负偏差",
+                "Value": "0.3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialTypeCylinder",
+                "Name": "圆筒材料类型",
+                "Value": "板材",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialNameCylinder",
+                "Name": "圆筒材料牌号",
+                "Value": "Q345R",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Pcal",
+                "Name": "法兰计算压力",
+                "Value": "2.50986",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Tc_Flange",
+                "Name": "法兰计算温度",
+                "Value": "200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_E_Preload",
+                "Name": "预紧状态法兰材料弹性模量E",
+                "Value": "201000",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_E_Operate",
+                "Name": "操作状态法兰材料弹性模量E",
+                "Value": "191000",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressFlange",
+                "Name": "设计温度下法兰材料许用应力",
+                "Value": "150",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressFlange20",
+                "Name": "室温下法兰材料许用应力",
+                "Value": "178",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ma",
+                "Name": "法兰预紧力矩Ma",
+                "Value": "189690779.36696",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Mo",
+                "Name": "法兰设计力矩Mo",
+                "Value": "159851780.36542",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Mp",
+                "Name": "法兰操作力矩Mp",
+                "Value": "135952820.58509",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Se",
+                "Name": "法兰有效厚度",
+                "Value": "56",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlEffective_cal",
+                "Name": "活套法兰计算有效厚度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_S1DevideS0",
+                "Name": "S1/S0",
+                "Value": "1.50183",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlBigEnd",
+                "Name": "法兰颈部大端名义厚度",
+                "Value": "44",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlLittleEnd",
+                "Name": "法兰颈部小端名义厚度",
+                "Value": "30.3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiFl_cal",
+                "Name": "法兰计算内径",
+                "Value": "1006",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiFlEquivalent_cal",
+                "Name": "法兰当量计算内径",
+                "Value": "1023.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_PLiquid_s",
+                "Name": "壳程液柱静压力",
+                "Value": "0.00986",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_PLiquid_t",
+                "Name": "管程液柱静压力",
+                "Value": "0.00986",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableSressCylinder",
+                "Name": "设计温度下圆筒材料许用应力",
+                "Value": "170",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_N",
+                "Name": "垫片接触宽度N",
+                "Value": "20",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_b0",
+                "Name": "基本密封宽度b0",
+                "Value": "10",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_b",
+                "Name": "有效密封宽度b",
+                "Value": "8.00056",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DG",
+                "Name": "垫片压紧力作用中心圆直径DG",
+                "Value": "1046.99888",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_rl",
+                "Name": "垫片分程隔板肋条总长",
+                "Value": "1012",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Tc_Bolt",
+                "Name": "螺栓计算温度",
+                "Value": "250",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressBolt",
+                "Name": "设计温度下螺栓材料许用应力",
+                "Value": "176",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressBolt20",
+                "Name": "室温下螺栓材料许用应力",
+                "Value": "210",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_dr",
+                "Name": "螺栓根径",
+                "Value": "19.294",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_W",
+                "Name": "螺栓设计载荷W",
+                "Value": "3613118.9916",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Wa",
+                "Name": "预紧状态下，需要的最小螺栓载荷Wa",
+                "Value": "1815790.33302",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Wp",
+                "Name": "操作状态下，需要的最小螺栓载荷Wp",
+                "Value": "2557178.41468",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Aa",
+                "Name": "预紧状态下，需要的螺栓总截面积Aa",
+                "Value": "8646.62063",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ab",
+                "Name": "实际使用的螺栓总截面积Ab",
+                "Value": "19881.23425",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Am",
+                "Name": "需要的螺栓总截面积Am",
+                "Value": "14529.42281",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ap",
+                "Name": "操作状态下，需要的螺栓总截面积Ap",
+                "Value": "14529.42281",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LG",
+                "Name": "LG",
+                "Value": "52.50056",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LD",
+                "Name": "LD",
+                "Value": "52.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LA",
+                "Name": "LA",
+                "Value": "32",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LAmin",
+                "Name": "LA最小值",
+                "Value": "32",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LT",
+                "Name": "LT",
+                "Value": "62.75028",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_L",
+                "Name": "螺栓间距",
+                "Value": "53.22228",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lmax",
+                "Name": "最大螺栓间距",
+                "Value": "140",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lmin",
+                "Name": "最小螺栓间距",
+                "Value": "52",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Le",
+                "Name": "Le",
+                "Value": "24",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lemin",
+                "Name": "Le最小值",
+                "Value": "24",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_F",
+                "Name": "F",
+                "Value": "2160884.7324",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Fa",
+                "Name": "Fa",
+                "Value": "1815790.33302",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FD",
+                "Name": "FD",
+                "Value": "1994964.3184",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FG_Preloade",
+                "Name": "预紧状态下法兰垫片压紧力FG",
+                "Value": "3613118.9916",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FG_Operate",
+                "Name": "操作状态下法兰垫片压紧力FG",
+                "Value": "396293.68229",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FP",
+                "Name": "FP",
+                "Value": "396293.68229",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FT",
+                "Name": "FT",
+                "Value": "165920.414",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MD",
+                "Name": "MD",
+                "Value": "104735626.71576",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MT",
+                "Name": "MT",
+                "Value": "10411552.64197",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MG",
+                "Name": "MG",
+                "Value": "20805641.22735",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_ho",
+                "Name": "ho",
+                "Value": "165.72206",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_hDivideho",
+                "Name": "h/ho",
+                "Value": "0.33188",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_K",
+                "Name": "K",
+                "Value": "1.19284",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TT",
+                "Name": "T",
+                "Value": "1.84184",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Z",
+                "Name": "Z",
+                "Value": "5.72954",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Y",
+                "Name": "Y",
+                "Value": "11.10546",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_U",
+                "Name": "U",
+                "Value": "12.20377",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FI",
+                "Name": "FI",
+                "Value": "0.87411",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_VI",
+                "Name": "VI",
+                "Value": "0.35844",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FL",
+                "Name": "FL",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_VL",
+                "Name": "VL",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_f",
+                "Name": "f",
+                "Value": "1.06219",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_e",
+                "Name": "e",
+                "Value": "0.00527",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_d1",
+                "Name": "d1",
+                "Value": "4205170.5952",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Psi",
+                "Name": "ψ",
+                "Value": "1.29537",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Beita",
+                "Name": "β",
+                "Value": "1.39285",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Gama",
+                "Name": "γ",
+                "Value": "0.7033",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Eta",
+                "Name": "η",
+                "Value": "0.04176",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lan",
+                "Name": "λ",
+                "Value": "0.74507",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ki",
+                "Name": "常数KI",
+                "Value": "0.3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_KL",
+                "Name": "常数KL",
+                "Value": "0.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_H",
+                "Name": "轴向应力",
+                "Value": "134.75979",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_R",
+                "Name": "径向应力",
+                "Value": "94.72219",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_T",
+                "Name": "切向应力",
+                "Value": "19.98954",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_Combination",
+                "Name": "综合应力",
+                "Value": "114.74099",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TaoPreload",
+                "Name": "预紧状态切应力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TaoOperate",
+                "Name": "操作状态切应力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Atao",
+                "Name": "剪切面积",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_J_Preload",
+                "Name": "预紧状态刚度",
+                "Value": "0.63887",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_J_Operate",
+                "Name": "操作状态刚度",
+                "Value": "0.48186",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFl",
+                "Name": "法兰名义厚度",
+                "Value": "59",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_H",
+                "Name": "法兰总高",
+                "Value": "155",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_weight",
+                "Name": "法兰毛坯质量",
+                "Value": "365",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C4_Definition",
+                "Name": "平盖设计余量",
+                "Value": "11.8",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "Fl2",
+                "Name": "法兰",
+                "Value": "非优先法兰",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TypeofExchange2",
+                "Name": "换热器型号",
+                "Value": "BEU",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_P_s2",
+                "Name": "壳程设计压力",
+                "Value": "1.6",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_T_s2",
+                "Name": "壳程设计温度",
+                "Value": "200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_P_t2",
+                "Name": "管程设计压力",
+                "Value": "2.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_T_t2",
+                "Name": "管程设计温度",
+                "Value": "250",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Density_s2",
+                "Name": "壳程液柱密度",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Density_t2",
+                "Name": "管程液柱密度",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "IfPLiquid2",
+                "Name": "是否考虑液柱静压力",
+                "Value": "True",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TypeofFl2",
+                "Name": "法兰类型",
+                "Value": "整体法兰2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MtlType2",
+                "Name": "法兰材料类型",
+                "Value": "锻件",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MtlName2",
+                "Name": "法兰材料牌号",
+                "Value": "16Mn",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C22",
+                "Name": "法兰材料腐蚀裕量",
+                "Value": "3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C12",
+                "Name": "法兰材料负偏差",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SealingfaceNumber2",
+                "Name": "压紧面形状序号",
+                "Value": "1a",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_IfC22",
+                "Name": "法兰盘是否考虑腐蚀裕量",
+                "Value": "True",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlBigEndEffective2",
+                "Name": "法兰颈部大端有效厚度",
+                "Value": "41",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlLittleEndEffective2",
+                "Name": "法兰颈部小端有效厚度",
+                "Value": "17.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Di2",
+                "Name": "法兰名义内径",
+                "Value": "1000",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DoFl2",
+                "Name": "法兰名义外径",
+                "Value": "1200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Omiga2",
+                "Name": "法兰压紧面压紧宽度ω",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_h2",
+                "Name": "法兰颈部高度",
+                "Value": "96",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnComposition2",
+                "Name": "覆层厚度",
+                "Value": "0.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SorT2",
+                "Name": "管程还是壳程",
+                "Value": "管程",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_IfMiddle2",
+                "Name": "法兰为夹持法兰",
+                "Value": "True",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_NameFl2",
+                "Name": "法兰位置",
+                "Value": "管箱法兰",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FAxial2",
+                "Name": "轴向外力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MForce2",
+                "Name": "外力矩",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_IfMethod2",
+                "Name": "任意式法兰是否按活套法兰计算",
+                "Value": "False",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_HeightWelding2",
+                "Name": "焊缝高度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_l2",
+                "Name": "焊缝长度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DepthWelding2",
+                "Name": "焊缝深度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TypeGasket1or22",
+                "Name": "垫片序号",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialNameGasket2",
+                "Name": "垫片材料牌号",
+                "Value": "复合柔性石墨波齿金属板(不锈钢)",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_m2",
+                "Name": "垫片系数",
+                "Value": "3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_y2",
+                "Name": "比压力",
+                "Value": "69",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_ThicknessGasket2",
+                "Name": "垫片厚度",
+                "Value": "3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_EffectiveDoGasket2",
+                "Name": "垫片有效外径",
+                "Value": "1063",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_EffectiveDiGasket2",
+                "Name": "垫片有效内径",
+                "Value": "1023",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DoGasket2",
+                "Name": "垫片名义外径",
+                "Value": "1060",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiGasket2",
+                "Name": "垫片名义内径",
+                "Value": "1020",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_S_SeparatorPlate2",
+                "Name": "分程隔板处垫片有效密封面积",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_br2",
+                "Name": "垫片分程隔板肋条有效密封宽度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_GasketNumber2",
+                "Name": "垫片代号",
+                "Value": "2.1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SeparatorPlateW2",
+                "Name": "隔条位置尺寸",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Db2",
+                "Name": "螺栓中心圆直径",
+                "Value": "1152",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialNameBolt2",
+                "Name": "螺栓材料牌号",
+                "Value": "35CrMo",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_dB2",
+                "Name": "螺栓公称直径",
+                "Value": "M22",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_n2",
+                "Name": "螺栓数量",
+                "Value": "68",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnCylinder2",
+                "Name": "圆筒名义厚度",
+                "Value": "20",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiCylinder2",
+                "Name": "圆筒名义内径",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DoCylinder2",
+                "Name": "圆筒名义外径",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C1_cylinder2",
+                "Name": "圆筒材料负偏差",
+                "Value": "0.3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialTypeCylinder2",
+                "Name": "圆筒材料类型",
+                "Value": "板材",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialNameCylinder2",
+                "Name": "圆筒材料牌号",
+                "Value": "Q345R",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Pcal2",
+                "Name": "法兰计算压力",
+                "Value": "2.50986",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Tc_Flange2",
+                "Name": "法兰计算温度",
+                "Value": "250",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_E_Preload2",
+                "Name": "预紧状态法兰材料弹性模量E",
+                "Value": "201000",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_E_Operate2",
+                "Name": "操作状态法兰材料弹性模量E",
+                "Value": "188000",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressFlange2",
+                "Name": "设计温度下法兰材料许用应力",
+                "Value": "137",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressFlange202",
+                "Name": "室温下法兰材料许用应力",
+                "Value": "178",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ma2",
+                "Name": "法兰预紧力矩Ma",
+                "Value": "189690779.36696",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Mo2",
+                "Name": "法兰设计力矩Mo",
+                "Value": "145997959.40042",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Mp2",
+                "Name": "法兰操作力矩Mp",
+                "Value": "135952820.58509",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Se2",
+                "Name": "法兰有效厚度",
+                "Value": "59",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlEffective_cal2",
+                "Name": "活套法兰计算有效厚度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_S1DevideS02",
+                "Name": "S1/S0",
+                "Value": "2.38372",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlBigEnd2",
+                "Name": "法兰颈部大端名义厚度",
+                "Value": "44",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlLittleEnd2",
+                "Name": "法兰颈部小端名义厚度",
+                "Value": "20.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiFl_cal2",
+                "Name": "法兰计算内径",
+                "Value": "1006",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiFlEquivalent_cal2",
+                "Name": "法兰当量计算内径",
+                "Value": "1023.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_PLiquid_s2",
+                "Name": "壳程液柱静压力",
+                "Value": "0.00986",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_PLiquid_t2",
+                "Name": "管程液柱静压力",
+                "Value": "0.00986",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableSressCylinder2",
+                "Name": "设计温度下圆筒材料许用应力",
+                "Value": "157",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_N2",
+                "Name": "垫片接触宽度N",
+                "Value": "20",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_b02",
+                "Name": "基本密封宽度b0",
+                "Value": "10",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_b2",
+                "Name": "有效密封宽度b",
+                "Value": "8.00056",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DG2",
+                "Name": "垫片压紧力作用中心圆直径DG",
+                "Value": "1046.99888",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_rl2",
+                "Name": "垫片分程隔板肋条总长",
+                "Value": "1012",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Tc_Bolt2",
+                "Name": "螺栓计算温度",
+                "Value": "250",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressBolt2",
+                "Name": "设计温度下螺栓材料许用应力",
+                "Value": "176",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressBolt202",
+                "Name": "室温下螺栓材料许用应力",
+                "Value": "210",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_dr2",
+                "Name": "螺栓根径",
+                "Value": "19.294",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_W2",
+                "Name": "螺栓设计载荷W",
+                "Value": "3613118.9916",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Wa2",
+                "Name": "预紧状态下，需要的最小螺栓载荷Wa",
+                "Value": "1815790.33302",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Wp2",
+                "Name": "操作状态下，需要的最小螺栓载荷Wp",
+                "Value": "2557178.41468",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Aa2",
+                "Name": "预紧状态下，需要的螺栓总截面积Aa",
+                "Value": "8646.62063",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ab2",
+                "Name": "实际使用的螺栓总截面积Ab",
+                "Value": "19881.23425",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Am2",
+                "Name": "需要的螺栓总截面积Am",
+                "Value": "14529.42281",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ap2",
+                "Name": "操作状态下，需要的螺栓总截面积Ap",
+                "Value": "14529.42281",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LG2",
+                "Name": "LG",
+                "Value": "52.50056",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LD2",
+                "Name": "LD",
+                "Value": "52.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LA2",
+                "Name": "LA",
+                "Value": "32",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LAmin2",
+                "Name": "LA最小值",
+                "Value": "32",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LT2",
+                "Name": "LT",
+                "Value": "62.75028",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_L2",
+                "Name": "螺栓间距",
+                "Value": "53.22228",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lmax2",
+                "Name": "最大螺栓间距",
+                "Value": "145.14286",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lmin2",
+                "Name": "最小螺栓间距",
+                "Value": "52",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Le2",
+                "Name": "Le",
+                "Value": "24",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lemin2",
+                "Name": "Le最小值",
+                "Value": "24",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_F2",
+                "Name": "F",
+                "Value": "2160884.7324",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Fa2",
+                "Name": "Fa",
+                "Value": "1815790.33302",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FD2",
+                "Name": "FD",
+                "Value": "1994964.3184",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FG_Preloade2",
+                "Name": "预紧状态下法兰垫片压紧力FG",
+                "Value": "3613118.9916",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FG_Operate2",
+                "Name": "操作状态下法兰垫片压紧力FG",
+                "Value": "396293.68229",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FP2",
+                "Name": "FP",
+                "Value": "396293.68229",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FT2",
+                "Name": "FT",
+                "Value": "165920.414",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MD2",
+                "Name": "MD",
+                "Value": "104735626.71576",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MT2",
+                "Name": "MT",
+                "Value": "10411552.64197",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MG2",
+                "Name": "MG",
+                "Value": "20805641.22735",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_ho2",
+                "Name": "ho",
+                "Value": "131.54163",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_hDivideho2",
+                "Name": "h/ho",
+                "Value": "0.72981",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_K2",
+                "Name": "K",
+                "Value": "1.19284",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TT2",
+                "Name": "T",
+                "Value": "1.84184",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Z2",
+                "Name": "Z",
+                "Value": "5.72954",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Y2",
+                "Name": "Y",
+                "Value": "11.10546",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_U2",
+                "Name": "U",
+                "Value": "12.20377",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FI2",
+                "Name": "FI",
+                "Value": "0.76349",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_VI2",
+                "Name": "VI",
+                "Value": "0.14404",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FL2",
+                "Name": "FL",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_VL2",
+                "Name": "VL",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_f2",
+                "Name": "f",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_e2",
+                "Name": "e",
+                "Value": "0.0058",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_d12",
+                "Name": "d1",
+                "Value": "3297164.58598",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Psi2",
+                "Name": "ψ",
+                "Value": "1.34245",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Beita2",
+                "Name": "β",
+                "Value": "1.45545",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Gama2",
+                "Name": "γ",
+                "Value": "0.72886",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Eta2",
+                "Name": "η",
+                "Value": "0.06229",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lan2",
+                "Name": "λ",
+                "Value": "0.79115",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ki2",
+                "Name": "常数KI",
+                "Value": "0.3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_KL2",
+                "Name": "常数KL",
+                "Value": "0.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_H2",
+                "Name": "轴向应力",
+                "Value": "109.12431",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_R2",
+                "Name": "径向应力",
+                "Value": "76.69787",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_T2",
+                "Name": "切向应力",
+                "Value": "23.55697",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_Combination2",
+                "Name": "综合应力",
+                "Value": "92.91109",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TaoPreload2",
+                "Name": "预紧状态切应力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TaoOperate2",
+                "Name": "操作状态切应力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Atao2",
+                "Name": "剪切面积",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_J_Preload2",
+                "Name": "预紧状态刚度",
+                "Value": "0.76735",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_J_Operate2",
+                "Name": "操作状态刚度",
+                "Value": "0.588",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFl2",
+                "Name": "法兰名义厚度",
+                "Value": "62",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_H2",
+                "Name": "法兰总高",
+                "Value": "184",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_weight2",
+                "Name": "法兰毛坯质量",
+                "Value": "415",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C4_Definition2",
+                "Name": "平盖设计余量",
+                "Value": "12.4",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:实际使用的螺栓总截面积>=需要的螺栓总截面积",
+                "Name": "输出提示",
+                "Value": "校核成功:实际使用的螺栓总截面积>=需要的螺栓总截面积",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:轴向应力",
+                "Name": "输出提示",
+                "Value": "校核成功:轴向应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:径向应力",
+                "Name": "输出提示",
+                "Value": "校核成功:径向应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:切向应力",
+                "Name": "输出提示",
+                "Value": "校核成功:切向应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:综合应力",
+                "Name": "输出提示",
+                "Value": "校核成功:综合应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:预紧状态刚度<= 1",
+                "Name": "输出提示",
+                "Value": "校核成功:预紧状态刚度<= 1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:操作状态刚度<= 1",
+                "Name": "输出提示",
+                "Value": "校核成功:操作状态刚度<= 1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:实际使用的螺栓总截面积>=需要的螺栓总截面积2",
+                "Name": "输出提示",
+                "Value": "校核成功:实际使用的螺栓总截面积>=需要的螺栓总截面积",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:轴向应力2",
+                "Name": "输出提示",
+                "Value": "校核成功:轴向应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:径向应力2",
+                "Name": "输出提示",
+                "Value": "校核成功:径向应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:切向应力2",
+                "Name": "输出提示",
+                "Value": "校核成功:切向应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:综合应力2",
+                "Name": "输出提示",
+                "Value": "校核成功:综合应力",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:预紧状态刚度<= 12",
+                "Name": "输出提示",
+                "Value": "校核成功:预紧状态刚度<= 1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "校核成功:操作状态刚度<= 12",
+                "Name": "输出提示",
+                "Value": "校核成功:操作状态刚度<= 1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "Fl1",
+                "Name": "法兰",
+                "Value": "优先法兰",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TypeofExchange",
+                "Name": "换热器型号",
+                "Value": "BEU",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_P_s",
+                "Name": "壳程设计压力",
+                "Value": "-0.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_T_s",
+                "Name": "壳程设计温度",
+                "Value": "200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_P_t",
+                "Name": "管程设计压力",
+                "Value": "-1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_T_t",
+                "Name": "管程设计温度",
+                "Value": "300",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Density_s",
+                "Name": "壳程液柱密度",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Density_t",
+                "Name": "管程液柱密度",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "IfPLiquid",
+                "Name": "是否考虑液柱静压力",
+                "Value": "True",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TypeofFl",
+                "Name": "法兰类型",
+                "Value": "整体法兰2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MtlType",
+                "Name": "法兰材料类型",
+                "Value": "锻件",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MtlName",
+                "Name": "法兰材料牌号",
+                "Value": "16Mn",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C2",
+                "Name": "法兰材料腐蚀裕量",
+                "Value": "3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C1",
+                "Name": "法兰材料负偏差",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SealingfaceNumber",
+                "Name": "压紧面形状序号",
+                "Value": "1a",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_IfC2",
+                "Name": "法兰盘是否考虑腐蚀裕量",
+                "Value": "True",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlBigEndEffective",
+                "Name": "法兰颈部大端有效厚度",
+                "Value": "41",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlLittleEndEffective",
+                "Name": "法兰颈部小端有效厚度",
+                "Value": "27.3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Di",
+                "Name": "法兰名义内径",
+                "Value": "1000",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DoFl",
+                "Name": "法兰名义外径",
+                "Value": "1200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Omiga",
+                "Name": "法兰压紧面压紧宽度ω",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_h",
+                "Name": "法兰颈部高度",
+                "Value": "28",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnComposition",
+                "Name": "覆层厚度",
+                "Value": "0.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SorT",
+                "Name": "管程还是壳程",
+                "Value": "壳程",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_IfMiddle",
+                "Name": "法兰为夹持法兰",
+                "Value": "True",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_NameFl",
+                "Name": "法兰位置",
+                "Value": "壳体法兰",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FAxial",
+                "Name": "轴向外力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MForce",
+                "Name": "外力矩",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_IfMethod",
+                "Name": "任意式法兰是否按活套法兰计算",
+                "Value": "False",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_HeightWelding",
+                "Name": "焊缝高度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_l",
+                "Name": "焊缝长度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DepthWelding",
+                "Name": "焊缝深度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TypeGasket1or2",
+                "Name": "垫片序号",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialNameGasket",
+                "Name": "垫片材料牌号",
+                "Value": "复合柔性石墨波齿金属板(不锈钢)",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_m",
+                "Name": "垫片系数",
+                "Value": "3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_y",
+                "Name": "比压力",
+                "Value": "69",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_ThicknessGasket",
+                "Name": "垫片厚度",
+                "Value": "3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_EffectiveDoGasket",
+                "Name": "垫片有效外径",
+                "Value": "1063",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_EffectiveDiGasket",
+                "Name": "垫片有效内径",
+                "Value": "1023",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DoGasket",
+                "Name": "垫片名义外径",
+                "Value": "1060",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiGasket",
+                "Name": "垫片名义内径",
+                "Value": "1020",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_S_SeparatorPlate",
+                "Name": "分程隔板处垫片有效密封面积",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_br",
+                "Name": "垫片分程隔板肋条有效密封宽度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_GasketNumber",
+                "Name": "垫片代号",
+                "Value": "2.1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SeparatorPlateW",
+                "Name": "隔条位置尺寸",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Db",
+                "Name": "螺栓中心圆直径",
+                "Value": "1152",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialNameBolt",
+                "Name": "螺栓材料牌号",
+                "Value": "35CrMo",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_dB",
+                "Name": "螺栓公称直径",
+                "Value": "M22",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_n",
+                "Name": "螺栓数量",
+                "Value": "40",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnCylinder",
+                "Name": "圆筒名义厚度",
+                "Value": "30",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiCylinder",
+                "Name": "圆筒名义内径",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DoCylinder",
+                "Name": "圆筒名义外径",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C1_cylinder",
+                "Name": "圆筒材料负偏差",
+                "Value": "0.3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialTypeCylinder",
+                "Name": "圆筒材料类型",
+                "Value": "板材",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialNameCylinder",
+                "Name": "圆筒材料牌号",
+                "Value": "Q345R",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Pcal",
+                "Name": "法兰计算压力",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Tc_Flange",
+                "Name": "法兰计算温度",
+                "Value": "200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_E_Preload",
+                "Name": "预紧状态法兰材料弹性模量E",
+                "Value": "201000",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_E_Operate",
+                "Name": "操作状态法兰材料弹性模量E",
+                "Value": "191000",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressFlange",
+                "Name": "设计温度下法兰材料许用应力",
+                "Value": "150",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressFlange20",
+                "Name": "室温下法兰材料许用应力",
+                "Value": "178",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ma",
+                "Name": "法兰预紧力矩Ma",
+                "Value": "112133523.39083",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Mo",
+                "Name": "法兰设计力矩Mo",
+                "Value": "94494542.18329",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Mp",
+                "Name": "法兰操作力矩Mp",
+                "Value": "677135.88192",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Se",
+                "Name": "法兰有效厚度",
+                "Value": "45",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlEffective_cal",
+                "Name": "活套法兰计算有效厚度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_S1DevideS0",
+                "Name": "S1/S0",
+                "Value": "1.50183",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlBigEnd",
+                "Name": "法兰颈部大端名义厚度",
+                "Value": "44",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlLittleEnd",
+                "Name": "法兰颈部小端名义厚度",
+                "Value": "30.3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiFl_cal",
+                "Name": "法兰计算内径",
+                "Value": "1006",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiFlEquivalent_cal",
+                "Name": "法兰当量计算内径",
+                "Value": "1023.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_PLiquid_s",
+                "Name": "壳程液柱静压力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_PLiquid_t",
+                "Name": "管程液柱静压力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableSressCylinder",
+                "Name": "设计温度下圆筒材料许用应力",
+                "Value": "170",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_N",
+                "Name": "垫片接触宽度N",
+                "Value": "20",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_b0",
+                "Name": "基本密封宽度b0",
+                "Value": "10",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_b",
+                "Name": "有效密封宽度b",
+                "Value": "8.00056",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DG",
+                "Name": "垫片压紧力作用中心圆直径DG",
+                "Value": "1046.99888",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_rl",
+                "Name": "垫片分程隔板肋条总长",
+                "Value": "1012",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Tc_Bolt",
+                "Name": "螺栓计算温度",
+                "Value": "300",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressBolt",
+                "Name": "设计温度下螺栓材料许用应力",
+                "Value": "174",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressBolt20",
+                "Name": "室温下螺栓材料许用应力",
+                "Value": "210",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_dr",
+                "Name": "螺栓根径",
+                "Value": "19.294",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_W",
+                "Name": "螺栓设计载荷W",
+                "Value": "2135853.75267",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Wa",
+                "Name": "预紧状态下，需要的最小螺栓载荷Wa",
+                "Value": "1815790.33302",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Wp",
+                "Name": "操作状态下，需要的最小螺栓载荷Wp",
+                "Value": "1018853.49673",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Aa",
+                "Name": "预紧状态下，需要的螺栓总截面积Aa",
+                "Value": "8646.62063",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ab",
+                "Name": "实际使用的螺栓总截面积Ab",
+                "Value": "11694.84368",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Am",
+                "Name": "需要的螺栓总截面积Am",
+                "Value": "8646.62063",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ap",
+                "Name": "操作状态下，需要的螺栓总截面积Ap",
+                "Value": "5855.47987",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LG",
+                "Name": "LG",
+                "Value": "52.50056",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LD",
+                "Name": "LD",
+                "Value": "52.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LA",
+                "Name": "LA",
+                "Value": "32",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LAmin",
+                "Name": "LA最小值",
+                "Value": "32",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LT",
+                "Name": "LT",
+                "Value": "62.75028",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_L",
+                "Name": "螺栓间距",
+                "Value": "90.47787",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lmax",
+                "Name": "最大螺栓间距",
+                "Value": "121.14286",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lmin",
+                "Name": "最小螺栓间距",
+                "Value": "52",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Le",
+                "Name": "Le",
+                "Value": "24",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lemin",
+                "Name": "Le最小值",
+                "Value": "24",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_F",
+                "Name": "F",
+                "Value": "860958.68516",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Fa",
+                "Name": "Fa",
+                "Value": "1815790.33302",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FD",
+                "Name": "FD",
+                "Value": "794851.21569",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FG_Preloade",
+                "Name": "预紧状态下法兰垫片压紧力FG",
+                "Value": "2135853.75267",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FG_Operate",
+                "Name": "操作状态下法兰垫片压紧力FG",
+                "Value": "157894.81157",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FP",
+                "Name": "FP",
+                "Value": "157894.81157",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FT",
+                "Name": "FT",
+                "Value": "66107.46947",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MD",
+                "Name": "MD",
+                "Value": "41729688.82384",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MT",
+                "Name": "MT",
+                "Value": "4148262.30144",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MG",
+                "Name": "MG",
+                "Value": "8289566.41997",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_ho",
+                "Name": "ho",
+                "Value": "165.72206",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_hDivideho",
+                "Name": "h/ho",
+                "Value": "0.16896",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_K",
+                "Name": "K",
+                "Value": "1.19284",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TT",
+                "Name": "T",
+                "Value": "1.84184",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Z",
+                "Name": "Z",
+                "Value": "5.72954",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Y",
+                "Name": "Y",
+                "Value": "11.10546",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_U",
+                "Name": "U",
+                "Value": "12.20377",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FI",
+                "Name": "FI",
+                "Value": "0.89736",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_VI",
+                "Name": "VI",
+                "Value": "0.43014",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FL",
+                "Name": "FL",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_VL",
+                "Name": "VL",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_f",
+                "Name": "f",
+                "Value": "1.59148",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_e",
+                "Name": "e",
+                "Value": "0.00541",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_d1",
+                "Name": "d1",
+                "Value": "3504205.18349",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Psi",
+                "Name": "ψ",
+                "Value": "1.24367",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Beita",
+                "Name": "β",
+                "Value": "1.32408",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Gama",
+                "Name": "γ",
+                "Value": "0.67523",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Eta",
+                "Name": "η",
+                "Value": "0.026",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lan",
+                "Name": "λ",
+                "Value": "0.70124",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ki",
+                "Name": "常数KI",
+                "Value": "0.3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_KL",
+                "Name": "常数KL",
+                "Value": "0.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_H",
+                "Name": "轴向应力",
+                "Value": "126.81716",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_R",
+                "Name": "径向应力",
+                "Value": "87.58568",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_T",
+                "Name": "切向应力",
+                "Value": "13.30851",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_Combination",
+                "Name": "综合应力",
+                "Value": "107.20142",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TaoPreload",
+                "Name": "预紧状态切应力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TaoOperate",
+                "Name": "操作状态切应力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Atao",
+                "Name": "剪切面积",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_J_Preload",
+                "Name": "预紧状态刚度",
+                "Value": "0.48154",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_J_Operate",
+                "Name": "操作状态刚度",
+                "Value": "0.00306",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFl",
+                "Name": "法兰名义厚度",
+                "Value": "48",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_H",
+                "Name": "法兰总高",
+                "Value": "76",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_weight",
+                "Name": "法兰毛坯质量",
+                "Value": "230",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C4_Definition",
+                "Name": "平盖设计余量",
+                "Value": "9.6",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "Fl2",
+                "Name": "法兰",
+                "Value": "非优先法兰",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TypeofExchange2",
+                "Name": "换热器型号",
+                "Value": "BEU",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_P_s2",
+                "Name": "壳程设计压力",
+                "Value": "-0.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_T_s2",
+                "Name": "壳程设计温度",
+                "Value": "200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_P_t2",
+                "Name": "管程设计压力",
+                "Value": "-1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_T_t2",
+                "Name": "管程设计温度",
+                "Value": "300",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Density_s2",
+                "Name": "壳程液柱密度",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Density_t2",
+                "Name": "管程液柱密度",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "IfPLiquid2",
+                "Name": "是否考虑液柱静压力",
+                "Value": "True",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TypeofFl2",
+                "Name": "法兰类型",
+                "Value": "整体法兰2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MtlType2",
+                "Name": "法兰材料类型",
+                "Value": "锻件",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MtlName2",
+                "Name": "法兰材料牌号",
+                "Value": "16Mn",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C22",
+                "Name": "法兰材料腐蚀裕量",
+                "Value": "3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C12",
+                "Name": "法兰材料负偏差",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SealingfaceNumber2",
+                "Name": "压紧面形状序号",
+                "Value": "1a",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_IfC22",
+                "Name": "法兰盘是否考虑腐蚀裕量",
+                "Value": "True",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlBigEndEffective2",
+                "Name": "法兰颈部大端有效厚度",
+                "Value": "41",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlLittleEndEffective2",
+                "Name": "法兰颈部小端有效厚度",
+                "Value": "17.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Di2",
+                "Name": "法兰名义内径",
+                "Value": "1000",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DoFl2",
+                "Name": "法兰名义外径",
+                "Value": "1200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Omiga2",
+                "Name": "法兰压紧面压紧宽度ω",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_h2",
+                "Name": "法兰颈部高度",
+                "Value": "60",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnComposition2",
+                "Name": "覆层厚度",
+                "Value": "0.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SorT2",
+                "Name": "管程还是壳程",
+                "Value": "管程",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_IfMiddle2",
+                "Name": "法兰为夹持法兰",
+                "Value": "True",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_NameFl2",
+                "Name": "法兰位置",
+                "Value": "管箱法兰",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FAxial2",
+                "Name": "轴向外力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MForce2",
+                "Name": "外力矩",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_IfMethod2",
+                "Name": "任意式法兰是否按活套法兰计算",
+                "Value": "False",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_HeightWelding2",
+                "Name": "焊缝高度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_l2",
+                "Name": "焊缝长度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DepthWelding2",
+                "Name": "焊缝深度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TypeGasket1or22",
+                "Name": "垫片序号",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialNameGasket2",
+                "Name": "垫片材料牌号",
+                "Value": "复合柔性石墨波齿金属板(不锈钢)",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_m2",
+                "Name": "垫片系数",
+                "Value": "3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_y2",
+                "Name": "比压力",
+                "Value": "69",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_ThicknessGasket2",
+                "Name": "垫片厚度",
+                "Value": "3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_EffectiveDoGasket2",
+                "Name": "垫片有效外径",
+                "Value": "1063",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_EffectiveDiGasket2",
+                "Name": "垫片有效内径",
+                "Value": "1023",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DoGasket2",
+                "Name": "垫片名义外径",
+                "Value": "1060",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiGasket2",
+                "Name": "垫片名义内径",
+                "Value": "1020",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_S_SeparatorPlate2",
+                "Name": "分程隔板处垫片有效密封面积",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_br2",
+                "Name": "垫片分程隔板肋条有效密封宽度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_GasketNumber2",
+                "Name": "垫片代号",
+                "Value": "2.1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SeparatorPlateW2",
+                "Name": "隔条位置尺寸",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Db2",
+                "Name": "螺栓中心圆直径",
+                "Value": "1152",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialNameBolt2",
+                "Name": "螺栓材料牌号",
+                "Value": "35CrMo",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_dB2",
+                "Name": "螺栓公称直径",
+                "Value": "M22",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_n2",
+                "Name": "螺栓数量",
+                "Value": "40",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnCylinder2",
+                "Name": "圆筒名义厚度",
+                "Value": "20",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiCylinder2",
+                "Name": "圆筒名义内径",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DoCylinder2",
+                "Name": "圆筒名义外径",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C1_cylinder2",
+                "Name": "圆筒材料负偏差",
+                "Value": "0.3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialTypeCylinder2",
+                "Name": "圆筒材料类型",
+                "Value": "板材",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MaterialNameCylinder2",
+                "Name": "圆筒材料牌号",
+                "Value": "Q345R",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Pcal2",
+                "Name": "法兰计算压力",
+                "Value": "1",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Tc_Flange2",
+                "Name": "法兰计算温度",
+                "Value": "300",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_E_Preload2",
+                "Name": "预紧状态法兰材料弹性模量E",
+                "Value": "201000",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_E_Operate2",
+                "Name": "操作状态法兰材料弹性模量E",
+                "Value": "183000",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressFlange2",
+                "Name": "设计温度下法兰材料许用应力",
+                "Value": "123",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressFlange202",
+                "Name": "室温下法兰材料许用应力",
+                "Value": "178",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ma2",
+                "Name": "法兰预紧力矩Ma",
+                "Value": "112133523.39083",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Mo2",
+                "Name": "法兰设计力矩Mo",
+                "Value": "77485524.5903",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Mp2",
+                "Name": "法兰操作力矩Mp",
+                "Value": "677135.88192",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Se2",
+                "Name": "法兰有效厚度",
+                "Value": "55",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlEffective_cal2",
+                "Name": "活套法兰计算有效厚度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_S1DevideS02",
+                "Name": "S1/S0",
+                "Value": "2.38372",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlBigEnd2",
+                "Name": "法兰颈部大端名义厚度",
+                "Value": "44",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFlLittleEnd2",
+                "Name": "法兰颈部小端名义厚度",
+                "Value": "20.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiFl_cal2",
+                "Name": "法兰计算内径",
+                "Value": "1006",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DiFlEquivalent_cal2",
+                "Name": "法兰当量计算内径",
+                "Value": "1023.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_PLiquid_s2",
+                "Name": "壳程液柱静压力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_PLiquid_t2",
+                "Name": "管程液柱静压力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableSressCylinder2",
+                "Name": "设计温度下圆筒材料许用应力",
+                "Value": "143",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_N2",
+                "Name": "垫片接触宽度N",
+                "Value": "20",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_b02",
+                "Name": "基本密封宽度b0",
+                "Value": "10",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_b2",
+                "Name": "有效密封宽度b",
+                "Value": "8.00056",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DG2",
+                "Name": "垫片压紧力作用中心圆直径DG",
+                "Value": "1046.99888",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_rl2",
+                "Name": "垫片分程隔板肋条总长",
+                "Value": "1012",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Tc_Bolt2",
+                "Name": "螺栓计算温度",
+                "Value": "300",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressBolt2",
+                "Name": "设计温度下螺栓材料许用应力",
+                "Value": "174",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStressBolt202",
+                "Name": "室温下螺栓材料许用应力",
+                "Value": "210",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_dr2",
+                "Name": "螺栓根径",
+                "Value": "19.294",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_W2",
+                "Name": "螺栓设计载荷W",
+                "Value": "2135853.75267",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Wa2",
+                "Name": "预紧状态下，需要的最小螺栓载荷Wa",
+                "Value": "1815790.33302",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Wp2",
+                "Name": "操作状态下，需要的最小螺栓载荷Wp",
+                "Value": "1018853.49673",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Aa2",
+                "Name": "预紧状态下，需要的螺栓总截面积Aa",
+                "Value": "8646.62063",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ab2",
+                "Name": "实际使用的螺栓总截面积Ab",
+                "Value": "11694.84368",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Am2",
+                "Name": "需要的螺栓总截面积Am",
+                "Value": "8646.62063",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ap2",
+                "Name": "操作状态下，需要的螺栓总截面积Ap",
+                "Value": "5855.47987",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LG2",
+                "Name": "LG",
+                "Value": "52.50056",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LD2",
+                "Name": "LD",
+                "Value": "52.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LA2",
+                "Name": "LA",
+                "Value": "32",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LAmin2",
+                "Name": "LA最小值",
+                "Value": "32",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LT2",
+                "Name": "LT",
+                "Value": "62.75028",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_L2",
+                "Name": "螺栓间距",
+                "Value": "90.47787",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lmax2",
+                "Name": "最大螺栓间距",
+                "Value": "138.28571",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lmin2",
+                "Name": "最小螺栓间距",
+                "Value": "52",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Le2",
+                "Name": "Le",
+                "Value": "24",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lemin2",
+                "Name": "Le最小值",
+                "Value": "24",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_F2",
+                "Name": "F",
+                "Value": "860958.68516",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Fa2",
+                "Name": "Fa",
+                "Value": "1815790.33302",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FD2",
+                "Name": "FD",
+                "Value": "794851.21569",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FG_Preloade2",
+                "Name": "预紧状态下法兰垫片压紧力FG",
+                "Value": "2135853.75267",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FG_Operate2",
+                "Name": "操作状态下法兰垫片压紧力FG",
+                "Value": "157894.81157",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FP2",
+                "Name": "FP",
+                "Value": "157894.81157",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FT2",
+                "Name": "FT",
+                "Value": "66107.46947",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MD2",
+                "Name": "MD",
+                "Value": "41729688.82384",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MT2",
+                "Name": "MT",
+                "Value": "4148262.30144",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_MG2",
+                "Name": "MG",
+                "Value": "8289566.41997",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_ho2",
+                "Name": "ho",
+                "Value": "131.54163",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_hDivideho2",
+                "Name": "h/ho",
+                "Value": "0.45613",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_K2",
+                "Name": "K",
+                "Value": "1.19284",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TT2",
+                "Name": "T",
+                "Value": "1.84184",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Z2",
+                "Name": "Z",
+                "Value": "5.72954",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Y2",
+                "Name": "Y",
+                "Value": "11.10546",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_U2",
+                "Name": "U",
+                "Value": "12.20377",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FI2",
+                "Name": "FI",
+                "Value": "0.82967",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_VI2",
+                "Name": "VI",
+                "Value": "0.20695",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_FL2",
+                "Name": "FL",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_VL2",
+                "Name": "VL",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_f2",
+                "Name": "f",
+                "Value": "2.0048",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_e2",
+                "Name": "e",
+                "Value": "0.00631",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_d12",
+                "Name": "d1",
+                "Value": "2294851.98597",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Psi2",
+                "Name": "ψ",
+                "Value": "1.3469",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Beita2",
+                "Name": "β",
+                "Value": "1.46138",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Gama2",
+                "Name": "γ",
+                "Value": "0.73128",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Eta2",
+                "Name": "η",
+                "Value": "0.0725",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lan2",
+                "Name": "λ",
+                "Value": "0.80378",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Ki2",
+                "Name": "常数KI",
+                "Value": "0.3",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_KL2",
+                "Name": "常数KL",
+                "Value": "0.2",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_H2",
+                "Name": "轴向应力",
+                "Value": "114.28509",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_R2",
+                "Name": "径向应力",
+                "Value": "46.29377",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_T2",
+                "Name": "切向应力",
+                "Value": "17.52836",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AllowableStress_Combination2",
+                "Name": "综合应力",
+                "Value": "80.28943",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TaoPreload2",
+                "Name": "预紧状态切应力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_TaoOperate2",
+                "Name": "操作状态切应力",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Atao2",
+                "Name": "剪切面积",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_J_Preload2",
+                "Name": "预紧状态刚度",
+                "Value": "0.64149",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_J_Operate2",
+                "Name": "操作状态刚度",
+                "Value": "0.00425",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnFl2",
+                "Name": "法兰名义厚度",
+                "Value": "58",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_H2",
+                "Name": "法兰总高",
+                "Value": "118",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_weight2",
+                "Name": "法兰毛坯质量",
+                "Value": "310",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C4_Definition2",
+                "Name": "平盖设计余量",
+                "Value": "11.6",
+                "Desc": "",
+                "ReportOutput": null
+            }
+        ]
+    }
+}
