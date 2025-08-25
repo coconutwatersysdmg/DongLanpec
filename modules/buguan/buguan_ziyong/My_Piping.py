@@ -788,286 +788,358 @@ class TubeLayoutEditor(QMainWindow):
         # 标志位，标记是否成功从产品设计活动库加载参数
         product_params_loaded = False
 
-        # -------------------------- 抽取：特殊参数处理通用函数 --------------------------
-        def process_special_params(raw_params, product_cursor, product_id):
-            """
-            通用参数处理函数：处理公称直径DN等需关联产品设计活动表_设计数据表的特殊参数
-            :param raw_params: 原始参数列表（来自产品库布管参数表或元件库默认表）
-            :param product_cursor: 产品设计活动库的数据库游标（用于查询设计数据表）
-            :param product_id: 产品ID（用于设计数据表查询）
-            :return: 处理后的参数列表
-            """
-            processed_params = []
-            if not isinstance(raw_params, (list, tuple)):
-                print(f"原始参数格式错误，不是列表/元组类型：{type(raw_params)}")
-                return processed_params
-
-            for param in raw_params:
-                # 校验单条参数格式（必须包含参数名、参数值、单位）
-                if not (isinstance(param, dict) and all(key in param for key in ['参数名', '参数值', '单位'])):
-                    print(f"参数格式错误，跳过: {param}")
-                    continue
-
-                param_name = param['参数名']
-                param_value = param['参数值']
-                unit = param['单位']
-
-                # 处理空值参数
-                if param_value is None:
-                    print(f"参数'{param_name}'的值为空，使用默认空字符串处理")
-                    processed_params.append({
-                        '参数名': param_name,
-                        '参数值': '',
-                        '单位': unit
-                    })
-                    continue
-
-                # -------------------------- 特殊参数处理（关联产品设计活动表_设计数据表） --------------------------
-                # 1. 公称直径 DN：从设计数据表查“公称直径*”的壳程数值
-                if param_name == "公称直径 DN":
-                    try:
-                        design_query = """
-                            SELECT 壳程数值 
-                            FROM 产品设计活动表_设计数据表 
-                            WHERE 产品ID = %s AND 参数名称 = %s
-                        """
-                        product_cursor.execute(design_query, (product_id, "公称直径*"))
-                        design_data = product_cursor.fetchone()
-                        # 优先使用设计数据表的值，无则用原始值
-                        if isinstance(design_data, dict) and '壳程数值' in design_data and design_data['壳程数值']:
-                            processed_params.append({
-                                '参数名': param_name,
-                                '参数值': design_data['壳程数值'],
-                                '单位': unit
-                            })
-                        else:
-                            processed_params.append({
-                                '参数名': param_name,
-                                '参数值': param_value,
-                                '单位': unit
-                            })
-                    except Exception as e:
-                        print(f"处理公称直径DN时出错: {str(e)}")
-                        processed_params.append({
-                            '参数名': param_name,
-                            '参数值': param_value,
-                            '单位': unit
-                        })
-
-                # 2. 是否以外径为基准：从设计数据表查同名参数的壳程数值
-                elif param_name == "是否以外径为基准":
-                    try:
-                        design_query = """
-                            SELECT 壳程数值 
-                            FROM 产品设计活动表_设计数据表 
-                            WHERE 产品ID = %s AND 参数名称 = %s
-                        """
-                        product_cursor.execute(design_query, (product_id, "是否以外径为基准"))
-                        design_data = product_cursor.fetchone()
-                        if isinstance(design_data, dict) and '壳程数值' in design_data and design_data['壳程数值']:
-                            processed_params.append({
-                                '参数名': param_name,
-                                '参数值': design_data['壳程数值'],
-                                '单位': unit
-                            })
-                        else:
-                            processed_params.append({
-                                '参数名': param_name,
-                                '参数值': param_value,
-                                '单位': unit
-                            })
-                    except Exception as e:
-                        print(f"处理是否以外径为基准时出错: {str(e)}")
-                        processed_params.append({
-                            '参数名': param_name,
-                            '参数值': param_value,
-                            '单位': unit
-                        })
-
-                # 3. 壳体内直径 Di：从设计数据表查“公称直径*”的管程数值
-                elif param_name == "壳体内直径 Di":
-                    try:
-                        design_query = """
-                            SELECT 管程数值 
-                            FROM 产品设计活动表_设计数据表 
-                            WHERE 产品ID = %s AND 参数名称 = %s
-                        """
-                        product_cursor.execute(design_query, (product_id, "公称直径*"))
-                        design_data = product_cursor.fetchone()
-                        if isinstance(design_data, dict) and '管程数值' in design_data and design_data['管程数值']:
-                            processed_params.append({
-                                '参数名': param_name,
-                                '参数值': design_data['管程数值'],
-                                '单位': unit
-                            })
-                        else:
-                            processed_params.append({
-                                '参数名': param_name,
-                                '参数值': param_value,
-                                '单位': unit
-                            })
-                    except Exception as e:
-                        print(f"处理壳体内直径Di时出错: {str(e)}")
-                        processed_params.append({
-                            '参数名': param_name,
-                            '参数值': param_value,
-                            '单位': unit
-                        })
-
-                # 4. 需关联产品设计活动表_元件附加参数表的参数
-                elif param_name in ["旁路挡板厚度", "防冲板形式", "防冲板厚度", "滑道定位",
-                                    "滑道高度", "滑道厚度", "滑道与竖直中心线夹角",
-                                    "切边长度 L1", "切边高度 h"]:
-                    try:
-                        design_query = """
-                            SELECT 参数值 
-                            FROM 产品设计活动表_元件附加参数表 
-                            WHERE 产品ID = %s AND 参数名称 = %s
-                        """
-                        product_cursor.execute(design_query, (product_id, param_name))
-                        design_data = product_cursor.fetchone()
-                        if isinstance(design_data, dict) and '参数值' in design_data and design_data['参数值']:
-                            processed_params.append({
-                                '参数名': param_name,
-                                '参数值': design_data['参数值'],
-                                '单位': unit
-                            })
-                        else:
-                            processed_params.append({
-                                '参数名': param_name,
-                                '参数值': param_value,
-                                '单位': unit
-                            })
-                    except Exception as e:
-                        print(f"处理{param_name}时出错: {str(e)}")
-                        processed_params.append({
-                            '参数名': param_name,
-                            '参数值': param_value,
-                            '单位': unit
-                        })
-
-                # 其他普通参数：直接保留原始值
-                else:
-                    processed_params.append({
-                        '参数名': param_name,
-                        '参数值': param_value,
-                        '单位': unit
-                    })
-            return processed_params
-
-        # -------------------------- 1. 优先从产品设计活动库加载参数 --------------------------
+        # 首先尝试从产品设计活动库加载参数（包含设计数据表）
         product_conn = None
         try:
             product_conn = create_product_connection()
             if product_conn:
-                with product_conn.cursor() as product_cursor:
-                    # 校验产品ID有效性
-                    if not self.productID:
-                        print("产品ID为空，无法查询布管参数")
-                        raise ValueError("产品ID为空，无法查询布管参数")
-
-                    # 从产品库布管参数表查询原始参数
+                with product_conn.cursor() as cursor:
+                    # 根据产品ID查询布管参数
                     query = """
                         SELECT 参数名, 参数值, 单位 
                         FROM 产品设计活动表_布管参数表 
                         WHERE 产品ID = %s
                     """
-                    product_cursor.execute(query, (self.productID,))
-                    raw_product_params = product_cursor.fetchall()
+                    # 检查self.productID是否有效
+                    if not self.productID:
+                        print("产品ID为空，无法查询布管参数")
+                        raise ValueError("产品ID为空，无法查询布管参数")
 
-                    # 调用通用函数处理参数（含特殊参数关联查询）
-                    processed_params = process_special_params(
-                        raw_params=raw_product_params,
-                        product_cursor=product_cursor,
-                        product_id=self.productID
-                    )
+                    cursor.execute(query, (self.productID,))
+                    product_params = cursor.fetchall()
 
-                    # 处理结果判断
-                    if processed_params:
-                        self.setup_parameters(processed_params)
-                        self.hide_specific_params(hidden_params)
-                        self.update_leftpad_params()
-                        product_params_loaded = True
-                        print(f"从产品设计活动库成功加载并处理参数，共{len(processed_params)}个有效参数")
+                    if product_params and isinstance(product_params, (list, tuple)):
+                        # 处理公称直径DN等需要关联设计数据表的参数
+                        processed_params = []
+                        for param in product_params:
+                            if isinstance(param, dict) and all(key in param for key in ['参数名', '参数值', '单位']):
+                                param_name = param['参数名']
+                                param_value = param['参数值']
+                                unit = param['单位']
+
+                                if param_value is None:
+                                    print(f"参数'{param_name}'的值为空，使用默认处理")
+                                    processed_params.append({
+                                        '参数名': param_name,
+                                        '参数值': '',
+                                        '单位': unit
+                                    })
+                                    continue
+
+                                # 公称直径DN的个性化查询（仅产品库有设计数据表）
+                                if param_name == "公称直径 DN":
+                                    try:
+                                        # 从产品库的设计数据表查询（符合实际表结构）
+                                        design_query = """
+                                            SELECT 壳程数值 
+                                            FROM 产品设计活动表_设计数据表 
+                                            WHERE 产品ID = %s AND 参数名称 = %s
+                                        """
+                                        cursor.execute(design_query, (self.productID, "公称直径*"))
+                                        design_data = cursor.fetchone()
+
+                                        if isinstance(design_data, dict) and '壳程数值' in design_data and design_data[
+                                            '壳程数值']:
+                                            processed_params.append({
+                                                '参数名': param_name,
+                                                '参数值': design_data['壳程数值'],
+                                                '单位': unit
+                                            })
+                                        else:
+                                            processed_params.append({
+                                                '参数名': param_name,
+                                                '参数值': param_value,
+                                                '单位': unit
+                                            })
+                                    except Exception as e:
+                                        print(f"处理公称直径DN时出错: {str(e)}")
+                                        processed_params.append({
+                                            '参数名': param_name,
+                                            '参数值': param_value,
+                                            '单位': unit
+                                        })
+
+                                # 其他需要产品库设计数据表的参数处理（保持原逻辑）
+                                elif param_name == "是否以外径为基准":
+                                    try:
+                                        design_query = """
+                                            SELECT 壳程数值 
+                                            FROM 产品设计活动表_设计数据表 
+                                            WHERE 产品ID = %s AND 参数名称 = %s
+                                        """
+                                        cursor.execute(design_query, (self.productID, "是否以外径为基准"))
+                                        design_data = cursor.fetchone()
+
+                                        if isinstance(design_data, dict) and '壳程数值' in design_data and design_data[
+                                            '壳程数值']:
+                                            processed_params.append({
+                                                '参数名': param_name,
+                                                '参数值': design_data['壳程数值'],
+                                                '单位': unit
+                                            })
+                                        else:
+                                            processed_params.append({
+                                                '参数名': param_name,
+                                                '参数值': param_value,
+                                                '单位': unit
+                                            })
+                                    except Exception as e:
+                                        print(f"处理是否以外径为基准时出错: {str(e)}")
+                                        processed_params.append({
+                                            '参数名': param_name,
+                                            '参数值': param_value,
+                                            '单位': unit
+                                        })
+
+                                elif param_name == "壳体内直径 Di":
+                                    try:
+                                        design_query = """
+                                            SELECT 管程数值 
+                                            FROM 产品设计活动表_设计数据表 
+                                            WHERE 产品ID = %s AND 参数名称 = %s
+                                        """
+                                        cursor.execute(design_query, (self.productID, "公称直径*"))
+                                        design_data = cursor.fetchone()
+
+                                        if isinstance(design_data, dict) and '管程数值' in design_data and design_data[
+                                            '管程数值']:
+                                            processed_params.append({
+                                                '参数名': param_name,
+                                                '参数值': design_data['管程数值'],
+                                                '单位': unit
+                                            })
+                                        else:
+                                            processed_params.append({
+                                                '参数名': param_name,
+                                                '参数值': param_value,
+                                                '单位': unit
+                                            })
+                                    except Exception as e:
+                                        print(f"处理壳体内直径Di时出错: {str(e)}")
+                                        processed_params.append({
+                                            '参数名': param_name,
+                                            '参数值': param_value,
+                                            '单位': unit
+                                        })
+
+                                # 其他参数处理逻辑（保持不变）
+                                elif param_name in ["旁路挡板厚度", "防冲板形式", "防冲板厚度", "滑道定位",
+                                                    "滑道高度", "滑道厚度", "滑道与竖直中心线夹角",
+                                                    "切边长度 L1", "切边高度 h"]:
+                                    try:
+                                        design_query = """
+                                            SELECT 参数值 
+                                            FROM 产品设计活动表_元件附加参数表 
+                                            WHERE 产品ID = %s AND 参数名称 = %s
+                                        """
+                                        cursor.execute(design_query, (self.productID, param_name))
+                                        design_data = cursor.fetchone()
+
+                                        if isinstance(design_data, dict) and '参数值' in design_data and design_data[
+                                            '参数值']:
+                                            processed_params.append({
+                                                '参数名': param_name,
+                                                '参数值': design_data['参数值'],
+                                                '单位': unit
+                                            })
+                                        else:
+                                            processed_params.append({
+                                                '参数名': param_name,
+                                                '参数值': param_value,
+                                                '单位': unit
+                                            })
+                                    except Exception as e:
+                                        print(f"处理{param_name}时出错: {str(e)}")
+                                        processed_params.append({
+                                            '参数名': param_name,
+                                            '参数值': param_value,
+                                            '单位': unit
+                                        })
+                                else:
+                                    processed_params.append({
+                                        '参数名': param_name,
+                                        '参数值': param_value,
+                                        '单位': unit
+                                    })
+                            else:
+                                print(f"参数格式错误，跳过: {param}")
+
+                        if processed_params:
+                            self.setup_parameters(processed_params)
+                            self.hide_specific_params(hidden_params)
+                            self.update_leftpad_params()
+                            product_params_loaded = True
+                        else:
+                            print("没有有效的处理后参数，无法设置参数")
                     else:
-                        print("没有有效的处理后参数，无法从产品设计活动库设置参数")
+                        print(f"未查询到产品ID为{self.productID}的布管参数或参数格式不正确")
             else:
                 print("无法创建产品数据库连接")
         except Exception as e:
-            print(f"产品库数据库操作错误: {str(e)}")
+            print(f"数据库操作错误: {str(e)}")
             QMessageBox.warning(self, "查询警告", f"从产品设计活动库读取参数失败: {str(e)}")
         finally:
-            # 关闭产品库连接
             if product_conn and hasattr(product_conn, 'open') and product_conn.open:
                 try:
                     product_conn.close()
-                    print("产品数据库连接已关闭")
                 except Exception as e:
                     print(f"关闭产品数据库连接时出错: {str(e)}")
 
-        # -------------------------- 2. 产品库加载失败时，从元件库加载默认参数 --------------------------
+        # 组件默认库加载（不涉及产品设计活动表，仅使用自身默认表）
         if not product_params_loaded:
             component_conn = None
-            product_conn_for_design = None  # 单独用于查询产品设计数据表的连接（因元件库无此表）
             try:
-                # 2.1 建立元件库连接，查询默认参数
                 component_conn = create_component_connection()
-                if not component_conn:
-                    print("无法创建组件数据库连接，无法加载默认参数")
-                    raise ConnectionError("组件数据库连接失败")
+                if component_conn:
+                    with component_conn.cursor() as cursor:
+                        # 组件库仅从自身的布管参数默认表加载，不涉及产品库的设计数据表
+                        cursor.execute("SELECT 参数名, 参数值, 单位 FROM 布管参数默认表")
+                        default_params = cursor.fetchall()
 
-                # 2.2 建立产品库连接（用于查询设计数据表，因特殊参数需关联此表）
-                product_conn_for_design = create_product_connection()
-                if not product_conn_for_design:
-                    print("无法创建产品数据库连接，无法处理特殊默认参数")
-                    raise ConnectionError("产品数据库连接失败（用于默认参数的特殊处理）")
+                        if default_params and isinstance(default_params, (list, tuple)):
+                            # 处理默认参数，对特殊参数需要从产品设计活动库的设计数据表中读取
+                            processed_params = []
+                            for param in default_params:
+                                if isinstance(param, dict) and all(
+                                        key in param for key in ['参数名', '参数值', '单位']):
+                                    param_name = param['参数名']
+                                    param_value = param['参数值']
+                                    unit = param['单位']
 
-                # 2.3 从元件库布管参数默认表查询原始默认参数
-                with component_conn.cursor() as component_cursor:
-                    component_cursor.execute("SELECT 参数名, 参数值, 单位 FROM 布管参数默认表")
-                    raw_default_params = component_cursor.fetchall()
-                    if not isinstance(raw_default_params, (list, tuple)):
-                        print("未查询到默认参数或参数格式不正确")
-                        raise ValueError("默认参数格式错误")
+                                    # 对于特殊参数，尝试从产品设计活动库的设计数据表中读取
+                                    if param_name in ["公称直径 DN", "是否以外径为基准", "壳体内直径 Di"]:
+                                        # 需要产品数据库连接来查询设计数据表
+                                        product_design_conn = None
+                                        try:
+                                            product_design_conn = create_product_connection()
+                                            if product_design_conn and self.productID:
+                                                with product_design_conn.cursor() as design_cursor:
+                                                    if param_name == "公称直径 DN":
+                                                        design_query = """
+                                                            SELECT 壳程数值 
+                                                            FROM 产品设计活动表_设计数据表 
+                                                            WHERE 产品ID = %s AND 参数名称 = %s
+                                                        """
+                                                        design_cursor.execute(design_query,
+                                                                              (self.productID, "公称直径*"))
+                                                        design_data = design_cursor.fetchone()
 
-                # 2.4 调用通用函数处理默认参数（含特殊参数关联产品设计数据表）
-                with product_conn_for_design.cursor() as product_cursor:
-                    processed_default_params = process_special_params(
-                        raw_params=raw_default_params,
-                        product_cursor=product_cursor,
-                        product_id=self.productID  # 即使读默认参数，仍需产品ID查设计数据表
-                    )
+                                                        if isinstance(design_data,
+                                                                      dict) and '壳程数值' in design_data and \
+                                                                design_data['壳程数值']:
+                                                            processed_params.append({
+                                                                '参数名': param_name,
+                                                                '参数值': design_data['壳程数值'],
+                                                                '单位': unit
+                                                            })
+                                                        else:
+                                                            processed_params.append({
+                                                                '参数名': param_name,
+                                                                '参数值': param_value,
+                                                                '单位': unit
+                                                            })
 
-                # 2.5 应用处理后的默认参数
-                if processed_default_params:
-                    self.setup_parameters(processed_default_params)
-                    self.hide_specific_params(hidden_params)
-                    self.update_leftpad_params()
-                    print(f"从元件库成功加载并处理默认参数，共{len(processed_default_params)}个有效参数")
+                                                    elif param_name == "是否以外径为基准":
+                                                        design_query = """
+                                                            SELECT 壳程数值 
+                                                            FROM 产品设计活动表_设计数据表 
+                                                            WHERE 产品ID = %s AND 参数名称 = %s
+                                                        """
+                                                        design_cursor.execute(design_query,
+                                                                              (self.productID, "是否以外径为基准"))
+                                                        design_data = design_cursor.fetchone()
+
+                                                        if isinstance(design_data,
+                                                                      dict) and '壳程数值' in design_data and \
+                                                                design_data['壳程数值']:
+                                                            processed_params.append({
+                                                                '参数名': param_name,
+                                                                '参数值': design_data['壳程数值'],
+                                                                '单位': unit
+                                                            })
+                                                        else:
+                                                            processed_params.append({
+                                                                '参数名': param_name,
+                                                                '参数值': param_value,
+                                                                '单位': unit
+                                                            })
+
+                                                    elif param_name == "壳体内直径 Di":
+                                                        design_query = """
+                                                            SELECT 管程数值 
+                                                            FROM 产品设计活动表_设计数据表 
+                                                            WHERE 产品ID = %s AND 参数名称 = %s
+                                                        """
+                                                        design_cursor.execute(design_query,
+                                                                              (self.productID, "公称直径*"))
+                                                        design_data = design_cursor.fetchone()
+
+                                                        if isinstance(design_data,
+                                                                      dict) and '管程数值' in design_data and \
+                                                                design_data['管程数值']:
+                                                            processed_params.append({
+                                                                '参数名': param_name,
+                                                                '参数值': design_data['管程数值'],
+                                                                '单位': unit
+                                                            })
+                                                        else:
+                                                            processed_params.append({
+                                                                '参数名': param_name,
+                                                                '参数值': param_value,
+                                                                '单位': unit
+                                                            })
+                                            else:
+                                                # 无法连接到产品数据库或没有产品ID，使用默认值
+                                                processed_params.append({
+                                                    '参数名': param_name,
+                                                    '参数值': param_value,
+                                                    '单位': unit
+                                                })
+                                        except Exception as e:
+                                            print(f"处理{param_name}时出错: {str(e)}")
+                                            processed_params.append({
+                                                '参数名': param_name,
+                                                '参数值': param_value,
+                                                '单位': unit
+                                            })
+                                        finally:
+                                            if product_design_conn and hasattr(product_design_conn,
+                                                                               'open') and product_design_conn.open:
+                                                try:
+                                                    product_design_conn.close()
+                                                except Exception as e:
+                                                    print(f"关闭产品设计数据库连接时出错: {str(e)}")
+                                    else:
+                                        # 非特殊参数，直接使用默认值
+                                        processed_params.append({
+                                            '参数名': param_name,
+                                            '参数值': param_value,
+                                            '单位': unit
+                                        })
+                                else:
+                                    print(f"参数格式错误，跳过: {param}")
+
+                            if processed_params:
+                                self.setup_parameters(processed_params)
+                                self.hide_specific_params(hidden_params)
+                                self.update_leftpad_params()
+                            else:
+                                print("没有有效的处理后参数，无法设置参数")
+                        else:
+                            print("未查询到默认参数或参数格式不正确")
                 else:
-                    print("没有有效的处理后默认参数，无法设置参数")
-
+                    print("无法创建组件数据库连接")
             except Exception as e:
-                print(f"默认参数加载/处理错误: {str(e)}")
-                QMessageBox.critical(self, "加载错误", f"无法读取/处理默认参数: {str(e)}")
+                print(f"默认参数加载错误: {str(e)}")
+                QMessageBox.critical(self, "加载错误", f"无法读取默认参数: {str(e)}")
             finally:
-                # 关闭元件库连接
                 if component_conn and hasattr(component_conn, 'open') and component_conn.open:
                     try:
                         component_conn.close()
-                        print("组件数据库连接已关闭")
                     except Exception as e:
                         print(f"关闭组件数据库连接时出错: {str(e)}")
-                # 关闭产品库（用于设计数据表）连接
-                if product_conn_for_design and hasattr(product_conn_for_design,
-                                                       'open') and product_conn_for_design.open:
-                    try:
-                        product_conn_for_design.close()
-                        print("产品数据库（设计数据表查询）连接已关闭")
-                    except Exception as e:
-                        print(f"关闭产品数据库（设计数据表查询）连接时出错: {str(e)}")
 
-        # -------------------------- 3. 后续计算与元件构建逻辑（保持不变） --------------------------
+        # 后续计算和元素构建逻辑保持不变
         try:
             self.calculate_piping_layout()
         except Exception as e:
@@ -1149,7 +1221,165 @@ class TubeLayoutEditor(QMainWindow):
                 else:
                     print("未查询到是否布置滑道的信息，使用默认值None")
                 cursor.close()
-            else
+            else:
+                print("无法创建产品数据库连接，无法查询是否布置滑道")
+        except Exception as e:
+            print(f"查询是否布置滑道错误: {str(e)}")
+        finally:
+            if product_conn and hasattr(product_conn, 'open') and product_conn.open:
+                try:
+                    product_conn.close()
+                except Exception as e:
+                    print(f"关闭产品数据库连接时出错: {str(e)}")
+
+        # 各类元件构建逻辑保持不变
+        lagan_centers = all_coords.get('lagan_centers', [])
+        side_centers = all_coords.get("side_centers", [])
+        center_dangguan_centers = all_coords.get("center_dangguan_centers", [])
+        side_dangban_centers = all_coords.get("side_dangban_centers", [])
+        center_dangban_centers = all_coords.get("center_dangban_centers", "")
+        impingement_plate_1_centers = all_coords.get("impingement_plate_1_centers", "")
+        impingement_plate_2_centers = all_coords.get("impingement_plate_2_centers", "")
+        del_centers = all_coords.get("del_centers", [])
+
+        try:
+            if hasattr(self, 'global_centers'):
+                self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
+                    self.global_centers)
+            else:
+                print("self.global_centers不存在，无法分组中心点")
+                self.full_sorted_current_centers_up = []
+                self.full_sorted_current_centers_down = []
+        except Exception as e:
+            print(f"分组中心点时出错: {str(e)}")
+            self.full_sorted_current_centers_up = []
+            self.full_sorted_current_centers_down = []
+
+        try:
+            if isinstance(lagan_centers, (list, tuple)):
+                self.build_lagan(lagan_centers)
+            else:
+                print(f"lagan_centers不是列表或元组类型，而是{type(lagan_centers)}")
+        except Exception as e:
+            print(f"构建拉杆时出错: {str(e)}")
+
+        try:
+            if isinstance(side_centers, (list, tuple)):
+                self.build_side_lagan(side_centers)
+            else:
+                print(f"side_centers不是列表或元组类型，而是{type(side_centers)}")
+        except Exception as e:
+            print(f"构建最左最右拉杆时出错: {str(e)}")
+
+        try:
+            if isinstance(center_dangguan_centers, (list, tuple)):
+                self.build_center_dangguan(center_dangguan_centers)
+            else:
+                print(f"center_dangguan_centers不是列表或元组类型，而是{type(center_dangguan_centers)}")
+        except Exception as e:
+            print(f"构建中间挡管时出错: {str(e)}")
+
+        try:
+            if isinstance(side_dangban_centers, (list, tuple)):
+                self.build_side_dangban(side_dangban_centers, side_dangban_thick)
+            else:
+                print(f"side_dangban_centers不是列表或元组类型，而是{type(side_dangban_centers)}")
+        except Exception as e:
+            print(f"构建旁路挡板时出错: {str(e)}")
+
+        try:
+            if is_arranged_huadao == 1:
+                self.build_huadao("滑道与管板焊接", height, thickness, angle, 50, 15)
+        except Exception as e:
+            print(f"构建滑道时出错: {str(e)}")
+
+        try:
+            if center_dangban_centers:
+                import ast
+                centers_list = ast.literal_eval(center_dangban_centers)
+                if not isinstance(centers_list, list):
+                    print(f"center_dangban_centers解析后不是列表类型，而是{type(centers_list)}")
+                    centers_list = []
+            else:
+                centers_list = []
+
+            if isinstance(centers_list, list):
+                for i in range(0, len(centers_list), 2):
+                    if i + 1 < len(centers_list):
+                        pair = [centers_list[i], centers_list[i + 1]]
+                        if isinstance(pair, list) and len(pair) == 2:
+                            self.build_center_dangban(pair)
+                        else:
+                            print(f"无效的中间挡板坐标对: {pair}")
+                    else:
+                        print(f"中间挡板坐标列表索引{i + 1}超出范围，跳过")
+        except (SyntaxError, ValueError, TypeError) as e:
+            print(f"处理中间挡板时出错: {str(e)}")
+
+        try:
+            if impingement_plate_1_centers:
+                import ast
+                centers_list = ast.literal_eval(impingement_plate_1_centers)
+                if not isinstance(centers_list, list):
+                    print(f"impingement_plate_1_centers解析后不是列表类型，而是{type(centers_list)}")
+                    centers_list = []
+            else:
+                centers_list = []
+
+            if isinstance(centers_list, list):
+                for i in range(0, len(centers_list), 2):
+                    if i + 1 < len(centers_list):
+                        pair = [centers_list[i], centers_list[i + 1]]
+                        if isinstance(pair, list) and len(pair) == 2:
+                            self.build_impingement_plate(
+                                pair, "与定距管/拉杆焊接平板式",
+                                baffle_thickness, baffle_angle,
+                                0, 0, 0, tube_outer_diameter, tube_pitch
+                            )
+                        else:
+                            print(f"无效的平板式防冲板坐标对: {pair}")
+                    else:
+                        print(f"平板式防冲板坐标列表索引{i + 1}超出范围，跳过")
+        except (SyntaxError, ValueError, TypeError) as e:
+            print(f"处理平板式防冲板时出错: {str(e)}")
+
+        try:
+            if impingement_plate_2_centers:
+                import ast
+                centers_list = ast.literal_eval(impingement_plate_2_centers)
+                if not isinstance(centers_list, list):
+                    print(f"impingement_plate_2_centers解析后不是列表类型，而是{type(centers_list)}")
+                    centers_list = []
+            else:
+                centers_list = []
+
+            if isinstance(centers_list, list):
+                for i in range(0, len(centers_list), 2):
+                    if i + 1 < len(centers_list):
+                        pair = [centers_list[i], centers_list[i + 1]]
+                        if isinstance(pair, list) and len(pair) == 2:
+                            self.build_impingement_plate(
+                                pair, "与定距管/拉杆焊接折边式",
+                                baffle_thickness, baffle_angle,
+                                0, 0, 0, tube_outer_diameter, tube_pitch
+                            )
+                        else:
+                            print(f"无效的折边式防冲板坐标对: {pair}")
+                    else:
+                        print(f"折边式防冲板坐标列表索引{i + 1}超出范围，跳过")
+        except (SyntaxError, ValueError, TypeError) as e:
+            print(f"处理折边式防冲板时出错: {str(e)}")
+
+        try:
+            if isinstance(del_centers, (list, tuple)):
+                self.delete_huanreguan(del_centers)
+            else:
+                print(f"del_centers不是列表或元组类型，而是{type(del_centers)}")
+        except Exception as e:
+            print(f"删除换热管时出错: {str(e)}")
+
+        # TODO 后续取消注释
+        # self.line_tip.setText("请确认"壳体内径Di"是否正确！")
 
     def calculate_piping_layout(self):
         """处理布管计算的核心逻辑，返回计算结果"""
