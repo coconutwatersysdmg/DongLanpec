@@ -94,17 +94,39 @@ class ZoomableGraphicsView(QGraphicsView):
 
 
 class ClickableRectItem(QGraphicsRectItem):
-    def __init__(self, rect, parent=None):
+    def __init__(self, rect, parent=None, is_side_block=False, editor=None):
         super().__init__(rect, parent)
         self.setAcceptHoverEvents(True)
-        self.setFlag(QGraphicsItem.ItemIsSelectable, True)
-        # 临时设置明显的边框，方便观察实际点击区域
-        self.setPen(QPen(Qt.red, 2))  # 红色边框，便于调试
+        self.setFlag(QGraphicsRectItem.ItemIsSelectable, True)
+        self.is_side_block = is_side_block  # 标记是否为旁路挡板
+        self.is_selected = False  # 选中状态
+        self.editor = editor  # 主窗口引用（TubeLayoutEditor实例）
+        self.original_pen = self.pen()  # 保存原始画笔
+        self.selected_pen = QPen(QColor(255, 0, 0), 2)  # 选中时的红色边框
+        self.paired_block = None  # 配对挡板引用
+
+    def set_paired_block(self, block):
+        """设置配对挡板（双向绑定）"""
+        self.paired_block = block
+        if block and block.paired_block != self:
+            block.paired_block = self
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            print("你已点击旁路挡板")
-            event.accept()  # 接受事件，避免继续传递
+        if event.button() == Qt.LeftButton and self.is_side_block:
+            # 切换选中状态
+            self.is_selected = not self.is_selected
+            # 更新边框样式
+            self.setPen(self.selected_pen if self.is_selected else self.original_pen)
+
+            # 更新主窗口选中列表
+            if self.editor and hasattr(self.editor, 'selected_side_blocks'):
+                if self.is_selected:
+                    if self not in self.editor.selected_side_blocks:
+                        self.editor.selected_side_blocks.append(self)
+                else:
+                    if self in self.editor.selected_side_blocks:
+                        self.editor.selected_side_blocks.remove(self)
+            event.accept()
         else:
             super().mousePressEvent(event)
 
@@ -233,6 +255,7 @@ class TubeLayoutEditor(QMainWindow):
 
         self.productID = product_id  # 产品ID
         self.isSymmetry = False
+        self.selected_side_blocks = []
         self.input_json = []
         self.current_leftpad = []
         self.line_tip = line_tip
@@ -4744,17 +4767,18 @@ class TubeLayoutEditor(QMainWindow):
 
     # 删除换热管
     def on_del_click(self):
-        if hasattr(self, 'selected_centers') and self.selected_centers:
+        print(self.selected_side_blocks)
+        if hasattr(self, 'selected_side_blocks') and self.selected_side_blocks:
+            self.delete_selected_side_blocks()
+        elif self.selected_centers:
             if self.isSymmetry:
                 selected_centers = self.judge_linkage(self.selected_centers)
             else:
                 selected_centers = self.selected_centers
             self.delete_huanreguan(selected_centers)
-            # self.connect_center(self.scene, self.current_centers, self.small_D)
+        # self.connect_center(self.scene, self.current_centers, self.small_D)
 
-            self.selected_centers.clear()
-        else:
-            QMessageBox.warning(self, "未选中", "请先点击图形区域中的一个或多个小圆以选中圆心")
+        self.selected_centers.clear()
 
     def delete_huanreguan(self, selected_centers):
 
@@ -5511,26 +5535,31 @@ class TubeLayoutEditor(QMainWindow):
 
         import ast
         selected_centers_list = []
+        # 解析选中的中心点（支持列表或字符串格式）
         if isinstance(selected_centers, list):
-            selected_centers_list = [item for item in selected_centers
-                                     if isinstance(item, tuple)
-                                     and len(item) == 2
-                                     and all(isinstance(x, (int, float)) for x in item)]
+            selected_centers_list = [
+                item for item in selected_centers
+                if isinstance(item, tuple) and len(item) == 2
+                   and all(isinstance(x, (int, float)) for x in item)
+            ]
         elif isinstance(selected_centers, str):
             try:
                 parsed_list = ast.literal_eval(selected_centers)
                 if isinstance(parsed_list, list):
-                    selected_centers_list = [item for item in parsed_list
-                                             if isinstance(item, tuple)
-                                             and len(item) == 2
-                                             and all(isinstance(x, (int, float)) for x in item)]
+                    selected_centers_list = [
+                        item for item in parsed_list
+                        if isinstance(item, tuple) and len(item) == 2
+                           and all(isinstance(x, (int, float)) for x in item)
+                    ]
             except (SyntaxError, ValueError, TypeError) as e:
                 print("字符串解析错误:", e)
                 selected_centers_list = []
         else:
             selected_centers_list = []
 
-        # 合并并去重中心点
+        # 合并并去重中心点（确保side_dangban已初始化）
+        if not hasattr(self, 'side_dangban'):
+            self.side_dangban = []
         combined = []
         seen = set()
         for coord in self.side_dangban:
@@ -5543,23 +5572,23 @@ class TubeLayoutEditor(QMainWindow):
                 combined.append(coord)
         self.side_dangban = combined
 
-        current_coords = self.selected_to_current_coords(selected_centers)
-        from PyQt5.QtWidgets import QGraphicsRectItem
+        current_coords = self.selected_to_current_coords(selected_centers)  # 转换坐标
         from PyQt5.QtCore import QRectF, Qt
         from PyQt5.QtGui import QPen, QBrush
         import math
+        from PyQt5.QtWidgets import QMessageBox
 
-        # 初始化操作列表
+        # 初始化操作记录列表
         if not hasattr(self, 'operations'):
             self.operations = []
 
         added_count = 0
         done_rows = set()
-        block_width = 30  # 固定宽度
+        block_width = 30  # 挡板固定宽度
 
+        # 处理字符串类型的selected_centers（二次校验）
         if isinstance(selected_centers, str):
             try:
-                import ast
                 selected_centers = ast.literal_eval(selected_centers)
             except (SyntaxError, ValueError) as e:
                 print(f"字符串转换失败: {e}")
@@ -5569,9 +5598,9 @@ class TubeLayoutEditor(QMainWindow):
             for row_label, _ in selected_centers:
                 if row_label in done_rows:
                     continue
-                row_idx = abs(row_label) - 1  # 行号转换为索引
+                row_idx = abs(row_label) - 1  # 行号转索引
 
-                # 选择对应的圆心列表
+                # 选择对应的圆心列表（上/下半部分）
                 if row_label > 0:
                     centers_group = self.sorted_current_centers_up
                 else:
@@ -5588,11 +5617,14 @@ class TubeLayoutEditor(QMainWindow):
                 _, y = row[0]
 
                 # 计算最大允许的x坐标（确保在大圆内）
+                if not hasattr(self, 'R_nei'):
+                    QMessageBox.warning(self, "参数错误", "未找到大内圆半径参数R_nei")
+                    return 0
                 max_x = math.sqrt(self.R_nei ** 2 - y ** 2)
 
-                # 计算最左和最右挡板位置，确保不超出大圆
-                left_x = max(row[0][0] - 40, -max_x)  # 最左圆左侧40单位，但不小于-max_x
-                right_x = min(row[-1][0] + 20, max_x - block_width)  # 最右圆右侧20单位，但不超出max_x
+                # 计算最左和最右挡板位置（不超出大圆）
+                left_x = max(row[0][0] - 40, -max_x)  # 最左圆左侧40单位
+                right_x = min(row[-1][0] + 20, max_x - block_width)  # 最右圆右侧20单位
 
                 # 计算矩形中心位置
                 left_rect_center_x = max(left_x - block_width / 2, -max_x + block_width / 2)
@@ -5602,37 +5634,88 @@ class TubeLayoutEditor(QMainWindow):
                 max_block_height = 2 * math.sqrt(self.R_nei ** 2 - y ** 2)
                 actual_block_height = min(block_height, max_block_height)
 
-                # 绘制蓝色矩形挡板
+                # 绘制蓝色矩形挡板（一对）
                 pen = QPen(Qt.blue)
                 brush = QBrush(Qt.blue)
-                for x0 in [left_rect_center_x, right_rect_center_x]:
-                    # 再次验证是否在大圆内
-                    if abs(x0) + block_width / 2 > max_x:
-                        continue
 
-                    rect = QRectF(x0 - block_width / 2,
-                                  y - actual_block_height / 2,
-                                  block_width,
-                                  actual_block_height)
-                    rect_item = ClickableRectItem(rect)
-                    rect_item.setZValue(10)
-                    rect_item.setPen(pen)
-                    rect_item.setBrush(brush)
-                    rect_item.setFlag(rect_item.ItemIsSelectable, True)  # 允许选中
-                    rect_item.setFlag(rect_item.ItemSendsGeometryChanges, True)
-                    self.graphics_scene.addItem(rect_item)
+                # 创建左侧挡板（传递主窗口引用self）
+                left_rect = QRectF(
+                    left_rect_center_x - block_width / 2,
+                    y - actual_block_height / 2,
+                    block_width,
+                    actual_block_height
+                )
+                left_block = ClickableRectItem(left_rect, is_side_block=True, editor=self)
+                left_block.setPen(pen)
+                left_block.setBrush(brush)
+                left_block.original_pen = pen  # 初始化原始画笔
+
+                # 创建右侧挡板
+                right_rect = QRectF(
+                    right_rect_center_x - block_width / 2,
+                    y - actual_block_height / 2,
+                    block_width,
+                    actual_block_height
+                )
+                right_block = ClickableRectItem(right_rect, is_side_block=True, editor=self)
+                right_block.setPen(pen)
+                right_block.setBrush(brush)
+                right_block.original_pen = pen  # 初始化原始画笔
+
+                # 双向绑定配对挡板
+                left_block.set_paired_block(right_block)
+
+                # 设置挡板属性
+                for block in [left_block, right_block]:
+                    block.setZValue(10)  # 显示在上方
+                    block.setFlag(QGraphicsRectItem.ItemIsSelectable, True)
+                    block.setFlag(QGraphicsRectItem.ItemSendsGeometryChanges, True)
+                    self.graphics_scene.addItem(block)
                     added_count += 1
 
-                    # 记录操作
-                    self.operations.append({
-                        "type": "side_block",
-                        "row": row_label,
-                        "rect": (x0 - block_width / 2, y - actual_block_height / 2, block_width, actual_block_height)
-                    })
+                # 记录操作
+                self.operations.append({
+                    "type": "side_block",
+                    "row": row_label,
+                    "rects": [
+                        (left_rect_center_x - block_width / 2, y - actual_block_height / 2, block_width,
+                         actual_block_height),
+                        (right_rect_center_x - block_width / 2, y - actual_block_height / 2, block_width,
+                         actual_block_height)
+                    ]
+                })
 
                 done_rows.add(row_label)
 
         return added_count
+
+    def delete_selected_side_blocks(self):
+        """删除所有选中的旁路挡板及其配对挡板"""
+        if not hasattr(self, 'selected_side_blocks'):
+            self.selected_side_blocks = []
+            return
+
+        # 复制选中列表避免迭代中修改列表导致错误
+        blocks_to_remove = list(self.selected_side_blocks)
+        removed_blocks = set()
+
+        for block in blocks_to_remove:
+            if block in removed_blocks:
+                continue
+
+            # 移除自身
+            if block.scene() == self.graphics_scene:  # 确认在当前场景中
+                self.graphics_scene.removeItem(block)
+            removed_blocks.add(block)
+
+            # 移除配对挡板
+            if block.paired_block and block.paired_block not in removed_blocks:
+                if block.paired_block.scene() == self.graphics_scene:
+                    self.graphics_scene.removeItem(block.paired_block)
+                removed_blocks.add(block.paired_block)
+
+        # 清空选中列表
+        self.selected_side_blocks = []
 
     from PyQt5.QtGui import QColor, QPen
     from PyQt5.QtWidgets import QGraphicsLineItem
