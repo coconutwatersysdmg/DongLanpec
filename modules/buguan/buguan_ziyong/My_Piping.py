@@ -18,7 +18,8 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                              QTabWidget, QTableWidget, QTableWidgetItem, QPushButton, QLabel, QGraphicsView,
                              QGraphicsScene, QFrame,
                              QDialog, QDialogButtonBox, QStackedWidget, QGridLayout,
-                             QSizePolicy, QHeaderView, QLineEdit, QCheckBox, QListView, QGraphicsLineItem)
+                             QSizePolicy, QHeaderView, QLineEdit, QCheckBox, QListView, QGraphicsLineItem,
+                             QGraphicsRectItem)
 from PyQt5.QtWidgets import QGraphicsEllipseItem
 from PyQt5.QtWidgets import QGraphicsPolygonItem, QMessageBox, QComboBox
 from PyQt5.QtWidgets import QTextEdit
@@ -90,6 +91,22 @@ class ZoomableGraphicsView(QGraphicsView):
                 self.scale(1 / self.zoom_factor, 1 / self.zoom_factor)
         else:
             super().wheelEvent(event)
+
+
+class ClickableRectItem(QGraphicsRectItem):
+    """可点击的矩形图形项，用于旁路挡板等组件"""
+
+    def __init__(self, rect, parent=None):
+        super().__init__(rect, parent)
+        self.setAcceptHoverEvents(True)
+
+    def mousePressEvent(self, event):
+        """鼠标点击事件"""
+        if event.button() == Qt.LeftButton:
+            print("你已点击旁路挡板")
+            event.accept()
+        else:
+            super().mousePressEvent(event)
 
 
 # 预览对话框 -----------------------------------------------------
@@ -569,7 +586,7 @@ class TubeLayoutEditor(QMainWindow):
         # 添加勾选框到容器
         checkbox_layout = QHBoxLayout(self.checkbox_container)
         checkbox_layout.setContentsMargins(5, 5, 5, 5)
-        self.symmetric_checkbox = QCheckBox("对称布管")
+        self.symmetric_checkbox = QCheckBox("对称分布元件")
         self.symmetric_checkbox.setChecked(False)
         self.symmetric_checkbox.setStyleSheet("font-size: 20px; color: #333;")
         checkbox_layout.addWidget(self.symmetric_checkbox)
@@ -5597,7 +5614,7 @@ class TubeLayoutEditor(QMainWindow):
                                   y - actual_block_height / 2,
                                   block_width,
                                   actual_block_height)
-                    rect_item = QGraphicsRectItem(rect)
+                    rect_item = ClickableRectItem(rect)
                     rect_item.setPen(pen)
                     rect_item.setBrush(brush)
                     self.graphics_scene.addItem(rect_item)
