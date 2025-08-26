@@ -3288,7 +3288,8 @@ class TubeLayoutEditor(QMainWindow):
         extension = R * 0.1  # 让坐标轴比大圆长10%
         total_length = R + extension
         arrow_size = 10  # 箭头大小
-        font = QFont("Arial", 10, QFont.Bold)
+        # 增大字体大小，从10改为14，更醒目
+        font = QFont("Arial", 14, QFont.Bold)
 
         # 红色 X 轴
         pen_x = QPen(Qt.red)
@@ -3314,8 +3315,8 @@ class TubeLayoutEditor(QMainWindow):
         scene.addLine(0, total_length, -arrow_size / 2, total_length - arrow_size, pen_y)
         scene.addLine(0, total_length, arrow_size / 2, total_length - arrow_size, pen_y)
 
-        # 角度文字
-        text_offset = 30
+        # TODO 角度文字
+        text_offset = 20
         scene.addText("0°", font).setPos(-10, -total_length - text_offset)
         scene.addText("90°", font).setPos(total_length + text_offset / 2, -30)
         scene.addText("180°", font).setPos(-20, total_length + 5)
