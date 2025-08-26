@@ -2684,7 +2684,6 @@ class TubeLayoutEditor(QMainWindow):
     def save_data(self):
         """TODO 保存数据，根据当前页面显示不同的保存成功提示"""
         current_page_index = self.header.currentIndex()
-        self.actual_save_operation(current_page_index)  # 先保存后提示
 
         # 根据当前页面设置不同的提示信息
         if current_page_index == 0 and self.has_piped:  # 布管页面
@@ -2734,6 +2733,7 @@ class TubeLayoutEditor(QMainWindow):
 
             # 显示对话框
             save_dialog.exec_()
+        self.actual_save_operation(current_page_index)  # 先保存后提示
 
     def build_sql_for_coordinate(self):
         current_centers_set = set(self.current_centers)
