@@ -19,7 +19,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                              QGraphicsScene, QFrame,
                              QDialog, QDialogButtonBox, QStackedWidget, QGridLayout,
                              QSizePolicy, QHeaderView, QLineEdit, QCheckBox, QListView, QGraphicsLineItem,
-                             QGraphicsRectItem)
+                             QGraphicsRectItem, QGraphicsItem)
 from PyQt5.QtWidgets import QGraphicsEllipseItem
 from PyQt5.QtWidgets import QGraphicsPolygonItem, QMessageBox, QComboBox
 from PyQt5.QtWidgets import QTextEdit
@@ -94,17 +94,17 @@ class ZoomableGraphicsView(QGraphicsView):
 
 
 class ClickableRectItem(QGraphicsRectItem):
-    """可点击的矩形图形项，用于旁路挡板等组件"""
-
     def __init__(self, rect, parent=None):
         super().__init__(rect, parent)
         self.setAcceptHoverEvents(True)
+        self.setFlag(QGraphicsItem.ItemIsSelectable, True)
+        # 临时设置明显的边框，方便观察实际点击区域
+        self.setPen(QPen(Qt.red, 2))  # 红色边框，便于调试
 
     def mousePressEvent(self, event):
-        """鼠标点击事件"""
         if event.button() == Qt.LeftButton:
             print("你已点击旁路挡板")
-            event.accept()
+            event.accept()  # 接受事件，避免继续传递
         else:
             super().mousePressEvent(event)
 
@@ -5615,8 +5615,11 @@ class TubeLayoutEditor(QMainWindow):
                                   block_width,
                                   actual_block_height)
                     rect_item = ClickableRectItem(rect)
+                    rect_item.setZValue(10)
                     rect_item.setPen(pen)
                     rect_item.setBrush(brush)
+                    rect_item.setFlag(rect_item.ItemIsSelectable, True)  # 允许选中
+                    rect_item.setFlag(rect_item.ItemSendsGeometryChanges, True)
                     self.graphics_scene.addItem(rect_item)
                     added_count += 1
 
@@ -7090,19 +7093,31 @@ class TubeLayoutEditor(QMainWindow):
         from PyQt5.QtGui import QPen, QBrush, QColor
         from PyQt5.QtWidgets import QGraphicsEllipseItem
         import math
+
+        # 确保ClickableRectItem已定义（如果在其他文件中需导入）
+        # from your_module import ClickableRectItem
+
         if not hasattr(self, 'has_piped'):
             self.has_piped = False
-        # 未布管时直接忽略事件
+        # 未布管时直接让事件传递
         if not self.has_piped:
             return super().eventFilter(obj, event)
 
         if obj == self.graphics_view.viewport() and event.type() == QEvent.MouseButtonPress:
-            # 捕获点击坐标
+            # 转换点击坐标到场景坐标系
             scene_pos = self.graphics_view.mapToScene(event.pos())
             self.mouse_x = scene_pos.x()
             self.mouse_y = scene_pos.y()
 
-            # 判断点击是否在大圆内
+            # 关键：先检查是否点击了ClickableRectItem（如旁路挡板）
+            # 获取点击位置的所有图形项（按层级排序，顶层在前）
+            items = self.graphics_scene.items(scene_pos)
+            for item in items:
+                # 如果点击了矩形挡板，直接放行事件，不拦截
+                if isinstance(item, ClickableRectItem):
+                    return False  # 让事件传递给矩形的mousePressEvent
+
+            # 以下是原有圆心选中逻辑（仅处理非矩形的点击）
             in_big_circle = False
             if hasattr(self, 'R_wai'):
                 distance_to_center = math.hypot(self.mouse_x, self.mouse_y)
@@ -7159,12 +7174,13 @@ class TubeLayoutEditor(QMainWindow):
                     marker = self.graphics_scene.addEllipse(
                         x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
                     )
-                    marker.setData(0, "marker")  # ✅ 关键：标记这个圆是 marker
-
+                    marker.setData(0, "marker")  # 标记这个圆是 marker
+                return True  # 处理了圆心点击，拦截事件
             else:
                 print("未选中")
-                # self.line_tip.setText("未选中圆心")
-            return True
+                return False  # 未选中任何圆心，不拦截事件
+
+        # 其他事件类型默认传递
         return super().eventFilter(obj, event)
 
 
