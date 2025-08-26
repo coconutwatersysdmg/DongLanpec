@@ -3,6 +3,8 @@ import logging
 import math
 import os
 import sys
+import time
+import traceback
 from typing import List, Tuple
 
 import pandas as pd
@@ -16,7 +18,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                              QTabWidget, QTableWidget, QTableWidgetItem, QPushButton, QLabel, QGraphicsView,
                              QGraphicsScene, QFrame,
                              QDialog, QDialogButtonBox, QStackedWidget, QGridLayout,
-                             QSizePolicy, QHeaderView, QLineEdit, QCheckBox, QListView)
+                             QSizePolicy, QHeaderView, QLineEdit, QCheckBox, QListView, QGraphicsLineItem)
 from PyQt5.QtWidgets import QGraphicsEllipseItem
 from PyQt5.QtWidgets import QGraphicsPolygonItem, QMessageBox, QComboBox
 from PyQt5.QtWidgets import QTextEdit
@@ -27,8 +29,7 @@ from modules.buguan.buguan_ziyong.sheet_form_page import SheetFormPage
 from modules.buguan.buguan_ziyong.tube_sheet_connection import TubeSheetConnectionPage
 from modules.chanpinguanli.chanpinguanli_main import product_manager
 
-
-product_id = 'PD2025082518130001'
+product_id = 'PD2025081322414301'
 
 
 def on_product_id_changed(new_id):
@@ -1381,8 +1382,9 @@ class TubeLayoutEditor(QMainWindow):
         # TODO 后续取消注释
         # self.line_tip.setText("请确认"壳体内径Di"是否正确！")
 
+    # TODO 布管函数
     def calculate_piping_layout(self):
-        """处理布管计算的核心逻辑，返回计算结果"""
+
         # 清除之前的连线和临时元素（保留坐标轴等基础元素）
         if hasattr(self, 'connection_lines'):
             for line in self.connection_lines:
@@ -2550,57 +2552,6 @@ class TubeLayoutEditor(QMainWindow):
             #     "coord": (x, y)
             # })
 
-    # def delete_connection_centers(self, centers):
-    #
-    #     if not hasattr(self, 'operations'):
-    #         self.operations = []
-    #
-    #     gray_pen = QPen(QColor(245, 245, 245))  # 浅灰色边框
-    #     gray_pen.setWidth(1)
-    #     gray_brush = QBrush(Qt.NoBrush)  # 空心圆
-    #     for x, y in centers:
-    #         found = False
-    #         for item in self.graphics_scene.items():
-    #             if isinstance(item, QGraphicsEllipseItem):
-    #                 rect = item.rect()
-    #                 cx = item.scenePos().x() + rect.width() / 2
-    #                 cy = item.scenePos().y() + rect.height() / 2
-    #                 if abs(cx - x) < 1e-2 and abs(cy - y) < 1e-2:
-    #                     # 不移除原有圆，直接在相同位置绘制浅灰色空心圆覆盖
-    #                     self.graphics_scene.addEllipse(
-    #                         x - self.r, y - self.r, 2 * self.r, 2 * self.r,
-    #                         gray_pen, gray_brush
-    #                     )
-    #                     found = True
-    #                     break
-    #
-    #         # 如果没找到对应圆，仍绘制浅灰色空心圆
-    #         if not found:
-    #             self.graphics_scene.addEllipse(
-    #                 x - self.r, y - self.r, 2 * self.r, 2 * self.r,
-    #                 gray_pen, gray_brush
-    #             )
-    #
-    #         # 擦除当前圆内选中色（如果有）
-    #         click_point = QPointF(x, y)
-    #         for item in self.graphics_scene.items(click_point):
-    #             if isinstance(item, QGraphicsEllipseItem):
-    #                 # 只移除选中状态的高亮圆，保留原始圆
-    #                 if item.brush() != gray_brush:
-    #                     self.graphics_scene.removeItem(item)
-    #                 break
-    #
-    #         # 添加操作记录
-    #         self.operations.append({
-    #             "type": "del",
-    #             "coord": (x, y)
-    #         })
-    #
-    #     if self.create_scene():
-    #         # 场景创建成功后，重新连接圆心并更新管孔数量
-    #         self.connect_center(self.scene, self.current_centers, self.small_D)
-    #         self.update_tube_nums()
-
     def validate_input(self, item, row):
         """验证输入是否为合法浮点数"""
         if self._is_validating:
@@ -3365,151 +3316,107 @@ class TubeLayoutEditor(QMainWindow):
         scene.addText("180°", font).setPos(-20, total_length + 5)
         scene.addText("270°", font).setPos(-total_length - text_offset, -30)
 
-    # 连接中心
+    # TODO 连接中心
     def connect_center(self, scene, centers: List[Tuple[float, float]], do: float):
         """
-        根据换热管排列方式，连接相邻圆心（带调试日志版）
+        根据换热管排列方式，连接相邻圆心
         """
         import math
         from PyQt5.QtGui import QPen, QColor
         from PyQt5.QtWidgets import QGraphicsLineItem
 
-        try:
+        # 先清除已有的连线
+        self.clear_connection_lines(scene)
+        # 更新需求，所有圆心都要有连线，后续如有需求再修改这句
+        # centers = self.global_centers
+        # 获取排列方式和中心距
+        layout_type = None
+        S = do  # 默认 fallback
+        if hasattr(self, "left_data_pd"):
+            df = self.left_data_pd
+            # 获取排列方式
+            res_type = df[df["参数名"] == "换热管排列方式"]
+            if not res_type.empty:
+                layout_type = res_type.iloc[0]["参数值"].strip()
+            # 获取中心距 S
+            res_s = df[df["参数名"] == "换热管中心距 S"]
+            if not res_s.empty:
+                try:
+                    S = float(res_s.iloc[0]["参数值"])
+                except:
+                    pass
 
-            self.clear_connection_lines(scene)
+        if not layout_type:
+            return
+        # 定义方向向量
+        sqrt3 = math.sqrt(3)
+        sqrt2 = math.sqrt(2)
+        directions = []
+        if layout_type == "正方形":
+            directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        elif layout_type == "正三角形":
+            directions = [(1, 0), (-1, 0), (0.5, sqrt3 / 2), (-0.5, sqrt3 / 2), (0.5, sqrt3 / 2), (-0.5, sqrt3 / 2)]
+        elif layout_type == "转角正方形":
+            directions = [(sqrt2 / 2, sqrt2 / 2), (-sqrt2 / 2, sqrt2 / 2), (-sqrt2 / 2, -sqrt2 / 2),
+                          (sqrt2 / 2, -sqrt2 / 2)]
+        elif layout_type == "转角正三角形":
+            directions = [(0, 1), (0, -1), (sqrt3 / 2, 0.5), (sqrt3 / 2, -0.5), (-sqrt3 / 2, 0.5), (-sqrt3 / 2, -0.5)]
+        else:
+            return
 
-            # 更新需求，所有圆心都要有连线
-            centers = self.global_centers
+        # 网格索引设置
+        grid_size = S * 1.2
+        grid = dict()
 
-            # 校验 centers 有效性
-            if not isinstance(centers, list):
-                return
-            for i, (x, y) in enumerate(centers):
-                if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
-                    return
+        for idx, (x, y) in enumerate(centers):
+            key = (round(x / grid_size), round(y / grid_size))
+            grid.setdefault(key, []).append((idx, x, y))
 
-            # 获取排列方式和中心距
-            layout_type = None
-            S = do  # 默认 fallback
+        # 绘制准备
+        pen = QPen(QColor(0, 0, 255))
+        pen.setWidth(1)
+        tolerance = S * 0.55
+        connected = set()
 
-            if hasattr(self, "left_data_pd"):
-                df = self.left_data_pd
-                # 获取排列方式
-                res_type = df[df["参数名"] == "换热管排列方式"]
-                if not res_type.empty:
-                    layout_type = res_type.iloc[0]["参数值"].strip()
+        # 遍历所有圆心找邻居
+        for idx0, (x0, y0) in enumerate(centers):
+            base_key = (round(x0 / grid_size), round(y0 / grid_size))
+            candidates = []
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    key = (base_key[0] + dx, base_key[1] + dy)
+                    if key in grid:
+                        candidates.extend(grid[key])
 
+            for dir_x, dir_y in directions:
+                target_x = x0 + dir_x * S
+                target_y = y0 + dir_y * S
 
-                else:
-                    print("警告：未找到 '换热管排列方式' 参数")
+                nearest = None
+                min_dist = 1e9
+                for idx1, x1, y1 in candidates:
+                    if idx0 == idx1:
+                        continue
+                    dist = math.hypot(x1 - target_x, y1 - target_y)
+                    if dist < min_dist:
+                        min_dist = dist
+                        nearest = (idx1, x1, y1)
 
-                # 获取中心距 S
-                res_s = df[df["参数名"] == "换热管中心距 S"]
-                if not res_s.empty:
-                    try:
-                        S = float(res_s.iloc[0]["参数值"])
+                if not nearest:
+                    continue
 
-
-                    except Exception as e:
-                        print(f"解析 S 失败：{e}，使用默认值 {S}")
-                else:
-                    print("警告：未找到 '换热管中心距 S' 参数，使用默认值")
-            else:
-                print("警告：未找到 left_data_pd 属性")
-
-            if not layout_type:
-                print("错误：未获取到排列方式，退出函数")
-                return
-
-            # 定义方向向量
-            sqrt3 = math.sqrt(3)
-            sqrt2 = math.sqrt(2)
-            directions = []
-            if layout_type == "正方形":
-                directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
-            elif layout_type == "正三角形":
-                # 修正原代码重复项：移除重复的后两个方向
-                directions = [(1, 0), (-1, 0), (0.5, sqrt3 / 2), (-0.5, sqrt3 / 2)]
-            elif layout_type == "转角正方形":
-                directions = [(sqrt2 / 2, sqrt2 / 2), (-sqrt2 / 2, sqrt2 / 2),
-                              (-sqrt2 / 2, -sqrt2 / 2), (sqrt2 / 2, -sqrt2 / 2)]
-            elif layout_type == "转角正三角形":
-                directions = [(0, 1), (0, -1), (sqrt3 / 2, 0.5), (sqrt3 / 2, -0.5),
-                              (-sqrt3 / 2, 0.5), (-sqrt3 / 2, -0.5)]
-            else:
-                print(f"错误：不支持的排列方式 {layout_type}")
-                return
-
-            # 网格索引设置（用于高效查找邻居）
-            grid_size = S * 1.2
-            grid = dict()
-
-            for idx, (x, y) in enumerate(centers):
-                key = (round(x / grid_size), round(y / grid_size))
-                if key not in grid:
-                    grid[key] = []
-                grid[key].append((idx, x, y))
-
-            # 绘制准备
-            pen = QPen(QColor(0, 0, 255))
-            pen.setWidth(1)
-            tolerance = S * 0.55  # 允许的距离误差
-            connected = set()  # 用于避免重复连线
-
-            # 初始化连线列表（确保存在）
-            if not hasattr(self, 'connection_lines'):
-                self.connection_lines = []
-
-            # 遍历所有圆心找邻居
-
-            for idx0, (x0, y0) in enumerate(centers):
-                # 计算当前圆心所在网格
-                base_key = (round(x0 / grid_size), round(y0 / grid_size))
-                candidates = []
-                # 搜索周边3x3网格的候选点
-                for dx in [-1, 0, 1]:
-                    for dy in [-1, 0, 1]:
-                        key = (base_key[0] + dx, base_key[1] + dy)
-                        if key in grid:
-                            candidates.extend(grid[key])
-
-                # 按方向向量查找目标点
-                for dir_idx, (dir_x, dir_y) in enumerate(directions):
-                    target_x = x0 + dir_x * S
-                    target_y = y0 + dir_y * S
-
-                    # 查找候选点中距离目标最近的点
-                    nearest = None
-                    min_dist = float('inf')
-                    for idx1, x1, y1 in candidates:
-                        if idx0 == idx1:
-                            continue  # 跳过自身
-                        dist = math.hypot(x1 - target_x, y1 - target_y)
-                        if dist < min_dist:
-                            min_dist = dist
-                            nearest = (idx1, x1, y1)
-
-                    # 判断是否在误差范围内
-                    if nearest and min_dist < tolerance:
-                        idx1, x1, y1 = nearest
-
-                        # 避免重复连线（按索引排序存储）
-                        key = tuple(sorted((idx0, idx1)))
-                        if key not in connected:
-                            connected.add(key)
-                            # 创建并添加连线
-                            try:
-                                line = QGraphicsLineItem(x0, y0, x1, y1)
-                                line.setPen(pen)
-                                scene.addItem(line)
-                                self.connection_lines.append(line)
-                            except Exception as e:
-                                print(f"  添加连线失败：{e}")
-
-
-
-        except Exception as e:
-            print("未成功添加连线")
+                if min_dist < tolerance:
+                    idx1, x1, y1 = nearest
+                    key = tuple(sorted((idx0, idx1)))
+                    if key not in connected:
+                        connected.add(key)
+                        # 创建连线（修正参数错误）
+                        line = QGraphicsLineItem(x0, y0, x1, y1)  # 移除pen参数
+                        line.setPen(pen)  # 单独设置画笔
+                        scene.addItem(line)
+                        # 如果有存储连线的列表，添加进去
+                        if hasattr(self, 'connection_lines'):
+                            self.connection_lines.append(line)
 
     def draw_layout(self, big_D_wai, big_D_nei: float, small_D: float, centers: List[Tuple[float, float]]):
         #     """
@@ -3551,7 +3458,6 @@ class TubeLayoutEditor(QMainWindow):
         # 刷新视图
         self.graphics_view.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
 
-    # TODO 这个函数要改
     def group_centers_by_y(self, centers: List[Tuple[float, float]], tol: float = 1e-3) -> Tuple[
         List[List[Tuple[float, float]]], List[List[Tuple[float, float]]]]:
         """
@@ -4821,11 +4727,14 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 selected_centers = self.selected_centers
             self.delete_huanreguan(selected_centers)
+            # self.connect_center(self.scene, self.current_centers, self.small_D)
+
             self.selected_centers.clear()
         else:
             QMessageBox.warning(self, "未选中", "请先点击图形区域中的一个或多个小圆以选中圆心")
 
     def delete_huanreguan(self, selected_centers):
+
         if not selected_centers:
             return []
 
@@ -4954,15 +4863,14 @@ class TubeLayoutEditor(QMainWindow):
                     saved_lines = [(line.line(), line.pen()) for line in self.connection_lines]
                     for line in self.connection_lines:
                         self.graphics_scene.removeItem(line)
-
                 # 更新当前圆心列表
                 self.current_centers = [
                     (cx, cy) for (cx, cy) in self.current_centers
                     if (round(cx, 2), round(cy, 2)) not in centers_to_remove
                 ]
-
-                self.connect_center(self.scene, self.current_centers, self.small_D)
-                self.update_tube_nums()
+                if self.create_scene():
+                    self.connect_center(self.scene, self.current_centers, self.small_D)
+                    self.update_tube_nums()
 
                 if saved_lines and hasattr(self, 'connection_lines'):
                     self.connection_lines = []
@@ -4970,8 +4878,8 @@ class TubeLayoutEditor(QMainWindow):
                         new_line = self.graphics_scene.addLine(line_data, pen)
                         self.connection_lines.append(new_line)
         else:
-            # print("未选中")
-            self.line_tip.setText("未选中圆心")
+            print("未选中")
+            # self.line_tip.setText("未选中圆心")
 
         return current_coords
 
@@ -5699,6 +5607,10 @@ class TubeLayoutEditor(QMainWindow):
                 done_rows.add(row_label)
 
         return added_count
+
+    from PyQt5.QtGui import QColor, QPen
+    from PyQt5.QtWidgets import QGraphicsLineItem
+    import traceback  # 用于打印具体异常，定位问题
 
     def clear_connection_lines(self, scene):
         """安全清除所有连线，处理无效对象"""
@@ -7227,8 +7139,8 @@ class TubeLayoutEditor(QMainWindow):
                     marker.setData(0, "marker")  # ✅ 关键：标记这个圆是 marker
 
             else:
-                # print("未选中")
-                self.line_tip.setText("未选中圆心")
+                print("未选中")
+                # self.line_tip.setText("未选中圆心")
             return True
         return super().eventFilter(obj, event)
 

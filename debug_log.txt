@@ -223,3 +223,15 @@
 [set_row_editable] 设置第 0 行为 不可编辑
 [set_row_editable] 设置第 1 行为 可编辑
 [set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
