@@ -592,6 +592,7 @@ class TubeLayoutEditor(QMainWindow):
             if action == "布管":
                 btn.clicked.connect(self.on_buguan_bt_click)
             elif action == "全屏":
+                btn.setObjectName("fullscreenButton")
                 btn.clicked.connect(lambda: self.handle_fullscreen_toggle())
             elif action == "操作记录":
                 btn.clicked.connect(self.on_show_operations_click)
@@ -697,12 +698,16 @@ class TubeLayoutEditor(QMainWindow):
         return self.tube_data
 
     def handle_fullscreen_toggle(self):
-        # TODO 全屏自适应
-        """改进的全屏切换逻辑"""
+        # 改进的全屏切换逻辑
         if not hasattr(self, 'is_fullscreen'):
             self.is_fullscreen = False
 
         self.is_fullscreen = not self.is_fullscreen  # 切换状态
+
+        # 找到全屏按钮并修改文字
+        fullscreen_btn = self.findChild(QPushButton, "fullscreenButton")
+        if fullscreen_btn:
+            fullscreen_btn.setText("退出全屏" if self.is_fullscreen else "全屏")
 
         if self.is_fullscreen:
             # 进入全屏模式
