@@ -10,13 +10,14 @@ import pymysql
 from PyQt5.QtCore import QPointF
 from PyQt5.QtCore import QSize
 from PyQt5.QtCore import Qt, QLineF
-from PyQt5.QtGui import QColor, QPen, QPolygonF
+from PyQt5.QtGui import QColor, QPen, QPolygonF, QPainterPath
 from PyQt5.QtGui import QPixmap, QFont, QBrush, QIcon
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QTabWidget, QTableWidget, QTableWidgetItem, QPushButton, QLabel, QGraphicsView,
                              QGraphicsScene, QFrame,
                              QDialog, QDialogButtonBox, QStackedWidget, QGridLayout,
-                             QSizePolicy, QHeaderView, QLineEdit, QCheckBox, QListView, QGraphicsRectItem)
+                             QSizePolicy, QHeaderView, QLineEdit, QCheckBox, QListView, QGraphicsRectItem,
+                             QGraphicsPathItem)
 from PyQt5.QtWidgets import QGraphicsEllipseItem
 from PyQt5.QtWidgets import QGraphicsPolygonItem, QMessageBox, QComboBox
 from PyQt5.QtWidgets import QTextEdit
@@ -90,18 +91,23 @@ class ZoomableGraphicsView(QGraphicsView):
             super().wheelEvent(event)
 
 
-class ClickableRectItem(QGraphicsRectItem):
-    def __init__(self, rect, parent=None, is_side_block=False, editor=None):
-        super().__init__(rect, parent)
+# 修正后的ClickableRectItem类（继承自QGraphicsPathItem以支持路径绘制）
+class ClickableRectItem(QGraphicsPathItem):
+    def __init__(self, path=None, parent=None, is_side_block=False, is_baffle=False, editor=None):
+        # 初始化父类，使用提供的路径或空路径
+        super().__init__(path if path else QPainterPath(), parent)
         self.setAcceptHoverEvents(True)
-        self.setFlag(QGraphicsRectItem.ItemIsSelectable, True)
+        self.setFlag(QGraphicsPathItem.ItemIsSelectable, True)
         self.is_side_block = is_side_block  # 标记是否为旁路挡板
+        self.is_baffle = is_baffle  # 标记是否为防冲板
         self.is_selected = False  # 选中状态
-        self.editor = editor  # 主窗口引用（TubeLayoutEditor实例）
+        self.editor = editor  # 主窗口引用
         self.original_pen = self.pen()  # 保存原始画笔
-        # 修改为高亮黄色边框，线条更粗(3像素)，增加圆角效果使外观更柔和
+        # 高亮选中样式
         self.selected_pen = QPen(QColor(255, 215, 0), 3, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
         self.paired_block = None  # 配对挡板引用
+        self.baffle_type = None  # 防冲板类型
+        self.interfering_tubes = []  # 干涉的换热管坐标
 
     def set_paired_block(self, block):
         """设置配对挡板（双向绑定）"""
@@ -110,23 +116,376 @@ class ClickableRectItem(QGraphicsRectItem):
             block.paired_block = self
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton and self.is_side_block:
+        if event.button() == Qt.LeftButton and (self.is_side_block or self.is_baffle):
             # 切换选中状态
             self.is_selected = not self.is_selected
             # 更新边框样式
             self.setPen(self.selected_pen if self.is_selected else self.original_pen)
 
             # 更新主窗口选中列表
-            if self.editor and hasattr(self.editor, 'selected_side_blocks'):
-                if self.is_selected:
-                    if self not in self.editor.selected_side_blocks:
-                        self.editor.selected_side_blocks.append(self)
-                else:
-                    if self in self.editor.selected_side_blocks:
-                        self.editor.selected_side_blocks.remove(self)
+            if self.editor:
+                if self.is_side_block and hasattr(self.editor, 'selected_side_blocks'):
+                    if self.is_selected:
+                        if self not in self.editor.selected_side_blocks:
+                            self.editor.selected_side_blocks.append(self)
+                    else:
+                        if self in self.editor.selected_side_blocks:
+                            self.editor.selected_side_blocks.remove(self)
+                elif self.is_baffle and hasattr(self.editor, 'selected_baffles'):
+                    if self.is_selected:
+                        if self not in self.editor.selected_baffles:
+                            self.editor.selected_baffles.append(self)
+                    else:
+                        if self in self.editor.selected_baffles:
+                            self.editor.selected_baffles.remove(self)
             event.accept()
         else:
             super().mousePressEvent(event)
+
+
+# 修正后的防冲板构建方法
+def build_impingement_plate(self, selected_centers, baffle_type, baffle_thickness, baffle_angle,
+                            baffle_width, baffle_azimuth, baffle_distance, tube_outer_diameter, tube_pitch):
+    if not selected_centers:
+        return []
+
+    from PyQt5.QtCore import QPointF, QLineF, QRectF, Qt
+    from PyQt5.QtGui import QPen, QColor, QBrush, QPainterPath, QPolygonF
+    from PyQt5.QtWidgets import QMessageBox, QGraphicsEllipseItem, QGraphicsPathItem, QGraphicsPolygonItem
+    import math
+    import ast
+
+    # 初始化防冲板选中列表和存储列表
+    if not hasattr(self, 'selected_baffles'):
+        self.selected_baffles = []
+    if not hasattr(self, 'baffle_items'):
+        self.baffle_items = []
+
+    # 处理不同类型的防冲板
+    if baffle_type == "与定距管/拉杆焊接平板式":
+        # 解析选中的中心点
+        selected_centers_list = []
+        if isinstance(selected_centers, list):
+            selected_centers_list = [item for item in selected_centers
+                                     if isinstance(item, tuple)
+                                     and len(item) == 2
+                                     and all(isinstance(x, (int, float)) for x in item)]
+        elif isinstance(selected_centers, str):
+            try:
+                parsed_list = ast.literal_eval(selected_centers)
+                if isinstance(parsed_list, list):
+                    selected_centers_list = [item for item in parsed_list
+                                             if isinstance(item, tuple)
+                                             and len(item) == 2
+                                             and all(isinstance(x, (int, float)) for x in item)]
+            except (SyntaxError, ValueError, TypeError) as e:
+                print("字符串解析错误:", e)
+                selected_centers_list = []
+
+        # 合并坐标并去重
+        combined = []
+        seen = set()
+        for coord in getattr(self, 'impingement_plate_1', []):
+            if coord not in seen:
+                seen.add(coord)
+                combined.append(coord)
+        for coord in selected_centers_list:
+            if coord not in seen:
+                seen.add(coord)
+                combined.append(coord)
+        self.impingement_plate_1 = combined
+        current_coords = self.selected_to_current_coords(selected_centers)
+
+        # 验证选中数量
+        if len(selected_centers) != 2:
+            QMessageBox.warning(self, "选中错误", "请选择恰好两个圆心进行防冲板绘制")
+            if isinstance(selected_centers, str):
+                try:
+                    selected_centers = ast.literal_eval(selected_centers)
+                except (SyntaxError, ValueError) as e:
+                    print(f"字符串转换失败: {e}")
+                    return current_coords
+            # 清除选中标记
+            for row_label, col_label in selected_centers:
+                row_idx = abs(row_label) - 1
+                col_idx = abs(col_label) - 1
+                centers_group = self.sorted_current_centers_up if row_label > 0 else self.sorted_current_centers_down
+                if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
+                    x, y = centers_group[row_idx][col_idx]
+                    click_point = QPointF(x, y)
+                    for item in self.graphics_scene.items(click_point):
+                        if isinstance(item, QGraphicsEllipseItem):
+                            self.graphics_scene.removeItem(item)
+                            break
+            self.selected_centers.clear()
+            return
+
+        # 转换字符串类型的选中中心
+        if isinstance(selected_centers, str):
+            try:
+                selected_centers = ast.literal_eval(selected_centers)
+            except (SyntaxError, ValueError) as e:
+                print(f"字符串转换失败: {e}")
+                return current_coords
+
+        # 获取并清除选中标记
+        points = []
+        if selected_centers:
+            for row_label, col_label in selected_centers:
+                row_idx = abs(row_label) - 1
+                col_idx = abs(col_label) - 1
+                centers_group = self.sorted_current_centers_up if row_label > 0 else self.sorted_current_centers_down
+                if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
+                    x, y = centers_group[row_idx][col_idx]
+                    points.append((x, y))
+                # 擦除选中标记
+                click_point = QPointF(x, y)
+                for item in self.graphics_scene.items(click_point):
+                    if isinstance(item, QGraphicsEllipseItem):
+                        self.graphics_scene.removeItem(item)
+                        break
+
+        if len(points) != 2:
+            QMessageBox.warning(self, "错误", "无法获取两个圆心坐标")
+            self.selected_centers.clear()
+            return
+
+        # 绘制平板式防冲板（使用路径绘制矩形）
+        baffle_color = QColor(0, 0, 139)  # 深蓝色
+        pen = QPen(baffle_color)
+        pen.setWidth(int(baffle_thickness)) if baffle_thickness else pen.setWidth(3)
+
+        # 创建防冲板矩形路径
+        line_vector = QPointF(points[1][0] - points[0][0], points[1][1] - points[0][1])
+        line_length = math.hypot(line_vector.x(), line_vector.y())
+        if line_length == 0:
+            return
+
+        # 计算矩形参数
+        rect_width = line_length
+        rect_height = baffle_thickness if baffle_thickness else 3
+        rect_center_x = (points[0][0] + points[1][0]) / 2
+        rect_center_y = (points[0][1] + points[1][1]) / 2
+
+        # 计算旋转角度
+        angle_rad = math.atan2(line_vector.y(), line_vector.x())
+        angle_deg = math.degrees(angle_rad)
+
+        # 创建矩形路径
+        rect_path = QPainterPath()
+        rect = QRectF(-rect_width / 2, -rect_height / 2, rect_width, rect_height)
+        rect_path.addRect(rect)
+
+        # 创建可选中矩形（使用路径项）
+        baffle_rect = ClickableRectItem(rect_path, is_baffle=True, editor=self)
+        baffle_rect.setPos(rect_center_x, rect_center_y)
+        baffle_rect.setRotation(angle_deg)
+        baffle_rect.setPen(pen)
+        baffle_rect.setBrush(QBrush(baffle_color))
+        baffle_rect.original_pen = pen
+        baffle_rect.baffle_type = "与定距管/拉杆焊接平板式"
+        baffle_rect.setZValue(5)
+
+        # 存储防冲板信息
+        self.graphics_scene.addItem(baffle_rect)
+        self.baffle_items.append(baffle_rect)
+
+        # 计算干涉管
+        self.calculate_and_update_interfering_tubes(points, baffle_thickness)
+        if hasattr(self, 'interfering_centers'):
+            centers = [self.actual_to_selected_coords(coord) for coord in self.interfering_centers]
+            centers = [c for c in centers if c is not None]
+            baffle_rect.interfering_tubes = centers.copy()
+            self.delete_huanreguan(centers)
+
+        # 记录操作
+        if not hasattr(self, 'operations'):
+            self.operations = []
+        self.operations.append({
+            "type": "baffle_plate",
+            "baffle_type": baffle_type,
+            "thickness": baffle_thickness,
+            "angle": baffle_angle,
+            "points": points,
+            "interfering_tubes": self.interfering_centers if hasattr(self, 'interfering_centers') else []
+        })
+
+        self.selected_centers.clear()
+
+    elif baffle_type == "与定距管/拉杆焊接折边式":
+        # 解析选中的中心点
+        selected_centers_list = []
+        if isinstance(selected_centers, list):
+            selected_centers_list = [item for item in selected_centers
+                                     if isinstance(item, tuple)
+                                     and len(item) == 2
+                                     and all(isinstance(x, (int, float)) for x in item)]
+        elif isinstance(selected_centers, str):
+            try:
+                parsed_list = ast.literal_eval(selected_centers)
+                if isinstance(parsed_list, list):
+                    selected_centers_list = [item for item in parsed_list
+                                             if isinstance(item, tuple)
+                                             and len(item) == 2
+                                             and all(isinstance(x, (int, float)) for x in item)]
+            except (SyntaxError, ValueError, TypeError) as e:
+                print("字符串解析错误:", e)
+                selected_centers_list = []
+
+        # 合并坐标并去重
+        combined = []
+        seen = set()
+        for coord in getattr(self, 'impingement_plate_2', []):
+            if coord not in seen:
+                seen.add(coord)
+                combined.append(coord)
+        for coord in selected_centers_list:
+            if coord not in seen:
+                seen.add(coord)
+                combined.append(coord)
+        self.impingement_plate_2 = combined
+        current_coords = self.selected_to_current_coords(selected_centers)
+
+        # 参数验证
+        if baffle_angle is None:
+            QMessageBox.warning(self, "参数缺失", "未找到防冲板折边角度参数")
+            return
+        if not (30 <= baffle_angle < 90):
+            QMessageBox.warning(self, "参数错误", "防冲板折边角度只能在30°到90°之间（不含90°）")
+            return
+        if tube_outer_diameter is None or tube_pitch is None:
+            QMessageBox.warning(self, "参数缺失", "请确保已填写换热管外径 do 和中心距 S")
+            return
+
+        # 验证选中数量
+        if len(selected_centers) != 2:
+            QMessageBox.warning(self, "选中错误", "请选择恰好两个圆心进行折边式防冲板绘制")
+            # 清除选中标记
+            for row_label, col_label in selected_centers:
+                row_idx = abs(row_label) - 1
+                col_idx = abs(col_label) - 1
+                centers_group = self.sorted_current_centers_up if row_label > 0 else self.sorted_current_centers_down
+                if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
+                    x, y = centers_group[row_idx][col_idx]
+                    click_point = QPointF(x, y)
+                    for item in self.graphics_scene.items(click_point):
+                        if isinstance(item, QGraphicsEllipseItem):
+                            self.graphics_scene.removeItem(item)
+                            break
+            self.selected_centers.clear()
+            return
+
+        # 获取并清除选中标记
+        points = []
+        for row_label, col_label in selected_centers:
+            row_idx = abs(row_label) - 1
+            col_idx = abs(col_label) - 1
+            centers_group = self.sorted_current_centers_up if row_label > 0 else self.sorted_current_centers_down
+            if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
+                x, y = centers_group[row_idx][col_idx]
+                points.append((x, y))
+            # 清除选中标记
+            click_point = QPointF(x, y)
+            for item in self.graphics_scene.items(click_point):
+                if isinstance(item, QGraphicsEllipseItem):
+                    self.graphics_scene.removeItem(item)
+                    break
+
+        if len(points) != 2:
+            QMessageBox.warning(self, "错误", "无法获取两个有效的圆心坐标")
+            self.selected_centers.clear()
+            return
+
+        # 计算折边式防冲板的坐标点
+        A = QPointF(points[0][0], points[0][1])
+        B = QPointF(points[1][0], points[1][1])
+        AB_vector = B - A
+        AB_length = math.hypot(AB_vector.x(), AB_vector.y())
+
+        if AB_length == 0:
+            QMessageBox.warning(self, "错误", "两个选中的圆心位置重合，无法绘制防冲板")
+            return
+
+        # 计算坐标轴向量
+        x_axis = AB_vector / AB_length
+        y_axis = QPointF(-x_axis.y(), x_axis.x())
+
+        # 计算防冲板参数
+        angle_rad = math.radians(baffle_angle)
+        fix_dy_plus_1 = int(tube_pitch) + 1
+        fix_tube_half_plus_6_plus_1 = int(tube_outer_diameter / 2 + 6) + 1
+        baffle_height = max(fix_dy_plus_1, fix_tube_half_plus_6_plus_1)
+        incline_length = baffle_height / math.sin(angle_rad)
+        top_length = AB_length - 2 * (baffle_height / math.tan(angle_rad))
+
+        if top_length < 0:
+            QMessageBox.warning(
+                self, "参数异常",
+                f"计算得到的顶部长度为负值({top_length:.2f})，\n"
+                f"请检查折边角度({baffle_angle}°)和选中的管间距({AB_length:.2f})"
+            )
+            self.selected_centers.clear()
+            return
+
+        # 计算折边顶点坐标
+        P = A + x_axis * (incline_length * math.cos(angle_rad)) + y_axis * (incline_length * math.sin(angle_rad))
+        Q = P + x_axis * top_length
+
+        # 创建防冲板路径
+        baffle_path = QPainterPath()
+        baffle_path.moveTo(A)
+        baffle_path.lineTo(P)
+        baffle_path.lineTo(Q)
+        baffle_path.lineTo(B)
+
+        # 创建可选中防冲板（直接使用路径）
+        baffle_color = QColor(0, 0, 139)
+        pen = QPen(baffle_color)
+        pen.setWidth(int(baffle_thickness)) if baffle_thickness else pen.setWidth(3)
+
+        baffle_item = ClickableRectItem(baffle_path, is_baffle=True, editor=self)
+        baffle_item.setPen(pen)
+        baffle_item.setBrush(QBrush(baffle_color))
+        baffle_item.original_pen = pen
+        baffle_item.baffle_type = "与定距管/拉杆焊接折边式"
+        baffle_item.setZValue(5)
+
+        # 存储防冲板信息
+        self.graphics_scene.addItem(baffle_item)
+        self.baffle_items.append(baffle_item)
+
+        # 计算干涉管
+        self.calculate_and_update_bend_interfering_tubes(A, P, Q, B, baffle_thickness)
+        if hasattr(self, 'interfering_centers'):
+            centers = [self.actual_to_selected_coords(coord) for coord in self.interfering_centers]
+            centers = [c for c in centers if c is not None]
+            baffle_item.interfering_tubes = centers.copy()
+            self.delete_huanreguan(centers)
+
+        # 记录操作
+        if not hasattr(self, 'operations'):
+            self.operations = []
+        self.operations.append({
+            "type": "baffle_folded",
+            "baffle_type": baffle_type,
+            "thickness": baffle_thickness,
+            "angle": baffle_angle,
+            "height": baffle_height,
+            "incline_length": incline_length,
+            "top_length": top_length,
+            "points": {
+                "A": (A.x(), A.y()),
+                "P": (P.x(), P.y()),
+                "Q": (Q.x(), Q.y()),
+                "B": (B.x(), B.y())
+            }
+        })
+
+        self.selected_centers.clear()
+
+    elif baffle_type == "与圆筒焊接折边式":
+        print("待开发")
+        self.selected_centers.clear()
 
 
 # 预览对话框 -----------------------------------------------------
@@ -4729,6 +5088,8 @@ class TubeLayoutEditor(QMainWindow):
     def on_del_click(self):
         if hasattr(self, 'selected_side_blocks') and self.selected_side_blocks:
             self.delete_selected_side_blocks()
+        if hasattr(self, 'selected_baffles') and self.selected_baffles:
+            self.delete_selected_baffles()
         elif self.selected_centers:
             if self.isSymmetry:
                 selected_centers = self.judge_linkage(self.selected_centers)
@@ -4738,6 +5099,45 @@ class TubeLayoutEditor(QMainWindow):
         # self.connect_center(self.scene, self.current_centers, self.small_D)
 
         self.selected_centers.clear()
+
+    def delete_selected_baffles(self):
+        """删除选中的防冲板，并恢复对应的干涉换热管"""
+        if not hasattr(self, 'selected_baffles') or not self.selected_baffles:
+            return
+
+        # 收集要恢复的换热管坐标
+        tubes_to_restore = []
+
+        # 复制选中列表避免迭代中修改
+        baffles_to_remove = list(self.selected_baffles)
+
+        for baffle in baffles_to_remove:
+            # 恢复干涉的换热管
+            if hasattr(baffle, 'interfering_tubes') and baffle.interfering_tubes:
+                tubes_to_restore.extend(baffle.interfering_tubes)
+                interfering_coords = {(x, abs(y)) for x, y in baffle.interfering_tubes}
+                self.impingement_plate_1 = [
+                    coord for coord in self.impingement_plate_1
+                    if (coord[0], abs(coord[1])) not in interfering_coords
+                ]
+                self.impingement_plate_2 = [
+                    coord for coord in self.impingement_plate_2
+                    if (coord[0], abs(coord[1])) not in interfering_coords
+                ]
+
+            # 从场景中移除防冲板
+            if baffle.scene() == self.graphics_scene:
+                self.graphics_scene.removeItem(baffle)
+
+            # 从存储列表中移除
+            if baffle in self.baffle_items:
+                self.baffle_items.remove(baffle)
+            if baffle in self.selected_baffles:
+                self.selected_baffles.remove(baffle)
+
+        # 恢复干涉换热管
+        if tubes_to_restore:
+            self.build_huanreguan(tubes_to_restore)
 
     def delete_huanreguan(self, selected_centers):
 
@@ -6763,13 +7163,21 @@ class TubeLayoutEditor(QMainWindow):
         if not selected_centers:
             return []
 
-        from PyQt5.QtCore import QPointF, QLineF
-        from PyQt5.QtGui import QPen, QColor
+        from PyQt5.QtCore import QPointF, QLineF, Qt
+        from PyQt5.QtGui import QPen, QColor, QBrush, QPainterPath
         from PyQt5.QtWidgets import QMessageBox, QGraphicsEllipseItem
         import math
+        import ast
+
+        # 初始化防冲板选中列表和存储列表
+        if not hasattr(self, 'selected_baffles'):
+            self.selected_baffles = []
+        if not hasattr(self, 'baffle_items'):
+            self.baffle_items = []
+
         # 处理不同类型的防冲板
         if baffle_type == "与定距管/拉杆焊接平板式":
-            import ast
+            # 解析选中的中心点
             selected_centers_list = []
             if isinstance(selected_centers, list):
                 selected_centers_list = [item for item in selected_centers
@@ -6787,12 +7195,11 @@ class TubeLayoutEditor(QMainWindow):
                 except (SyntaxError, ValueError, TypeError) as e:
                     print("字符串解析错误:", e)
                     selected_centers_list = []
-            else:
 
-                selected_centers_list = []
+            # 合并坐标并去重
             combined = []
             seen = set()
-            for coord in self.impingement_plate_1:
+            for coord in getattr(self, 'impingement_plate_1', []):
                 if coord not in seen:
                     seen.add(coord)
                     combined.append(coord)
@@ -6803,11 +7210,11 @@ class TubeLayoutEditor(QMainWindow):
             self.impingement_plate_1 = combined
             current_coords = self.selected_to_current_coords(selected_centers)
 
+            # 验证选中数量
             if len(selected_centers) != 2:
                 QMessageBox.warning(self, "选中错误", "请选择恰好两个圆心进行防冲板绘制")
                 if isinstance(selected_centers, str):
                     try:
-                        import ast
                         selected_centers = ast.literal_eval(selected_centers)
                     except (SyntaxError, ValueError) as e:
                         print(f"字符串转换失败: {e}")
@@ -6827,14 +7234,15 @@ class TubeLayoutEditor(QMainWindow):
                 self.selected_centers.clear()
                 return
 
+            # 转换字符串类型的选中中心
             if isinstance(selected_centers, str):
                 try:
-                    import ast
                     selected_centers = ast.literal_eval(selected_centers)
                 except (SyntaxError, ValueError) as e:
                     print(f"字符串转换失败: {e}")
                     return current_coords
 
+            # 获取并清除选中标记
             points = []
             if selected_centers:
                 for row_label, col_label in selected_centers:
@@ -6856,17 +7264,35 @@ class TubeLayoutEditor(QMainWindow):
                 self.selected_centers.clear()
                 return
 
-            # 绘制平板式防冲板
-            pen = QPen(QColor(0, 0, 139))  # 深蓝色
-            pen.setWidth(int(baffle_thickness)) if baffle_thickness else pen.setWidth(3)
-            line = QLineF(QPointF(points[0][0], points[0][1]), QPointF(points[1][0], points[1][1]))
-            self.graphics_scene.addLine(line, pen)
+            # 绘制平板式防冲板（保持与原始代码相同的单线效果）
+            baffle_color = QColor(0, 0, 139)  # 深蓝色
+            pen = QPen(baffle_color)
+            pen_width = int(baffle_thickness) if baffle_thickness else 3
+            pen.setWidth(pen_width)
+
+            # 创建与原始线条完全一致的路径
+            baffle_path = QPainterPath()
+            baffle_path.moveTo(QPointF(points[0][0], points[0][1]))
+            baffle_path.lineTo(QPointF(points[1][0], points[1][1]))
+
+            # 创建可选中的防冲板项
+            baffle_item = ClickableRectItem(baffle_path, is_baffle=True, editor=self)
+            baffle_item.setPen(pen)
+            # 不设置刷子，保持线条效果而非填充效果
+            baffle_item.original_pen = pen
+            baffle_item.baffle_type = "与定距管/拉杆焊接平板式"
+            baffle_item.setZValue(5)
+
+            # 存储防冲板信息
+            self.graphics_scene.addItem(baffle_item)
+            self.baffle_items.append(baffle_item)
+
+            # 计算干涉管
             self.calculate_and_update_interfering_tubes(points, baffle_thickness)
             if hasattr(self, 'interfering_centers'):
                 centers = [self.actual_to_selected_coords(coord) for coord in self.interfering_centers]
-                # 过滤转换失败的空值
                 centers = [c for c in centers if c is not None]
-                # 执行删除
+                baffle_item.interfering_tubes = centers.copy()
                 self.delete_huanreguan(centers)
 
             # 记录操作
@@ -6878,14 +7304,13 @@ class TubeLayoutEditor(QMainWindow):
                 "thickness": baffle_thickness,
                 "angle": baffle_angle,
                 "points": points,
-                "interfering_tubes": [center for center in
-                                      self.operations[-1].get("interfering_tubes", [])] if self.operations else []
+                "interfering_tubes": self.interfering_centers if hasattr(self, 'interfering_centers') else []
             })
 
             self.selected_centers.clear()
 
         elif baffle_type == "与定距管/拉杆焊接折边式":
-            import ast
+            # 解析选中的中心点
             selected_centers_list = []
             if isinstance(selected_centers, list):
                 selected_centers_list = [item for item in selected_centers
@@ -6903,12 +7328,11 @@ class TubeLayoutEditor(QMainWindow):
                 except (SyntaxError, ValueError, TypeError) as e:
                     print("字符串解析错误:", e)
                     selected_centers_list = []
-            else:
 
-                selected_centers_list = []
+            # 合并坐标并去重
             combined = []
             seen = set()
-            for coord in self.impingement_plate_2:
+            for coord in getattr(self, 'impingement_plate_2', []):
                 if coord not in seen:
                     seen.add(coord)
                     combined.append(coord)
@@ -6918,27 +7342,26 @@ class TubeLayoutEditor(QMainWindow):
                     combined.append(coord)
             self.impingement_plate_2 = combined
             current_coords = self.selected_to_current_coords(selected_centers)
-            # 参数验证：检查折边角度是否有效
+
+            # 参数验证
             if baffle_angle is None:
                 QMessageBox.warning(self, "参数缺失", "未找到防冲板折边角度参数")
-                return  # 终止执行并返回
+                return
             if not (30 <= baffle_angle < 90):
                 QMessageBox.warning(self, "参数错误", "防冲板折边角度只能在30°到90°之间（不含90°）")
-                return  # 角度无效时终止
-            # 参数验证：检查换热管基础参数是否存在
+                return
             if tube_outer_diameter is None or tube_pitch is None:
                 QMessageBox.warning(self, "参数缺失", "请确保已填写换热管外径 do 和中心距 S")
-                return  # 缺少必要参数时终止
-            # 验证选中的圆心数量（必须为2个）
+                return
+
+            # 验证选中数量
             if len(selected_centers) != 2:
                 QMessageBox.warning(self, "选中错误", "请选择恰好两个圆心进行折边式防冲板绘制")
-                # 清除选中标记（恢复原始样式）
+                # 清除选中标记
                 for row_label, col_label in selected_centers:
                     row_idx = abs(row_label) - 1
                     col_idx = abs(col_label) - 1
-                    # 确定对应的圆心分组（上/下）
                     centers_group = self.sorted_current_centers_up if row_label > 0 else self.sorted_current_centers_down
-                    # 验证索引有效性并清除选中涂层
                     if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
                         x, y = centers_group[row_idx][col_idx]
                         click_point = QPointF(x, y)
@@ -6946,70 +7369,99 @@ class TubeLayoutEditor(QMainWindow):
                             if isinstance(item, QGraphicsEllipseItem):
                                 self.graphics_scene.removeItem(item)
                                 break
-                self.selected_centers.clear()  # 清空选中记录
-                return  # 选中数量错误时终止
-            # 提取两个选中圆心的坐标并清除选中标记
+                self.selected_centers.clear()
+                return
+
+            # 获取并清除选中标记
             points = []
             for row_label, col_label in selected_centers:
                 row_idx = abs(row_label) - 1
                 col_idx = abs(col_label) - 1
-                # 确定对应的圆心分组（上/下）
                 centers_group = self.sorted_current_centers_up if row_label > 0 else self.sorted_current_centers_down
-                # 验证索引有效性并获取坐标
                 if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
                     x, y = centers_group[row_idx][col_idx]
-                    points.append((x, y))  # 保存坐标到列表
-                # 清除选中标记（恢复原始样式）
+                    points.append((x, y))
+                # 清除选中标记
                 click_point = QPointF(x, y)
                 for item in self.graphics_scene.items(click_point):
                     if isinstance(item, QGraphicsEllipseItem):
                         self.graphics_scene.removeItem(item)
                         break
-            # 验证坐标获取结果
+
             if len(points) != 2:
                 QMessageBox.warning(self, "错误", "无法获取两个有效的圆心坐标")
-                self.selected_centers.clear()  # 清空选中记录
-                return  # 坐标获取失败时终止
-            # 计算折边式防冲板的关键坐标点
-            A = QPointF(points[0][0], points[0][1])  # 起点（第一个圆心）
-            B = QPointF(points[1][0], points[1][1])  # 终点（第二个圆心）
-            AB_vector = B - A  # 向量AB
-            AB_length = math.hypot(AB_vector.x(), AB_vector.y())  # 计算AB长度
-            # 处理两点重合的异常情况
+                self.selected_centers.clear()
+                return
+
+            # 计算折边式防冲板的坐标点
+            A = QPointF(points[0][0], points[0][1])
+            B = QPointF(points[1][0], points[1][1])
+            AB_vector = B - A
+            AB_length = math.hypot(AB_vector.x(), AB_vector.y())
+
             if AB_length == 0:
                 QMessageBox.warning(self, "错误", "两个选中的圆心位置重合，无法绘制防冲板")
-                return  # 两点重合时终止
-            # 计算坐标轴向量（用于折边角度计算）
-            x_axis = AB_vector / AB_length  # 单位化AB向量作为x轴
-            y_axis = self.determine_y_axis(A, B, x_axis)  # 获取垂直于AB的y轴向量（假设该方法已实现）
-            # 计算防冲板几何参数
-            angle_rad = math.radians(baffle_angle)  # 角度转弧度
-            # 基于换热管参数计算防冲板高度（取两个计算值的最大值）
+                return
+
+            # 计算坐标轴向量（使用原始代码的方法）
+            x_axis = AB_vector / AB_length
+            # 使用原始代码中的方法确定y轴方向
+            y_axis = self.determine_y_axis(A, B, x_axis)  # 保持与原始代码一致的方向
+
+            # 计算防冲板参数
+            angle_rad = math.radians(baffle_angle)
             fix_dy_plus_1 = int(tube_pitch) + 1
             fix_tube_half_plus_6_plus_1 = int(tube_outer_diameter / 2 + 6) + 1
             baffle_height = max(fix_dy_plus_1, fix_tube_half_plus_6_plus_1)
-            # 计算折边倾斜段长度和顶部水平段长度
-            incline_length = baffle_height / math.sin(angle_rad)  # 倾斜边长度
-            top_length = AB_length - 2 * (baffle_height / math.tan(angle_rad))  # 顶部水平段长度
-            # 验证顶部长度是否有效（不能为负）
+            incline_length = baffle_height / math.sin(angle_rad)
+            top_length = AB_length - 2 * (baffle_height / math.tan(angle_rad))
+
             if top_length < 0:
                 QMessageBox.warning(
                     self, "参数异常",
                     f"计算得到的顶部长度为负值({top_length:.2f})，\n"
                     f"请检查折边角度({baffle_angle}°)和选中的管间距({AB_length:.2f})"
                 )
-                self.selected_centers.clear()  # 清空选中记录
-                return  # 顶部长度无效时终止
-            # 计算折边顶点坐标（P和Q）
-            P = A + x_axis * (incline_length * math.cos(angle_rad)) + y_axis * (incline_length * math.sin(angle_rad))
-            Q = P + x_axis * top_length  # 顶部终点
-            # 绘制折边式防冲板（三段折线）
-            pen = QPen(QColor(0, 0, 139))  # 深蓝色线条
-            pen.setWidth(int(baffle_thickness)) if baffle_thickness else pen.setWidth(3)  # 设置线宽（默认3）
-            self.graphics_scene.addLine(QLineF(A, P), pen)  # 绘制左侧倾斜边
-            self.graphics_scene.addLine(QLineF(P, Q), pen)  # 绘制顶部水平边
-            self.graphics_scene.addLine(QLineF(Q, B), pen)  # 绘制右侧倾斜边
+                self.selected_centers.clear()
+                return
 
+            # 计算折边顶点坐标（保持与原始代码相同的计算方式）
+            P = A + x_axis * (incline_length * math.cos(angle_rad)) + y_axis * (incline_length * math.sin(angle_rad))
+            Q = P + x_axis * top_length
+
+            # 创建与原始三条线段完全一致的路径
+            baffle_path = QPainterPath()
+            baffle_path.moveTo(A)
+            baffle_path.lineTo(P)
+            baffle_path.lineTo(Q)
+            baffle_path.lineTo(B)
+
+            # 创建可选中的防冲板项
+            baffle_color = QColor(0, 0, 139)
+            pen = QPen(baffle_color)
+            pen_width = int(baffle_thickness) if baffle_thickness else 3
+            pen.setWidth(pen_width)
+
+            baffle_item = ClickableRectItem(baffle_path, is_baffle=True, editor=self)
+            baffle_item.setPen(pen)
+            # 不设置刷子，保持线条效果而非填充效果
+            baffle_item.original_pen = pen
+            baffle_item.baffle_type = "与定距管/拉杆焊接折边式"
+            baffle_item.setZValue(5)
+
+            # 存储防冲板信息
+            self.graphics_scene.addItem(baffle_item)
+            self.baffle_items.append(baffle_item)
+
+            # 计算干涉管
+            self.calculate_and_update_bend_interfering_tubes(A, P, Q, B, baffle_thickness)
+            if hasattr(self, 'interfering_centers'):
+                centers = [self.actual_to_selected_coords(coord) for coord in self.interfering_centers]
+                centers = [c for c in centers if c is not None]
+                baffle_item.interfering_tubes = centers.copy()
+                self.delete_huanreguan(centers)
+
+            # 记录操作
             if not hasattr(self, 'operations'):
                 self.operations = []
             self.operations.append({
@@ -7027,14 +7479,9 @@ class TubeLayoutEditor(QMainWindow):
                     "B": (B.x(), B.y())
                 }
             })
-            self.calculate_and_update_bend_interfering_tubes(A, P, Q, B, baffle_thickness)
-            if hasattr(self, 'interfering_centers'):
-                centers = [self.actual_to_selected_coords(coord) for coord in self.interfering_centers]
-                # 过滤转换失败的空值
-                centers = [c for c in centers if c is not None]
-                # 执行删除
-                self.delete_huanreguan(centers)
+
             self.selected_centers.clear()
+
         elif baffle_type == "与圆筒焊接折边式":
             print("待开发")
             self.selected_centers.clear()
