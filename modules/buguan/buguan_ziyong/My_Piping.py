@@ -5717,25 +5717,21 @@ class TubeLayoutEditor(QMainWindow):
         # 清空选中列表
         self.selected_side_blocks = []
 
-    from PyQt5.QtGui import QColor, QPen
-    from PyQt5.QtWidgets import QGraphicsLineItem
-    import traceback  # 用于打印具体异常，定位问题
-
+    # TODO 这个删除连线的方法一直不正确，没有删除成功
     def clear_connection_lines(self, scene):
         """安全清除所有连线，处理无效对象"""
         if not hasattr(self, 'connection_lines'):
             self.connection_lines = []
             return
 
-        # 逆序移除以避免索引问题
         for line in reversed(self.connection_lines):
             try:
-                if line in scene.items():  # 检查是否仍在场景中
+                if line in scene.items():
                     scene.removeItem(line)
-            except RuntimeError:  # 捕获可能的内存访问错误
+            except RuntimeError:
                 pass
 
-        self.connection_lines.clear()  # 清空列表
+        self.connection_lines.clear()
 
     # 滑道功能
     def on_green_slide_click(self, initial_centers=None):
