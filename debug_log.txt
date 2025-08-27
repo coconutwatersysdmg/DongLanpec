@@ -247,3 +247,41 @@
 [set_row_editable] 设置第 0 行为 不可编辑
 [set_row_editable] 设置第 1 行为 可编辑
 [set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[get_input_must_var] 获取第 0 行的输入项
+[get_input_must_var] 编号: fsdfsdf, 名称: fsSDF, 设备位号: ffsD, 设计阶段: 详细设计, 设计版次: fsdGFD
+[check_existing_product] 存在: False
+[save_new_product] 准备保存第 0 行产品
+[save_new_product] 查询项目保存路径...
+[save_new_product] 产品文件夹路径: fsdFsD\aGFESG_Dsfdf\fsdfsdf_fsSDF_ffsD
+[save_new_product] 创建产品文件夹并写入文件
+[save_new_product] 模板文件复制完成: fsdFsD\aGFESG_Dsfdf\fsdfsdf_fsSDF_ffsD\条件输入数据表.xlsx
+[save_new_product] 写入数据库
+[save_new_product] 保存完成，更新状态
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 不可编辑
+[set_row_editable] 设置第 2 行为 不可编辑
+[set_row_editable] 设置第 0 行为 不可编辑
+[set_row_editable] 设置第 1 行为 可编辑
+[set_row_editable] 设置第 2 行为 可编辑

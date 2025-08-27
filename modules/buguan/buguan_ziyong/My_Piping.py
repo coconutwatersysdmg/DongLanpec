@@ -102,7 +102,8 @@ class ClickableRectItem(QGraphicsRectItem):
         self.is_selected = False  # 选中状态
         self.editor = editor  # 主窗口引用（TubeLayoutEditor实例）
         self.original_pen = self.pen()  # 保存原始画笔
-        self.selected_pen = QPen(QColor(255, 0, 0), 2)  # 选中时的红色边框
+        # 修改为高亮黄色边框，线条更粗(3像素)，增加圆角效果使外观更柔和
+        self.selected_pen = QPen(QColor(255, 215, 0), 3, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
         self.paired_block = None  # 配对挡板引用
 
     def set_paired_block(self, block):
@@ -609,7 +610,7 @@ class TubeLayoutEditor(QMainWindow):
         # 添加勾选框到容器
         checkbox_layout = QHBoxLayout(self.checkbox_container)
         checkbox_layout.setContentsMargins(5, 5, 5, 5)
-        self.symmetric_checkbox = QCheckBox("对称分布元件")
+        self.symmetric_checkbox = QCheckBox("对称分布")
         self.symmetric_checkbox.setChecked(False)
         self.symmetric_checkbox.setStyleSheet("font-size: 20px; color: #333;")
         checkbox_layout.addWidget(self.symmetric_checkbox)
