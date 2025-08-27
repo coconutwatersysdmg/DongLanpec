@@ -250,11 +250,11 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
 class TubeLayoutEditor(QMainWindow):
     def __init__(self, line_tip=None):
         super().__init__()
-
         self.productID = product_id  # 产品ID
         self.isSymmetry = False
         self.selected_side_blocks = []
         self.slide_selected_centers = []
+        self.sdangban_selected_centers = []
         self.input_json = []
         self.current_leftpad = []
         self.line_tip = line_tip
@@ -1201,7 +1201,6 @@ class TubeLayoutEditor(QMainWindow):
             if not hasattr(self, 'input_json') or not isinstance(self.input_json, dict):
                 raise ValueError("self.input_json不存在或不是字典类型")
 
-
             side_dangban_thick = float(self.input_json.get('LB_BPBThick', 0))
             baffle_thickness = float(self.input_json.get('LB_BaffleThick', 0))
             baffle_angle = float(self.input_json.get('LB_BaffleA', 0))
@@ -1300,38 +1299,10 @@ class TubeLayoutEditor(QMainWindow):
             self.full_sorted_current_centers_up = []
             self.full_sorted_current_centers_down = []
 
-        try:
-            if isinstance(lagan_centers, (list, tuple)):
-                self.build_lagan(lagan_centers)
-            else:
-                print(f"lagan_centers不是列表或元组类型，而是{type(lagan_centers)}")
-        except Exception as e:
-            print(f"构建拉杆时出错: {str(e)}")
-
-        try:
-            if isinstance(side_centers, (list, tuple)):
-                self.build_side_lagan(side_centers)
-            else:
-                print(f"side_centers不是列表或元组类型，而是{type(side_centers)}")
-        except Exception as e:
-            print(f"构建最左最右拉杆时出错: {str(e)}")
-
-        try:
-            if isinstance(center_dangguan_centers, (list, tuple)):
-                self.build_center_dangguan(center_dangguan_centers)
-            else:
-                print(f"center_dangguan_centers不是列表或元组类型，而是{type(center_dangguan_centers)}")
-        except Exception as e:
-            print(f"构建中间挡管时出错: {str(e)}")
-
-        try:
-            if isinstance(side_dangban_centers, (list, tuple)):
-                self.build_side_dangban(side_dangban_centers, side_dangban_thick)
-            else:
-                print(f"side_dangban_centers不是列表或元组类型，而是{type(side_dangban_centers)}")
-        except Exception as e:
-            print(f"构建旁路挡板时出错: {str(e)}")
-
+        self.build_lagan(lagan_centers)
+        self.build_side_lagan(side_centers)
+        self.build_center_dangguan(center_dangguan_centers)
+        self.build_side_dangban(side_dangban_centers, side_dangban_thick)
         try:
             if is_arranged_huadao == 1:
                 self.build_huadao("滑道与管板焊接", height, thickness, angle, 50, 15)
@@ -1414,14 +1385,7 @@ class TubeLayoutEditor(QMainWindow):
                         print(f"折边式防冲板坐标列表索引{i + 1}超出范围，跳过")
         except (SyntaxError, ValueError, TypeError) as e:
             print(f"处理折边式防冲板时出错: {str(e)}")
-
-        try:
-            if isinstance(del_centers, (list, tuple)):
-                self.delete_huanreguan(del_centers)
-            else:
-                print(f"del_centers不是列表或元组类型，而是{type(del_centers)}")
-        except Exception as e:
-            print(f"删除换热管时出错: {str(e)}")
+        self.delete_huanreguan(del_centers)
 
         # TODO 后续取消注释
         # self.line_tip.setText("请确认"壳体内径Di"是否正确！")
@@ -1487,7 +1451,6 @@ class TubeLayoutEditor(QMainWindow):
 
         # 转换为DataFrame
         self.left_data_pd = pd.DataFrame(self.left_data_pd)
-
 
         # 2. 构造JSON映射
         param_mapping = {
@@ -5559,14 +5522,8 @@ class TubeLayoutEditor(QMainWindow):
         from PyQt5.QtWidgets import QMessageBox
         from PyQt5.QtWidgets import QGraphicsRectItem
         import math
+
         def is_point_in_rect(point, rect_x, rect_y, rect_w, rect_h):
-            """判断点（换热管中心）是否在挡板矩形内（含边界）
-            :param point: 换热管中心坐标 (x, y)
-            :param rect_x: 挡板矩形左上角x坐标
-            :param rect_y: 挡板矩形左上角y坐标
-            :param rect_w: 挡板宽度
-            :param rect_h: 挡板高度
-            """
             x, y = point
             rect_min_x = rect_x - 1e-8
             rect_max_x = rect_x + rect_w + 1e-8
@@ -5702,7 +5659,8 @@ class TubeLayoutEditor(QMainWindow):
 
         # -------------------------- 4. 原逻辑：绘制挡板 + 新增干涉处理 --------------------------
         if selected_centers:
-            for row_label, _ in selected_centers:
+            for selected_center in selected_centers:
+                row_label, col_label = selected_center
                 if row_label in done_rows:
                     continue
                 row_idx = abs(row_label) - 1  # 行号转索引
@@ -5795,6 +5753,10 @@ class TubeLayoutEditor(QMainWindow):
                 # 双向绑定配对挡板
                 left_block.set_paired_block(right_block)
 
+                # 存储挡板信息，用于后续识别 - 使用实际的selected_center坐标
+                left_block.original_selected_center = selected_center
+                right_block.original_selected_center = selected_center
+
                 # 记录操作（补充挡板参数）
                 self.operations.append({
                     "type": "side_block",
@@ -5812,39 +5774,94 @@ class TubeLayoutEditor(QMainWindow):
         if current_interfering_tubes:
             # 转换为列表（集合不可迭代）
             interfering_list = list(current_interfering_tubes)
-            # 1. 删除干涉管（调用现有删除函数）
-            # 先转换为相对坐标（与滑道逻辑一致）
+
             interfering_selected_coords = []
             for abs_coord in interfering_list:
                 rel_coord = self.actual_to_selected_coords(abs_coord)
                 if rel_coord is not None:
                     interfering_selected_coords.append(rel_coord)
+
             # 执行删除
             self.delete_huanreguan(interfering_selected_coords)
-
-            # 2. 更新当前有效换热管列表（移除干涉管）
             interfering_set = set(interfering_list)
             self.current_centers = [coord for coord in self.current_centers if coord not in interfering_set]
 
-            # 3. 存储干涉管的相对坐标到全局变量
-            self.sdangban_selected_centers.extend(interfering_selected_coords)
-            # 去重（避免多次调用函数重复存储）
-            self.sdangban_selected_centers = list(set(self.sdangban_selected_centers))
+            # 修改存储结构：[[绘制坐标, 干涉坐标1, 干涉坐标2, ...], ...]
+            # 为每个绘制的挡板创建对应的条目
+            for selected_center in selected_centers:
+                row_label, col_label = selected_center
+                if row_label in done_rows:
+                    # 找到这个挡板对应的干涉管
+                    dangban_interfering_tubes = []
+                    for interfering_coord in interfering_selected_coords:
+                        # 如果干涉管的行号与挡板行号相同（考虑正负号）
+                        if (interfering_coord[0] == row_label or
+                                interfering_coord[0] == -row_label or
+                                abs(interfering_coord[0]) == abs(row_label)):
+                            dangban_interfering_tubes.append(interfering_coord)
 
-            # 4. 更新换热管总数显示
+                    # 创建存储条目
+                    dangban_entry = [selected_center]  # 第一个是绘制坐标
+                    dangban_entry.extend(dangban_interfering_tubes)  # 后面是干涉坐标
+
+                    self.sdangban_selected_centers.append(dangban_entry)
+
             self.update_tube_nums()
 
-            print(f"旁路挡板绘制完成：新增{added_count}块挡板，删除{len(interfering_list)}根干涉换热管")
         else:
             print(f"旁路挡板绘制完成：新增{added_count}块挡板，无干涉换热管")
+            # 即使没有干涉管，也要记录绘制信息
+            for selected_center in selected_centers:
+                row_label, col_label = selected_center
+                if row_label in done_rows:
+                    self.sdangban_selected_centers.append([selected_center])  # 只存储绘制坐标
 
         return added_count
 
     def delete_selected_side_blocks(self):
-        """删除所有选中的旁路挡板及其配对挡板"""
-        if not hasattr(self, 'selected_side_blocks'):
-            self.selected_side_blocks = []
+        """删除选中的旁路挡板，并恢复对应的干涉换热管"""
+        print("当前存储的旁路挡板信息:", self.sdangban_selected_centers)
+        print(self.side_dangban)
+
+        if not hasattr(self, 'selected_side_blocks') or not self.selected_side_blocks:
             return
+
+        # 收集要恢复的换热管坐标
+        tubes_to_restore = []
+        blocks_to_remove_info = []  # 存储要删除的挡板信息
+
+        # 找出选中挡板对应的绘制坐标信息
+        for block in self.selected_side_blocks:
+            if hasattr(block, 'original_selected_center'):
+                block_info = block.original_selected_center
+                blocks_to_remove_info.append(block_info)
+
+        # 去重
+        blocks_to_remove_info = list(set(blocks_to_remove_info))
+
+        # 存储要从self.side_dangban中删除的坐标
+        to_remove_from_side_dangban = []
+
+        # 根据绘制坐标找到对应的干涉管信息
+        for block_info in blocks_to_remove_info:
+            for i, dangban_entry in enumerate(self.sdangban_selected_centers):
+                if dangban_entry and dangban_entry[0] == block_info:
+                    # 第一个是绘制坐标，后面的是干涉管坐标
+                    if len(dangban_entry) > 1:
+                        tubes_to_restore.extend(dangban_entry[1:])
+                    # 记录要从self.side_dangban中删除的坐标
+                    to_remove_from_side_dangban.append(dangban_entry[0])
+                    # 从存储中移除这个条目
+                    self.sdangban_selected_centers.pop(i)
+                    break
+
+        # 更新self.side_dangban，移除对应的坐标
+        self.side_dangban = [coord for coord in self.side_dangban if coord not in to_remove_from_side_dangban]
+
+        # 恢复干涉换热管
+        if tubes_to_restore:
+            print(f"恢复干涉换热管: {tubes_to_restore}")
+            self.build_huanreguan(tubes_to_restore)
 
         # 复制选中列表避免迭代中修改列表导致错误
         blocks_to_remove = list(self.selected_side_blocks)
@@ -5868,7 +5885,7 @@ class TubeLayoutEditor(QMainWindow):
         # 清空选中列表
         self.selected_side_blocks = []
 
-    # TODO 这个删除连线的方法一直不正确，没有删除成功
+    # TODO 这个删除圆心连线的方法一直不正确，没有删除成功
     def clear_connection_lines(self, scene):
         """安全清除所有连线，处理无效对象"""
         if not hasattr(self, 'connection_lines'):
@@ -5973,7 +5990,6 @@ class TubeLayoutEditor(QMainWindow):
         if self.slide_selected_centers:
             self.build_huanreguan(self.slide_selected_centers)
             self.slide_selected_centers = []
-
 
         try:
             # 将字符串参数转换为数值
