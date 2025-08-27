@@ -92,13 +92,14 @@ class ZoomableGraphicsView(QGraphicsView):
 
 
 class ClickableRectItem(QGraphicsPathItem):
-    def __init__(self, path=None, parent=None, is_side_block=False, is_baffle=False, editor=None):
+    def __init__(self, path=None, parent=None, is_side_block=False, is_baffle=False, is_slide=False, editor=None):
         # 初始化父类，使用提供的路径或空路径
         super().__init__(path if path else QPainterPath(), parent)
         self.setAcceptHoverEvents(True)
         self.setFlag(QGraphicsPathItem.ItemIsSelectable, True)
         self.is_side_block = is_side_block  # 标记是否为旁路挡板
         self.is_baffle = is_baffle  # 标记是否为防冲板
+        self.is_slide = is_slide  # 新增：标记是否为滑道
         self.is_selected = False  # 选中状态
         self.editor = editor  # 主窗口引用
         self.original_pen = self.pen()  # 保存原始画笔
@@ -115,7 +116,7 @@ class ClickableRectItem(QGraphicsPathItem):
             block.paired_block = self
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton and (self.is_side_block or self.is_baffle):
+        if event.button() == Qt.LeftButton and (self.is_side_block or self.is_baffle or self.is_slide):
             # 切换选中状态
             self.is_selected = not self.is_selected
             # 更新边框样式
@@ -137,6 +138,13 @@ class ClickableRectItem(QGraphicsPathItem):
                     else:
                         if self in self.editor.selected_baffles:
                             self.editor.selected_baffles.remove(self)
+                elif self.is_slide and hasattr(self.editor, 'selected_slides'):
+                    if self.is_selected:
+                        if self not in self.editor.selected_slides:
+                            self.editor.selected_slides.append(self)
+                    else:
+                        if self in self.editor.selected_slides:
+                            self.editor.selected_slides.remove(self)
             event.accept()
         else:
             super().mousePressEvent(event)
@@ -303,9 +311,12 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
 class TubeLayoutEditor(QMainWindow):
     def __init__(self, line_tip=None):
         super().__init__()
+
         self.productID = product_id  # 产品ID
         self.isSymmetry = False
         self.selected_side_blocks = []
+        self.interfering_tubes1 = []
+        self.interfering_tubes2 = []
         self.slide_selected_centers = []
         self.sdangban_selected_centers = []
         self.input_json = []
@@ -4786,6 +4797,9 @@ class TubeLayoutEditor(QMainWindow):
             self.delete_selected_baffles()
         if hasattr(self, 'selected_side_rods') and self.selected_side_rods:
             self.delete_selected_side_rods()
+        if hasattr(self, 'selected_slides') and self.selected_slides:
+            self.delete_selected_slides()
+
         elif self.selected_centers:
             if self.isSymmetry:
                 selected_centers = self.judge_linkage(self.selected_centers)
@@ -5180,10 +5194,6 @@ class TubeLayoutEditor(QMainWindow):
             # # 若未成功添加任何换热管，弹出警告
             # if added_count == 0:
             #     QMessageBox.warning(self, "警告", "未成功添加任何换热管，请检查坐标选择")
-
-        else:
-            # 若未传入有效选中坐标，弹出提示
-            QMessageBox.warning(self, "未选中", "请先点击图形区域中的一个或多个小圆以选中")
 
     # 最左最右拉杆
     def on_small_block_click(self):
@@ -6134,7 +6144,65 @@ class TubeLayoutEditor(QMainWindow):
         layout.addLayout(button_layout)
         dialog.exec_()
 
+    def delete_selected_slides(self):
+        """删除选中的滑道，并恢复对应的干涉换热管"""
+        if not hasattr(self, 'selected_slides') or not self.selected_slides:
+            QMessageBox.information(self, "提示", "请先选择要删除的滑道")
+            return
+        print(self.interfering_tubes1)
+        for coord in self.interfering_tubes1:
+            processed_coord1 = self.actual_to_selected_coords(coord)
+            self.build_huanreguan([processed_coord1])
+        for coord in self.interfering_tubes1:
+            processed_coord2 = self.actual_to_selected_coords(coord)
+            self.build_huanreguan([processed_coord2])
+
+        self.interfering_tubes1 = []
+        self.interfering_tubes2 = []
+
+        # 收集要恢复的换热管坐标和要删除的滑道
+        tubes_to_restore = []
+        slides_to_remove = list(self.selected_slides)  # 复制列表避免迭代中修改
+
+        # 先从场景和存储列表中移除所有选中滑道
+        for slide in slides_to_remove:
+            # 收集要恢复的换热管
+            if hasattr(slide, 'interfering_tubes') and slide.interfering_tubes:
+                tubes_to_restore.extend(slide.interfering_tubes)
+
+            # 从场景中移除
+            if slide.scene() == self.graphics_scene:
+                self.graphics_scene.removeItem(slide)
+
+            # 从存储列表中移除
+            if slide in self.green_slide_items:
+                self.green_slide_items.remove(slide)
+            if slide in self.selected_slides:
+                self.selected_slides.remove(slide)
+
+        # 恢复干涉的换热管
+        if tubes_to_restore:
+            # 去重处理
+            unique_tubes = list(set(tubes_to_restore))
+            # 绘制恢复的换热管
+            self.build_huanreguan(unique_tubes)
+            # 更新当前圆心列表
+            for tube in unique_tubes:
+                if tube not in self.current_centers:
+                    self.current_centers.append(tube)
+
+        # 更新管数显示
+        self.update_total_holes_count()
+
+        # 移除了不存在的clear_selection()调用
+
+        # 如果没有滑道了，重置标志
+        if not self.green_slide_items:
+            self.isHuadao = False
+            self.graphics_view.setCursor(Qt.ArrowCursor)
+
     def build_huadao(self, location, height, thickness, angle, cut_length, cut_height):
+        """构建滑道并支持选中功能（增加干涉记录存储）"""
         if self.slide_selected_centers:
             self.build_huanreguan(self.slide_selected_centers)
             self.slide_selected_centers = []
@@ -6145,14 +6213,20 @@ class TubeLayoutEditor(QMainWindow):
             thickness = float(thickness)
             angle = float(angle)
 
-            self.draw_slide_with_params(height, thickness, angle)
+            # 初始化滑道选中列表和干涉记录
+            if not hasattr(self, 'selected_slides'):
+                self.selected_slides = []
+            # 新增：滑道干涉记录存储结构 [滑道参数, 干涉管坐标列表]
+            if not hasattr(self, 'slide_interference_records'):
+                self.slide_interference_records = []
 
+            self.draw_slide_with_params(height, thickness, angle)
 
         except ValueError as e:
             QMessageBox.warning(self, "参数错误", f"请输入有效的数值参数: {str(e)}")
 
     def draw_slide_with_params(self, height, thickness, angle):
-        """根据给定参数绘制滑道"""
+        """根据给定参数绘制滑道（支持选中）"""
         try:
             # 清除上次绘制的绿色滑道
             if hasattr(self, "green_slide_items"):
@@ -6281,15 +6355,12 @@ class TubeLayoutEditor(QMainWindow):
                 # 线段的向量
                 dx = x2 - x1
                 dy = y2 - y1
-
                 # 如果线段长度为0，返回点到端点的距离
                 if dx == 0 and dy == 0:
                     return math.hypot(x - x1, y - y1)
-
                 # 计算投影比例
                 t = ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy)
                 t = max(0, min(1, t))  # 限制在[0,1]范围内
-
                 # 投影点
                 proj_x = x1 + t * dx
                 proj_y = y1 + t * dy
@@ -6332,7 +6403,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 return slipway_centers, interfering_y_coords
 
-            def draw_slide_polygon(base_x, base_y, unit_dx, unit_dy, thickness, length):
+            def draw_slide_polygon(base_x, base_y, unit_dx, unit_dy, thickness, length, is_left=True):
                 perp_dx, perp_dy = -unit_dy, unit_dx
                 half_thick = thickness / 2
 
@@ -6359,17 +6430,34 @@ class TubeLayoutEditor(QMainWindow):
                 all_interfering_y_coords.update(interfering_y_coords)
 
                 polygon = QPolygonF([p1, p2, p3, p4])
-                item = QGraphicsPolygonItem(polygon)
+
+                # 使用ClickableRectItem而不是QGraphicsPolygonItem
+                path = QPainterPath()
+                path.addPolygon(polygon)
+
+                item = ClickableRectItem(path, is_slide=True, editor=self)
                 item.setBrush(QColor(0, 100, 0))  # 深绿色
                 item.setPen(QPen(Qt.NoPen))  # 无边框
+                item.slide_params = {
+                    'base_x': base_x,
+                    'base_y': base_y,
+                    'unit_dx': unit_dx,
+                    'unit_dy': unit_dy,
+                    'thickness': thickness,
+                    'length': length,
+                    'is_left': is_left
+                }
+
                 self.graphics_scene.addItem(item)
                 self.green_slide_items.append(item)
 
                 return interfering_tubes
 
             # 绘制两个滑道并收集干涉信息
-            interfering_tubes1 = draw_slide_polygon(base1_x, base1_y, u1_x, u1_y, slide_thickness, slide_length)
-            interfering_tubes2 = draw_slide_polygon(base2_x, base2_y, u2_x, u2_y, slide_thickness, slide_length)
+            self.interfering_tubes1 = draw_slide_polygon(base1_x, base1_y, u1_x, u1_y, slide_thickness, slide_length,
+                                                         is_left=True)
+            self.interfering_tubes2 = draw_slide_polygon(base2_x, base2_y, u2_x, u2_y, slide_thickness, slide_length,
+                                                         is_left=False)
 
             # 处理所有干涉的管子（按行删除）
             if all_interfering_y_coords:
@@ -6409,6 +6497,9 @@ class TubeLayoutEditor(QMainWindow):
                 "coord_origin": (0, 0),
                 "length": slide_length
             })
+
+            # 标记已布置滑道
+            self.isHuadao = True
 
         except ValueError as e:
             QMessageBox.warning(self, "参数错误", f"参数格式不正确: {str(e)}")
