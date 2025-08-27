@@ -1203,7 +1203,7 @@ class TubeLayoutEditor(QMainWindow):
         try:
             if not hasattr(self, 'input_json') or not isinstance(self.input_json, dict):
                 raise ValueError("self.input_json不存在或不是字典类型")
-            print(self.input_json)
+
 
             side_dangban_thick = float(self.input_json.get('LB_BPBThick', 0))
             baffle_thickness = float(self.input_json.get('LB_BaffleThick', 0))
@@ -1491,7 +1491,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 转换为DataFrame
         self.left_data_pd = pd.DataFrame(self.left_data_pd)
-        print(self.left_data_pd)
+
 
         # 2. 构造JSON映射
         param_mapping = {
@@ -4771,7 +4771,6 @@ class TubeLayoutEditor(QMainWindow):
 
     # 删除换热管
     def on_del_click(self):
-        print(self.selected_side_blocks)
         if hasattr(self, 'selected_side_blocks') and self.selected_side_blocks:
             self.delete_selected_side_blocks()
         elif self.selected_centers:
@@ -5126,9 +5125,9 @@ class TubeLayoutEditor(QMainWindow):
                 self.current_centers)
             self.update_tube_nums()
 
-            # 若未成功添加任何换热管，弹出警告
-            if added_count == 0:
-                QMessageBox.warning(self, "警告", "未成功添加任何换热管，请检查坐标选择")
+            # # 若未成功添加任何换热管，弹出警告
+            # if added_count == 0:
+            #     QMessageBox.warning(self, "警告", "未成功添加任何换热管，请检查坐标选择")
 
         else:
             # 若未传入有效选中坐标，弹出提示
