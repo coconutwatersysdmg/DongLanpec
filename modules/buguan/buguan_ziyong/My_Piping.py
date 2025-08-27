@@ -257,6 +257,7 @@ class TubeLayoutEditor(QMainWindow):
         self.productID = product_id  # 产品ID
         self.isSymmetry = False
         self.selected_side_blocks = []
+        self.slide_selected_centers = []
         self.input_json = []
         self.current_leftpad = []
         self.line_tip = line_tip
@@ -822,8 +823,7 @@ class TubeLayoutEditor(QMainWindow):
         return results
 
     def load_initial_data(self):
-        print("这是在干什么")
-        print(self.productID)  # 修正原代码中product_id未定义的错误
+
         hidden_params = [
             "滑道定位", "滑道高度", "滑道厚度", "滑道与竖直中心线夹角",
             "旁路挡板厚度", "防冲板形式", "防冲板厚度", "防冲板折边角度",
@@ -1193,16 +1193,17 @@ class TubeLayoutEditor(QMainWindow):
             print(f"第一次计算布管布局出错: {str(e)}")
             QMessageBox.warning(self, "计算警告", f"第一次计算布管布局失败: {str(e)}")
 
-        try:
-            self.calculate_piping_layout()
-        except Exception as e:
-            print(f"第二次计算布管布局出错: {str(e)}")
-            QMessageBox.warning(self, "计算警告", f"第二次计算布管布局失败: {str(e)}")
+        # try:
+        #     self.calculate_piping_layout()
+        # except Exception as e:
+        #     print(f"第二次计算布管布局出错: {str(e)}")
+        #     QMessageBox.warning(self, "计算警告", f"第二次计算布管布局失败: {str(e)}")
 
         # 解析输入参数部分保持不变
         try:
             if not hasattr(self, 'input_json') or not isinstance(self.input_json, dict):
                 raise ValueError("self.input_json不存在或不是字典类型")
+            print(self.input_json)
 
             side_dangban_thick = float(self.input_json.get('LB_BPBThick', 0))
             baffle_thickness = float(self.input_json.get('LB_BaffleThick', 0))
@@ -1212,6 +1213,7 @@ class TubeLayoutEditor(QMainWindow):
             height = float(self.input_json.get('LB_SlipWayHeight', 0))
             thickness = float(self.input_json.get('LB_SlipWayThick', 0))
             angle = float(self.input_json.get('LB_SlipWayAngle', 0))
+            print(angle)
 
             if tube_outer_diameter <= 0:
                 print("管子外径必须大于0，使用默认值10")
@@ -1489,6 +1491,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 转换为DataFrame
         self.left_data_pd = pd.DataFrame(self.left_data_pd)
+        print(self.left_data_pd)
 
         # 2. 构造JSON映射
         param_mapping = {
@@ -4998,17 +5001,30 @@ class TubeLayoutEditor(QMainWindow):
 
     # 添加换热管
     def on_huanreguan_click(self):
-        from PyQt5.QtGui import QPen, QBrush, QColor
-        from PyQt5.QtWidgets import QMessageBox, QGraphicsEllipseItem
-        from PyQt5.QtCore import Qt
+        """
+        换热管点击事件入口函数：仅处理对称逻辑，然后调用实际构建函数
+        """
+        # 根据是否对称，处理选中的中心坐标
         if self.isSymmetry:
             selected_centers = self.judge_linkage(self.selected_centers)
         else:
             selected_centers = self.selected_centers
 
+        # 调用实际执行换热管构建逻辑的函数
+        self.build_huanreguan(selected_centers)
+
+    def build_huanreguan(self, selected_centers):
+        """
+        换热管实际构建函数：处理选中中心校验、绘图、属性更新等核心逻辑
+        :param selected_centers: 经过对称处理后的选中中心坐标（相对坐标）
+        """
+        from PyQt5.QtGui import QPen, QBrush, QColor
+        from PyQt5.QtWidgets import QMessageBox, QGraphicsEllipseItem
+        from PyQt5.QtCore import Qt
+
         # 检查是否有选中的中心（相对坐标）
-        if hasattr(self, 'selected_centers') and self.selected_centers:
-            # 初始化必要的属性
+        if selected_centers:
+            # 初始化必要的属性（若未定义则创建）
             if not hasattr(self, 'huanreguan'):
                 self.huanreguan = []
             if not hasattr(self, 'current_centers'):
@@ -5022,7 +5038,7 @@ class TubeLayoutEditor(QMainWindow):
             brush_t = QBrush(Qt.NoBrush)
             added_count = 0
 
-            # 淡蓝色画刷颜色定义
+            # 淡蓝色画刷颜色定义（用于筛选待删除的圆）
             target_brush_color = QColor(173, 216, 230)
             items_to_remove = []
 
@@ -5032,62 +5048,64 @@ class TubeLayoutEditor(QMainWindow):
                     if item.brush().color() == target_brush_color:
                         items_to_remove.append(item)
 
-            # 移除筛选出的淡蓝色圆
+            # 移除筛选出的淡蓝色圆（场景移除后引用自动管理，无需手动del）
             for item in items_to_remove:
                 self.graphics_scene.removeItem(item)
-                # 无需手动del，场景移除后引用会自动管理
 
-            # 收集并处理目标坐标（基于相对坐标直接索引）
+            # 收集并处理目标坐标（基于相对坐标直接索引绝对坐标）
             target_coords = []
             for row_label, col_label in selected_centers:
                 try:
                     # 基于相对坐标的行标签选择数据源（上/下半轴）
                     if row_label > 0:
                         centers_list = self.full_sorted_current_centers_up
-                        row_idx = row_label - 1  # 正数行标签直接转换为索引
+                        row_idx = row_label - 1  # 正数行标签转换为索引（从0开始）
                     else:
                         centers_list = self.full_sorted_current_centers_down
-                        row_idx = -row_label - 1  # 负数行标签取绝对值转换为索引
+                        row_idx = -row_label - 1  # 负数行标签取绝对值后转换为索引（从0开始）
 
-                    # 基于相对坐标的列标签获取列索引（处理正负，保持与原函数abs逻辑一致）
+                    # 基于相对坐标的列标签获取列索引（处理正负，保持与原逻辑一致）
                     col_idx = abs(col_label) - 1
 
-                    # 通过相对坐标索引直接获取绝对坐标（核心修改：简化转换流程）
+                    # 通过相对坐标索引直接获取绝对坐标（核心转换逻辑）
                     x, y = centers_list[row_idx][col_idx]
                     actual_abs_coord = (x, y)
 
-                    # 检查是否已存在该绝对坐标
+                    # 跳过已存在的绝对坐标（避免重复绘制）
                     if actual_abs_coord in self.current_centers:
                         continue
 
+                    # 收集有效坐标及关联信息（用于后续绘图和记录）
                     target_coords.append((x, y, row_label, col_label, actual_abs_coord))
 
                 except IndexError as e:
+                    # 捕获索引超出范围异常（坐标标签对应的数据不存在）
                     print(
                         f"相对坐标索引错误: 行标签{row_label}（索引{row_idx}）、列标签{col_label}（索引{col_idx}）超出范围，错误：{e}")
                     continue
                 except Exception as e:
+                    # 捕获其他未知异常
                     print(f"处理相对坐标时出错: {e}，坐标：({row_label}, {col_label})")
                     continue
 
             # 绘制深蓝色空心圆（使用相对坐标索引得到的绝对坐标）
             for x, y, row_label, col_label, actual_abs_coord in target_coords:
-                # 确保坐标有效
+                # 跳过无效坐标（x或y为None的情况）
                 if x is None or y is None:
                     continue
 
-                # 绘制椭圆（基于相对坐标索引出的绝对坐标）
+                # 在图形场景中添加椭圆（空心圆，基于绝对坐标计算左上角位置）
                 new_circle = self.graphics_scene.addEllipse(
-                    x - self.r,  # 椭圆左上角x（绝对坐标）
-                    y - self.r,  # 椭圆左上角y（绝对坐标）
-                    2 * self.r,  # 宽度
-                    2 * self.r,  # 高度
-                    pen_t,
-                    brush_t
+                    x - self.r,  # 椭圆左上角x坐标（绝对坐标 - 半径 = 左上角位置）
+                    y - self.r,  # 椭圆左上角y坐标（绝对坐标 - 半径 = 左上角位置）
+                    2 * self.r,  # 椭圆宽度（直径）
+                    2 * self.r,  # 椭圆高度（直径）
+                    pen_t,  # 画笔（深蓝色，线宽1）
+                    brush_t  # 画刷（无填充，空心）
                 )
-                new_circle.setZValue(2)  # 确保在顶层
+                new_circle.setZValue(2)  # 设置图层优先级，确保空心圆在顶层显示
 
-                # 记录操作
+                # 记录当前操作及坐标信息（用于后续回溯、统计等）
                 self.huanreguan.append((row_label, col_label))
                 self.current_centers.append(actual_abs_coord)
                 self.operations.append({
@@ -5098,19 +5116,22 @@ class TubeLayoutEditor(QMainWindow):
                 })
                 added_count += 1
 
-            # 更新删除列表（移除已选中的相对坐标）
-            self.del_centers = [coord for coord in self.del_centers if coord not in self.selected_centers]
-            # 清空选中状态并更新界面
+            # 更新删除列表（移除已选中的相对坐标，避免重复删除）
+            self.del_centers = [coord for coord in self.del_centers if coord not in selected_centers]
+            # 清空选中状态（避免后续操作重复处理）
             self.selected_centers = []
+            # 更新界面相关统计信息和坐标分组
             self.update_total_holes_count()
             self.sorted_current_centers_up, self.sorted_current_centers_down = self.group_centers_by_y(
                 self.current_centers)
             self.update_tube_nums()
 
+            # 若未成功添加任何换热管，弹出警告
             if added_count == 0:
                 QMessageBox.warning(self, "警告", "未成功添加任何换热管，请检查坐标选择")
 
         else:
+            # 若未传入有效选中坐标，弹出提示
             QMessageBox.warning(self, "未选中", "请先点击图形区域中的一个或多个小圆以选中")
 
     # 最左最右拉杆
@@ -5410,7 +5431,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 查找参数表中旁路挡板厚度的行和当前值
         param_row = -1
-        default_thickness = 8.0  # 默认厚度
+        default_thickness = 15.0  # 默认厚度
         row_count = self.param_table.rowCount()
         for row in range(row_count):
             name_item = self.param_table.item(row, 1)
@@ -5585,7 +5606,7 @@ class TubeLayoutEditor(QMainWindow):
 
         added_count = 0
         done_rows = set()
-        block_width = 30  # 挡板固定宽度
+        block_width = 30  # 挡板固定宽度，为啥是固定的呢，哈哈奇怪
 
         # 处理字符串类型的selected_centers（二次校验）
         if isinstance(selected_centers, str):
@@ -5820,6 +5841,10 @@ class TubeLayoutEditor(QMainWindow):
         dialog.exec_()
 
     def build_huadao(self, location, height, thickness, angle, cut_length, cut_height):
+        if self.slide_selected_centers:
+            self.build_huanreguan(self.slide_selected_centers)
+            self.slide_selected_centers = []
+        print(f"初始 slipway_centers: {self.slipway_centers}")
 
         try:
             # 将字符串参数转换为数值
@@ -5828,6 +5853,8 @@ class TubeLayoutEditor(QMainWindow):
             angle = float(angle)
 
             self.draw_slide_with_params(height, thickness, angle)
+            print(f"处理后 slipway_centers: {self.slipway_centers}")
+            print(f"处理后 slide_selected_centers: {self.slide_selected_centers}")
 
         except ValueError as e:
             QMessageBox.warning(self, "参数错误", f"请输入有效的数值参数: {str(e)}")
@@ -5878,6 +5905,10 @@ class TubeLayoutEditor(QMainWindow):
                 return
 
             DN = DN or DL
+
+            # 初始化滑道中心列表
+            self.slipway_centers = []
+            all_interfering_y_coords = set()  # 收集所有存在干涉的y坐标
 
             # 以下是原来的绘图逻辑...
             outer_radius = DN / 2
@@ -6007,11 +6038,9 @@ class TubeLayoutEditor(QMainWindow):
                     if center[1] in interfering_y_coords
                 ]
 
-                return slipway_centers
+                return slipway_centers, interfering_y_coords
 
-            # TODO 计算滑道四个角的坐标
             def draw_slide_polygon(base_x, base_y, unit_dx, unit_dy, thickness, length):
-
                 perp_dx, perp_dy = -unit_dy, unit_dx
                 half_thick = thickness / 2
 
@@ -6026,22 +6055,16 @@ class TubeLayoutEditor(QMainWindow):
                     (p3.x(), p3.y()),
                     (p4.x(), p4.y())
                 ]
+
                 # 检查干涉
-                interfering_tubes = check_tube_slide_interference(
+                interfering_tubes, interfering_y_coords = check_tube_slide_interference(
                     slide_corners=slide_corners,
                     tube_centers=self.current_centers,
                     tube_diameter=do
                 )
 
-                self.slipway_centers = interfering_tubes
-                # 擦除干涉换热管，必须先给current_centers赋值
-                slipway_set = set(self.slipway_centers)
-                self.current_centers = [center for center in self.current_centers if center not in slipway_set]
-                centers = [self.actual_to_selected_coords(coord) for coord in self.slipway_centers]
-                # 过滤转换失败的空值
-                centers = [c for c in centers if c is not None]
-                # 执行删除
-                self.delete_huanreguan(centers)
+                # 收集所有干涉的y坐标
+                all_interfering_y_coords.update(interfering_y_coords)
 
                 polygon = QPolygonF([p1, p2, p3, p4])
                 item = QGraphicsPolygonItem(polygon)
@@ -6049,10 +6072,39 @@ class TubeLayoutEditor(QMainWindow):
                 item.setPen(QPen(Qt.NoPen))  # 无边框
                 self.graphics_scene.addItem(item)
                 self.green_slide_items.append(item)
-                self.update_tube_nums()
 
-            draw_slide_polygon(base1_x, base1_y, u1_x, u1_y, slide_thickness, slide_length)
-            draw_slide_polygon(base2_x, base2_y, u2_x, u2_y, slide_thickness, slide_length)
+                return interfering_tubes
+
+            # 绘制两个滑道并收集干涉信息
+            interfering_tubes1 = draw_slide_polygon(base1_x, base1_y, u1_x, u1_y, slide_thickness, slide_length)
+            interfering_tubes2 = draw_slide_polygon(base2_x, base2_y, u2_x, u2_y, slide_thickness, slide_length)
+
+            # 处理所有干涉的管子（按行删除）
+            if all_interfering_y_coords:
+                # 收集所有在干涉行上的换热管
+                self.slipway_centers = [
+                    center for center in self.current_centers
+                    if center[1] in all_interfering_y_coords
+                ]
+
+                # 擦除干涉换热管（整行删除）
+                slipway_set = set(self.slipway_centers)
+                self.current_centers = [center for center in self.current_centers if center not in slipway_set]
+
+                # 坐标转换
+                centers = []
+                for coord in self.slipway_centers:
+                    converted = self.actual_to_selected_coords(coord)
+                    if converted is not None:
+                        centers.append(converted)
+
+                self.slide_selected_centers = centers
+
+                # 执行删除
+                if centers:
+                    self.delete_huanreguan(centers)
+
+                self.update_tube_nums()
 
             if not hasattr(self, 'operations'):
                 self.operations = []
@@ -6068,6 +6120,8 @@ class TubeLayoutEditor(QMainWindow):
 
         except ValueError as e:
             QMessageBox.warning(self, "参数错误", f"参数格式不正确: {str(e)}")
+        except Exception as e:
+            QMessageBox.warning(self, "错误", f"绘制滑道时发生错误: {str(e)}")
 
     def calculate_and_update_interfering_tubes(self, line_segment, line_thickness):
         do = None
