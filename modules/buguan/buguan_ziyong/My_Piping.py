@@ -2345,7 +2345,7 @@ class TubeLayoutEditor(QMainWindow):
                 elif param['参数名'] == "滑道定位":
                     combo.addItems(["滑道与管板焊接", "滑道与第一块折流板焊接"])
                 elif param['参数名'] == "管程程数":
-                    combo.addItems(["1", "2", "4", "6", "8", "10", "12"])
+                    combo.addItems(["2", "4", "6", "8", "10", "12"])
                 elif param['参数名'] == "换热管布置方式":
                     combo.addItems(["对中", "跨中", "任意"])
                 elif param['参数名'] == "管程分程形式":
@@ -2356,6 +2356,7 @@ class TubeLayoutEditor(QMainWindow):
                     # 创建列表视图并设置为下拉框视图
                     list_view = QListView()
                     combo.setView(list_view)
+                    combo.setIconSize(QSize(75, 55))
 
                     # 查找管程程数所在行
                     tube_pass_row = -1
