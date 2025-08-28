@@ -2952,6 +2952,7 @@ class TubeLayoutEditor(QMainWindow):
             )
             sql_statements.append(insert_sql)
 
+
         # 3. 处理拉杆直径参数（原有逻辑保留）
         tie_rod_d = self.output_data.get('TieRodD')
         if tie_rod_d is not None:
@@ -3113,33 +3114,46 @@ class TubeLayoutEditor(QMainWindow):
         return "; ".join(insert_statements) if insert_statements else None
 
     def build_sql_for_tube_hole(self, tube_hole_data):
-        """TODO 管孔数量表保存数据"""
         if not tube_hole_data:
             QMessageBox.warning(self, "警告", "缺少必要的管孔数量分布数据！")
             return None
 
-        # 构建清空表的SQL语句
-        clear_sql = "DELETE FROM 产品设计活动表_布管数量表;"
+        # 验证产品ID是否存在
+        if not hasattr(self, 'productID') or not self.productID:
+            QMessageBox.warning(self, "警告", "产品ID不存在或为空！")
+            return None
 
-        # 构建插入数据的SQL语句
-        insert_sql = "INSERT INTO 产品设计活动表_布管数量表 (`至水平中心线行号`, `管孔数量（上）`, `管孔数量（下）`) VALUES "
+        # 处理产品ID的SQL注入防护
+        safe_product_id = self.productID.replace("'", "''")
+
+        # 构建查询SQL：检查是否存在该产品ID的记录
+        query_sql = f"SELECT 1 FROM 产品设计活动表_布管数量表 WHERE `产品ID` = '{safe_product_id}' LIMIT 1;"
+
+        # 构建删除SQL：仅删除该产品ID的记录
+        delete_sql = f"DELETE FROM 产品设计活动表_布管数量表 WHERE `产品ID` = '{safe_product_id}';"
+
+        # 构建插入数据的SQL语句，增加产品ID字段
+        insert_sql = "INSERT INTO 产品设计活动表_布管数量表 (`产品ID`, `至水平中心线行号`, `管孔数量（上）`, `管孔数量（下）`) VALUES "
         values = []
+
         for data in tube_hole_data:
             line_num = data.get("至水平中心线行号", "")
             holes_up = data.get("管孔数量(上)", "")
             holes_down = data.get("管孔数量(下)", "")
 
-            # 简单转义单引号防止 SQL 注入
+            # 转义单引号防止SQL注入
             safe_line_num = line_num.replace("'", "''")
             safe_holes_up = holes_up.replace("'", "''") if holes_up is not None else ""
             safe_holes_down = holes_down.replace("'", "''") if holes_down is not None else ""
 
-            values.append(f"('{safe_line_num}','{safe_holes_up}','{safe_holes_down}')")
+            # 加入产品ID到VALUES中
+            values.append(f"('{safe_product_id}', '{safe_line_num}', '{safe_holes_up}', '{safe_holes_down}')")
 
         insert_sql += ",\n".join(values) + ";"
 
-        # 返回两条SQL语句：先清空表再插入数据
-        return [clear_sql, insert_sql]
+        # 返回SQL语句列表：查询 -> (存在则删除) -> 插入
+        # 调用方需要先执行query_sql，根据结果决定是否执行delete_sql，最后执行insert_sql
+        return [query_sql, delete_sql, insert_sql]
 
     def build_sql_for_tube_form(self):
         if not self.tube_form_data:
