@@ -6160,11 +6160,10 @@ class TubeLayoutEditor(QMainWindow):
         dialog.exec_()
 
     def delete_selected_slides(self):
-        """删除选中的滑道，并恢复对应的干涉换热管"""
+        """删除选中的滑道及其配对滑道，并恢复对应的干涉换热管"""
         if not hasattr(self, 'selected_slides') or not self.selected_slides:
             QMessageBox.information(self, "提示", "请先选择要删除的滑道")
             return
-        print(self.interfering_tubes1)
         for coord in self.interfering_tubes1:
             processed_coord1 = self.actual_to_selected_coords(coord)
             self.build_huanreguan([processed_coord1])
@@ -6176,14 +6175,27 @@ class TubeLayoutEditor(QMainWindow):
         self.interfering_tubes2 = []
 
         # 收集要恢复的换热管坐标和要删除的滑道
-        tubes_to_restore = []
-        slides_to_remove = list(self.selected_slides)  # 复制列表避免迭代中修改
+        tubes_to_restore = set()
+        slides_to_remove = set()
 
-        # 先从场景和存储列表中移除所有选中滑道
+        # 先收集所有需要删除的滑道（包括配对的）
+        for slide in list(self.selected_slides):
+            if slide not in slides_to_remove:
+                slides_to_remove.add(slide)
+
+                # 添加配对滑道（如果存在）
+                if hasattr(slide, 'paired_block') and slide.paired_block:
+                    paired_slide = slide.paired_block
+                    slides_to_remove.add(paired_slide)
+                    # 如果配对滑道也在选中列表中，确保不会重复处理
+                    if paired_slide in self.selected_slides:
+                        self.selected_slides.remove(paired_slide)
+
+        # 处理所有要删除的滑道
         for slide in slides_to_remove:
             # 收集要恢复的换热管
             if hasattr(slide, 'interfering_tubes') and slide.interfering_tubes:
-                tubes_to_restore.extend(slide.interfering_tubes)
+                tubes_to_restore.update(slide.interfering_tubes)
 
             # 从场景中移除
             if slide.scene() == self.graphics_scene:
@@ -6197,24 +6209,35 @@ class TubeLayoutEditor(QMainWindow):
 
         # 恢复干涉的换热管
         if tubes_to_restore:
-            # 去重处理
-            unique_tubes = list(set(tubes_to_restore))
+            # 转换为相对坐标
+            relative_tubes = []
+            for tube in tubes_to_restore:
+                rel_coord = self.actual_to_selected_coords(tube)
+                if rel_coord:
+                    relative_tubes.append(rel_coord)
+
             # 绘制恢复的换热管
-            self.build_huanreguan(unique_tubes)
-            # 更新当前圆心列表
-            for tube in unique_tubes:
-                if tube not in self.current_centers:
-                    self.current_centers.append(tube)
+            if relative_tubes:
+                self.build_huanreguan(relative_tubes)
+
+                # 更新当前圆心列表
+                for tube in tubes_to_restore:
+                    if tube not in self.current_centers:
+                        self.current_centers.append(tube)
+
+        # 清空干涉管记录
+        self.interfering_tubes1 = []
+        self.interfering_tubes2 = []
 
         # 更新管数显示
         self.update_total_holes_count()
-
-        # 移除了不存在的clear_selection()调用
+        self.update_tube_nums()
 
         # 如果没有滑道了，重置标志
         if not self.green_slide_items:
             self.isHuadao = False
             self.graphics_view.setCursor(Qt.ArrowCursor)
+            QMessageBox.information(self, "提示", "所有滑道已删除")
 
     def build_huadao(self, location, height, thickness, angle, cut_length, cut_height):
         """构建滑道并支持选中功能（增加干涉记录存储）"""
@@ -6465,6 +6488,11 @@ class TubeLayoutEditor(QMainWindow):
 
                 self.graphics_scene.addItem(item)
                 self.green_slide_items.append(item)
+                if len(self.green_slide_items) >= 2:
+
+                    slide1 = self.green_slide_items[-2]
+                    slide2 = self.green_slide_items[-1]
+                    slide1.set_paired_block(slide2)
 
                 return interfering_tubes
 
