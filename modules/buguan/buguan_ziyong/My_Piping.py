@@ -973,7 +973,6 @@ class TubeLayoutEditor(QMainWindow):
                                         '单位': unit
                                     })
                                     continue
-
                                 # 公称直径DN的个性化查询（仅产品库有设计数据表）
                                 if param_name == "公称直径 DN":
                                     try:
@@ -1006,23 +1005,22 @@ class TubeLayoutEditor(QMainWindow):
                                             '参数值': param_value,
                                             '单位': unit
                                         })
-
                                 # 其他需要产品库设计数据表的参数处理（保持原逻辑）
                                 elif param_name == "是否以外径为基准":
                                     try:
                                         design_query = """
-                                            SELECT 壳程数值 
-                                            FROM 产品设计活动表_设计数据表 
+                                            SELECT 数值 
+                                            FROM 产品设计活动表_通用数据表 
                                             WHERE 产品ID = %s AND 参数名称 = %s
                                         """
-                                        cursor.execute(design_query, (self.productID, "是否以外径为基准"))
+                                        cursor.execute(design_query, (self.productID, "是否以外径为基准*"))
                                         design_data = cursor.fetchone()
 
-                                        if isinstance(design_data, dict) and '壳程数值' in design_data and design_data[
-                                            '壳程数值']:
+                                        if isinstance(design_data, dict) and '数值' in design_data and design_data[
+                                            '数值']:
                                             processed_params.append({
                                                 '参数名': param_name,
-                                                '参数值': design_data['壳程数值'],
+                                                '参数值': design_data['数值'],
                                                 '单位': unit
                                             })
                                         else:
