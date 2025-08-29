@@ -6160,7 +6160,7 @@ class TubeLayoutEditor(QMainWindow):
         dialog.exec_()
 
     def delete_selected_slides(self):
-        """删除选中的滑道及其配对滑道，并恢复对应的干涉换热管"""
+
         if not hasattr(self, 'selected_slides') or not self.selected_slides:
             QMessageBox.information(self, "提示", "请先选择要删除的滑道")
             return
@@ -6237,7 +6237,7 @@ class TubeLayoutEditor(QMainWindow):
         if not self.green_slide_items:
             self.isHuadao = False
             self.graphics_view.setCursor(Qt.ArrowCursor)
-            QMessageBox.information(self, "提示", "所有滑道已删除")
+            # QMessageBox.information(self, "提示", "所有滑道已删除")
 
     def build_huadao(self, location, height, thickness, angle, cut_length, cut_height):
         """构建滑道并支持选中功能（增加干涉记录存储）"""
