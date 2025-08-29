@@ -546,8 +546,8 @@ class TubeLayoutEditor(QMainWindow):
         self.param_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Interactive)
         # TODO 设置左侧参数表每列的初始列宽
         self.param_table.setColumnWidth(0, 50)
-        self.param_table.setColumnWidth(1, 280)
-        self.param_table.setColumnWidth(2, 100)
+        self.param_table.setColumnWidth(1, 320)
+        self.param_table.setColumnWidth(2, 120)
         self.param_table.setColumnWidth(3, 50)
         param_layout.addWidget(self.param_table)
 
