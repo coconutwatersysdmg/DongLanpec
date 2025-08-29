@@ -92,7 +92,8 @@ class ZoomableGraphicsView(QGraphicsView):
 
 
 class ClickableRectItem(QGraphicsPathItem):
-    def __init__(self, path=None, parent=None, is_side_block=False, is_baffle=False, is_slide=False, editor=None):
+    def __init__(self, path=None, parent=None, is_side_block=False, is_baffle=False,
+                 is_slide=False, is_center_dangguan=False, editor=None):
         # 初始化父类，使用提供的路径或空路径
         super().__init__(path if path else QPainterPath(), parent)
         self.setAcceptHoverEvents(True)
@@ -100,6 +101,7 @@ class ClickableRectItem(QGraphicsPathItem):
         self.is_side_block = is_side_block  # 标记是否为旁路挡板
         self.is_baffle = is_baffle  # 标记是否为防冲板
         self.is_slide = is_slide  # 新增：标记是否为滑道
+        self.is_center_dangguan = is_center_dangguan  # 新增：标记是否为中间挡管
         self.is_selected = False  # 选中状态
         self.editor = editor  # 主窗口引用
         self.original_pen = self.pen()  # 保存原始画笔
@@ -108,6 +110,7 @@ class ClickableRectItem(QGraphicsPathItem):
         self.paired_block = None  # 配对挡板引用
         self.baffle_type = None  # 防冲板类型
         self.interfering_tubes = []  # 干涉的换热管坐标
+        self.original_selected_center = None  # 存储原始选中坐标
 
     def set_paired_block(self, block):
         """设置配对挡板（双向绑定）"""
@@ -116,7 +119,9 @@ class ClickableRectItem(QGraphicsPathItem):
             block.paired_block = self
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton and (self.is_side_block or self.is_baffle or self.is_slide):
+        if event.button() == Qt.LeftButton and (
+                self.is_side_block or self.is_baffle or self.is_slide or self.is_center_dangguan
+        ):
             # 切换选中状态
             self.is_selected = not self.is_selected
             # 更新边框样式
@@ -145,6 +150,13 @@ class ClickableRectItem(QGraphicsPathItem):
                     else:
                         if self in self.editor.selected_slides:
                             self.editor.selected_slides.remove(self)
+                elif self.is_center_dangguan and hasattr(self.editor, 'selected_center_dangguan'):
+                    if self.is_selected:
+                        if self not in self.editor.selected_center_dangguan:
+                            self.editor.selected_center_dangguan.append(self)
+                    else:
+                        if self in self.editor.selected_center_dangguan:
+                            self.editor.selected_center_dangguan.remove(self)
             event.accept()
         else:
             super().mousePressEvent(event)
@@ -2953,7 +2965,6 @@ class TubeLayoutEditor(QMainWindow):
             )
             sql_statements.append(insert_sql)
 
-
         # 3. 处理拉杆直径参数（原有逻辑保留）
         tie_rod_d = self.output_data.get('TieRodD')
         if tie_rod_d is not None:
@@ -4814,7 +4825,8 @@ class TubeLayoutEditor(QMainWindow):
             self.delete_selected_side_rods()
         if hasattr(self, 'selected_slides') and self.selected_slides:
             self.delete_selected_slides()
-
+        if hasattr(self, 'selected_center_dangguan') and self.selected_center_dangguan:
+            self.delete_selected_center_dangguan()
         elif self.selected_centers:
             if self.isSymmetry:
                 selected_centers = self.judge_linkage(self.selected_centers)
@@ -5422,7 +5434,7 @@ class TubeLayoutEditor(QMainWindow):
     # 中间挡管
     def on_center_block_click(self):
         if len(self.selected_centers) != 2:
-            QMessageBox.warning(self, "选中错误", "请选择恰好两个圆心进行中间挡管绘制")
+            # QMessageBox.warning(self, "选中错误", "请选择恰好两个圆心进行中间挡管绘制")
             return
         if self.isSymmetry:
             selected_centers = self.judge_linkage(self.selected_centers)
@@ -5435,8 +5447,10 @@ class TubeLayoutEditor(QMainWindow):
         self.selected_centers.clear()
 
     def build_center_dangguan(self, selected_centers):
+        """构建中间挡管，支持选中功能（保持紫色空心圆样式）"""
         if not selected_centers:
             return []
+
         import ast
         selected_centers_list = []
         if isinstance(selected_centers, list):
@@ -5456,8 +5470,9 @@ class TubeLayoutEditor(QMainWindow):
                 print("字符串解析错误:", e)
                 selected_centers_list = []
         else:
-
             selected_centers_list = []
+
+        # 合并并去重中心点
         combined = []
         seen = set()
         for coord in self.center_dangguan:
@@ -5469,12 +5484,14 @@ class TubeLayoutEditor(QMainWindow):
                 seen.add(coord)
                 combined.append(coord)
         self.center_dangguan = combined
+
         current_coords = self.selected_to_current_coords(selected_centers)
 
         # 校验选中的圆心数量是否为2
-
         if not selected_centers:
-            QMessageBox.warning(self, "选中错误", "请选择恰好两个圆心进行中间挡管绘制")
+            # QMessageBox.warning(self, "选中错误", "请选择恰好两个圆心进行中间挡管绘制")
+            return current_coords
+
         if isinstance(selected_centers, str):
             try:
                 import ast
@@ -5482,68 +5499,72 @@ class TubeLayoutEditor(QMainWindow):
             except (SyntaxError, ValueError) as e:
                 print(f"字符串转换失败: {e}")
                 return current_coords
-        if selected_centers:
-            # 擦除所有淡蓝色填充（原逻辑保留）
-            for row_label, col_label in selected_centers:
-                # 修正行/列索引计算（适配正负行号）
-                row_idx = abs(row_label) - 1
-                col_idx = abs(col_label) - 1
 
-                # 根据行号正负选择对应的圆心列表
-                centers_group = self.sorted_current_centers_up if row_label > 0 else self.sorted_current_centers_down
+        # 擦除所有淡蓝色填充
+        for row_label, col_label in selected_centers:
+            row_idx = abs(row_label) - 1
+            col_idx = abs(col_label) - 1
 
-                # 获取原始坐标并擦除淡蓝色
-                if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
-                    x, y = centers_group[row_idx][col_idx]
-                    click_point = QPointF(x, y)
-                    for item in self.graphics_scene.items(click_point):
-                        if isinstance(item, QGraphicsEllipseItem):
-                            self.graphics_scene.removeItem(item)
-                            break
+            centers_group = self.sorted_current_centers_up if row_label > 0 else self.sorted_current_centers_down
+
+            if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
+                x, y = centers_group[row_idx][col_idx]
+                click_point = QPointF(x, y)
+                for item in self.graphics_scene.items(click_point):
+                    if isinstance(item, QGraphicsEllipseItem):
+                        self.graphics_scene.removeItem(item)
+                        break
 
         points = []
-        if isinstance(selected_centers, str):
-            try:
-                import ast
-                selected_centers = ast.literal_eval(selected_centers)
-            except (SyntaxError, ValueError) as e:
-                print(f"字符串转换失败: {e}")
-                return current_coords
         if selected_centers:
             for row_label, col_label in selected_centers:
                 row_idx = abs(row_label) - 1
                 col_idx = abs(col_label) - 1
 
-                # 选择对应的圆心列表（上/下半轴）
                 centers_group = self.sorted_current_centers_up if row_label > 0 else self.sorted_current_centers_down
 
-                # 提取原始坐标（不转换y符号）
                 if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
                     x, y = centers_group[row_idx][col_idx]
                     points.append((x, y))
 
-                    # 擦除淡蓝色选中涂层
                     click_point = QPointF(x, y)
                     for item in self.graphics_scene.items(click_point):
                         if isinstance(item, QGraphicsEllipseItem):
                             self.graphics_scene.removeItem(item)
                             break
-        if selected_centers:
-            # 确保成功获取两个点的坐标
-            if len(points) != 2:
-                QMessageBox.warning(self, "选中错误", "请选择恰好两个圆心进行中间挡管绘制")
-                return
-            # 计算中点并绘制紫色圆（中间挡管）
+
+        if selected_centers and len(points) == 2:
+            # 计算中点并绘制紫色空心圆（中间挡管）
             x_mid = (points[0][0] + points[1][0]) / 2
             y_mid = 0  # 沿X轴放置
 
+            # 创建中间挡管图形项（使用ClickableRectItem）
             pen = QPen(QColor(128, 0, 128))  # 紫色
             pen.setWidth(3)
-            self.graphics_scene.addEllipse(
-                x_mid - self.r, y_mid - self.r, 2 * self.r, 2 * self.r,
-                pen
+            brush = QBrush(Qt.NoBrush)  # 空心圆，保持原样式
+
+            # 创建圆形路径
+            path = QPainterPath()
+            path.addEllipse(x_mid - self.r, y_mid - self.r, 2 * self.r, 2 * self.r)
+
+            # 使用ClickableRectItem创建可选中中间挡管
+            center_dangguan_item = ClickableRectItem(
+                path=path,
+                is_center_dangguan=True,
+                editor=self
             )
-            # 记录操作（原逻辑保留）
+            center_dangguan_item.setPen(pen)
+            center_dangguan_item.setBrush(brush)  # 设置为空心
+            center_dangguan_item.original_pen = pen
+            center_dangguan_item.original_selected_center = selected_centers[0]  # 存储原始选中坐标
+            center_dangguan_item.setZValue(10)
+            self.graphics_scene.addItem(center_dangguan_item)
+
+            # 初始化选中列表
+            if not hasattr(self, 'selected_center_dangguan'):
+                self.selected_center_dangguan = []
+
+            # 记录操作
             if not hasattr(self, 'operations'):
                 self.operations = []
             self.operations.append({
@@ -5551,6 +5572,35 @@ class TubeLayoutEditor(QMainWindow):
                 "coord": (x_mid, y_mid),
                 "from": points
             })
+        # elif len(points) != 2:
+        #     QMessageBox.warning(self, "选中错误", "请选择恰好两个圆心进行中间挡管绘制")
+
+        return current_coords
+
+    def delete_selected_center_dangguan(self):
+        """删除选中的中间挡管"""
+        if not hasattr(self, 'selected_center_dangguan') or not self.selected_center_dangguan:
+            return
+
+        # 复制选中列表避免迭代中修改
+        dangguan_to_remove = list(self.selected_center_dangguan)
+
+        for dangguan in dangguan_to_remove:
+            # 从场景中移除中间挡管
+            if dangguan.scene() == self.graphics_scene:
+                self.graphics_scene.removeItem(dangguan)
+
+            # 从存储列表中移除
+            if dangguan in self.selected_center_dangguan:
+                self.selected_center_dangguan.remove(dangguan)
+
+            # 从center_dangguan列表中移除对应的坐标
+            if hasattr(dangguan, 'original_selected_center') and dangguan.original_selected_center:
+                if dangguan.original_selected_center in self.center_dangguan:
+                    self.center_dangguan.remove(dangguan.original_selected_center)
+
+        # 清空选中列表
+        self.selected_center_dangguan.clear()
 
     # 旁路挡板
     def on_side_block_click(self):
@@ -6489,7 +6539,6 @@ class TubeLayoutEditor(QMainWindow):
                 self.graphics_scene.addItem(item)
                 self.green_slide_items.append(item)
                 if len(self.green_slide_items) >= 2:
-
                     slide1 = self.green_slide_items[-2]
                     slide2 = self.green_slide_items[-1]
                     slide1.set_paired_block(slide2)
@@ -7556,139 +7605,7 @@ class TubeLayoutEditor(QMainWindow):
             return
         self.build_center_dangban(self.selected_centers)
 
-    def build_center_dangban(self, selected_centers):
-        from PyQt5.QtCore import Qt, QPointF
-        from PyQt5.QtGui import QPen, QBrush, QColor
-        from PyQt5.QtWidgets import QMessageBox, QGraphicsEllipseItem
 
-        if not selected_centers:
-            return []
-
-        import ast
-        selected_centers_list = []
-        if isinstance(selected_centers, list):
-            selected_centers_list = [item for item in selected_centers
-                                     if isinstance(item, tuple)
-                                     and len(item) == 2
-                                     and all(isinstance(x, (int, float)) for x in item)]
-        elif isinstance(selected_centers, str):
-            try:
-                parsed_list = ast.literal_eval(selected_centers)
-                if isinstance(parsed_list, list):
-                    selected_centers_list = [item for item in parsed_list
-                                             if isinstance(item, tuple)
-                                             and len(item) == 2
-                                             and all(isinstance(x, (int, float)) for x in item)]
-            except (SyntaxError, ValueError, TypeError) as e:
-                print("字符串解析错误:", e)
-                selected_centers_list = []
-        else:
-
-            selected_centers_list = []
-        combined = []
-        seen = set()
-        for coord in self.center_dangban:
-            if coord not in seen:
-                seen.add(coord)
-                combined.append(coord)
-        for coord in selected_centers_list:
-            if coord not in seen:
-                seen.add(coord)
-                combined.append(coord)
-        self.center_dangban = combined
-        current_coords = self.selected_to_current_coords(selected_centers)
-
-        # 提取两个选中圆的坐标
-        points = []
-        if isinstance(selected_centers, str):
-            try:
-                import ast
-                selected_centers = ast.literal_eval(selected_centers)
-            except (SyntaxError, ValueError) as e:
-                print(f"字符串转换失败: {e}")
-                return current_coords
-        if selected_centers:
-            for row_label, col_label in selected_centers:
-                # 计算行/列索引（基于绝对值）
-                row_idx = abs(row_label) - 1
-                col_idx = abs(col_label) - 1
-
-                # 选择对应的圆心列表（上/下分组）
-                if row_label > 0:
-                    centers_group = self.sorted_current_centers_up
-                else:
-                    centers_group = self.sorted_current_centers_down
-
-                # 校验索引有效性并获取坐标
-                if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
-                    x, y = centers_group[row_idx][col_idx]
-                    points.append((x, y))
-
-                    # 恢复默认圆样式（清除淡蓝色选中涂层）
-                    click_point = QPointF(x, y)
-                    for item in self.graphics_scene.items(click_point):
-                        if isinstance(item, QGraphicsEllipseItem):
-                            self.graphics_scene.removeItem(item)
-                            break
-                    # 绘制原始深蓝色边框
-                    pen_restore = QPen(QColor(0, 0, 80))  # 深蓝色
-                    pen_restore.setWidth(1)
-                    self.graphics_scene.addEllipse(
-                        x - self.r, y - self.r, 2 * self.r, 2 * self.r,
-                        pen_restore, QBrush(Qt.NoBrush)
-                    )
-                    # 确保获取到两个有效点
-
-            if len(points) != 2:
-                QMessageBox.warning(self, "错误", "选中的小圆坐标获取失败")
-                # 回滚中心挡板列表
-                for center in selected_centers:
-                    if center in self.center_dangban:
-                        self.center_dangban.remove(center)
-                return
-
-            # 解析坐标
-            (x1, y1), (x2, y2) = points
-
-            # 判断对称性（水平/竖直）
-            is_horizontal = (abs(y1 - y2) < 1e-2 and abs(x1 + x2) < 1e-2)  # 关于y轴对称（水平连线）
-            is_vertical = (abs(x1 - x2) < 1e-2 and abs(y1 + y2) < 1e-2)  # 关于x轴对称（竖直连线）
-
-            if not (is_horizontal or is_vertical):
-                QMessageBox.warning(self, "错误", "两个小圆必须关于x轴或y轴对称，且连线为水平或竖直")
-                # 回滚中心挡板列表
-                for center in selected_centers:
-                    if center in self.center_dangban:
-                        self.center_dangban.remove(center)
-                return
-
-            # 绘制紫色挡板线段
-            pen = QPen(QColor(128, 0, 128))  # 紫色
-            pen.setWidth(3)
-
-            if is_horizontal:
-                # 水平对称：绘制两条水平线段
-                x_start = min(x1, x2) + self.r
-                x_end = max(x1, x2) - self.r
-                self.graphics_scene.addLine(x_start, y1, x_end, y1, pen)
-                self.graphics_scene.addLine(x_start, -y1, x_end, -y1, pen)  # 对称线段
-            else:
-                # 竖直对称：绘制两条竖直线段
-                y_start = min(y1, y2) + self.r
-                y_end = max(y1, y2) - self.r
-                self.graphics_scene.addLine(x1, y_start, x1, y_end, pen)
-                self.graphics_scene.addLine(-x1, y_start, -x1, y_end, pen)  # 对称线段
-
-            # 记录操作
-            if not hasattr(self, 'operations'):
-                self.operations = []
-            self.operations.append({
-                "type": "purple_block",
-                "from": [(x1, y1), (x2, y2)],
-                "mode": "horizontal" if is_horizontal else "vertical"
-            })
-            # 清除选中状态
-        self.selected_centers.clear()
 
     def enable_scene_click_capture(self):
         """启用图形视图的点击事件捕获"""
