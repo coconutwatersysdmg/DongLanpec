@@ -94,20 +94,38 @@ class ZoomableGraphicsView(QGraphicsView):
 class ClickableRectItem(QGraphicsPathItem):
     def __init__(self, path=None, parent=None, is_side_block=False, is_baffle=False,
                  is_slide=False, is_center_dangguan=False, is_center_dangban=False, editor=None):
+        # 关键修改：将QRectF自动转换为QPainterPath
+        if isinstance(path, QRectF):
+            temp_path = QPainterPath()
+            temp_path.addRect(path)  # 将矩形添加到路径
+            path = temp_path
+
         # 初始化父类，使用提供的路径或空路径
         super().__init__(path if path else QPainterPath(), parent)
+
         self.setAcceptHoverEvents(True)
         self.setFlag(QGraphicsPathItem.ItemIsSelectable, True)
-        self.is_side_block = is_side_block  # 标记是否为旁路挡板
-        self.is_baffle = is_baffle  # 标记是否为防冲板
-        self.is_slide = is_slide  # 新增：标记是否为滑道
-        self.is_center_dangguan = is_center_dangguan  # 新增：标记是否为中间挡管
-        self.is_center_dangban = is_center_dangban  # 新增：标记是否为中间挡板
+
+        # 各种类型标记
+        self.is_side_block = is_side_block  # 旁路挡板
+        self.is_baffle = is_baffle  # 防冲板
+        self.is_slide = is_slide  # 滑道
+        self.is_center_dangguan = is_center_dangguan  # 中间挡管
+        self.is_center_dangban = is_center_dangban  # 中间挡板
+
         self.is_selected = False  # 选中状态
         self.editor = editor  # 主窗口引用
         self.original_pen = self.pen()  # 保存原始画笔
+
         # 高亮选中样式
-        self.selected_pen = QPen(QColor(255, 215, 0), 3, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+        self.selected_pen = QPen(
+            QColor(255, 215, 0),  # 金色
+            3,
+            Qt.SolidLine,
+            Qt.RoundCap,
+            Qt.RoundJoin
+        )
+
         self.paired_block = None  # 配对挡板引用
         self.baffle_type = None  # 防冲板类型
         self.interfering_tubes = []  # 干涉的换热管坐标
@@ -5944,7 +5962,9 @@ class TubeLayoutEditor(QMainWindow):
                 left_rect_x = left_rect_center_x - block_width / 2  # 左上角x
                 left_rect_y = y - actual_block_height / 2  # 左上角y
                 left_rect = QRectF(left_rect_x, left_rect_y, block_width, actual_block_height)
-                left_block = ClickableRectItem(left_rect, is_side_block=True, editor=self)
+                path = QPainterPath()
+                path.addRect(left_rect)  # 将QRectF添加到路径中
+                left_block = ClickableRectItem(path, is_side_block=True, editor=self)
                 left_block.setPen(pen)
                 left_block.setBrush(brush)
                 left_block.original_pen = pen
