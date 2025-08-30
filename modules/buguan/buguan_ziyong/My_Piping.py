@@ -4491,11 +4491,8 @@ class TubeLayoutEditor(QMainWindow):
         #
         #     self.build_x_2_cross_pipes(self.selected_centers)
 
+    # TODO 交叉布管绘制函数，可修改样式
     def build_2_cross_pipes(self, selected_centers):
-        """
-        绘制两个选中圆的公切线
-        :param selected_centers: 包含两个坐标的列表，格式为[(row_label, col_label), (row_label, col_label)]
-        """
         if len(selected_centers) != 2:
             return
 
@@ -4539,8 +4536,8 @@ class TubeLayoutEditor(QMainWindow):
         p2_start = QPointF(x1 + vx2 * r, y1 + vy2 * r)
         p2_end = QPointF(x2 + vx2 * r, y2 + vy2 * r)
 
-        # 绘制切线
-        pen = QPen(QColor(0, 0, 139), 2)
+        # 绘制切线 - 设置为很细的线条（线宽改为1）
+        pen = QPen(QColor(0, 0, 139), 1)  # 线宽从2改为1，变得更细
         line1 = self.graphics_scene.addLine(QLineF(p1_start, p1_end), pen)
         line2 = self.graphics_scene.addLine(QLineF(p2_start, p2_end), pen)
 
@@ -4548,7 +4545,7 @@ class TubeLayoutEditor(QMainWindow):
             self.connection_lines = []
         self.connection_lines.extend([line1, line2])
 
-        # ✅ 擦除的只是高亮标记，不删掉换热管本身
+        # 擦除高亮标记
         for x, y in points:
             for item in self.graphics_scene.items(QPointF(x, y)):
                 if isinstance(item, QGraphicsEllipseItem):
@@ -4562,7 +4559,7 @@ class TubeLayoutEditor(QMainWindow):
         self.operations.append({
             "type": "cross_pipe_tangents",
             "points": points,
-            "line_width": 2,
+            "line_width": 1,  # 记录修改后的线宽
             "tube_diameter": do_value
         })
 
