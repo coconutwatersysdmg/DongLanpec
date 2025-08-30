@@ -4015,25 +4015,25 @@ class TubeLayoutEditor(QMainWindow):
     def find_closest_to_axes(self):
         if self.sorted_current_centers_up and self.sorted_current_centers_down:
 
-            self.print_cross_x_up = self.sorted_current_centers_up[0] if self.sorted_current_centers_up else []
-            self.print_cross_x_down = self.sorted_current_centers_down[0] if self.sorted_current_centers_down else []
+            self.print_cross_x_up_line1 = self.sorted_current_centers_up[0] if self.sorted_current_centers_up else []
+            self.print_cross_x_down_line1 = self.sorted_current_centers_down[0] if self.sorted_current_centers_down else []
 
             min_x_up = float('inf')
             min_x_down = float('inf')
-            self.print_cross_y_left = []
-            self.print_cross_y_right = []
+            self.print_cross_y_left_line1 = []
+            self.print_cross_y_right_line1 = []
 
             for row in self.sorted_current_centers_up:
                 for x, y in row:
                     if abs(x) < min_x_up:
                         min_x_up = abs(x)
-                        self.print_cross_y_left = []
-                        self.print_cross_y_right = []
+                        self.print_cross_y_left_line1 = []
+                        self.print_cross_y_right_line1 = []
                     if abs(x) == min_x_up:
                         if x < 0:
-                            self.print_cross_y_left.append((x, y))
+                            self.print_cross_y_left_line1.append((x, y))
                         else:
-                            self.print_cross_y_right.append((x, y))
+                            self.print_cross_y_right_line1.append((x, y))
 
             for row in self.sorted_current_centers_down:
                 for x, y in row:
@@ -4041,15 +4041,15 @@ class TubeLayoutEditor(QMainWindow):
                         min_x_down = abs(x)
 
                         if min_x_down < min_x_up:
-                            self.print_cross_y_left = []
-                            self.print_cross_y_right = []
+                            self.print_cross_y_left_line1 = []
+                            self.print_cross_y_right_line1 = []
                     if abs(x) == min_x_down and min_x_down <= min_x_up:
                         if x < 0:
-                            self.print_cross_y_left.append((x, y))
+                            self.print_cross_y_left_line1.append((x, y))
                         else:
-                            self.print_cross_y_right.append((x, y))
+                            self.print_cross_y_right_line1.append((x, y))
 
-            if not self.print_cross_y_left and not self.print_cross_y_right:
+            if not self.print_cross_y_left_line1 and not self.print_cross_y_right_line1:
                 all_points = []
                 for row in self.sorted_current_centers_up + self.sorted_current_centers_down:
                     all_points.extend(row)
@@ -4058,24 +4058,24 @@ class TubeLayoutEditor(QMainWindow):
                     # Find the point with smallest |x| value
                     closest = min(all_points, key=lambda p: abs(p[0]))
                     if closest[0] < 0:
-                        self.print_cross_y_left = [closest]
+                        self.print_cross_y_left_line1 = [closest]
                     else:
-                        self.print_cross_y_right = [closest]
+                        self.print_cross_y_right_line1 = [closest]
 
                     symmetric = (-closest[0], closest[1])
                     if symmetric in all_points:
                         if symmetric[0] < 0:
-                            self.print_cross_y_left.append(symmetric)
+                            self.print_cross_y_left_line1.append(symmetric)
                         else:
-                            self.print_cross_y_right.append(symmetric)
+                            self.print_cross_y_right_line1.append(symmetric)
 
-            self.print_cross_y_left.sort(key=lambda p: abs(p[1]))
-            self.print_cross_y_right.sort(key=lambda p: abs(p[1]))
+            self.print_cross_y_left_line1.sort(key=lambda p: abs(p[1]))
+            self.print_cross_y_right_line1.sort(key=lambda p: abs(p[1]))
         else:
-            self.print_cross_x_up = []
-            self.print_cross_x_down = []
-            self.print_cross_y_left = []
-            self.print_cross_y_right = []
+            self.print_cross_x_up_line1 = []
+            self.print_cross_x_down_line1 = []
+            self.print_cross_y_left_line1 = []
+            self.print_cross_y_right_line1 = []
 
     def get_selected_x_center_numbers(self, selected_centers):
         # 初始化返回的编号
@@ -4084,21 +4084,21 @@ class TubeLayoutEditor(QMainWindow):
 
         # 遍历selected_centers中的每个坐标
         for center in selected_centers:
-            # 检查是否属于上列表self.print_cross_x_up
-            for item in self.print_cross_x_up:
+            # 检查是否属于上列表self.print_cross_x_up_line1
+            for item in self.print_cross_x_up_line1:
                 # item的格式为(编号, x坐标, y坐标)，center为(x坐标, y坐标)
                 if (item[1], item[2]) == center:
                     up_number = item[0]
                     break
-            # 检查是否属于下列表self.print_cross_x_down
-            for item in self.print_cross_x_down:
+            # 检查是否属于下列表self.print_cross_x_down_line1
+            for item in self.print_cross_x_down_line1:
                 if (item[1], item[2]) == center:
                     down_number = item[0]
                     break
 
         # 处理可能的异常情况（如果有坐标未找到对应列表）
         if up_number is None or down_number is None:
-            raise ValueError("selected_centers中的坐标未完全匹配到self.print_cross_x_up或self.print_cross_x_down")
+            raise ValueError("selected_centers中的坐标未完全匹配到self.print_cross_x_up_line1或self.print_cross_x_down_line1")
 
         return {
             'up_number': up_number,
@@ -4112,14 +4112,14 @@ class TubeLayoutEditor(QMainWindow):
 
         # 遍历选中的每个坐标
         for center in selected_centers:
-            # 检查是否属于上列表 self.print_cross_x_up
-            for item in self.print_cross_x_up:
+            # 检查是否属于上列表 self.print_cross_x_up_line1
+            for item in self.print_cross_x_up_line1:
                 # item 格式为 (编号, x坐标, y坐标)，center 为 (x坐标, y坐标)
                 if (item[1], item[2]) == center:
                     up_numbers.append(item[0])
                     break
-            # 检查是否属于下列表 self.print_cross_x_down
-            for item in self.print_cross_x_down:
+            # 检查是否属于下列表 self.print_cross_x_down_line1
+            for item in self.print_cross_x_down_line1:
                 if (item[1], item[2]) == center:
                     down_numbers.append(item[0])
                     break
@@ -4140,18 +4140,18 @@ class TubeLayoutEditor(QMainWindow):
         right_number = None
 
         for center in selected_centers:
-            for item in self.print_cross_y_left:
+            for item in self.print_cross_y_left_line1:
                 # item的格式为(编号, x坐标, y坐标)，center为(x坐标, y坐标)
                 if (item[1], item[2]) == center:
                     left_number = item[0]
                     break
-            for item in self.print_cross_y_right:
+            for item in self.print_cross_y_right_line1:
                 if (item[1], item[2]) == center:
                     right_number = item[0]
                     break
 
         if left_number is None or right_number is None:
-            raise ValueError("selected_centers中的坐标未完全匹配到self.print_cross_y_left或self.print_cross_y_right")
+            raise ValueError("selected_centers中的坐标未完全匹配到self.print_cross_y_left_line1或self.print_cross_y_right_line1")
 
         return {
             'left_number': left_number,
@@ -4161,7 +4161,7 @@ class TubeLayoutEditor(QMainWindow):
     def get_x_2_number_sequences(self, result):
         up_num = result['up_number']
         down_num = result['down_number']
-        total_count = len(self.print_cross_x_up)
+        total_count = len(self.print_cross_x_up_line1)
         diff = abs(up_num - down_num)
 
         sequence_length = max(0, total_count - diff)
@@ -4175,19 +4175,19 @@ class TubeLayoutEditor(QMainWindow):
 
         # 分配序列（较小的数对应从1开始的序列）
         if up_num < down_num:
-            self.pair_x_info_up = seq_start
-            self.pair_x_info_down = seq_end
+            self.pair_x_info_up_line1 = seq_start
+            self.pair_x_info_down_line1 = seq_end
         else:
-            self.pair_x_info_down = seq_start
-            self.pair_x_info_up = seq_end
+            self.pair_x_info_down_line1 = seq_start
+            self.pair_x_info_up_line1 = seq_end
 
         # 验证初始序列长度相等
-        assert len(self.pair_x_info_up) == len(self.pair_x_info_down), "序列长度必须相等"
+        assert len(self.pair_x_info_up_line1) == len(self.pair_x_info_down_line1), "序列长度必须相等"
         half_total = total_count / 2
         filtered_up = []
         filtered_down = []
         # 遍历每一对元素
-        for u, d in zip(self.pair_x_info_up, self.pair_x_info_down):
+        for u, d in zip(self.pair_x_info_up_line1, self.pair_x_info_down_line1):
             condition1 = (u < half_total < d)
             condition2 = (u > half_total > d)
             condition3 = (u == half_total and d > half_total)
@@ -4197,16 +4197,16 @@ class TubeLayoutEditor(QMainWindow):
                 filtered_up.append(u)
                 filtered_down.append(d)
         # 更新列表
-        self.pair_x_info_up = filtered_up
-        self.pair_x_info_down = filtered_down
+        self.pair_x_info_up_line1 = filtered_up
+        self.pair_x_info_down_line1 = filtered_down
         # 验证过滤后长度仍相等
-        assert len(self.pair_x_info_up) == len(self.pair_x_info_down), "过滤后序列长度必须相等"
+        assert len(self.pair_x_info_up_line1) == len(self.pair_x_info_down_line1), "过滤后序列长度必须相等"
 
     def get_y_2_number_sequences(self, result):
         up_num = result['left_number']
         down_num = result['right_number']
-        total_count = len(self.print_cross_y_left)
-        # assert len(self.print_cross_y_left) == len(self.print_cross_y_right), "左右列表长度必须相等"
+        total_count = len(self.print_cross_y_left_line1)
+        # assert len(self.print_cross_y_left_line1) == len(self.print_cross_y_right_line1), "左右列表长度必须相等"
 
         diff = abs(up_num - down_num)
         sequence_length = max(0, total_count - diff)
@@ -4262,9 +4262,9 @@ class TubeLayoutEditor(QMainWindow):
         used_down_nums = set()
 
         # 第一步：收集所有需要构建的交叉管道坐标对
-        for up_num, down_num in zip(self.pair_x_info_up, self.pair_x_info_down):
-            up_coord = next(((x, y) for (num, x, y) in self.print_cross_x_up if num == up_num), None)
-            down_coord = next(((x, y) for (num, x, y) in self.print_cross_x_down if num == down_num), None)
+        for up_num, down_num in zip(self.pair_x_info_up_line1, self.pair_x_info_down_line1):
+            up_coord = next(((x, y) for (num, x, y) in self.print_cross_x_up_line1 if num == up_num), None)
+            down_coord = next(((x, y) for (num, x, y) in self.print_cross_x_down_line1 if num == down_num), None)
 
             if up_coord and down_coord:
                 up_selected = self.actual_to_selected_coords(up_coord)
@@ -4281,14 +4281,14 @@ class TubeLayoutEditor(QMainWindow):
         # 第三步：收集并删除未使用的环热管
         del_centers = []
         # 处理上部分未使用的坐标
-        for num, x, y in self.print_cross_x_up:
+        for num, x, y in self.print_cross_x_up_line1:
             if num not in used_up_nums:
                 rel_coord = self.actual_to_selected_coords((x, y))
                 if rel_coord:
                     del_centers.append(rel_coord)
 
         # 处理下部分未使用的坐标
-        for num, x, y in self.print_cross_x_down:
+        for num, x, y in self.print_cross_x_down_line1:
             if num not in used_down_nums:
                 rel_coord = self.actual_to_selected_coords((x, y))
                 if rel_coord:
@@ -4315,9 +4315,9 @@ class TubeLayoutEditor(QMainWindow):
         # 第一步：收集所有需要构建的交叉管道坐标对
         for up_num, down_num in zip(self.pair_y_info_left, self.pair_y_info_right):
             # 查找上部分对应的坐标
-            up_coord = next(((x, y) for (num, x, y) in self.print_cross_y_left if num == up_num), None)
+            up_coord = next(((x, y) for (num, x, y) in self.print_cross_y_left_line1 if num == up_num), None)
             # 查找下部分对应的坐标
-            down_coord = next(((x, y) for (num, x, y) in self.print_cross_y_right if num == down_num), None)
+            down_coord = next(((x, y) for (num, x, y) in self.print_cross_y_right_line1 if num == down_num), None)
 
             if up_coord and down_coord:
                 up_selected = self.actual_to_selected_coords(up_coord)
@@ -4334,14 +4334,14 @@ class TubeLayoutEditor(QMainWindow):
         # 第三步：收集并删除未使用的环热管
         del_centers = []
         # 处理左部分未使用的坐标
-        for num, x, y in self.print_cross_y_left:
+        for num, x, y in self.print_cross_y_left_line1:
             if num not in used_up_nums:
                 rel_coord = self.actual_to_selected_coords((x, y))
                 if rel_coord:
                     del_centers.append(rel_coord)
 
         # 处理右部分未使用的坐标
-        for num, x, y in self.print_cross_y_right:
+        for num, x, y in self.print_cross_y_right_line1:
             if num not in used_down_nums:
                 rel_coord = self.actual_to_selected_coords((x, y))
                 if rel_coord:
@@ -4361,27 +4361,27 @@ class TubeLayoutEditor(QMainWindow):
             self.current_centers
         )
         self.find_closest_to_axes()
-        # 先保存添加序号前的print_cross_x_up和print_cross_x_down
-        self.original_print_cross_x_up = self.print_cross_x_up.copy()
-        self.original_print_cross_x_down = self.print_cross_x_down.copy()
+        # 先保存添加序号前的print_cross_x_up_line1和print_cross_x_down_line1
+        self.original_print_cross_x_up_line1 = self.print_cross_x_up_line1.copy()
+        self.original_print_cross_x_down_line1 = self.print_cross_x_down_line1.copy()
 
-        self.print_cross_y_left.sort(key=lambda coord: coord[1])
-        self.print_cross_y_right.sort(key=lambda coord: coord[1])
-        self.original_print_cross_y_left = self.print_cross_y_left.copy()
-        self.original_print_cross_y_right = self.print_cross_y_right.copy()
+        self.print_cross_y_left_line1.sort(key=lambda coord: coord[1])
+        self.print_cross_y_right_line1.sort(key=lambda coord: coord[1])
+        self.original_print_cross_y_left_line1 = self.print_cross_y_left_line1.copy()
+        self.original_print_cross_y_right_line1 = self.print_cross_y_right_line1.copy()
 
         # 格式化上下部分的打印坐标（添加序号）
-        self.print_cross_x_up = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_x_up)
+        self.print_cross_x_up_line1 = [
+            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_x_up_line1)
         ]
-        self.print_cross_x_down = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_x_down)
+        self.print_cross_x_down_line1 = [
+            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_x_down_line1)
         ]
-        self.print_cross_y_left = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_left)
+        self.print_cross_y_left_line1 = [
+            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_left_line1)
         ]
-        self.print_cross_y_right = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_right)
+        self.print_cross_y_right_line1 = [
+            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_right_line1)
         ]
 
         # 检查选中状态：确保已选中两个圆
@@ -4392,16 +4392,16 @@ class TubeLayoutEditor(QMainWindow):
 
         current_coords = self.selected_to_current_coords(self.selected_centers)
         if len(self.selected_centers) == 2:
-            # 判断两个坐标是否分别属于添加序号前的self.print_cross_x_up和self.print_cross_x_down（顺序不限）
-            coord1_in_up = current_coords[0] in self.original_print_cross_x_up
-            coord1_in_down = current_coords[0] in self.original_print_cross_x_down
-            coord2_in_up = current_coords[1] in self.original_print_cross_x_up
-            coord2_in_down = current_coords[1] in self.original_print_cross_x_down
+            # 判断两个坐标是否分别属于添加序号前的self.print_cross_x_up_line1和self.print_cross_x_down_line1（顺序不限）
+            coord1_in_up = current_coords[0] in self.original_print_cross_x_up_line1
+            coord1_in_down = current_coords[0] in self.original_print_cross_x_down_line1
+            coord2_in_up = current_coords[1] in self.original_print_cross_x_up_line1
+            coord2_in_down = current_coords[1] in self.original_print_cross_x_down_line1
 
-            coord3_in_left = current_coords[0] in self.original_print_cross_y_left
-            coord3_in_right = current_coords[0] in self.original_print_cross_y_right
-            coord4_in_left = current_coords[1] in self.original_print_cross_y_left
-            coord4_in_right = current_coords[1] in self.original_print_cross_y_right
+            coord3_in_left = current_coords[0] in self.original_print_cross_y_left_line1
+            coord3_in_right = current_coords[0] in self.original_print_cross_y_right_line1
+            coord4_in_left = current_coords[1] in self.original_print_cross_y_left_line1
+            coord4_in_right = current_coords[1] in self.original_print_cross_y_right_line1
 
             if (coord1_in_up and coord2_in_down) or (coord1_in_down and coord2_in_up):
                 self.cross_x_2_pipes(current_coords)  # 调用交叉管道计算逻辑
@@ -4410,13 +4410,13 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 print("选了两个，但是位置不正确")
         elif len(self.selected_centers) == 4:
-            # 统计属于 self.original_print_cross_x_up 和 self.original_print_cross_x_down 的坐标数量
-            x_up_count = sum(1 for coord in current_coords if coord in self.original_print_cross_x_up)
-            x_down_count = sum(1 for coord in current_coords if coord in self.original_print_cross_x_down)
+            # 统计属于 self.original_print_cross_x_up_line1 和 self.original_print_cross_x_down_line1 的坐标数量
+            x_up_count = sum(1 for coord in current_coords if coord in self.original_print_cross_x_up_line1)
+            x_down_count = sum(1 for coord in current_coords if coord in self.original_print_cross_x_down_line1)
 
-            # 统计属于 self.original_print_cross_y_left 和 self.original_print_cross_y_right 的坐标数量
-            y_left_count = sum(1 for coord in current_coords if coord in self.original_print_cross_y_left)
-            y_right_count = sum(1 for coord in current_coords if coord in self.original_print_cross_y_right)
+            # 统计属于 self.original_print_cross_y_left_line1 和 self.original_print_cross_y_right_line1 的坐标数量
+            y_left_count = sum(1 for coord in current_coords if coord in self.original_print_cross_y_left_line1)
+            y_right_count = sum(1 for coord in current_coords if coord in self.original_print_cross_y_right_line1)
 
             if x_up_count == 2 and x_down_count == 2:
                 self.cross_x_4_pipes(current_coords)  # 两个属于 x_up，两个属于 x_down
