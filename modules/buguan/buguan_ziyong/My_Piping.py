@@ -3500,7 +3500,7 @@ class TubeLayoutEditor(QMainWindow):
         # 绘制准备
         pen = QPen(QColor(0, 0, 255))
         pen.setWidth(1)
-        tolerance = S * 0.55
+        tolerance = S * 0.45
         connected = set()
 
         # 遍历所有圆心找邻居
@@ -4385,6 +4385,45 @@ class TubeLayoutEditor(QMainWindow):
                 # if not (condition1 or condition2 or condition3 or condition4) or u == d:
                 filtered_up.append(u)
                 filtered_down.append(d)
+            # 更新列表
+            self.pair_x_info_up_line1 = filtered_up
+            self.pair_x_info_down_line1 = filtered_down
+        elif tubeline_num == '6':
+            up_num = result['up_number']
+            down_num = result['down_number']
+            total_count = len(self.print_cross_x_up_line1)
+            diff = abs(up_num - down_num)
+
+            sequence_length = max(0, total_count - diff)
+
+            smaller_num = min(up_num, down_num)
+            larger_num = max(up_num, down_num)
+
+            seq_start = list(range(1, 1 + sequence_length))
+            seq_end = list(range(total_count - sequence_length + 1, total_count + 1))
+
+            if up_num < down_num:
+                self.pair_x_info_up_line1 = seq_start
+                self.pair_x_info_down_line1 = seq_end
+            else:
+                self.pair_x_info_down_line1 = seq_start
+                self.pair_x_info_up_line1 = seq_end
+
+            # 验证初始序列长度相等
+            assert len(self.pair_x_info_up_line1) == len(self.pair_x_info_down_line1), "序列长度必须相等"
+            half_total = total_count / 2
+            filtered_up = []
+            filtered_down = []
+            # 遍历每一对元素
+            for u, d in zip(self.pair_x_info_up_line1, self.pair_x_info_down_line1):
+                condition1 = (u < half_total < d)
+                condition2 = (u > half_total > d)
+                condition3 = (u == half_total and d > half_total)
+                condition4 = (u > half_total and d == half_total)
+
+                if not (condition1 or condition2 or condition3 or condition4) or u == d:
+                    filtered_up.append(u)
+                    filtered_down.append(d)
             # 更新列表
             self.pair_x_info_up_line1 = filtered_up
             self.pair_x_info_down_line1 = filtered_down
