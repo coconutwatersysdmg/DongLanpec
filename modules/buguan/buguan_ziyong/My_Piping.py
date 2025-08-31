@@ -4335,7 +4335,6 @@ class TubeLayoutEditor(QMainWindow):
     # 获取配对，交叉布管核心函数，需要按照管程程数分类讨论。此为在x轴上下选取两个换热管
     def get_x_2_number_sequences(self, result):
         tubeline_num = self.get_tube_pass_count()  # 获取当前管程程数
-        print(tubeline_num)
         if tubeline_num == '4':
             up_num = result['up_number']
             down_num = result['down_number']
@@ -4508,13 +4507,17 @@ class TubeLayoutEditor(QMainWindow):
         # 获取选择的中心点编号
         result = self.get_selected_x_center_numbers(selected_centers)
         if result['up_number'] == result['down_number']:
-            print("参照管孔之间的连线应为倾斜线")
+            # print("参照管孔之间的连线应为倾斜线")
+            QMessageBox.warning(self, "选择错误", "参照管孔之间的连线应为倾斜线")
             self.clear_selection_highlight()
             self.selected_centers.clear()
             return
 
         elif abs(result['up_number'] - result['down_number']) > 3:
-            print("参照管孔间隔不能大于3个换热管孔")
+            # print("参照管孔间隔不能大于3个换热管孔")
+            QMessageBox.warning(self, "选择错误", "参照管孔间隔不能大于3个换热管孔")
+            self.clear_selection_highlight()
+            self.selected_centers.clear()
         else:
             self.get_x_2_number_sequences(result)
 
@@ -4566,51 +4569,65 @@ class TubeLayoutEditor(QMainWindow):
 
     def cross_y_2_pipes(self, selected_centers):
         # 获取选择的中心点编号（实际坐标传入）
+
         result = self.get_selected_y_center_numbers(selected_centers)
-        self.get_y_2_number_sequences(result)
+        if result['left_number'] == result['right_number']:
+            # print("参照管孔之间的连线应为倾斜线")
+            QMessageBox.warning(self, "选择错误", "参照管孔之间的连线应为倾斜线")
+            self.clear_selection_highlight()
+            self.selected_centers.clear()
+            return
 
-        coordinate_pairs = []
-        used_up_nums = set()
-        used_down_nums = set()
+        elif abs(result['left_number'] - result['right_number']) > 3:
+            # print("参照管孔间隔不能大于3个换热管孔")
+            QMessageBox.warning(self, "选择错误", "参照管孔间隔不能大于3个换热管孔")
+            self.clear_selection_highlight()
+            self.selected_centers.clear()
+        else:
+            self.get_y_2_number_sequences(result)
 
-        # 第一步：收集所有需要构建的交叉管道坐标对
-        for up_num, down_num in zip(self.pair_y_info_left, self.pair_y_info_right):
-            # 查找上部分对应的坐标
-            up_coord = next(((x, y) for (num, x, y) in self.print_cross_y_left_line1 if num == up_num), None)
-            # 查找下部分对应的坐标
-            down_coord = next(((x, y) for (num, x, y) in self.print_cross_y_right_line1 if num == down_num), None)
+            coordinate_pairs = []
+            used_up_nums = set()
+            used_down_nums = set()
 
-            if up_coord and down_coord:
-                up_selected = self.actual_to_selected_coords(up_coord)
-                down_selected = self.actual_to_selected_coords(down_coord)
-                if up_selected and down_selected:
-                    coordinate_pairs.append((up_selected, down_selected))
-                    used_up_nums.add(up_num)
-                    used_down_nums.add(down_num)
+            # 第一步：收集所有需要构建的交叉管道坐标对
+            for up_num, down_num in zip(self.pair_y_info_left, self.pair_y_info_right):
+                # 查找上部分对应的坐标
+                up_coord = next(((x, y) for (num, x, y) in self.print_cross_y_left_line1 if num == up_num), None)
+                # 查找下部分对应的坐标
+                down_coord = next(((x, y) for (num, x, y) in self.print_cross_y_right_line1 if num == down_num), None)
 
-        # 第二步：先构建所有交叉管道
-        for up_selected, down_selected in coordinate_pairs:
-            self.build_2_cross_pipes([up_selected, down_selected])  # 确保传入格式为[(x1,y1), (x2,y2)]
+                if up_coord and down_coord:
+                    up_selected = self.actual_to_selected_coords(up_coord)
+                    down_selected = self.actual_to_selected_coords(down_coord)
+                    if up_selected and down_selected:
+                        coordinate_pairs.append((up_selected, down_selected))
+                        used_up_nums.add(up_num)
+                        used_down_nums.add(down_num)
 
-        # 第三步：收集并删除未使用的环热管
-        del_centers = []
-        # 处理左部分未使用的坐标
-        for num, x, y in self.print_cross_y_left_line1:
-            if num not in used_up_nums:
-                rel_coord = self.actual_to_selected_coords((x, y))
-                if rel_coord:
-                    del_centers.append(rel_coord)
+            # 第二步：先构建所有交叉管道
+            for up_selected, down_selected in coordinate_pairs:
+                self.build_2_cross_pipes([up_selected, down_selected])  # 确保传入格式为[(x1,y1), (x2,y2)]
 
-        # 处理右部分未使用的坐标
-        for num, x, y in self.print_cross_y_right_line1:
-            if num not in used_down_nums:
-                rel_coord = self.actual_to_selected_coords((x, y))
-                if rel_coord:
-                    del_centers.append(rel_coord)
+            # 第三步：收集并删除未使用的环热管
+            del_centers = []
+            # 处理左部分未使用的坐标
+            for num, x, y in self.print_cross_y_left_line1:
+                if num not in used_up_nums:
+                    rel_coord = self.actual_to_selected_coords((x, y))
+                    if rel_coord:
+                        del_centers.append(rel_coord)
 
-        # 最后执行删除操作
-        if del_centers:
-            self.delete_huanreguan(del_centers)
+            # 处理右部分未使用的坐标
+            for num, x, y in self.print_cross_y_right_line1:
+                if num not in used_down_nums:
+                    rel_coord = self.actual_to_selected_coords((x, y))
+                    if rel_coord:
+                        del_centers.append(rel_coord)
+
+            # 最后执行删除操作
+            if del_centers:
+                self.delete_huanreguan(del_centers)
 
     def cross_y_4_pipes(self, selected_centers):
         print("y4")
@@ -4622,14 +4639,27 @@ class TubeLayoutEditor(QMainWindow):
             self.current_centers
         )
         self.find_closest_to_axes()
+
         # 先保存添加序号前的print_cross_x_up_line1和print_cross_x_down_line1
         self.original_print_cross_x_up_line1 = self.print_cross_x_up_line1.copy()
         self.original_print_cross_x_down_line1 = self.print_cross_x_down_line1.copy()
+        self.original_print_cross_x_up_line2 = self.print_cross_x_up_line2.copy()
+        self.original_print_cross_x_down_line2 = self.print_cross_x_down_line2.copy()
+        self.original_print_cross_x_up_line3 = self.print_cross_x_up_line3.copy()
+        self.original_print_cross_x_down_line3 = self.print_cross_x_down_line3.copy()
 
         self.print_cross_y_left_line1.sort(key=lambda coord: coord[1])
         self.print_cross_y_right_line1.sort(key=lambda coord: coord[1])
+        self.print_cross_y_left_line2.sort(key=lambda coord: coord[1])
+        self.print_cross_y_right_line2.sort(key=lambda coord: coord[1])
+        self.print_cross_y_left_line3.sort(key=lambda coord: coord[1])
+        self.print_cross_y_right_line3.sort(key=lambda coord: coord[1])
         self.original_print_cross_y_left_line1 = self.print_cross_y_left_line1.copy()
         self.original_print_cross_y_right_line1 = self.print_cross_y_right_line1.copy()
+        self.original_print_cross_y_left_line2 = self.print_cross_y_left_line2.copy()
+        self.original_print_cross_y_right_line2 = self.print_cross_y_right_line2.copy()
+        self.original_print_cross_y_left_line3 = self.print_cross_y_left_line3.copy()
+        self.original_print_cross_y_right_line3 = self.print_cross_y_right_line3.copy()
 
         # 格式化上下部分的打印坐标（添加序号）
         self.print_cross_x_up_line1 = [
@@ -4638,11 +4668,35 @@ class TubeLayoutEditor(QMainWindow):
         self.print_cross_x_down_line1 = [
             (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_x_down_line1)
         ]
+        self.print_cross_x_up_line2 = [
+            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_x_up_line2)
+        ]
+        self.print_cross_x_down_line2 = [
+            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_x_down_line2)
+        ]
+        self.print_cross_x_up_line3 = [
+            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_x_up_line3)
+        ]
+        self.print_cross_x_down_line3 = [
+            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_x_down_line3)
+        ]
         self.print_cross_y_left_line1 = [
             (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_left_line1)
         ]
         self.print_cross_y_right_line1 = [
             (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_right_line1)
+        ]
+        self.print_cross_y_left_line2 = [
+            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_left_line2)
+        ]
+        self.print_cross_y_right_line2 = [
+            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_right_line2)
+        ]
+        self.print_cross_y_left_line3 = [
+            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_left_line3)
+        ]
+        self.print_cross_y_right_line3 = [
+            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_right_line3)
         ]
 
         # 检查选中状态：确保已选中两个圆
@@ -4652,7 +4706,9 @@ class TubeLayoutEditor(QMainWindow):
             return
 
         current_coords = self.selected_to_current_coords(self.selected_centers)
+        # 选择了两个换热管进行交叉布管的情况
         if len(self.selected_centers) == 2:
+
             # 判断两个坐标是否分别属于添加序号前的self.print_cross_x_up_line1和self.print_cross_x_down_line1（顺序不限）
             coord1_in_up = current_coords[0] in self.original_print_cross_x_up_line1
             coord1_in_down = current_coords[0] in self.original_print_cross_x_down_line1
@@ -4664,10 +4720,42 @@ class TubeLayoutEditor(QMainWindow):
             coord4_in_left = current_coords[1] in self.original_print_cross_y_left_line1
             coord4_in_right = current_coords[1] in self.original_print_cross_y_right_line1
 
+            coord5_in_up = current_coords[0] in self.original_print_cross_x_up_line2
+            coord5_in_down = current_coords[0] in self.original_print_cross_x_down_line2
+            coord6_in_up = current_coords[1] in self.original_print_cross_x_up_line2
+            coord6_in_down = current_coords[1] in self.original_print_cross_x_down_line2
+
+            coord7_in_left = current_coords[0] in self.original_print_cross_y_left_line2
+            coord7_in_right = current_coords[0] in self.original_print_cross_y_right_line2
+            coord8_in_left = current_coords[1] in self.original_print_cross_y_left_line2
+            coord8_in_right = current_coords[1] in self.original_print_cross_y_right_line2
+
+            coord9_in_up = current_coords[0] in self.original_print_cross_x_up_line3
+            coord9_in_down = current_coords[0] in self.original_print_cross_x_down_line3
+            coord10_in_up = current_coords[1] in self.original_print_cross_x_up_line3
+            coord10_in_down = current_coords[1] in self.original_print_cross_x_down_line3
+
+            coord11_in_left = current_coords[0] in self.original_print_cross_y_left_line3
+            coord11_in_right = current_coords[0] in self.original_print_cross_y_right_line3
+            coord12_in_left = current_coords[1] in self.original_print_cross_y_left_line3
+            coord12_in_right = current_coords[1] in self.original_print_cross_y_right_line3
             if (coord1_in_up and coord2_in_down) or (coord1_in_down and coord2_in_up):
-                self.cross_x_2_pipes(current_coords)  # 调用交叉管道计算逻辑
+                self.cross_x_2_pipes(current_coords)
             elif (coord3_in_left and coord4_in_right) or (coord3_in_right and coord4_in_left):
                 self.cross_y_2_pipes(current_coords)
+            elif (coord5_in_up and coord6_in_down) or (coord5_in_down and coord6_in_up):
+                # self.cross_x_2_pipes(current_coords)
+                print("第二排x轴")
+
+            elif (coord7_in_left and coord8_in_right) or (coord7_in_right and coord8_in_left):
+                # self.cross_y_2_pipes(current_coords)
+                print("第二排y轴")
+            elif (coord9_in_up and coord10_in_down) or (coord9_in_down and coord10_in_up):
+                # self.cross_x_2_pipes(current_coords)
+                print("第三排x轴")
+            elif (coord11_in_left and coord12_in_right) or (coord11_in_right and coord12_in_left):
+                # self.cross_y_2_pipes(current_coords)
+                print("第三排y轴")
             else:
                 print("选了两个，但是位置不正确")
         elif len(self.selected_centers) == 4:
