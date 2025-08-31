@@ -4227,7 +4227,7 @@ class TubeLayoutEditor(QMainWindow):
             self.print_cross_y_right_line3 = []
 
     # 获取选中的两个换热管的编号，x轴上下编号
-    def get_selected_x_center_numbers(self, selected_centers):
+    def get_selected_x_center_numbers(self, selected_centers,print_cross_x_up,print_cross_x_down):
         # 初始化返回的编号
         up_number = None
         down_number = None
@@ -4235,13 +4235,13 @@ class TubeLayoutEditor(QMainWindow):
         # 遍历selected_centers中的每个坐标
         for center in selected_centers:
             # 检查是否属于上列表self.print_cross_x_up_line1
-            for item in self.print_cross_x_up_line1:
+            for item in print_cross_x_up:
                 # item的格式为(编号, x坐标, y坐标)，center为(x坐标, y坐标)
                 if (item[1], item[2]) == center:
                     up_number = item[0]
                     break
             # 检查是否属于下列表self.print_cross_x_down_line1
-            for item in self.print_cross_x_down_line1:
+            for item in print_cross_x_down:
                 if (item[1], item[2]) == center:
                     down_number = item[0]
                     break
@@ -4249,7 +4249,7 @@ class TubeLayoutEditor(QMainWindow):
         # 处理可能的异常情况（如果有坐标未找到对应列表）
         if up_number is None or down_number is None:
             raise ValueError(
-                "selected_centers中的坐标未完全匹配到self.print_cross_x_up_line1或self.print_cross_x_down_line1")
+                "selected_centers中的坐标未完全匹配到print_cross_x_up或print_cross_x_down")
 
         return {
             'up_number': up_number,
@@ -4333,12 +4333,16 @@ class TubeLayoutEditor(QMainWindow):
         return None
 
     # 获取配对，交叉布管核心函数，需要按照管程程数分类讨论。此为在x轴上下选取两个换热管
-    def get_x_2_number_sequences(self, result):
+    def get_x_2_number_sequences(self, result, print_cross_x_up):
+        # 初始化返回变量
+        pair_x_info_up = []
+        pair_x_info_down = []
+
         tubeline_num = self.get_tube_pass_count()  # 获取当前管程程数
         if tubeline_num == '4':
             up_num = result['up_number']
             down_num = result['down_number']
-            total_count = len(self.print_cross_x_up_line1)
+            total_count = len(print_cross_x_up)
             diff = abs(up_num - down_num)
 
             sequence_length = max(0, total_count - diff)
@@ -4350,19 +4354,19 @@ class TubeLayoutEditor(QMainWindow):
             seq_end = list(range(total_count - sequence_length + 1, total_count + 1))
 
             if up_num < down_num:
-                self.pair_x_info_up_line1 = seq_start
-                self.pair_x_info_down_line1 = seq_end
+                pair_x_info_up = seq_start
+                pair_x_info_down = seq_end
             else:
-                self.pair_x_info_down_line1 = seq_start
-                self.pair_x_info_up_line1 = seq_end
+                pair_x_info_down = seq_start
+                pair_x_info_up = seq_end
 
             # 验证初始序列长度相等
-            assert len(self.pair_x_info_up_line1) == len(self.pair_x_info_down_line1), "序列长度必须相等"
+            assert len(pair_x_info_up) == len(pair_x_info_down), "序列长度必须相等"
             half_total = total_count / 2
             filtered_up = []
             filtered_down = []
             # 遍历每一对元素
-            for u, d in zip(self.pair_x_info_up_line1, self.pair_x_info_down_line1):
+            for u, d in zip(pair_x_info_up, pair_x_info_down):
                 condition1 = (u < half_total < d)
                 condition2 = (u > half_total > d)
                 condition3 = (u == half_total and d > half_total)
@@ -4372,12 +4376,12 @@ class TubeLayoutEditor(QMainWindow):
                     filtered_up.append(u)
                     filtered_down.append(d)
             # 更新列表
-            self.pair_x_info_up_line1 = filtered_up
-            self.pair_x_info_down_line1 = filtered_down
+            pair_x_info_up = filtered_up
+            pair_x_info_down = filtered_down
         elif tubeline_num == '2':
             up_num = result['up_number']
             down_num = result['down_number']
-            total_count = len(self.print_cross_x_up_line1)
+            total_count = len(print_cross_x_up)
             diff = abs(up_num - down_num)
 
             sequence_length = max(0, total_count - diff)
@@ -4389,34 +4393,29 @@ class TubeLayoutEditor(QMainWindow):
             seq_end = list(range(total_count - sequence_length + 1, total_count + 1))
 
             if up_num < down_num:
-                self.pair_x_info_up_line1 = seq_start
-                self.pair_x_info_down_line1 = seq_end
+                pair_x_info_up = seq_start
+                pair_x_info_down = seq_end
             else:
-                self.pair_x_info_down_line1 = seq_start
-                self.pair_x_info_up_line1 = seq_end
+                pair_x_info_down = seq_start
+                pair_x_info_up = seq_end
 
             # 验证初始序列长度相等
-            assert len(self.pair_x_info_up_line1) == len(self.pair_x_info_down_line1), "序列长度必须相等"
+            assert len(pair_x_info_up) == len(pair_x_info_down), "序列长度必须相等"
             # half_total = total_count / 2
             filtered_up = []
             filtered_down = []
             # 遍历每一对元素
-            for u, d in zip(self.pair_x_info_up_line1, self.pair_x_info_down_line1):
-                # condition1 = (u < half_total < d)
-                # condition2 = (u > half_total > d)
-                # condition3 = (u == half_total and d > half_total)
-                # condition4 = (u > half_total and d == half_total)
-                #
-                # if not (condition1 or condition2 or condition3 or condition4) or u == d:
+            for u, d in zip(pair_x_info_up, pair_x_info_down):
+                # 对于tubeline_num == '2'，直接保留所有元素
                 filtered_up.append(u)
                 filtered_down.append(d)
             # 更新列表
-            self.pair_x_info_up_line1 = filtered_up
-            self.pair_x_info_down_line1 = filtered_down
+            pair_x_info_up = filtered_up
+            pair_x_info_down = filtered_down
         elif tubeline_num == '6':
             up_num = result['up_number']
             down_num = result['down_number']
-            total_count = len(self.print_cross_x_up_line1)
+            total_count = len(print_cross_x_up)
             diff = abs(up_num - down_num)
 
             sequence_length = max(0, total_count - diff)
@@ -4428,19 +4427,19 @@ class TubeLayoutEditor(QMainWindow):
             seq_end = list(range(total_count - sequence_length + 1, total_count + 1))
 
             if up_num < down_num:
-                self.pair_x_info_up_line1 = seq_start
-                self.pair_x_info_down_line1 = seq_end
+                pair_x_info_up = seq_start
+                pair_x_info_down = seq_end
             else:
-                self.pair_x_info_down_line1 = seq_start
-                self.pair_x_info_up_line1 = seq_end
+                pair_x_info_down = seq_start
+                pair_x_info_up = seq_end
 
             # 验证初始序列长度相等
-            assert len(self.pair_x_info_up_line1) == len(self.pair_x_info_down_line1), "序列长度必须相等"
+            assert len(pair_x_info_up) == len(pair_x_info_down), "序列长度必须相等"
             half_total = total_count / 2
             filtered_up = []
             filtered_down = []
             # 遍历每一对元素
-            for u, d in zip(self.pair_x_info_up_line1, self.pair_x_info_down_line1):
+            for u, d in zip(pair_x_info_up, pair_x_info_down):
                 condition1 = (u < half_total < d)
                 condition2 = (u > half_total > d)
                 condition3 = (u == half_total and d > half_total)
@@ -4450,8 +4449,11 @@ class TubeLayoutEditor(QMainWindow):
                     filtered_up.append(u)
                     filtered_down.append(d)
             # 更新列表
-            self.pair_x_info_up_line1 = filtered_up
-            self.pair_x_info_down_line1 = filtered_down
+            pair_x_info_up = filtered_up
+            pair_x_info_down = filtered_down
+
+        # 返回计算得到的两个序列
+        return pair_x_info_up, pair_x_info_down
 
     def get_y_2_number_sequences(self, result):
         up_num = result['left_number']
@@ -4503,32 +4505,35 @@ class TubeLayoutEditor(QMainWindow):
         # 验证过滤后长度
         assert len(self.pair_y_info_left) == len(self.pair_y_info_right), "过滤后序列长度必须相等"
 
-    def cross_x_2_pipes(self, selected_centers):
+    def cross_x_2_pipes(self, selected_centers, print_cross_x_up, print_cross_x_down):
         # 获取选择的中心点编号
-        result = self.get_selected_x_center_numbers(selected_centers)
+        result = self.get_selected_x_center_numbers(selected_centers,print_cross_x_up,print_cross_x_down)
         if result['up_number'] == result['down_number']:
-            # print("参照管孔之间的连线应为倾斜线")
+            # 参照管孔不能为同一位置
             QMessageBox.warning(self, "选择错误", "参照管孔之间的连线应为倾斜线")
             self.clear_selection_highlight()
             self.selected_centers.clear()
             return
 
         elif abs(result['up_number'] - result['down_number']) > 3:
-            # print("参照管孔间隔不能大于3个换热管孔")
+            # 参照管孔间隔不能大于3个
             QMessageBox.warning(self, "选择错误", "参照管孔间隔不能大于3个换热管孔")
             self.clear_selection_highlight()
             self.selected_centers.clear()
         else:
-            self.get_x_2_number_sequences(result)
+            self.get_x_2_number_sequences(result, print_cross_x_up)
+            up_seq, down_seq = self.get_x_2_number_sequences(result, print_cross_x_up)
+            pair_x_info_up = up_seq
+            pair_x_info_down = down_seq
 
             coordinate_pairs = []
             used_up_nums = set()
             used_down_nums = set()
 
             # 第一步：收集所有需要构建的交叉管道坐标对
-            for up_num, down_num in zip(self.pair_x_info_up_line1, self.pair_x_info_down_line1):
-                up_coord = next(((x, y) for (num, x, y) in self.print_cross_x_up_line1 if num == up_num), None)
-                down_coord = next(((x, y) for (num, x, y) in self.print_cross_x_down_line1 if num == down_num), None)
+            for up_num, down_num in zip(pair_x_info_up, pair_x_info_down):
+                up_coord = next(((x, y) for (num, x, y) in print_cross_x_up if num == up_num), None)
+                down_coord = next(((x, y) for (num, x, y) in print_cross_x_down if num == down_num), None)
 
                 if up_coord and down_coord:
                     up_selected = self.actual_to_selected_coords(up_coord)
@@ -4545,14 +4550,14 @@ class TubeLayoutEditor(QMainWindow):
             # 第三步：收集并删除未使用的环热管
             del_centers = []
             # 处理上部分未使用的坐标
-            for num, x, y in self.print_cross_x_up_line1:
+            for num, x, y in print_cross_x_up:
                 if num not in used_up_nums:
                     rel_coord = self.actual_to_selected_coords((x, y))
                     if rel_coord:
                         del_centers.append(rel_coord)
 
             # 处理下部分未使用的坐标
-            for num, x, y in self.print_cross_x_down_line1:
+            for num, x, y in print_cross_x_down:
                 if num not in used_down_nums:
                     rel_coord = self.actual_to_selected_coords((x, y))
                     if rel_coord:
@@ -4740,19 +4745,18 @@ class TubeLayoutEditor(QMainWindow):
             coord12_in_left = current_coords[1] in self.original_print_cross_y_left_line3
             coord12_in_right = current_coords[1] in self.original_print_cross_y_right_line3
             if (coord1_in_up and coord2_in_down) or (coord1_in_down and coord2_in_up):
-                self.cross_x_2_pipes(current_coords)
+                self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line1, self.print_cross_x_down_line1)
             elif (coord3_in_left and coord4_in_right) or (coord3_in_right and coord4_in_left):
                 self.cross_y_2_pipes(current_coords)
             elif (coord5_in_up and coord6_in_down) or (coord5_in_down and coord6_in_up):
-                # self.cross_x_2_pipes(current_coords)
-                print("第二排x轴")
+                self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line2, self.print_cross_x_down_line2)
+
 
             elif (coord7_in_left and coord8_in_right) or (coord7_in_right and coord8_in_left):
                 # self.cross_y_2_pipes(current_coords)
                 print("第二排y轴")
             elif (coord9_in_up and coord10_in_down) or (coord9_in_down and coord10_in_up):
-                # self.cross_x_2_pipes(current_coords)
-                print("第三排x轴")
+                self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line3, self.print_cross_x_down_line3)
             elif (coord11_in_left and coord12_in_right) or (coord11_in_right and coord12_in_left):
                 # self.cross_y_2_pipes(current_coords)
                 print("第三排y轴")
