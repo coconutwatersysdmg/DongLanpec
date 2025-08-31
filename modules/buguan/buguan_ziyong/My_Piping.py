@@ -4227,7 +4227,7 @@ class TubeLayoutEditor(QMainWindow):
             self.print_cross_y_right_line3 = []
 
     # 获取选中的两个换热管的编号，x轴上下编号
-    def get_selected_x_center_numbers(self, selected_centers,print_cross_x_up,print_cross_x_down):
+    def get_selected_x_center_numbers(self, selected_centers, print_cross_x_up, print_cross_x_down):
         # 初始化返回的编号
         up_number = None
         down_number = None
@@ -4286,25 +4286,25 @@ class TubeLayoutEditor(QMainWindow):
         }
 
     # 获取选中的两个换热管的编号，y轴左右编号
-    def get_selected_y_center_numbers(self, selected_centers):
+    def get_selected_y_center_numbers(self, selected_centers,print_cross_y_left,print_cross_y_right):
         # 初始化返回的编号
         left_number = None
         right_number = None
 
         for center in selected_centers:
-            for item in self.print_cross_y_left_line1:
+            for item in print_cross_y_left:
                 # item的格式为(编号, x坐标, y坐标)，center为(x坐标, y坐标)
                 if (item[1], item[2]) == center:
                     left_number = item[0]
                     break
-            for item in self.print_cross_y_right_line1:
+            for item in print_cross_y_right:
                 if (item[1], item[2]) == center:
                     right_number = item[0]
                     break
 
         if left_number is None or right_number is None:
             raise ValueError(
-                "selected_centers中的坐标未完全匹配到self.print_cross_y_left_line1或self.print_cross_y_right_line1")
+                "selected_centers中的坐标未完全匹配到print_cross_y_left或print_cross_y_right")
 
         return {
             'left_number': left_number,
@@ -4455,59 +4455,131 @@ class TubeLayoutEditor(QMainWindow):
         # 返回计算得到的两个序列
         return pair_x_info_up, pair_x_info_down
 
-    def get_y_2_number_sequences(self, result):
-        up_num = result['left_number']
-        down_num = result['right_number']
-        total_count = len(self.print_cross_y_left_line1)
-        # assert len(self.print_cross_y_left_line1) == len(self.print_cross_y_right_line1), "左右列表长度必须相等"
+    def get_y_2_number_sequences(self, result, print_cross_y_left):
+        # 初始化返回变量
+        pair_y_info_left = []
+        pair_y_info_right = []
 
-        diff = abs(up_num - down_num)
-        sequence_length = max(0, total_count - diff)
+        tubeline_num = self.get_tube_pass_count()  # 获取当前管程程数
+        if tubeline_num == '4':
+            left_num = result['left_number']
+            right_num = result['right_number']
+            total_count = len(print_cross_y_left)
+            diff = abs(left_num - right_num)
 
-        smaller_num = min(up_num, down_num)
-        larger_num = max(up_num, down_num)
+            sequence_length = max(0, total_count - diff)
 
-        # 生成起始和结束序列
-        seq_start = list(range(1, 1 + sequence_length))
-        seq_end = list(range(total_count - sequence_length + 1, total_count + 1))
+            smaller_num = min(left_num, right_num)
+            larger_num = max(left_num, right_num)
 
-        # 核心修改：根据编号大小反转序列分配（这是输出顺序相反的关键）
-        if up_num < down_num:
-            self.pair_y_info_left = seq_start
-            self.pair_y_info_right = seq_end
-        else:
-            # 当up_num > down_num时，交换序列分配
-            self.pair_y_info_left = seq_end
-            self.pair_y_info_right = seq_start
+            seq_start = list(range(1, 1 + sequence_length))
+            seq_end = list(range(total_count - sequence_length + 1, total_count + 1))
 
-        # 验证初始序列长度
-        assert len(self.pair_y_info_left) == len(self.pair_y_info_right), "序列长度必须相等"
+            if left_num < right_num:
+                pair_y_info_left = seq_start
+                pair_y_info_right = seq_end
+            else:
+                pair_y_info_left = seq_end
+                pair_y_info_right = seq_start
 
-        half_total = total_count / 2
-        filtered_up = []
-        filtered_down = []
-        # 保留你的原始判断条件（未删除）
-        for u, d in zip(self.pair_y_info_left, self.pair_y_info_right):
-            condition1 = (u < half_total < d)
-            condition2 = (u > half_total > d)
-            condition3 = (u == half_total and d > half_total)
-            condition4 = (u > half_total and d == half_total)
+            # 验证初始序列长度相等
+            assert len(pair_y_info_left) == len(pair_y_info_right), "序列长度必须相等"
+            half_total = total_count / 2
+            filtered_left = []
+            filtered_right = []
+            # 遍历每一对元素
+            for u, d in zip(pair_y_info_left, pair_y_info_right):
+                condition1 = (u < half_total < d)
+                condition2 = (u > half_total > d)
+                condition3 = (u == half_total and d > half_total)
+                condition4 = (u > half_total and d == half_total)
 
-            # 只过滤不符合条件或相等的元素（与原逻辑一致）
-            if not (condition1 or condition2 or condition3 or condition4) or u == d:
-                filtered_up.append(u)
-                filtered_down.append(d)
+                if not (condition1 or condition2 or condition3 or condition4) or u == d:
+                    filtered_left.append(u)
+                    filtered_right.append(d)
+            # 更新列表
+            pair_y_info_left = filtered_left
+            pair_y_info_right = filtered_right
+        elif tubeline_num == '2':
+            left_num = result['left_number']
+            right_num = result['right_number']
+            total_count = len(print_cross_y_left)
+            diff = abs(left_num - right_num)
 
-        # 更新列表
-        self.pair_y_info_left = filtered_up
-        self.pair_y_info_right = filtered_down
+            sequence_length = max(0, total_count - diff)
 
-        # 验证过滤后长度
-        assert len(self.pair_y_info_left) == len(self.pair_y_info_right), "过滤后序列长度必须相等"
+            smaller_num = min(left_num, right_num)
+            larger_num = max(left_num, right_num)
+
+            seq_start = list(range(1, 1 + sequence_length))
+            seq_end = list(range(total_count - sequence_length + 1, total_count + 1))
+
+            if left_num < right_num:
+                pair_y_info_left = seq_start
+                pair_y_info_right = seq_end
+            else:
+                pair_y_info_left = seq_end
+                pair_y_info_right = seq_start
+
+            # 验证初始序列长度相等
+            assert len(pair_y_info_left) == len(pair_y_info_right), "序列长度必须相等"
+            # half_total = total_count / 2
+            filtered_left = []
+            filtered_right = []
+            # 遍历每一对元素
+            for u, d in zip(pair_y_info_left, pair_y_info_right):
+                # 对于tubeline_num == '2'，直接保留所有元素
+                filtered_left.append(u)
+                filtered_right.append(d)
+            # 更新列表
+            pair_y_info_left = filtered_left
+            pair_y_info_right = filtered_right
+        elif tubeline_num == '6':
+            left_num = result['left_number']
+            right_num = result['right_number']
+            total_count = len(print_cross_y_left)
+            diff = abs(left_num - right_num)
+
+            sequence_length = max(0, total_count - diff)
+
+            smaller_num = min(left_num, right_num)
+            larger_num = max(left_num, right_num)
+
+            seq_start = list(range(1, 1 + sequence_length))
+            seq_end = list(range(total_count - sequence_length + 1, total_count + 1))
+
+            if left_num < right_num:
+                pair_y_info_left = seq_start
+                pair_y_info_right = seq_end
+            else:
+                pair_y_info_left = seq_end
+                pair_y_info_right = seq_start
+
+            # 验证初始序列长度相等
+            assert len(pair_y_info_left) == len(pair_y_info_right), "序列长度必须相等"
+            half_total = total_count / 2
+            filtered_left = []
+            filtered_right = []
+            # 遍历每一对元素
+            for u, d in zip(pair_y_info_left, pair_y_info_right):
+                condition1 = (u < half_total < d)
+                condition2 = (u > half_total > d)
+                condition3 = (u == half_total and d > half_total)
+                condition4 = (u > half_total and d == half_total)
+
+                if not (condition1 or condition2 or condition3 or condition4) or u == d:
+                    filtered_left.append(u)
+                    filtered_right.append(d)
+            # 更新列表
+            pair_y_info_left = filtered_left
+            pair_y_info_right = filtered_right
+
+        # 返回计算得到的两个序列
+        return pair_y_info_left, pair_y_info_right
 
     def cross_x_2_pipes(self, selected_centers, print_cross_x_up, print_cross_x_down):
         # 获取选择的中心点编号
-        result = self.get_selected_x_center_numbers(selected_centers,print_cross_x_up,print_cross_x_down)
+        result = self.get_selected_x_center_numbers(selected_centers, print_cross_x_up, print_cross_x_down)
         if result['up_number'] == result['down_number']:
             # 参照管孔不能为同一位置
             QMessageBox.warning(self, "选择错误", "参照管孔之间的连线应为倾斜线")
@@ -4567,72 +4639,79 @@ class TubeLayoutEditor(QMainWindow):
             if del_centers:
                 self.delete_huanreguan(del_centers)
 
-    def cross_x_4_pipes(self, selected_centers):
-        result = self.get_selected_x_4_center_numbers(selected_centers)
-        #
-        print("nih")
+    def cross_y_2_pipes(self, current_coords, print_cross_y_left, print_cross_y_right):
+        # 获取选择的中心点编号（实际坐标传入，参数名从selected_centers改为current_coords，匹配需求）
+        result = self.get_selected_y_center_numbers(current_coords,print_cross_y_left,print_cross_y_right)
 
-    def cross_y_2_pipes(self, selected_centers):
-        # 获取选择的中心点编号（实际坐标传入）
-
-        result = self.get_selected_y_center_numbers(selected_centers)
+        # 校验1：参照管孔不能为同一位置（连线需为倾斜线）
         if result['left_number'] == result['right_number']:
-            # print("参照管孔之间的连线应为倾斜线")
             QMessageBox.warning(self, "选择错误", "参照管孔之间的连线应为倾斜线")
             self.clear_selection_highlight()
             self.selected_centers.clear()
             return
 
+        # 校验2：参照管孔间隔不能大于3个换热管孔
         elif abs(result['left_number'] - result['right_number']) > 3:
-            # print("参照管孔间隔不能大于3个换热管孔")
             QMessageBox.warning(self, "选择错误", "参照管孔间隔不能大于3个换热管孔")
             self.clear_selection_highlight()
             self.selected_centers.clear()
-        else:
-            self.get_y_2_number_sequences(result)
 
-            coordinate_pairs = []
-            used_up_nums = set()
-            used_down_nums = set()
+        # 校验通过：生成序列并构建交叉管道
+        else:
+            # 调用get_y_2_number_sequences生成配对序列，通过返回值接收（而非类成员变量）
+            # 注：需确保get_y_2_number_sequences已改造为返回left_seq和right_seq，逻辑同get_x_2_number_sequences
+            left_seq, right_seq = self.get_y_2_number_sequences(result, print_cross_y_left)
+            pair_y_info_left = left_seq
+            pair_y_info_right = right_seq
+
+            coordinate_pairs = []  # 存储需构建的交叉管道坐标对
+            used_left_nums = set()  # 标记左部已使用的管孔编号（原used_up_nums，语义对齐y方向）
+            used_right_nums = set()  # 标记右部已使用的管孔编号（原used_down_nums，语义对齐y方向）
 
             # 第一步：收集所有需要构建的交叉管道坐标对
-            for up_num, down_num in zip(self.pair_y_info_left, self.pair_y_info_right):
-                # 查找上部分对应的坐标
-                up_coord = next(((x, y) for (num, x, y) in self.print_cross_y_left_line1 if num == up_num), None)
-                # 查找下部分对应的坐标
-                down_coord = next(((x, y) for (num, x, y) in self.print_cross_y_right_line1 if num == down_num), None)
+            for left_num, right_num in zip(pair_y_info_left, pair_y_info_right):
+                # 查找左部（原up_num对应逻辑）对应的实际坐标
+                left_coord = next(((x, y) for (num, x, y) in print_cross_y_left if num == left_num), None)
+                # 查找右部（原down_num对应逻辑）对应的实际坐标
+                right_coord = next(((x, y) for (num, x, y) in print_cross_y_right if num == right_num), None)
 
-                if up_coord and down_coord:
-                    up_selected = self.actual_to_selected_coords(up_coord)
-                    down_selected = self.actual_to_selected_coords(down_coord)
-                    if up_selected and down_selected:
-                        coordinate_pairs.append((up_selected, down_selected))
-                        used_up_nums.add(up_num)
-                        used_down_nums.add(down_num)
+                # 坐标有效性校验：转换为选中态坐标并添加到列表
+                if left_coord and right_coord:
+                    left_selected = self.actual_to_selected_coords(left_coord)
+                    right_selected = self.actual_to_selected_coords(right_coord)
+                    if left_selected and right_selected:
+                        coordinate_pairs.append((left_selected, right_selected))
+                        used_left_nums.add(left_num)
+                        used_right_nums.add(right_num)
 
-            # 第二步：先构建所有交叉管道
-            for up_selected, down_selected in coordinate_pairs:
-                self.build_2_cross_pipes([up_selected, down_selected])  # 确保传入格式为[(x1,y1), (x2,y2)]
+            # 第二步：构建所有交叉管道（保持原构建逻辑，参数格式不变）
+            for left_selected, right_selected in coordinate_pairs:
+                self.build_2_cross_pipes([left_selected, right_selected])  # 格式：[(x1,y1), (x2,y2)]
 
             # 第三步：收集并删除未使用的环热管
             del_centers = []
-            # 处理左部分未使用的坐标
-            for num, x, y in self.print_cross_y_left_line1:
-                if num not in used_up_nums:
+            # 处理左部未使用的坐标（原up部分逻辑，语义改为左部）
+            for num, x, y in print_cross_y_left:
+                if num not in used_left_nums:
                     rel_coord = self.actual_to_selected_coords((x, y))
                     if rel_coord:
                         del_centers.append(rel_coord)
 
-            # 处理右部分未使用的坐标
-            for num, x, y in self.print_cross_y_right_line1:
-                if num not in used_down_nums:
+            # 处理右部未使用的坐标（原down部分逻辑，语义改为右部）
+            for num, x, y in print_cross_y_right:
+                if num not in used_right_nums:
                     rel_coord = self.actual_to_selected_coords((x, y))
                     if rel_coord:
                         del_centers.append(rel_coord)
 
-            # 最后执行删除操作
+            # 执行删除操作（仅当有未使用管孔时）
             if del_centers:
                 self.delete_huanreguan(del_centers)
+
+    def cross_x_4_pipes(self, selected_centers):
+        result = self.get_selected_x_4_center_numbers(selected_centers)
+        #
+        print("nih")
 
     def cross_y_4_pipes(self, selected_centers):
         print("y4")
@@ -4707,7 +4786,7 @@ class TubeLayoutEditor(QMainWindow):
         # 检查选中状态：确保已选中两个圆
         if not hasattr(self, 'selected_centers'):
             # 未初始化选中状态，提示用户选择
-            QMessageBox.warning(self, "选择错误", "请先准确选择两个圆")
+            QMessageBox.warning(self, "选择错误", "参照管孔的数量应为2个或4个")
             return
 
         current_coords = self.selected_to_current_coords(self.selected_centers)
@@ -4744,24 +4823,27 @@ class TubeLayoutEditor(QMainWindow):
             coord11_in_right = current_coords[0] in self.original_print_cross_y_right_line3
             coord12_in_left = current_coords[1] in self.original_print_cross_y_left_line3
             coord12_in_right = current_coords[1] in self.original_print_cross_y_right_line3
+            # x轴第一排
             if (coord1_in_up and coord2_in_down) or (coord1_in_down and coord2_in_up):
                 self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line1, self.print_cross_x_down_line1)
+            # y轴第一排
             elif (coord3_in_left and coord4_in_right) or (coord3_in_right and coord4_in_left):
-                self.cross_y_2_pipes(current_coords)
+                self.cross_y_2_pipes(current_coords, self.print_cross_y_left_line1, self.print_cross_y_right_line1)
+            # x轴第二排
             elif (coord5_in_up and coord6_in_down) or (coord5_in_down and coord6_in_up):
                 self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line2, self.print_cross_x_down_line2)
-
-
+            # y轴第二排
             elif (coord7_in_left and coord8_in_right) or (coord7_in_right and coord8_in_left):
-                # self.cross_y_2_pipes(current_coords)
-                print("第二排y轴")
+                self.cross_y_2_pipes(current_coords, self.print_cross_y_left_line2, self.print_cross_y_right_line2)
+            # x轴第三排
             elif (coord9_in_up and coord10_in_down) or (coord9_in_down and coord10_in_up):
                 self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line3, self.print_cross_x_down_line3)
+            # y轴第三排
             elif (coord11_in_left and coord12_in_right) or (coord11_in_right and coord12_in_left):
-                # self.cross_y_2_pipes(current_coords)
-                print("第三排y轴")
+                self.cross_y_2_pipes(current_coords, self.print_cross_y_left_line3, self.print_cross_y_right_line3)
             else:
-                print("选了两个，但是位置不正确")
+                QMessageBox.warning(self, "选择错误", "参照管孔位置不正确")
+
         elif len(self.selected_centers) == 4:
             # 统计属于 self.original_print_cross_x_up_line1 和 self.original_print_cross_x_down_line1 的坐标数量
             x_up_count = sum(1 for coord in current_coords if coord in self.original_print_cross_x_up_line1)
