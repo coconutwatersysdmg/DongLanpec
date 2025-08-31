@@ -3997,8 +3997,6 @@ class TubeLayoutEditor(QMainWindow):
         # 清除旧高亮，恢复为标准小圆
         self.clear_selection_highlight()
 
-        self.selected_centers.clear()
-
         # 获取当前选中的行（去重）
         selected_rows = set()
         for index in self.hole_distribution_table.selectedIndexes():
@@ -4012,53 +4010,61 @@ class TubeLayoutEditor(QMainWindow):
         brush = QBrush(QColor(173, 216, 230))  # LightBlue
 
         for row in selected_rows:
-            # 先处理下半部分（行号为负），确保负行号坐标排在前面
+            # 处理下半部分（行号为负）
             if row < len(self.full_sorted_current_centers_down):
                 centers_down = self.full_sorted_current_centers_down[row]
                 for col_idx, (x, y) in enumerate(centers_down):
-                    self.graphics_scene.addEllipse(x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush)
+                    # 添加高亮标记
+                    marker = self.graphics_scene.addEllipse(
+                        x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
+                    )
+                    marker.setData(0, "marker")  # 标记这个圆是 marker
                     col_num = -(col_idx + 1)
                     self.selected_centers.append((-(row + 1), col_num))
 
-            # 再处理上半部分（行号为正），确保正行号坐标排在后面
+            # 处理上半部分（行号为正）
             if row < len(self.full_sorted_current_centers_up):
                 centers_up = self.full_sorted_current_centers_up[row]
                 for col_idx, (x, y) in enumerate(centers_up):
-                    self.graphics_scene.addEllipse(x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush)
-                    col_num = -(col_idx + 1)
+                    # 添加高亮标记
+                    marker = self.graphics_scene.addEllipse(
+                        x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
+                    )
+                    marker.setData(0, "marker")  # 标记这个圆是 marker
+                    col_num = (col_idx + 1)
                     self.selected_centers.append(((row + 1), col_num))
 
-
     def clear_selection_highlight(self):
-        if not hasattr(self, 'selected_centers'):
+        if not hasattr(self, 'selected_centers') or not self.selected_centers:
             return
 
-        pen_restore = QPen(QColor(0, 0, 80))  # 深蓝色
-        pen_restore.setWidth(1)
-        brush_restore = QBrush(Qt.NoBrush)
-
-        for (row_label, col_idx) in self.selected_centers:
+        # 清除所有标记并恢复原始状态
+        for (row_label, col_label) in self.selected_centers:
             # 确定是上半部分还是下半部分
             is_upper = row_label > 0
             row_idx = abs(row_label) - 1
+            col_idx = abs(col_label) - 1  # 处理列的绝对值
+
+            # 选择正确的圆心列表
             centers = self.full_sorted_current_centers_up if is_upper else self.full_sorted_current_centers_down
 
+            # 检查索引有效性
             if row_idx < 0 or row_idx >= len(centers):
                 continue
-            if col_idx - 1 < 0 or col_idx - 1 >= len(centers[row_idx]):
+            if col_idx < 0 or col_idx >= len(centers[row_idx]):
                 continue
 
-            x, y = centers[row_idx][col_idx - 1]
+            x, y = centers[row_idx][col_idx]
+            click_point = QPointF(x, y)
 
-            # 清除高亮圆
-            for item in self.graphics_scene.items(QPointF(x, y)):
-                if isinstance(item, QGraphicsEllipseItem):
+            # 只删除标记项，保留原始圆
+            for item in self.graphics_scene.items(click_point):
+                if isinstance(item, QGraphicsEllipseItem) and item.data(0) == "marker":
                     self.graphics_scene.removeItem(item)
                     break
 
-            # 恢复原始圆
-            self.graphics_scene.addEllipse(x - self.r, y - self.r, 2 * self.r, 2 * self.r,
-                                           pen_restore, brush_restore)
+        # 清空选中记录
+        self.selected_centers.clear()
 
     def on_show_operations_click(self):
         if not hasattr(self, 'operations') or not self.operations:
@@ -5051,10 +5057,8 @@ class TubeLayoutEditor(QMainWindow):
             if self.isSymmetry:
                 selected_centers = list(self.judge_linkage(self.selected_centers))
             else:
-                print("this")
                 selected_centers = list(self.selected_centers)
             self.delete_huanreguan(selected_centers)
-        print("ssss")
 
         self.selected_centers.clear()
 
