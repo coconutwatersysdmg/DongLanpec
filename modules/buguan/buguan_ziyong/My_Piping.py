@@ -2384,6 +2384,10 @@ class TubeLayoutEditor(QMainWindow):
                     combo.addItems(["滑道与管板焊接", "滑道与第一块折流板焊接"])
                 elif param['参数名'] == "管程程数":
                     combo.addItems(["2", "4", "6", "8", "10", "12"])
+                    # 为管程程数下拉框单独绑定信号
+                    combo.currentIndexChanged.connect(
+                        lambda index, r=row: self.on_tube_pass_combo_changed(r)
+                    )
                 elif param['参数名'] == "换热管布置方式":
                     combo.addItems(["对中", "跨中", "任意"])
                 elif param['参数名'] == "管程分程形式":
@@ -2517,6 +2521,18 @@ class TubeLayoutEditor(QMainWindow):
         # 初始化时触发一次折流板参数联动计算
         self.update_baffle_parameters(None)
 
+    def on_tube_pass_combo_changed(self, row):
+        """管程程数下拉框变化处理函数"""
+        # 获取当前选中的管程程数
+        combo = self.param_table.cellWidget(row, 2)
+        if isinstance(combo, QComboBox):
+            tube_pass = combo.currentText()
+            # 更新SN参数
+            self.update_SN()
+            # 更新管程分程形式的图片
+            if self.tube_pass_form_combo:
+                self.load_tube_pass_images(self.tube_pass_form_combo, tube_pass)
+
     def add_image_to_combo(self, combo, base_path, filename, identifier):
         """添加带图片的下拉项，关联具体标识"""
         image_path = os.path.join(base_path, filename)
@@ -2585,8 +2601,6 @@ class TubeLayoutEditor(QMainWindow):
         if self.tube_pass_form_combo:
             # 获取当前选择项的标识作为参数值
             self.tube_pass_form_value = self.tube_pass_form_combo.itemData(index, Qt.UserRole)
-            # 可在此处添加调试打印
-            print(f"管程分程形式参数值已更新为: {self.tube_pass_form_value}")
 
     def on_combobox_changed(self, row, param_name):
         """处理下拉框类型参数的变更事件"""
@@ -3974,6 +3988,7 @@ class TubeLayoutEditor(QMainWindow):
 
         return None
 
+    # TODO 整行选中函数
     def on_row_selection_changed(self):
         """响应右侧表格选中事件，高亮对应小圆或在未选中时恢复，并同步更新 self.selected_centers"""
         if not hasattr(self, 'full_sorted_current_centers_up') or not hasattr(self, 'full_sorted_current_centers_down'):
@@ -3997,17 +4012,22 @@ class TubeLayoutEditor(QMainWindow):
         brush = QBrush(QColor(173, 216, 230))  # LightBlue
 
         for row in selected_rows:
-            # 处理上半部分
-            if row < len(self.full_sorted_current_centers_up):
-                for col_idx, (x, y) in enumerate(self.full_sorted_current_centers_up[row]):
-                    self.graphics_scene.addEllipse(x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush)
-                    self.selected_centers.append((row + 1, col_idx + 1))
-
-            # 处理下半部分
+            # 先处理下半部分（行号为负），确保负行号坐标排在前面
             if row < len(self.full_sorted_current_centers_down):
-                for col_idx, (x, y) in enumerate(self.full_sorted_current_centers_down[row]):
+                centers_down = self.full_sorted_current_centers_down[row]
+                for col_idx, (x, y) in enumerate(centers_down):
                     self.graphics_scene.addEllipse(x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush)
-                    self.selected_centers.append((-(row + 1), col_idx + 1))
+                    col_num = -(col_idx + 1)
+                    self.selected_centers.append((-(row + 1), col_num))
+
+            # 再处理上半部分（行号为正），确保正行号坐标排在后面
+            if row < len(self.full_sorted_current_centers_up):
+                centers_up = self.full_sorted_current_centers_up[row]
+                for col_idx, (x, y) in enumerate(centers_up):
+                    self.graphics_scene.addEllipse(x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush)
+                    col_num = -(col_idx + 1)
+                    self.selected_centers.append(((row + 1), col_num))
+
 
     def clear_selection_highlight(self):
         if not hasattr(self, 'selected_centers'):
@@ -4021,7 +4041,7 @@ class TubeLayoutEditor(QMainWindow):
             # 确定是上半部分还是下半部分
             is_upper = row_label > 0
             row_idx = abs(row_label) - 1
-            centers = self.sorted_current_centers_up if is_upper else self.sorted_current_centers_down
+            centers = self.full_sorted_current_centers_up if is_upper else self.full_sorted_current_centers_down
 
             if row_idx < 0 or row_idx >= len(centers):
                 continue
@@ -4481,48 +4501,57 @@ class TubeLayoutEditor(QMainWindow):
     def cross_x_2_pipes(self, selected_centers):
         # 获取选择的中心点编号
         result = self.get_selected_x_center_numbers(selected_centers)
-        self.get_x_2_number_sequences(result)
+        if result['up_number'] == result['down_number']:
+            print("参照管孔之间的连线应为倾斜线")
+            self.clear_selection_highlight()
+            self.selected_centers.clear()
+            return
 
-        coordinate_pairs = []
-        used_up_nums = set()
-        used_down_nums = set()
+        elif abs(result['up_number'] - result['down_number']) > 3:
+            print("参照管孔间隔不能大于3个换热管孔")
+        else:
+            self.get_x_2_number_sequences(result)
 
-        # 第一步：收集所有需要构建的交叉管道坐标对
-        for up_num, down_num in zip(self.pair_x_info_up_line1, self.pair_x_info_down_line1):
-            up_coord = next(((x, y) for (num, x, y) in self.print_cross_x_up_line1 if num == up_num), None)
-            down_coord = next(((x, y) for (num, x, y) in self.print_cross_x_down_line1 if num == down_num), None)
+            coordinate_pairs = []
+            used_up_nums = set()
+            used_down_nums = set()
 
-            if up_coord and down_coord:
-                up_selected = self.actual_to_selected_coords(up_coord)
-                down_selected = self.actual_to_selected_coords(down_coord)
-                if up_selected and down_selected:
-                    coordinate_pairs.append((up_selected, down_selected))
-                    used_up_nums.add(up_num)
-                    used_down_nums.add(down_num)
+            # 第一步：收集所有需要构建的交叉管道坐标对
+            for up_num, down_num in zip(self.pair_x_info_up_line1, self.pair_x_info_down_line1):
+                up_coord = next(((x, y) for (num, x, y) in self.print_cross_x_up_line1 if num == up_num), None)
+                down_coord = next(((x, y) for (num, x, y) in self.print_cross_x_down_line1 if num == down_num), None)
 
-        # 第二步：先构建所有交叉管道
-        for up_selected, down_selected in coordinate_pairs:
-            self.build_2_cross_pipes([up_selected, down_selected])  # 确保传入格式为[(x1,y1), (x2,y2)]
+                if up_coord and down_coord:
+                    up_selected = self.actual_to_selected_coords(up_coord)
+                    down_selected = self.actual_to_selected_coords(down_coord)
+                    if up_selected and down_selected:
+                        coordinate_pairs.append((up_selected, down_selected))
+                        used_up_nums.add(up_num)
+                        used_down_nums.add(down_num)
 
-        # 第三步：收集并删除未使用的环热管
-        del_centers = []
-        # 处理上部分未使用的坐标
-        for num, x, y in self.print_cross_x_up_line1:
-            if num not in used_up_nums:
-                rel_coord = self.actual_to_selected_coords((x, y))
-                if rel_coord:
-                    del_centers.append(rel_coord)
+            # 第二步：先构建所有交叉管道
+            for up_selected, down_selected in coordinate_pairs:
+                self.build_2_cross_pipes([up_selected, down_selected])  # 确保传入格式为[(x1,y1), (x2,y2)]
 
-        # 处理下部分未使用的坐标
-        for num, x, y in self.print_cross_x_down_line1:
-            if num not in used_down_nums:
-                rel_coord = self.actual_to_selected_coords((x, y))
-                if rel_coord:
-                    del_centers.append(rel_coord)
+            # 第三步：收集并删除未使用的环热管
+            del_centers = []
+            # 处理上部分未使用的坐标
+            for num, x, y in self.print_cross_x_up_line1:
+                if num not in used_up_nums:
+                    rel_coord = self.actual_to_selected_coords((x, y))
+                    if rel_coord:
+                        del_centers.append(rel_coord)
 
-        # 最后执行删除操作
-        if del_centers:
-            self.delete_huanreguan(del_centers)
+            # 处理下部分未使用的坐标
+            for num, x, y in self.print_cross_x_down_line1:
+                if num not in used_down_nums:
+                    rel_coord = self.actual_to_selected_coords((x, y))
+                    if rel_coord:
+                        del_centers.append(rel_coord)
+
+            # 最后执行删除操作
+            if del_centers:
+                self.delete_huanreguan(del_centers)
 
     def cross_x_4_pipes(self, selected_centers):
         result = self.get_selected_x_4_center_numbers(selected_centers)
@@ -5015,18 +5044,17 @@ class TubeLayoutEditor(QMainWindow):
             self.delete_selected_slides()
         if hasattr(self, 'selected_center_dangguan') and self.selected_center_dangguan:
             self.delete_selected_center_dangguan()
-
-        print(self.selected_center_dangban)
         if hasattr(self, 'selected_center_dangban') and self.selected_center_dangban:
             self.delete_selected_center_dangban()
 
-        elif self.selected_centers:
+        if self.selected_centers:
             if self.isSymmetry:
-                selected_centers = self.judge_linkage(self.selected_centers)
+                selected_centers = list(self.judge_linkage(self.selected_centers))
             else:
-                selected_centers = self.selected_centers
+                print("this")
+                selected_centers = list(self.selected_centers)
             self.delete_huanreguan(selected_centers)
-        # self.connect_center(self.scene, self.current_centers, self.small_D)
+        print("ssss")
 
         self.selected_centers.clear()
 
@@ -5074,13 +5102,50 @@ class TubeLayoutEditor(QMainWindow):
         if not selected_centers:
             return []
 
+        # 确保使用全局中心点数据
+        self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
+            self.global_centers)
+
         import ast
         selected_centers_list = []
         if isinstance(selected_centers, list):
-            selected_centers_list = [item for item in selected_centers
-                                     if isinstance(item, tuple)
-                                     and len(item) == 2
-                                     and all(isinstance(x, (int, float)) for x in item)]
+            # 检查是否为相对坐标 (行号, 列号) 格式
+            if selected_centers and all(isinstance(item, (list, tuple)) and len(item) == 2
+                                        and isinstance(item[0], (int, float)) and isinstance(item[1], (int, float))
+                                        for item in selected_centers):
+                # 这是相对坐标格式，需要转换为绝对坐标
+                absolute_coords_to_remove = set()
+
+                for row_label, col_label in selected_centers:
+                    row_idx = abs(row_label) - 1
+
+                    # 修复列索引计算逻辑：区分正负列号
+                    if col_label < 0:
+                        # 负列号：-1 对应 0，-2 对应 1，依此类推
+                        col_idx = abs(col_label) - 1
+                    else:
+                        # 正列号：5 对应 4，6 对应 5，依此类推（因为5是第5列，索引从0开始是4）
+                        col_idx = col_label - 1
+
+                    # 获取原始坐标
+                    if row_label > 0:
+                        centers_group = self.full_sorted_current_centers_up
+                    else:
+                        centers_group = self.full_sorted_current_centers_down
+
+                    # 检查索引有效性
+                    if (0 <= row_idx < len(centers_group) and
+                            0 <= col_idx < len(centers_group[row_idx])):
+                        x, y = centers_group[row_idx][col_idx]
+                        absolute_coords_to_remove.add((round(x, 2), round(y, 2)))
+
+                selected_centers_list = list(absolute_coords_to_remove)
+            else:
+                # 已经是绝对坐标格式
+                selected_centers_list = [item for item in selected_centers
+                                         if isinstance(item, tuple)
+                                         and len(item) == 2
+                                         and all(isinstance(x, (int, float)) for x in item)]
         elif isinstance(selected_centers, str):
             try:
                 parsed_list = ast.literal_eval(selected_centers)
@@ -5095,6 +5160,7 @@ class TubeLayoutEditor(QMainWindow):
         else:
             selected_centers_list = []
 
+        # 合并并去重中心点
         combined = []
         seen = set()
         for coord in self.del_centers:
@@ -5107,117 +5173,95 @@ class TubeLayoutEditor(QMainWindow):
                 combined.append(coord)
         self.del_centers = combined
 
-        current_coords = self.selected_to_current_coords(selected_centers)
+        # 使用绝对坐标来处理删除
+        absolute_coords_to_remove = set(selected_centers_list)
 
-        if hasattr(self, 'selected_centers') and selected_centers:
-            if not hasattr(self, 'operations'):
-                self.operations = []
+        # 定义删除样式（浅灰色空心圆）
+        gray_pen = QPen(QColor(254, 254, 254))
+        gray_pen.setWidth(1)
+        gray_brush = QBrush(Qt.NoBrush)  # 空心圆
+        blue_tube_pen = QColor(0, 0, 80)
 
-            # 定义删除样式（浅灰色空心圆）
-            gray_pen = QPen(QColor(245, 245, 245))  # 浅灰色边框
-            gray_pen.setWidth(1)
-            gray_brush = QBrush(Qt.NoBrush)  # 空心圆
-            # 记录深蓝色换热管的画笔颜色（与on_huanreguan_click保持一致）
-            blue_tube_pen = QColor(0, 0, 80)
+        # 删除所有目标坐标对应的圆
+        centers_to_remove = list(absolute_coords_to_remove)
+        for x, y in centers_to_remove:
+            # 1. 先擦除选中色（包括普通圆和深蓝色换热管的高亮）
+            click_point = QPointF(x, y)
+            items_to_remove = []
+            for item in self.graphics_scene.items(click_point):
+                if isinstance(item, QGraphicsEllipseItem):
+                    # 移除所有非灰色空心圆的元素（选中色）
+                    if item.brush() != gray_brush:
+                        items_to_remove.append(item)
 
-            # 字符串转换逻辑
-            if isinstance(selected_centers, str):
-                try:
-                    selected_centers = ast.literal_eval(selected_centers)
-                except (SyntaxError, ValueError) as e:
-                    print(f"字符串转换失败: {e}")
-                    return current_coords
+            # 批量移除项目，避免在迭代中修改场景
+            for item in items_to_remove:
+                self.graphics_scene.removeItem(item)
 
-            centers_to_remove = []
-            if selected_centers:
-                for row_label, col_label in selected_centers:
-                    row_idx = abs(row_label) - 1
-                    col_idx = abs(col_label) - 1
-
-                    # 获取原始坐标
-                    if row_label > 0:
-                        centers_group = self.full_sorted_current_centers_up
-                        x, y = centers_group[row_idx][col_idx]
-                    else:
-                        centers_group = self.full_sorted_current_centers_down
-                        x, y = centers_group[row_idx][col_idx]
-
-                    original_coord = (x, y)
-                    rounded_coord = (round(x, 2), round(y, 2))
-                    centers_to_remove.append(rounded_coord)
-
-                    # 1. 先擦除选中色（包括普通圆和深蓝色换热管的高亮）
-                    click_point = QPointF(x, y)
-                    for item in self.graphics_scene.items(click_point):
-                        if isinstance(item, QGraphicsEllipseItem):
-                            # 移除所有非灰色空心圆的元素（选中色）
-                            if item.brush() != gray_brush:
-                                self.graphics_scene.removeItem(item)
-
-                    # 2. 绘制浅灰色空心圆覆盖（重点处理深蓝色换热管）
-                    found = False
-                    for item in self.graphics_scene.items():
-                        if isinstance(item, QGraphicsEllipseItem):
-                            rect = item.rect()
-                            cx = item.scenePos().x() + rect.width() / 2
-                            cy = item.scenePos().y() + rect.height() / 2
-                            # 匹配条件：坐标接近 且 是深蓝色换热管 或 普通圆
-                            is_blue_tube = (item.pen().color() == blue_tube_pen)
-                            if abs(cx - x) < 1e-2 and abs(cy - y) < 1e-2 and (
-                                    is_blue_tube or item.brush() == gray_brush):
-                                self.graphics_scene.addEllipse(
-                                    x - self.r, y - self.r, 2 * self.r, 2 * self.r,
-                                    gray_pen, gray_brush
-                                )
-                                found = True
-                                break
-
-                    # 未找到对应圆时仍绘制灰色覆盖圆
-                    if not found:
+            # 2. 绘制浅灰色空心圆覆盖
+            found = False
+            for item in self.graphics_scene.items():
+                if isinstance(item, QGraphicsEllipseItem):
+                    rect = item.rect()
+                    cx = item.scenePos().x() + rect.width() / 2
+                    cy = item.scenePos().y() + rect.height() / 2
+                    # 匹配条件：坐标接近且是深蓝色换热管或普通圆
+                    is_blue_tube = (item.pen().color() == blue_tube_pen)
+                    if abs(cx - x) < 1e-2 and abs(cy - y) < 1e-2 and (
+                            is_blue_tube or item.brush() == gray_brush):
+                        # 先移除原有圆
+                        self.graphics_scene.removeItem(item)
+                        # 再绘制灰色覆盖圆
                         self.graphics_scene.addEllipse(
                             x - self.r, y - self.r, 2 * self.r, 2 * self.r,
                             gray_pen, gray_brush
                         )
+                        found = True
+                        break
 
-                    # 3. 强制移除残留的深蓝色圆（确保覆盖生效）
-                    for item in self.graphics_scene.items(click_point):
-                        if isinstance(item, QGraphicsEllipseItem) and item.pen().color() == blue_tube_pen:
-                            self.graphics_scene.removeItem(item)
+            # 未找到对应圆时直接绘制灰色覆盖圆
+            if not found:
+                self.graphics_scene.addEllipse(
+                    x - self.r, y - self.r, 2 * self.r, 2 * self.r,
+                    gray_pen, gray_brush
+                )
 
-                    # 添加操作记录
-                    self.operations.append({
-                        "type": "del",
-                        "row": row_label,
-                        "col": col_label,
-                        "coord": original_coord
-                    })
+        # 更新当前圆心列表
+        if hasattr(self, 'current_centers'):
+            # 保存并重新绘制切线
+            saved_lines = []
+            if hasattr(self, 'connection_lines'):
+                saved_lines = [(line.line(), line.pen()) for line in self.connection_lines]
+                for line in self.connection_lines:
+                    self.graphics_scene.removeItem(line)
 
-            if hasattr(self, 'current_centers'):
-                # 保存并重新绘制切线
-                saved_lines = []
-                if hasattr(self, 'connection_lines'):
-                    saved_lines = [(line.line(), line.pen()) for line in self.connection_lines]
-                    for line in self.connection_lines:
-                        self.graphics_scene.removeItem(line)
-                # 更新当前圆心列表
-                self.current_centers = [
-                    (cx, cy) for (cx, cy) in self.current_centers
-                    if (round(cx, 2), round(cy, 2)) not in centers_to_remove
-                ]
-                if self.create_scene():
-                    self.connect_center(self.scene, self.current_centers, self.small_D)
-                    self.update_tube_nums()
+            # 使用绝对坐标来过滤，确保删除所有目标坐标
+            self.current_centers = [
+                (cx, cy) for (cx, cy) in self.current_centers
+                if (round(cx, 2), round(cy, 2)) not in absolute_coords_to_remove
+            ]
 
-                if saved_lines and hasattr(self, 'connection_lines'):
-                    self.connection_lines = []
-                    for line_data, pen in saved_lines:
-                        new_line = self.graphics_scene.addLine(line_data, pen)
-                        self.connection_lines.append(new_line)
-        else:
-            print("未选中")
-            # self.line_tip.setText("未选中圆心")
+            if self.create_scene():
+                self.connect_center(self.scene, self.current_centers, self.small_D)
+                self.update_tube_nums()
 
-        return current_coords
+            if saved_lines and hasattr(self, 'connection_lines'):
+                self.connection_lines = []
+                for line_data, pen in saved_lines:
+                    new_line = self.graphics_scene.addLine(line_data, pen)
+                    self.connection_lines.append(new_line)
+
+        # 添加操作记录
+        if not hasattr(self, 'operations'):
+            self.operations = []
+
+        for coord in centers_to_remove:
+            self.operations.append({
+                "type": "del",
+                "coord": coord
+            })
+
+        return centers_to_remove
 
     def judge_linkage(self, selected_centers):
         linkage_centers = []
