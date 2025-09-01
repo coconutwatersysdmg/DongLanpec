@@ -1617,6 +1617,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 3. 根据产品ID从数据库获取产品型式并设置热交换器类型
         he_type = '2'  # 默认U型管式
+        product_type_str = ''  # 用于存储产品型式字符串
         if self.productID:
             conn = None
             try:
@@ -1628,15 +1629,14 @@ class TubeLayoutEditor(QMainWindow):
                         result = cursor.fetchone()
 
                         if result and '产品型式' in result:
-                            product_type = result['产品型式']
-                            product_type = product_type.strip().upper()  # 标准化处理
+                            product_type_str = result['产品型式'].strip().upper()  # 标准化处理并保存
 
                             # 根据产品型式判断热交换器类型
-                            if product_type in ['AEU', 'BEU']:
+                            if product_type_str in ['AEU', 'BEU']:
                                 he_type = '2'  # U型管式
-                            elif product_type == 'NEM':
+                            elif product_type_str == 'NEM':
                                 he_type = '1'  # 固定管板式
-                            elif product_type in ['AES', 'BES']:
+                            elif product_type_str in ['AES', 'BES']:
                                 he_type = '0'  # 浮头式
             except pymysql.MySQLError as e:
                 print(f"数据库查询产品型式失败: {e}")
@@ -1694,6 +1694,28 @@ class TubeLayoutEditor(QMainWindow):
             # 强制刷新场景
             self.graphics_scene.update()
             QApplication.processEvents()
+
+            # 5. 根据产品型式设置交叉布管按钮状态
+            # 查找交叉布管按钮（通过按钮文本）
+            cross_pipe_btn = None
+            # 遍历中心布局中的所有按钮
+            for i in range(self.action_bar.count()):
+                item = self.action_bar.itemAt(i)
+                if item.widget() and isinstance(item.widget(), QPushButton):
+                    if item.widget().text() == "交叉布管":
+                        cross_pipe_btn = item.widget()
+                        break
+
+            # 如果找到按钮，根据产品型式设置可用状态
+            if cross_pipe_btn is not None:
+                if product_type_str == 'BES':
+                    cross_pipe_btn.setEnabled(False)  # BES 产品禁用按钮
+                    cross_pipe_btn.setToolTip("BES 产品不支持交叉布管功能")  # 可选：添加提示
+                else:
+                    cross_pipe_btn.setEnabled(True)  # 其他产品启用按钮
+                    cross_pipe_btn.setToolTip("")  # 清除提示
+            else:
+                print("警告：未找到交叉布管按钮")
 
             return result
 
