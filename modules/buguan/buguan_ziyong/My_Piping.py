@@ -256,16 +256,30 @@ class PreviewDialog(QDialog):
             value = param.get('参数值', 'N/A')
             unit = param.get('单位', 'N/A')
 
-            self.table.setItem(row, 0, QTableWidgetItem(num))
-            self.table.setItem(row, 1, QTableWidgetItem(name))
-            self.table.setItem(row, 2, QTableWidgetItem(value))
-            self.table.setItem(row, 3, QTableWidgetItem(unit))
+            # 创建单元格并设置居中对齐
+            num_item = QTableWidgetItem(num)
+            num_item.setTextAlignment(Qt.AlignCenter)  # 水平垂直居中
+
+            name_item = QTableWidgetItem(name)
+            name_item.setTextAlignment(Qt.AlignCenter)
+
+            value_item = QTableWidgetItem(value)
+            value_item.setTextAlignment(Qt.AlignCenter)
+
+            unit_item = QTableWidgetItem(unit)
+            unit_item.setTextAlignment(Qt.AlignCenter)
+
+            # 设置单元格
+            self.table.setItem(row, 0, num_item)
+            self.table.setItem(row, 1, name_item)
+            self.table.setItem(row, 2, value_item)
+            self.table.setItem(row, 3, unit_item)
 
             # 调整列宽
-            self.table.setColumnWidth(0, 20)
-            self.table.setColumnWidth(1, 400)
+            self.table.setColumnWidth(0, 50)
+            self.table.setColumnWidth(1, 250)
             self.table.setColumnWidth(2, 250)
-            self.table.setColumnWidth(3, 30)
+            self.table.setColumnWidth(3, 50)
 
         layout.addWidget(self.table)
 
@@ -2413,11 +2427,13 @@ class TubeLayoutEditor(QMainWindow):
             # 设置序号列（第0列），不可编辑
             num_item = QTableWidgetItem(str(row + 1))
             num_item.setFlags(num_item.flags() & ~Qt.ItemIsEditable)
+            num_item.setTextAlignment(Qt.AlignCenter)  # 新增：设置居中对齐
             self.param_table.setItem(row, 0, num_item)
 
             # 设置参数名列（第1列），不可编辑
             param_name_item = QTableWidgetItem(param['参数名'])
             param_name_item.setFlags(param_name_item.flags() & ~Qt.ItemIsEditable)
+            param_name_item.setTextAlignment(Qt.AlignCenter)  # 新增：设置居中对齐
             self.param_table.setItem(row, 1, param_name_item)
 
             # 记录关键参数的行索引
@@ -2537,6 +2553,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 普通文本输入框（参数值列，第2列）
                 item = QTableWidgetItem(str(param['参数值']))  # 确保存储字符串
                 item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
+                item.setTextAlignment(Qt.AlignCenter)  # 新增：设置居中对齐
 
                 # 需要特殊处理的参数列表（验证+联动）
                 target_params = [
@@ -2580,6 +2597,7 @@ class TubeLayoutEditor(QMainWindow):
             # 设置单位列（第3列），不可编辑
             unit_item = QTableWidgetItem(param['单位'])
             unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
+            unit_item.setTextAlignment(Qt.AlignCenter)  # 新增：设置居中对齐
             self.param_table.setItem(row, 3, unit_item)
 
         # 初始化时触发一次折流板参数联动计算
