@@ -2446,7 +2446,7 @@ class TubeLayoutEditor(QMainWindow):
             # 处理特殊字段（下拉框）
             special_params = ["是否以外径为基准", "分程布置形式", "换热管排列方式", "滑道定位",
                               "折流板切口方向", "管程分程形式", "防冲板形式", "换热管外径 do", "管程程数",
-                              "换热管布置方式", "热交换器公称（换热管）长度 L", "换热管公称长度 LN"]  # 添加重命名后的参数名
+                              "换热管布置方式", "热交换器公称（换热管）长度 L", "换热管公称长度 LN","滑道定位"]  # 添加重命名后的参数名
 
             if param['参数名'] in special_params:
 
@@ -6772,15 +6772,31 @@ class TubeLayoutEditor(QMainWindow):
 
         # 创建输入控件
         input_widgets = {}
+        # 定义滑道定位的选项列表
+        slide_location_options = ["滑道与管板焊接", "滑道与第一块折流板焊接"]
+
         for param in param_names:
             row_layout = QHBoxLayout()
             label = QLabel(f"{param}:")
-            edit = QLineEdit()
-            edit.setText(default_values.get(param, ""))
-            row_layout.addWidget(label)
-            row_layout.addWidget(edit)
+
+            # 为"滑道定位"创建下拉框，其他参数保持输入框
+            if param == "滑道定位":
+                combo = QComboBox()
+                combo.addItems(slide_location_options)  # 使用预定义的选项列表
+                # 设置默认值 - 使用预定义的选项列表进行检查
+                if default_values.get(param, "") in slide_location_options:
+                    combo.setCurrentText(default_values[param])
+                input_widgets[param] = combo
+                row_layout.addWidget(label)
+                row_layout.addWidget(combo)
+            else:
+                edit = QLineEdit()
+                edit.setText(default_values.get(param, ""))
+                row_layout.addWidget(label)
+                row_layout.addWidget(edit)
+                input_widgets[param] = edit
+
             layout.addLayout(row_layout)
-            input_widgets[param] = edit
 
         button_layout = QHBoxLayout()
         ok_btn = QPushButton("确定")
@@ -6793,7 +6809,12 @@ class TubeLayoutEditor(QMainWindow):
             for row in range(self.param_table.rowCount()):
                 param_name = self.param_table.item(row, 1).text()
                 if param_name in input_widgets:
-                    new_value = input_widgets[param_name].text()
+                    # 根据控件类型获取值
+                    if isinstance(input_widgets[param_name], QComboBox):
+                        new_value = input_widgets[param_name].currentText()
+                    else:
+                        new_value = input_widgets[param_name].text()
+
                     widget = self.param_table.cellWidget(row, 2)
                     if isinstance(widget, QComboBox):
                         index = widget.findText(new_value)
@@ -6806,7 +6827,7 @@ class TubeLayoutEditor(QMainWindow):
 
             # 收集参数并调用build_huadao
             params = {
-                "location": input_widgets["滑道定位"].text(),
+                "location": input_widgets["滑道定位"].currentText(),  # 从下拉框获取值
                 "height": input_widgets["滑道高度"].text(),
                 "thickness": input_widgets["滑道厚度"].text(),
                 "angle": input_widgets["滑道与竖直中心线夹角"].text(),
