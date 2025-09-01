@@ -2429,6 +2429,9 @@ class TubeLayoutEditor(QMainWindow):
                                    "折流板切口方向", "管程分程形式", "防冲板形式", "换热管外径 do", "管程程数",
                                    "换热管布置方式"]:
                 combo = QComboBox()
+                # 判断是否为"是否以外径为基准"参数
+                is_diameter_based = (param['参数名'] == "是否以外径为基准")
+
                 if param['参数名'] == "是否以外径为基准":
                     combo.addItems(["是", "否"])
                 elif param['参数名'] == "分程布置形式":
@@ -2523,6 +2526,10 @@ class TubeLayoutEditor(QMainWindow):
                     else:
                         # 没有匹配项时设置为第一个
                         combo.setCurrentIndex(0)
+
+                # 关键修改：设置"是否以外径为基准"为不可编辑
+                if is_diameter_based:
+                    combo.setEnabled(False)  # 禁用下拉框，使其不可编辑
 
                 self.param_table.setCellWidget(row, 2, combo)
 
