@@ -1299,6 +1299,7 @@ class TubeLayoutEditor(QMainWindow):
         #     QMessageBox.warning(self, "计算警告", f"第二次计算布管布局失败: {str(e)}")
 
         # 解析输入参数部分保持不变
+        # print(self.input_json)
         try:
             if not hasattr(self, 'input_json') or not isinstance(self.input_json, dict):
                 raise ValueError("self.input_json不存在或不是字典类型")
@@ -1494,7 +1495,6 @@ class TubeLayoutEditor(QMainWindow):
 
     # TODO 布管函数
     def calculate_piping_layout(self):
-
         # 清除之前的连线和临时元素（保留坐标轴等基础元素）
         if hasattr(self, 'connection_lines'):
             for line in self.connection_lines:
@@ -1613,13 +1613,43 @@ class TubeLayoutEditor(QMainWindow):
 
         # 补充默认值
         input_json['LB_TieRodD'] = input_json.get('LB_TubeD', '')
-        input_json['LB_HEType'] = '2'
         input_json['LB_ClapboardType'] = '2'
+
+        # 3. 根据产品ID从数据库获取产品型式并设置热交换器类型
+        he_type = '2'  # 默认U型管式
+        if self.productID:
+            conn = None
+            try:
+                conn = create_product_connection()
+                if conn:
+                    with conn.cursor() as cursor:
+                        query = "SELECT 产品型式 FROM 产品设计活动表 WHERE 产品ID = %s"
+                        cursor.execute(query, (self.productID,))
+                        result = cursor.fetchone()
+
+                        if result and '产品型式' in result:
+                            product_type = result['产品型式']
+                            product_type = product_type.strip().upper()  # 标准化处理
+
+                            # 根据产品型式判断热交换器类型
+                            if product_type in ['AEU', 'BEU']:
+                                he_type = '2'  # U型管式
+                            elif product_type == 'NEM':
+                                he_type = '1'  # 固定管板式
+                            elif product_type in ['AES', 'BES']:
+                                he_type = '0'  # 浮头式
+            except pymysql.MySQLError as e:
+                print(f"数据库查询产品型式失败: {e}")
+            finally:
+                if conn and conn.open:
+                    conn.close()
+
+        input_json['LB_HEType'] = he_type
 
         self.input_json = input_json
         # print(self.input_json)
 
-        # 3. 执行布管计算
+        # 4. 执行布管计算
         try:
             json_str = run_layout_tube_calculate(
                 json.dumps(input_json, indent=2, ensure_ascii=False)
