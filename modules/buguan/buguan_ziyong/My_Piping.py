@@ -1495,7 +1495,12 @@ class TubeLayoutEditor(QMainWindow):
 
     # TODO 布管函数
     def calculate_piping_layout(self):
-        # 清除之前的连线和临时元素（保留坐标轴等基础元素）
+        self.is_x_line1 = False
+        self.is_x_line2 = False
+        self.is_x_line3 = False
+        self.is_y_line1 = False
+        self.is_y_line2 = False
+        self.is_y_line3 = False
         if hasattr(self, 'connection_lines'):
             for line in self.connection_lines:
                 if line in self.graphics_scene.items():
@@ -3501,7 +3506,7 @@ class TubeLayoutEditor(QMainWindow):
         scene.addLine(0, total_length, arrow_size / 2, total_length - arrow_size, pen_y)
 
         # TODO 角度文字
-        text_offset = 20
+        text_offset = 40
         scene.addText("0°", font).setPos(-10, -total_length - text_offset)
         scene.addText("90°", font).setPos(total_length + text_offset / 2, -30)
         scene.addText("180°", font).setPos(-20, total_length + 5)
@@ -4338,7 +4343,7 @@ class TubeLayoutEditor(QMainWindow):
         }
 
     # 获取选中的两个换热管的编号，y轴左右编号
-    def get_selected_y_center_numbers(self, selected_centers,print_cross_y_left,print_cross_y_right):
+    def get_selected_y_center_numbers(self, selected_centers, print_cross_y_left, print_cross_y_right):
         # 初始化返回的编号
         left_number = None
         right_number = None
@@ -4693,7 +4698,7 @@ class TubeLayoutEditor(QMainWindow):
 
     def cross_y_2_pipes(self, current_coords, print_cross_y_left, print_cross_y_right):
         # 获取选择的中心点编号（实际坐标传入，参数名从selected_centers改为current_coords，匹配需求）
-        result = self.get_selected_y_center_numbers(current_coords,print_cross_y_left,print_cross_y_right)
+        result = self.get_selected_y_center_numbers(current_coords, print_cross_y_left, print_cross_y_right)
 
         # 校验1：参照管孔不能为同一位置（连线需为倾斜线）
         if result['left_number'] == result['right_number']:
@@ -4770,7 +4775,7 @@ class TubeLayoutEditor(QMainWindow):
 
     # 交叉布管
     def on_cross_pipes_click(self):
-        # 分组并排序圆心（上下两部分）
+
         self.sorted_current_centers_up, self.sorted_current_centers_down = self.group_centers_by_y(
             self.current_centers
         )
@@ -4878,24 +4883,52 @@ class TubeLayoutEditor(QMainWindow):
             # x轴第一排
             if (coord1_in_up and coord2_in_down) or (coord1_in_down and coord2_in_up):
                 self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line1, self.print_cross_x_down_line1)
+                self.is_x_line1 = True
             # y轴第一排
             elif (coord3_in_left and coord4_in_right) or (coord3_in_right and coord4_in_left):
                 self.cross_y_2_pipes(current_coords, self.print_cross_y_left_line1, self.print_cross_y_right_line1)
+                self.is_y_line1 = True
             # x轴第二排
             elif (coord5_in_up and coord6_in_down) or (coord5_in_down and coord6_in_up):
-                self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line2, self.print_cross_x_down_line2)
+                if self.is_x_line1:
+                    self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line2, self.print_cross_x_down_line2)
+                    self.is_y_line2 = True
+                else:
+                    QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
+                    self.clear_selection_highlight()
+                    self.selected_centers.clear()
             # y轴第二排
             elif (coord7_in_left and coord8_in_right) or (coord7_in_right and coord8_in_left):
-                self.cross_y_2_pipes(current_coords, self.print_cross_y_left_line2, self.print_cross_y_right_line2)
+                if self.is_y_line1:
+                    self.cross_y_2_pipes(current_coords, self.print_cross_y_left_line2, self.print_cross_y_right_line2)
+                    self.is_y_line2 = True
+                else:
+                    QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
+                    self.clear_selection_highlight()
+                    self.selected_centers.clear()
             # x轴第三排
             elif (coord9_in_up and coord10_in_down) or (coord9_in_down and coord10_in_up):
-                self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line3, self.print_cross_x_down_line3)
+                if self.is_x_line1 and self.is_x_line2:
+                    self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line3, self.print_cross_x_down_line3)
+                    self.is_x_line3 = True
+                else:
+                    QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
+                    self.clear_selection_highlight()
+                    self.selected_centers.clear()
             # y轴第三排
             elif (coord11_in_left and coord12_in_right) or (coord11_in_right and coord12_in_left):
-                self.cross_y_2_pipes(current_coords, self.print_cross_y_left_line3, self.print_cross_y_right_line3)
+                if self.is_y_line1 and self.is_y_line2:
+                    self.cross_y_2_pipes(current_coords, self.print_cross_y_left_line3, self.print_cross_y_right_line3)
+                    self.is_y_line3=True
+                else:
+                    QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
+                    self.clear_selection_highlight()
+                    self.selected_centers.clear()
             else:
                 QMessageBox.warning(self, "选择错误", "参照管孔位置不正确")
-
+                self.clear_selection_highlight()
+                self.selected_centers.clear()
+        # 选择了四个换热管进行交叉布管的情况
         elif len(self.selected_centers) == 4:
             # 统计属于 self.original_print_cross_x_up_line1 和 self.original_print_cross_x_down_line1 的坐标数量
             x_up_count = sum(1 for coord in current_coords if coord in self.original_print_cross_x_up_line1)
@@ -4910,9 +4943,9 @@ class TubeLayoutEditor(QMainWindow):
             elif y_left_count == 2 and y_right_count == 2:
                 self.cross_y_4_pipes(current_coords)  # 两个属于 y_left，两个属于 y_right
             else:
-                print("选了四个坐标，但分组不符合要求")
+                QMessageBox.warning(self, "选择错误", "参照管孔位置不正确")
         else:
-            print("选中错误")
+            QMessageBox.warning(self, "选择错误", "参照管孔的数量应为2个或4个")
 
         #
         #     self.build_x_2_cross_pipes(self.selected_centers)
