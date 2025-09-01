@@ -802,9 +802,9 @@ class TubeLayoutEditor(QMainWindow):
         self.hole_distribution_table.itemSelectionChanged.connect(self.on_row_selection_changed)
 
         # TODO 布管页面设置布局比例
-        self.main_tube_layout.addWidget(self.param_frame, 3)  # 左侧参数区域占2份
-        self.main_tube_layout.addWidget(self.center_frame, 4)  # 中间图形区域占5份
-        self.main_tube_layout.addWidget(self.right_frame, 2)  # 右侧管孔区域占2份
+        self.main_tube_layout.addWidget(self.param_frame, 3)
+        self.main_tube_layout.addWidget(self.center_frame, 4)
+        self.main_tube_layout.addWidget(self.right_frame, 2)
         self.stacked_widget.addWidget(page)
 
         self.enable_scene_click_capture()
@@ -881,8 +881,8 @@ class TubeLayoutEditor(QMainWindow):
             self.right_frame.show()
             self.param_table.show()
             # 恢复原始布局比例
-            self.main_tube_layout.setStretch(0, 2)
-            self.main_tube_layout.setStretch(1, 5)
+            self.main_tube_layout.setStretch(0, 3)
+            self.main_tube_layout.setStretch(1, 4)
             self.main_tube_layout.setStretch(2, 2)
 
         # 强制刷新布局
