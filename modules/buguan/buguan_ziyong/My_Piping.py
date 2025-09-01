@@ -10,7 +10,7 @@ import pymysql
 from PyQt5.QtCore import QPointF, QRectF
 from PyQt5.QtCore import QSize
 from PyQt5.QtCore import Qt, QLineF
-from PyQt5.QtGui import QColor, QPen, QPolygonF, QPainterPath
+from PyQt5.QtGui import QColor, QPen, QPolygonF, QPainterPath, QIntValidator
 from PyQt5.QtGui import QPixmap, QFont, QBrush, QIcon
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QTabWidget, QTableWidget, QTableWidgetItem, QPushButton, QLabel, QGraphicsView,
@@ -2427,13 +2427,16 @@ class TubeLayoutEditor(QMainWindow):
             # 设置序号列（第0列），不可编辑
             num_item = QTableWidgetItem(str(row + 1))
             num_item.setFlags(num_item.flags() & ~Qt.ItemIsEditable)
-            num_item.setTextAlignment(Qt.AlignCenter)  # 新增：设置居中对齐
+            num_item.setTextAlignment(Qt.AlignCenter)
             self.param_table.setItem(row, 0, num_item)
 
             # 设置参数名列（第1列），不可编辑
-            param_name_item = QTableWidgetItem(param['参数名'])
+            param_name = param['参数名']
+
+
+            param_name_item = QTableWidgetItem(param_name)
             param_name_item.setFlags(param_name_item.flags() & ~Qt.ItemIsEditable)
-            param_name_item.setTextAlignment(Qt.AlignCenter)  # 新增：设置居中对齐
+            param_name_item.setTextAlignment(Qt.AlignCenter)
             self.param_table.setItem(row, 1, param_name_item)
 
             # 记录关键参数的行索引
@@ -2441,119 +2444,181 @@ class TubeLayoutEditor(QMainWindow):
                 self.baffle_params_rows[param['参数名']] = row
 
             # 处理特殊字段（下拉框）
-            if param['参数名'] in ["是否以外径为基准", "分程布置形式", "换热管排列方式", "滑道定位",
-                                   "折流板切口方向", "管程分程形式", "防冲板形式", "换热管外径 do", "管程程数",
-                                   "换热管布置方式"]:
-                combo = QComboBox()
-                # 判断是否为"是否以外径为基准"参数
-                is_diameter_based = (param['参数名'] == "是否以外径为基准")
+            special_params = ["是否以外径为基准", "分程布置形式", "换热管排列方式", "滑道定位",
+                              "折流板切口方向", "管程分程形式", "防冲板形式", "换热管外径 do", "管程程数",
+                              "换热管布置方式", "热交换器公称（换热管）长度 L", "换热管公称长度 LN"]  # 添加重命名后的参数名
 
-                if param['参数名'] == "是否以外径为基准":
-                    combo.addItems(["是", "否"])
-                elif param['参数名'] == "分程布置形式":
-                    combo.addItems(["未选择", "形式1", "形式2", "形式3"])
-                elif param['参数名'] == "换热管排列方式":
-                    combo.addItems(["正三角形", "转角正三角形", "正方形", "转角正方形"])
-                elif param['参数名'] == "折流板切口方向":
-                    combo.addItems(["水平上下", "垂直左右"])
-                elif param['参数名'] == "滑道定位":
-                    combo.addItems(["滑道与管板焊接", "滑道与第一块折流板焊接"])
-                elif param['参数名'] == "管程程数":
-                    combo.addItems(["2", "4", "6", "8", "10", "12"])
-                    # 为管程程数下拉框单独绑定信号
-                    combo.currentIndexChanged.connect(
-                        lambda index, r=row: self.on_tube_pass_combo_changed(r)
-                    )
-                elif param['参数名'] == "换热管布置方式":
-                    combo.addItems(["对中", "跨中", "任意"])
-                elif param['参数名'] == "管程分程形式":
-                    # 保存管程分程形式下拉框引用和行索引
-                    self.tube_pass_form_combo = combo
-                    self.tube_pass_form_row = row
+            if param['参数名'] in special_params:
 
-                    # 创建列表视图并设置为下拉框视图
-                    list_view = QListView()
-                    combo.setView(list_view)
-                    combo.setIconSize(QSize(75, 55))
+                # 特殊处理换热管公称长度 LN（原热交换器公称（换热管）长度 L）
+                if param['参数名'] in ["热交换器公称（换热管）长度 L", "换热管公称长度 LN"]:
+                    # 创建可编辑的下拉框
+                    combo = QComboBox()
+                    combo.setEditable(True)  # 关键修改：设置为可编辑，允许手动输入
 
-                    # 查找管程程数所在行
-                    tube_pass_row = -1
-                    for r in range(self.param_table.rowCount()):
-                        if self.param_table.item(r, 1) and self.param_table.item(r, 1).text() == "管程程数":
-                            tube_pass_row = r
-                            break
+                    # 添加下拉选项
+                    standard_lengths = ["1000", "1500", "2000", "2500", "3000", "4500",
+                                        "6000", "7500", "8000", "9000", "12000"]
+                    combo.addItems(standard_lengths)
 
-                    if tube_pass_row != -1:
-                        # 获取管程程数值
-                        tube_pass_widget = self.param_table.cellWidget(tube_pass_row, 2)
-                        if isinstance(tube_pass_widget, QComboBox):
-                            self.tube_pass_combo = tube_pass_widget
-                            # 绑定管程程数变化事件
-                            tube_pass_widget.currentIndexChanged.connect(self.on_tube_pass_changed)
-                            tube_pass = tube_pass_widget.currentText()
+                    # 设置输入验证器，只允许输入大于0的整数
+                    validator = QIntValidator(1, 99999, self)  # 最小值1，最大值99999
+                    combo.setValidator(validator)
+
+                    # 设置当前值
+                    try:
+                        current_value = str(param['参数值']).strip()
+                        if current_value:
+                            # 先尝试在下拉选项中查找
+                            index = combo.findText(current_value)
+                            if index >= 0:
+                                combo.setCurrentIndex(index)
+                            else:
+                                # 如果不在选项中，设置为自定义文本
+                                combo.setEditText(current_value)
+                                # 手动验证输入值
+                                self.validate_tube_length_input(combo, current_value, row)
                         else:
-                            tube_pass_item = self.param_table.item(tube_pass_row, 2)
-                            tube_pass = tube_pass_item.text() if tube_pass_item else ""
-
-                        # 加载图片到下拉框
-                        self.load_tube_pass_images(combo, tube_pass)
-                        # 绑定选择变化事件，更新参数值
-                        combo.currentIndexChanged.connect(self.on_tube_pass_form_changed)
-
-                    # 绑定列宽变化事件，动态调整图标大小
-                    def adjust_icon_size():
-                        if self.tube_pass_form_combo and hasattr(self, 'tube_pass_form_row'):
-                            # 获取当前列宽，减去边距
-                            column_width = self.param_table.columnWidth(self.tube_pass_form_column) - 20
-                            if column_width > 50:  # 最小宽度限制
-                                # 假设图片宽高比为4:3，可以根据实际图片比例调整
-                                icon_width = column_width
-                                icon_height = int(icon_width * 3 / 4)
-                                list_view.setIconSize(QSize(icon_width, icon_height))
-
-                    # 初始调整一次
-                    adjust_icon_size()
-                    # 监听列宽变化事件
-                    header = self.param_table.horizontalHeader()
-                    header.sectionResized.connect(
-                        lambda logicalIndex, oldSize, newSize: adjust_icon_size()
-                        if logicalIndex == self.tube_pass_form_column else None
-                    )
-
-                elif param['参数名'] == "防冲板形式":
-                    combo.addItems(["与定距管/拉杆焊接平板式", "与定距管/拉杆焊接折边式", "与圆筒焊接折边式"])
-                elif param['参数名'] == "换热管外径 do":
-                    combo.addItems(["10", "12", "14", "16", "19", "25", "30", "32", "35", "38", "45", "50", "55", "57"])
-                    # 绑定变更事件
-                    combo.currentIndexChanged.connect(
-                        lambda idx, r=row, p=param['参数名']: self.on_combobox_changed(r, p)
-                    )
-
-                # 设置当前值 - 确保参数值是字符串且存在于选项中
-                try:
-                    # 先尝试直接设置
-                    combo.setCurrentText(str(param['参数值']))
-                except:
-                    # 如果失败，查找最匹配的选项
-                    for i in range(combo.count()):
-                        if combo.itemText(i) == str(param['参数值']):
-                            combo.setCurrentIndex(i)
-                            break
-                    else:
-                        # 没有匹配项时设置为第一个
+                            # 默认选择第一个选项
+                            combo.setCurrentIndex(0)
+                    except:
                         combo.setCurrentIndex(0)
 
-                # 关键修改：设置"是否以外径为基准"为不可编辑
-                if is_diameter_based:
-                    combo.setEnabled(False)  # 禁用下拉框，使其不可编辑
+                    # 保存原始值
+                    self._original_values[(row, 2)] = str(param['参数值']) if param['参数值'] else ""
 
-                self.param_table.setCellWidget(row, 2, combo)
+                    # 绑定文本变化事件进行验证
+                    def create_validation_handler(combo_box, row_idx):
+                        def validate_tube_length():
+                            text = combo_box.currentText().strip()
+                            if text:
+                                self.validate_tube_length_input(combo_box, text, row_idx)
+
+                        return validate_tube_length
+
+                    # 连接编辑完成信号
+                    combo.lineEdit().editingFinished.connect(create_validation_handler(combo, row))
+
+                    # 连接当前文本变化信号，实时更新原始值
+                    def update_original_value(text, row_idx):
+                        self._original_values[(row_idx, 2)] = text
+
+                    combo.currentTextChanged.connect(lambda text: update_original_value(text, row))
+
+                    self.param_table.setCellWidget(row, 2, combo)
+
+                else:
+                    combo = QComboBox()
+                    # 判断是否为"是否以外径为基准"参数
+                    is_diameter_based = (param['参数名'] == "是否以外径为基准")
+
+                    if param['参数名'] == "是否以外径为基准":
+                        combo.addItems(["是", "否"])
+                    elif param['参数名'] == "分程布置形式":
+                        combo.addItems(["未选择", "形式1", "形式2", "形式3"])
+                    elif param['参数名'] == "换热管排列方式":
+                        combo.addItems(["正三角形", "转角正三角形", "正方形", "转角正方形"])
+                    elif param['参数名'] == "折流板切口方向":
+                        combo.addItems(["水平上下", "垂直左右"])
+                    elif param['参数名'] == "滑道定位":
+                        combo.addItems(["滑道与管板焊接", "滑道与第一块折流板焊接"])
+                    elif param['参数名'] == "管程程数":
+                        combo.addItems(["2", "4", "6", "8", "10", "12"])
+                        # 为管程程数下拉框单独绑定信号
+                        combo.currentIndexChanged.connect(
+                            lambda index, r=row: self.on_tube_pass_combo_changed(r)
+                        )
+                    elif param['参数名'] == "换热管布置方式":
+                        combo.addItems(["对中", "跨中", "任意"])
+                    elif param['参数名'] == "管程分程形式":
+                        # 保存管程分程形式下拉框引用和行索引
+                        self.tube_pass_form_combo = combo
+                        self.tube_pass_form_row = row
+
+                        # 创建列表视图并设置为下拉框视图
+                        list_view = QListView()
+                        combo.setView(list_view)
+                        combo.setIconSize(QSize(75, 55))
+
+                        # 查找管程程数所在行
+                        tube_pass_row = -1
+                        for r in range(self.param_table.rowCount()):
+                            if self.param_table.item(r, 1) and self.param_table.item(r, 1).text() == "管程程数":
+                                tube_pass_row = r
+                                break
+
+                        if tube_pass_row != -1:
+                            # 获取管程程数值
+                            tube_pass_widget = self.param_table.cellWidget(tube_pass_row, 2)
+                            if isinstance(tube_pass_widget, QComboBox):
+                                self.tube_pass_combo = tube_pass_widget
+                                # 绑定管程程数变化事件
+                                tube_pass_widget.currentIndexChanged.connect(self.on_tube_pass_changed)
+                                tube_pass = tube_pass_widget.currentText()
+                            else:
+                                tube_pass_item = self.param_table.item(tube_pass_row, 2)
+                                tube_pass = tube_pass_item.text() if tube_pass_item else ""
+
+                            # 加载图片到下拉框
+                            self.load_tube_pass_images(combo, tube_pass)
+                            # 绑定选择变化事件，更新参数值
+                            combo.currentIndexChanged.connect(self.on_tube_pass_form_changed)
+
+                        # 绑定列宽变化事件，动态调整图标大小
+                        def adjust_icon_size():
+                            if self.tube_pass_form_combo and hasattr(self, 'tube_pass_form_row'):
+                                # 获取当前列宽，减去边距
+                                column_width = self.param_table.columnWidth(self.tube_pass_form_column) - 20
+                                if column_width > 50:  # 最小宽度限制
+                                    # 假设图片宽高比为4:3，可以根据实际图片比例调整
+                                    icon_width = column_width
+                                    icon_height = int(icon_width * 3 / 4)
+                                    list_view.setIconSize(QSize(icon_width, icon_height))
+
+                        # 初始调整一次
+                        adjust_icon_size()
+                        # 监听列宽变化事件
+                        header = self.param_table.horizontalHeader()
+                        header.sectionResized.connect(
+                            lambda logicalIndex, oldSize, newSize: adjust_icon_size()
+                            if logicalIndex == self.tube_pass_form_column else None
+                        )
+
+                    elif param['参数名'] == "防冲板形式":
+                        combo.addItems(["与定距管/拉杆焊接平板式", "与定距管/拉杆焊接折边式", "与圆筒焊接折边式"])
+                    elif param['参数名'] == "换热管外径 do":
+                        combo.addItems(
+                            ["10", "12", "14", "16", "19", "25", "30", "32", "35", "38", "45", "50", "55", "57"])
+                        # 绑定变更事件
+                        combo.currentIndexChanged.connect(
+                            lambda idx, r=row, p=param['参数名']: self.on_combobox_changed(r, p)
+                        )
+
+                    # 设置当前值 - 确保参数值是字符串且存在于选项中
+                    try:
+                        # 先尝试直接设置
+                        combo.setCurrentText(str(param['参数值']))
+                    except:
+                        # 如果失败，查找最匹配的选项
+                        for i in range(combo.count()):
+                            if combo.itemText(i) == str(param['参数值']):
+                                combo.setCurrentIndex(i)
+                                break
+                        else:
+                            # 没有匹配项时设置为第一个
+                            combo.setCurrentIndex(0)
+
+                    # 关键修改：设置"是否以外径为基准"为不可编辑
+                    if is_diameter_based:
+                        combo.setEnabled(False)  # 禁用下拉框，使其不可编辑
+
+                    self.param_table.setCellWidget(row, 2, combo)
 
             else:
                 # 普通文本输入框（参数值列，第2列）
                 item = QTableWidgetItem(str(param['参数值']))  # 确保存储字符串
                 item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
-                item.setTextAlignment(Qt.AlignCenter)  # 新增：设置居中对齐
+                item.setTextAlignment(Qt.AlignCenter)
 
                 # 需要特殊处理的参数列表（验证+联动）
                 target_params = [
@@ -2597,11 +2662,37 @@ class TubeLayoutEditor(QMainWindow):
             # 设置单位列（第3列），不可编辑
             unit_item = QTableWidgetItem(param['单位'])
             unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
-            unit_item.setTextAlignment(Qt.AlignCenter)  # 新增：设置居中对齐
+            unit_item.setTextAlignment(Qt.AlignCenter)
             self.param_table.setItem(row, 3, unit_item)
 
         # 初始化时触发一次折流板参数联动计算
         self.update_baffle_parameters(None)
+
+    # 新增验证函数
+    def validate_tube_length_input(self, combo_box, text, row_idx):
+        """验证换热管长度输入"""
+        if text:
+            try:
+                value = int(text)
+                if value <= 0:
+                    # 输入不合法，恢复原始值
+                    original = self._original_values.get((row_idx, 2), "")
+                    if original:
+                        combo_box.setEditText(original)
+                    else:
+                        combo_box.setCurrentIndex(0)
+                    QMessageBox.warning(self, "输入错误", "换热管公称长度必须为大于0的整数")
+                    return False
+            except ValueError:
+                # 输入不是整数，恢复原始值
+                original = self._original_values.get((row_idx, 2), "")
+                if original:
+                    combo_box.setEditText(original)
+                else:
+                    combo_box.setCurrentIndex(0)
+                QMessageBox.warning(self, "输入错误", "换热管公称长度必须为整数")
+                return False
+        return True
 
     def on_tube_pass_combo_changed(self, row):
         """管程程数下拉框变化处理函数"""
@@ -4944,7 +5035,7 @@ class TubeLayoutEditor(QMainWindow):
             elif (coord11_in_left and coord12_in_right) or (coord11_in_right and coord12_in_left):
                 if self.is_y_line1 and self.is_y_line2:
                     self.cross_y_2_pipes(current_coords, self.print_cross_y_left_line3, self.print_cross_y_right_line3)
-                    self.is_y_line3=True
+                    self.is_y_line3 = True
                 else:
                     QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
                     self.clear_selection_highlight()
