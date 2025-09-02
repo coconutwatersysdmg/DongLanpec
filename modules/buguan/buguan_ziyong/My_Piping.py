@@ -289,6 +289,36 @@ class PreviewDialog(QDialog):
         layout.addWidget(button_box)
 
 
+class NoWheelComboBox(QComboBox):
+    """自定义下拉框，禁用鼠标滚轮"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def wheelEvent(self, event):
+        # 完全忽略滚轮事件
+        event.ignore()
+
+
+class NoWheelTableWidget(QTableWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def wheelEvent(self, event):
+        pos = event.pos()
+        row = self.rowAt(pos.y())
+        column = self.columnAt(pos.x())
+
+        if 0 <= row < self.rowCount() and 0 <= column < self.columnCount():
+            cell_widget = self.cellWidget(row, column)
+
+            if cell_widget and isinstance(cell_widget, QComboBox):
+                # 让下拉框自己处理事件（已经被禁用）
+                return
+
+        super().wheelEvent(event)
+
+
 # 主窗口 --------------------------------------------------------
 def get_plate_form_params(image_name):
     """从管板形式表中获取参数"""
@@ -547,7 +577,7 @@ class TubeLayoutEditor(QMainWindow):
         param_layout.setContentsMargins(5, 5, 5, 5)
 
         # 参数表格
-        self.param_table = QTableWidget()
+        self.param_table = NoWheelTableWidget()
         self.param_table.setColumnCount(4)
         self.param_table.setHorizontalHeaderLabels(["序号", "参数名", "参数值", "单位"])
         self.param_table.verticalHeader().setVisible(False)
@@ -2509,7 +2539,7 @@ class TubeLayoutEditor(QMainWindow):
                     self.param_table.setCellWidget(row, 2, combo)
 
                 else:
-                    combo = QComboBox()
+                    combo = NoWheelComboBox()
                     # 判断是否为"是否以外径为基准"参数
                     is_diameter_based = (param['参数名'] == "是否以外径为基准")
 
