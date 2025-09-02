@@ -1713,6 +1713,7 @@ class TubeLayoutEditor(QMainWindow):
             # 强制刷新场景
             self.graphics_scene.update()
             QApplication.processEvents()
+            self.update_SN()
 
             # 5. 根据产品型式设置交叉布管按钮状态
             # 查找交叉布管按钮（通过按钮文本）
@@ -5008,7 +5009,7 @@ class TubeLayoutEditor(QMainWindow):
             elif (coord5_in_up and coord6_in_down) or (coord5_in_down and coord6_in_up):
                 if self.is_x_line1:
                     self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line2, self.print_cross_x_down_line2)
-                    self.is_y_line2 = True
+                    self.is_x_line2 = True
                 else:
                     QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
                     self.clear_selection_highlight()
