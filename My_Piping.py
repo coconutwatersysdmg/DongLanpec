@@ -4411,16 +4411,16 @@ class TubeLayoutEditor(QMainWindow):
                 print("选了两个，但是位置不正确")
         elif len(self.selected_centers) == 4:
             # 统计属于 self.original_print_cross_x_up_line1 和 self.original_print_cross_x_down_line1 的坐标数量
-            x_up_count = sum(1 for coord in current_coords if coord in self.original_print_cross_x_up_line1)
-            x_down_count = sum(1 for coord in current_coords if coord in self.original_print_cross_x_down_line1)
+            x_up_count_line1 = sum(1 for coord in current_coords if coord in self.original_print_cross_x_up_line1)
+            x_down_count_line1 = sum(1 for coord in current_coords if coord in self.original_print_cross_x_down_line1)
 
             # 统计属于 self.original_print_cross_y_left_line1 和 self.original_print_cross_y_right_line1 的坐标数量
-            y_left_count = sum(1 for coord in current_coords if coord in self.original_print_cross_y_left_line1)
-            y_right_count = sum(1 for coord in current_coords if coord in self.original_print_cross_y_right_line1)
+            y_left_count_line1 = sum(1 for coord in current_coords if coord in self.original_print_cross_y_left_line1)
+            y_right_count_line1 = sum(1 for coord in current_coords if coord in self.original_print_cross_y_right_line1)
 
-            if x_up_count == 2 and x_down_count == 2:
+            if x_up_count_line1 == 2 and x_down_count_line1 == 2:
                 self.cross_x_4_pipes(current_coords)  # 两个属于 x_up，两个属于 x_down
-            elif y_left_count == 2 and y_right_count == 2:
+            elif y_left_count_line1 == 2 and y_right_count_line1 == 2:
                 self.cross_y_4_pipes(current_coords)  # 两个属于 y_left，两个属于 y_right
             else:
                 print("选了四个坐标，但分组不符合要求")
