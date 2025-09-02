@@ -3051,7 +3051,6 @@ class TubeLayoutEditor(QMainWindow):
             layout = QVBoxLayout()
             save_dialog.setLayout(layout)
 
-            # 添加图标和消息（可以添加 QIcon，如果需要）
             message_label = QLabel(message)
             message_label.setAlignment(Qt.AlignCenter)
             message_label.setStyleSheet("font-size: 16px; font-weight: bold;")
@@ -4188,6 +4187,7 @@ class TubeLayoutEditor(QMainWindow):
         self.calculate_piping_layout()
         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
             self.global_centers)
+
         # 布管后初始化
         self.selected_centers = []
         self.lagan_info = []  # 拉杆
@@ -4728,6 +4728,8 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 pair_x_info_down = seq_start
                 pair_x_info_up = seq_end
+            print(pair_x_info_up)
+            print(pair_x_info_down)
 
             # 验证初始序列长度相等
             assert len(pair_x_info_up) == len(pair_x_info_down), "序列长度必须相等"
@@ -4836,6 +4838,8 @@ class TubeLayoutEditor(QMainWindow):
         elif tubeline_num == '6':
             left_num = result['left_number']
             right_num = result['right_number']
+            print(left_num)
+            print(right_num)
             total_count = len(print_cross_y_left)
             diff = abs(left_num - right_num)
 
@@ -4853,6 +4857,8 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 pair_y_info_left = seq_end
                 pair_y_info_right = seq_start
+            print(pair_y_info_left)
+            print(pair_y_info_right)
 
             # 验证初始序列长度相等
             assert len(pair_y_info_left) == len(pair_y_info_right), "序列长度必须相等"
@@ -4861,14 +4867,14 @@ class TubeLayoutEditor(QMainWindow):
             filtered_right = []
             # 遍历每一对元素
             for u, d in zip(pair_y_info_left, pair_y_info_right):
-                condition1 = (u < half_total < d)
-                condition2 = (u > half_total > d)
-                condition3 = (u == half_total and d > half_total)
-                condition4 = (u > half_total and d == half_total)
-
-                if not (condition1 or condition2 or condition3 or condition4) or u == d:
-                    filtered_left.append(u)
-                    filtered_right.append(d)
+                # condition1 = (u < half_total < d)
+                # condition2 = (u > half_total > d)
+                # condition3 = (u == half_total and d > half_total)
+                # condition4 = (u > half_total and d == half_total)
+                #
+                # if not (condition1 or condition2 or condition3 or condition4) or u == d:
+                filtered_left.append(u)
+                filtered_right.append(d)
             # 更新列表
             pair_y_info_left = filtered_left
             pair_y_info_right = filtered_right
@@ -4944,6 +4950,7 @@ class TubeLayoutEditor(QMainWindow):
 
     def cross_y_2_pipes(self, current_coords, print_cross_y_left, print_cross_y_right):
         # 获取选择的中心点编号（实际坐标传入，参数名从selected_centers改为current_coords，匹配需求）
+        global valid_distance
         result = self.get_selected_y_center_numbers(current_coords, print_cross_y_left, print_cross_y_right)
 
         # 校验1：参照管孔不能为同一位置（连线需为倾斜线）
@@ -4988,8 +4995,14 @@ class TubeLayoutEditor(QMainWindow):
                         used_right_nums.add(right_num)
 
             # 第二步：构建所有交叉管道（保持原构建逻辑，参数格式不变）
+            if coordinate_pairs:
+                left_selected, right_selected = coordinate_pairs[0]
+                valid_distance = int(self.calculate_distance([left_selected, right_selected]))
+
             for left_selected, right_selected in coordinate_pairs:
-                self.build_2_cross_pipes([left_selected, right_selected])  # 格式：[(x1,y1), (x2,y2)]
+                distance = self.calculate_distance([left_selected, right_selected])
+                if int(distance) == valid_distance:
+                    self.build_2_cross_pipes([left_selected, right_selected])
 
             # 第三步：收集并删除未使用的环热管
             del_centers = []
@@ -5566,8 +5579,8 @@ class TubeLayoutEditor(QMainWindow):
         QApplication.processEvents()
 
     def selected_to_current_coords(self, selected_centers):
-        self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
-            self.global_centers)
+        # self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
+        #     self.global_centers)
         current_coords = []
         if isinstance(selected_centers, str):
             try:
