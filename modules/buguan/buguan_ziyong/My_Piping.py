@@ -2434,7 +2434,6 @@ class TubeLayoutEditor(QMainWindow):
             # 设置参数名列（第1列），不可编辑
             param_name = param['参数名']
 
-
             param_name_item = QTableWidgetItem(param_name)
             param_name_item.setFlags(param_name_item.flags() & ~Qt.ItemIsEditable)
             param_name_item.setTextAlignment(Qt.AlignCenter)
@@ -2447,7 +2446,8 @@ class TubeLayoutEditor(QMainWindow):
             # 处理特殊字段（下拉框）
             special_params = ["是否以外径为基准", "分程布置形式", "换热管排列方式", "滑道定位",
                               "折流板切口方向", "管程分程形式", "防冲板形式", "换热管外径 do", "管程程数",
-                              "换热管布置方式", "热交换器公称（换热管）长度 L", "换热管公称长度 LN","滑道定位"]  # 添加重命名后的参数名
+                              "换热管布置方式", "热交换器公称（换热管）长度 L", "换热管公称长度 LN",
+                              "滑道定位"]  # 添加重命名后的参数名
 
             if param['参数名'] in special_params:
 
@@ -3102,6 +3102,27 @@ class TubeLayoutEditor(QMainWindow):
         safe_productID = escape_str(productID)
         delete_sql = f"DELETE FROM {table_name} WHERE `产品ID` = '{safe_productID}'"
         sql_statements.append(delete_sql)
+
+        # -------------------------- 新增逻辑：处理管程程数为2时的分程隔板参数 --------------------------
+        # 1. 先遍历tube_data，判断是否存在"管程程数"且值为"2"
+        is_tube_pass_two = False
+        for data in tube_data:
+            current_param_name = data.get("参数名", "").strip()
+            current_param_value = data.get("参数值", "").strip()
+            # 确认找到"管程程数"且参数值为"2"
+            if current_param_name == "管程程数" and current_param_value == "2":
+                is_tube_pass_two = True
+                break
+
+        # 2. 若满足条件，遍历tube_data修改"分程隔板两侧相邻管中心距（竖直）"的参数值为0
+        if is_tube_pass_two:
+            for data in tube_data:
+                current_param_name = data.get("参数名", "").strip()
+                # 找到目标参数，将其参数值设为0
+                if current_param_name == "分程隔板两侧相邻管中心距（竖直）":
+                    data["参数值"] = "0"  # 统一设为字符串"0"，与原有参数值格式保持一致
+                    break  # 假设该参数唯一，找到后退出循环
+        # ------------------------------------------------------------------------------------------
 
         cross_params = {
             "公称直径 DN": None,
@@ -4506,6 +4527,27 @@ class TubeLayoutEditor(QMainWindow):
         # 未找到参数时返回None
         return None
 
+    def get_tube_radius_count(self):
+        row_count = self.param_table.rowCount()
+        for row in range(row_count):
+            # 获取当前行的参数名
+            name_item = self.param_table.item(row, 1)
+            if not name_item:
+                continue
+
+            if name_item.text() == "换热管外径 do":
+                # 检查单元格是否是QComboBox控件
+                cell_widget = self.param_table.cellWidget(row, 2)
+                if isinstance(cell_widget, QComboBox):
+                    return cell_widget.currentText()
+                else:
+                    # 普通文本单元格
+                    value_item = self.param_table.item(row, 2)
+                    return value_item.text() if value_item else None
+
+        # 未找到参数时返回None
+        return None
+
     # 获取配对，交叉布管核心函数，需要按照管程程数分类讨论。此为在x轴上下选取两个换热管
     def get_x_2_number_sequences(self, result, print_cross_x_up):
         # 初始化返回变量
@@ -4890,6 +4932,14 @@ class TubeLayoutEditor(QMainWindow):
     def cross_y_4_pipes(self, selected_centers):
         print("y4")
 
+    def calculate_distance(self, selected_centers):
+        if len(selected_centers) != 2:
+            raise ValueError("selected_centers必须包含且仅包含两个坐标点")
+        actual_coords = self.selected_to_current_coords(selected_centers)
+        (x1, y1), (x2, y2) = actual_coords
+        distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
+        return distance
+
     # 交叉布管
     def on_cross_pipes_click(self):
 
@@ -4964,10 +5014,35 @@ class TubeLayoutEditor(QMainWindow):
             return
 
         current_coords = self.selected_to_current_coords(self.selected_centers)
-        # 选择了两个换热管进行交叉布管的情况
+        # 管孔数量为2个
         if len(self.selected_centers) == 2:
+            tube_radius = self.get_tube_radius_count()
+            distance = self.calculate_distance(self.selected_centers)
 
-            # 判断两个坐标是否分别属于添加序号前的self.print_cross_x_up_line1和self.print_cross_x_down_line1（顺序不限）
+            tube_outer_diameter = int(tube_radius)
+            rmin_table = {
+                10: 20, 12: 24, 14: 30, 16: 32, 19: 40, 20: 40, 22: 45,
+                25: 50, 30: 60, 32: 65, 35: 70, 38: 76, 45: 90, 50: 100,
+                55: 110, 57: 115
+            }
+
+            # 检查是否需要进行弯曲半径检查
+            perform_check = tube_outer_diameter in rmin_table
+
+            # 如果需要检查且不满足条件，则给出提示
+            if perform_check:
+                required_rmin = rmin_table[tube_outer_diameter]
+                if distance < required_rmin:
+                    QMessageBox.warning(self, "距离不足", "参照管孔之间倾斜线的距离不满足U形换热管的最小弯曲半径。")
+                    self.clear_selection_highlight()
+                    self.selected_centers.clear()
+                    # 不继续执行后续逻辑
+                    return
+
+            # 转换坐标（假设已通过selected_to_current_coords获取实际坐标）
+            current_coords = self.selected_to_current_coords(self.selected_centers)
+
+            # 判断两个坐标是否分别属于指定的线（顺序不限）
             coord1_in_up = current_coords[0] in self.original_print_cross_x_up_line1
             coord1_in_down = current_coords[0] in self.original_print_cross_x_down_line1
             coord2_in_up = current_coords[1] in self.original_print_cross_x_up_line1
@@ -4997,6 +5072,7 @@ class TubeLayoutEditor(QMainWindow):
             coord11_in_right = current_coords[0] in self.original_print_cross_y_right_line3
             coord12_in_left = current_coords[1] in self.original_print_cross_y_left_line3
             coord12_in_right = current_coords[1] in self.original_print_cross_y_right_line3
+
             # x轴第一排
             if (coord1_in_up and coord2_in_down) or (coord1_in_down and coord2_in_up):
                 self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line1, self.print_cross_x_down_line1)
@@ -5045,7 +5121,7 @@ class TubeLayoutEditor(QMainWindow):
                 QMessageBox.warning(self, "选择错误", "参照管孔位置不正确")
                 self.clear_selection_highlight()
                 self.selected_centers.clear()
-        # 选择了四个换热管进行交叉布管的情况
+        # 管孔数量为4个
         elif len(self.selected_centers) == 4:
             # 统计属于 self.original_print_cross_x_up_line1 和 self.original_print_cross_x_down_line1 的坐标数量
             x_up_count = sum(1 for coord in current_coords if coord in self.original_print_cross_x_up_line1)
