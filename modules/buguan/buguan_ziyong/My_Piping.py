@@ -242,32 +242,41 @@ class PreviewDialog(QDialog):
 
         # 参数表格
         self.table = QTableWidget()
-        self.table.setColumnCount(4)  # 保持四列
+        self.table.setColumnCount(4)
         self.table.setHorizontalHeaderLabels(["序号", "参数名", "参数值", "单位"])
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
 
+        # 强制设置表格样式
+        self.table.setStyleSheet("""
+            QTableWidget {
+                gridline-color: #d0d0d0;
+            }
+            QTableWidget::item {
+                padding: 5px;
+            }
+            /* 为不同列设置不同的对齐方式 */
+            QTableWidget::item:first {
+                text-align: center;  /* 第一列居中 */
+            }
+            QTableWidget::item {
+                text-align: left;    /* 其他列左对齐 */
+            }
+        """)
+
         # 填充数据
         self.table.setRowCount(len(parameters))
         for row, param in enumerate(parameters):
-            # 确保每个参数都有 '序号', '参数名', '参数值', '单位'
-            num = param.get('序号', str(row + 1))  # 如果没有序号，使用行号
+            num = param.get('序号', str(row + 1))
             name = param.get('参数名', 'N/A')
             value = param.get('参数值', 'N/A')
             unit = param.get('单位', 'N/A')
 
-            # 创建单元格并设置居中对齐
+            # 创建单元格项并设置数据
             num_item = QTableWidgetItem(num)
-            num_item.setTextAlignment(Qt.AlignCenter)  # 水平垂直居中
-
             name_item = QTableWidgetItem(name)
-            name_item.setTextAlignment(Qt.AlignCenter)
-
             value_item = QTableWidgetItem(value)
-            value_item.setTextAlignment(Qt.AlignCenter)
-
             unit_item = QTableWidgetItem(unit)
-            unit_item.setTextAlignment(Qt.AlignCenter)
 
             # 设置单元格
             self.table.setItem(row, 0, num_item)
@@ -275,11 +284,24 @@ class PreviewDialog(QDialog):
             self.table.setItem(row, 2, value_item)
             self.table.setItem(row, 3, unit_item)
 
-            # 调整列宽
-            self.table.setColumnWidth(0, 50)
-            self.table.setColumnWidth(1, 250)
-            self.table.setColumnWidth(2, 250)
-            self.table.setColumnWidth(3, 50)
+        # 调整列宽后，重新设置对齐方式（确保生效）
+        self.table.setColumnWidth(0, 50)
+        self.table.setColumnWidth(1, 300)
+        self.table.setColumnWidth(2, 250)
+        self.table.setColumnWidth(3, 80)
+
+        # 在数据填充完成后，强制设置对齐方式
+        for row in range(self.table.rowCount()):
+            # 第一列居中
+            item = self.table.item(row, 0)
+            if item:
+                item.setTextAlignment(Qt.AlignCenter)
+
+            # 其他列左对齐
+            for col in range(1, 4):
+                item = self.table.item(row, col)
+                if item:
+                    item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         layout.addWidget(self.table)
 
@@ -2466,7 +2488,7 @@ class TubeLayoutEditor(QMainWindow):
 
             param_name_item = QTableWidgetItem(param_name)
             param_name_item.setFlags(param_name_item.flags() & ~Qt.ItemIsEditable)
-            param_name_item.setTextAlignment(Qt.AlignCenter)
+            # param_name_item.setTextAlignment(Qt.AlignCenter)
             self.param_table.setItem(row, 1, param_name_item)
 
             # 记录关键参数的行索引
@@ -2649,7 +2671,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 普通文本输入框（参数值列，第2列）
                 item = QTableWidgetItem(str(param['参数值']))  # 确保存储字符串
                 item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
-                item.setTextAlignment(Qt.AlignCenter)
+                # item.setTextAlignment(Qt.AlignCenter)
 
                 # 需要特殊处理的参数列表（验证+联动）
                 target_params = [
@@ -2693,7 +2715,7 @@ class TubeLayoutEditor(QMainWindow):
             # 设置单位列（第3列），不可编辑
             unit_item = QTableWidgetItem(param['单位'])
             unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
-            unit_item.setTextAlignment(Qt.AlignCenter)
+            # unit_item.setTextAlignment(Qt.AlignCenter)
             self.param_table.setItem(row, 3, unit_item)
 
         # 初始化时触发一次折流板参数联动计算
