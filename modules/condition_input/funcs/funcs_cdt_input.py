@@ -1,6 +1,7 @@
 from openpyxl.styles import Alignment
 
-from modules.cailiaodingyi.funcs.funcs_pdf_change import get_gasket_contact_dims_from_db, update_element_name_data
+from modules.cailiaodingyi.funcs.funcs_pdf_change import get_gasket_contact_dims_from_db, update_element_name_data, \
+    get_design_params_by_product_id, update_guankou_param_flex_db, query_guankou_affiliation
 from modules.condition_input.funcs.db_cnt import get_connection
 from PyQt5.QtWidgets import (QTableWidgetItem, QTableWidget, QHeaderView, QWidget,
                              QMessageBox, QUndoStack, QFileDialog, QComboBox, QStyledItemDelegate, QShortcut)
@@ -1061,6 +1062,65 @@ def sync_design_params_to_element_params(product_id):
             d1 = dims["垫片与密封面接触内径D1"]
             update_element_name_data(product_id, element_name, "垫片名义内径D1n", str(d1))
 
+def sync_corrosion_to_guankou_param(product_id, guankou_codes, category_label=None):
+    """
+    将条件输入（设计数据表）的腐蚀裕量同步到管口参数：
+    - case1: 当管程/壳程腐蚀裕量数值相同 → 用该值填写管口3列默认值
+    - case2: 如果管口号都属于管程或壳程 → 用对应的腐蚀裕量值填写
+    - case3: 以上两种情况都不满足时 → 不填，保持为空
+    """
+
+    # 1. 从条件输入获取腐蚀裕量
+    ca_map = get_design_params_by_product_id(product_id)
+    tube_ca = ca_map.get("腐蚀裕量*", {}).get("管程数值", "")
+    shell_ca = ca_map.get("腐蚀裕量*", {}).get("壳程数值", "")
+
+    # 如果没有腐蚀裕量则跳过
+    if not tube_ca and not shell_ca:
+        print("[跳过] 条件输入没有腐蚀裕量")
+        return
+
+    print(f"[调试] tube_ca={tube_ca} ({type(tube_ca)}), shell_ca={shell_ca} ({type(shell_ca)})")
+
+    # === case1: 管壳程腐蚀裕量相同 ===
+    if tube_ca and shell_ca and str(tube_ca) == str(shell_ca):
+        update_guankou_param_flex_db(product_id, "接管腐蚀裕量", str(tube_ca), tab_name=category_label)
+        print(f"[case1] 管壳程腐蚀裕量相同，写入默认值 {tube_ca}")
+        return
+
+    # === case2: 管壳程腐蚀裕量不同 ===
+    if guankou_codes:
+        # 获取所有管口所属（管程/壳程）
+        affiliations = [query_guankou_affiliation(product_id, code) for code in guankou_codes]
+
+        # 如果所有管口号都属于管程
+        if all(a == "管程" for a in affiliations if a):
+            if tube_ca:
+                update_guankou_param_flex_db(product_id, "接管腐蚀裕量", str(tube_ca), tab_name=category_label)
+                print(f"[case2] {guankou_codes} 都属于管程，写入 {tube_ca}")
+            else:
+                update_guankou_param_flex_db(product_id, "接管腐蚀裕量", "", tab_name=category_label)
+                print(f"[case2] {guankou_codes} 管程腐蚀裕量为空，留空")
+
+        # 如果所有管口号都属于壳程
+        elif all(a == "壳程" for a in affiliations if a):
+            if shell_ca:
+                update_guankou_param_flex_db(product_id, "接管腐蚀裕量", str(shell_ca), tab_name=category_label)
+                print(f"[case2] {guankou_codes} 都属于壳程，写入 {shell_ca}")
+            else:
+                update_guankou_param_flex_db(product_id, "接管腐蚀裕量", "", tab_name=category_label)
+                print(f"[case2] {guankou_codes} 壳程腐蚀裕量为空，留空")
+
+        # 如果管口号的所属元件既有管程也有壳程
+        else:
+            update_guankou_param_flex_db(product_id, "接管腐蚀裕量", "", tab_name=category_label)
+            print(f"[case3] {guankou_codes} 管口号所属元件不同，留空")
+
+    else:
+        # 如果没有管口号且腐蚀裕量不同，保持为空
+        update_guankou_param_flex_db(product_id, "接管腐蚀裕量", "", tab_name=category_label)
+        print("[case3] 没有管口号且腐蚀裕量不同，留空")
+
 def save_all_tables(viewer, product_id):
     """
     保存所有表格数据（标准、设计、通用、涂漆、无损检测）至数据库
@@ -1707,6 +1767,7 @@ def update_design_data_table_from_excel(excel_path: str, table_widget):
     except Exception as e:
         raise RuntimeError(f"导入设计数据失败：{str(e)}")
 
+# 已改
 def import_multi_conditions_from_excel(excel_path: str, product_id: int, viewer: QWidget):
     """
     导入Excel中的工况2/3小表到数据库，并做校核。
@@ -1749,9 +1810,9 @@ def import_multi_conditions_from_excel(excel_path: str, product_id: int, viewer:
                         header_item = table.verticalHeaderItem(r)
                         if header_item and header_item.text().strip() == pname_base:
                             if kc_val:
-                                table.setItem(r, 0, QTableWidgetItem(kc_val))
+                                table.setItem(r, 1, QTableWidgetItem(kc_val))
                             if gc_val:
-                                table.setItem(r, 1, QTableWidgetItem(gc_val))
+                                table.setItem(r, 2, QTableWidgetItem(gc_val))
                             break
 
                     # === 校核（调用 dispatch_cell_validation） ===

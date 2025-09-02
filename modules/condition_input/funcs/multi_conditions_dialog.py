@@ -6,6 +6,8 @@ from PyQt5.QtWidgets import QDialog, QMessageBox, QTableWidgetItem
 from modules.condition_input.funcs.ctrl_helper import enable_full_undo
 from PyQt5.QtWidgets import QSizePolicy, QHeaderView
 
+# PARAM_UNITS = ["MPa", "℃", "MPa", "℃", "℃", "MPa"]  # 按参数名称顺序给单位
+
 db_config_1 = {
     'host': 'localhost',
     'port': 3306,
@@ -22,6 +24,26 @@ class MultiConditionsDialog(QDialog):
         "工作温度（出口）",
         "最高允许工作压力"
     ]
+
+# 已改
+    def fill_table(self, gongkuang_no):
+        data_map = self._data_cache.get(gongkuang_no, {})
+        for r, pname in enumerate(self.PARAM_NAMES):
+            kc_val, gc_val = data_map.get(pname, ("", ""))
+            kc_item = QTableWidgetItem(str(kc_val))
+            kc_item.setTextAlignment(Qt.AlignCenter)  # 设置居zhong
+            self.tableWidget.setItem(r, 1, kc_item)
+
+            gc_item = QTableWidgetItem(str(gc_val))
+            gc_item.setTextAlignment(Qt.AlignCenter)  # 设置居中
+            self.tableWidget.setItem(r, 2, gc_item)
+
+            # self.tableWidget.setItem(r, 2, QTableWidgetItem(self.PARAM_UNITS[r]))
+            # 获取参数单位列（0列）的单元格
+            unit_item = self.tableWidget.item(r, 0)
+            if unit_item:
+                # 移除可编辑标志，保留其他默认标志（如选中、启用等）
+                unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
 
     def __init__(self, parent=None, product_id=None):
         super().__init__(parent)
@@ -47,8 +69,8 @@ class MultiConditionsDialog(QDialog):
 
         # 初始化表格
         self.tableWidget.setRowCount(len(self.PARAM_NAMES))
-        self.tableWidget.setColumnCount(2)
-        self.tableWidget.setHorizontalHeaderLabels(["壳程数值", "管程数值"])
+        self.tableWidget.setColumnCount(3)
+        self.tableWidget.setHorizontalHeaderLabels(["参数单位","壳程数值", "管程数值"])
         for r, name in enumerate(self.PARAM_NAMES):
             self.tableWidget.setVerticalHeaderItem(r, QTableWidgetItem(name))
 
@@ -71,8 +93,22 @@ class MultiConditionsDialog(QDialog):
         self.load_gongkuang_data(1)
         self.fill_table(1)
 
-        # ✅ 设置初始大小 & 允许缩放
-        self.resize(700, 500)
+        # ✅ 根据表格内容动态设置初始大小（高度正好能显示所有行）
+        vh = self.tableWidget.verticalHeader()
+        total_height = vh.length()  # 所有行高度之和
+        header_height = self.tableWidget.horizontalHeader().height()
+        frame = self.tableWidget.frameWidth() * 2
+        margin = 100  # 预留额外空间给下拉框、按钮
+
+        total_height = total_height + header_height + frame + margin
+
+        # 表格宽度
+        total_width = sum(self.tableWidget.columnWidth(c) for c in range(self.tableWidget.columnCount()))
+        total_width += self.tableWidget.verticalHeader().width() + frame + 50  # 适当留点余量
+
+        self.resize(total_width, total_height)
+
+        # ✅ 允许用户继续拖动缩放
         self.setSizeGripEnabled(True)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
@@ -80,6 +116,7 @@ class MultiConditionsDialog(QDialog):
         self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.tableWidget.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.tableWidget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
 
     def _make_param_field(self, param_name, gongkuang_no):
         if gongkuang_no == 1:
@@ -137,12 +174,14 @@ class MultiConditionsDialog(QDialog):
         # 缓存
         self._data_cache[gongkuang_no] = data_map
 
-    def fill_table(self, gongkuang_no):
-        data_map = self._data_cache.get(gongkuang_no, {})
-        for r, pname in enumerate(self.PARAM_NAMES):
-            kc_val, gc_val = data_map.get(pname, ("", ""))
-            self.tableWidget.setItem(r, 0, QTableWidgetItem(str(kc_val)))
-            self.tableWidget.setItem(r, 1, QTableWidgetItem(str(gc_val)))
+    # def fill_table(self, gongkuang_no):
+    #     data_map = self._data_cache.get(gongkuang_no, {})
+    #     for r, pname in enumerate(self.PARAM_NAMES):
+    #         kc_val, gc_val = data_map.get(pname, ("", ""))
+    #         # self.tableWidget.setItem(r, 0, QTableWidgetItem(PARAM_UNITS[r]))
+    #         self.tableWidget.setItem(r, 1, QTableWidgetItem(str(kc_val)))
+    #         self.tableWidget.setItem(r, 2, QTableWidgetItem(str(gc_val)))
+
 
     def save_current_gongkuang(self):
         gongkuang_no = self.current_gongkuang
@@ -305,12 +344,16 @@ class MultiConditionsDialog(QDialog):
 
         self.current_gongkuang = gongkuang_no
 
+# 已改
     def _save_to_cache(self, gongkuang_no):
         data_map = {}
         for r, pname in enumerate(self.PARAM_NAMES):
-            kc_item = self.tableWidget.item(r, 0)
-            gc_item = self.tableWidget.item(r, 1)
+            kc_item = self.tableWidget.item(r, 1)
+            gc_item = self.tableWidget.item(r, 2)
+
             kc_val = kc_item.text().strip() if kc_item else ""
             gc_val = gc_item.text().strip() if gc_item else ""
             data_map[pname] = (kc_val, gc_val)
+            kc_item.setTextAlignment(Qt.AlignCenter)
+            gc_item.setTextAlignment(Qt.AlignCenter)
         self._data_cache[gongkuang_no] = data_map

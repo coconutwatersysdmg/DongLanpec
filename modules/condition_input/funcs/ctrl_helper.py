@@ -40,11 +40,16 @@ class UndoableItemDelegate(QStyledItemDelegate):
                 cmd = CellEditCommand(self.table, index.row(), index.column(), old_value, new_value)
                 self.undo_stack.push(cmd)
 
+                # 🔴 新增：标记界面已修改
+                if self.viewer:
+                    self.viewer._set_modified(True)
+
             super().setModelData(editor, model, index)
 
             QTimer.singleShot(0, lambda r=index.row(), c=index.column(), v=new_value: self._validate_cell(r, c, v))
         except Exception as e:
             print("setModelData异常：", e)
+
 
     def _validate_cell(self, row, col, value):
         try:
