@@ -4978,31 +4978,43 @@ class TubeLayoutEditor(QMainWindow):
             used_left_nums = set()  # 标记左部已使用的管孔编号（原used_up_nums，语义对齐y方向）
             used_right_nums = set()  # 标记右部已使用的管孔编号（原used_down_nums，语义对齐y方向）
 
-            # 第一步：收集所有需要构建的交叉管道坐标对
+            # 第一步：收集并筛选所有需要构建的交叉管道坐标对
+            coordinate_pairs = []
+            used_left_nums = set()
+            used_right_nums = set()
+            valid_distance = None  # 初始化有效距离
+
             for left_num, right_num in zip(pair_y_info_left, pair_y_info_right):
-                # 查找左部（原up_num对应逻辑）对应的实际坐标
+                # 查找左部对应的实际坐标
                 left_coord = next(((x, y) for (num, x, y) in print_cross_y_left if num == left_num), None)
-                # 查找右部（原down_num对应逻辑）对应的实际坐标
+                # 查找右部对应的实际坐标
                 right_coord = next(((x, y) for (num, x, y) in print_cross_y_right if num == right_num), None)
 
-                # 坐标有效性校验：转换为选中态坐标并添加到列表
+                # 坐标有效性校验
                 if left_coord and right_coord:
                     left_selected = self.actual_to_selected_coords(left_coord)
                     right_selected = self.actual_to_selected_coords(right_coord)
                     if left_selected and right_selected:
-                        coordinate_pairs.append((left_selected, right_selected))
-                        used_left_nums.add(left_num)
-                        used_right_nums.add(right_num)
+                        # 计算当前坐标对的距离
+                        current_distance = int(self.calculate_distance([left_selected, right_selected]))
 
-            # 第二步：构建所有交叉管道（保持原构建逻辑，参数格式不变）
-            if coordinate_pairs:
-                left_selected, right_selected = coordinate_pairs[0]
-                valid_distance = int(self.calculate_distance([left_selected, right_selected]))
+                        # 确定有效距离（使用第一个符合条件的坐标对的距离）
+                        if valid_distance is None:
+                            valid_distance = current_distance
+                            # 第一个符合条件的坐标对直接加入
+                            coordinate_pairs.append((left_selected, right_selected))
+                            used_left_nums.add(left_num)
+                            used_right_nums.add(right_num)
+                        else:
+                            # 只添加距离与有效距离相同的坐标对
+                            if current_distance == valid_distance:
+                                coordinate_pairs.append((left_selected, right_selected))
+                                used_left_nums.add(left_num)
+                                used_right_nums.add(right_num)
 
+            # 第二步：构建所有符合条件的交叉管道
             for left_selected, right_selected in coordinate_pairs:
-                distance = self.calculate_distance([left_selected, right_selected])
-                if int(distance) == valid_distance:
-                    self.build_2_cross_pipes([left_selected, right_selected])
+                self.build_2_cross_pipes([left_selected, right_selected])
 
             # 第三步：收集并删除未使用的环热管
             del_centers = []
@@ -5171,6 +5183,40 @@ class TubeLayoutEditor(QMainWindow):
             for up_tube, down_tube in all_pairs:
                 pair_x_info_up.append(up_tube)
                 pair_x_info_down.append(down_tube)
+        elif tubeline_num == '6':
+            # 获取用户选择的两个管子
+            up_num1, up_num2 = result['up_numbers']
+            A, B = sorted([up_num1, up_num2])
+            D = B - A
+
+            # 所有管子按从小到大排序
+            all_tubes = sorted(range(1, total_count + 1))
+            valid_tubes = all_tubes  # 保留所有管子，根据实际需求调整
+            used_tubes = set()
+
+            # 核心配对：确保用户选择的配对优先且必须包含
+            user_pairs = [(A, B), (B, A)]
+            used_tubes.update([A, B])
+
+            # 处理其他管子，按当前D值进行配对
+            other_pairs = []
+            for tube in valid_tubes:
+                if tube in used_tubes:
+                    continue
+                pair_tube = tube + D
+                if pair_tube in valid_tubes and pair_tube not in used_tubes:
+                    other_pairs.append((tube, pair_tube))
+                    other_pairs.append((pair_tube, tube))
+                    used_tubes.add(tube)
+                    used_tubes.add(pair_tube)
+
+            # 合并所有配对（用户选择的配对 + 其他配对）
+            all_pairs = user_pairs + other_pairs
+
+            # 生成最终序列
+            for up_tube, down_tube in all_pairs:
+                pair_x_info_up.append(up_tube)
+                pair_x_info_down.append(down_tube)
 
         else:
             QMessageBox.warning(self, "功能提示", "该管程程数交叉布管尚未开发")
@@ -5180,6 +5226,7 @@ class TubeLayoutEditor(QMainWindow):
         return pair_x_info_up, pair_x_info_down
 
     def cross_y_4_pipes(self, current_coords, print_cross_y_left, print_cross_y_right):
+        global valid_distance
         result = self.get_selected_y_4_center_numbers(current_coords, print_cross_y_left, print_cross_y_right)
         if set(result['up_numbers']) == set(result['down_numbers']):
             if abs(result['up_numbers'][0] - result['up_numbers'][1]) > 3:
@@ -5209,8 +5256,14 @@ class TubeLayoutEditor(QMainWindow):
                             used_down_nums.add(down_num)
 
                 # 第二步：先构建所有交叉管道
-                for up_selected, down_selected in coordinate_pairs:
-                    self.build_2_cross_pipes([up_selected, down_selected])  # 确保传入格式为[(x1,y1), (x2,y2)]
+                if coordinate_pairs:
+                    left_selected, right_selected = coordinate_pairs[0]
+                    valid_distance = int(self.calculate_distance([left_selected, right_selected]))
+
+                for left_selected, right_selected in coordinate_pairs:
+                    distance = self.calculate_distance([left_selected, right_selected])
+                    if int(distance) == valid_distance:
+                        self.build_2_cross_pipes([left_selected, right_selected])
 
                 # 第三步：收集并删除未使用的环热管
                 del_centers = []
