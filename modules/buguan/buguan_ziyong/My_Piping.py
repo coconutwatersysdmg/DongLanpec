@@ -1455,18 +1455,18 @@ class TubeLayoutEditor(QMainWindow):
         impingement_plate_2_centers = all_coords.get("impingement_plate_2_centers", "")
         del_centers = all_coords.get("del_centers", [])
 
-        try:
-            if hasattr(self, 'global_centers'):
-                self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
-                    self.global_centers)
-            else:
-                print("self.global_centers不存在，无法分组中心点")
-                self.full_sorted_current_centers_up = []
-                self.full_sorted_current_centers_down = []
-        except Exception as e:
-            print(f"分组中心点时出错: {str(e)}")
-            self.full_sorted_current_centers_up = []
-            self.full_sorted_current_centers_down = []
+        # try:
+        #     if hasattr(self, 'global_centers'):
+        #         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
+        #             self.global_centers)
+        #     else:
+        #         print("self.global_centers不存在，无法分组中心点")
+        #         self.full_sorted_current_centers_up = []
+        #         self.full_sorted_current_centers_down = []
+        # except Exception as e:
+        #     print(f"分组中心点时出错: {str(e)}")
+        #     self.full_sorted_current_centers_up = []
+        #     self.full_sorted_current_centers_down = []
 
         self.build_lagan(lagan_centers)
         self.build_side_lagan(side_centers)
@@ -1749,7 +1749,7 @@ class TubeLayoutEditor(QMainWindow):
             self.current_centers = current_centers
 
             # 更新管数量和绘制布局（确保小圆绘制在最上层）
-            self.update_tube_nums()
+
             self.draw_layout(DN, DL, do, result["centers"])
 
             # 重新创建场景并连接中心，确保层级正确
@@ -1766,6 +1766,9 @@ class TubeLayoutEditor(QMainWindow):
             self.graphics_scene.update()
             QApplication.processEvents()
             self.update_SN()
+            self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
+                self.global_centers)
+            self.update_tube_nums()
 
             # 5. 根据产品型式设置交叉布管按钮状态
             # 查找交叉布管按钮（通过按钮文本）
@@ -5096,8 +5099,6 @@ class TubeLayoutEditor(QMainWindow):
                     self.clear_selection_highlight()
                     self.selected_centers.clear()
 
-
-
         else:
             QMessageBox.warning(self, "选择错误", "参照管位置不正确")
             self.clear_selection_highlight()
@@ -5874,6 +5875,8 @@ class TubeLayoutEditor(QMainWindow):
         # # 按Y坐标分组中心
         self.sorted_current_centers_up, self.sorted_current_centers_down = self.group_centers_by_y(
             self.current_centers)
+        self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
+            self.global_centers)
 
         # 获取右侧表格并清空内容
         right_table = self.hole_distribution_table
