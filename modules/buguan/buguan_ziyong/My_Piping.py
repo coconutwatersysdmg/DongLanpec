@@ -1641,7 +1641,7 @@ class TubeLayoutEditor(QMainWindow):
             "换热管壁厚 δ": ("LB_TubeThick", None),
             "换热管排列方式": (
                 "LB_RangeType", {"正三角形": "1", "转角正三角形": "0", "正方形": "2", "转角正方形": "3"}),
-            "热交换器公称（换热管）长度 L": ("LB_TubeLong", None),
+            "换热管公称长度 LN": ("LB_TubeLong", None),
             "换热管中心距 S": ("LB_S", None),
             "折流板切口方向": ("LB_BaffleDirection", {"水平上下": "1", "垂直左右": "2"}),
             "折流板要求切口率 (%)": ("LB_BafflePerStr", None),
@@ -2075,8 +2075,8 @@ class TubeLayoutEditor(QMainWindow):
 
             if param_name == "管程程数":
                 tube_pass_row = row
-            elif param_name == "分程隔板两侧相邻管中心距（竖直）":
-                sn_row = row
+            # elif param_name == "分程隔板两侧相邻管中心距（竖直）":
+            #     sn_row = row
             elif param_name == "分程隔板两侧相邻管中心距（水平）":
                 lev_row = row  # 确保正确获取水平方向参数的行索引（原代码已定义变量，此处逻辑无修改）
 
@@ -2498,13 +2498,13 @@ class TubeLayoutEditor(QMainWindow):
             # 处理特殊字段（下拉框）
             special_params = ["是否以外径为基准", "分程布置形式", "换热管排列方式", "滑道定位",
                               "折流板切口方向", "管程分程形式", "防冲板形式", "换热管外径 do", "管程程数",
-                              "换热管布置方式", "热交换器公称（换热管）长度 L", "换热管公称长度 LN",
+                              "换热管布置方式", "换热管公称长度 LN", "换热管公称长度 LN",
                               "滑道定位"]  # 添加重命名后的参数名
 
             if param['参数名'] in special_params:
 
-                # 特殊处理换热管公称长度 LN（原热交换器公称（换热管）长度 L）
-                if param['参数名'] in ["热交换器公称（换热管）长度 L", "换热管公称长度 LN"]:
+                # 特殊处理换热管公称长度 LN（原换热管公称长度 LN）
+                if param['参数名'] in ["换热管公称长度 LN", "换热管公称长度 LN"]:
                     # 创建可编辑的下拉框
                     combo = QComboBox()
                     combo.setEditable(True)  # 关键修改：设置为可编辑，允许手动输入
@@ -5046,49 +5046,57 @@ class TubeLayoutEditor(QMainWindow):
                 self.selected_centers.clear()
             else:
                 # self.get_x_4_number_sequences(result, print_cross_x_up)
-                up_seq, down_seq = self.get_x_4_number_sequences(result, print_cross_x_up)
-                pair_x_info_up = up_seq
-                pair_x_info_down = down_seq
-                coordinate_pairs = []
-                used_up_nums = set()
-                used_down_nums = set()
+                tube_num = self.get_tube_pass_count()
+                if tube_num == '2':
+                    up_seq, down_seq = self.get_x_4_number_sequences(result, print_cross_x_up)
+                    pair_x_info_up = up_seq
+                    pair_x_info_down = down_seq
+                    coordinate_pairs = []
+                    used_up_nums = set()
+                    used_down_nums = set()
 
-                # 第一步：收集所有需要构建的交叉管道坐标对
-                for up_num, down_num in zip(pair_x_info_up, pair_x_info_down):
-                    up_coord = next(((x, y) for (num, x, y) in print_cross_x_up if num == up_num), None)
-                    down_coord = next(((x, y) for (num, x, y) in print_cross_x_down if num == down_num), None)
+                    # 第一步：收集所有需要构建的交叉管道坐标对
+                    for up_num, down_num in zip(pair_x_info_up, pair_x_info_down):
+                        up_coord = next(((x, y) for (num, x, y) in print_cross_x_up if num == up_num), None)
+                        down_coord = next(((x, y) for (num, x, y) in print_cross_x_down if num == down_num), None)
 
-                    if up_coord and down_coord:
-                        up_selected = self.actual_to_selected_coords(up_coord)
-                        down_selected = self.actual_to_selected_coords(down_coord)
-                        if up_selected and down_selected:
-                            coordinate_pairs.append((up_selected, down_selected))
-                            used_up_nums.add(up_num)
-                            used_down_nums.add(down_num)
+                        if up_coord and down_coord:
+                            up_selected = self.actual_to_selected_coords(up_coord)
+                            down_selected = self.actual_to_selected_coords(down_coord)
+                            if up_selected and down_selected:
+                                coordinate_pairs.append((up_selected, down_selected))
+                                used_up_nums.add(up_num)
+                                used_down_nums.add(down_num)
 
-                # 第二步：先构建所有交叉管道
-                for up_selected, down_selected in coordinate_pairs:
-                    self.build_2_cross_pipes([up_selected, down_selected])  # 确保传入格式为[(x1,y1), (x2,y2)]
+                    # 第二步：先构建所有交叉管道
+                    for up_selected, down_selected in coordinate_pairs:
+                        self.build_2_cross_pipes([up_selected, down_selected])  # 确保传入格式为[(x1,y1), (x2,y2)]
 
-                # 第三步：收集并删除未使用的环热管
-                del_centers = []
-                # 处理上部分未使用的坐标
-                for num, x, y in print_cross_x_up:
-                    if num not in used_up_nums:
-                        rel_coord = self.actual_to_selected_coords((x, y))
-                        if rel_coord:
-                            del_centers.append(rel_coord)
+                    # 第三步：收集并删除未使用的环热管
+                    del_centers = []
+                    # 处理上部分未使用的坐标
+                    for num, x, y in print_cross_x_up:
+                        if num not in used_up_nums:
+                            rel_coord = self.actual_to_selected_coords((x, y))
+                            if rel_coord:
+                                del_centers.append(rel_coord)
 
-                # 处理下部分未使用的坐标
-                for num, x, y in print_cross_x_down:
-                    if num not in used_down_nums:
-                        rel_coord = self.actual_to_selected_coords((x, y))
-                        if rel_coord:
-                            del_centers.append(rel_coord)
+                    # 处理下部分未使用的坐标
+                    for num, x, y in print_cross_x_down:
+                        if num not in used_down_nums:
+                            rel_coord = self.actual_to_selected_coords((x, y))
+                            if rel_coord:
+                                del_centers.append(rel_coord)
 
-                # 最后执行删除操作
-                if del_centers:
-                    self.delete_huanreguan(del_centers)
+                    # 最后执行删除操作
+                    if del_centers:
+                        self.delete_huanreguan(del_centers)
+                else:
+                    QMessageBox.warning(self, "功能提示", "该管程程数交叉布管尚未开发")
+                    self.clear_selection_highlight()
+                    self.selected_centers.clear()
+
+
 
         else:
             QMessageBox.warning(self, "选择错误", "参照管位置不正确")
@@ -5528,7 +5536,7 @@ class TubeLayoutEditor(QMainWindow):
             # x轴第三排
             elif x_up_count_line3 == 2 and x_down_count_line3 == 2:
                 if self.is_x_line1 and self.is_x_line2:
-                    self.cross_x_4_pipes(current_coords, self.print_cross_y_left_line3, self.print_cross_y_right_line3)
+                    self.cross_x_4_pipes(current_coords, self.print_cross_x_up_line3, self.print_cross_x_down_line3)
                     self.is_x_line3 = True
                 else:
                     QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")

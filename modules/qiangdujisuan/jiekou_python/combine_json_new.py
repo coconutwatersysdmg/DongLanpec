@@ -3176,7 +3176,7 @@ def calculate_heat_exchanger_strength(product_id):
     mapping = {
         "换热管外径 do": "换热管外径",
         "换热管壁厚 δ": "换热管壁厚",
-        "热交换器公称（换热管）长度 L": "换热管直管段长度"
+        "换热管公称长度 LN": "换热管直管段长度"
     }
 
     try:

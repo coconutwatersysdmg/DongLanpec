@@ -1521,7 +1521,7 @@ class TubeLayoutEditor(QMainWindow):
             "换热管壁厚 δ": ("LB_TubeThick", None),
             "换热管排列方式": (
                 "LB_RangeType", {"正三角形": "1", "转角正三角形": "0", "正方形": "2", "转角正方形": "3"}),
-            "热交换器公称（换热管）长度 L": ("LB_TubeLong", None),
+            "换热管公称长度 LN": ("LB_TubeLong", None),
             "换热管中心距 S": ("LB_S", None),
             "折流板切口方向": ("LB_BaffleDirection", {"水平上下": "1", "垂直左右": "2"}),
             "折流板要求切口率 (%)": ("LB_BafflePerStr", None),
