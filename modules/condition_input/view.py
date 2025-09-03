@@ -9,6 +9,7 @@ import os
 from PyQt5.QtCore import QEvent
 from PyQt5.QtWidgets import QTableWidgetItem
 from modules.condition_input.funcs.multi_conditions_dialog import MultiConditionsDialog
+from PyQt5.QtWidgets import QMessageBox, QPushButton
 
 # 导入功能函数
 from modules.condition_input.funcs.funcs_product_info import widget_fold, get_product_info, update_diagram, check_pdt_define
@@ -58,6 +59,7 @@ class DesignConditionInputViewer(QWidget):
         self.product_id = product_id
         self._is_valid_product = True
         self._early_tip_msg = ""
+        self._is_modified = False
 
         if not self.product_id:
             self._is_valid_product = False
@@ -113,7 +115,7 @@ class DesignConditionInputViewer(QWidget):
 
         self.btn_fold.clicked.connect(self.fold_open)
         self.btn_inputrefdata.clicked.connect(self.on_input_ref_data_clicked)
-        self.btn_confirm.clicked.connect(self.check_and_save_data)
+        self.btn_confirm.clicked.connect(lambda: self.check_and_save_data(force=True))
         self.btn_output.clicked.connect(self.export_condition_file)
         self.load_product_info(self.product_id, self._product_info)
         self.import_condition_data(self.product_id)
@@ -177,6 +179,7 @@ class DesignConditionInputViewer(QWidget):
             self.design_delegate = DesignDataDelegate()
             self.tableWidget_design_data.setItemDelegateForColumn(1, self.design_delegate)
             self.tableWidget_design_data.viewer = self
+
 
 
 
@@ -414,33 +417,69 @@ class DesignConditionInputViewer(QWidget):
         render_grouped_table(table_widget, grouped_data, headers, group_key_column)
 
     # 保存及检查必填项
-    def check_and_save_data(self):
+    def check_and_save_data(self, force=False):
+        """
+        保存及检查必填项
+        :param force: 是否强制保存（确认按钮时 True，切换/关闭时 False）
+        """
         if not getattr(self, "_is_valid_product", True):
             return True  # 空界面不用保存
+
+        # 如果不是强制保存，并且没有修改过数据，就直接跳过
+        if not force and not getattr(self, "_is_modified", False):
+            print("[保存] 数据未修改，跳过保存。")
+            return True
+
         try:
-            has_missing_dsg, missing_dsg = validate_required_fields(self.tableWidget_design_data, mode="设计数据")
-            has_missing_common, missing_common = validate_required_fields(self.tableWidget_general_data,
-                                                                          mode="通用数据")
+            has_missing_dsg, missing_dsg = validate_required_fields(
+                self.tableWidget_design_data, mode="设计数据"
+            )
+            has_missing_common, missing_common = validate_required_fields(
+                self.tableWidget_general_data, mode="通用数据"
+            )
 
             if has_missing_dsg or has_missing_common:
-                missing_fields = [name for _, name in missing_dsg + missing_common]
-                msg = "以下必填项：\n" + "、".join(missing_fields) + "\n对应参数值不能为空。"
-                QMessageBox.warning(self, "提示", msg)
+                missing_fields = [name for _, name in (missing_dsg + missing_common)]
+                msg = (
+                    "以下必填项：\n"
+                    + "、".join(missing_fields)
+                    + "\n对应参数值不能为空。\n是否继续保存？"
+                )
+
+                # 自定义“是 / 否”按钮
+                box = QMessageBox(self)
+                box.setIcon(QMessageBox.Question)
+                box.setWindowTitle("提示")
+                box.setText(msg)
+                yes_btn = box.addButton("是", QMessageBox.YesRole)
+                no_btn = box.addButton("否", QMessageBox.NoRole)
+                box.setDefaultButton(no_btn)
+                box.exec_()
+
+                # 始终高亮未填项
                 highlight_missing_required_rows(self.tableWidget_design_data, missing_dsg)
                 highlight_missing_required_rows(self.tableWidget_general_data, missing_common)
-                return False
+
+                if box.clickedButton() == no_btn:
+                    return False
+                # 如果点“是”，继续保存
 
             if not save_local_condition_file(self.product_id, self):
                 return False
 
             save_all_tables(self, self.product_id)
-            self.line_tip.setText("条件输入数据保存成功！")
-            self.line_tip.setToolTip("条件输入数据保存成功！")
+            self.line_tip.setText("保存成功！")
+            self.line_tip.setToolTip("保存成功！")
+            self.line_tip.setStyleSheet("color: black;")
+
+            # 保存完成后清除修改标志
+            self._is_modified = False
             return True
 
         except Exception as e:
             QMessageBox.critical(self, "保存失败", f"保存数据出错：\n{str(e)}")
             return False
+
     def export_condition_file(self):
         """
         导出条件输入数据表：先保存至本地文件，然后复制至用户选择的位置。
@@ -557,3 +596,6 @@ class DesignConditionInputViewer(QWidget):
         dlg = MultiConditionsDialog(self, product_id=self.product_id)
         dlg.exec_()
 
+    def _set_modified(self, modified=True):
+        """标记数据是否已修改"""
+        self._is_modified = modified

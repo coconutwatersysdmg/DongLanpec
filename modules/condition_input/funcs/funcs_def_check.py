@@ -483,8 +483,10 @@ def check_design_pressure(value, tip_widget, param_name, column_name, table_widg
     except:
         return "error", "输入数据类型有误，请确认后输入"
 
+    if dp == 0:
+        return "warn", "设计压力不能为0！不合规。"
     # 1）低于0.1MPa，提示（warn）
-    if dp < 0.1:
+    if dp < 0.1 and dp > -0.02:
         return "warn", "建议按常压容器标准设计。"
     # 2）高于35MPa但不超过100MPa，提醒（warn）
     if 35 < dp <= 100:
