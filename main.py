@@ -1,20 +1,12 @@
-
-# ---- 日志引导 END ----
-
 import multiprocessing
 import os
 import subprocess
 import sys
 import threading
-import logging, os, datetime
-import traceback
-
-
 
 from PyQt5 import QtWidgets, uic, Qt, QtCore
 
 from modules.buguan.buguan_ziyong.My_Piping import TubeLayoutEditor
-from modules.buguan.main import run_tube_design_gui
 from modules.qiangdujisuan.jiekou_python.jisuanjiemian import JisuanResultViewer
 from register import RegisterDialog, LoginWindow
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
@@ -23,7 +15,6 @@ from PyQt5.QtCore import QUrl, QTimer
 from PyQt5.QtWidgets import QWidget, QTabBar, QPushButton, QMessageBox, QDesktopWidget, QApplication, QLabel
 
 from modules.TwoD.TwoD_tab import TwoDGeneratorTab
-from modules.buguan import main
 from modules.cailiaodingyi.paradefine_view import DesignParameterDefineInputerViewer
 from modules.chanpinguanli import bianl, chanpinguanli_main
 # from modules.chanpinguanli.chanpinguanli_main import create_main_window
@@ -48,27 +39,65 @@ class UserPage(QWidget):
         super().__init__()
         pass
 
-# class ProjectPage(QWidget):
-#     def __init__(self):
-#         super().__init__()
-#         uic.loadUi(resource_path("pages/project_page.ui"), self)
-#
-# class MaterialPage(QWidget):
-#     def __init__(self):
-#         super().__init__()
-#         uic.loadUi(resource_path("pages/material_page.ui"), self)
-from modules.chanpinguanli.chanpinguanli_main import product_manager  # 假设你是这样导入的
-current_product_id = ''
+from modules.chanpinguanli.chanpinguanli_main import product_manager
+from modules.chanpinguanli.common_usage import get_mysql_connection_product
+
+import modules.chanpinguanli.bianl as bianl
+
 def on_product_id_changed(new_id):
-    global current_product_id
-    current_product_id = new_id  # 保存最新 ID
+    bianl.current_product_id = new_id  # 保存最新 ID
+    update_current_product_info(new_id)
+
 
 product_manager.product_id_changed.connect(on_product_id_changed)
+
+def update_current_product_info(product_id):
+    """根据产品ID更新当前产品信息显示"""
+    if not product_id:
+        print("id"+product_id)
+        clear_current_product_info()
+        return
+
+    try:
+        conn = get_mysql_connection_product()
+        cursor = conn.cursor()
+        sql = "SELECT 产品名称, 设备位号, 产品编号 FROM 产品需求表 WHERE 产品ID = %s"
+        cursor.execute(sql, (product_id,))
+        result = cursor.fetchone()
+
+        if result:
+            main_window = QApplication.instance().activeWindow()
+            if main_window and hasattr(main_window, 'label_product_name'):
+                main_window.label_product_name.setText(result.get('产品名称', ''))
+                main_window.label_product_tag_numer.setText(result.get('设备位号', ''))
+                main_window.label_product_number.setText(result.get('产品编号', ''))
+            else:
+                print("[更新失败] 无法获取主窗口或标签控件")
+        else:
+            print(f"[更新失败] 未找到产品ID {product_id} 的信息")
+            clear_current_product_info()
+    except Exception as e:
+        print(f"[更新失败] 数据库查询异常: {e}")
+        clear_current_product_info()
+    finally:
+        if 'cursor' in locals():
+            cursor.close()
+        if 'conn' in locals():
+            conn.close()
+
+
+def clear_current_product_info():
+    """清除当前产品信息显示"""
+    main_window = QApplication.instance().activeWindow()
+    if main_window and hasattr(main_window, 'label_product_name'):
+        main_window.label_product_name.setText('')
+        main_window.label_product_tag_numer.setText('')
+        main_window.label_product_number.setText('')
+    else:
+        print("[清除失败] 无法获取主窗口或标签控件")
+
 import subprocess
-import time
 import os
-import configparser
-import json
 
 
 
@@ -148,6 +177,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tab_widget = self.findChild(QtWidgets.QTabWidget, "tabWidget")
         self.line_tip = self.findChild(QtWidgets.QLineEdit, "line_tip")
 
+        self._tip_timer = QTimer(self)
+        self._tip_timer.setSingleShot(True)
+        self._tip_timer.timeout.connect(self.clear_line_tip)
+
         self.tab_widget.setTabsClosable(True)
         self.tab_widget.tabCloseRequested.connect(self.close_tab)
         self.tab_widget.tabBar().setTabButton(0, QTabBar.RightSide, None)  # 首页无关闭按钮
@@ -181,17 +214,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.login_image = self.findChild(QLabel, "label_2")  # 替换为你的图片控件的实际对象名称
         if self.login_image:
             self.login_image.mousePressEvent = self.handle_image_click
-        #     self.login_image.setCursor(Qt.PointingHandCursor)  # 设置鼠标悬停时的手型光标
-        # 页面按钮（登录前禁用）
-        import subprocess
 
-        # def launch_stats_window():
-        #     stats = cpgl_Stats()
-        #     stats.show()
-        #     # ✅ 初始化下拉框数据
-        #     cpgl_main.load_product_types()
-        #     cpgl_main.load_product_forms()
-        #     cpgl_main.load_product_types_design_t()
+        self.current_product_id = ""      # 当前在产品管理界面点到的
+        self.last_confirmed_product_id = ""  # 已经和模块绑定的ID
 
         self.page_buttons = {
             "btn_project": ("项目管理", lambda: self.get_or_create_stats()),
@@ -234,7 +259,6 @@ class MainWindow(QtWidgets.QMainWindow):
             "材料清单": dialog.cb_material.isChecked()
         }
         print("用户选择：", selections)
-        # 💡 这里你可以加入生成文件的逻辑
 
 
     def get_or_create_stats(self):
@@ -266,54 +290,96 @@ class MainWindow(QtWidgets.QMainWindow):
                     btn = self.findChild(QPushButton, btn_name)
                     if btn:
                         btn.setEnabled(True)
-    #新增
-    def on_tab_changed(self, index):
-        if self._last_tab_index is not None and self._last_tab_index != index:
-            last_widget = self.tab_widget.widget(self._last_tab_index)
-            if hasattr(last_widget, "check_and_save_data"):
-                # 延迟保存，等界面切换完成再执行，避免卡顿
-                QTimer.singleShot(100, lambda: last_widget.check_and_save_data())
-        self._last_tab_index = index
-    #改
+
     def open_tab(self, title, widget):
-        if not self.is_logged_in:
-            QMessageBox.warning(self, "未登录", "请先登录后再操作。")
-            return
+        import modules.chanpinguanli.bianl as bianl
+        print(
+            f"[DEBUG][open_tab] current={bianl.current_product_id}, last_confirmed={self.last_confirmed_product_id}, tabs={[self.tab_widget.tabText(i) for i in range(self.tab_widget.count())]}")
 
-        current_index = self.tab_widget.currentIndex()
+        # 只统计非首页、非项目管理的 tab
+        other_tabs = [
+            self.tab_widget.tabText(i)
+            for i in range(self.tab_widget.count())
+            if self.tab_widget.tabText(i) not in ("", "项目管理")
+        ]
+        print(f"[DEBUG][open_tab] other_tabs={other_tabs}")
 
-        # 检查是否已打开该标签页
+        # === 修复逻辑 ===
+        if self.last_confirmed_product_id and self.last_confirmed_product_id != bianl.current_product_id:
+            if other_tabs:  # 🚩 只有真的有其他模块时才拦截
+                QMessageBox.warning(self, "操作禁止", "请先关闭其他界面，再切换产品！")
+                return
+            else:
+                # 🚩 没有其他模块，说明只是在项目管理切换了产品 → 更新 last_confirmed
+                self.last_confirmed_product_id = bianl.current_product_id
+                print(f"[DEBUG][open_tab] 没有其他模块，直接同步 last_confirmed → {self.last_confirmed_product_id}")
+
+        # === 原有逻辑 ===
         for i in range(self.tab_widget.count()):
             if self.tab_widget.tabText(i) == title:
                 self.tab_widget.setCurrentIndex(i)
-                # ✅ 延迟保存当前页
-                if current_index != -1:
-                    current_widget = self.tab_widget.widget(current_index)
-                    if hasattr(current_widget, "check_and_save_data"):
-                        QTimer.singleShot(100, lambda: current_widget.check_and_save_data())
                 return
+        idx = self.tab_widget.addTab(widget, title)
+        self.tab_widget.setCurrentIndex(idx)
 
-        index = self.tab_widget.addTab(widget, title)
-        self.tab_widget.setCurrentIndex(index)
+        self.last_confirmed_product_id = bianl.current_product_id
+        self._last_tab_index = idx
+        print(f"[DEBUG][open_tab] last_confirmed updated → {self.last_confirmed_product_id}")
 
-        # ✅ 延迟保存当前页
-        if current_index != -1:
-            current_widget = self.tab_widget.widget(current_index)
-            if hasattr(current_widget, "check_and_save_data"):
-                QTimer.singleShot(100, lambda: current_widget.check_and_save_data())
+    def on_tab_changed(self, index):
+        import modules.chanpinguanli.bianl as bianl
+        print(
+            f"[DEBUG][on_tab_changed] index={index}, current={bianl.current_product_id}, last_confirmed={self.last_confirmed_product_id}")
 
+        if index == self.home_tab_index:
+            self._last_tab_index = index
+            return
+
+        # 只统计非首页、非项目管理的 tab
+        other_tabs = [
+            self.tab_widget.tabText(i)
+            for i in range(self.tab_widget.count())
+            if self.tab_widget.tabText(i) not in ("", "项目管理")
+        ]
+
+        if self.last_confirmed_product_id and self.last_confirmed_product_id != bianl.current_product_id:
+            if other_tabs:  # 🚩 只有真的有其他模块时才拦截
+                QMessageBox.warning(self, "操作禁止", "请先关闭其他界面，再切换产品！")
+                self.tab_widget.blockSignals(True)
+                self.tab_widget.setCurrentIndex(self._last_tab_index)
+                self.tab_widget.blockSignals(False)
+                return
+            else:
+                # 🚩 没有其他模块，说明只是在项目管理切换了产品 → 更新 last_confirmed
+                self.last_confirmed_product_id = bianl.current_product_id
+                print(
+                    f"[DEBUG][on_tab_changed] 没有其他模块，直接同步 last_confirmed → {self.last_confirmed_product_id}")
+
+        # ✅ 更新记录：允许切换
+        self._last_tab_index = index
 
     def close_tab(self, index):
-        # 取出当前关闭的 widget
         widget = self.tab_widget.widget(index)
 
         # 如果子页面有保存方法则执行保存
         if hasattr(widget, "check_and_save_data"):
             if not widget.check_and_save_data():
-                # 如果保存失败，阻止关闭
                 return
 
+        self._tip_timer.start(5000)
         self.tab_widget.removeTab(index)
+
+        # === 新增：如果只剩下首页和项目管理，重置 last_confirmed_product_id ===
+        import modules.chanpinguanli.bianl as bianl
+        remaining_tabs = [
+            self.tab_widget.tabText(i).strip()
+            for i in range(self.tab_widget.count())
+        ]
+        safe_tabs = {"", "项目管理"}  # 首页="", 项目管理=项目管理
+        if all(t in safe_tabs for t in remaining_tabs):
+            self.last_confirmed_product_id = bianl.current_product_id
+            print(
+                f"[DEBUG][close_tab] 所有模块已关闭，last_confirmed_product_id 重置为 {self.last_confirmed_product_id}")
 
     def closeEvent(self, event):
         # ✅ 检查每个 tab 页是否保存成功
@@ -332,7 +398,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # ✅ 允许关闭
         event.accept()
+        self._tip_timer.start(5000)
 
+    def clear_line_tip(self):
+        if self.line_tip:
+            self.line_tip.clear()
+            self.line_tip.setToolTip("")
 
 
 if __name__ == "__main__":
