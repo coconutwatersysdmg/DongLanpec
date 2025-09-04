@@ -8,7 +8,60 @@ import modules.chanpinguanli.common_usage as common_usage
 from openpyxl import Workbook
 import modules.chanpinguanli.product_confirm_qianzhi as product_confirm_qianzhi
 import modules.chanpinguanli.auto_edit_row as auto_edit_row
-from modules.chanpinguanli import chanpinguanli_main, open_project
+from modules.chanpinguanli import chanpinguanli_main
+
+curr_row_serial = ""
+# 产品名称
+curr_row_product_name = ""
+curr_row_device_position = ""
+curr_row_product_number = ""
+curr_row_design_edition = ""
+curr_row_design_stage=""
+
+
+# 我用这个函数的原因是因为我要把当前row的值全部获取到 让其他函数取用  问题是其他函数的判断好像需要这个全局变量进行判断进行下一步
+# 所以在另一个函数里需要重新获取
+# 我要重新写
+def get_input_must_var(row):
+    global curr_row_serial_item, curr_row_product_number_item, curr_row_product_name_item, curr_row_design_stage_widget, curr_row_device_position_item, curr_row_design_edition_item
+    global curr_row_serial, curr_row_product_number, curr_row_product_name, curr_row_design_stage, curr_row_device_position, curr_row_design_edition
+
+    print(f"[get_input_must_var] 获取第 {row} 行的输入项")
+    if row < bianl.product_table.rowCount() and bianl.product_table.columnCount() > 4:
+        # 原索引：1=产品编号，2=产品名称，3=设备位号改1 改77
+        # 新索引：1=产品名称，2=设备位号，3=产品编号（关键修改）
+        curr_row_serial_item = bianl.product_table.item(row, 0)
+        curr_row_product_name_item = bianl.product_table.item(row, 1)  # 产品名称（新列1）
+        curr_row_device_position_item = bianl.product_table.item(row, 2)  # 设备位号（新列2）
+        curr_row_product_number_item = bianl.product_table.item(row, 3)  # 产品编号（新列3）
+        curr_row_design_edition_item = bianl.product_table.item(row, 5)  # 设计版次
+        curr_row_design_stage_widget = bianl.product_table.cellWidget(row, 4)  # 设计阶段
+
+        # 变量取值
+        # 序号
+        curr_row_serial =curr_row_serial_item.text().strip().zfill(3) if curr_row_serial_item and curr_row_serial_item.text() else f"{row + 1:03d}"
+        #产品名称
+        curr_row_product_name = curr_row_product_name_item.text().strip() if curr_row_product_name_item and curr_row_product_name_item.text() else ""
+        curr_row_device_position = curr_row_device_position_item.text().strip() if curr_row_device_position_item and curr_row_device_position_item.text() else ""
+        curr_row_product_number = curr_row_product_number_item.text().strip() if curr_row_product_number_item and curr_row_product_number_item.text() else ""
+        curr_row_design_edition = curr_row_design_edition_item.text().strip() if curr_row_design_edition_item and curr_row_design_edition_item.text() else ""
+        # 设计阶段
+        if curr_row_design_stage_widget and isinstance(curr_row_design_stage_widget, QComboBox):
+            curr_row_design_stage = curr_row_design_stage_widget.currentText().strip()
+        else:
+            # 如果没找到下拉框，就兜底读取单元格文本（防止为空）
+            # 不用全局变量
+            # 全局变量 当前文件中的所有函数都能访问
+            # 局部变量 只能当前函数访问
+            design_stage_item = bianl.product_table.item(row, 4)
+            curr_row_design_stage = design_stage_item.text().strip() if design_stage_item and design_stage_item.text() else ""
+
+        print(
+            f"[get_input_must_var] 编号: {curr_row_product_number}, 名称: {curr_row_product_name}, 设备位号: {curr_row_device_position}, 设计阶段: {curr_row_design_stage}, 设计版次: {curr_row_design_edition}")
+        return curr_row_product_number, curr_row_product_name, curr_row_device_position, curr_row_design_stage, curr_row_design_edition
+
+    print("[get_input_must_var] 输入项获取失败")
+    return None, None, None, None, None
 
 
 def handle_confirm_product():
@@ -37,44 +90,81 @@ def handle_confirm_product():
         #     }
         return
     print("开始处理产品确认流程...")  # 调试信息
+
     total_rows = bianl.product_table.rowCount()
 
     print(f"总行数: {total_rows}")  # 调试信息
-    # ✅ 新增：缺失必填项行列表
+    # ✅ 点击产品信息区的确认后的 信息的整体弹出
+    # 缺失必填项”
     missing_rows = []
+    # 新建成功
     new_success = []
+    # 更新成功
     update_success = []#改77
     cun_zai = []
     other_errors = []
-
+    #row 从 0 到 total_rows-1
     for row in range(total_rows):
         print(f"\n处理第 {row + 1} 行...")  # 调试信息
+        # 判断是否为最后一行
         if row == total_rows - 1:
             print("跳过最后一行（预留空行）")  # 调试信息
             continue
-        try: #改66
-            product_name_item = bianl.product_table.item(row, 1)  # 产品名称（新列1）改1 改66
-            device_position_item = bianl.product_table.item(row, 2)  # 设备位号（新列2）
-            product_number_item = bianl.product_table.item(row, 3)  # 产品编号（新列3）
-            # 新增
-            number = product_number_item.text().strip() if product_number_item and product_number_item.text() else ""
-            name = product_name_item.text().strip() if product_name_item and product_name_item.text() else ""
-            position = device_position_item.text().strip() if device_position_item and device_position_item.text() else ""
-            print(f"产品编号: {number}")
-            print(f"产品名称: {name}")
-            print(f"设备位置: {position}")
+
+        #判断此行的 产品id 应该在此拿到此行的状态 拿到此行的状态
+        if row not in bianl.product_table_row_status or not isinstance(bianl.product_table_row_status[row], dict):
+            bianl.product_table_row_status[row] = {}
+            curr_product_id = None
+        else:
+            curr_product_id = bianl.product_table_row_status[row].get("product_id")
+
+        #     每一行都要进行的处理
+        # 首先调用全局变量
+        get_input_must_var(row)
+
+        try:
+            # 提取文本信息
+            # product_name_item = bianl.product_table.item(row, 1)  # 产品名称对应设备名称（新列1）改1 改66
+            # device_position_item = bianl.product_table.item(row, 2)  # 设备位号（新列2）
+            # product_number_item = bianl.product_table.item(row, 3)  # 产品编号（新列3）
+            # #  设计版次 列5
+            # design_edition_item = bianl.product_table.item(row,5)
+            # # 设计阶段 design_stage_widget是combo
+            # design_stage_widget = bianl.product_table.cellWidget(row, 4)
+            #
+            #
+            # # 新增
+            # number = product_number_item.text().strip() if product_number_item and product_number_item.text() else ""
+            # name = product_name_item.text().strip() if product_name_item and product_name_item.text() else ""
+            # position = device_position_item.text().strip() if device_position_item and device_position_item.text() else ""
+            # design_edition = design_edition_item.text().strip() if design_edition_item and design_edition_item.text() else ""
+            # 设计阶段
+            # if design_stage_widget and isinstance(design_stage_widget, QComboBox):
+            #     design_stage = design_stage_widget.currentText().strip()
+            # else:
+            #     # 如果没找到下拉框，就兜底读取单元格文本（防止为空）
+            #     design_stage_item = bianl.product_table.item(row, 4)
+            #     design_stage = design_stage_item.text().strip() if design_stage_item and design_stage_item.text() else ""
+            # 获取全部的全局变量
 
             # 检查当前行是否为空   改
             if product_confirm_qianzhi.is_product_row_empty(row):
                 print("该行完全为空，跳过")
                 continue
+
             # 检查是否完整 改77
-            if not all([name]):
+            # Python 内置函数 all() 会检查列表里的每个元素是不是“真值”。
+            # 所有元素都为真 → 返回 True。
+            # 只要有一个是假 → 返回 False。
+            # 在 Python 里，空字符串 "" 会被当作 False。
+
+            if not all([curr_row_product_name]):
                 print("必填项未输入完整，弹出警告框")
                 missing_rows.append(row + 1)
                 # QMessageBox.warning(bianl.main_window, "警告", f"第 {row + 1} 行存在未输入的必填项！")
                 continue
 
+            # 每行进行 分情况 进行操作
             current_status = product_confirm_qianzhi.get_status(row)
             print(f"当前状态: {current_status}")  # 调试信息
 
@@ -87,24 +177,28 @@ def handle_confirm_product():
                 else:
                     print(f"[状态表存在] 第 {row + 1} 行已有状态记录: {bianl.product_table_row_status[row]}")
 
-                print("调用 get_input_must_var")  # 调试信息
-                product_confirm_qianzhi.get_input_must_var(row)
-
                 print("检查是否已存在该产品...")  # 调试信息
-                if product_confirm_qianzhi.check_existing_product(number, name, position, bianl.current_project_id):
+                # 对应查的还是这三个 因为要用三个存 三个存在的时候
+                if product_confirm_qianzhi.check_existing_product(curr_row_product_number, curr_row_product_name, curr_row_device_position, bianl.current_project_id):
                     print("产品已存在，弹出提示框")  # 调试信息
                     cun_zai.append(row + 1)
                     # QMessageBox.warning(bianl.main_window, "提示", f"第 {row + 1} 行所表示的产品已存在，请修改！")
                     # return
-                    continue  # ✅ 只记录，继续处理后续行
+                    # 最近的那个循环（这里是 for row in range(total_rows)），含义是“结束当前这轮，开始下一轮”。
+                    #
+                    # continue 不会“影响 try/except 的行为”，也不会“跳进下面的 try”。它就是把当前迭代后面的代码全都跳过。
+                    continue  # ✅ 只记录，继续处理后续行 跳过本次 跳入for循环的下一个
 
                 try:
                     print("尝试保存新产品...")  # 调试信息
-                    product_confirm_qianzhi.save_new_product(row)
+
+                    product_confirm_qianzhi.save_new_product(row,curr_row_serial,curr_row_product_name,curr_row_product_number,curr_row_device_position, curr_row_design_stage,curr_row_design_edition)
                     print("保存成功，更新状态为 view")  # 调试信息
                     # 变成不可编辑状态
                     auto_edit_row.update_status(row, "view")
+                    # 行的颜色重新设置
                     product_confirm_qianzhi.set_row_editable(row, False)
+
                     # 设置当前行产品定义 definition_status 为 edit
                     bianl.product_table_row_status[row]["definition_status"] = "edit"
                     print(
@@ -122,7 +216,6 @@ def handle_confirm_product():
                             print(f"第{r + 1}行没有 product_id，定义状态为锁定（start）")
                     new_success.append(row + 1)
                     # QMessageBox.warning(bianl.main_window, "提示", f"第{row+1}行的产品新建成功！")
-
                 except Exception as e:
                     import traceback
                     with open("error_log.txt", "a", encoding="utf-8") as log:
@@ -136,56 +229,68 @@ def handle_confirm_product():
                 if not isinstance(row_status, dict):
                     print(f"[警告] 第 {row + 1} 行状态结构异常，强制恢复为空字典")
                     row_status = {}
-
-                # 获取当前所有字段的新值
-                new_number = product_number_item.text().strip()
-                new_name = product_name_item.text().strip()
-                new_position = device_position_item.text().strip()
-                
-                # 获取设计阶段和设计版次的当前值 改77
-                new_design_stage = ""
-                design_stage_widget = bianl.product_table.cellWidget(row, 4)
-                if design_stage_widget and isinstance(design_stage_widget, QComboBox):
-                    new_design_stage = design_stage_widget.currentText().strip()
-                elif bianl.product_table.item(row, 4):
-                    new_design_stage = bianl.product_table.item(row, 4).text().strip()
-                
-                new_design_edition = ""
-                if bianl.product_table.item(row, 5):
-                    new_design_edition = bianl.product_table.item(row, 5).text().strip()
-                
-                # 首次编辑时，记录当前值作为旧值
-                if not row_status.get("old_number") and not row_status.get("old_name") and not row_status.get("old_position"):
-                    row_status["old_number"] = new_number
-                    row_status["old_name"] = new_name
-                    row_status["old_position"] = new_position
-                    row_status["old_design_stage"] = new_design_stage
-                    row_status["old_design_edition"] = new_design_edition
-                
-                # 获取旧值
+                # 获取旧值5
+                # todo查这个旧值获取的
                 old_number = row_status.get("old_number", "")
                 old_name = row_status.get("old_name", "")
                 old_position = row_status.get("old_position", "")
-                old_design_stage = row_status.get("old_design_stage", "")
-                old_design_edition = row_status.get("old_design_edition", "")
+                old_serial = row_status.get("old_serial", "")
+
+                # 获取当前所有字段的新值 if product_number_item and product_number_item.text() else ""
+                # todo 重复可以 优化成name 直接用
+                new_serial = curr_row_serial
+                new_number = curr_row_product_number
+                new_name = curr_row_product_name
+                new_position = curr_row_device_position
+                new_design_edition = curr_row_design_edition
+                # t设计版次
+                new_design_stage = curr_row_design_stage
+
+
+
+                if row not in bianl.product_table_row_status or not isinstance(bianl.product_table_row_status[row],
+                                                                               dict):
+                    bianl.product_table_row_status[row] = {}
+                # 首次编辑时，记录当前值作为旧值  虽然必填项为设备名称 但是这三个改变都改变 没有下面这段
+                # 查 old_name什么时候存的 这里好像可以注销掉
+                # if not row_status.get("old_number") and not row_status.get("old_name") and not row_status.get("old_position"):
+                #     row_status["old_number"] = new_number
+                #     row_status["old_name"] = new_name
+                #     row_status["old_position"] = new_position
+                    # row_status["old_design_stage"] = new_design_stage
+                    # row_status["old_design_edition"] = new_design_edition
+                
+
+                # old_design_stage = row_status.get("old_design_stage", "")
+                # old_design_edition = row_status.get("old_design_edition", "")
                 
                 # 当任何字段发生变化时都触发更新
-                if (old_number != new_number or old_name != new_name or old_position != new_position or
-                    old_design_stage != new_design_stage or old_design_edition != new_design_edition):
-                    product_confirm_qianzhi.get_input_must_var(row)
-                    # 收集更新结果
-                    if product_confirm_qianzhi.update_existing_product(row):
+                if (old_number != new_number or old_name != new_name or old_position != new_position or old_serial!=new_serial):
+                    # 调用函数 update
+                    if product_confirm_qianzhi.update_existing_product(row, new_serial ,new_name,new_number, new_position,new_design_stage, new_design_edition):
                         update_success.append(row + 1)
-
-                    # 更新状态记录中的旧值
-                    row_status["old_number"] = new_number
-                    row_status["old_name"] = new_name
-                    row_status["old_position"] = new_position
-                    row_status["old_design_stage"] = new_design_stage
-                    row_status["old_design_edition"] = new_design_edition
-
                 else:
-                    print(f"第 {row + 1} 行无变化，跳过")
+
+                    # 更新数据库信息（加入 WHERE 语句防止全表修改）
+                    conn = common_usage.get_mysql_connection_product()
+                    cursor = conn.cursor()
+                    # 根据三个相同的更新 根据产品id进行更新
+
+                    sql = """
+                                UPDATE 产品需求表
+                                SET 产品编号 = %s, 产品名称 = %s, 设备位号 = %s, 设计阶段 = %s, 设计版次 = %s
+                                WHERE 产品ID = %s
+                            """
+                    values = (
+                        new_number, new_name, new_position, new_design_stage,
+                        new_design_edition, curr_product_id
+                    )
+                    cursor.execute(sql, values)
+                    conn.commit()
+                    cursor.close()
+                    conn.close()
+                    print(f"只更新一次数据库")
+                    print(f"更新此行")
                 # ✅ 不管有没有变化，都变为不可编辑、变灰
                 auto_edit_row.update_status(row, "view")
                 product_confirm_qianzhi.set_row_editable(row, False)

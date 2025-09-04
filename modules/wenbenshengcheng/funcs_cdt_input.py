@@ -1,3 +1,5 @@
+import cmd
+
 from modules.condition_input.funcs.db_cnt import get_connection
 from PyQt5.QtWidgets import (QTableWidgetItem, QTableWidget, QHeaderView, QWidget,
                              QMessageBox, QUndoStack, QFileDialog, QComboBox, QStyledItemDelegate)
@@ -1916,7 +1918,7 @@ def handle_cross_table_triggers(viewer: QWidget, changed_table: QTableWidget, ro
 
             old_val = std_cell.text()
             if std_value != old_val and undo_stack:
-                cmd = CellEditCommand(target_table, 0, 2, old_val, std_value)
+                # cmd = CellEditCommand(target_table, 0, 2, old_val, std_value)
                 undo_stack.push(cmd)
                 cmd.redo()
 
@@ -2018,7 +2020,7 @@ def handle_cross_table_triggers(viewer: QWidget, changed_table: QTableWidget, ro
                             old_val = target_item.text()
                             target_item.setText("")
                             if undo_stack:
-                                from .undo_command import CellEditCommand
+                                # from .undo_command import CellEditCommand
                                 undo_stack.push(CellEditCommand(changed_table, row, col_idx, old_val, ""))
 
 def update_trail_table_side_only(table: QTableWidget, side: str, factor_val: str, undo_stack=None):

@@ -1,12 +1,14 @@
 import json
 import traceback
 
+import pymysql
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTextEdit
 import os
 
-from modules.qiangdujisuan.jiekou_python.combine_json_new import calculate_heat_exchanger_strength
+from modules.qiangdujisuan.jiekou_python.combine_json_new import calculate_heat_exchanger_strength as calculate_heat_exchanger_strength_ABEU
+from modules.qiangdujisuan.jiekou_python.combine_json_new_abes import calculate_heat_exchanger_strength as calculate_heat_exchanger_strength_ABES
+
 from modules.chanpinguanli.chanpinguanli_main import product_manager
-from modules.qiangdujisuan.jiekou_python.combine_json_new_aeu import calculate_heat_exchanger_strength_AEU
 
 product_id = None
 
@@ -33,7 +35,36 @@ class JisuanResultViewer(QWidget):
         print(product_id)
 
         try:
-            result = calculate_heat_exchanger_strength(product_id)
+            # 查询产品型式
+            conn = pymysql.connect(
+                host="localhost",  # 数据库地址
+                user="root",  # 用户名
+                password="123456",  # 密码
+                database="产品设计活动库",  # 数据库名
+                charset="utf8mb4"
+            )
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT 产品型式 
+                FROM 产品设计活动表 
+                WHERE 产品ID = %s
+            """, (product_id,))
+            row = cursor.fetchone()
+            conn.close()
+            print("产品型式为",row[0])
+            if not row:
+                raise ValueError(f"未找到 product_id={product_id} 对应的产品型式")
+
+            product_type = row[0]
+
+            # 根据产品型式调用不同方法
+            if product_type in ("AEU", "BEU"):
+                result = calculate_heat_exchanger_strength_ABEU(product_id)
+            elif product_type in ("AES", "BES"):
+                result = calculate_heat_exchanger_strength_ABES(product_id)
+            else:
+                raise ValueError(f"未知的产品型式: {product_type}")
+
             # 如果 result 是字符串（不是 dict），就先解析
             if isinstance(result, str):
                 result = json.loads(result)

@@ -1,3 +1,5 @@
+import re
+from collections import defaultdict
 from functools import partial
 
 from PyQt5 import QtWidgets, QtCore
@@ -5,23 +7,79 @@ from PyQt5.QtWidgets import QComboBox, QTableWidget, QTableWidgetItem
 from PyQt5.QtCore import Qt, QTimer, QObject
 
 from modules.cailiaodingyi.controllers.datamanager import (
-    load_data_by_template
+    load_data_by_template, ask_before_switch_template_against_current
 )
 from modules.cailiaodingyi.demo import NoWheelComboBoxFilter
 from modules.cailiaodingyi.funcs.funcs_pdf_change import (
     update_guankou_define_data,
     update_guankou_define_status,
-    load_element_data_by_product_id, is_all_guankou_parts_defined, get_filtered_material_options
+    load_element_data_by_product_id, is_all_guankou_parts_defined, get_filtered_material_options,
+    query_template_name_by_product
 )
 from modules.cailiaodingyi.funcs.funcs_pdf_input import (
     move_guankou_to_first, update_template_input_editable_state
 )
 
 
+
+
+
+
 def handle_template_change(viewer_instance, index):
     print("handle_template_change called with index:", index)
-    selected_template = viewer_instance.comboBox_template.itemText(index)
+    selected_template = viewer_instance.comboBox_template.itemText(index).strip()
+    if not selected_template:
+        return
+
+    pid = getattr(viewer_instance, "product_id", None)
+    if not pid:
+        viewer_instance.show_error_message("提示", "未检测到产品ID，无法切换模板")
+        return
+
+    # ✅ 先尝试从数据库取
+    old_template = query_template_name_by_product(pid)
+    print(f"old{old_template}")
+    # ✅ 如果取不到，就 fallback 用当前控件保存的 current_template_name
+    if not old_template:
+        old_template = getattr(viewer_instance, "current_template_name", "").strip()
+
+    ok = ask_before_switch_template_against_current(
+        viewer_instance,
+        pid,
+        base_template_name=old_template,
+        target_template_name=selected_template
+    )
+    if not ok:
+        print("[模板切换] 用户取消")
+        try:
+            viewer_instance._template_reverting = True
+            viewer_instance.comboBox_template.blockSignals(True)
+            viewer_instance.comboBox_template.setCurrentIndex(getattr(viewer_instance, "_template_prev_index", 0))
+        finally:
+            viewer_instance.comboBox_template.blockSignals(False)
+            viewer_instance._template_reverting = False
+        return
+
+    # 真正切换
     load_data_by_template(viewer_instance, selected_template)
+
+    viewer_instance.current_template_name = selected_template
+    viewer_instance._template_prev_index = index
+
+
+
+
+# 初始化（UI建立好且下拉框已有值后调用一次）
+def init_template_combo_hooks(self):
+    self.current_template_name = self.comboBox_template.currentText().strip()
+    self._template_prev_index = self.comboBox_template.currentIndex()
+    self._template_reverting = False
+    self.comboBox_template.currentIndexChanged.connect(
+        lambda idx: handle_template_change(self, idx)
+    )
+
+
+
 
 def inject_material_refresh(combo: QComboBox, table: QTableWidget, row: int, col: int):
     def refresh_options_before_dropdown():

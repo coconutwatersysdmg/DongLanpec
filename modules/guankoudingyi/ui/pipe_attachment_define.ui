@@ -78,6 +78,9 @@
         <layout class="QVBoxLayout" name="verticalLayout_4">
          <item>
           <layout class="QHBoxLayout" name="horizontalLayout">
+           <property name="spacing">
+            <number>20</number>
+           </property>
            <item>
             <spacer name="horizontalSpacer">
              <property name="orientation">
@@ -95,7 +98,7 @@
             <widget class="QPushButton" name="pushButton_in">
              <property name="font">
               <font>
-               <pointsize>9</pointsize>
+               <pointsize>11</pointsize>
               </font>
              </property>
              <property name="styleSheet">
@@ -718,6 +721,11 @@
      </item>
      <item>
       <widget class="QPushButton" name="pushButton_affirm">
+       <property name="font">
+        <font>
+         <pointsize>11</pointsize>
+        </font>
+       </property>
        <property name="styleSheet">
         <string notr="true">background-color: rgb(255, 255, 255);</string>
        </property>

@@ -1,4 +1,4 @@
-from PyQt5.QtCore import Qt, QObject, QEvent
+from PyQt5.QtCore import Qt, QObject, QEvent, QItemSelectionModel
 
 from PyQt5 import QtWidgets, uic
 from PyQt5.QtWidgets import (
@@ -9,6 +9,7 @@ from PyQt5.QtGui import QColor
 from pandas.core.interchange import column
 
 from modules.chanpinguanli.chanpinguanli_main import product_manager
+from modules.guankoudingyi.funcs.funcs_pipe_data_output import export_nozzle_listing
 #导入函数功能
 from modules.guankoudingyi.obtain_product_type_version import get_product_type_and_version
 
@@ -21,7 +22,7 @@ from modules.guankoudingyi.funcs.funcs_pipe_table import (
 )
 from modules.guankoudingyi.funcs.funcs_pipe_comboBox_units import setup_unit_selection_handlers, load_nps_to_dn_map
 from modules.guankoudingyi.funcs.funcs_pipe_comboBox_value import handle_pipe_cell_click, handle_pipe_cell_changed, \
-    initialize_pipe_combobox_delegates
+    initialize_pipe_combobox_delegates, NoWheelComboBox
 # 导入表头排序功能
 from modules.guankoudingyi.funcs.funcs_pipe_sort import setup_header_click_sort
 # 导入确认按钮功能
@@ -65,6 +66,106 @@ class ReturnKeyJumpFilter(QObject):
             return True
 
         return super().eventFilter(obj, event)
+
+# === 对公称尺寸、法兰标准、压力等级、法兰型式、密封面型式进行多行定义的时候最后一行编辑保护过滤器 ===
+class LastRowEditProtector(QObject):
+    def __init__(self, table, stats_widget):
+        super().__init__(table)
+        self.table = table
+        self.stats_widget = stats_widget
+
+    def eventFilter(self, obj, event):
+        # 拦截可能触发编辑的事件
+        if event.type() in (QEvent.MouseButtonDblClick, QEvent.KeyPress):
+            current = self.table.currentIndex()
+            if current.isValid():
+                row = current.row()
+                column = current.column()
+
+                # 检查是否是最后一行且没有管口代号
+                if row == self.table.rowCount() - 1:
+                    pipe_code_item = self.table.item(row, 1)
+                    has_pipe_code = pipe_code_item.text().strip() != "" if pipe_code_item else False
+
+                    if not has_pipe_code and column in {4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}:
+                        print(f"[DEBUG] 过滤器阻止最后一行编辑：行={row}, 列={column}, 事件={event.type()}")
+                        return True  # 阻止事件传递
+
+        return super().eventFilter(obj, event)
+
+# === 自定义选择模型，阻止选中最后一行空白行的特定列 ===
+class CustomSelectionModel(QItemSelectionModel):
+    def __init__(self, model, stats_widget):
+        super().__init__(model)
+        self.stats_widget = stats_widget
+        self.table = stats_widget.tableWidget_pipe
+
+    def select(self, selection, command):
+        # 过滤选择范围，移除最后一行空白行的目标列单元格
+        if hasattr(selection, 'indexes'):
+            # 处理 QItemSelection
+            filtered_selection = selection.__class__()
+            for sel_range in selection:
+                filtered_range = self.filter_selection_range(sel_range)
+                if not filtered_range.isEmpty():
+                    filtered_selection.append(filtered_range)
+            super().select(filtered_selection, command)
+        else:
+            # 处理单个 QModelIndex
+            if self.is_valid_selection(selection):
+                super().select(selection, command)
+
+    def filter_selection_range(self, sel_range):
+        """过滤选择范围，移除最后一行空白行的目标列"""
+        top = sel_range.top()
+        bottom = sel_range.bottom()
+        left = sel_range.left()
+        right = sel_range.right()
+
+        last_row = self.table.rowCount() - 1
+        target_columns = {4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}
+
+        # 如果选择范围包含最后一行
+        if bottom == last_row:
+            # 检查最后一行是否有管口代号
+            pipe_code_item = self.table.item(last_row, 1)
+            has_pipe_code = pipe_code_item.text().strip() != "" if pipe_code_item else False
+
+            if not has_pipe_code:
+                # 检查选择范围是否包含目标列
+                if any(col in target_columns for col in range(left, right + 1)):
+                    # 如果只选择了最后一行，返回空选择
+                    if top == bottom:
+                        return sel_range.__class__()
+                    # 否则，将选择范围缩小到倒数第二行
+                    bottom = last_row - 1
+
+        # 返回过滤后的选择范围
+        if top <= bottom and left <= right:
+            return sel_range.__class__(
+                self.model().index(top, left),
+                self.model().index(bottom, right)
+            )
+        else:
+            return sel_range.__class__()
+
+    def is_valid_selection(self, index):
+        """检查单个索引是否可以被选择"""
+        if not index.isValid():
+            return True
+
+        row = index.row()
+        column = index.column()
+        last_row = self.table.rowCount() - 1
+        target_columns = {4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}
+
+        # 如果是最后一行的目标列
+        if row == last_row and column in target_columns:
+            pipe_code_item = self.table.item(row, 1)
+            has_pipe_code = pipe_code_item.text().strip() != "" if pipe_code_item else False
+            return has_pipe_code
+
+        return True
 
 class Stats(QtWidgets.QWidget):
     def __init__(self, line_tip=None):
@@ -149,6 +250,8 @@ class Stats(QtWidgets.QWidget):
         self.pushButton_pipe_up.clicked.connect(lambda: move_selected_pipe_rows_up(self))
         #管口下移
         self.pushButton_pipe_down.clicked.connect(lambda: move_selected_pipe_rows_down(self))
+        #管口信息导出
+        self.pushButton_out.clicked.connect(self._on_click_export)
 
         # 单元格改变的监听
         self.tableWidget_pipe.cellChanged.connect(self.handle_cell_change)
@@ -176,9 +279,17 @@ class Stats(QtWidgets.QWidget):
         #回车事件到下一行
         self.tableWidget_pipe.installEventFilter(ReturnKeyJumpFilter(self.tableWidget_pipe))
 
+        # 安装编辑保护过滤器
+        self.tableWidget_pipe.installEventFilter(LastRowEditProtector(self.tableWidget_pipe, self))
 
         # 连接确认按钮
         connect_save_button(self)
+        self.clear_bottom_tip()
+
+        # ===== 批量赋值状态跟踪 =====
+        # 仅用于第4-8列（公称尺寸、法兰标准、压力等级、法兰型式、密封面型式）
+        self.bulk_assign_target_column = None
+        self.bulk_assign_rows = []
 
 
     """设置冻结的表头"""
@@ -267,7 +378,8 @@ class Stats(QtWidgets.QWidget):
                 label = QLabel(key)
                 label.setAlignment(Qt.AlignCenter)
                 label.setStyleSheet("font-size: 12pt;")
-                combo = QComboBox()
+                # combo = QComboBox()
+                combo = NoWheelComboBox()
                 combo.addItems(unit_options[key])
                 combo.setStyleSheet("QComboBox { font-size: 10pt; }")
                 
@@ -290,7 +402,8 @@ class Stats(QtWidgets.QWidget):
                 label = QLabel(key)
                 label.setAlignment(Qt.AlignCenter)
                 label.setStyleSheet("font-size: 12pt;")
-                combo = QComboBox()
+                # combo = QComboBox()
+                combo = NoWheelComboBox()
                 combo.addItems(unit_options[key])
                 combo.setStyleSheet("QComboBox { font-size: 10pt; }")
                 
@@ -348,6 +461,13 @@ class Stats(QtWidgets.QWidget):
         # 设置与冻结表头相同的列数
         table_pipe.setColumnCount(self.tableWidget_pipe_title.columnCount())
 
+        # 设置自定义选择模型，阻止选中最后一行空白行的特定列
+        custom_selection_model = CustomSelectionModel(table_pipe.model(), self)
+        table_pipe.setSelectionModel(custom_selection_model)
+
+        # 连接选择变化信号，额外过滤最后一行空白行
+        custom_selection_model.selectionChanged.connect(self.filter_last_row_selection)
+
         # 锁定第一列（序号列）不可编辑
         for row in range(table_pipe.rowCount()):
             item = table_pipe.item(row, 0)
@@ -385,14 +505,14 @@ class Stats(QtWidgets.QWidget):
             6: 110,  # 压力等级
             7: 110,  # 法兰型式
             8: 130,  # 密封面型式
-            9: 110,  # 焊端规格
+            9: 160,  # 焊端规格
             10: 160,  # 管口所属元件
             11: 160,  # 轴向定位基准
             12: 160,  # 轴向定位距离
             13: 140,  # 轴向夹角(°)
             14: 140,  # 周向方位(°)
             15: 140,  # 偏心距(mm)
-            16: 110,  # 外伸高度
+            16: 160,  # 外伸高度
             17: 110,  # 管口附件
             18: 110  # 管口载荷
         }
@@ -470,11 +590,11 @@ class Stats(QtWidgets.QWidget):
         if column == 1 and not hasattr(self, 'old_port_code'):
             self.old_port_code = ''
 
-        # ✅ 如果是最后一行的管口代号被填写，自动添加新行
-        if column == 1 and row == self.tableWidget_pipe.rowCount() - 1:
-            item = self.tableWidget_pipe.item(row, column)
-            if item and item.text().strip():
-                check_last_row_and_add_new(self)
+        # # ✅ 如果是最后一行的管口代号被填写，自动添加新行
+        # if column == 1 and row == self.tableWidget_pipe.rowCount() - 1:
+        #     item = self.tableWidget_pipe.item(row, column)
+        #     if item and item.text().strip():
+        #         check_last_row_and_add_new(self)
 
         # ✅ 更新视图
         view = self.widget_control.findChild(HeatExchangerView)
@@ -484,6 +604,15 @@ class Stats(QtWidgets.QWidget):
     """处理单元格单击的监听，单击变成下拉框"""
     def handle_pipe_cell_click(self, row, column):
         """监听管口表单元格点击，若是五个目标字段，则转换为下拉框"""
+        # 首先检查最后一行的限制：如果是最后一行且没有管口代号，不允许编辑
+        table = self.tableWidget_pipe
+        if row == table.rowCount() - 1:
+            pipe_code_item = table.item(row, 1)
+            has_pipe_code = pipe_code_item.text().strip() != "" if pipe_code_item else False
+            if not has_pipe_code:
+                print(f"[DEBUG] 阻止最后一行编辑：行={row}, 列={column}, 有管口代号={has_pipe_code}")
+                return  # 阻止最后一行在没有管口代号时编辑
+
         handle_pipe_cell_click(self, row, column)
 
     """单行和多行高亮"""
@@ -548,6 +677,13 @@ class Stats(QtWidgets.QWidget):
             except Exception:
                 pass
 
+        # 在高亮刷新后，更新批量赋值状态
+        try:
+            from modules.guankoudingyi.funcs.funcs_pipe_comboBox_value import update_bulk_assign_state
+            update_bulk_assign_state(self)
+        except Exception as e:
+            print(f"更新批量赋值状态出错: {str(e)}")
+
     """从表格中提取所有管口数据"""
     def get_all_pipe_data(self):
         table = self.tableWidget_pipe
@@ -562,7 +698,23 @@ class Stats(QtWidgets.QWidget):
             for col, key in fields.items():
                 cell = table.item(row, col)
                 item[key] = cell.text().strip() if cell else ""
-            if item["管口代号"]:
+            
+            # ✅ 修改条件：只要有管口代号、公称尺寸、管口所属元件、轴向定位基准这四个基本信息就开始绘制
+            if (item["管口代号"] and item["公称尺寸"] and 
+                item["管口所属元件"] and item["轴向定位基准"]):
+                
+                # 为空值参数设置默认值
+                if not item["轴向定位距离"]:
+                    item["轴向定位距离"] = "程序推荐"
+                if not item["轴向夹角（°）"]:
+                    item["轴向夹角（°）"] = "0"
+                if not item["周向方位（°）"]:
+                    item["周向方位（°）"] = "180"
+                if not item["偏心距"]:
+                    item["偏心距"] = "0"
+                if not item["外伸高度"]:
+                    item["外伸高度"] = "程序推荐"
+                    
                 data.append(item)
         return data
 
@@ -616,5 +768,83 @@ class Stats(QtWidgets.QWidget):
         table_attach.horizontalHeader().setVisible(False)
         table_attach.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         table_attach.setRowHeight(0, 30)
+
+
+    """过滤选择，移除最后一行空白行的特定列选择"""
+    def filter_last_row_selection(self, selected, deselected):
+
+        table = self.tableWidget_pipe
+        last_row = table.rowCount() - 1
+        target_columns = {4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}
+
+        # 检查最后一行是否有管口代号
+        pipe_code_item = table.item(last_row, 1)
+        has_pipe_code = pipe_code_item.text().strip() != "" if pipe_code_item else False
+
+        if not has_pipe_code:
+            # 获取当前选择
+            selection_model = table.selectionModel()
+            current_selection = selection_model.selection()
+
+            # 检查是否有最后一行的目标列被选中
+            should_clear = False
+            for sel_range in current_selection:
+                if sel_range.bottom() == last_row:
+                    # 检查是否包含目标列
+                    if any(col in target_columns for col in range(sel_range.left(), sel_range.right() + 1)):
+                        should_clear = True
+                        break
+
+            if should_clear:
+                # 创建新的选择，排除最后一行的目标列
+                from PyQt5.QtCore import QItemSelection
+                new_selection = QItemSelection()
+
+                for sel_range in current_selection:
+                    top = sel_range.top()
+                    bottom = sel_range.bottom()
+                    left = sel_range.left()
+                    right = sel_range.right()
+
+                    # 如果选择范围包含最后一行
+                    if bottom == last_row:
+                        # 检查是否包含目标列
+                        if any(col in target_columns for col in range(left, right + 1)):
+                            # 如果只选择了最后一行，跳过这个范围
+                            if top == bottom:
+                                continue
+                            # 否则，缩小选择范围到倒数第二行
+                            bottom = last_row - 1
+
+                    # 添加过滤后的范围
+                    if top <= bottom:
+                        new_selection.select(
+                            table.model().index(top, left),
+                            table.model().index(bottom, right)
+                        )
+
+                # 应用新的选择
+                selection_model.blockSignals(True)
+                selection_model.clearSelection()
+                selection_model.select(new_selection, QItemSelectionModel.Select)
+                selection_model.blockSignals(False)
+
+    def _on_click_export(self):
+        try:
+            # 在导出前先给出提示
+            if self.line_tip:
+                self.line_tip.setText("离开该界面前请勿忘记点击“确认”按钮！")
+                self.line_tip.setStyleSheet("color: #fcb15d; font-weight:bold;")
+
+            out_path = export_nozzle_listing(self)  # self 就是 stats_widget
+            if out_path:
+                QMessageBox.information(self, "导出成功", f"已导出到：\n{out_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "导出失败", str(e))
+    """用于点击确认后，清除下方给出的提示"""
+    def clear_bottom_tip(self):
+        if self.line_tip:
+            self.line_tip.clear()
+
 
 

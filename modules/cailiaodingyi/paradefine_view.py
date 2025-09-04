@@ -1,5 +1,7 @@
 import os
+import re
 import sys
+import traceback
 from collections import defaultdict
 from urllib.parse import urljoin
 from urllib.request import pathname2url
@@ -9,9 +11,12 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor, QPixmap
 from PyQt5.QtWidgets import QApplication, QWidget, QTableWidgetItem, QMessageBox, QMenu, QAction, QComboBox, \
     QStyledItemDelegate, QPushButton, QTableWidget, QVBoxLayout, QTabWidget, QLabel, QAbstractItemView, QLineEdit, \
-    QDialog
+    QDialog, QCheckBox, QHeaderView, QHBoxLayout, QToolButton
 
 from modules import chanpinguanli
+from modules.cailiaodingyi.controllers.add_tab import PlusTabManager
+from modules.cailiaodingyi.controllers.checkcombo import CheckComboDelegate
+from modules.cailiaodingyi.controllers.combo import ComboDelegate, ComboPopupEventFilter
 from modules.cailiaodingyi.controllers.rename import RenamableLineEdit
 from modules.cailiaodingyi.controllers.table import CustomHeaderView
 from modules.cailiaodingyi.controllers.template_handler import (
@@ -24,11 +29,12 @@ from modules.cailiaodingyi.controllers.datamanager import (
     handle_guankou_table_click,
     on_confirm_param_update,
     on_confirm_guankouparam, apply_paramname_dependent_combobox, apply_paramname_combobox,
-    apply_gk_paramname_combobox, bind_define_table_click,
+    apply_gk_paramname_combobox, bind_define_table_click, on_clear_param_update, load_data_by_template, on_clear_guankou_param_update,
 )
 from modules.cailiaodingyi.funcs.funcs_pdf_change import load_guankou_para_data_leibie, load_guankou_define_leibie, \
     load_updated_guankou_define_data, load_update_element_data, load_update_guankou_define_data, \
-    load_update_guankou_para_data, get_design_params_by_product_id, update_guankou_param_by_param_name
+    load_update_guankou_para_data, get_design_params_by_product_id, \
+    query_template_id, query_guankou_codes
 from modules.cailiaodingyi.controllers.style import ReturnKeyJumpFilter
 from modules.cailiaodingyi.funcs.funcs_pdf_input import (
     load_design_product_data,
@@ -52,11 +58,14 @@ from modules.cailiaodingyi.funcs.funcs_pdf_input import (
     save_to_template_library, get_template_id_by_name, insert_updated_element_para_data, insert_guankou_define_data,
     insert_guankou_para_info, load_template, load_guankou_material_detail_template, get_grouped,
     update_material_category_in_db, query_guankou_param_by_template, load_guankou_param_leibie, load_guankou_param_byid,
-    delete_guankou_data_from_db
+    delete_guankou_data_from_db, load_dropdown_options, load_guankou_param_structure_from_db,
+    insert_guankou_param_leibie, query_guankou_default, insert_guankou_info, query_assigned_codes_by_tab, _find_row,
+    query_guankou_codes_by_product, query_unassigned_codes, query_codes_for_tab_raw
 )
+from modules.cailiaodingyi.funcs.funcs_pdf_render import render_guankou_param_to_ui, _set_text_center
 from modules.chanpinguanli import chanpinguanli_main
 from modules.chanpinguanli.chanpinguanli_main import product_manager
-# from modules.condition_input.funcs.funcs_cdt_input import sync_corrosion_to_guankou_param
+from modules.condition_input.funcs.funcs_cdt_input import sync_corrosion_to_guankou_param
 from modules.condition_input.view import DesignConditionInputViewer
 from modules.guankoudingyi.dynamically_adjust_ui import Stats
 
@@ -78,11 +87,12 @@ class DesignParameterDefineInputerViewer(QWidget):
         self.line_tip = line_tip
         self.main_window = main_window
         self.guankou_define_info = None
-        self.ui = uic.loadUi("modules/cailiaodingyi/ui/paradefine_modified.ui", self)  # 加载UI文件
+        self.ui = uic.loadUi("modules/cailiaodingyi/ui/paradefine.ui", self)  # 加载UI文件
         self.init_widgets()  # 获取所有控件、绑定事件
         self.product_id = product_id
         print("self.product_id", self.product_id)
         self.product_type, self.product_form = load_design_product_data(self.product_id)
+        print("产品类型", self.product_form)
         # 初始化管口材料tab页列表
         self.dynamic_guankou_tabs = []
         self.dynamic_guankou_param_tabs = {}
@@ -132,17 +142,29 @@ class DesignParameterDefineInputerViewer(QWidget):
         self.lineEdit_filter = self.findChild(QtWidgets.QLineEdit, "lineEdit")
         self.lineEdit_filter.setPlaceholderText("输入关键词筛选所有列...")
         self.lineEdit_filter.textChanged.connect(self.filter_table_globally)
-        # 获取管口定义表格控件
-        self.tableWidget_guankou_define = self.findChild(QtWidgets.QTableWidget, "tableWidget_define1")
-        # 绘制管口定义表格
+        # 获取管口表格控件
+        self.tableWidget_guankou = self.findChild(QtWidgets.QTableWidget, "tableWidget_define1")
+        self.tableWidget_guankou.cellClicked.connect(self.on_guankou_cell_clicked)
 
-        self.tableWidget_guankou_define.setHorizontalHeader(CustomHeaderView(QtCore.Qt.Horizontal, self.tableWidget_guankou_define))
-        self.tableWidget_guankou_define.cellClicked.connect(lambda row, col: handle_guankou_table_click(self, row, col))
-        self.tableWidget_guankou_param = self.findChild(QtWidgets.QTableWidget, "tableWidget_gpara1")
-        self.tableWidget_guankou_define.cellClicked.connect(lambda row, col: handle_guankou_table_click(self, row, col))
-        # 绘制管口参数表格
-        self.tableWidget_guankou_param.setHorizontalHeader(CustomHeaderView(QtCore.Qt.Horizontal, self.tableWidget_guankou_param))
-        self.tableWidget_guankou_param.installEventFilter(ReturnKeyJumpFilter(self.tableWidget_guankou_param))
+        # 通用元件的清空
+        self.pushButton_clear = self.findChild(QPushButton, "pushButton_9")
+        self.pushButton_clear.clicked.connect(lambda: on_clear_param_update(self))
+
+        # 管口元件的清空
+        self.pushButton_guankou_clear = self.findChild(QPushButton, "pushButton_6")
+        self.pushButton_guankou_clear.clicked.connect(lambda: on_clear_guankou_param_update(self))
+
+
+
+
+        # # 绘制管口定义表格
+        # self.tableWidget_guankou_define.setHorizontalHeader(CustomHeaderView(QtCore.Qt.Horizontal, self.tableWidget_guankou_define))
+        # self.tableWidget_guankou_define.cellClicked.connect(lambda row, col: handle_guankou_table_click(self, row, col))
+        # self.tableWidget_guankou_param = self.findChild(QtWidgets.QTableWidget, "tableWidget_gpara1")
+        # self.tableWidget_guankou_define.cellClicked.connect(lambda row, col: handle_guankou_table_click(self, row, col))
+        # # 绘制管口参数表格
+        # self.tableWidget_guankou_param.setHorizontalHeader(CustomHeaderView(QtCore.Qt.Horizontal, self.tableWidget_guankou_param))
+        # self.tableWidget_guankou_param.installEventFilter(ReturnKeyJumpFilter(self.tableWidget_guankou_param))
 
         self.label_part_image = self.findChild(QLabel, "label_4")
         print("self.label_part_image", self.label_part_image)
@@ -168,43 +190,49 @@ class DesignParameterDefineInputerViewer(QWidget):
         # 对于非管口的零件参数表格设置高亮
         self.tableWidget_para_define.itemSelectionChanged.connect(self.on_param_table_selection_changed)
 
-        # 监听添加管口材料分类按钮
-        self.pushButton_add_guankou = self.findChild(QPushButton, "pushButton_6")
-        self.pushButton_add_guankou.clicked.connect(lambda: self.add_guankou_category_tab(mode='add'))
-        # 监听复制按钮
-        self.pushButton_copy_guankou = self.findChild(QPushButton, "pushButton")
-        self.pushButton_copy_guankou.clicked.connect(lambda: self.add_guankou_category_tab(mode='copy'))
+
         # 获取管口定义对应的tabs
         self.guankou_tabWidget = self.findChild(QTabWidget, "tabWidget")
-        self.guankou_tabWidget.currentChanged.connect(self.on_tab_changed)
+        # self.guankou_tabWidget.currentChanged.connect(self.on_tab_changed)
         # 第一个 tab 页
-        self.default_guankou_tab_widget = self.guankou_tabWidget.widget(0)
+        self.default_param_table = self.tableWidget_guankou  # 记录真正默认页的表
+        page0 = self.guankou_tabWidget.widget(0)
+        if page0 and page0.property('param_table') is None:
+            page0.setProperty('param_table', self.default_param_table)
 
-        # 获取默认tab页的边框
-        self.param_section_widget = self.findChild(QWidget, "param_section_widget")
-        self.param_section_layout = self.param_section_widget.layout()
-        # 消除 param_section_layout 的边距和间距
-        self.param_section_layout.setContentsMargins(0, 0, 0, 0)
-        self.param_section_layout.setSpacing(4)
-
-        # 启用关闭按钮
-        self.guankou_tabWidget.setTabsClosable(True)
-        # 绑定关闭按钮事件
-        self.guankou_tabWidget.tabCloseRequested.connect(self.remove_guankou_tab)
 
         # 监听双击 tab 重命名
         self.guankou_tabWidget.tabBarDoubleClicked.connect(self.on_tab_double_clicked)
 
-        # 右键 tab 页
-        self.guankou_tabWidget.tabBar().setContextMenuPolicy(Qt.CustomContextMenu)
-        self.guankou_tabWidget.tabBar().customContextMenuRequested.connect(self.on_tab_right_clicked)
+
+        bar = self.guankou_tabWidget.tabBar()
+        bar.setUsesScrollButtons(True)  # 出现滚动箭头
+        bar.setExpanding(False)  # 关键：不要等分拉伸，才能判断“是否能放下+”
+        bar.setElideMode(Qt.ElideNone)  # 不要省略号
+        bar.setContextMenuPolicy(Qt.CustomContextMenu)
+        bar.customContextMenuRequested.connect(self.on_guankou_tab_right_menu)
+
+        # 挂上管理器（只保留这一句）
+        self.plus_mgr = PlusTabManager(
+            self.guankou_tabWidget,
+            lambda src_idx, src_name: self._add_single_table_tab_copy_only(
+                source_tab_name=src_name,
+                insert_after_index=src_idx
+            )
+        )
+
+        # 建一个：tab 名 → 对应表格 的映射，便于切换时找到表
+        self.dynamic_guankou_param_tabs = getattr(self, "dynamic_guankou_param_tabs", {})
+
+        # 切换 tab 时，把当前表指向该 tab 的表格（便于你其他逻辑沿用原来的 self.tableWidget_guankou）
+        self.guankou_tabWidget.currentChanged.connect(self._on_guankou_tab_changed)
+
+        QTimer.singleShot(0, lambda: self._on_guankou_tab_changed(self.guankou_tabWidget.currentIndex()))
 
         # 获取存为模板输入框
         self.lineEdit_template = self.findChild(QtWidgets.QLineEdit, "lineEdit_2")
         self.lineEdit_template.returnPressed.connect(self.on_template_name_entered)
 
-        # 获取管口材料分类对应的下拉框
-        self.guankou_material_category = self.findChild(QtWidgets.QComboBox, "comboBox_8")
 
         # self.tableWidget_parts.installEventFilter(ReturnKeyJumpFilter(self.tableWidget_parts))
         self.tableWidget_parts.installEventFilter(
@@ -213,43 +241,221 @@ class DesignParameterDefineInputerViewer(QWidget):
                 after_jump_callback=lambda r, c: handle_table_click(self, r, c)
             )
         )
-        self.tableWidget_guankou_param.installEventFilter(ReturnKeyJumpFilter(self.tableWidget_guankou_param))
-        self.tableWidget_para_define.installEventFilter(ReturnKeyJumpFilter(self.tableWidget_para_define))
+        # self.tableWidget_guankou_param.installEventFilter(ReturnKeyJumpFilter(self.tableWidget_guankou_param))
+        # self.tableWidget_para_define.installEventFilter(ReturnKeyJumpFilter(self.tableWidget_para_define))
 
         # 用户修改，才标记未保存
         self.detail_table_modified = True
 
-        # # 上一步下一步
-        # self.last_button = self.findChild(QPushButton, "pushButton_4")
-        # self.next_button = self.findChild(QPushButton, "pushButton_5")
-        # self.last_button.clicked.connect(self.goto_previous_page)
-        # self.next_button.clicked.connect(self.goto_next_page)
 
 
 
     def on_tab_changed(self, index):
         self.guankou_material_category.setCurrentIndex(0)
 
+
+
+    def _ensure_default_tab_registered(self):
+        tw = self.guankou_tabWidget
+        if not tw or tw.count() == 0:
+            return
+
+        page0 = tw.widget(0)
+
+        # ① 优先用第一页 page 上的属性
+        table0 = page0.property('param_table') if page0 is not None else None
+        # ② 其次用初始化时缓存的真正默认表
+        if table0 is None:
+            table0 = getattr(self, "default_param_table", None)
+        # ③ 最后才兜底旧字段（仅当以上都没有时）
+        if table0 is None:
+            table0 = getattr(self, "tableWidget_guankou", None)
+
+        if page0 is not None and page0.property('param_table') is None and table0 is not None:
+            page0.setProperty('param_table', table0)
+
+        if table0 is not None:
+            if not hasattr(self, "dynamic_guankou_param_tabs"):
+                self.dynamic_guankou_param_tabs = {}
+            self.dynamic_guankou_param_tabs[tw.tabText(0).strip()] = table0
+
+    def _on_guankou_tab_changed(self, index: int):
+        tw = self.guankou_tabWidget
+        if not tw or index < 0 or index >= tw.count():
+            return
+        name = tw.tabText(index).strip()
+        if name in {"+", "＋"}:
+            tw.setCurrentIndex(max(0, index - 1))
+            return
+        if index == 0:
+            self._ensure_default_tab_registered()
+
+        page = tw.widget(index)
+        table = page.property('param_table') if page is not None else None
+        if table is None and index == 0:
+            table = getattr(self, "default_param_table", None) or getattr(self, "tableWidget_guankou", None)
+        if table is None:
+            print(f"[警告] 没找到 {name} 的参数表，跳过刷新");
+            return
+
+        self.tableWidget_guankou = table
+
+        # ★ 用数据库为准：覆盖“已选值”，并更新候选
+        self.patch_codes_for_current_tab(table, name)
+
+    def _add_single_table_tab_copy_only(self, source_tab_name: str, insert_after_index: int):
+        """
+        新建单表 tab：
+        - 拷贝源：始终取“当前选中的 tab”（如果当前是 '+'，则取最后一个真正的 tab）
+        - 插入位置：始终插在最后一个已创建的 tab 后面（即 '+' 之前）
+        - 布局：page + QVBoxLayout 包住表格，并拷贝初始 tab 的边距/间距，保证顶部空隙一致
+        """
+        tw = self.guankou_tabWidget
+
+        # —— 1) 取“当前选中 tab”作为拷贝源（若当前是 +，退回到最后一个真正的 tab）——
+        cur = tw.currentIndex()
+        if cur < 0:
+            cur = 0
+        cur_name = tw.tabText(cur) if tw.count() > 0 else ""
+        if cur_name == "+":
+            last_real = tw.count() - 2 if (tw.count() >= 2 and tw.tabText(tw.count() - 1) == "+") else tw.count() - 1
+            cur = max(0, last_real)
+            cur_name = tw.tabText(cur) if cur >= 0 else ""
+        source_tab_name = cur_name  # 用 tab 名判断并加载数据
+
+
+        # —— 2) 计算插入位置：始终放到最后一个新建 tab 的后面（即 '+' 的前面）——
+        last_is_plus = (tw.count() > 0 and tw.tabText(tw.count() - 1) == "+")
+        insert_pos = tw.count() - 1 if last_is_plus else tw.count()
+        insert_pos = max(0, insert_pos)
+
+        print(f"[调试] 新 tab 将插入位置: {insert_pos}")
+
+        # —— 3) 新建表格 + 外壳布局（拷贝初始 tab 的边距/间距，保证顶部空隙一致）——
+        table_guankou = QTableWidget()
+        table_guankou.setHorizontalHeader(CustomHeaderView(QtCore.Qt.Horizontal, table_guankou))
+        table_guankou.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Expanding)
+
+        page = QtWidgets.QWidget()
+        main_layout = QtWidgets.QVBoxLayout(page)
+
+        base_layout = None
+        if tw.count() > 0:
+            w0 = tw.widget(0)
+            base_layout = w0.layout() if w0 else None
+        if base_layout:
+            m = base_layout.contentsMargins()
+            main_layout.setContentsMargins(m.left(), m.top(), m.right(), m.bottom())
+            main_layout.setSpacing(base_layout.spacing())
+            # 如需保持完全一致的外观，也可同步样式（可选）
+            page.setStyleSheet(w0.styleSheet())
+        else:
+            main_layout.setContentsMargins(9, 6, 9, 6)
+            main_layout.setSpacing(6)
+
+        main_layout.addWidget(table_guankou)
+
+        # —— 4) 生成唯一标签并插入到目标位置 ——
+        tab_label = self.generate_unique_guankou_label()
+        tw.insertTab(insert_pos, page, tab_label)
+        tw.setCurrentIndex(insert_pos)
+
+        page.setProperty('param_table', table_guankou)
+
+        # 记录映射
+        self.dynamic_guankou_param_tabs[tab_label] = table_guankou
+
+        # —— 5) 加载并渲染：严格用“拷贝源 tab 名”加载相同内容 ——
+        select_template = self.comboBox_template.currentText() or 'None'
+        guankou_para_info = load_guankou_param_leibie(source_tab_name, self.product_id, select_template)
+        insert_guankou_param_leibie(self.product_id, tab_label, select_template, guankou_para_info,
+                                        keep_values=True)
+
+        old_ref = getattr(self, "tableWidget_guankou", None)
+        self.tableWidget_guankou = table_guankou
+        try:
+            render_guankou_param_to_ui(self, guankou_para_info)
+        finally:
+            self.tableWidget_guankou = old_ref  # ← 一定要恢复旧引用
+
+        # ✅ 关键：新增后也刷新
+        if hasattr(self, "plus_mgr") and self.plus_mgr:
+            self.plus_mgr.refresh_after_model_change()
+
+    def on_guankou_tab_right_menu(self, pos):
+        bar = self.guankou_tabWidget.tabBar()
+        index = bar.tabAt(pos)
+        if index < 0:
+            return
+
+        text = self.guankou_tabWidget.tabText(index).strip()
+        if text in {"+", "＋"}:
+            return
+
+        total = self.guankou_tabWidget.count()
+        has_plus = total > 0 and self.guankou_tabWidget.tabText(total - 1).strip() in {"+", "＋"}
+        real_count = total - (1 if has_plus else 0)
+
+        menu = QMenu(self)
+        act_enlarge = menu.addAction("放大查看参数表格")
+        act_delete = menu.addAction("删除此分类")
+        act = menu.exec_(bar.mapToGlobal(pos))
+        if act is act_enlarge:
+            self.show_floating_table(index)  # ← 用上面新版
+            return
+        if act is act_delete:
+            self.remove_guankou_tab(index)
+
     def remove_guankou_tab(self, index):
-        if self.guankou_tabWidget.count() <= 1:
+        # 防止删除 “+”
+        tab_text = self.guankou_tabWidget.tabText(index).strip()
+        if tab_text in {"+", "＋"}:
+            return
+
+        # 至少保留一个（排除“+”）
+        total = self.guankou_tabWidget.count()
+        has_plus = total > 0 and self.guankou_tabWidget.tabText(total - 1).strip() in {"+", "＋"}
+        real_count = total - (1 if has_plus else 0)
+        if real_count <= 1:
             QMessageBox.information(self, "提示", "至少保留一个管口材料分类，不能删除最后一个 tab")
             return
 
-        tab = self.guankou_tabWidget.widget(index)
         tab_name = self.guankou_tabWidget.tabText(index)
-
         print(f"[调试] 正在删除 tab: {tab_name}")
-        if self.product_id:
+
+        # 删库
+        if getattr(self, "product_id", None):
             delete_guankou_data_from_db(self.product_id, tab_name)
         else:
             print("[警告] 当前 product_id 不存在，无法删除数据库记录")
 
-        # ✅ 清理映射
-        self.dynamic_guankou_param_tabs.pop(tab_name, None)
-        self.dynamic_guankou_define_tabs.pop(tab_name, None)
+        # ==== 关键改动：放大窗口安全处理 ====
+        if hasattr(self, "dynamic_guankou_param_tabs"):
+            table = self.dynamic_guankou_param_tabs.pop(tab_name, None)
+            if table:
+                # 如果在放大窗口中
+                win = getattr(table, "_dock_float_win", None)
+                if win and win.isVisible():
+                    print(f"[调试] {tab_name} 正在放大显示，删除时关闭放大窗口")
+                    # 标记放弃还原，防止 restore 把它塞到别的 tab
+                    table._dock_abandoned = True
+                    win.close()  # 会触发 restore，走“销毁”分支
+        # ====================================
 
+        # UI 移除
         self.guankou_tabWidget.removeTab(index)
 
+        # 选中一个合理的 tab
+        cnt = self.guankou_tabWidget.count()
+        if cnt:
+            sel = min(index, cnt - 1)
+            if self.guankou_tabWidget.tabText(sel).strip() in {"+", "＋"} and sel > 0:
+                sel -= 1
+            self.guankou_tabWidget.setCurrentIndex(sel)
+
+        # ✅ 让 PlusTabManager 重新判断“+”用页签还是右上角按钮
+        if hasattr(self, "plus_mgr") and self.plus_mgr:
+            self.plus_mgr.refresh_after_model_change()
 
     def on_tab_double_clicked(self, index):
         """更改tab页标题"""
@@ -270,7 +476,6 @@ class DesignParameterDefineInputerViewer(QWidget):
 
             self.guankou_tabWidget.setTabText(index, new_label)
             self.dynamic_guankou_param_tabs[new_label] = self.dynamic_guankou_param_tabs.pop(old_label, None)
-            self.dynamic_guankou_define_tabs[new_label] = self.dynamic_guankou_define_tabs.pop(old_label, None)
             update_material_category_in_db(self.product_id, old_label, new_label)
             print(f"[调试] tab 重命名：{old_label} → {new_label}")
 
@@ -301,10 +506,6 @@ class DesignParameterDefineInputerViewer(QWidget):
             self.dynamic_guankou_param_tabs[new_label] = self.dynamic_guankou_param_tabs.pop(old_label, None)
             self.dynamic_guankou_define_tabs[new_label] = self.dynamic_guankou_define_tabs.pop(old_label, None)
 
-            # ✅ 可选：同步更新数据库中“类别”字段（建议）
-            update_material_category_in_db(self.product_id, old_label, new_label)
-
-            print(f"[调试] tab 重命名：{old_label} → {new_label}")
             line_edit.deleteLater()
 
         line_edit.editingFinished.connect(finish_edit)
@@ -320,109 +521,177 @@ class DesignParameterDefineInputerViewer(QWidget):
                 return label
         raise ValueError("管口材料分类数量超限，无法生成唯一标签")
 
-    def on_tab_right_clicked(self, pos):
-        tab_bar = self.guankou_tabWidget.tabBar()
-        index = tab_bar.tabAt(pos)
-        if index == -1:
+    def show_floating_table(self, tab_index: int):
+        tw = self.guankou_tabWidget
+        tab_page = tw.widget(tab_index)
+        if tab_page is None:
             return
 
-        menu = QMenu()
-        enlarge_action = menu.addAction("放大查看参数表格")
+        tab_name = tw.tabText(tab_index)
 
-        action = menu.exec_(tab_bar.mapToGlobal(pos))
-        if action == enlarge_action:
-            self.show_floating_table(index)
+        # —— 找到该页的表格：优先映射 → 页内找第一个 QTableWidget → （可选）默认表引用 ——
+        table = None
+        if hasattr(self, "dynamic_guankou_param_tabs"):
+            table = self.dynamic_guankou_param_tabs.get(tab_name)
 
-    def show_floating_table(self, tab_index):
-        if self.guankou_tabWidget.widget(tab_index) is self.default_guankou_tab_widget:
-            param_table = self.tableWidget_guankou_param
-            tab_name = self.guankou_tabWidget.tabText(0)
-        else:
-            tab_name = self.guankou_tabWidget.tabText(tab_index)
-            param_table = self.dynamic_guankou_param_tabs.get(tab_name)
+        if table is None:
+            tables = tab_page.findChildren(QTableWidget)
+            table = tables[0] if tables else None
 
-        if not param_table:
+        if table is None and hasattr(self, "tableWidget_guankou"):
+            # 若这是默认第一页，可以兜底用默认表引用
+            try:
+                if tw.indexOf(tab_page) == 0:
+                    table = self.tableWidget_guankou
+            except Exception:
+                pass
+
+        if table is None:
             QMessageBox.warning(self, "未找到", f"未找到 {tab_name} 对应的参数表格")
             return
+
+        # ==== 放大前：在原位塞占位器，占坑以便还原 ====
+        # 清理历史占位器（如果之前放大过还没清掉）
+        old_ph = getattr(table, "_dock_placeholder", None)
+        if old_ph and old_ph.parent() is not None:
+            try:
+                old_ph.setParent(None)
+                old_ph.deleteLater()
+            except Exception:
+                pass
+
+        layout = tab_page.layout()
+        if layout is None:
+            layout = QtWidgets.QVBoxLayout(tab_page)
+
+        idx = layout.indexOf(table)
+        if idx < 0:
+            idx = layout.count()
+
+        placeholder = QtWidgets.QWidget(tab_page)
+        placeholder.setFixedHeight(0)
+        placeholder.setObjectName("dock_placeholder")
+        layout.insertWidget(idx, placeholder)
+
+        # 绑定“停靠信息”到 table 本身（最稳妥）
+        table._dock_parent_page = tab_page
+        table._dock_parent_layout = layout
+        table._dock_index = idx
+        table._dock_placeholder = placeholder
+        table._dock_tab_name = tab_name
+        table._dock_abandoned = False  # 默认允许还原
+
+        # 从原布局移除，放到弹窗
+        try:
+            layout.removeWidget(table)
+        except Exception:
+            pass
 
         float_win = QDialog(self)
         float_win.setWindowTitle(f"{tab_name} - 参数表格放大查看")
         float_win.setWindowFlags(Qt.Window | Qt.WindowStaysOnTopHint)
+        float_win.setAttribute(Qt.WA_DeleteOnClose, True)
         float_win.resize(1200, 700)
 
-        layout = QVBoxLayout(float_win)
-        # ✅ 将原表格嵌入新窗口（注意不能重复 setParent，否则原位置会消失）
-        shared_table = param_table  # ✅ 实际共享同一个表格
+        dlg_layout = QVBoxLayout(float_win)
+        dlg_layout.setContentsMargins(0, 0, 0, 0)
+        dlg_layout.addWidget(table)
 
-        layout.addWidget(shared_table)
+        # 把放大窗引用也绑到 table，删除时可直接关闭
+        table._dock_float_win = float_win
 
-        def restore_table():
-            float_win.close()
+        # —— 如果这个页被删除（removeTab 会导致 page.destroyed）→ 标记放弃还原并关闭放大窗 ——
+        def _on_parent_page_destroyed():
+            try:
+                table._dock_abandoned = True
+                # 对应分类已不存在，移除映射（避免之后错误引用）
+                if hasattr(self, "dynamic_guankou_param_tabs"):
+                    self.dynamic_guankou_param_tabs.pop(tab_name, None)
+                win = getattr(table, "_dock_float_win", None)
+                if win and win.isVisible():
+                    win.close()  # 会触发 restore，走“销毁”分支
+            except Exception:
+                pass
 
-            tab_widget = self.guankou_tabWidget.widget(tab_index)
+        # 只在本次放大会话里连接一次
+        try:
+            tab_page.destroyed.connect(_on_parent_page_destroyed)
+        except Exception:
+            pass
 
-            if tab_widget.objectName() == "tab":
-                layout = self.param_section_layout
-                param = self.tableWidget_guankou_param
-                define = self.tableWidget_guankou_define
+        def restore():
+            # 从弹窗拿出来（解除父子关系）
+            try:
+                dlg_layout.removeWidget(table)
+            except Exception:
+                pass
 
-                other = define if shared_table == param else param
+            parent_page = getattr(table, "_dock_parent_page", None)
+            placeholder = getattr(table, "_dock_placeholder", None)
+            abandoned = getattr(table, "_dock_abandoned", False)
 
-                # 安全移除原来的
+            # ==== 关键：若父页已删除或标记放弃还原 → 不塞到别的分类，直接销毁 ====
+            if abandoned or parent_page is None or tw.indexOf(parent_page) < 0:
                 try:
-                    old_parent = shared_table.parent()
-                    if old_parent != tab_widget:
-                        old_layout = old_parent.layout()
-                        if old_layout:
-                            old_layout.removeWidget(shared_table)
-                except Exception as e:
-                    print(f"[移除旧 parent 失败] {e}")
-
-                def safe_remove(lay, w):
-                    try:
-                        if lay.indexOf(w) != -1:
-                            lay.removeWidget(w)
-                    except:
-                        pass
-
-                safe_remove(layout, shared_table)
-                safe_remove(layout, other)
-
-                # 插入，保持上下结构
-                layout.addWidget(define)
-                layout.addWidget(param)
-
-            else:
-                # 动态 tab 恢复
-                layout = tab_widget.layout()
-                try:
-                    old_parent = shared_table.parent()
-                    if old_parent and old_parent != tab_widget:
-                        old_layout = old_parent.layout()
-                        if old_layout:
-                            old_layout.removeWidget(shared_table)
-                except:
+                    if placeholder and placeholder.parent() is not None:
+                        pl = placeholder.parent().layout()
+                        if pl:
+                            pl.removeWidget(placeholder)
+                    if placeholder:
+                        placeholder.setParent(None)
+                        placeholder.deleteLater()
+                except Exception:
                     pass
-                layout.addWidget(shared_table)
 
-        float_win.finished.connect(restore_table)
+                try:
+                    table.setParent(None)
+                except Exception:
+                    pass
+                table.deleteLater()
+
+                # 清理临时属性
+                for attr in ("_dock_parent_page", "_dock_parent_layout", "_dock_index",
+                             "_dock_placeholder", "_dock_tab_name", "_dock_float_win", "_dock_abandoned"):
+                    if hasattr(table, attr):
+                        try:
+                            delattr(table, attr)
+                        except Exception:
+                            pass
+                return
+
+            # ==== 正常还原到占位器原位 ====
+            lay = parent_page.layout() or QtWidgets.QVBoxLayout(parent_page)
+            try:
+                ph_index = lay.indexOf(placeholder) if placeholder else -1
+                if ph_index >= 0:
+                    lay.insertWidget(ph_index, table)
+                    lay.removeWidget(placeholder)
+                    placeholder.setParent(None)
+                    placeholder.deleteLater()
+                else:
+                    # 占位器丢了也能用原 index 兜底
+                    insert_index = getattr(table, "_dock_index", lay.count())
+                    insert_index = insert_index if isinstance(insert_index, int) else lay.count()
+                    if 0 <= insert_index <= lay.count():
+                        lay.insertWidget(insert_index, table)
+                    else:
+                        lay.addWidget(table)
+            finally:
+                # 清理临时属性
+                for attr in ("_dock_parent_page", "_dock_parent_layout", "_dock_index",
+                             "_dock_placeholder", "_dock_tab_name", "_dock_float_win", "_dock_abandoned"):
+                    if hasattr(table, attr):
+                        try:
+                            delattr(table, attr)
+                        except Exception:
+                            pass
+
+            # 再保证映射仍然指向这个 table（防止外部代码重建引用）
+            if hasattr(self, "dynamic_guankou_param_tabs"):
+                self.dynamic_guankou_param_tabs[tab_name] = table
+
+        float_win.finished.connect(restore)
         float_win.show()
-
-
-    def goto_previous_page(self):
-        if self.main_window:
-            self.main_window.open_tab(
-                "条件输入",
-                DesignConditionInputViewer(
-                    line_tip=self.line_tip, main_window=self.main_window)
-            )
-
-    def goto_next_page(self):
-        if self.main_window:
-            self.main_window.open_tab(
-                "管口及附件定义",
-                Stats(line_tip=self.line_tip, main_window=self.main_window)
-            )
 
     def on_selection_changed(self):
         table = self.tableWidget_parts
@@ -453,6 +722,20 @@ class DesignParameterDefineInputerViewer(QWidget):
                 item = table.item(row, c)
                 if item:
                     item.setBackground(QColor("#d0e7ff"))  # 高亮色
+
+    def on_guankou_cell_clicked(self, row, col):
+        table = self.tableWidget_guankou
+
+        for r in range(table.rowCount()):
+            for c in range(table.columnCount()):
+                item = table.item(r, c)
+                if item:
+                    item.setBackground(QColor("#ffffff"))
+
+        for c in range(table.columnCount()):
+            item = table.item(row, c)
+            if item:
+                item.setBackground(QColor("#d0e7ff"))
 
     def show_error_message(self, title, message):
         # 创建QMessageBox来显示错误信息
@@ -506,19 +789,157 @@ class DesignParameterDefineInputerViewer(QWidget):
             # 有模板
             self.lineEdit_template.setEnabled(True)
 
+    def _new_param_tab_like_default(self, label: str, insert_pos: int = None):
+        """创建一个和第0个tab外观完全一致的新页，返回 (page, table)"""
+        tw = self.guankou_tabWidget
+
+        # 目标插入位：默认插在 '+' 前，否则末尾
+        if insert_pos is None:
+            last_is_plus = (tw.count() > 0 and tw.tabText(tw.count() - 1).strip() in {"+", "＋"})
+            insert_pos = tw.count() - 1 if last_is_plus else tw.count()
+            insert_pos = max(0, insert_pos)
+
+        # —— 表格（和你一致）——
+        table = QTableWidget()
+        table.setHorizontalHeader(CustomHeaderView(QtCore.Qt.Horizontal, table))
+        table.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Expanding)
+
+        # —— 页壳 + 布局（完全复制第0页的边距/间距/样式）——
+        page = QtWidgets.QWidget()
+        main_layout = QtWidgets.QVBoxLayout(page)
+
+        base_layout = None
+        w0 = tw.widget(0) if tw.count() > 0 else None
+        if w0:
+            base_layout = w0.layout()
+            # 页壳样式 + 页壳contentsMargins
+            page.setStyleSheet(w0.styleSheet())
+            m_page = w0.contentsMargins()
+            page.setContentsMargins(m_page.left(), m_page.top(), m_page.right(), m_page.bottom())
+
+        if base_layout:
+            m = base_layout.contentsMargins()
+            main_layout.setContentsMargins(m.left(), m.top(), m.right(), m.bottom())
+            main_layout.setSpacing(base_layout.spacing())
+        else:
+            main_layout.setContentsMargins(9, 6, 9, 6)
+            main_layout.setSpacing(6)
+
+        main_layout.addWidget(table)
+
+        # 插入
+        self.guankou_tabWidget.insertTab(insert_pos, page, label)
+        self.guankou_tabWidget.setCurrentIndex(insert_pos)
+
+        # 记录映射
+        page.setProperty('param_table', table)
+        if not hasattr(self, "dynamic_guankou_param_tabs"):
+            self.dynamic_guankou_param_tabs = {}
+        self.dynamic_guankou_param_tabs[label] = table
+
+        return page, table
+
+    def patch_codes_for_current_tab(self, table, tab_name: str):
+        """
+        下拉候选只包含：
+          1) 当前 tab 已分配的管口号（保持查询顺序）
+          2) 未分类(材料分类 IS NULL) 的管口号（保持查询顺序）
+
+        会把其它 tab 已占用的管口号排除掉。
+        """
+        # 找到“管口号”这一行
+        row = _find_row(table, "管口号")
+        if row is None or row < 0:
+            print("[管口号] 未找到“管口号”行，跳过。")
+            return
+
+        # 读取数据库
+        assigned = query_assigned_codes_by_tab(self.product_id, tab_name) or []  # 本 tab 已分配
+        unassigned = query_unassigned_codes(self.product_id) or []  # 未分类（天然已排除其它 tab）
+
+        # 显示：把“已分配”的值写到第1列，用 '、' 连接
+        _set_text_center(table, row, 1, "、".join(assigned))
+
+        # 候选：已分配 + 未分类（去重但保序）
+        merged, seen = [], set()
+        for code in assigned + unassigned:
+            if code and code not in seen:
+                seen.add(code)
+                merged.append(code)
+
+        # 写到表属性，CheckComboDelegate 会优先读这里
+        table.setProperty("gk_code_candidates", merged)
+
+        # 重新设置代理（先清掉可能存在的旧代理，避免悬空引用引发崩溃）
+        table.setItemDelegateForRow(row, None)
+        table.setItemDelegateForRow(row, CheckComboDelegate(options=merged, table=table))
+
+
+    def build_or_refresh_guankou_tabs_from_db(self, param_map: dict):
+        tw = self.guankou_tabWidget
+        if not hasattr(self, "dynamic_guankou_param_tabs"):
+            self.dynamic_guankou_param_tabs = {}
+
+        labels = list(param_map.keys()) or ["管口材料分类1"]
+
+        # 保留第0页，删其余
+        has_plus = (tw.count() > 0 and tw.tabText(tw.count() - 1).strip() in {"+", "＋"})
+        last_real = tw.count() - (1 if has_plus else 0)
+        for i in range(last_real - 1, 0, -1):
+            w = tw.widget(i)
+            tw.removeTab(i)
+            if w:
+                w.deleteLater()
+        self.dynamic_guankou_param_tabs.clear()
+
+        for idx, label in enumerate(labels):
+            if idx == 0:
+                tw.setTabText(0, label)
+                page0 = tw.widget(0)
+                tables = page0.findChildren(QTableWidget) if page0 else []
+                table = tables[0] if tables else getattr(self, "tableWidget_guankou", None)
+                if table is None:
+                    _, table = self._new_param_tab_like_default(label, insert_pos=0)
+                    tw.removeTab(1)
+                self.tableWidget_guankou = table
+                self.dynamic_guankou_param_tabs[label] = table
+            else:
+                _, table = self._new_param_tab_like_default(label)
+
+            # 渲染
+            data = param_map.get(label, [])
+            old_ref = getattr(self, "tableWidget_guankou", None)
+            self.tableWidget_guankou = table
+            try:
+                render_guankou_param_to_ui(self, data)
+            finally:
+                self.tableWidget_guankou = self.tableWidget_guankou if idx == 0 else old_ref
+
+            # 渲染完再补“管口号”
+            self.patch_codes_for_current_tab(table, label)
 
     def load_original_data(self):
+
+        def _norm_label(s: str) -> str:
+            # 仅用于调试对齐：去掉全角空格/首尾空格
+            if s is None:
+                return ""
+            return str(s).replace("\u3000", " ").strip()
 
         # 如果模板名称为空，则设置为 "None"字符串
         template_name = "None"
         self.product_type, self.product_form = load_design_product_data(product_id)
         self.product_id = product_id
 
+        print(
+            f"[DBG] load_original_data: product_id={self.product_id}, type={self.product_type}, form={self.product_form}")
+
         template_names = load_template(self.product_type, self.product_form)
         template_list = [
             "" if row['模板名称'] == "None" else row['模板名称']
             for row in template_names
         ]
+        print(f"[DBG] 模板候选：{template_list}")
 
         self.comboBox_template.clear()
         self.comboBox_template.addItems(template_list)
@@ -526,49 +947,43 @@ class DesignParameterDefineInputerViewer(QWidget):
         index_blank = template_list.index("") if "" in template_list else 0
         self.comboBox_template.setCurrentIndex(index_blank)
 
-        self.populate_guankou_combo(self.guankou_material_category)
-        print("绑定下拉框对象：", self.guankou_material_category)
-        # 替代原本的直接 connect 和赋值
-        QTimer.singleShot(0, lambda: (
-            self.guankou_material_category.currentIndexChanged[int].connect(self.on_guankou_selected),
-            setattr(self, 'dropdown_initialized', True)
-        ))
         # 检查产品设计活动库数据
         if has_product(product_id):
             # 获取零件列表信息
             element_original_info = load_element_info(product_id)
+            print(
+                f"[DBG] 元件列表条数={len(element_original_info)}  示例前3项={[e.get('零件名称') for e in element_original_info[:3]]}")
             template_name_from_db = element_original_info[0].get("模板名称", "None")
+            print(f"[DBG] DB模板名={repr(template_name_from_db)}")
             index = self.comboBox_template.findText(template_name_from_db)
             if index != -1:
                 self.comboBox_template.setCurrentIndex(index)
             else:
-                print(f"模板下拉框中找不到：{template_name_from_db}")
+                print(f"[WARN] 模板下拉框中找不到：{template_name_from_db}")
 
-            #zhange
+            # zhange
             if not template_name_from_db or template_name_from_db == "None":
-                # 模板名称为空或者默认无模板，存为模板输入框禁用
                 self.lineEdit_template.setEnabled(False)
             else:
-                # 有模板名称，存为模板输入框启用
                 self.lineEdit_template.setEnabled(True)
-
 
             guankou_define_dict = {}
             category_labels = query_all_guankou_categories(product_id)
-            print(11111111111111111,category_labels)
+            print(f"[DBG] 分类(原始)：{category_labels}")
+            print(f"[DBG] 分类(repr)：{[repr(x) for x in category_labels]}")
+            print(f"[DBG] 分类(规范化)：{[_norm_label(x) for x in category_labels]}")
+
             for label in category_labels:
                 define_data = query_guankou_define_data_by_category(product_id, label)
                 guankou_define_dict[label] = define_data
-                print("111111111111111", guankou_define_dict[label])
+                print(
+                    f"[DBG] 定义数据[{repr(label)}] 条数={len(define_data)}  示例={[d.get('参数名称') for d in define_data[:5]]}")
                 self.label = label
-
 
         # 从模板库中读数据
         elif self.product_type and self.product_form:
 
-            # zhange
             self.lineEdit_template.setEnabled(False)  # 首次无模板，禁用输入框
-
 
             element_original_info = load_elementoriginal_data(template_name, self.product_type, self.product_form)
             insert_element_data(element_original_info, product_id, template_name)
@@ -576,25 +991,23 @@ class DesignParameterDefineInputerViewer(QWidget):
                 self.show_error_message("数据加载错误", "没有找到零件数据")
                 return
 
+            # 管口类别表的读取插入
+            guankou_info = query_guankou_default(self.product_type, self.product_form)
+            insert_guankou_info(product_id, guankou_info)
+
+            # 管口附加参数表的读取插入与渲染
             first_template_id = element_original_info[0].get('模板ID', None)
             guankou_para_info = query_template_guankou_para_data(first_template_id)
             insert_guankou_para_data(product_id, guankou_para_info, template_name)
+            print(f"[DBG] 首次模板渲染参数条数={len(guankou_para_info)}")
+            render_guankou_param_to_ui(self, guankou_para_info)
 
             element_para_info = query_template_element_para_data(first_template_id)
             insert_element_para_data(product_id, element_para_info)
 
-            guankou_define_info = load_guankou_define_data(self.product_type, self.product_form, first_template_id)
-            insert_guankou_material_data(guankou_define_info, product_id, template_name)
-            guankou_define_dict = {"管口材料分类1": guankou_define_info}
-            print(f"模板对应的数据{guankou_define_dict}")
-
         else:
-            self.show_info_message("提示", "未选择产品，界面以空白状态打开。")
-
-            #zhange
-            self.lineEdit_template.setEnabled(False)  # 界面空白，禁用输入框
-
-
+            self.show_info_message("提示", "未创建产品，请先创建产品。")
+            self.lineEdit_template.setEnabled(False)
             return
 
         # 渲染零件列表数据(包括零件示意图)
@@ -602,192 +1015,47 @@ class DesignParameterDefineInputerViewer(QWidget):
         self.element_data = element_original_info
         self.render_data_to_table(element_original_info)
 
-
-        # 渲染到表格
-        self.render_data_to_table(element_original_info)
-
-        # 存为模板
-        # update_template_input_editable_state(self)
-        # 存储零件的示意图路径，以便后续使用
-        self.image_paths = [item.get('零件示意图', '') for item in element_original_info]  # 假设返回的字段名是 '零件示意图'
+        # 示意图
+        self.image_paths = [item.get('零件示意图', '') for item in element_original_info]
         if self.image_paths:
             QTimer.singleShot(1, lambda: self.display_image(self.image_paths[0]))
-        # 清空旧 tab 页
-        while self.guankou_tabWidget.count() > 1:
-            self.guankou_tabWidget.removeTab(1)
 
-        # 假设你的 UI 中默认 tab 是“管口材料分类1”
-        category_label = "管口材料分类1"
-        data = guankou_define_dict[category_label]
-        print(f"data{data}")
-        self.guankou_define_info = data
+        # 取当前/默认 tab 的标题
+        if self.guankou_tabWidget.count() > 0:
+            current_index = self.guankou_tabWidget.currentIndex()
+            category_label = self.guankou_tabWidget.tabText(current_index)
+        else:
+            category_label = category_labels[0] if category_labels else "管口材料分类1"
+        print(
+            f"[DBG] 当前Tab：index={getattr(self.guankou_tabWidget, 'currentIndex', lambda: -1)()} title={repr(category_label)}")
 
-        # 使用 UI 里已有的表格控件
-        table_define = self.tableWidget_guankou_define
-        table_param = self.tableWidget_guankou_param
+        if has_product(product_id):
 
-        self.render_guankou_param_table(table_define, data)
-        # 绑定下拉框
-        dropdown_data = load_material_dropdown_values()
-        column_index_map = {'材料类型': 1, '材料牌号': 2, '材料标准': 3, '供货状态': 4}
-        column_data_map = {column_index_map[k]: v for k, v in dropdown_data.items()}
-        apply_combobox_to_table(table_define, column_data_map, data, self.product_id, self,
-                                category_label=category_label)
-        set_table_tooltips(table_define)
+            # 同步腐蚀裕量
+            category_labels = query_all_guankou_categories(product_id)
+            print(f"[DBG] 准备同步腐蚀裕量的分类：{category_labels}")
+            for category_label in category_labels:
+                guankou_codes = query_guankou_codes(self.product_id, category_label) or []
+                print(f"[DBG] 产品 {self.product_id}, 分类 {repr(category_label)} 的管口号: {guankou_codes}")
+                sync_corrosion_to_guankou_param(product_id, guankou_codes, category_label)
 
-        # 渲染下半参数表
-        if data:
-            first_id = data[0].get("管口零件ID", None)
-            if first_id:
-                if has_product(product_id):
-                    param_data = query_guankou_param_by_product(self.product_id, first_id, category_label)
-                else:
-                    param_data = query_guankou_param_by_template(first_id, category_label)
-                if param_data:
-                    self.render_guankou_material_detail_table(table_param, param_data)
-                    param_options = load_material_dropdown_values()
-                    # apply_paramname_dependent_combobox(
-                    #     self.tableWidget_guankou_param,
-                    #     param_col=0,
-                    #     value_col=1,
-                    #     param_options=param_options
-                    # )
-                    apply_gk_paramname_combobox(
-                        self.tableWidget_guankou_param,
-                        param_col=0,
-                        value_col=1
-                    )
+            # 构建 param_map -> 渲染
+            labels = query_all_guankou_categories(self.product_id) or ["管口材料分类1"]
+            param_map = {}
+            for label in labels:
+                rows = query_guankou_param_by_product(self.product_id, label) or []
+                param_map[label] = rows
+                print(f"[DBG] param_map[{repr(label)}] 条数={len(rows)} "
+                      f"示例参数={[r.get('参数名称') for r in rows[:5]]}")
 
-        bind_define_table_click(self, table_define, table_param, data, category_label)
+            print(f"[DBG] 传入 build_or_refresh 的 keys：{[repr(k) for k in param_map.keys()]}")
 
-        # 行点击绑定
-        table_define.cellClicked.connect(
-            lambda row, col, d=data, p=table_param, label=category_label:
-            self.on_define_table_clicked(row, d, p, label)
-        )
+            # 调用建/刷 tabs
+            self.build_or_refresh_guankou_tabs_from_db(param_map)
 
-        for category_label, data in guankou_define_dict.items():
-            if category_label == "管口材料分类1":
-                continue  # 已处理，跳过
-            # 创建 tab 页容器和布局
-            tab = QWidget()
-            layout = QVBoxLayout(tab)
-
-            # 创建上表格（管口定义）
-            table_define = QTableWidget()
-            table_define.setHorizontalHeader(CustomHeaderView(QtCore.Qt.Horizontal, table_define))
-            table_define.setObjectName(f"table_define_{category_label}")
-            layout.addWidget(table_define)
-
-            # 创建下表格（参数信息）
-            table_param = QTableWidget()
-            table_param.setHorizontalHeader(CustomHeaderView(QtCore.Qt.Horizontal, table_param))
-            table_param.setObjectName(f"table_param_{category_label}")
-            layout.addWidget(table_param)
-
-            # 添加 tab 到 QTabWidget
-            self.guankou_tabWidget.addTab(tab, category_label)
-
-            # 渲染上表格
-            self.render_guankou_param_table(table_define, data)
-
-            # 下拉框绑定
-            dropdown_data = load_material_dropdown_values()
-            column_index_map = {'材料类型': 1, '材料牌号': 2, '材料标准': 3, '供货状态': 4}
-            column_data_map = {column_index_map[k]: v for k, v in dropdown_data.items()}
-            apply_combobox_to_table(table_define, column_data_map, data,
-                                    self.product_id, self, category_label=category_label)
-            set_table_tooltips(table_define)
-
-            # 渲染默认参数（定义表的第一条）
-            if data:
-                first_id = data[0].get("管口零件ID", None)
-                if first_id:
-                    if has_product(product_id):
-                        # sync_corrosion_to_guankou_param(product_id)
-                        param_data = query_guankou_param_by_product(self.product_id, first_id, category_label)
-                    else:
-                        param_data = query_template_guankou_para_data(first_id)
-                    if param_data:
-                        self.render_guankou_material_detail_table(table_param, param_data)
-                        param_options = load_material_dropdown_values()
-                        apply_paramname_dependent_combobox(
-                            table_param,
-                            param_col=0,
-                            value_col=1,
-                            param_options=param_options
-                        )
-                        apply_gk_paramname_combobox(
-                            table_param,
-                            param_col=0,
-                            value_col=1
-                        )
-
-                # 添加 "+" 标签页
-
-
-            def make_handler(table_def, table_par, label):
-                return lambda row, col: self._on_define_row_clicked(table_def, table_par, row, label)
-
-            table_define.cellClicked.connect(
-                lambda row, col, d=data, p=table_param, label=category_label:
-                self.on_define_table_clicked(row, d, p, label)
-
-            )
-
-
-            # ✅ 遍历已有的 tab 页，补充 dynamic_guankou_xxx_tabs 映射
-            for i in range(self.guankou_tabWidget.count()):
-                print(f"[调试] 当前 tab 数量: {self.guankou_tabWidget.count()}")
-
-                tab_widget = self.guankou_tabWidget.widget(i)
-                print(f"tab{tab_widget}")
-                tab_name = self.guankou_tabWidget.tabText(i)
-                print(f"tabname{tab_name}")
-
-                # 跳过第一个默认 tab（通常已初始化）
-                if tab_name == "管口材料分类1":
-                    continue
-
-                # 在 tab_widget 中查找两个表格
-                try:
-                    tables = tab_widget.findChildren(QTableWidget)
-                    print(f"tables = {tables}")  # ✅ 输出完整的列表
-                    if len(tables) >= 2:
-                        define_table = tables[0]
-                        param_table = tables[1]
-                        print(f"define_table = {define_table}")
-                        print(f"param_table = {param_table}")
-
-                        self.dynamic_guankou_define_tabs[tab_name] = define_table
-                        self.dynamic_guankou_param_tabs[tab_name] = param_table
-                        print(f"[调试] viewer_instance ID: {id(self)}")
-
-                        print(f"[恢复] 注册 {tab_name} → 定义表格 {define_table}，参数表格 {param_table}")
-                    else:
-                        print(f"[警告] 未找到 {tab_name} 中的两个表格，当前获取到表格数量: {len(tables)}")
-                except Exception as e:
-                    print(f"[异常] 恢复 tab 时出错: {e}")
-        # 创建一个加号按钮
-        plus_button = QPushButton("+")
-        plus_button.setFixedSize(20, 20)
-        plus_button.setStyleSheet("QPushButton { border: none; font-weight: bold; }")
-
-        # 将加号按钮放在 QTabWidget 的右上角（右上角跟随 Tab 标签）
-        self.tabWidget.setCornerWidget(plus_button, corner=Qt.TopRightCorner)
-
-        # 加号点击连接逻辑
-        # plus_button.clicked.connect(复制)
-        plus_button.clicked.connect(lambda: self.add_guankou_category_tab(mode='copy'))
-
-        # zhange
-        self.comboBox_template.currentIndexChanged.connect(self.update_template_input_editable_state)
-        # 初始执行一次，保证状态正确
-        self.update_template_input_editable_state()
-
-
-
-
+            # 打印最终 QTabWidget 的标题列表
+            titles = [self.guankou_tabWidget.tabText(i) for i in range(self.guankou_tabWidget.count())]
+            print(f"[DBG] QTabWidget 当前tabs：{[repr(t) for t in titles]}")
 
 
     def render_data_to_table(self, element_original_info):
@@ -1168,7 +1436,7 @@ class DesignParameterDefineInputerViewer(QWidget):
             print(f"[调试] 新增的管口零件参数信息: {guankou_param_data}")
             all_guankou_param_data = query_template_guankou_para_data(template_id)
             insert_all_guankou_param(all_guankou_param_data, category_label, self.product_id, select_template)
-            # sync_corrosion_to_guankou_param(self.product_id)
+            sync_corrosion_to_guankou_param(self.product_id)
             self.render_guankou_material_detail_table(table_guankou_param, guankou_param_data)
         elif mode == 'copy':
             current_index = self.guankou_tabWidget.currentIndex()
@@ -1256,62 +1524,67 @@ class DesignParameterDefineInputerViewer(QWidget):
         else:
             self.stackedWidget.setCurrentIndex(1)
 
+
+    def save_associated_data(self, template_id):
+        """保存关联数据到其他表（直接使用template_id）"""
+        try:
+            # 1. 保存元件参数
+            updated_element_para = load_update_element_data(self.product_id)
+            insert_updated_element_para_data(template_id, updated_element_para)
+            # 2. 保存管口定义
+            updated_guankou_define = load_update_guankou_define_data(self.product_id)
+            insert_guankou_define_data(
+                template_id,
+                updated_guankou_define,
+                self.product_type,
+                self.product_form
+            )
+            # 3. 保存管口参数
+            updated_guankou_para = load_update_guankou_para_data(self.product_id)
+            insert_guankou_para_info(template_id, updated_guankou_para)
+        except Exception as e:
+            print(f"关联数据保存失败: {e}")
+            raise
+
+    def load_template_by_id(self, template_id):
+        """直接通过模板ID加载数据（复用现有逻辑）"""
+        # 调用现有的load_data_by_template函数，优先使用template_id
+        load_data_by_template(self, template_id=template_id)
+
+
     # 监控存为模板输入框
     def on_template_name_entered(self):
-
+        # 1. 获取模板名称
         template_name = self.lineEdit_template.text().strip()
         print(f"当前输入的模板名称{template_name}")
         if not template_name:
             self.show_error_message("提示", "请输入模板名称后再按回车。")
             return
-
-        # 判断左侧表格是否全部为“已定义”
-        # if not is_all_defined_in_left_table(self.tableWidget_parts, define_status_col=7):  # 假设定义状态列是第7列
-        #     self.show_error_message("提示", "还有未定义的零件，不能保存为模板。")
-        #     return
-
-        # 查询产品设计活动库数据
+        # 2. 检查零件定义状态（取消注释并实现）
+        if not is_all_defined_in_left_table(self.tableWidget_parts, define_status_col=7):
+            self.show_error_message("提示", "还有未定义的零件，不能保存为模板。")
+            return
+        # 3. 加载产品数据
         product_data = load_element_info(self.product_id)
-
         if not product_data:
             self.show_error_message("错误", "未找到产品材料数据。")
             return
+        # 4. 保存模板到数据库（修改点：获取返回的模板ID）
+        try:
+            template_id = save_to_template_library(
+                template_name=template_name,
+                product_data=product_data,
+                product_type=self.product_type,
+                product_form=self.product_form
+            )
+            # 5. 保存关联数据（直接使用返回的template_id）
+            self.save_associated_data(template_id)
+            # 6. 直接加载新模板（新增调用）
+            self.load_template_by_id(template_id)
+            self.show_info_message("成功", f"模板 '{template_name}' 已保存并自动加载！")
+        except Exception as e:
+            self.show_error_message("错误", f"保存失败: {str(e)}")
 
-        # 写入模板库
-        save_to_template_library(template_name, product_data, self.product_type, self.product_form)
-        self.show_info_message("模板保存成功", f"模板 '{template_name}' 已保存到材料库。")
-
-
-        # 根据用户输入的模板名称去材料库中查找对应的模板ID
-        template_id = get_template_id_by_name(template_name)
-        if template_id is not None:
-            print(f"查询到模板ID：{template_id}")
-            updated_element_para = load_update_element_data(self.product_id)
-            insert_updated_element_para_data(template_id, updated_element_para)
-            updated_guankou_define = load_update_guankou_define_data(self.product_id)
-            insert_guankou_define_data(template_id, updated_guankou_define, self.product_type, self.product_form)
-            updated_guankou_para = load_update_guankou_para_data(self.product_id)
-            print(f"当前管口参数信息{updated_guankou_para}")
-            insert_guankou_para_info(template_id, updated_guankou_para)
-        else:
-            print("未找到对应模板ID")
-
-    def on_guankou_selected(self, index):
-
-        if not getattr(self, 'dropdown_initialized', False):
-            return
-
-        if index == 0:
-            return
-
-        selected_text = self.guankou_material_category.currentText()
-
-        codes = selected_text.split(';')
-
-        current_tab_index = self.guankou_tabWidget.currentIndex()
-        material_category = self.guankou_tabWidget.tabText(current_tab_index)
-
-        update_material_category_in_db(codes, material_category)
 
     def on_param_table_selection_changed(self):
         table = self.tableWidget_para_define

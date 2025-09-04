@@ -24,123 +24,156 @@ db_config_2 = {
     'database': '产品设计活动库'
 }
 
+# —— 运行期隐藏ID映射 + 待删ID 集合 ——
+def ensure_hidden_maps(stats_widget):
+    if not hasattr(stats_widget, "row_hidden_pipe_id"):
+        stats_widget.row_hidden_pipe_id = {}   # {row_index: 管口ID}
+    if not hasattr(stats_widget, "deleted_pipe_ids"):
+        stats_widget.deleted_pipe_ids = set()  # {管口ID}
+
+# —— 计算“下一管口ID”（只分配，不入库）——
+def get_next_pipe_id_runtime(stats_widget, product_id):
+    """
+    返回一个“尚未使用”的新 管口ID：
+    max(数据库中该产品已有管口ID, 运行期已分配但未落库的管口ID) + 1
+    """
+    from modules.guankoudingyi.db_cnt import get_connection
+    import pymysql
+    ensure_hidden_maps(stats_widget)
+
+    max_db = 0
+    conn = get_connection(**db_config_2)
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as c:
+            c.execute("SELECT MAX(管口ID) AS mx FROM 产品设计活动表_管口表 WHERE 产品ID=%s", (product_id,))
+            row = c.fetchone()
+            if row and row.get("mx") is not None:
+                max_db = int(row["mx"])
+    finally:
+        conn.close()
+
+    max_runtime = 0
+    if stats_widget.row_hidden_pipe_id:
+        try:
+            max_runtime = max(int(v) for v in stats_widget.row_hidden_pipe_id.values() if v is not None)
+        except ValueError:
+            max_runtime = 0
+
+    return max(max_db, max_runtime) + 1
+
+# —— 行交换时，同步隐藏“管口ID”映射 ——
+def swap_hidden_id(stats_widget, row_a, row_b):
+    ensure_hidden_maps(stats_widget)
+    ida = stats_widget.row_hidden_pipe_id.get(row_a)
+    idb = stats_widget.row_hidden_pipe_id.get(row_b)
+    if ida is None and idb is None:
+        return
+    if ida is None:
+        stats_widget.row_hidden_pipe_id.pop(row_b, None)
+    else:
+        stats_widget.row_hidden_pipe_id[row_b] = ida
+    if idb is None:
+        stats_widget.row_hidden_pipe_id.pop(row_a, None)
+    else:
+        stats_widget.row_hidden_pipe_id[row_a] = idb
+
+
 """数据读取，界面显示，数据存入产品设计活动表_管口表"""
 def read_pipe_temp(stats_widget, belong_type, belong_version, product_id):
     """
-    读取元件库的管口默认表，显示到界面 tableWidget_pipe，同时保存到产品设计活动表_管口表。
-    首先，根据当前 产品ID 去产品设计活动表_管口表判断当前产品ID是否有对应的数据，若没有，则根据当前产品所属类型和所属型式去元件库
-    中的管口默认表读取对应的默认数据，若还没有，则给出弹窗提示；
-    自动防止重复插入（利用唯一索引产品ID+管口代号）
+    读取顺序：
+      1) 产品设计活动库.产品设计活动表_管口表（带管口ID）
+      2) 若无 → 元件库.管口默认表（带管口ID），并将其插入到产品表
+      3) 若仍无 → 弹窗并清空界面
     """
     table_pipe = stats_widget.tableWidget_pipe  # 获取界面表格控件
+    ensure_hidden_maps(stats_widget)
 
     # 先连接
     conn_component = get_connection(**db_config_1)
     conn_product = get_connection(**db_config_2)
-    cursor_component = conn_component.cursor()
-    cursor_product = conn_product.cursor()
+    cursor_component = conn_component.cursor(pymysql.cursors.DictCursor)
+    cursor_product = conn_product.cursor(pymysql.cursors.DictCursor)
     try:
-        sql1 = """
-            SELECT COUNT(*) as count FROM 产品设计活动表_管口表 WHERE 产品ID = %s
-        """
-        cursor_product.execute(sql1, (product_id,))
-        if cursor_product.fetchone()['count'] > 0:
-            source_is_default = False   #使用已有数据
-        else:
-            source_is_default = True    #使用默认表中的数据
-
-        # 优先查产品设计活动表
-        sql_product = """
-            SELECT 管口代号, 管口功能, 管口用途, 公称尺寸, 法兰标准, 压力等级, 法兰型式,
+        # 先查产品表（带 管口ID）
+        cursor_product.execute("""
+            SELECT 管口ID, 管口代号, 管口功能, 管口用途, 公称尺寸, 法兰标准, 压力等级, 法兰型式,
                    密封面型式, 焊端规格, 管口所属元件, 轴向定位基准, 轴向定位距离,
                    `轴向夹角（°）`, `周向方位（°）`, `偏心距`, 外伸高度, 管口附件, 管口载荷
             FROM 产品设计活动表_管口表
             WHERE 产品ID = %s
-        """
-        cursor_product.execute(sql_product, (product_id,))
-        results = cursor_product.fetchall()
-        source_is_default = False
-
-        # 如果没有产品表数据，查询默认表
-        if not results:
-            sql_default = """
-                SELECT 管口代号, 管口功能, 管口用途, 公称尺寸, 法兰标准, 压力等级, 法兰型式,
+            ORDER BY 管口ID ASC
+        """, (product_id,))
+        rows = cursor_product.fetchall()
+        # 若产品表无数据 → 查默认表（带 管口ID）
+        if not rows:
+            cursor_component.execute("""
+                SELECT 管口ID, 管口代号, 管口功能, 管口用途, 公称尺寸, 法兰标准, 压力等级, 法兰型式,
                        密封面型式, 焊端规格, 管口所属元件, 轴向定位基准, 轴向定位距离,
                        `轴向夹角（°）`, `周向方位（°）`, `偏心距`, 外伸高度, 管口附件, 管口载荷
                 FROM 管口默认表
                 WHERE 所属类型 = %s AND 所属型式 = %s
-            """
-            cursor_component.execute(sql_default, (belong_type, belong_version))
-            results = cursor_component.fetchall()
-            source_is_default = True
+                ORDER BY 管口ID ASC
+            """, (belong_type, belong_version))
+            rows = cursor_component.fetchall()
 
-        # 若仍无结果，提示并清空表格
-        if not results:
-            QMessageBox.information(stats_widget, "查询结果", "未找到符合条件的数据")
-            table_pipe.clearContents()
-            table_pipe.setRowCount(0)
-            return
+            if not rows:
+                QMessageBox.information(stats_widget, "查询结果", "未在管口默认表中找到默认数据")
+                table_pipe.clearContents()
+                table_pipe.setRowCount(0)
+                return
 
-        # 设置行数（数据行）
-        table_pipe.setRowCount(len(results))
-
-        # 显示到界面
-        for row_index, row_data in enumerate(results):
-            for col_index, cell in enumerate(row_data.values()):
-                value = "" if cell is None or str(cell) == "None" else str(cell)
-                item = QTableWidgetItem(value)
-                item.setTextAlignment(Qt.AlignCenter)
-                table_pipe.setItem(row_index, col_index + 1, item)
-
-        # 序号的刷新
-        stats_widget.refresh_pipe_table_sequence()
-        # 检查是否需要添加新行
-        check_last_row_and_add_new(stats_widget)
-        # 列宽调整
-        stats_widget.adjust_pipe_column_width()
-        #管口功能列只读状态
-        set_pipe_function_column_readonly(stats_widget)
-
-        # 插入产品设计活动表_管口表（防止重复）
-        if source_is_default:
-            change_status = '未更改'
-            sql_insert = """
+            # 把默认数据（含 管口ID）落库到产品表（防重复：依赖唯一键 (产品ID, 管口ID)）
+            cursor_product.executemany("""
                 INSERT INTO 产品设计活动表_管口表 (
-                    产品ID, 管口代号, 管口功能, 管口用途, 公称尺寸, 法兰标准, 压力等级,
+                    产品ID, 管口ID, 管口代号, 管口功能, 管口用途, 公称尺寸, 法兰标准, 压力等级,
                     法兰型式, 密封面型式, 焊端规格, 管口所属元件, 轴向定位基准, 轴向定位距离,
-                    轴向夹角（°）, 周向方位（°）, 偏心距, 外伸高度, 管口附件, 管口载荷, 管口更改状态
+                    `轴向夹角（°）`, `周向方位（°）`, `偏心距`, 外伸高度, 管口附件, 管口载荷, 管口更改状态
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s, %s, %s, %s
+                    %(产品ID)s, %(管口ID)s, %(管口代号)s, %(管口功能)s, %(管口用途)s, %(公称尺寸)s, %(法兰标准)s, %(压力等级)s,
+                    %(法兰型式)s, %(密封面型式)s, %(焊端规格)s, %(管口所属元件)s, %(轴向定位基准)s, %(轴向定位距离)s,
+                    %(轴向夹角（°）)s, %(周向方位（°）)s, %(偏心距)s, %(外伸高度)s, %(管口附件)s, %(管口载荷)s, '未更改'
                 )
-            """
-
-            params_list = []
-            for row_data in results:
-                params = (
-                    product_id,
-                    row_data["管口代号"], row_data["管口功能"], row_data["管口用途"],
-                    row_data["公称尺寸"], row_data["法兰标准"], row_data["压力等级"],
-                    row_data["法兰型式"], row_data["密封面型式"], row_data["焊端规格"],
-                    row_data["管口所属元件"], row_data["轴向定位基准"], row_data["轴向定位距离"],
-                    row_data["轴向夹角（°）"], row_data["周向方位（°）"], row_data["偏心距"],
-                    row_data["外伸高度"], row_data["管口附件"], row_data["管口载荷"],
-                    change_status
-                )
-                params_list.append(params)
-
-            cursor_product.executemany(sql_insert, params_list)
+                ON DUPLICATE KEY UPDATE 管口代号=VALUES(管口代号)
+            """, [{**r, "产品ID": product_id} for r in rows])
             conn_product.commit()
 
-    except pymysql.MySQLError as e:
-        conn_product.rollback()
-        QMessageBox.critical(stats_widget, "数据库操作失败", f"错误信息: {e}")
+        # —— 渲染到UI（并建立隐藏ID映射）——
+        table_pipe.clearContents()
+        table_pipe.setRowCount(len(rows))
+        stats_widget.row_hidden_pipe_id.clear()
 
+        fields = ["管口代号", "管口功能", "管口用途", "公称尺寸", "法兰标准", "压力等级", "法兰型式",
+                  "密封面型式", "焊端规格", "管口所属元件", "轴向定位基准", "轴向定位距离",
+                  "轴向夹角（°）", "周向方位（°）", "偏心距", "外伸高度", "管口附件", "管口载荷"]
+        for rr, row in enumerate(rows):
+            stats_widget.row_hidden_pipe_id[rr] = row.get("管口ID")  # 记录隐藏ID
+            for cc, name in enumerate(fields, start=1):
+                val = row.get(name)
+                text = "" if val is None or str(val) == "None" else str(val)
+                item = QTableWidgetItem(text)
+                item.setTextAlignment(Qt.AlignCenter)
+                table_pipe.setItem(rr, cc, item)
+
+        stats_widget.refresh_pipe_table_sequence()
+        check_last_row_and_add_new(stats_widget)
+        stats_widget.adjust_pipe_column_width()
+        set_pipe_function_column_readonly(stats_widget)
+
+        # 🚩 新增：在数据加载完成后，自动为前四行推荐公称尺寸
+        try:
+            from modules.guankoudingyi.funcs.funcs_pipe_comboBox_value import auto_recommend_nominal_sizes_for_first_four_pipes
+            auto_recommend_nominal_sizes_for_first_four_pipes(stats_widget, product_id)
+        except Exception as e:
+            print(f"[ERROR] 自动推荐公称尺寸失败: {str(e)}")
+
+    except Exception as e:
+        conn_product.rollback()
+        QMessageBox.critical(stats_widget, "数据库错误", f"读取管口数据失败：{e}")
     finally:
-        cursor_component.close()
+        cursor_component.close();
         conn_component.close()
-        cursor_product.close()
+        cursor_product.close();
         conn_product.close()
 
 """管口功能列和管口所属元件列部分只读"""
@@ -192,12 +225,12 @@ def set_pipe_function_column_readonly(stats_widget):
 """管口删除"""
 def delete_selected_pipe_rows(stats_widget, product_id):
     """
-    删除选中行：从界面 tableWidget_pipe 和数据库中同步删除
-    :param stats_widget: 主窗口实例
-    :param product_id: 当前产品ID
+    删除选中行：只删界面；同时记录这些行对应的“隐藏管口ID”到 stats_widget.deleted_pipe_ids。
+    真正的数据库删除在“确认保存”时执行。
     """
+    ensure_hidden_maps(stats_widget)
     table = stats_widget.tableWidget_pipe
-    selected_rows = list(set(index.row() for index in table.selectedIndexes()))
+    selected_rows = sorted(set(index.row() for index in table.selectedIndexes()), reverse=True)
 
     # 排除最后一行
     last_row_index = table.rowCount() - 1
@@ -216,37 +249,11 @@ def delete_selected_pipe_rows(stats_widget, product_id):
     if reply != QMessageBox.Yes:
         return
 
-    # 删除数据库中的记录
-    try:
-        # 连接数据库
-        conn = get_connection(**db_config_2)
-        cursor = conn.cursor()
-
-    except Exception as e:
-        QMessageBox.critical(stats_widget, "数据库错误", f"连接数据库失败：{e}")
-        return
-
-    try:
-        for row in sorted(selected_rows, reverse=True):
-            port_code_item = table.item(row, 1)  # 第1列是"管口代号"
-            if port_code_item:
-                port_code = port_code_item.text()
-                # 从数据库删除管口表中的记录
-                cursor.execute(
-                    "DELETE FROM 产品设计活动表_管口表 WHERE 产品ID = %s AND 管口代号 = %s",
-                    (product_id, port_code)
-                )
-                # 从界面删除
-                table.removeRow(row)
-
-        conn.commit()
-        print("已从界面和数据库删除选中的管口数据")
-    except Exception as e:
-        conn.rollback()
-        QMessageBox.critical(stats_widget, "删除失败", f"数据库操作失败：{e}")
-    finally:
-        cursor.close()
-        conn.close()
+    for row in selected_rows:
+        hid = getattr(stats_widget, "row_hidden_pipe_id", {}).pop(row, None)
+        if hid is not None:
+            stats_widget.deleted_pipe_ids.add(hid)
+        table.removeRow(row)
     # 序号的刷新
     stats_widget.refresh_pipe_table_sequence()
 
@@ -307,6 +314,9 @@ def move_selected_pipe_rows_up(stats_widget):
     table.blockSignals(False)
     # 手动调用高亮方法，确保高亮样式跟随移动
     # stats_widget.highlight_selected_rows()
+    #——同步隐藏ID——
+    for row in selected_rows:
+        swap_hidden_id(stats_widget, row, row-1)
 
 """管口下移"""
 def move_selected_pipe_rows_down(stats_widget):
@@ -361,6 +371,10 @@ def move_selected_pipe_rows_down(stats_widget):
     table.blockSignals(False)
     # 手动调用高亮方法，确保高亮样式跟随移动
     # stats_widget.highlight_selected_rows()
+    # ——同步隐藏ID——
+    for row in selected_rows:
+        swap_hidden_id(stats_widget, row, row + 1)
+
 
 """检查最后一行的管口代号是否已填写，如果已填写则添加新行"""
 def check_last_row_and_add_new(stats_widget):
@@ -395,6 +409,12 @@ def check_last_row_and_add_new(stats_widget):
                 if col == 0:
                     item.setText(str(new_row + 1)) # 序号列
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable) # 序号列不可编辑
+                elif col == 1:
+                    # 管口代号列：保持可编辑
+                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
+                else:
+                    # 其他列：设为不可编辑（冻结状态）
+                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 table.setItem(new_row, col, item)
             
             # 添加新行后自动调整列宽
@@ -402,8 +422,46 @@ def check_last_row_and_add_new(stats_widget):
         finally:
             # === 恢复信号连接 ===
             table.blockSignals(False)
-        # ✅ 新增：刷新序号
+        # 刷新序号
         stats_widget.refresh_pipe_table_sequence()
+
+"""控制最后一行其他列的编辑状态"""
+def control_last_row_editable_state(stats_widget, enable_editing=True):
+    """
+    控制最后一行除管口代号外其他列的可编辑状态
+    :param stats_widget: 主窗口实例
+    :param enable_editing: True为解冻（可编辑），False为冻结（不可编辑）
+    """
+    table = stats_widget.tableWidget_pipe
+    last_row = table.rowCount() - 1
+    
+    if last_row < 0:
+        return
+    
+    # 检查是否确实是最后一行且管口代号已填写
+    last_port_code_item = table.item(last_row, 1)
+    if not last_port_code_item:
+        return
+    
+    print(f"[DEBUG] 最后一行管口代号: '{last_port_code_item.text()}'")
+    
+    changed_count = 0
+    for col in range(2, table.columnCount()):  # 从第2列开始（跳过序号和管口代号）
+        item = table.item(last_row, col)
+        if item:
+            if enable_editing:
+                # 解冻：恢复可编辑状态
+                old_flags = item.flags()
+                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
+                new_flags = item.flags()
+                if old_flags != new_flags:
+                    changed_count += 1
+                    print(f"[DEBUG] 列{col} 解冻成功")
+            else:
+                # 冻结：设为不可编辑
+                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                changed_count += 1
+
 
 """判断新输入的管口代号是否在界面上已存在"""
 def is_duplicate_port_code(table, new_code: str, current_row: int) -> bool:
@@ -417,4 +475,3 @@ def is_duplicate_port_code(table, new_code: str, current_row: int) -> bool:
         if item and item.text().strip() == new_code:
             return True
     return False
-

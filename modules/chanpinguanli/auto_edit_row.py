@@ -11,7 +11,6 @@ import os
 
 
 
-
 def lock_combo(combo: QComboBox):
     combo.setEnabled(False)
     combo.setMinimumWidth(combo.sizeHint().width())  # 防止变窄
@@ -103,7 +102,7 @@ def add_table_row():
     print(f"[add_table_row] 新增行 {current_row_count}：status=start, definition_status=start，产品定义区已锁定")
 
     bianl.product_table.scrollToBottom()
-    product_confirm_qianzhi.set_row_editable(current_row_count, True)
+    # product_confirm_qianzhi.set_row_editable(current_row_count, True)
 
 
 
@@ -122,7 +121,7 @@ def handle_auto_add_row(row, column):
     QTimer.singleShot(0, lambda: finalize_row_edit(row, new_text))
 
 
-# 更新序号
+# 更新序号 改yxx
 def update_row_numbers():
     table = bianl.product_table
     table.blockSignals(True)
@@ -214,14 +213,20 @@ def finalize_row_edit(row, new_text):
     #     return all(not (table.item(r, c) and table.item(r, c).text().strip()) for c in range(1, total_columns))
         # ✅ 初始行数只有3行时，全部填写完毕，自动新增行
     if total_rows == 3 and all(is_row_filled(r) for r in range(3)):
+
         add_table_row()
+        print("增加")
         update_row_numbers()
+        print("更新")
         return
 
     if total_rows >= 4:
         if row == last_row and is_row_filled(row):
+
             add_table_row()
+            print("增加1")
             update_row_numbers()
+            print("更新2")
             return
         if is_row_empty(row) and row != last_row and is_row_empty(last_row):
             remove_row_and_status(row)
@@ -235,36 +240,30 @@ def finalize_row_edit(row, new_text):
     col = table.currentColumn()
     highlight_row_except_current(row, col)
 
-def handle_combo_changed(row, col):
-    """
-    当下拉框选择变化时触发
-    - 如果在最后一行选择了非空值 → 自动新增一行
-    """
+
+def handle_combo_changed(row: int, col: int):
+    """统一处理：有值且在最后一行 → 自增；清空且非最后一行、整行空 → 自减"""
+
     table = bianl.product_table
-    widget = table.cellWidget(row, col)
-    if not widget:
+    last_row = table.rowCount() - 1
+    w = table.cellWidget(row, col)
+    if not w:
         return
+    else:
+        text = w.currentText().strip()
 
-    current_text = widget.currentText().strip()
-    last_row = table.rowCount() - 1
+    if text:
+        # 在最后一行选了内容 → 新增一行
+        if row == last_row:
+            add_table_row()
+            update_row_numbers()
+    else:
+        # 被清空：若不是最后一行且整行为空 → 删除该行
+        if row != last_row and is_row_empty(row):
+            remove_row_and_status(row)
+            update_row_numbers()
 
-    # ✅ 在最后一行选择了内容 → 新增行
-    if row == last_row and current_text:
-        add_table_row()
-        update_row_numbers()
 
-
-def handle_combo_text_changed(row, col, text):
-    """
-    当下拉框文本变化时触发
-    - 如果清空（text==""）且不是最后一行 → 删除该行
-    """
-    table = bianl.product_table
-    last_row = table.rowCount() - 1
-
-    if text.strip() == "" and row != last_row:
-        remove_row_and_status(row)
-        update_row_numbers()
 
 from PyQt5.QtCore import QObject, QEvent, Qt, QTimer
 from PyQt5.QtWidgets import QComboBox
@@ -280,6 +279,7 @@ def bind_design_combo(combo: QComboBox, row: int, col: int):
     # 防止被回收
     setattr(combo, "_delete_filter", filt)
 
+# 下拉框 QComboBox 安装一个事件过滤器，让 Delete / Backspace 键可以把下拉框内容清空
 class _ComboDeleteFilter(QObject):
     """拦截 Delete/Backspace 清空下拉框并触发统一逻辑"""
     def __init__(self, combo: QComboBox, row: int, col: int):
@@ -299,22 +299,6 @@ class _ComboDeleteFilter(QObject):
             return True
         return False
 
-def handle_combo_changed(row: int, col: int):
-    """统一处理：有值且在最后一行 → 自增；清空且非最后一行、整行空 → 自减"""
-    table = bianl.product_table
-    last_row = table.rowCount() - 1
-    w = table.cellWidget(row, col)
-    text = w.currentText().strip() if isinstance(w, QComboBox) else ""
 
-    if text:
-        # 在最后一行选了内容 → 新增一行
-        if row == last_row:
-            add_table_row()
-            update_row_numbers()
-    else:
-        # 被清空：若不是最后一行且整行为空 → 删除该行
-        if row != last_row and is_row_empty(row):
-            remove_row_and_status(row)
-            update_row_numbers()
 
 

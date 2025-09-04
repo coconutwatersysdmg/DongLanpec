@@ -35,6 +35,7 @@ import modules.chanpinguanli.product_modify as product_modify
 import modules.chanpinguanli.chanpinguanli_main as main
 import modules.chanpinguanli.auto_edit_row as auto_edit_row
 
+
 class cpgl_Stats(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
@@ -108,8 +109,21 @@ class cpgl_Stats(QtWidgets.QWidget):
                 "definition_status": "start"
             }
             # main.on_rows_inserted(row, row)  # ✅ 初始行也生成下拉框
+        from typing import List
+        # 下拉框的列
+        def get_design_stage_options() -> List[str]:
+            # 这里可以替换为数据库读取/配置读取
+            return ["方案设计", "详细设计"]
 
-
+        # 若你已有：def get_status(row) -> "view"/"edit" ...
+        self.design_stage_col4 = main.ColumnComboInstaller(
+            table=self.product_table,
+            column=4,
+            options_provider=get_design_stage_options,
+            editable=True,  # 允许在下拉里手动输入；若不允许，改为 False
+            # read_only_checker=get_status  # 可选：根据行状态设只读；没有就去掉此参数
+        )
+        self.design_stage_col4.install()
 
         # 初始化 产品定义 全部锁住 改77
         # 单独锁一个 产品信息部分的下拉框
@@ -190,6 +204,11 @@ class cpgl_Stats(QtWidgets.QWidget):
         self.findChild(QtWidgets.QPushButton, "modify_product_btn").clicked.connect(product_modify.edit_row_state)
         # 删除产品
         self.findChild(QtWidgets.QPushButton, "delete_product_btn").clicked.connect(main.delete_selected_product)
+
+
+
+
+
 
         # 产品定义 改66
         # 下拉框
@@ -297,9 +316,10 @@ class cpgl_Stats(QtWidgets.QWidget):
             set_row_editable(row, False)
         # 产品信息表格部分的每行的字体颜色灰色的初始话
         # open_project.apply_table_font_style()
+        # 绑定信号 点击表头 列变成深蓝色
+        # bianl.product_table.horizontalHeader().sectionClicked.connect(main._on_header_clicked)
 
 
-        
         # 项目管理 回车 键盘上下左右键控制 其他输入框的绑定方向
         from PyQt5.QtWidgets import QLineEdit, QDateEdit
 
@@ -404,10 +424,95 @@ class cpgl_Stats(QtWidgets.QWidget):
                 label.setStyleSheet("background-color: transparent;")
         # 👇 添加这一行调用函数（必须放在控件都初始化之后）
         apply_project_info_keyboard_control()
-        
+
+
+        #产品定义 工作信息 的键盘绑定
+        def apply_product_work_info_keyboard_control():
+            from PyQt5.QtCore import Qt
+
+            nav_map = {
+                # 产品定义区
+                bianl.product_type_combo: {
+                    Qt.Key_Down: bianl.product_form_combo,
+                    Qt.Key_Right: bianl.design_input,  # 右键跨到工作信息第一行
+                },
+                bianl.product_form_combo: {
+                    Qt.Key_Up: bianl.product_type_combo,
+                    Qt.Key_Down: bianl.product_model_input,
+                    Qt.Key_Right: bianl.design_input,
+                },
+                bianl.product_model_input: {
+                    Qt.Key_Up: bianl.product_form_combo,
+                    Qt.Key_Down: bianl.drawing_prefix_input,
+                    Qt.Key_Right: bianl.design_input,
+                },
+                bianl.drawing_prefix_input: {
+                    Qt.Key_Up: bianl.product_model_input,
+                    Qt.Key_Down: bianl.design_input,  # ↓ 直接进入工作信息
+                    Qt.Key_Right: bianl.design_input,
+                },
+
+                # 工作信息区
+                bianl.design_input: {
+                    Qt.Key_Left: bianl.product_model_input,  # ← 回到型号
+                    Qt.Key_Up: bianl.drawing_prefix_input,
+                    Qt.Key_Down: bianl.proofread_input,
+                },
+                bianl.proofread_input: {
+                    Qt.Key_Up: bianl.design_input,
+                    Qt.Key_Down: bianl.review_input,
+                    Qt.Key_Left: bianl.product_model_input,
+                },
+                bianl.review_input: {
+                    Qt.Key_Up: bianl.proofread_input,
+                    Qt.Key_Down: bianl.standardization_input,
+                    Qt.Key_Left: bianl.product_model_input,
+                },
+                bianl.standardization_input: {
+                    Qt.Key_Up: bianl.review_input,
+                    Qt.Key_Down: bianl.approval_input,
+                    Qt.Key_Left: bianl.product_model_input,
+                },
+                bianl.approval_input: {
+                    Qt.Key_Up: bianl.standardization_input,
+                    Qt.Key_Down: bianl.co_signature_input,
+                    Qt.Key_Left: bianl.product_model_input,
+                },
+                bianl.co_signature_input: {
+                    Qt.Key_Up: bianl.approval_input,
+                    Qt.Key_Left: bianl.product_model_input,
+                },
+            }
+
+            def make_handler(widget):
+                def key_handler(e):
+                    key = e.key()
+                    if widget in nav_map and key in nav_map[widget]:
+                        target = nav_map[widget][key]
+                        target.setFocus()
+                    elif key in (Qt.Key_Return, Qt.Key_Enter):
+                        # 回车等价于 ↓
+                        if widget in nav_map and Qt.Key_Down in nav_map[widget]:
+                            nav_map[widget][Qt.Key_Down].setFocus()
+                        else:
+                            widget.focusNextChild()
+                    else:
+                        type(widget).keyPressEvent(widget, e)
+
+                return key_handler
+
+            for widget in nav_map:
+                widget.keyPressEvent = make_handler(widget)
+
+        # 👇 添加这一行调用函数（必须放在控件都初始化之后）
+        apply_product_work_info_keyboard_control()
+
         # 延迟加载最后使用的项目，确保UI完全初始化  改3
         from PyQt5.QtCore import QTimer
         QTimer.singleShot(20, main.load_last_project)
+
+
+
 
 # if __name__ == "__main__":
 #     App = QApplication(sys.argv)

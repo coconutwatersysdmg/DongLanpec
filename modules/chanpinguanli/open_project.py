@@ -227,41 +227,59 @@ def open_project():
         for row in range(total_rows):
             print(f"处理第 {row + 1} 行...")  # 调试信息
             # 如果当前行的索引 row 小于产品的数量 product_count，则加载实际的产品数据。
+
             if row < product_count:
-                # 获取第row的产品信息 是字典
+                # 获取第 row 的产品信息
                 product = products[row]
                 print(f"加载产品: {product.get('产品编号', '')}, {product.get('产品名称', '')}")  # 调试信息
-                # 原顺序：编号(1)、名称(2)、位号(3) → 新顺序：名称(1)、位号(2)、编号(3)改1 改66
+
+                # 原顺序：编号(1)、名称(2)、位号(3) → 新顺序：名称(1)、位号(2)、编号(3)
                 bianl.product_table.setItem(row, 1, QTableWidgetItem(product.get("产品名称", "")))  # 列1：产品名称
                 bianl.product_table.setItem(row, 2, QTableWidgetItem(product.get("设备位号", "")))  # 列2：设备位号
                 bianl.product_table.setItem(row, 3, QTableWidgetItem(product.get("产品编号", "")))  # 列3：产品编号
-                bianl.product_table.setItem(row, 4, QTableWidgetItem(product.get("设计阶段", "")))  # 列4：设计阶段
+                bianl.product_table.setItem(row, 4, QTableWidgetItem(product.get("设计阶段", "")))  # 列3：产品编号
                 bianl.product_table.setItem(row, 5, QTableWidgetItem(product.get("设计版次", "")))  # 列5：设计版次
 
-                # 输入上 产品id
+                # --- 设计阶段（重点调试）---
+                # stage_value = str(product.get("设计阶段", "")).strip()
+                # bianl.product_table.setItem(row, 4, QTableWidgetItem(stage_value))
+                # print(f"[open_project] 第 {row} 行数据库设计阶段值: '{stage_value}'")
+
+                # 设置完值后再锁定为只读状态
+                set_row_editable(row, False)
+
+                # 调试：检查 UI 是否显示了设计阶段
+                # widget = bianl.product_table.cellWidget(row, 4)
+                # if widget and isinstance(widget, QComboBox):
+                #     print(f"[open_project] 第 {row} 行 UI(QComboBox) 当前设计阶段: '{widget.currentText()}'")
+                # elif bianl.product_table.item(row, 4):
+                #     print(
+                #         f"[open_project] 第 {row} 行 UI(QTableWidgetItem) 当前设计阶段: '{bianl.product_table.item(row, 4).text().strip()}'")
+                # else:
+                #     print(f"[open_project] 第 {row} 行 UI 没有找到设计阶段控件")
+
+
+                # 输入上 产品id  加上的原来的
                 bianl.product_table_row_status[row] = {
                     "status": "view",
                     "product_id": product.get("产品ID", ""),
                 }
                 curr_row_status = bianl.product_table_row_status[row].get("status", None)
                 curr_row_product_id = bianl.product_table_row_status[row].get("product_id", None)
-
                 print(f"status:{curr_row_status}, product_id:{curr_row_product_id}")
 
                 # 检查产品定义的必填项是否已经保存
                 product_type = product.get("产品类型", None)
                 product_form = product.get("产品型式", None)
-                print(f"产品类型：{product_type}产品形式：{product_form}")
-                # 如果产品有定义，必填项不可编辑
-                if product_type and product_form :
+                print(f"产品类型：{product_type} 产品形式：{product_form}")
 
+                # 如果产品定义部分的 必填项已有，则不可编辑 否则是可编辑状态
+                if product_type and product_form:
                     bianl.product_table_row_status[row]["definition_status"] = "view"
-                    print(f"[打开项目]第 {row + 1} 行产品已定义，不可编辑")  # 调试信息
+                    print(f"[打开项目]第 {row + 1} 行产品已定义，不可编辑")
                 else:
-                    # 如果没有定义，必填项可编辑
-                    print(f"[打开项目]第 {row + 1} 行产品未定义，允许编辑")  # 调试信息
-
                     bianl.product_table_row_status[row]["definition_status"] = "edit"
+                    print(f"[打开项目]第 {row + 1} 行产品未定义，允许编辑")
 
                 #   产品信息  产品所在行不可编辑
                 set_row_editable(row, False)
@@ -269,9 +287,9 @@ def open_project():
                 # 空白行
                 bianl.product_table_row_status[row] = {"status": "start"}
                 bianl.product_table_row_status[row]["definition_status"] = "start"
+
                 lock_combo(bianl.product_form_combo)
                 lock_combo(bianl.product_type_combo)
-
                 lock_line_edit(bianl.product_model_input)
                 lock_line_edit(bianl.drawing_prefix_input)
 

@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import QMessageBox, QLabel, QComboBox
 import pymysql
 from modules.guankoudingyi.db_cnt import get_connection
+from modules.guankoudingyi.funcs.funcs_pipe_table import ensure_hidden_maps, get_next_pipe_id_runtime
 
 db_config_2 = {
     'host': 'localhost',
@@ -12,91 +13,123 @@ db_config_2 = {
 
 def save_all_pipe_data(stats_widget):
     """
-    保存表格中所有管口数据到数据库
-    :param stats_widget: 主窗口实例
+    保存策略：
+    - 对每一行（除最后空行）：
+        * 必须有 管口代号
+        * 取隐藏 管口ID；若无（极端情况），运行期分配一个
+        * 对 产品设计活动表_管口表 做 INSERT ... ON DUPLICATE KEY UPDATE
+        * 同步对 产品设计活动表_管口类别表 做 INSERT ... ON DUPLICATE KEY UPDATE（四项：产品ID、管口ID、管口代号、管口所属元件）
+    - 对 stats_widget.deleted_pipe_ids ：逐个 DELETE WHERE 产品ID AND 管口ID（同时删除两张表里的对应记录）
     """
+    ensure_hidden_maps(stats_widget)
+    # 获取表格和产品ID
+    table = stats_widget.tableWidget_pipe
+    product_id = stats_widget.product_id
+    if not product_id:
+        QMessageBox.warning(stats_widget, "错误", "产品ID不能为空")
+        return
+
+    # 定义列映射
+    column_map = {
+        1: "管口代号",
+        2: "管口功能",
+        3: "管口用途",
+        4: "公称尺寸",
+        5: "法兰标准",
+        6: "压力等级",
+        7: "法兰型式",
+        8: "密封面型式",
+        9: "焊端规格",
+        10: "管口所属元件",
+        11: "轴向定位基准",
+        12: "轴向定位距离",
+        13: "轴向夹角（°）",
+        14: "周向方位（°）",
+        15: "偏心距",
+        16: "外伸高度",
+        17: "管口附件",
+        18: "管口载荷"
+    }
+
+    conn = None
+    cur = None
     try:
-        # 获取表格和产品ID
-        table = stats_widget.tableWidget_pipe
-        product_id = stats_widget.product_id
-
-        # 连接数据库
         conn = get_connection(**db_config_2)
-        cursor = conn.cursor()
+        cur = conn.cursor(pymysql.cursors.DictCursor)
 
-        # ✅ 判断是否存在该产品ID对应的数据
-        cursor.execute("SELECT COUNT(*) as count FROM 产品设计活动表_管口表 WHERE 产品ID = %s", (product_id,))
-        existing_count = cursor.fetchone()['count']
+        # —— 1) 先处理延迟删除 ——
+        for hid in list(stats_widget.deleted_pipe_ids):
+            # 管口表
+            cur.execute("""
+                DELETE FROM 产品设计活动表_管口表
+                WHERE 产品ID=%s AND 管口ID=%s
+            """, (product_id, hid))
+            # 管口类别表（新增）
+            cur.execute("""
+                DELETE FROM 产品设计活动表_管口类别表
+                WHERE 产品ID=%s AND 管口ID=%s
+            """, (product_id, hid))
+        stats_widget.deleted_pipe_ids.clear()
 
-        if existing_count > 0:
-            # ✅ 如果有旧记录，先删除
-            cursor.execute("DELETE FROM 产品设计活动表_管口表 WHERE 产品ID = %s", (product_id,))
-            conn.commit()  # 删除后立即提交，避免后续操作影响
+        # —— 2) 逐行 Upsert（新增/修改）——
+        last_row = table.rowCount() - 1
+        for row in range(last_row):  # 排除最后空行
+            code_item = table.item(row, 1)
+            port_code = code_item.text().strip() if code_item else ""
+            if not port_code:
+                continue
 
-        # 定义列映射
-        column_map = {
-            1: "管口代号",
-            2: "管口功能",
-            3: "管口用途",
-            4: "公称尺寸",
-            5: "法兰标准",
-            6: "压力等级",
-            7: "法兰型式",
-            8: "密封面型式",
-            9: "焊端规格",
-            10: "管口所属元件",
-            11: "轴向定位基准",
-            12: "轴向定位距离",
-            13: "轴向夹角（°）",
-            14: "周向方位（°）",
-            15: "偏心距",
-            16: "外伸高度",
-            17: "管口附件",
-            18: "管口载荷"
-        }
-
-        # 遍历表格行（除了最后一行，因为最后一行是用于添加新数据的空行）
-        for row in range(table.rowCount() - 1):
-            # 获取管口代号（必需字段）
-            port_code_item = table.item(row, 1)
-            if not port_code_item or not port_code_item.text().strip():
-                continue  # 跳过没有管口代号的行
-
-            port_code = port_code_item.text().strip()
-            insert_data = {}
+            # 收集行数据
+            row_data = {}
             for col, field in column_map.items():
-                item = table.item(row, col)
-                if item and item.text().strip():
-                    insert_data[field] = item.text().strip()
+                it = table.item(row, col)
+                txt = it.text().strip() if it else ""
+                if txt != "":
+                    row_data[field] = txt
 
-            if not insert_data:
-                continue  # 如果没有数据要插入，跳过
+            # 获取/兜底分配 管口ID（运行期分配，确认时才落库）
+            hid = stats_widget.row_hidden_pipe_id.get(row)
+            if not hid:
+                hid = get_next_pipe_id_runtime(stats_widget, product_id)
+                stats_widget.row_hidden_pipe_id[row] = hid  # 写回运行期映射
 
-            # 构造插入语句
-            insert_data.pop("管口代号", None)  # ✅ 删除潜在重复字段
-            fields = ['产品ID', '管口代号', '管口更改状态'] + list(insert_data.keys())
-            values = [product_id, port_code, '已更改'] + list(insert_data.values())
+            # —— 2.1 写 "产品设计活动表_管口表"
+            row_data.pop("管口代号", None)  # ✅ 删除潜在重复字段
+            fields = ["产品ID", "管口ID", "管口代号", "管口更改状态"] + list(row_data.keys())
+            values = [product_id, hid, port_code, "已更改"] + list(row_data.values())
             placeholders = ", ".join(["%s"] * len(fields))
-            sql = f"""
-                       INSERT INTO 产品设计活动表_管口表
-                       (`{'`, `'.join(fields)}`)
-                       VALUES ({placeholders})
-                   """
-            cursor.execute(sql, values)
-        # 提交事务
-        conn.commit()
-        QMessageBox.information(stats_widget, "保存成功", "所有管口数据已成功保存到数据库")
+            set_clause = ", ".join([f"`{k}`=VALUES(`{k}`)" for k in row_data.keys()] + [
+                "`管口代号`=VALUES(`管口代号`)", "`管口更改状态`='已更改'"
+            ])
 
+            sql = f"""
+                    INSERT INTO 产品设计活动表_管口表 (`{'`, `'.join(fields)}`)
+                    VALUES ({placeholders})
+                    ON DUPLICATE KEY UPDATE {set_clause}
+                """
+            cur.execute(sql, values)
+
+            # —— 2.2 同步写 "产品设计活动表_管口类别表"（四列）
+            # 获取管口所属元件
+            component = row_data.get("管口所属元件", "")
+            cur.execute("""
+                INSERT INTO 产品设计活动表_管口类别表 (`产品ID`, `管口ID`, `管口代号`, `管口所属元件`)
+                VALUES (%s, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE `管口代号`=VALUES(`管口代号`), `管口所属元件`=VALUES(`管口所属元件`)
+            """, (product_id, hid, port_code, component))
+
+        conn.commit()
+        QMessageBox.information(stats_widget, "保存成功", "保存成功。")
     except Exception as e:
         if conn:
             conn.rollback()
-        QMessageBox.critical(stats_widget, "保存失败", f"保存数据时出错：{str(e)}")
-
+        QMessageBox.critical(stats_widget, "保存失败", f"保存数据时出错：{e}")
     finally:
-        if cursor:
-            cursor.close()
+        if cur:
+            cur.close()
         if conn:
             conn.close()
+
 
 def get_type_selections_from_table_header(stats_widget):
     """

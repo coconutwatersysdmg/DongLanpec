@@ -1,11 +1,11 @@
 import json
 
 # 将 raw.json 替换为你的原始 JSON 文件名
-with open(r'Input.json', 'r', encoding='utf-8') as f:
+with open(r'BESInput.json', 'r', encoding='utf-8') as f:
     data = json.load(f)
 
 # 输出为格式化后的 JSON 文件
-with open('Output.json', 'w', encoding='utf-8') as f:
+with open('BESInput(示例).json', 'w', encoding='utf-8') as f:
     json.dump(data, f, indent=4, ensure_ascii=False)
 
 print("✅ 格式化完成，输出文件为 Output.json")

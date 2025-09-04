@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                              QComboBox, QFileDialog, QFrame, QGroupBox, QHeaderView, QDateEdit, QMessageBox, QAction)
 from PyQt5.QtCore import Qt, QDate, pyqtSignal
 from PyQt5.QtGui import QPixmap
+import shutil
 
 import modules.chanpinguanli.bianl as bianl
 # 按钮文件导入
@@ -44,6 +45,251 @@ from PyQt5.QtCore import QObject, QEvent
 
 
 
+# modules/chanpinguanli/product_table_combo.py
+from PyQt5.QtWidgets import QComboBox, QTableWidget
+from PyQt5.QtCore import Qt, QObject, pyqtSignal
+
+# 下拉框的列
+# -*- coding: utf-8 -*-
+from typing import Callable, List, Optional
+from PyQt5.QtCore import Qt, QObject
+from PyQt5.QtWidgets import QStyledItemDelegate, QComboBox, QTableWidget, QTableWidgetItem, QWidget
+
+# 下拉框
+class EditOnlyComboDelegate(QStyledItemDelegate):
+    """
+    进入编辑时才出现的下拉框委托：
+      - 支持可编辑/只读（仅影响是否可手动输入）
+      - 支持选项动态注入（初始化时给定）
+      - 自动兼容“现有值不在候选项里”的场景（不丢值）
+    """
+    def __init__(self, options: List[str], editable: bool = True, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        self._options = options or []
+        self._editable = editable
+
+    def createEditor(self, parent, option, index):
+        from PyQt5.QtWidgets import QComboBox, QListView
+        from PyQt5.QtCore import Qt, QSize
+        combo = QComboBox(parent)
+        combo.addItems([""] + self._options)
+        combo.setEditable(self._editable)
+        combo.setInsertPolicy(QComboBox.NoInsert)
+        combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+
+        # —— ① 文本居中（包含 lineEdit 与各个选项项）——
+        if combo.lineEdit():
+            combo.lineEdit().setAlignment(Qt.AlignCenter)
+            combo.lineEdit().setFrame(False)  # 改2：去掉内框线
+
+        # 让编辑器高度与单元格完全一致
+        combo.setMinimumHeight(option.rect.height())  # 改3：强制高度 = 单元格高
+        combo.setMaximumHeight(option.rect.height())  # 改3：强制高度 = 单元格高
+
+        # 可选：宽度也与单元格完全一致（部分平台会留一点边）
+        combo.setMinimumWidth(option.rect.width())  # 改4：宽度贴合
+        combo.setMaximumWidth(option.rect.width())  # 改4：宽度贴合
+
+        # 让每个 item 在下拉里也居中
+        for i in range(combo.count()):
+            combo.setItemData(i, Qt.AlignCenter, Qt.TextAlignmentRole)
+
+        # —— ② 用 QListView 作为下拉视图，便于控制项高、滚动条等 ——
+        view = QListView(combo)
+        view.setUniformItemSizes(True)
+        view.setSpacing(0)  # 行间距
+        view.setMouseTracking(True)
+        view.setStyleSheet("""
+            QListView {
+                outline: none;
+                padding: 0px;
+                border: 1px solid #c8ccd4;
+                background: #ffffff;
+            }
+            QListView::item {
+                height: 45px;                 /* 每项高度 */
+            }
+            QListView::item:hover {
+                background: #0078d7;          /* 悬停色 */
+                color:#ffffff;
+            }
+            QListView::item:selected {
+                background: #0078d7;          /* 选中色 */
+            }
+            QScrollBar:vertical {
+                width: 10px;
+                margin: 0;
+            }
+        """)
+        combo.setView(view)
+
+        # —— ③ 组合框本体样式（圆角、边框、箭头区）——
+        # 获取图片路径（使用主程序目录 + 相对路径）
+        base_dir = os.getcwd()  # main.py 的位置
+        image_path = os.path.join(base_dir, "modules", "chanpinguanli", "icons", "下箭头.png").replace("\\", "/")
+        combo.setStyleSheet(f"""
+            QComboBox {{
+                padding: 0 28px 0 10px;           /* 右侧留给下拉箭头的空间 */
+                border: 1px solid #c8ccd4;             
+                background: #ffffff;
+            }}
+            
+            QComboBox:focus {{
+                border: 1px solid #4c83ff;        /* 聚焦高亮 */
+            }}
+                
+            /* 只读时灰一些（若你把 editable 设为 False 或禁用控件） */
+            QComboBox:!editable:disabled, QComboBox[enabled="false"] {{
+                color: #888;
+                background: #f3f4f6;
+                border: 1px solid #e5e7eb;
+            }}
+            
+            
+            /* 下拉箭头区域 */
+            QComboBox::drop-down {{
+                subcontrol-origin: padding;
+                subcontrol-position: top right;
+                width: 40px;
+                border-left: 1px solid #e5e7eb;  
+            }}
+            QComboBox::down-arrow {{
+                image: url("{image_path}");
+                width: 30px;
+                height: 20px;
+            }}
+        """)
+
+        # —— ④ 下拉宽度自适应当前列宽/文本 ——
+        # 以当前单元格宽度为基准，避免弹出太窄
+        cell_w = option.rect.width()
+        # 粗略按最长文本给点富余（也可只用 cell_w）
+        fm = combo.fontMetrics()
+        longest = max((combo.itemText(i) for i in range(combo.count())), key=len, default="")
+        popup_w = max(cell_w, fm.width(longest) + 40)  # 40 给左右内边距和滚动条余量
+        combo.view().setMinimumWidth(popup_w)
+
+        return combo
+
+    def setEditorData(self, editor, index):
+        if not isinstance(editor, QComboBox):
+            return
+        cur = (index.data() or "").strip()
+        if cur and editor.findText(cur) < 0:
+            editor.insertItem(0, cur)
+            editor.setCurrentIndex(0)
+        else:
+            i = editor.findText(cur)
+            editor.setCurrentIndex(i if i >= 0 else 0)
+
+    def setModelData(self, editor, model, index):
+        if isinstance(editor, QComboBox):
+            model.setData(index, editor.currentText(), Qt.EditRole)
+
+    def updateEditorGeometry(self, editor, option, index):
+        editor.setGeometry(option.rect)
+
+# 下拉框
+class ColumnComboInstaller(QObject):
+    """
+    把“某列使用下拉框（仅编辑时出现）”的逻辑封装起来。
+
+    用法示例（主界面 __init__ 里）：
+        self.design_stage_col4 = ColumnComboInstaller(
+            table=self.product_table,
+            column=4,
+            options_provider=get_design_stage_options,   # -> List[str]
+            editable=True,
+            read_only_checker=get_status                # -> str, 返回 "view"/"edit" 等
+        )
+        self.design_stage_col4.install()
+    """
+    def __init__(self,
+                 table: QTableWidget,
+                 column: int,
+                 options_provider: Callable[[], List[str]],
+                 editable: bool = True,
+                 read_only_checker: Optional[Callable[[int], str]] = None):
+        super().__init__(table)
+        self.table = table
+        self.column = column
+        self._options_provider = options_provider
+        self._editable = editable
+        self._read_only_checker = read_only_checker
+
+        # 新增行时，确保目标列有占位 item、对齐、可编辑标志
+        if self.table.model():
+            self.table.model().rowsInserted.connect(self._on_rows_inserted)
+
+    # —— 对外接口 ——
+    def install(self):
+        """安装委托，并对现有行做一次占位与标志设置"""
+        opts = self._safe_get_options()
+        self.table.setItemDelegateForColumn(
+            self.column,
+            EditOnlyComboDelegate(opts, editable=self._editable, parent=self.table)
+        )
+        # 现有行处理
+        for r in range(self.table.rowCount()):
+            self._ensure_item_and_flags(r)
+
+    def refresh_options(self):
+        """当选项有更新时调用（重新设置列委托即可）"""
+        opts = self._safe_get_options()
+        self.table.setItemDelegateForColumn(
+            self.column,
+            EditOnlyComboDelegate(opts, editable=self._editable, parent=self.table)
+        )
+
+    # —— 内部：确保目标列有占位 item、对齐、可编辑状态 ——
+    def _ensure_item_and_flags(self, row: int):
+        it = self.table.item(row, self.column)
+        if it is None:
+            it = QTableWidgetItem("")
+            it.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(row, self.column, it)
+        else:
+            it.setTextAlignment(Qt.AlignCenter)
+
+        # 根据 read_only_checker 控制是否可编辑
+        ro = self._is_row_readonly(row)
+        flags = it.flags()
+        if ro:
+            it.setFlags(flags & ~Qt.ItemIsEditable)
+        else:
+            it.setFlags(flags | Qt.ItemIsEditable)
+
+    def _on_rows_inserted(self, parent_index, start: int, end: int):
+        for r in range(start, end + 1):
+            self._ensure_item_and_flags(r)
+
+    def _is_row_readonly(self, row: int) -> bool:
+        if self._read_only_checker is None:
+            return False
+        try:
+            status = (self._read_only_checker(row) or "").strip().lower()
+        except Exception:
+            status = ""
+        # 你项目里常用 "view" 表示只读，可按需扩展
+        return status == "view"
+
+    def _safe_get_options(self) -> List[str]:
+        try:
+            opts = self._options_provider() or []
+            # 去重并保序
+            seen, out = set(), []
+            for x in opts:
+                if x not in seen:
+                    seen.add(x); out.append(x)
+            return out
+        except Exception:
+            return []
+
+
+
+
+
+# 产品id管理器
 class ProductManager(QObject):
     product_id_changed = pyqtSignal(str)  # 定义一个信号
 
@@ -88,7 +334,7 @@ def disable_keyboard_search(table: QTableWidget):
     bianl.product_table.keyboardSearch = lambda text: None
 
 
-# 点击的回车的时候保存编辑且下移
+# 点击的回车的时候保存编辑且下移 产品信息
 class ReturnKeyJumpFilter(QObject):
     def __init__(self, table):
         super().__init__(table)
@@ -113,7 +359,7 @@ class ReturnKeyJumpFilter(QObject):
 
             self.table.setCurrentCell(next_row, col)
             return True  # 拦截掉默认行为
-
+        # 其他键 交给父类的默认处理 父类的默认处理是什么？
         return super().eventFilter(obj, event)
 
 # 新建类 窗口关闭 检查内容是否已经保存
@@ -140,6 +386,7 @@ class CustomMainWindow(QMainWindow):
                 event.ignore()  # 如果点击的是“否”，忽略退出操作
                 return
         event.accept()
+
 # 检查是否进行保存
 def check_if_all_saved():
     print("【调试】开始检查是否有未保存数据...")
@@ -229,9 +476,8 @@ def lock_combo(combo: QComboBox):
         }
     """)
 
-import os
 
-
+# 产品定义部分的下拉框
 def unlock_combo(combo: QComboBox):
     combo.setEnabled(True)
     combo.setMinimumWidth(0)
@@ -491,8 +737,12 @@ def center_window(interface):  # 新增函数，使窗口打开时位于屏幕�
     """点击行切换内容 产品信息和产品定义的联动"""
 
 
+# yxx改
 # 点击行获取产品id
 def on_product_row_clicked(row, column):
+    if bianl.current_project_id == None:
+        QMessageBox.information(bianl.main_window, "提示", "请先新建项目，点击项目信息部分的确认按钮。")
+        return
 
     # 防御非法列
     if column < 0 or row < 0:
@@ -512,7 +762,9 @@ def on_product_row_clicked(row, column):
     # 🔧 先彻底复位控件状态 (防止继承)
     # ✅ 每次点击前统一复位所有控件状态，消除锁死继承
     reset_product_definition_controls()
+
     product_id = row_status.get("product_id", None)
+    # 修改的检测
     bianl.product_id = product_id
     # 获取不到 获取到了
     if not bianl.product_id:
@@ -529,6 +781,8 @@ def on_product_row_clicked(row, column):
     if definition_status == "view":
         lock_combo(bianl.product_type_combo)
         lock_combo(bianl.product_form_combo)
+
+
 
     elif definition_status == "edit":
         # unlock_combo(bianl.product_type_combo)
@@ -552,58 +806,7 @@ def on_product_row_clicked(row, column):
     # ✅ 每次点击统一刷新高亮：
     highlight_row_except_current(row, column)
 
-def _style_combo_bg_fg(combo: QComboBox, bg: str, fg: str, locked: bool = False):
-    """
-    给 QComboBox 设定统一的前景/背景色；
-    - bg: 背景色
-    - fg: 前景色（文字颜色）
-    - locked=True 时，不给 hover 高亮，整体灰态
-    """
-    base = f"""
-        QComboBox {{
-            background-color: {bg};
-            color: {fg};
-            border: 0px;
-            padding: 6px 8px;
-            font-size: 11pt;
-            font-family: '宋体';
-        }}
-        /* 默认隐藏箭头（需要显示时可在 :on 分支里重写） */
-        QComboBox::drop-down {{
-            width: 0px;
-            border: none;
-            background: transparent;
-        }}
-        QComboBox::down-arrow {{
-            image: none;
-            width: 0px;
-            height: 0px;
-        }}
-        QComboBox QAbstractItemView {{
-            background-color: #ffffff;
-            color: black;
-            selection-background-color: #d0e7ff;
-            selection-color: black;
-        }}
-    """
-    # 可编辑时允许 hover 变色；锁定时不加 hover，保持灰态
-    hover = "" if locked else """
-        QComboBox:hover {
-            background-color: #0078d7;
-            color: #ffffff;
-        }
-    """
-    combo.setStyleSheet(base + hover)
-
-
-def _clear_combo_style(combo: QComboBox):
-    """恢复默认：根据是否锁定决定黑字或灰字"""
-    locked = not combo.isEnabled()
-    if locked:
-        _style_combo_bg_fg(combo, "#ffffff", "#888888", locked=True)  # 白底灰字
-    else:
-        _style_combo_bg_fg(combo, "#ffffff", "black", locked=False)   # 白底黑字
-
+# 初始的
 def highlight_row_except_current(row, col):
     if col < 0 or row < 0:
         return
@@ -628,81 +831,123 @@ def highlight_row_except_current(row, col):
                 else:
                     item.setBackground(QBrush(QColor("#ffffff")))
                     item.setForeground(QBrush(QColor("#888888") if row_status == "view" else Qt.black))
-
-            # ★ 专门处理第 4 列（下拉框）
-            widget = table.cellWidget(r, 4)
-            if isinstance(widget, QComboBox):
-                locked = (row_status == "view") or (not widget.isEnabled())
-                if r == row and col == 4:
-                    # 当前焦点格：深蓝底白字
-                    _style_combo_bg_fg(widget, "#0078d7", "white", locked=False)
-                elif r == row:
-                    # 同一行其它格：浅蓝底；字色视锁定
-                    _style_combo_bg_fg(widget, "#d0e7ff", "#888888" if locked else "black", locked=locked)
-                else:
-                    # 其它行：按锁定恢复默认
-                    _clear_combo_style(widget)
     finally:
         table.blockSignals(False)
 
-# 高亮
+# yxx改 针对第四列 下拉框的
+# def _style_combo_bg_fg(combo: QComboBox, bg: str, fg: str):
+#     """
+#     给 QComboBox 设定统一的前景/背景色；
+#     - bg: 背景色
+#     - fg: 前景色（文字颜色）
+#     - locked=True 时，不给 hover 高亮，整体灰态
+#     """
+#     base = f"""
+#         QComboBox {{
+#             background-color: {bg};
+#             color: {fg};
+#             border: 0px;
+#             padding: 6px 8px;
+#             font-size: 11pt;
+#             font-family: '宋体';
+#         }}
+#         /* 默认隐藏箭头（需要显示时可在 :on 分支里重写） */
+#         QComboBox::drop-down {{
+#             width: 0px;
+#             border: none;
+#             background: transparent;
+#         }}
+#         QComboBox::down-arrow {{
+#             image: none;
+#             width: 0px;
+#             height: 0px;
+#         }}
+#         QComboBox QAbstractItemView {{
+#             background-color: #ffffff;
+#             color: black;
+#             selection-background-color: #d0e7ff;
+#             selection-color: black;
+#         }}
+#     """
+#     # 可编辑时允许 hover 变色；锁定时不加 hover，保持灰态
+#     # hover = "" if locked else """
+#     #     QComboBox:hover {
+#     #         background-color: black;
+#     #         color: #ffffff;
+#     #     }
+#     # """
+#     # combo.setStyleSheet(base + hover)
+#     combo.setStyleSheet(base)
+#
+# # yxx 改
+# def _clear_combo_style(combo: QComboBox, row:int):
+#     """恢复默认：根据是否锁定决定黑字或灰字"""
+#     # locked = not combo.isEnabled()
+#     row_status = product_confirm_qianzhi.get_status(row)
+#     # 如果等于view 则true 则锁
+#     locked = (row_status == "view")
+#
+#     if locked:
+#         _style_combo_bg_fg(combo, "#ffffff", "#888888")  # 白底灰字
+#     else:
+#         _style_combo_bg_fg(combo, "#ffffff", "black")   # 白底黑字
+#
+# # yxx改
 # def highlight_row_except_current(row, col):
-#     # 防御非法列（防止列=-1导致崩溃）
 #     if col < 0 or row < 0:
-#         print(f"[高亮] 非法行列 (row={row}, col={col})，跳过高亮刷新")
 #         return
 #
 #     table = bianl.product_table
-#     table.blockSignals(True)  # 防止信号递归触发
-#
-#
-#     for r in range(table.rowCount()):
-#         # 获取他的状态
-#         row_status = product_confirm_qianzhi.get_status(r)
-#         for c in range(table.columnCount()):
-#             item = table.item(r, c)
-#             if item is None:
-#                 item = QTableWidgetItem("")
-#                 table.setItem(r, c, item)
-#
-#             if r == row and c == col:
-#                 # 焦点深蓝色 字体白色
-#                 item.setBackground(QBrush(QColor("#0078d7")))  # 深蓝
-#                 item.setForeground(QBrush(Qt.white))
-#             elif r == row:
-#                 # 其他行 是浅蓝色
-#                 item.setBackground(QBrush(QColor("#d0e7ff")))  # 浅蓝
-#                 # 👇 根据该行状态决定字体颜色
-#                 if row_status == "view":
-#                     item.setForeground(QBrush(QColor("#888888")))  # 浅灰
+#     table.blockSignals(True)
+#     try:
+#         for r in range(table.rowCount()):
+#             # 开始循环行
+#             # 获取状态
+#             row_status = product_confirm_qianzhi.get_status(r)
+#             # 开始循环列
+#             for c in range(table.columnCount()):
+#                 if c == 4:
+#                     # 从0，4 第一行的开始
+#                     widget = table.cellWidget(r, 4)
+#                     # 判断是否是下拉框
+#                     if isinstance(widget, QComboBox):
+#                         # 判断只读（只读 TRUE）  都是被锁住了
+#                         locked = (row_status == "view")
+#                         print(f"状态：{row_status}, 控件的弃用状态：{widget.isEnabled()}")
+#                         if r == row and c == col:
+#                             # 单击所在行 但是不是此单元格 将锁定关闭 为什么？
+#                             # 背景字体  深蓝色 白色
+#                             _style_combo_bg_fg(widget, "#0078d7", "white")
+#                         elif r == row and c != col:
+#                             # 浅蓝色 灰色（锁） 黑色（编辑）
+#                             # 是被点的单元格的行
+#                             _style_combo_bg_fg(widget, "#d0e7ff", "#888888" if locked else "black")
+#                             print("")
+#                         else:
+#                             _clear_combo_style(widget, r)
+#                     continue  # ❗ 已处理控件，跳过 item 设置（避免被覆盖）
 #                 else:
-#                     item.setForeground(QBrush(Qt.black))  # 黑色
-#
-#             else:
-#                 item.setBackground(QBrush(QColor("#ffffff")))  # 白
-#                 # 👇 根据该行状态决定字体颜色
-#                 if row_status == "view":
-#                     item.setForeground(QBrush(QColor("#888888")))  # 浅灰
-#                 else:
-#                     item.setForeground(QBrush(Qt.black))  # 黑色
-#
-#      # ★ 新增：专门处理“第 4 列是 QComboBox 的情况”
-#     widget = table.cellWidget(r, 4)
-#     if isinstance(widget, QComboBox):
-#         if r == row and col == 4:
-#             # 当前焦点格（深蓝底白字）
-#             _style_combo_bg_fg(widget, "#0078d7", "white")
-#         elif r == row:
-#             # 同行其它格（浅蓝底，字色随行状态）
-#             _style_combo_bg_fg(widget, "#d0e7ff", ("#888888" if row_status == "view" else "black"))
-#         else:
-#             # 其它行（白底，字色随行状态，这里为了统一直接白底黑字）
-#             _clear_combo_style(widget)
+#                     item = table.item(r, c)
+#                     if item is None:
+#                         item = QTableWidgetItem("")
+#                         table.setItem(r, c, item)
+#                         print("创建item")
+#                     else:
+#                         print("有item")
 #
 #
-#
-#
-#     table.blockSignals(False)
+#                     if r == row and c == col:
+#                         item.setBackground(QBrush(QColor("#0078d7")))
+#                         item.setForeground(QBrush(Qt.white))
+#                     elif r == row:
+#                         item.setBackground(QBrush(QColor("#d0e7ff")))
+#                         item.setForeground(QBrush(QColor("#888888") if row_status == "view" else Qt.black))
+#                     else:
+#                         item.setBackground(QBrush(QColor("#ffffff")))
+#                         item.setForeground(QBrush(QColor("#888888") if row_status == "view" else Qt.black))
+#     finally:
+#         table.blockSignals(False)
+
 
 
 def fetch_and_update_product_definition_by_id(product_id):
@@ -759,7 +1004,7 @@ def fetch_and_update_product_definition_by_id(product_id):
             bianl.co_signature_input.setText(result2.get("会签", "") or "")
 
         else:
-            print(f"产品ID {product_id} 在数据库中不存在。")
+            print(f"产品ID {product_id} 对应的产品定义的区域在数据库中不存在。")
             clear_product_definition_fields()
 
     except Exception as e:
@@ -801,34 +1046,7 @@ def wrap_show_popup(original_show_popup, on_popup_callback):
         original_show_popup()     # 再真正弹出下拉框
     return wrapper
 
-
-# 下拉框
-# def load_product_types():
-#     """动态加载产品类型选项，仅第一次加载"""
-#     # product_type_combo = QComboBox()
-#     # QComboBox()是下拉框
-#     # combo = QComboBox()
-#     # combo.addItems(["苹果", "香蕉"])
-#     # print(combo.count())  # 输出 2
-#     # 通过判断下拉框的选项个数判断是否加载
-#     if bianl.product_type_combo.count() == 0:
-#         # 获取
-#         mapping = common_usage.get_product_type_form_mapping_from_db()
-#         bianl.type_form_mapping = mapping  # 缓存到变量中 后续不用再次查询数据库
-#         # 提取所有的types类型  列表推导式写法
-#         """"
-#             types = []
-#             for t in mapping.keys():
-#                 if t != "":
-#                     types.append(t)
-#         """
-#         types = [t for t in mapping.keys() if t != ""]
-#         # 将所有的types添加到下拉框  不用将forms加载到下拉框么？
-#         bianl.product_type_combo.addItems(types)
-#         # 设置类型下拉框不选任何项（为空）
-#         # 下拉框是列表 索引对应值 索引为-1 输出0
-#         bianl.product_type_combo.setCurrentIndex(-1)
-#         load_product_forms()  # 立刻调用，加载默认型式选项
+# 加载产品类型
 def load_product_types():
     """动态加载产品类型选项，仅第一次加载，避免触发联动"""
 
@@ -849,27 +1067,7 @@ def load_product_types():
 
         bianl.product_type_combo.blockSignals(False)
 
-
-# 下拉框
-# def load_product_forms():
-#     """根据当前类型选择，加载产品形式选项"""
-#     # 产品类型的下拉框产品  当前的类型
-#     current_type = bianl.product_type_combo.currentText().strip()
-#     # getattr() 是一个更安全的访问方式，如果 bianl 中没有这个属性，它就返回默认值 None
-#     # 获取bianl中的type_form_mapping"变量
-#     mapping = getattr(bianl, "type_form_mapping", None)
-#     # 确保获取了映射
-#     if not mapping:
-#         mapping = common_usage.get_product_type_form_mapping_from_db()
-#         bianl.type_form_mapping = mapping
-#     #     如果 current_type 存在于 mapping 中，就取它对应的型式列表；
-#     #  获取在mapping字典中current_type对应的值 没有返回mapping.get("", [])
-#     forms = mapping.get(current_type, mapping.get("", []))
-#     # 清空产品形式下拉框中原有的选项，防止重复。
-#     bianl.product_form_combo.clear()
-#     # 将刚才取得的“型式列表”填充到型式下拉框中
-#     bianl.product_form_combo.addItems(forms)
-
+# 加载产品型式
 def load_product_forms():
     current_type = bianl.product_type_combo.currentText().strip()
     mapping = getattr(bianl, "type_form_mapping", {})
@@ -882,26 +1080,7 @@ def load_product_forms():
     bianl.product_form_combo.setCurrentIndex(-1)
     bianl.product_form_combo.blockSignals(False)
 
-# s设计阶段 改88
-# def load_product_types_design_t():
-#     """动态加载产品类型选项，仅第一次加载"""
-#     if bianl.design_stage_combo.count() == 0:
-#         # 获取
-#         mapping_desi = common_usage.get_product_design_time_db()
-#         bianl.mapping_design_t = mapping_desi  # 缓存到变量中 后续不用再次查询数据库
-#         # 提取所有的types类型  列表推导式写法
-#         """"
-#             types = []
-#             for t in mapping.keys():
-#                 if t != "":
-#                     types.append(t)
-#         """
-#         # 添加到下拉框
-#         bianl.design_stage_combo.addItems(mapping_desi)
-#         bianl.design_stage_combo.setCurrentIndex(-1)  # 设置默认不选 空白
 
-
-#    产品定义区域的按钮 改66
 def confirm_product_definition():
     # 获取当前行和产品ID
     row = bianl.product_table.currentRow()
@@ -1152,13 +1331,112 @@ def fetch_and_display_image_by_type_form(product_type, product_form):
 
 
 """删除产品"""
+# 文件夹名称重命名 可以用来找文件夹
+def build_pd_folder_name(serial, name, number, position):
+    # 统一清洗 & 顺序：序号_产品名称_产品编号_设备位号（空值自动跳过）
+    parts = [
+        (serial or "").strip(),
+        (name or "").strip(),
+        (number or "").strip(),
+        (position or "").strip(),
+    ]
+    parts = [p for p in parts if p]  # 跳过空
+    return "_".join(parts)
+
+def rename_remaining_product_folders(project_root):
+    print("开始重名命名")
+    """删除行后，按最新序号重命名剩余产品的文件夹"""
+    for row in range(bianl.product_table.rowCount()):
+        status = bianl.product_table_row_status.get(row, {})
+        product_id = status.get("product_id")
+        if not product_id:
+            continue
+        # 当前的文件名
+        serial_item = bianl.product_table.item(row,0)
+        name_item = bianl.product_table.item(row, 1)
+        pos_item  = bianl.product_table.item(row, 2)
+        num_item  = bianl.product_table.item(row, 3)
+
+        serial = serial_item.text().strip().zfill(3) if serial_item and serial_item.text() else ""
+        name = name_item.text().strip() if name_item else ""
+        position = pos_item.text().strip() if pos_item else ""
+        number = num_item.text().strip() if num_item else ""
+
+        new_folder_name = build_pd_folder_name(serial, name, number, position)
+        new_folder = os.path.join(project_root, new_folder_name)
+
+        # ★修改：必须有 old_xxx 才能找到旧文件夹
+        old_serial = status.get("old_serial")
+        old_name   = status.get("old_name")
+        old_number = status.get("old_number")
+        old_pos    = status.get("old_position")
+        old_folder_name = build_pd_folder_name(old_serial, old_name, old_number, old_pos)
+        old_folder = os.path.join(project_root, old_folder_name)
+
+        if old_folder != new_folder and os.path.isdir(old_folder):
+            try:
+                os.rename(old_folder, new_folder)
+                print(f"[重命名] {old_folder_name} -> {new_folder_name}")
+
+                # ★修改：更新 old_xxx 为新值
+                status["old_serial"] = serial
+                print(f"更新{serial}")
+                # status["old_name"] = name
+                # status["old_number"] = number
+                # status["old_position"] = position
+            except Exception as e:
+                print(f"[重命名失败] {old_folder} -> {new_folder}: {e}")
+
+
+
+
+
 # 删除产品的函数
 def delete_selected_product():
+    total_rows = bianl.product_table.rowCount()
+    # 把删除之前的序号记下来
+    for row in range(total_rows):
+        if row == total_rows - 1:
+            print("跳过最后一行（预留空行）")  # 调试信息
+            continue
+        current_status = product_confirm_qianzhi.get_status(row)
+        print(f"当前状态（第{row}行）: {current_status}")  # 调试信息
+        try:
+            if current_status == "view":
+                serial_item = bianl.product_table.item(row, 0)
+                number_item = bianl.product_table.item(row, 1)
+                name_item = bianl.product_table.item(row, 2)
+                position_item = bianl.product_table.item(row, 3)
+
+                old_serial = serial_item.text().strip().zfill(3) if serial_item and serial_item.text().strip() else ""
+                old_number = number_item.text().strip() if number_item else ""
+                old_name = name_item.text().strip() if name_item else ""
+                old_position = position_item.text().strip() if position_item else ""
+                # 新增
+                if not isinstance(bianl.product_table_row_status.get(row), dict):
+                    print(f"第{row}行状态不是字典，初始化为空字典")  # 调试信息
+                    bianl.product_table_row_status[row] = {}
+
+                # 字典的使用
+                bianl.product_table_row_status[row].update({
+                    "old_serial": old_serial,
+                    "old_number": old_number,
+                    "old_name": old_name,
+                    "old_position": old_position
+                })
+                print(f"第{row}行进入编辑状态，原始值：{old_number}, {old_name}, {old_position}")  # 调试信息
+        except Exception as e:
+            print("更新产品所在行的状态时出错")  # 调试信息
+            QMessageBox.critical(bianl.main_window, "错误", f"更新产品信息时发生错误: {e}")
+            return
+
+
     print("=" * 50)
     print("[删除操作] >>> 准备删除当前产品")
-
     row = bianl.product_table.currentRow()
     product_id = bianl.product_id
+    # 加上的
+    row_status = bianl.product_table_row_status.get(row, {}) if row >= 0 else {}
     print(f"[删除操作] 当前选中表格行: {row}")
     print(f"[删除操作] 获取到的产品ID: {product_id}")
     print(f"[删除操作] 当前项目ID: {bianl.current_project_id}")
@@ -1192,7 +1470,8 @@ def delete_selected_product():
         return
 
     try:
-        # Step 1: 删除数据库记录 改66
+        # 删除数据库
+        # Step 1: 删除产品需求库
         print("[删除操作] 正在连接产品数据库...")
         conn = common_usage.get_mysql_connection_product()
         cursor = conn.cursor()
@@ -1202,7 +1481,10 @@ def delete_selected_product():
         print(f"[删除操作] 数据库中产品ID {product_id} 删除成功")
         cursor.close()
         conn.close()
+        # 删除产品设计活动库
         delete_product_from_activity_db(product_id)
+
+
 
         # Step 2: 查询项目保存路径
         print("[删除操作] 正在获取项目保存路径...")
@@ -1220,16 +1502,24 @@ def delete_selected_product():
             project_name = bianl.project_name_input.text().strip()
             folder_root = os.path.join(project_path, f"{owner}_{project_name}")
             print(f"[删除操作] 构建根路径: {folder_root}")
+            # 只有点击修改产品的时候 才会将当前的产品信息储存到old name里面 如果没有点击就不会储存
+            # 🔹 从表格获取这一行的序号、名称、编号、位号
+            serial_item = bianl.product_table.item(row, 0)
+            name_item = bianl.product_table.item(row, 1)
+            pos_item = bianl.product_table.item(row, 2)
+            num_item = bianl.product_table.item(row, 3)
 
-            product_number = bianl.product_table.item(row, 1).text().strip()
-            product_name = bianl.product_table.item(row, 2).text().strip()
-            device_position = bianl.product_table.item(row, 3).text().strip()
-            folder_name = f"{product_number}_{product_name}_{device_position}"
+            xudelete_serial = serial_item.text().strip().zfill(3) if serial_item and serial_item.text() else f"{row+1:03d}"
+            xudelete_product_name = name_item.text().strip() if name_item and name_item.text() else ""
+            xudelete_number = num_item.text().strip() if num_item and num_item.text() else ""
+            xudelete_position = pos_item.text().strip() if pos_item and pos_item.text() else ""
+
+            folder_name = build_pd_folder_name(xudelete_serial, xudelete_product_name, xudelete_number, xudelete_position)
             folder_path = os.path.join(folder_root, folder_name)
             print(f"[删除操作] 产品文件夹路径: {folder_path}")
 
             if os.path.exists(folder_path):
-                import shutil
+
                 shutil.rmtree(folder_path)
                 print(f"[删除操作] 文件夹删除成功: {folder_path}")
             else:
@@ -1247,10 +1537,10 @@ def delete_selected_product():
             2: {"product_id": "PD003", "status": "view", "definition_status": "edit"}
         }
         """
-
+        # 删除页面的表格的信息
         bianl.product_table.removeRow(row)
         print(f"[删除操作] 表格行 {row} 删除")
-
+        # 删除字典中的状态
         if row in bianl.product_table_row_status:
             print(f"[删除操作] 从状态字典中移除行: {row}")
             bianl.product_table_row_status.pop(row)
@@ -1263,11 +1553,16 @@ def delete_selected_product():
         else:
             print(f"[删除操作] 行 {row} 不存在于状态字典中")
 
+        # 重新更新 因为pop出去了 所以直接更新key就可以了
         refresh_product_table_row_status()
         print("[删除操作] 表格状态刷新完成")
+        # 对应更新了序号
         # 更新表格中的序号
         auto_edit_row.update_row_numbers()
         print("[删除操作] 更新表格序号")
+
+
+
         # Step 4: 若总行数小于3，自动补充空白行
         current_row_count = bianl.product_table.rowCount()
         if current_row_count < 3:
@@ -1287,29 +1582,21 @@ def delete_selected_product():
                 print(f"[删除操作] 已添加空白行 {new_row}，状态为 start/edit")
 
             print(f"[删除操作] 最终表格行数：{bianl.product_table.rowCount()}")
-
+        # 清空产品定义区域
         clear_product_definition_fields()
         bianl.product_id = None
         print("[删除操作] 产品定义区域清空")
+        # todo 需要重新设置其他的文件夹名称 查看是否需要进行重命名
+        # ★ 新增：重命名剩余行的文件夹
+        # ★修改：删除成功后，重命名剩余文件夹
+        if result:
+            rename_remaining_product_folders(folder_root)
 
         QMessageBox.information(bianl.main_window, "成功", f"此产品删除成功！")
         print("[删除操作] 所有删除操作完成")
         print("=" * 50)
-        # de_row = bianl.row
-        # de_col = bianl.colum
-        # if row == 0:
-        #     on_product_row_clicked(de_row, de_col)
-        # else:
-        #     on_product_row_clicked(de_row-1, de_col)
-        # highlight_row_except_current(bianl.row, bianl.colum)
-        # 删除产品后 高亮设置统一
-        # 删除后默认焦点行：上一行
-        # new_row = max(0, row - 1)
-        # new_col = bianl.colum if hasattr(bianl, 'colum') else 1
-        # 高亮
-        # 设置焦点 + 统一高亮
-        # bianl.product_table.setCurrentCell(new_row, new_col)
-        # on_product_row_clicked(new_row, new_col)  # 会自动调用高亮逻辑
+
+        # 设置焦点和高亮
         bianl.product_table.setCurrentCell(bianl.row, bianl.colum)
         bianl.product_table.setFocus()
         on_product_row_clicked(bianl.row, bianl.colum)
@@ -1382,7 +1669,7 @@ def refresh_product_table_row_status():
     [
         {"product_id": "PD002", "status": "view", "definition_status": "edit"},
         {"product_id": "PD003", "status": "view", "definition_status": "edit"}
-    ]     
+    ]
     """
     print(f"[刷新Row状态] 原状态列表长度: {len(old_status_list)}")
 
@@ -1401,6 +1688,7 @@ def refresh_product_table_row_status():
         status = old_row_data.get("status", "view")
         definition_status = old_row_data.get("definition_status", "edit")
 
+
         if not product_id:
             print(f"[刷新Row状态] [跳过] 第 {new_row} 行未找到 product_id")
             new_status[new_row] = {
@@ -1410,11 +1698,21 @@ def refresh_product_table_row_status():
             }
             continue
         # 存给新字典
+        # new_status[new_row] = {
+        #     "product_id": product_id,
+        #     "status": status,
+        #     "definition_status": definition_status
+        # }
         new_status[new_row] = {
             "product_id": product_id,
             "status": status,
-            "definition_status": definition_status
+            "definition_status": definition_status,
+            "old_serial": old_row_data.get("old_serial", ""),
+            "old_name": old_row_data.get("old_name", ""),
+            "old_number": old_row_data.get("old_number", ""),
+            "old_position": old_row_data.get("old_position", "")
         }
+
         print(f"[刷新Row状态] [绑定] 行 {new_row} -> 产品ID: {product_id}")
     # 更新给 product_table_row_status
     bianl.product_table_row_status = new_status
@@ -1423,6 +1721,8 @@ def refresh_product_table_row_status():
     for row_index, status in new_status.items():
         print(f"  行 {row_index}: {status}")
     print("=" * 60)
+
+
 
 
 """复制粘贴 产品信息"""
@@ -1645,7 +1945,7 @@ def load_last_project():
                                 open_project.unlock_line_edit(bianl.co_signature_input)
 
                             # 自动调用on_product_row_clicked方法，获取第一行产品的id 改5
-                            on_product_row_clicked(0, 0)
+                            on_product_row_clicked(0, 1)
                             # 显式设置产品表格的当前选中行
                             bianl.product_table.setCurrentCell(0, 0)
                             # 确保bianl.row和bianl.colum被正确设置
@@ -1679,5 +1979,74 @@ def load_last_project():
             log_file.write(f"自动加载最后项目失败: {e}\n")
             log_file.write(traceback.format_exc())
             log_file.write("\n\n")
+
+
+# yxx改 高亮这一列
+# def highlight_column(col):
+#     import modules.chanpinguanli.bianl as bianl
+#     print(f"[调试] highlight_column: 高亮整列 col={col}, 总行数={bianl.product_table.rowCount()}, 总列数={bianl.product_table.columnCount()}")
+#
+#     # bianl.is_header_highlighting = True  # 🚩 开启标志
+#
+#     for row in range(bianl.product_table.rowCount()):
+#         widget = bianl.product_table.cellWidget(row, col)
+#         if isinstance(widget, QComboBox):
+#             widget.setStyleSheet("""
+#                 QComboBox {
+#                     background-color: #0078d7;
+#                     color: #ffffff;
+#                     border: 0px;
+#                     padding: 6px 8px;
+#                     font-size: 11pt;
+#                     font-family: '宋体';
+#                 }
+#                 QComboBox::drop-down { width: 0px; border: none; background: transparent; }
+#                 QComboBox::down-arrow { image: none; width: 0px; height: 0px; }
+#             """)
+#             print(f"[调试] 行 {row}, 列 {col}: QComboBox → 应用深蓝色")
+#         else:
+#             item = bianl.product_table.item(row, col)
+#             if item:
+#                 item.setBackground(QBrush(QColor("#0078d7")))
+#                 item.setForeground(QBrush(QColor("#ffffff")))
+#
+#     bianl.is_header_highlighting = False  # 🚩 关闭标志
+
+
+# yxx改
+# 点击表头
+# def _on_header_clicked(col: int):
+#     table = bianl.product_table
+#     if not table:
+#         print("[调试] _on_header_clicked: table 不存在")
+#         return
+#
+#     header_item = table.horizontalHeaderItem(col)
+#     header_text = header_item.text() if header_item else "未知"
+#     print(f"[调试] _on_header_clicked: 点击表头 col={col}, 标题={header_text}")
+#
+#     if col == 4:
+#         bianl.is_header_highlighting = True
+#         print(f"[调试] _on_header_clicked: 检测到是设计阶段列 col={col} → 调用 highlight_column")
+#         highlight_column(col)
+#     else:
+#         print(f"[调试] _on_header_clicked: 普通列 col={col} → 仅高亮第一行")
+#         if table.rowCount() > 0:
+#             item = table.item(0, col)
+#             widget = table.cellWidget(0, col)
+#             if item:
+#                 item.setBackground(QBrush(QColor("#0078d7")))
+#                 item.setForeground(QBrush(Qt.white))
+#                 print(f"[调试] 第0行, col={col}: QTableWidgetItem → 设置为深蓝色")
+#             elif widget:
+#                 widget.setStyleSheet(widget.styleSheet() + """
+#                     QComboBox {
+#                         background-color: #0078d7;
+#                         color: white;
+#                     }
+#                 """)
+#                 print(f"[调试] 第0行, col={col}: QComboBox → 设置为深蓝色")
+#             else:
+#                 print(f"[调试] 第0行, col={col}: 没有 item 也没有 widget")
 
 

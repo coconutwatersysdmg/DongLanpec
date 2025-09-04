@@ -2,11 +2,11 @@ import json
 import os
 
 # 加载原始 JSON 文件
-with open("Onput(新).json", "r", encoding="utf-8") as f:
+with open("shuru_jisuan.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 
 # 获取 DictOutDatas 字典
-dict_out_datas = data.get("DictOutDatas", {})
+dict_out_datas = data.get("DictDatas", {})
 
 # 创建输出目录
 output_dir = "DictOutDatas_split"

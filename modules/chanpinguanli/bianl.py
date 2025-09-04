@@ -43,10 +43,12 @@ old_project_name = None
 old_project_path = None
 
 current_project_id = None
-# current_product_id = None
+
 
 # 点击当前行 对应的产品id
 product_id = None
+# 新建产品的时候的暂存的产品id
+current_product_id = None
 
 # 初始化状态表
 # 产品信息的字典
@@ -73,3 +75,6 @@ confirm_curr_image_relative_path = None
 copied_cells_data = []  # 用于存储复制的二维单元格内容
 
 last_project_path = None
+
+# 判断是点击单元格 还是点击表头
+is_header_highlighting = False

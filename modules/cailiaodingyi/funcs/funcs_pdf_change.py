@@ -1,6 +1,9 @@
 import json
+import re
+from typing import Iterable, Tuple, Any, Dict, List
 
 from PyQt5.QtWidgets import QTableWidget, QComboBox, QLineEdit, QTableWidgetItem
+from typing import Tuple, Set, Dict, Optional
 
 from modules.cailiaodingyi.db_cnt import get_connection
 import pymysql
@@ -62,28 +65,28 @@ def load_element_additional_data_by_product(product_id, element_id):
         connection.close()
 
 
-def load_guankou_define_data(product_type, product_form, template_id, category_label=None):
+def load_guankou_define_data(product_id, category_label=None):
     """兼容全部类别和按类别查询"""
 
-    connection = get_connection(**db_config_2)
+    connection = get_connection(**db_config_1)
     try:
         with connection.cursor() as cursor:
             if category_label:
                 sql = """
                 SELECT 
-                    管口零件ID, 零件名称, 材料类型, 材料牌号, 材料标准, 供货状态, 类别, 元件示意图
-                FROM 管口零件材料表
-                WHERE 产品类型 = %s AND 产品型式 = %s AND 模板ID = %s AND 类别 = %s
+                    管口零件参数ID, 参数名称, 参数值, 参数单位, 类别
+                FROM 产品设计活动表_管口附加参数表
+                WHERE 产品ID = %s AND 类别 = %s
                 """
-                cursor.execute(sql, (product_type, product_form, template_id, category_label))
+                cursor.execute(sql, (product_id, category_label))
             else:
                 sql = """
                 SELECT 
-                    管口零件ID, 零件名称, 材料类型, 材料牌号, 材料标准, 供货状态, 类别, 元件示意图
-                FROM 管口零件材料表
-                WHERE 产品类型 = %s AND 产品型式 = %s AND 模板ID = %s
+                    管口零件参数ID, 参数名称, 参数值, 参数单位, 类别
+                FROM 产品设计活动表_管口附加参数表
+                WHERE 产品ID = %s
                 """
-                cursor.execute(sql, (product_type, product_form, template_id))
+                cursor.execute(sql, (product_id))
 
             result = cursor.fetchall()
             return result
@@ -228,14 +231,14 @@ def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_n
     try:
         with connection.cursor() as cursor:
             # 查询管口材料参数数据表中是否存在该产品ID对应的管口材料参数信息
-            cursor.execute("SELECT COUNT(*) FROM 产品设计活动表_管口零件材料参数表 WHERE 产品ID = %s ", (product_id,))
+            cursor.execute("SELECT COUNT(*) FROM 产品设计活动表_管口附加参数表 WHERE 产品ID = %s ", (product_id,))
             result = cursor.fetchone() # 获取查询结果
 
             # 如果找到该产品ID对应的管口材料参数信息,进行删除操作
             if result['COUNT(*)'] > 0:
                 print(f"产品ID {product_id} 对应的管口材料参数信息已存在，执行删除操作")
                 cursor.execute("""
-                                    DELETE FROM 产品设计活动表_管口零件材料参数表
+                                    DELETE FROM 产品设计活动表_管口附加参数表
                                     WHERE 产品ID = %s
                                 """, (product_id,))
                 print(f"已删除产品ID:{product_id}的管口零件")
@@ -243,16 +246,15 @@ def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_n
             for item in guankou_para_info:
                 # 插入当前模板对应的管口零件参数信息
                 sql = """
-                        INSERT INTO 产品设计活动表_管口零件材料参数表
-                        (管口零件参数ID, 管口零件ID, 产品ID, 参数名称, 参数值, 参数单位, 类别, 模板名称)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+                        INSERT INTO 产品设计活动表_管口附加参数表
+                        (管口零件参数ID, 产品ID, 参数名称, 参数值, 参数单位, 类别, 模板名称)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s);
                     """
                 cursor.execute(sql, (
-                    item['管口零件参数ID'],
-                    item['管口零件ID'],
+                    item['管口附加参数ID'],
                     product_id,
                     item['参数名称'],
-                    item['参数值'],
+                    item['参数数值'],
                     item['参数单位'],
                     "管口材料分类1",
                     template_name
@@ -346,95 +348,146 @@ def update_param_table_data(table: QTableWidget, product_id: int, element_id: in
         connection.rollback()
         print("参数更新失败：", e)
 
+def is_defined_by_required_list(param_table: QTableWidget, required_names: set) -> bool:
+    def cell_value(r: int) -> str:
+        """获取单元格的值，处理各种控件类型"""
+        w = param_table.cellWidget(r, 1)
+        if isinstance(w, QComboBox):
+            return (w.currentText() or "").strip()
+        if isinstance(w, QLineEdit):
+            return (w.text() or "").strip()
+        it = param_table.item(r, 1)
+        return (it.text() if it else "").strip()
 
-def update_left_table_db_from_param_table(param_table: QTableWidget, product_id: int, element_id: int, part_name: str):
-    """
-    将右侧表格（除管口外的零件）的更新同步到左侧，并兼容固定管板的覆层判断逻辑
-    """
-    def get_param(name):
-        for row in range(param_table.rowCount()):
-            item = param_table.item(row, 0)
-            widget = param_table.cellWidget(row, 1)
-            if item and item.text() == name:
-                if isinstance(widget, QComboBox):
-                    return widget.currentText()
-                elif isinstance(widget, QLineEdit):
-                    return widget.text()
-        return ""
+    # 判断是否为空值（包括空字符串、空格和 None）
+    def is_empty(value: str) -> bool:
+        """返回 True 如果值为空（包括空格和 None）"""
+        return value is None or value.strip() == ""  # 认为 None 和空格也是未定义
 
-    def all_parameters_filled():
-        """只检查当前可见行是否填写了非空值"""
+    # 没有配置的情况：检查所有项
+    if not required_names:
         for row in range(param_table.rowCount()):
             if param_table.isRowHidden(row):
-                continue  # 被隐藏的行不参与判定
-
-            widget = param_table.cellWidget(row, 1)
-            if isinstance(widget, QComboBox):
-                value = widget.currentText().strip()
-            elif isinstance(widget, QLineEdit):
-                value = widget.text().strip()
-            else:
-                continue  # 如果没有控件可以跳过
-
-            if not value:
+                continue
+            if is_empty(cell_value(row)):  # 检查空值
                 return False
         return True
 
-    # 判断定义状态
-    define_status = "已定义" if all_parameters_filled() else "未定义"
+    # 有配置：只检查清单中的可见项
+    for row in range(param_table.rowCount()):
+        if param_table.isRowHidden(row):
+            continue
+        name_item = param_table.item(row, 0)
+        if not name_item:
+            continue
+        pname = (name_item.text() or "").strip()
+        value = cell_value(row)
+        if pname in required_names and is_empty(value):  # 空值判断
+            print(f"[调试] 必填项 {pname} 未定义，值为 {value}")  # 打印未定义项
+            return False
+    return True
 
-    # 判断是否为垫片类元件（名称中含“垫片”）
+
+
+
+
+
+
+
+
+
+def update_left_table_db_from_param_table(param_table: QTableWidget, product_id: int, element_id: int, part_name: str):
+    """
+    将右侧表格（除管口外的零件）的更新同步到左侧；集成“元件已定义参数表(逗号分隔)”判断。
+    """
+
+    def get_param(name: str) -> str:
+        """获取表格中的参数值，处理各种控件类型"""
+        for row in range(param_table.rowCount()):
+            name_item = param_table.item(row, 0)
+            if not name_item:
+                continue
+            if (name_item.text() or "").strip() != name:
+                continue
+
+            w = param_table.cellWidget(row, 1)
+            if isinstance(w, QComboBox):
+                val = (w.currentText() or "").strip()
+                return val
+
+            elif isinstance(w, QLineEdit):
+                val = (w.text() or "").strip()
+                return val
+
+            # 普通 item 类型
+            vitem = param_table.item(row, 1)
+            val = (vitem.text() if vitem else "").strip()
+            return val
+
+        return ""  # 如果没有找到对应项，返回空字符串
+
+    # === 新：从表里取“该元件的必填清单”，并按清单判定“已定义/未定义” ===
+    try:
+        required = query_required_paramlist_csv(part_name)   # set[str]
+    except Exception as e:
+        required = set()
+
+    try:
+        is_defined = is_defined_by_required_list(param_table, required)
+    except Exception as e:
+        print(f"[必填清单判定失败，回退旧逻辑] {e}")
+        required = set()
+        is_defined = is_defined_by_required_list(param_table, required)
+
+    define_status = "已定义" if is_defined else "未定义"
+
+    # === 以下保持你的原有写库逻辑 ===
     is_gasket = "垫片" in part_name
+    is_fixed_tube_sheet = (part_name == "固定管板")
 
-    # 判断是否为固定管板
-    is_fixed_tube_sheet = part_name == "固定管板"
-
-    # 开始数据库连接
     conn = get_connection(**db_config_1)
     try:
         with conn.cursor() as cursor:
             if is_gasket:
-                # ✅ 仅更新定义状态
+                # 仅更新定义状态
                 cursor.execute("""
-                        UPDATE 产品设计活动表_元件材料表
-                        SET 定义状态=%s
-                        WHERE 产品ID=%s AND 元件ID=%s
-                    """, (define_status, product_id, element_id))
+                    UPDATE 产品设计活动表_元件材料表
+                       SET 定义状态=%s
+                     WHERE 产品ID=%s AND 元件ID=%s
+                """, (define_status, product_id, element_id))
 
             else:
-                material_type = get_param("材料类型")
-                material_brand = get_param("材料牌号")
-                supply_status = get_param("供货状态")
+                material_type     = get_param("材料类型")
+                material_brand    = get_param("材料牌号")
+                supply_status     = get_param("供货状态")
                 material_standard = get_param("材料标准")
 
-                # ⬇⬇ 关键修改逻辑在这里 ⬇⬇
+                # 固定管板：管/壳侧任一覆层=是 => 有覆层
                 if is_fixed_tube_sheet:
-                    # 对固定管板的覆层逻辑特殊处理
                     guancheng_covering = get_param("管程侧是否添加覆层")
-                    kecheng_covering = get_param("壳程侧是否添加覆层")
-                    if guancheng_covering == "是" or kecheng_covering == "是":
-                        has_coating = "有覆层"
-                    else:
-                        has_coating = "无覆层"
+                    kecheng_covering   = get_param("壳程侧是否添加覆层")
+                    has_coating = "有覆层" if (guancheng_covering == "是" or kecheng_covering == "是") else "无覆层"
                 else:
-                    # 其它普通零件使用常规逻辑
                     has_coating = "有覆层" if get_param("是否添加覆层") == "是" else "无覆层"
 
-                # ✅ 正常更新
                 cursor.execute("""
-                        UPDATE 产品设计活动表_元件材料表
-                        SET 材料类型=%s, 材料牌号=%s, 供货状态=%s, 材料标准=%s, 有无覆层=%s, 定义状态=%s
-                        WHERE 产品ID=%s AND 元件ID=%s
-                    """, (
-                    material_type, material_brand, supply_status, material_standard, has_coating, define_status, product_id,
-                    element_id))
+                    UPDATE 产品设计活动表_元件材料表
+                       SET 材料类型=%s,
+                           材料牌号=%s,
+                           供货状态=%s,
+                           材料标准=%s,
+                           有无覆层=%s,
+                           定义状态=%s
+                     WHERE 产品ID=%s AND 元件ID=%s
+                """, (material_type, material_brand, supply_status, material_standard,
+                      has_coating, define_status, product_id, element_id))
+
         conn.commit()
     except Exception as e:
         conn.rollback()
         print("更新失败：", e)
     finally:
         conn.close()
-
 
 
 def update_guankou_define_data(product_id, new_value, field_name, guankou_id, category_label):
@@ -606,15 +659,15 @@ def load_updated_guankou_define_data(product_id, category_label=None):
         with connection.cursor() as cursor:
             if category_label:
                 sql = """
-                SELECT 管口零件ID, 零件名称, 材料类型, 材料牌号, 材料标准, 供货状态, 类别, 元件示意图
-                FROM 产品设计活动表_管口零件材料表
+                SELECT 管口零件参数ID, 参数名称, 参数值, 参数单位
+                FROM 产品设计活动表_管口附加参数表
                 WHERE 产品ID = %s AND 类别 = %s
                 """
                 cursor.execute(sql, (product_id, category_label))
             else:
                 sql = """
-                SELECT 管口零件ID, 零件名称, 材料类型, 材料牌号, 材料标准, 供货状态, 类别, 元件示意图
-                FROM 产品设计活动表_管口零件材料表
+                SELECT 管口零件参数ID, 参数名称, 参数值, 参数单位, 类别
+                FROM 产品设计活动表_管口附加参数表
                 WHERE 产品ID = %s
                 """
                 cursor.execute(sql, (product_id,))
@@ -1210,20 +1263,102 @@ def get_corrosion_allowance_from_db(product_id):
     finally:
         conn.close()
 
-
-def update_guankou_param_by_param_name(product_id: str, param_name: str, param_value: str):
+def _split_base_and_index_simple(name: str):
     """
-    直接根据产品ID和参数名称，更新管口零件材料参数表中所有该参数的值
+    仅用于 DB 字段名：判断是否带 1/2/3 后缀。
+    返回 (基础名, 索引或 None)。
+    例：'接管材料类型2' -> ('接管材料类型', 2)；'壁厚' -> ('壁厚', None)
+    """
+    s = (name or "").strip()
+    m = re.match(r"^(.*?)([1-3])$", s)
+    if m:
+        return m.group(1), int(m.group(2))
+    return s, None
+
+def _existing_multi_indices_db(conn, product_id: str, base_name: str, tab_name: str = None):
+    """
+    在 DB 中查看该产品(可选限定 tab)是否存在 base_name1/2/3；返回已存在的索引列表。
+    兼容 tuple row 和 dict row（DictCursor）。
+    """
+    cand = [f"{base_name}{i}" for i in (1, 2, 3)]
+    sql = (
+        "SELECT DISTINCT `参数名称` "
+        "FROM `产品设计活动表_管口附加参数表` "
+        "WHERE `产品ID`=%s AND `参数名称` IN (%s,%s,%s)"
+    )
+    params = [product_id] + cand
+    if tab_name:
+        sql += " AND `类别`=%s"
+        params.append(tab_name)
+
+    with conn.cursor() as cursor:
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+
+    got = set()
+    for row in rows:
+        # row 可能是 tuple/list，也可能是 dict（DictCursor）
+        if isinstance(row, dict):
+            val = row.get("参数名称")
+        else:
+            val = row[0] if row and len(row) > 0 else None
+        if val:
+            got.add(val)
+
+    return [i for i in (1, 2, 3) if f"{base_name}{i}" in got]
+
+
+
+def update_guankou_param_flex_db(product_id: str,
+                                 param_name: str,
+                                 param_value: str,
+                                 tab_name: str = None,
+                                 treat_empty_as_null: bool = True):
+    """
+    智能更新（仅针对 DB 字段名，不做去单位/映射）：
+    - 如果 param_name 本身是 base+索引（如 '接管材料类型2'）→ 仅更新该字段；
+    - 如果 param_name 无索引（如 '接管材料类型'）：
+        * 若 DB 存在 base1/2/3 中的任意一项 → 只更新已存在的这些（避免误更新 base）；
+        * 否则更新 base 本身。
+
+    可选 tab_name 用于限定类别；不传则不限定。
     """
     conn = get_connection(**db_config_1)
     try:
+        base, idx = _split_base_and_index_simple(param_name)
+
+        if idx is not None:
+            targets = [f"{base}{idx}"]
+        else:
+            # 自动探测是否为多列字段（以是否存在 base1/2/3 为准）
+            idxs = _existing_multi_indices_db(conn, product_id, base, tab_name)
+            targets = [f"{base}{i}" for i in idxs] if idxs else [base]
+
+        # 生成 UPDATE 语句
+        placeholders = ",".join(["%s"] * len(targets))
+        if treat_empty_as_null and (param_value is None or str(param_value).strip() == ""):
+            set_clause = "参数值 = NULL"
+            vals = []
+        else:
+            set_clause = "参数值 = %s"
+            vals = [str(param_value)]
+
+        sql = f"""
+            UPDATE 产品设计活动表_管口附加参数表
+            SET {set_clause}
+            WHERE 产品ID = %s
+              AND 参数名称 IN ({placeholders})
+        """
+        params = vals + [product_id] + targets
+        if tab_name:
+            sql += " AND 类别 = %s"
+            params.append(tab_name)
+
         with conn.cursor() as cursor:
-            cursor.execute("""
-                UPDATE 产品设计活动表_管口零件材料参数表
-                SET 参数值 = %s
-                WHERE 产品ID = %s AND 参数名称 = %s
-            """, (param_value, product_id, param_name))
+            cursor.execute(sql, params)
+            affected = cursor.rowcount
         conn.commit()
+        return {"targets": targets, "updated_rows": affected}
     finally:
         conn.close()
 
@@ -1330,5 +1465,627 @@ def update_element_name_data(product_id, element_name, param_name, param_value):
         conn.commit()
     finally:
         conn.close()
+
+
+
+
+def update_guankou_category_for_tab(product_id, category_label, selected_codes: list):
+    """
+    把 selected_codes 占用到本 tab，并释放本 tab 之前但已取消的代号
+    """
+    selected_codes = [c for c in (selected_codes or []) if c]
+
+    conn = pymysql.connect(**db_config_1)
+    try:
+        with conn.cursor() as c:
+            # 1) 释放：本 tab 之前占用但这次未选中的 → 置 NULL
+            if selected_codes:
+                fmt = ",".join(["%s"] * len(selected_codes))
+                sql_release = f"""
+                    UPDATE 产品设计活动表_管口类别表
+                    SET 材料分类 = NULL
+                    WHERE 产品ID = %s AND 材料分类 = %s
+                      AND 管口代号 NOT IN ({fmt})
+                """
+                c.execute(sql_release, [product_id, category_label, *selected_codes])
+            else:
+                # 本次一个都没选 → 该 tab 下的全部释放
+                c.execute("""
+                    UPDATE 产品设计活动表_管口类别表
+                    SET 材料分类 = NULL
+                    WHERE 产品ID = %s AND 材料分类 = %s
+                """, (product_id, category_label))
+
+            # 2) 占用：把本次选中的代号标记到本 tab
+            if selected_codes:
+                fmt = ",".join(["%s"] * len(selected_codes))
+                sql_claim = f"""
+                    UPDATE 产品设计活动表_管口类别表
+                    SET 材料分类 = %s
+                    WHERE 产品ID = %s AND 管口代号 IN ({fmt})
+                """
+                c.execute(sql_claim, [category_label, product_id, *selected_codes])
+
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def save_guankou_codes_for_tab(product_id, category_label, selected_codes):
+    conn = pymysql.connect(**db_config_1)
+    try:
+        with conn.cursor() as c:
+            # 释放本 tab 之前占用的
+            c.execute("""
+                UPDATE 产品设计活动表_管口类别表
+                SET 材料分类 = NULL
+                WHERE 产品ID = %s AND 材料分类 = %s
+            """, (product_id, category_label))
+
+            # 占用这次选择的
+            if selected_codes:
+                fmt = ",".join(["%s"] * len(selected_codes))
+                sql = f"""
+                    UPDATE 产品设计活动表_管口类别表
+                    SET 材料分类 = %s
+                    WHERE 产品ID = %s AND 管口代号 IN ({fmt})
+                """
+                c.execute(sql, [category_label, product_id, *selected_codes])
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def query_template_codes(product_id):
+    connection = get_connection(**db_config_1)
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT 管口ID, 管口代号, 管口所属元件
+                FROM 产品设计活动表_管口表
+                WHERE 产品ID = %s
+            """
+            cursor.execute(sql, (product_id))
+            result = cursor.fetchall()
+            return result
+    finally:
+        connection.close()
+
+
+def update_guankou_params_bulk(rows: Iterable[Tuple[str, str, str, Any]],
+                               treat_empty_as_null: bool = False) -> Dict[str, Any]:
+    """
+    rows: 可迭代的 (产品ID, 类别, 参数名称, 参数值)
+    只 UPDATE，不做 INSERT。
+    treat_empty_as_null=True 时，空字符串会写成 NULL。
+    返回: {"updated": int, "missing": [(产品ID, 类别, 参数名称), ...]}
+    """
+    rows = list(rows)
+    if not rows:
+        return {"updated": 0, "missing": []}
+
+    conn = pymysql.connect(**db_config_1)
+    updated = 0
+    missing: List[Tuple[str, str, str]] = []
+    try:
+        with conn.cursor() as c:
+            sql = """
+                UPDATE `产品设计活动表_管口附加参数表`
+                SET `参数值`=%s
+                WHERE `产品ID`=%s AND `类别`=%s AND `参数名称`=%s
+            """
+            for pid, cat, name, val in rows:
+                if treat_empty_as_null and (val is None or str(val).strip() == ""):
+                    val = None
+                c.execute(sql, (val, pid, cat, name))
+                if c.rowcount == 0:
+                    # 库里没有这条记录（严格只更新，不插入）
+                    missing.append((pid, cat, name))
+                else:
+                    updated += c.rowcount
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"updated": updated, "missing": missing}
+
+
+def get_numeric_rules(conn_factory, db_cfg) -> Tuple[Set[str], Set[str], Dict[str, tuple]]:
+    """
+    读取数据库里的数值校验规则。
+    返回：
+      gt0_set    -> 需 >0 的参数名集合
+      ge0_set    -> 需 ≥0 的参数名集合
+      range_map  -> 需范围校验的参数名 -> (lo, hi, lo_inc, hi_inc)
+                    lo/hi 可为 None；lo_inc/hi_inc 为 bool，表示是否包含端点
+    若读取失败或表为空，自动回退到一份内置默认集（与你现在逻辑一致）。
+    """
+    gt0_set, ge0_set, range_map = set(), set(), {}
+
+    try:
+        conn = conn_factory(**db_cfg)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT 参数名称, 规则类型, 最小值, 最大值, 含下限, 含上限
+                    FROM 参数校验规则表
+                    WHERE 是否启用=1
+                """)
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+
+        for name, rtype, lo, hi, lo_inc, hi_inc in rows:
+            name  = (name  or "").strip()
+            rtype = (rtype or "").strip().lower()
+            if not name or not rtype:
+                continue
+
+            if rtype == "gt0":
+                gt0_set.add(name)
+            elif rtype == "ge0":
+                ge0_set.add(name)
+            elif rtype == "range":
+                try:
+                    lo_f = None if lo is None or lo == "" else float(lo)
+                    hi_f = None if hi is None or hi == "" else float(hi)
+                except Exception:
+                    lo_f, hi_f = None, None
+                lo_in = bool(lo_inc) if lo_inc is not None else True
+                hi_in = bool(hi_inc) if hi_inc is not None else True
+                range_map[name] = (lo_f, hi_f, lo_in, hi_in)
+
+    except Exception as e:
+        print(f"[警告] 读取 参数校验规则表 失败，使用默认规则：{e}")
+
+    # 若三类都为空 -> 使用默认（与你原先集合一致）
+    if not gt0_set and not ge0_set and not range_map:
+        default_gt0 = {
+            "隔板管板侧削边角度", "隔板管板侧削边长度", "隔板管板侧端部与管箱法兰密封面差值", "铭牌板厚度", "铭牌板倒圆半径",
+            "排净孔轴向定位x倍隔板轴向长度", "削边角度", "削边长度", "旁路挡板厚度", "中间挡板厚度", "管板凸台高度",
+            "滑道高度", "滑道厚度", "滑道与竖直中心线夹角", "切边长度 L1", "切边高度 h", "封头总深度H/总高度Ho",
+            "球面部分内半径R", "过渡圆转角半径r", "铭牌板倒圆半径", "垫片与密封面接触内径D1", "铭牌板长度", "铭牌板宽度",
+            "垫片与密封面接触外径D2", "铭牌支架长度", "铭牌支架宽度", "铭牌支架厚度", "铭牌支架高度", "铭牌支架铆钉孔直径",
+            "铭牌支架长度方向铆钉孔间距", "铭牌支架宽度方向铆钉孔间距", "铭牌支架折弯圆角半径", "铭牌支架与铭牌板边距",
+            "垫片名义内径D1n", "垫片名义外径D2n", "垫片厚度", "三角缺口高度", "圆孔直径",
+            "隔板平盖侧削边长度", "隔板平盖侧削边角度", "隔板平盖侧端部与头盖法兰密封面差值"
+        }
+        default_ge0 = {
+            "凸面高度", "隔板槽深度", "覆层厚度", "凹槽深度",
+            "附加弯矩", "轴向拉伸载荷", "预设厚度1", "预设厚度2", "预设厚度3",
+            "管程侧分程隔板槽深度", "壳程侧分程隔板槽深度", "分程隔板槽宽",
+            "管程侧腐蚀裕量", "壳程侧腐蚀裕量", "管程侧覆层厚度", "壳程侧覆层厚度",
+            "防冲板厚度", "排气通液槽高度h", "鞍座高度h", "垫片比压力y", "垫片系数m",
+        }
+        default_range = {
+            # 角度：30 < x < 120
+            "三角缺口角度": (30.0, 120.0, False, False)
+        }
+        return default_gt0, default_ge0, default_range
+
+    return gt0_set, ge0_set, range_map
+
+
+
+
+def get_numeric_rules() -> Tuple[Set[str], Set[str], Dict[str, Tuple[Optional[float], Optional[float], bool, bool]]]:
+    """
+    读取【参数校验规则表】里的规则。
+    返回:
+      gt0_set   -> 需 >0 的参数名集合
+      ge0_set   -> 需 ≥0 的参数名集合
+      range_map -> 需范围校验的参数名 -> (lo, hi, lo_inc, hi_inc)
+    不做任何默认兜底；表为空或查询失败时，返回空集合/空字典。
+    """
+    gt0_set: Set[str] = set()
+    ge0_set: Set[str] = set()
+    range_map: Dict[str, Tuple[Optional[float], Optional[float], bool, bool]] = {}
+
+    conn = None
+    try:
+        conn = pymysql.connect(**db_config_2)
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT 参数名称, 规则类型, 最小值, 最大值, 含下限, 含上限
+                FROM 参数校验规则表
+                WHERE 是否启用=1
+            """)
+            rows = cur.fetchall() or []
+
+        for name, rtype, lo, hi, lo_inc, hi_inc in rows:
+            name  = (name or "").strip()
+            rtype = (rtype or "").strip().lower()
+            if not name or not rtype:
+                continue
+
+            if rtype == "gt0":
+                gt0_set.add(name)
+            elif rtype == "ge0":
+                ge0_set.add(name)
+            elif rtype == "range":
+                # None / 空串 -> None；边界布尔默认 True（包含）
+                try:
+                    lo_f = None if lo in (None, "") else float(lo)
+                    hi_f = None if hi in (None, "") else float(hi)
+                except Exception:
+                    lo_f, hi_f = None, None
+                lo_in = bool(lo_inc) if lo_inc is not None else True
+                hi_in = bool(hi_inc) if hi_inc is not None else True
+                range_map[name] = (lo_f, hi_f, lo_in, hi_in)
+
+    except Exception:
+        # 按你的要求，不做兜底也不报噪音；直接返回空集合/字典
+        pass
+    finally:
+        try:
+            if conn: conn.close()
+        except Exception:
+            pass
+
+    return gt0_set, ge0_set, range_map
+
+
+
+
+def clear_guankou_category(product_id, category_label):
+    """
+    清空某个产品在某个管口类别下的管口ID
+    """
+    connection = get_connection(**db_config_1)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                UPDATE 产品设计活动表_管口类别表
+                SET 材料分类 = NULL
+                WHERE 产品ID=%s AND 材料分类=%s
+            """, (product_id, category_label))
+
+            print(f"[清空管口ID] 受影响行数: {cursor.rowcount}")
+
+        connection.commit()
+    except Exception as e:
+        connection.rollback()
+        print("[错误] 清空管口ID失败：", e)
+
+
+def evaluate_visibility_rules_from_db(element_name: str,
+                                      table: QTableWidget = None,
+                                      param_col: int = 0,
+                                      value_col: int = 1,
+                                      values: dict = None,
+                                      viewer_instance=None):
+    """
+    读取《参数显隐规则表》+《参数显隐规则_附加条件表》，
+    计算每个目标参数的最终 SHOW/HIDE（后命中覆盖先命中）。
+    """
+    if not element_name:
+        return {}
+
+    # A. 取当前 UI 值（PARAM）
+    if values is None:
+        values = {}
+        if table is not None:
+            for r in range(table.rowCount()):
+                itp = table.item(r, param_col)
+                if not itp: continue
+                pname = (itp.text() or "").strip()
+                itv = table.item(r, value_col)
+                pval = (itv.text().strip() if itv else "")
+                values[pname] = pval
+
+    # B. 取 ENV（环境变量）
+    env = {
+        "产品类型": getattr(viewer_instance, "product_type", None) or "",
+        "产品型式": getattr(viewer_instance, "product_form", None) or "",
+    }
+
+    # C. 查库：主规则
+    connection = get_connection(**db_config_2)
+    try:
+        with connection.cursor() as cursor:
+            sql_main = """
+                SELECT id, 触发参数名 AS trig_param, 触发值 AS trig_value,
+                       目标参数名 AS target_param, 显隐 AS action
+                FROM 参数显隐规则表
+                WHERE 元件名称 = %s
+                ORDER BY id ASC
+            """
+            cursor.execute(sql_main, (element_name,))
+            rows = cursor.fetchall() or []
+
+            # 查附加条件：一次性取出按 规则行id 分组
+            rule_ids = [r["id"] for r in rows] or [-1]
+            sql_extra = """
+                SELECT 规则行id AS rule_id, 条件来源 AS src, 条件名 AS name,
+                       条件值 AS val, 比较 AS op
+                FROM 参数显隐规则_附加条件表
+                WHERE 规则行id IN ({})
+                ORDER BY id ASC
+            """.format(",".join(["%s"] * len(rule_ids)))
+            cursor.execute(sql_extra, rule_ids)
+            extras_rows = cursor.fetchall() or []
+    finally:
+        connection.close()
+
+    extras = {}
+    for er in extras_rows:
+        extras.setdefault(er["rule_id"], []).append(er)
+
+    # D. 规则计算（后命中覆盖先命中）
+    def _hit_base(trig_param, trig_value) -> bool:
+        # 允许“（环境）/TRUE”这种无条件写法
+        if str(trig_param).strip() in ("（环境）", "(环境)", "ENV", ""):
+            return True
+        return (values.get(str(trig_param).strip(), "") == ("" if trig_value is None else str(trig_value).strip()))
+
+    def _hit_extras(rule_id: int) -> bool:
+        conds = extras.get(rule_id, [])
+        for c in conds:
+            src = c["src"]; name = str(c["name"]).strip()
+            op  = (c["op"] or "EQ").upper()
+            raw = (c["val"] or "")
+            if src == "ENV":
+                cur = env.get(name, "")
+            else:  # PARAM
+                cur = values.get(name, "")
+            if op == "EQ":
+                if cur != raw: return False
+            elif op == "IN":
+                bucket = [x.strip() for x in str(raw).split(",") if x.strip() != ""]
+                if cur not in bucket: return False
+            else:
+                # 未知比较符：视为不命中，避免误显示
+                return False
+        return True
+
+    effects = {}  # target_param -> 'SHOW'/'HIDE'
+    for r in rows:
+        rid = r["id"]
+        trig_ok = _hit_base(r["trig_param"], r["trig_value"])
+        if not trig_ok:
+            continue
+        if not _hit_extras(rid):
+            continue
+        action = (r["action"] or "").upper().strip()
+        if action in ("SHOW", "HIDE"):
+            effects[str(r["target_param"]).strip()] = action  # 覆盖
+    return effects
+
+
+_WHITES = " \t\r\n\u00A0\u3000"      # 半角/全角空白
+_QUOTES = "\"'“”‘’"                 # 中英引号
+
+def _norm_name(s: str) -> str:
+    if s is None:
+        return ""
+    s = str(s)
+    s = re.sub(r"[：:]\s*$", "", s)           # 去末尾冒号
+    s = re.sub(r"[（(].*?[)）]\s*$", "", s)   # 去末尾括号（常见单位/说明）
+    s = s.strip(_WHITES + _QUOTES)
+    s = re.sub(rf"[{re.escape(_WHITES)}]+", "", s)  # 折叠并去掉全/半角空白
+    return s
+
+def _cell_text(t: QTableWidget, r: int, c: int) -> str:
+    w = t.cellWidget(r, c)
+    if isinstance(w, QComboBox):
+        return (w.currentText() or "").strip()
+    if isinstance(w, QLineEdit):
+        return (w.text() or "").strip()
+    it = t.item(r, c)
+    return (it.text().strip() if it else "")
+
+def _is_empty(val: str) -> bool:
+    if val is None:
+        return True
+    s = str(val).strip()
+    if s == "":
+        return True
+    # 0 / 0.0 等不算空
+    try:
+        if float(s) == 0.0:
+            return False
+    except Exception:
+        pass
+    return False
+
+
+def query_required_paramlist_csv(part_name: str) -> set:
+    """
+    从【元件已定义参数表】读取该元件的必填参数（CSV），返回【清洗后的】set[str]
+    兼容中文逗号/英文逗号/顿号分隔；不写死别名，一律做通用清洗。
+    """
+    conn = get_connection(**db_config_2)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 必填参数 FROM 元件已定义参数表 WHERE 元件名称=%s", (part_name,))
+            row = cur.fetchone()
+            if not row:
+                return set()
+            raw = row[0] if isinstance(row, (list, tuple)) else row.get("必填参数", "")
+            parts = re.split(r"[，,、]+", str(raw))
+            req = {_norm_name(p) for p in parts if _norm_name(p)}
+            print(f"[调试] DB必填(清洗后): {req}")
+            return req
+    finally:
+        conn.close()
+
+
+
+def query_guankou_affiliation(product_id, guankou_code):
+    """安全查询管口归属"""
+    affiliation = None
+    try:
+        # 每次都新开连接
+        import pymysql
+        conn = pymysql.connect(**db_config_1)
+        with conn.cursor() as cursor:
+            sql = """
+                SELECT 管口所属元件
+                FROM 产品设计活动表_管口类别表
+                WHERE 产品ID=%s AND 管口代号=%s
+            """
+            cursor.execute(sql, (product_id, guankou_code))
+            result = cursor.fetchone()
+            if result:
+                raw_elem = result[0]
+                elem_type = (raw_elem or "").strip().lower()
+                if "管" in elem_type:
+                    affiliation = "管程"
+                elif "壳" in elem_type:
+                    affiliation = "壳程"
+                print(f"[调试] 产品ID={product_id}, 管口={guankou_code}, 数据库值='{raw_elem}', 归类='{affiliation}'")
+            else:
+                print(f"[调试] 产品ID={product_id}, 管口={guankou_code}, 数据库查询无结果")
+    except Exception as e:
+        print(f"[异常] 查询管口 {guankou_code} 归属失败: {e}")
+    finally:
+        try: conn.close()
+        except: pass
+    return affiliation
+
+
+def query_guankou_codes(product_id, category_label):
+    """
+    根据产品ID和材料分类，查询已占用的管口代号列表
+    返回列表，例如 ['N1', 'N2', 'N3']
+    """
+    conn = pymysql.connect(**db_config_1)
+    guankou_codes = []
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as c:
+            sql = """
+                SELECT 管口代号
+                FROM 产品设计活动表_管口类别表
+                WHERE 产品ID = %s AND 材料分类 = %s
+                ORDER BY 管口代号
+            """
+            c.execute(sql, (product_id, category_label))
+            rows = c.fetchall()
+            # 把所有非空管口代号放入列表
+            guankou_codes = [row["管口代号"] for row in rows if row.get("管口代号")]
+    finally:
+        conn.close()
+
+    print(f"[调试] 产品 {product_id}, 分类 {category_label} 的管口号: {guankou_codes}")
+    return guankou_codes
+
+
+# === 读取：产品设计活动库 → 当前产品的“元件材料”快照 ===
+def fetch_product_element_materials(product_id):
+    """
+    从『产品设计活动库_元件材料表』按产品ID取：元件名称、材料类型、材料牌号、材料标准、供货状态、是否覆层
+    返回 {元件名称: {字段: 值}}
+    """
+    connection = get_connection(**db_config_1)  # 和你现有一致
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+            SELECT
+                元件名称,
+                材料类型,
+                材料牌号,
+                材料标准,
+                供货状态,
+                有无覆层
+            FROM 产品设计活动表_元件材料表
+            WHERE 产品ID = %s
+            """
+            cursor.execute(sql, (product_id,))
+            rows = cursor.fetchall()
+            data = {}
+            for r in rows:
+                name = (r.get("元件名称") or "").strip()
+                data[name] = {
+                    "材料类型": r.get("材料类型") or "",
+                    "材料牌号": r.get("材料牌号") or "",
+                    "材料标准": r.get("材料标准") or "",
+                    "供货状态": r.get("供货状态") or "",
+                    "是否覆层": r.get("是否覆层") or "",
+                }
+            return data
+    finally:
+        connection.close()
+
+
+# === 读取：材料库 → 目标模板（未切换前）对应的“元件材料模板”基准 ===
+def fetch_template_element_materials(template_name):
+    """
+    从『材料库.元件材料模板表』按模板名称取：元件名称、材料类型、材料牌号、材料标准、供货状态、是否覆层
+    返回 {元件名称: {字段: 值}}
+    """
+    connection = get_connection(**db_config_2)
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+            SELECT
+                元件名称,
+                材料类型,
+                材料牌号,
+                材料标准,
+                供货状态,
+                有无覆层
+            FROM 元件材料模板表
+            WHERE 模板名称 = %s
+            """
+            cursor.execute(sql, (template_name,))
+            rows = cursor.fetchall()
+            data = {}
+            for r in rows:
+                name = (r.get("元件名称") or "").strip()
+                data[name] = {
+                    "材料类型": r.get("材料类型") or "",
+                    "材料牌号": r.get("材料牌号") or "",
+                    "材料标准": r.get("材料标准") or "",
+                    "供货状态": r.get("供货状态") or "",
+                    "是否覆层": r.get("是否覆层") or "",
+                }
+            return data
+    finally:
+        connection.close()
+
+
+def diff_product_vs_template(prod_map: dict, tpl_map: dict) -> list:
+    """
+    对比『当前产品(库)』与『模板(库)』
+    返回差异列表：[{name, field, old, new}, ...]
+    """
+    diffs = []
+    FIELDS = ("材料类型","材料牌号","材料标准","供货状态","是否覆层")
+
+    # 以“产品当前已存在的元件”为主做对比
+    for name, pvals in prod_map.items():
+        tvals = tpl_map.get(name)
+        if not tvals:
+            diffs.append({"name": name, "field": "（模板缺少该元件）", "old": "有", "new": "无"})
+            continue
+        for f in FIELDS:
+            pv = (pvals.get(f, "") or "")
+            tv = (tvals.get(f, "") or "")
+            if pv != tv:
+                diffs.append({"name": name, "field": f, "old": pv, "new": tv})
+    return diffs
+
+def query_template_name_by_product(product_id: str) -> str:
+    """
+    根据产品ID获取当前使用的模板名称
+    """
+    conn = get_connection(**db_config_1)  # 用产品设计活动库
+    try:
+        with conn.cursor() as cur:
+            sql = """
+            SELECT 模板名称
+            FROM 产品设计活动表_元件材料表
+            WHERE 产品ID = %s
+            LIMIT 1
+            """
+            cur.execute(sql, (product_id,))
+            row = cur.fetchone()
+            if row and row.get("模板名称"):
+                return row["模板名称"].strip()
+            return ""
+    finally:
+        conn.close()
+
+
 
 

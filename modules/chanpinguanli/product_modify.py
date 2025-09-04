@@ -19,6 +19,8 @@ def edit_row_state():
             if current_status == "view":
                 # 原索引：1=产品编号，2=产品名称，3=设备位号改1 改66
                 # 新索引：1=产品名称，2=设备位号，3=产品编号（关键修改）
+                # 序号
+                serial_item = bianl.product_table.item(row, 0)
                 name_item = bianl.product_table.item(row, 1)  # 产品名称（新列1）
                 position_item = bianl.product_table.item(row, 2)  # 设备位号（新列2）
                 number_item = bianl.product_table.item(row, 3)  # 产品编号（新列3）
@@ -27,6 +29,9 @@ def edit_row_state():
                 old_name = name_item.text().strip() if name_item else ""
                 old_position = position_item.text().strip() if position_item else ""
                 old_number = number_item.text().strip() if number_item else ""
+                old_serial = serial_item.text().strip().zfill(
+                    3) if serial_item and serial_item.text() else f"{row + 1:03d}"
+
 
                 # 新增：确保状态字典格式正确
                 if not isinstance(bianl.product_table_row_status.get(row), dict):
@@ -38,9 +43,12 @@ def edit_row_state():
                 bianl.product_table_row_status[row].update({
                     "old_number": old_number,
                     "old_name": old_name,
-                    "old_position": old_position
+                    "old_position": old_position,
+                    "old_serial":old_serial
                 })
-                print(f"第{row}行进入编辑状态，原始值：{old_number}, {old_name}, {old_position}")  # 调试信息
+                print(
+                    f"[edit_row_state] 第{row + 1}行 OLD: serial={old_serial}, name={old_name}, number={old_number}, pos={old_position}")
+                # print(f"第{row}行进入编辑状态，原始值：{old_number}, {old_name}, {old_position}")  # 调试信息
                 product_confirm_qianzhi.set_row_editable(row, True)
 
             elif current_status == "start":

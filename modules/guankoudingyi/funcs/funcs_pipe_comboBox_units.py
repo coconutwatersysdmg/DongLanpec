@@ -65,12 +65,12 @@ def setup_unit_selection_handlers(stats_widget):
                     table.setItem(row, 6, level_item)
 
                     # 法兰型式列 (第7列)
-                    flange_type_item = QTableWidgetItem(' ')  # 设置为空值
+                    flange_type_item = QTableWidgetItem('')  # 设置为空值
                     flange_type_item.setTextAlignment(Qt.AlignCenter)
                     table.setItem(row, 7, flange_type_item)
 
                     # 密封面型式列 (第8列)
-                    sealing_surface_item = QTableWidgetItem(' ')  # 设置为空值
+                    sealing_surface_item = QTableWidgetItem('')  # 设置为空值
                     sealing_surface_item.setTextAlignment(Qt.AlignCenter)
                     table.setItem(row, 8, sealing_surface_item)
 
@@ -86,12 +86,12 @@ def setup_unit_selection_handlers(stats_widget):
                     table = stats_widget.tableWidget_pipe
                     # ✅ 直接用缓存好的 delegate
                     delegate = stats_widget.pipe_column_delegates[col_index]
-                    delegate.setItems(["默认"])
+                    delegate.setItems(["程序推荐"])
                     delegate.editable = True  # 允许可编辑
                     table.setItemDelegateForColumn(col_index, delegate)
 
                     for row in range(table.rowCount() - 1):
-                        item = QTableWidgetItem("默认")
+                        item = QTableWidgetItem("程序推荐")
                         item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
                         item.setTextAlignment(Qt.AlignCenter)
                         table.setItem(row, col_index, item)
