@@ -12,7 +12,7 @@ from modules.condition_input.funcs.multi_conditions_dialog import MultiCondition
 from PyQt5.QtWidgets import QMessageBox, QPushButton
 
 # 导入功能函数
-from modules.condition_input.funcs.funcs_product_info import widget_fold, get_product_info, update_diagram, check_pdt_define
+from modules.condition_input.funcs.funcs_product_info import check_pdt_define
 from modules.condition_input.funcs.ctrl_helper import enable_full_undo
 from modules.condition_input.funcs.funcs_cdt_input import load_design_data_if_exists, render_grouped_table, \
     render_coating_table, set_multilevel_headers, apply_table_style, highlight_missing_required_rows, \
@@ -43,7 +43,6 @@ class DesignConditionInputViewer(QWidget):
         ui_path = os.path.join(current_dir, "viewer.ui")
         uic.loadUi(ui_path, self)
         self.line_tip = line_tip
-
         screen_geometry = QApplication.desktop().screenGeometry()
         screen_width = screen_geometry.width()
         screen_height = screen_geometry.height()
@@ -53,9 +52,6 @@ class DesignConditionInputViewer(QWidget):
         self.move((screen_width - target_width) // 2, (screen_height - target_height) // 2)
 
         QToolTip.setFont(QFont("Microsoft YaHei", 12))
-        self.graph_product_diagram.setRenderHints(QPainter.Antialiasing | QPainter.SmoothPixmapTransform)
-        self.graph_product_diagram.setAlignment(Qt.AlignCenter)
-
         self.product_id = product_id
         self._is_valid_product = True
         self._early_tip_msg = ""
@@ -67,11 +63,6 @@ class DesignConditionInputViewer(QWidget):
         elif not check_pdt_define(self.product_id):
             self._is_valid_product = False
             self._early_tip_msg = "请先至项目管理处对当前产品进行定义！"
-        else:
-            self._product_info = get_product_info(self.product_id)
-            if not self._product_info:
-                self._is_valid_product = False
-                self._early_tip_msg = "未找到产品信息，请检查！"
 
         # 统一处理提示
         if not self._is_valid_product:
@@ -80,7 +71,6 @@ class DesignConditionInputViewer(QWidget):
                 self.line_tip.setToolTip(self._early_tip_msg)
             self.setDisabled(True)  # 禁用界面交互
             self._original_pixmap = None
-            update_diagram(self.graph_product_diagram, self._original_pixmap)
             return  # 如果你仍想中断后续数据加载逻辑，可以留这个 return，但控件已完整初始化
 
         self._is_loading_data = True
@@ -113,11 +103,9 @@ class DesignConditionInputViewer(QWidget):
             else:
                 print("[ERR][init] 没有定义 on_mode_changed 方法，无法连接信号")
 
-        self.btn_fold.clicked.connect(self.fold_open)
         self.btn_inputrefdata.clicked.connect(self.on_input_ref_data_clicked)
         self.btn_confirm.clicked.connect(lambda: self.check_and_save_data(force=True))
         self.btn_output.clicked.connect(self.export_condition_file)
-        self.load_product_info(self.product_id, self._product_info)
         self.import_condition_data(self.product_id)
 
         tables = [
@@ -179,66 +167,6 @@ class DesignConditionInputViewer(QWidget):
             self.design_delegate = DesignDataDelegate()
             self.tableWidget_design_data.setItemDelegateForColumn(1, self.design_delegate)
             self.tableWidget_design_data.viewer = self
-
-
-
-
-    def fold_open(self):
-        widget_fold(self.groupBox_product_info, self.btn_fold)
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        update_diagram(self.graph_product_diagram, self._original_pixmap)
-
-    def showEvent(self, event):  # ✅ 新加的方法
-        super().showEvent(event)
-        if hasattr(self, '_original_pixmap') and self._original_pixmap:
-            QTimer.singleShot(100, lambda: update_diagram(
-                self.graph_product_diagram, self._original_pixmap))
-
-    def load_product_info(self, product_id, product_info=None):
-        try:
-            # 如果外部传入了 product_info 就用它，否则重新查
-            result = product_info #or get_product_info(product_id)
-
-            if not result:
-                # 没查到产品信息，不加载任何数据，显示空图
-                self.line_product_code.setText("")
-                self.line_product_model.setText("")
-                self.line_device_loc_id.setText("")
-                self._original_pixmap = None
-                update_diagram(self.graph_product_diagram, self._original_pixmap)
-                return
-
-            # 设置文本控件
-            self.line_product_code.setText(result.get('产品编号', ''))
-            self.line_product_model.setText(result.get('产品型号', ''))
-            self.line_device_loc_id.setText(result.get('设备位号', ''))
-
-            # 构造产品图路径
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            chanpingguanli_dir = os.path.abspath(os.path.join(current_dir, '..', 'chanpinguanli'))
-            product_diagram_relpath = result.get('产品示意图', '')
-            product_diagram_path = os.path.join(chanpingguanli_dir, product_diagram_relpath)
-
-            # 尝试加载图片
-            if os.path.exists(product_diagram_path):
-                pixmap = QPixmap(product_diagram_path)
-                if not pixmap.isNull():
-                    self._original_pixmap = pixmap
-                    QTimer.singleShot(0, lambda: update_diagram(self.graph_product_diagram, self._original_pixmap))
-                    return
-
-            # 图片加载失败也清空图像并显示文字提示
-            self._original_pixmap = None
-            update_diagram(self.graph_product_diagram, self._original_pixmap)
-
-        except Exception as e:
-            # 防御性兜底
-            self._original_pixmap = None
-            update_diagram(self.graph_product_diagram, self._original_pixmap)
-            print(f"[错误] 加载产品信息失败：{e}")
-
     def import_condition_data(self, product_id):
         if not product_id:
             return
@@ -427,7 +355,6 @@ class DesignConditionInputViewer(QWidget):
 
         # 如果不是强制保存，并且没有修改过数据，就直接跳过
         if not force and not getattr(self, "_is_modified", False):
-            print("[保存] 数据未修改，跳过保存。")
             return True
 
         try:
@@ -437,7 +364,6 @@ class DesignConditionInputViewer(QWidget):
             has_missing_common, missing_common = validate_required_fields(
                 self.tableWidget_general_data, mode="通用数据"
             )
-
             if has_missing_dsg or has_missing_common:
                 missing_fields = [name for _, name in (missing_dsg + missing_common)]
                 msg = (
@@ -463,15 +389,12 @@ class DesignConditionInputViewer(QWidget):
                 if box.clickedButton() == no_btn:
                     return False
                 # 如果点“是”，继续保存
-
             if not save_local_condition_file(self.product_id, self):
                 return False
-
             save_all_tables(self, self.product_id)
             self.line_tip.setText("保存成功！")
             self.line_tip.setToolTip("保存成功！")
             self.line_tip.setStyleSheet("color: black;")
-
             # 保存完成后清除修改标志
             self._is_modified = False
             return True
