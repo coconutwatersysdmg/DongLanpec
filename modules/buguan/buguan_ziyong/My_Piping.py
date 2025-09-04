@@ -28,7 +28,7 @@ from modules.buguan.buguan_ziyong.sheet_form_page import SheetFormPage
 from modules.buguan.buguan_ziyong.tube_sheet_connection import TubeSheetConnectionPage
 from modules.chanpinguanli.chanpinguanli_main import product_manager
 
-product_id = 'PD2025081322414301'
+product_id = 'PD2025090422414302'
 
 
 def on_product_id_changed(new_id):
@@ -996,7 +996,7 @@ class TubeLayoutEditor(QMainWindow):
             "旁路挡板厚度", "防冲板形式", "防冲板厚度", "防冲板折边角度",
             "与圆筒焊接折边式防冲板宽度", "与圆筒焊接折边式防冲板方位角",
             "与圆筒焊接折边式防冲板至圆筒内壁最大距离", "切边长度L1",
-            "切边高度 h", "拉杆直径"
+            "切边高度 h"
         ]
 
         # 标志位，标记是否成功从产品设计活动库加载参数
@@ -2491,7 +2491,6 @@ class TubeLayoutEditor(QMainWindow):
 
             param_name_item = QTableWidgetItem(param_name)
             param_name_item.setFlags(param_name_item.flags() & ~Qt.ItemIsEditable)
-            # param_name_item.setTextAlignment(Qt.AlignCenter)
             self.param_table.setItem(row, 1, param_name_item)
 
             # 记录关键参数的行索引
@@ -2523,7 +2522,7 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 设置当前值
                     try:
-                        current_value = str(param['参数值']).strip()
+                        current_value = str(param['参数值']).strip() if param['参数值'] is not None else ""
                         if current_value:
                             # 先尝试在下拉选项中查找
                             index = combo.findText(current_value)
@@ -2650,17 +2649,26 @@ class TubeLayoutEditor(QMainWindow):
                             lambda idx, r=row, p=param['参数名']: self.on_combobox_changed(r, p)
                         )
 
-                    # 设置当前值 - 确保参数值是字符串且存在于选项中
+                    # 设置当前值 - 处理 None 值
+                    param_value_str = str(param['参数值']) if param['参数值'] is not None else ""
+
                     try:
-                        # 先尝试直接设置
-                        combo.setCurrentText(str(param['参数值']))
+                        # 先尝试直接设置，只有值不为空时才设置
+                        if param_value_str:
+                            combo.setCurrentText(param_value_str)
+                        else:
+                            # 如果值为空，设置为第一个选项
+                            if combo.count() > 0:
+                                combo.setCurrentIndex(0)
                     except:
                         # 如果失败，查找最匹配的选项
+                        found = False
                         for i in range(combo.count()):
-                            if combo.itemText(i) == str(param['参数值']):
+                            if combo.itemText(i) == param_value_str:
                                 combo.setCurrentIndex(i)
+                                found = True
                                 break
-                        else:
+                        if not found and combo.count() > 0:
                             # 没有匹配项时设置为第一个
                             combo.setCurrentIndex(0)
 
@@ -2672,9 +2680,15 @@ class TubeLayoutEditor(QMainWindow):
 
             else:
                 # 普通文本输入框（参数值列，第2列）
-                item = QTableWidgetItem(str(param['参数值']))  # 确保存储字符串
+                # 处理 None 值
+                param_value = param['参数值']
+                if param_value is None:
+                    display_value = ""
+                else:
+                    display_value = str(param_value)
+
+                item = QTableWidgetItem(display_value)
                 item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
-                # item.setTextAlignment(Qt.AlignCenter)
 
                 # 需要特殊处理的参数列表（验证+联动）
                 target_params = [
@@ -2684,7 +2698,7 @@ class TubeLayoutEditor(QMainWindow):
                 ]
                 if param['参数名'] in target_params:
                     # 保存原始值（字符串形式）
-                    self._original_values[(row, 2)] = str(param['参数值'])
+                    self._original_values[(row, 2)] = display_value
 
                     # 创建参数变更处理函数
                     def create_on_change_handler(row, param_name):
@@ -2716,9 +2730,14 @@ class TubeLayoutEditor(QMainWindow):
                 self.param_table.setItem(row, 2, item)
 
             # 设置单位列（第3列），不可编辑
-            unit_item = QTableWidgetItem(param['单位'])
+            unit_value = param['单位']
+            if unit_value is None:
+                unit_display = ""
+            else:
+                unit_display = str(unit_value)
+
+            unit_item = QTableWidgetItem(unit_display)
             unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
-            # unit_item.setTextAlignment(Qt.AlignCenter)
             self.param_table.setItem(row, 3, unit_item)
 
         # 初始化时触发一次折流板参数联动计算
