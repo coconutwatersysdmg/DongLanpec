@@ -13,6 +13,7 @@ import os
 import pandas as pd
 from openpyxl.cell.cell import MergedCell
 from openpyxl import load_workbook
+from modules.chanpinguanli import bianl
 from modules.condition_input.funcs.undo_command import CellEditCommand
 from modules.condition_input.funcs.funcs_def_check import check_dn, check_work_pressure, check_work_temp_in, \
     check_work_temp_out, check_work_pressure_max, check_tubeplate_design_pressure_gap, \
@@ -712,7 +713,6 @@ def save_data_to_database(data, product_id, table_name, table_widget, is_from_de
     - 更改状态字段统一标记；
     """
     connection = get_connection(**db_config_2)
-
     try:
         with connection.cursor() as cursor:
             header_columns = get_table_header_columns(table_widget)
@@ -720,6 +720,7 @@ def save_data_to_database(data, product_id, table_name, table_widget, is_from_de
             # 获取数据库字段结构
             cursor.execute(f"DESCRIBE {table_name}")
             table_columns = cursor.fetchall()
+            db_fields = [col['Field'] for col in table_columns]
 
             # 获取“更改状态”字段名
             change_status_column = None
@@ -733,27 +734,36 @@ def save_data_to_database(data, product_id, table_name, table_widget, is_from_de
             # 确定“参数名称”字段
             name_column = "规范/标准名称" if "产品标准" in table_name else "参数名称"
 
+            # === 参数ID字段映射（避免用“序号”）===
+            id_field_mapping = {
+                "产品设计活动表_产品标准数据表": "产品标准参数ID",
+                "产品设计活动表_设计数据表": "设计数据参数ID",
+                "产品设计活动表_通用数据表": "通用数据参数ID"
+            }
+            param_id_field = id_field_mapping.get(table_name, table_columns[0]['Field'])
+
+            # UI 表头第0列（序号）→ 实际数据库的参数ID字段
+            param_id_column = header_columns[0]   # UI显示是“序号”
+
             # 匹配模板表名
             template_table_mapping = {
                 "产品设计活动表_产品标准数据表": "产品标准数据模板表",
                 "产品设计活动表_设计数据表": "设计数据模板表",
                 "产品设计活动表_通用数据表": "通用数据模板表"
             }
-            template_table_name = template_table_mapping.get(table_name.replace("", ""), "")
+            template_table_name = template_table_mapping.get(table_name, "")
 
             # 获取模板字段列表（用于对比）
             template_compare_fields = []
             if template_table_name:
                 cursor.execute(f"DESCRIBE 产品条件库.{template_table_name}")
                 template_compare_fields = [col['Field'] for col in cursor.fetchall()]
-
-            # 数据库中参数ID字段名
-            param_id_field = table_columns[0]['Field']
-            param_id_column = header_columns[0]
+                print(f"[DEBUG] 模板表字段={template_compare_fields}")
 
             for row_idx, row in enumerate(data):
                 param_name = row.get(name_column)
                 if not param_name:
+                    print(f"[DEBUG] 跳过：没有{name_column}")
                     continue
 
                 # 获取模板数据行
@@ -764,14 +774,13 @@ def save_data_to_database(data, product_id, table_name, table_widget, is_from_de
                         (param_name,)
                     )
                     template = cursor.fetchone()
-
                 # 判断是否与模板数据有差异（更改状态）
                 def is_changed(template_row, current_row):
                     if not template_row:
                         return True
                     for key in header_columns:
                         if key not in template_compare_fields:
-                            continue  # 忽略“参数ID”等非模板字段
+                            continue
                         cur_val = str(current_row.get(key, "")).strip()
                         tpl_val = str(template_row.get(key, "")).strip()
                         if cur_val != tpl_val:
@@ -797,10 +806,8 @@ def save_data_to_database(data, product_id, table_name, table_widget, is_from_de
                         if update_values:
                             update_values[change_status_column] = change_detected
                             update_set = ', '.join([f"`{k}` = %s" for k in update_values])
-                            cursor.execute(
-                                f"UPDATE {table_name} SET {update_set} WHERE 产品ID = %s AND `{name_column}` = %s",
-                                tuple(update_values.values()) + (product_id, param_name)
-                            )
+                            sql = f"UPDATE {table_name} SET {update_set} WHERE 产品ID = %s AND `{name_column}` = %s"
+                            cursor.execute(sql, tuple(update_values.values()) + (product_id, param_name))
                 else:
                     # INSERT 操作
                     insert_row = {}
@@ -808,18 +815,19 @@ def save_data_to_database(data, product_id, table_name, table_widget, is_from_de
                         if field == "产品ID":
                             insert_row[field] = product_id
                         elif field == param_id_field:
+                            # ⚠️ 注意：这里要看 row 里到底有没有“序号”
                             insert_row[field] = row.get(param_id_column, "")
                         elif field == change_status_column:
                             insert_row[field] = change_detected
                         else:
                             insert_row[field] = row.get(field, "")
 
+                    print(f"[DEBUG] insert_row={insert_row}")
+
                     columns = ', '.join(f"`{k}`" for k in insert_row)
                     placeholders = ', '.join(['%s'] * len(insert_row))
-                    cursor.execute(
-                        f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})",
-                        tuple(insert_row.values())
-                    )
+                    sql = f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})"
+                    cursor.execute(sql, tuple(insert_row.values()))
 
         connection.commit()
 
@@ -1610,6 +1618,14 @@ def get_ref_data_excel_path(product_id: int) -> str:
     """
     给定产品ID，查询并返回对应的 条件输入数据表.xlsx 完整路径
     """
+    serial = ""
+    # ✅ 遍历 product_table_row_status，用 product_id 匹配行
+    for row, status in bianl.product_table_row_status.items():
+        if isinstance(status, dict):
+            if str(status.get("product_id")) == str(product_id):
+                serial = status.get("old_serial", "") or f"{row+1:03d}"
+                break
+
     try:
         # 第一步：连接产品需求库，查产品需求表
         connection = get_connection(**db_config_3)
@@ -1650,18 +1666,23 @@ def get_ref_data_excel_path(product_id: int) -> str:
         project_path = project_row['项目名称']
         yezhu_path = project_row['业主名称']
         pinjie_path = f"{yezhu_path}_{project_path}"
-        # 第三步：拼接路径
-        folder_name = f"{product_code}_{product_name}_{device_loc_id}"
+
+        # ✅ 拼接文件夹名：序号_产品名称_产品编号_设备位号（自动跳过空值）
+        parts = [serial, product_name, product_code, device_loc_id]
+        folder_name = "_".join([str(p).strip() for p in parts if p and str(p).strip()])
+
         full_path = os.path.join(project_save_path, pinjie_path, folder_name, "条件输入数据表.xlsx")
-        # ✅ 检查文件是否存在
+
         if not os.path.exists(full_path):
             raise FileNotFoundError(f"未找到文件：{full_path}")
 
         return full_path
 
     except Exception as e:
-        # 可以根据需要在这里统一处理异常（比如打印日志，或者继续往上抛）
-        raise e
+        print(f"[ERROR] get_ref_data_excel_path 出错: {e}")
+        raise
+
+
 
 def get_user_selected_excel_path(parent_widget=None) -> str:
     """
@@ -2307,17 +2328,15 @@ def save_local_condition_file(product_id: int, viewer: QWidget) -> bool:
     —— 改动：写出时使用“默认顺序”的行索引，确保导出的 Excel 始终是固定顺序。
     """
     local_path = get_ref_data_excel_path(product_id)
-
+    print(f"{local_path}")
     if is_file_locked(local_path):
         QMessageBox.warning(viewer, "文件占用", f"请先关闭本地文件：\n{local_path}\n然后重试保存。")
         return False  # 阻止继续
-
     try:
         wb = load_workbook(local_path)
     except FileNotFoundError:
         print(f"未找到本地条件数据文件：{local_path}")
         return False
-
     # === 关键：获取每张表的“默认写出顺序”索引 ===
     order_std     = get_row_index_order_for_default_write(viewer.tableWidget_product_std)
     order_design  = get_row_index_order_for_default_write(viewer.tableWidget_design_data)
@@ -2325,7 +2344,6 @@ def save_local_condition_file(product_id: int, viewer: QWidget) -> bool:
     # 检测/涂漆没有“参数ID默认顺序”的诉求，仍按当前显示顺序写
     order_trail   = None
     order_coating = None
-
     update_sheet_from_table(
         wb["产品标准"], viewer.tableWidget_product_std,
         col_start=1, col_end=3, excel_col_offset=2, excel_row_offset=2,
