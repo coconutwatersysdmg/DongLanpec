@@ -8754,41 +8754,181 @@ class TubeLayoutEditor(QMainWindow):
 
     # 中间挡板
     def on_purple_block_click(self):
-        from PyQt5.QtWidgets import QMessageBox
-        if not hasattr(self, 'selected_centers') or len(self.selected_centers) != 2:
-            QMessageBox.warning(self, "错误", "请选中两个对称的小圆（关于x轴或y轴）")
-            return
-        self.build_center_dangban(self.selected_centers)
+        """点击紫色挡板按钮：先弹出参数设置弹窗，确定后绘制并关闭弹窗"""
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QMessageBox, \
+            QComboBox, QTableWidgetItem
 
-    def build_center_dangban(self, selected_centers):
+        # 查找参数表中“中间挡板厚度”的行和当前默认值
+        param_row = -1
+        default_thickness = 3.0  # 默认厚度（可根据需求调整）
+        row_count = self.param_table.rowCount()
+        for row in range(row_count):
+            name_item = self.param_table.item(row, 1)
+            if name_item and name_item.text() == "中间挡板厚度":
+                param_row = row
+                self.param_table.setRowHidden(row, False)  # 显示参数行
+                # 获取当前参数值（兼容下拉框/普通单元格）
+                cell_widget = self.param_table.cellWidget(row, 2)
+                if isinstance(cell_widget, QComboBox):
+                    value_text = cell_widget.currentText()
+                else:
+                    value_item = self.param_table.item(row, 2)
+                    value_text = value_item.text() if value_item else ""
+                # 转换为数值，失败则用默认值
+                try:
+                    default_thickness = float(value_text)
+                except (ValueError, TypeError):
+                    pass
+                break
+
+        # 1. 创建弹窗实例（关键：确保dialog为局部变量，后续可直接调用close）
+        dialog = QDialog(self)
+        dialog.setWindowTitle("中间挡板参数设置")
+        dialog.setModal(True)  # 模态窗口，阻止外部操作
+
+        # 2. 弹窗布局
+        layout = QVBoxLayout(dialog)
+
+        # 厚度输入区域
+        thickness_layout = QHBoxLayout()
+        thickness_label = QLabel("中间挡板厚度:")
+        self.thickness_input = QLineEdit(str(default_thickness))
+        thickness_layout.addWidget(thickness_label)
+        thickness_layout.addWidget(self.thickness_input)
+        layout.addLayout(thickness_layout)
+
+        # 按钮区域（确定+关闭）
+        btn_layout = QHBoxLayout()
+        confirm_btn = QPushButton("确定")  # 按钮直接定义为局部变量，避免属性冲突
+        close_btn = QPushButton("关闭")
+        btn_layout.addWidget(confirm_btn)
+        btn_layout.addWidget(close_btn)
+        layout.addLayout(btn_layout)
+
+        # 3. 确定按钮点击事件（核心：执行绘制后强制关闭弹窗）
+        def on_confirm_click():
+            # 校验厚度输入有效性
+            try:
+                block_thickness = float(self.thickness_input.text())
+                if block_thickness <= 0:
+                    raise ValueError("厚度必须大于0")
+            except ValueError as e:
+                QMessageBox.warning(dialog, "输入错误", f"请输入有效的正数：{str(e)}")
+                return
+
+            # 检查选中的小圆数量
+            if not hasattr(self, 'selected_centers') or len(self.selected_centers) != 2:
+                QMessageBox.warning(self, "错误", "请选中两个对称的小圆（关于x轴或y轴）")
+                return
+
+            # 处理对称联动选中
+            if self.isSymmetry:
+                selected_centers = self.judge_linkage(self.selected_centers)
+            else:
+                selected_centers = self.selected_centers
+
+            # 执行中间挡板绘制
+            self.build_center_dangban(selected_centers, block_thickness)
+
+            # 清除选中状态（恢复小圆原始样式）
+            if hasattr(self, 'selected_centers') and self.selected_centers:
+                from PyQt5.QtCore import QPointF
+                from PyQt5.QtGui import QPen, QBrush, QColor
+                from PyQt5.QtWidgets import QGraphicsEllipseItem
+
+                for row_label, col_label in self.selected_centers:
+                    row_idx = abs(row_label) - 1
+                    col_idx = abs(col_label) - 1
+                    # 选择对应圆心分组（上/下）
+                    centers_group = self.sorted_current_centers_up if row_label > 0 else self.sorted_current_centers_down
+                    if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
+                        x, y = centers_group[row_idx][col_idx]
+                        # 移除淡蓝色选中涂层
+                        click_point = QPointF(x, y)
+                        for item in self.graphics_scene.items(click_point):
+                            if isinstance(item, QGraphicsEllipseItem):
+                                self.graphics_scene.removeItem(item)
+                                break
+                        # 重绘原始深蓝色圆
+                        pen_restore = QPen(QColor(0, 0, 80))
+                        pen_restore.setWidth(1)
+                        self.graphics_scene.addEllipse(
+                            x - self.r, y - self.r, 2 * self.r, 2 * self.r,
+                            pen_restore, QBrush(Qt.NoBrush)
+                        )
+                self.selected_centers.clear()
+
+            # ---------------- 关键：点击确定后强制关闭弹窗 ----------------
+            dialog.close()  # 直接调用dialog的close方法，确保弹窗关闭
+            # 额外保险：若close无效，用accept()结束弹窗（QDialog标准关闭方式）
+            dialog.accept()
+
+        # 4. 关闭按钮点击事件（同步参数+关闭弹窗）
+        def on_close_click():
+            # 同步输入的厚度到参数表
+            try:
+                thickness = float(self.thickness_input.text())
+                if param_row != -1:
+                    cell_widget = self.param_table.cellWidget(param_row, 2)
+                    if isinstance(cell_widget, QComboBox):
+                        index = cell_widget.findText(str(thickness))
+                        if index >= 0:
+                            cell_widget.setCurrentIndex(index)
+                        else:
+                            cell_widget.addItem(str(thickness))
+                            cell_widget.setCurrentText(str(thickness))
+                    else:
+                        self.param_table.setItem(param_row, 2, QTableWidgetItem(str(thickness)))
+            except ValueError:
+                pass
+            # 关闭弹窗
+            dialog.close()
+            dialog.accept()
+
+        # 绑定按钮点击事件（直接绑定局部函数，避免属性引用问题）
+        confirm_btn.clicked.connect(on_confirm_click)
+        close_btn.clicked.connect(on_close_click)
+
+        # 显示弹窗
+        dialog.exec_()
+        self.clear_selection_highlight()
+        self.selected_centers.clear()
+
+    def build_center_dangban(self, selected_centers, block_thickness):
+        """构建紫色中间挡板（接收厚度参数，执行绘制逻辑）"""
         from PyQt5.QtCore import Qt, QPointF
-        from PyQt5.QtGui import QPen, QBrush, QColor
+        from PyQt5.QtGui import QPen, QBrush, QColor, QPainterPath
         from PyQt5.QtWidgets import QMessageBox, QGraphicsEllipseItem
+        import ast
+        print(block_thickness)
 
+        # 1. 解析并校验选中的圆心坐标
         if not selected_centers:
             return []
 
-        import ast
         selected_centers_list = []
         if isinstance(selected_centers, list):
-            selected_centers_list = [item for item in selected_centers
-                                     if isinstance(item, tuple)
-                                     and len(item) == 2
-                                     and all(isinstance(x, (int, float)) for x in item)]
+            selected_centers_list = [
+                item for item in selected_centers
+                if isinstance(item, tuple) and len(item) == 2
+                   and all(isinstance(x, (int, float)) for x in item)
+            ]
         elif isinstance(selected_centers, str):
             try:
                 parsed_list = ast.literal_eval(selected_centers)
                 if isinstance(parsed_list, list):
-                    selected_centers_list = [item for item in parsed_list
-                                             if isinstance(item, tuple)
-                                             and len(item) == 2
-                                             and all(isinstance(x, (int, float)) for x in item)]
+                    selected_centers_list = [
+                        item for item in parsed_list
+                        if isinstance(item, tuple) and len(item) == 2
+                           and all(isinstance(x, (int, float)) for x in item)
+                    ]
             except (SyntaxError, ValueError, TypeError) as e:
                 print("字符串解析错误:", e)
                 selected_centers_list = []
         else:
             selected_centers_list = []
 
+        # 2. 合并圆心列表并去重
         combined = []
         seen = set()
         for coord in self.center_dangban:
@@ -8800,93 +8940,70 @@ class TubeLayoutEditor(QMainWindow):
                 seen.add(coord)
                 combined.append(coord)
         self.center_dangban = combined
+
+        # 坐标转换
         current_coords = self.selected_to_current_coords(selected_centers)
 
-        # 提取两个选中圆的坐标
-        points = []
+        # 3. 二次处理字符串类型的选中坐标
         if isinstance(selected_centers, str):
             try:
-                import ast
                 selected_centers = ast.literal_eval(selected_centers)
             except (SyntaxError, ValueError) as e:
                 print(f"字符串转换失败: {e}")
                 return current_coords
+
+        # 4. 提取选中圆的实际绘制坐标
+        points = []
         if selected_centers:
             for row_label, col_label in selected_centers:
-                # 计算行/列索引（基于绝对值）
                 row_idx = abs(row_label) - 1
                 col_idx = abs(col_label) - 1
-
-                # 选择对应的圆心列表（上/下分组）
-                if row_label > 0:
-                    centers_group = self.sorted_current_centers_up
-                else:
-                    centers_group = self.sorted_current_centers_down
-
-                # 校验索引有效性并获取坐标
+                centers_group = self.sorted_current_centers_up if row_label > 0 else self.sorted_current_centers_down
                 if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
                     x, y = centers_group[row_idx][col_idx]
                     points.append((x, y))
 
-                    # 恢复默认圆样式（清除淡蓝色选中涂层）
-                    click_point = QPointF(x, y)
-                    for item in self.graphics_scene.items(click_point):
-                        if isinstance(item, QGraphicsEllipseItem):
-                            self.graphics_scene.removeItem(item)
-                            break
-                    # 绘制原始深蓝色边框
-                    pen_restore = QPen(QColor(0, 0, 80))  # 深蓝色
-                    pen_restore.setWidth(1)
-                    self.graphics_scene.addEllipse(
-                        x - self.r, y - self.r, 2 * self.r, 2 * self.r,
-                        pen_restore, QBrush(Qt.NoBrush)
-                    )
-                    # 确保获取到两个有效点
-
+            # 校验坐标数量
             if len(points) != 2:
                 QMessageBox.warning(self, "错误", "选中的小圆坐标获取失败")
-                # 回滚中心挡板列表
+                # 回滚圆心列表
                 for center in selected_centers:
                     if center in self.center_dangban:
                         self.center_dangban.remove(center)
                 return
 
-            # 解析坐标
+            # 5. 判断对称性（x轴/y轴）
             (x1, y1), (x2, y2) = points
-
-            # 判断对称性（水平/竖直）
-            is_horizontal = (abs(y1 - y2) < 1e-2 and abs(x1 + x2) < 1e-2)  # 关于y轴对称（水平连线）
-            is_vertical = (abs(x1 - x2) < 1e-2 and abs(y1 + y2) < 1e-2)  # 关于x轴对称（竖直连线）
+            is_horizontal = (abs(y1 - y2) < 1e-2 and abs(x1 + x2) < 1e-2)  # 关于y轴对称
+            is_vertical = (abs(x1 - x2) < 1e-2 and abs(y1 + y2) < 1e-2)  # 关于x轴对称
 
             if not (is_horizontal or is_vertical):
                 QMessageBox.warning(self, "错误", "两个小圆必须关于x轴或y轴对称，且连线为水平或竖直")
-                # 回滚中心挡板列表
+                # 回滚圆心列表
                 for center in selected_centers:
                     if center in self.center_dangban:
                         self.center_dangban.remove(center)
                 return
 
-            # 绘制紫色挡板线段
-            pen = QPen(QColor(128, 0, 128))  # 紫色
-            pen.setWidth(3)
+            # 6. 绘制紫色挡板（使用用户设置的厚度）
+            pen = QPen(QColor(128, 0, 128))
+            pen.setWidth(int(block_thickness))  # 应用厚度参数（转int避免小数宽度异常）
 
             if is_horizontal:
                 # 水平对称：绘制两条水平线段
                 x_start = min(x1, x2) + self.r
                 x_end = max(x1, x2) - self.r
-
-                # 创建原始线段（用于显示）
+                # 绘制线段
                 line1 = self.graphics_scene.addLine(x_start, y1, x_end, y1, pen)
                 line2 = self.graphics_scene.addLine(x_start, -y1, x_end, -y1, pen)
-
                 # 创建可选中图形项
                 path1 = QPainterPath()
                 path1.moveTo(x_start, y1)
                 path1.lineTo(x_end, y1)
                 item1 = ClickableRectItem(path1, is_center_dangban=True, editor=self)
                 item1.setPen(pen)
-                item1.original_coords = selected_centers  # 存储原始坐标
-                item1.related_line_items = [line1]  # 存储相关的线段
+                item1.original_coords = selected_centers
+                item1.related_line_items = [line1]
                 self.graphics_scene.addItem(item1)
 
                 path2 = QPainterPath()
@@ -8894,11 +9011,11 @@ class TubeLayoutEditor(QMainWindow):
                 path2.lineTo(x_end, -y1)
                 item2 = ClickableRectItem(path2, is_center_dangban=True, editor=self)
                 item2.setPen(pen)
-                item2.original_coords = selected_centers  # 存储原始坐标
-                item2.related_line_items = [line2]  # 存储相关的线段
+                item2.original_coords = selected_centers
+                item2.related_line_items = [line2]
                 self.graphics_scene.addItem(item2)
 
-                # 设置配对关系
+                # 绑定配对关系
                 item1.set_paired_block(item2)
                 item2.set_paired_block(item1)
 
@@ -8906,10 +9023,9 @@ class TubeLayoutEditor(QMainWindow):
                 # 竖直对称：绘制两条竖直线段
                 y_start = min(y1, y2) + self.r
                 y_end = max(y1, y2) - self.r
-
+                # 绘制线段
                 line1 = self.graphics_scene.addLine(x1, y_start, x1, y_end, pen)
                 line2 = self.graphics_scene.addLine(-x1, y_start, -x1, y_end, pen)
-
                 # 创建可选中图形项
                 path1 = QPainterPath()
                 path1.moveTo(x1, y_start)
@@ -8929,20 +9045,25 @@ class TubeLayoutEditor(QMainWindow):
                 item2.related_line_items = [line2]
                 self.graphics_scene.addItem(item2)
 
-                # 设置配对关系
+                # 绑定配对关系
                 item1.set_paired_block(item2)
                 item2.set_paired_block(item1)
 
-            # 记录操作
+            # 7. 记录操作日志
             if not hasattr(self, 'operations'):
                 self.operations = []
             self.operations.append({
                 "type": "purple_block",
                 "from": [(x1, y1), (x2, y2)],
-                "mode": "horizontal" if is_horizontal else "vertical"
+                "mode": "horizontal" if is_horizontal else "vertical",
+                "thickness": block_thickness
             })
-            # 清除选中状态
+        self.clear_selection_highlight()
         self.selected_centers.clear()
+
+        # 清除选中状态（最终保障）
+        if hasattr(self, 'selected_centers'):
+            self.selected_centers.clear()
 
     # 删除中间挡板的函数
     def delete_selected_center_dangban(self):
