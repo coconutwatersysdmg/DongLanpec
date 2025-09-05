@@ -28,7 +28,7 @@ from modules.buguan.buguan_ziyong.sheet_form_page import SheetFormPage
 from modules.buguan.buguan_ziyong.tube_sheet_connection import TubeSheetConnectionPage
 from modules.chanpinguanli.chanpinguanli_main import product_manager
 
-product_id = 'PD2025090422414302'
+product_id = 'PD2025090422414303'
 
 
 def on_product_id_changed(new_id):
@@ -1365,7 +1365,7 @@ class TubeLayoutEditor(QMainWindow):
         #     QMessageBox.warning(self, "计算警告", f"第二次计算布管布局失败: {str(e)}")
 
         # 解析输入参数部分保持不变
-        # print(self.input_json)
+        print(self.input_json)
         try:
             if not hasattr(self, 'input_json') or not isinstance(self.input_json, dict):
                 raise ValueError("self.input_json不存在或不是字典类型")
@@ -1580,6 +1580,7 @@ class TubeLayoutEditor(QMainWindow):
 
         self.has_piped = True
         self.left_data_pd = []
+        print(self.param_table)
 
         # 1. 读取参数
         DL = None
@@ -1629,6 +1630,7 @@ class TubeLayoutEditor(QMainWindow):
         param_mapping = {
             "换热管布置方式": ("LB_IsRangeCenter", {"对中": "0", "跨中": "1", "任意": "2"}),
             "旁路挡板厚度": ("LB_BPBThick", None),
+            "管程分程形式": ("LB_Tubeform", None),
             "滑道高度": ("LB_SlipWayHeight", None),
             "拉杆直径": ("LB_TieRodD", None),
             "管程程数": ("LB_TubePassCount", None),
@@ -1683,7 +1685,41 @@ class TubeLayoutEditor(QMainWindow):
                     input_json[json_key] = param_value
 
         # 补充默认值
-        input_json['LB_TieRodD'] = input_json.get('LB_TubeD', '')
+        connection = pymysql.connect(
+            host="localhost",
+            user="root",
+            password="123456",
+            database="产品设计活动库",
+            charset="utf8mb4",
+            cursorclass=pymysql.cursors.DictCursor
+        )
+
+        cursor = connection.cursor()
+        sql = """
+            SELECT 参数值 
+            FROM 产品设计活动表_元件附加参数表
+            WHERE 产品ID = %s
+              AND 元件名称 = %s
+              AND 参数名称 = %s
+            LIMIT 1
+        """
+        cursor.execute(sql, (product_id, "拉杆", "拉杆型式"))
+        result = cursor.fetchone()
+        cursor.close()
+
+        if result and result["参数值"] == "焊接拉杆":
+            # 焊接拉杆 → 直接取换热管外径
+            input_json['LB_TieRodD'] = input_json.get('LB_TubeD', '')
+        else:
+            od_val = float(input_json.get('LB_TieRodD', 0))
+            if 10 <= od_val <= 14:
+                input_json['LB_TieRodD'] = "10"
+            elif 14 < od_val < 25:
+                input_json['LB_TieRodD'] = "12"
+            elif 25 <= od_val <= 57:
+                input_json['LB_TieRodD'] = "16"
+            else:
+                input_json['LB_TieRodD'] = "未知"
         input_json['LB_ClapboardType'] = '2'
 
         # 3. 根据产品ID从数据库获取产品型式并设置热交换器类型
@@ -1716,9 +1752,10 @@ class TubeLayoutEditor(QMainWindow):
                     conn.close()
 
         input_json['LB_HEType'] = he_type
-
+        if input_json['LB_TotalTubesCountNeed'] == '' or input_json['LB_TotalTubesCountNeed'] == None:
+            input_json['LB_TotalTubesCountNeed'] = "10000"
         self.input_json = input_json
-        # print(self.input_json)
+        print(self.input_json)
 
         # 4. 执行布管计算
         try:
@@ -2450,15 +2487,16 @@ class TubeLayoutEditor(QMainWindow):
             # 恢复事件触发
             self._is_validating = False
 
-    # def get_selected_tube_pass_form(self):
-    #     """获取当前选中的管程分程形式标识"""
-    #     if self.tube_pass_form_combo:
-    #         index = self.tube_pass_form_combo.currentIndex()
-    #         if index >= 0:
-    #             return self.tube_pass_form_combo.itemData(index, Qt.UserRole)
-    #     return ""
+    def get_selected_tube_pass_form(self):
+        """获取当前选中的管程分程形式标识"""
+        if self.tube_pass_form_combo:
+            index = self.tube_pass_form_combo.currentIndex()
+            if index >= 0:
+                return self.tube_pass_form_combo.itemData(index, Qt.UserRole)
+        return ""
 
     def setup_parameters(self, params):
+        print(params)
         self.param_table.setRowCount(len(params))
         self._is_validating = False  # 添加验证标志位
         self._original_values = {}  # 存储每个单元格的原始值
@@ -2586,6 +2624,7 @@ class TubeLayoutEditor(QMainWindow):
                     elif param['参数名'] == "换热管布置方式":
                         combo.addItems(["对中", "跨中", "任意"])
                     elif param['参数名'] == "管程分程形式":
+                        print(param['参数值'])
                         # 保存管程分程形式下拉框引用和行索引
                         self.tube_pass_form_combo = combo
                         self.tube_pass_form_row = row
@@ -2808,6 +2847,9 @@ class TubeLayoutEditor(QMainWindow):
         """加载管程分程形式的图片到下拉框，关联具体标识"""
         # 清空现有项
         combo.clear()
+        if self.input_json:
+            input_json = self.input_json
+            print(input_json['LB_TubePassCount'])
 
         # 使用绝对路径
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -2823,13 +2865,13 @@ class TubeLayoutEditor(QMainWindow):
         if tube_pass == "2":
             self.add_image_to_combo(combo, base_path, "2.png", "2")
         elif tube_pass == "4":
-            self.add_image_to_combo(combo, base_path, "4_1.png", "4_1")
-            self.add_image_to_combo(combo, base_path, "4_2.png", "4_2")
-            self.add_image_to_combo(combo, base_path, "4_3.png", "4_3")
+            self.add_image_to_combo(combo, base_path, "4.1.png", "4.1")
+            self.add_image_to_combo(combo, base_path, "4.2.png", "4.2")
+            self.add_image_to_combo(combo, base_path, "4.3.png", "4.3")
         elif tube_pass == "6":
-            self.add_image_to_combo(combo, base_path, "6_1.png", "6_1")
-            self.add_image_to_combo(combo, base_path, "6_2.png", "6_2")
-            self.add_image_to_combo(combo, base_path, "6_3.png", "6_3")
+            self.add_image_to_combo(combo, base_path, "6.1.png", "6.1")
+            self.add_image_to_combo(combo, base_path, "6.2.png", "6.2")
+            self.add_image_to_combo(combo, base_path, "6.3.png", "6.3")
         else:
             combo.addItem("未选择")
             combo.setItemData(0, "", Qt.UserRole)

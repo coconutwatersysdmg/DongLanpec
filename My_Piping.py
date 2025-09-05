@@ -2511,13 +2511,13 @@ class TubeLayoutEditor(QMainWindow):
         if tube_pass == "2":
             self.add_image_to_combo(combo, base_path, "2.png", "2")
         elif tube_pass == "4":
-            self.add_image_to_combo(combo, base_path, "4_1.png", "4_1")
-            self.add_image_to_combo(combo, base_path, "4_2.png", "4_2")
-            self.add_image_to_combo(combo, base_path, "4_3.png", "4_3")
+            self.add_image_to_combo(combo, base_path, "4.1.png", "4_1")
+            self.add_image_to_combo(combo, base_path, "4.2.png", "4_2")
+            self.add_image_to_combo(combo, base_path, "4.3.png", "4_3")
         elif tube_pass == "6":
-            self.add_image_to_combo(combo, base_path, "6_1.png", "6_1")
-            self.add_image_to_combo(combo, base_path, "6_2.png", "6_2")
-            self.add_image_to_combo(combo, base_path, "6_3.png", "6_3")
+            self.add_image_to_combo(combo, base_path, "6.1.png", "6_1")
+            self.add_image_to_combo(combo, base_path, "6.2.png", "6_2")
+            self.add_image_to_combo(combo, base_path, "6.3.png", "6_3")
         else:
             combo.addItem("未选择")
             combo.setItemData(0, "", Qt.UserRole)
