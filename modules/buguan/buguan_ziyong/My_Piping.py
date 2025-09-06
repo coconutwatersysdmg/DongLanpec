@@ -2179,6 +2179,9 @@ class TubeLayoutEditor(QMainWindow):
         do_row = -1
         dl_row = -1
         range_type_row = -1  # 换热管排列方式行索引
+        center_distance_row = -1
+        sn_vertical_row = -1  # 分程隔板两侧相邻管中心距（竖直）行索引
+        sn_horizontal_row = -1  # 分程隔板两侧相邻管中心距（水平）行索引
         row_count = self.param_table.rowCount()
 
         for row in range(row_count):
@@ -2197,34 +2200,47 @@ class TubeLayoutEditor(QMainWindow):
                 dl_row = row
             elif param_name == "换热管排列方式":
                 range_type_row = row
+            elif param_name == "换热管中心距 S":
+                center_distance_row = row
+            elif param_name == "分程隔板两侧相邻管中心距（竖直）":
+                sn_vertical_row = row
+            elif param_name == "分程隔板两侧相邻管中心距（水平）":
+                sn_horizontal_row = row
 
         # 2. 获取关键参数值
         # 2.1 壳体内直径 Di
         di_value = None
         if di_row != -1:
             di_item = self.param_table.item(di_row, 2)
-            if di_item:
+            if di_item and di_item.text().strip():
                 try:
                     di_value = float(di_item.text())
+                    print(f"获取到壳体内直径 Di: {di_value}")
                 except ValueError:
-                    pass
+                    print("壳体内直径 Di 参数值格式错误")
+                    return
 
-        # 2.2 换热管外径 do
+        # 2.2 换热管外径 do - 修复获取逻辑
         do_value = None
         if do_row != -1:
             do_widget = self.param_table.cellWidget(do_row, 2)
             if isinstance(do_widget, QComboBox):
                 try:
-                    do_value = float(do_widget.currentText())
-                except ValueError:
-                    pass
+                    selected_text = do_widget.currentText()
+                    if selected_text.strip():
+                        do_value = float(selected_text)
+                        print(f"获取到换热管外径 do: {do_value}")
+                except ValueError as e:
+                    print(f"换热管外径 do 转换错误: {e}")
+                    return
             else:
                 do_item = self.param_table.item(do_row, 2)
-                if do_item:
+                if do_item and do_item.text().strip():
                     try:
                         do_value = float(do_item.text())
                     except ValueError:
-                        pass
+                        print("换热管外径 do 参数值格式错误")
+                        return
 
         # 2.3 换热管排列方式
         range_type_value = None
@@ -2232,154 +2248,212 @@ class TubeLayoutEditor(QMainWindow):
             range_type_widget = self.param_table.cellWidget(range_type_row, 2)
             if isinstance(range_type_widget, QComboBox):
                 range_type_value = range_type_widget.currentText()
+                print(f"获取到换热管排列方式: {range_type_value}")
             else:
                 range_type_item = self.param_table.item(range_type_row, 2)
-                if range_type_item:
+                if range_type_item and range_type_item.text().strip():
                     range_type_value = range_type_item.text()
 
+        # 检查必要参数是否存在
+        if di_value is None or do_value is None or range_type_value is None:
+            print("缺少必要参数，无法进行计算")
+            return
+
         # 3. 计算并更新布管限定圆 DL
-        if dl_row != -1 and di_value is not None and do_value is not None:
+        if dl_row != -1:
             b3 = max(0.25 * do_value, 8.0)
             dl_value = di_value - 2 * b3
+            print(f"计算布管限定圆 DL: {di_value} - 2 * max(0.25 * {do_value}, 8.0) = {dl_value:.1f}")
 
             # 临时断开信号避免循环触发
-            if hasattr(self, 'param_table') and hasattr(self, 'handle_param_change'):
-                self.param_table.itemChanged.disconnect(self.handle_param_change)
+            original_handler = None
+            if hasattr(self, 'handle_param_change'):
+                try:
+                    self.param_table.itemChanged.disconnect(self.handle_param_change)
+                    original_handler = self.handle_param_change
+                except:
+                    pass
 
             dl_item = self.param_table.item(dl_row, 2)
             if dl_item:
-                dl_item.setText(f"{dl_value: .1f}")
+                dl_item.setText(f"{dl_value:.1f}")
             else:
                 self.param_table.setItem(dl_row, 2, QTableWidgetItem(f"{dl_value:.1f}"))
+            print(f"已更新布管限定圆 DL: {dl_value:.1f}")
 
             # 重新连接信号
-            if hasattr(self, 'param_table') and hasattr(self, 'handle_param_change'):
-                self.param_table.itemChanged.connect(self.handle_param_change)
+            if original_handler:
+                try:
+                    self.param_table.itemChanged.connect(original_handler)
+                except:
+                    pass
 
+        # 中心距映射表 - 使用浮点数键确保匹配
         center_distance_map = {
-            (10, "正三角形"): (14, 28),
-            (10, "正方形"): (17, 30),
-            (12, "正三角形"): (16, 30),
-            (12, "正方形"): (19, 32),
-            (14, "正三角形"): (19, 32),
-            (14, "正方形"): (21, 35),
-            (16, "正三角形"): (22, 35),
-            (16, "正方形"): (22, 38),
-            (19, "正三角形"): (25, 38),
-            (19, "正方形"): (25, 40),
-            (20, "正三角形"): (26, 40),
-            (20, "正方形"): (26, 42),
-            (22, "正三角形"): (28, 42),
-            (22, "正方形"): (28, 44),
-            (25, "正三角形"): (32, 44),
-            # 修复了这里的判断，添加了range_type_value是否为None的检查
-            (25, "正方形"): (32, 45.25 if range_type_value and "转角正方形" in range_type_value else 50),
-            (30, "正三角形"): (38, 50),
-            (30, "正方形"): (38, 52),
-            (32, "正三角形"): (40, 52),
-            (32, "正方形"): (40, 56),
-            (35, "正三角形"): (44, 56),
-            (35, "正方形"): (44, 60),
-            (38, "正三角形"): (48, 60),
-            (38, "正方形"): (48, 68),
-            (45, "正三角形"): (57, 68),
-            (45, "正方形"): (57, 76),
-            (50, "正三角形"): (64, 76),
-            (50, "正方形"): (64, 78),
-            (55, "正三角形"): (70, 78),
-            (55, "正方形"): (70, 80),
-            (57, "正三角形"): (72, 80),
-            (57, "正方形"): (72, 80),
+            (10.0, "正三角形"): (14.0, 28.0),
+            (10.0, "转角正三角形"): (14.0, 28.0),
+            (10.0, "正方形"): (17.0, 30.0),
+            (10.0, "转角正方形"): (17.0, 30.0),
+            (12.0, "正三角形"): (16.0, 30.0),
+            (12.0, "转角正三角形"): (16.0, 30.0),
+            (12.0, "正方形"): (19.0, 32.0),
+            (12.0, "转角正方形"): (19.0, 32.0),
+            (14.0, "正三角形"): (19.0, 32.0),
+            (14.0, "转角正三角形"): (19.0, 32.0),
+            (14.0, "正方形"): (21.0, 35.0),
+            (14.0, "转角正方形"): (21.0, 35.0),
+            (16.0, "正三角形"): (22.0, 35.0),
+            (16.0, "转角正三角形"): (22.0, 35.0),
+            (16.0, "正方形"): (22.0, 38.0),
+            (16.0, "转角正方形"): (22.0, 38.0),
+            (19.0, "正三角形"): (25.0, 38.0),
+            (19.0, "转角正三角形"): (25.0, 38.0),
+            (19.0, "正方形"): (25.0, 40.0),
+            (19.0, "转角正方形"): (25.0, 40.0),
+            (20.0, "正三角形"): (26.0, 40.0),
+            (20.0, "转角正三角形"): (26.0, 40.0),
+            (20.0, "正方形"): (26.0, 42.0),
+            (20.0, "转角正方形"): (26.0, 42.0),
+            (22.0, "正三角形"): (28.0, 42.0),
+            (22.0, "转角正三角形"): (28.0, 42.0),
+            (22.0, "正方形"): (28.0, 44.0),
+            (22.0, "转角正方形"): (28.0, 44.0),
+            (25.0, "正三角形"): (32.0, 44.0),
+            (25.0, "转角正三角形"): (32.0, 44.0),
+            (25.0, "正方形"): (32.0, 50.0),
+            (25.0, "转角正方形"): (32.0, 45.25),
+            (30.0, "正三角形"): (38.0, 50.0),
+            (30.0, "转角正三角形"): (38.0, 50.0),
+            (30.0, "正方形"): (38.0, 52.0),
+            (30.0, "转角正方形"): (38.0, 52.0),
+            (32.0, "正三角形"): (40.0, 52.0),
+            (32.0, "转角正三角形"): (40.0, 52.0),
+            (32.0, "正方形"): (40.0, 56.0),
+            (32.0, "转角正方形"): (40.0, 56.0),
+            (35.0, "正三角形"): (44.0, 56.0),
+            (35.0, "转角正三角形"): (44.0, 56.0),
+            (35.0, "正方形"): (44.0, 60.0),
+            (35.0, "转角正方形"): (44.0, 60.0),
+            (38.0, "正三角形"): (48.0, 60.0),
+            (38.0, "转角正三角形"): (48.0, 60.0),
+            (38.0, "正方形"): (48.0, 68.0),
+            (38.0, "转角正方形"): (48.0, 68.0),
+            (45.0, "正三角形"): (57.0, 68.0),
+            (45.0, "转角正三角形"): (57.0, 68.0),
+            (45.0, "正方形"): (57.0, 76.0),
+            (45.0, "转角正方形"): (57.0, 76.0),
+            (50.0, "正三角形"): (64.0, 76.0),
+            (50.0, "转角正三角形"): (64.0, 76.0),
+            (50.0, "正方形"): (64.0, 78.0),
+            (50.0, "转角正方形"): (64.0, 78.0),
+            (55.0, "正三角形"): (70.0, 78.0),
+            (55.0, "转角正三角形"): (70.0, 78.0),
+            (55.0, "正方形"): (70.0, 80.0),
+            (55.0, "转角正方形"): (70.0, 80.0),
+            (57.0, "正三角形"): (72.0, 80.0),
+            (57.0, "转角正三角形"): (72.0, 80.0),
+            (57.0, "正方形"): (72.0, 80.0),
+            (57.0, "转角正方形"): (72.0, 80.0),
         }
 
-        center_distance_row = -1
-        sn_row = -1
-        for row in range(row_count):
-            param_name_item = self.param_table.item(row, 1)
-            if param_name_item:
-                param_name = param_name_item.text()
-                if param_name == "换热管中心距 S":
-                    center_distance_row = row
-                elif param_name == "分程隔板两侧相邻管中心距（竖直）":
-                    sn_row = row
+        # 查找映射关系
+        key = (float(do_value), range_type_value)
+        print(f"查找映射键: {key}")
 
-        if do_value is not None and range_type_value is not None:
+        if key in center_distance_map:
+            center_distance, sn_value = center_distance_map[key]
+            print(f"找到映射: 中心距 S = {center_distance}, SN值 = {sn_value}")
 
-            key = (do_value, range_type_value)
-            if key in center_distance_map:
-                center_distance, sn_value = center_distance_map[key]
-            else:
-                center_distance = None
-                sn_value = None
+            # 更新换热管中心距 S
+            if center_distance_row != -1:
+                self._update_table_cell(center_distance_row, 2, f"{center_distance:.1f}")
+                print(f"已更新换热管中心距 S: {center_distance:.1f}")
 
-            if center_distance_row != -1 and center_distance is not None:
-                if hasattr(self, 'param_table') and hasattr(self, 'handle_param_change'):
-                    self.param_table.itemChanged.disconnect(self.handle_param_change)
+            # 更新分程隔板两侧相邻管中心距（竖直）
+            if sn_vertical_row != -1:
+                self._update_table_cell(sn_vertical_row, 2, f"{sn_value:.1f}")
+                print(f"已更新分程隔板两侧相邻管中心距（竖直）: {sn_value:.1f}")
 
-                center_distance_item = self.param_table.item(center_distance_row, 2)
-                if center_distance_item:
-                    center_distance_item.setText(f"{center_distance:.1f}")
-                else:
-                    self.param_table.setItem(center_distance_row, 2, QTableWidgetItem(f"{center_distance:.1f}"))
+            # 更新分程隔板两侧相邻管中心距（水平）
+            if sn_horizontal_row != -1:
+                self._update_table_cell(sn_horizontal_row, 2, f"{sn_value:.1f}")
+                print(f"已更新分程隔板两侧相邻管中心距（水平）: {sn_value:.1f}")
+        else:
+            print(f"未找到匹配的映射关系 for {key}")
 
-                if hasattr(self, 'param_table') and hasattr(self, 'handle_param_change'):
-                    self.param_table.itemChanged.connect(self.handle_param_change)
-
-            if sn_row != -1 and sn_value is not None:
-                if hasattr(self, 'param_table') and hasattr(self, 'handle_param_change'):
-                    self.param_table.itemChanged.disconnect(self.handle_param_change)
-
-                sn_item = self.param_table.item(sn_row, 2)
-                if sn_item:
-                    sn_item.setText(f"{sn_value:.1f}")
-                else:
-                    self.param_table.setItem(sn_row, 2, QTableWidgetItem(f"{sn_value:.1f}"))
-
-                if hasattr(self, 'param_table') and hasattr(self, 'handle_param_change'):
-                    self.param_table.itemChanged.connect(self.handle_param_change)
-
+        # 4. 更新折流板外径
         if di_value is not None and baffle_row != -1:
+            # 假设壳体材料为钢管（实际应根据具体参数获取）
             shell_material_type = "钢管"
             baffle_diameter = ""
+
             if di_value <= 400:
                 if shell_material_type == "钢管":
                     measured_inner_diameter = di_value - 5
                     baffle_diameter = f"{measured_inner_diameter - 2:.1f}"
                 else:
                     baffle_diameter = f"{di_value - 2.5:.1f}"
+            elif 400 < di_value <= 500:
+                baffle_diameter = f"{di_value - 3.5:.1f}"
+            elif 500 < di_value <= 900:
+                baffle_diameter = f"{di_value - 4.5:.1f}"
+            elif 900 < di_value <= 1300:
+                baffle_diameter = f"{di_value - 6:.1f}"
+            elif 1300 < di_value <= 1700:
+                baffle_diameter = f"{di_value - 7:.1f}"
+            elif 1700 < di_value <= 2100:
+                baffle_diameter = f"{di_value - 8.5:.1f}"
+            elif 2100 < di_value <= 2300:
+                baffle_diameter = f"{di_value - 12:.1f}"
+            elif 2300 < di_value <= 2600:
+                baffle_diameter = f"{di_value - 14:.1f}"
+            elif 2600 < di_value <= 3200:
+                baffle_diameter = f"{di_value - 16:.1f}"
+            elif 3200 < di_value <= 4000:
+                baffle_diameter = f"{di_value - 18:.1f}"
             else:
-                if 400 <= di_value < 500:
-                    baffle_diameter = f"{di_value - 3.5:.1f}"
-                elif 500 <= di_value < 900:
-                    baffle_diameter = f"{di_value - 4.5:.1f}"
-                elif 900 <= di_value < 1300:
-                    baffle_diameter = f"{di_value - 6:.1f}"
-                elif 1300 <= di_value < 1700:
-                    baffle_diameter = f"{di_value - 7:.1f}"
-                elif 1700 <= di_value < 2100:
-                    baffle_diameter = f"{di_value - 8.5:.1f}"
-                elif 2100 <= di_value < 2300:
-                    baffle_diameter = f"{di_value - 12:.1f}"
-                elif 2300 <= di_value <= 2600:
-                    baffle_diameter = f"{di_value - 14:.1f}"
-                elif 2600 < di_value <= 3200:
-                    baffle_diameter = f"{di_value - 16:.1f}"
-                elif 3200 < di_value <= 4000:
-                    baffle_diameter = f"{di_value - 18:.1f}"
+                baffle_diameter = f"{di_value - 20:.1f}"  # 默认减量
 
-            # 更新折流板外径
             if baffle_diameter:
-                if hasattr(self, 'param_table') and hasattr(self, 'handle_param_change'):
-                    self.param_table.itemChanged.disconnect(self.handle_param_change)
+                self._update_table_cell(baffle_row, 2, baffle_diameter)
+                print(f"已更新折流板外径: {baffle_diameter}")
 
-                baffle_item = self.param_table.item(baffle_row, 2)
-                if baffle_item:
-                    baffle_item.setText(baffle_diameter)
-                else:
-                    self.param_table.setItem(baffle_row, 2, QTableWidgetItem(baffle_diameter))
+    def _update_table_cell(self, row, column, value):
+        """安全更新表格单元格的辅助方法"""
+        # 临时断开信号避免循环触发
+        original_handler = None
+        if hasattr(self, 'handle_param_change'):
+            try:
+                self.param_table.itemChanged.disconnect(self.handle_param_change)
+                original_handler = self.handle_param_change
+            except:
+                pass
 
-                if hasattr(self, 'param_table') and hasattr(self, 'handle_param_change'):
-                    self.param_table.itemChanged.connect(self.handle_param_change)
+        # 更新单元格
+        cell_widget = self.param_table.cellWidget(row, column)
+        if isinstance(cell_widget, QComboBox):
+            # 查找并设置下拉框选项
+            index = cell_widget.findText(value)
+            if index >= 0:
+                cell_widget.setCurrentIndex(index)
+            else:
+                # 如果找不到匹配项，添加新选项
+                cell_widget.addItem(value)
+                cell_widget.setCurrentText(value)
+        else:
+            item = self.param_table.item(row, column)
+            if item:
+                item.setText(value)
+            else:
+                self.param_table.setItem(row, column, QTableWidgetItem(value))
+
+        # 重新连接信号
+        if original_handler:
+            try:
+                self.param_table.itemChanged.connect(original_handler)
+            except:
+                pass
+
 
     def update_baffle_parameters(self, changed_param_name):
         """
@@ -2894,7 +2968,15 @@ class TubeLayoutEditor(QMainWindow):
 
     def on_combobox_changed(self, row, param_name):
         """处理下拉框类型参数的变更事件"""
+        print(f"下拉框变更: 参数名={param_name}, 行={row}")
+
         if param_name == "换热管外径 do":
+            # 获取当前选中的值
+            do_widget = self.param_table.cellWidget(row, 2)
+            if isinstance(do_widget, QComboBox):
+                selected_value = do_widget.currentText()
+                print(f"选中的换热管外径: {selected_value}")
+
             self.update_baffle_diameter()
 
     def none_tube(self, height_0_180, height_90_270, Di, do, centers):
