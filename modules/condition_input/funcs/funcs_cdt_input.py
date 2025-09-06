@@ -1,7 +1,8 @@
 from openpyxl.styles import Alignment
 
-from modules.cailiaodingyi.funcs.funcs_pdf_change import get_gasket_contact_dims_from_db, update_element_name_data, \
-    get_design_params_by_product_id, update_guankou_param_flex_db, query_guankou_affiliation
+
+from modules.cailiaodingyi.funcs.funcs_pdf_change import update_element_name_data, \
+    get_design_params_by_product_id, update_guankou_param_flex_db, query_guankou_affiliation, resolve_gasket_dimensions
 from modules.condition_input.funcs.db_cnt import get_connection
 from PyQt5.QtWidgets import (QTableWidgetItem, QTableWidget, QHeaderView, QWidget,
                              QMessageBox, QUndoStack, QFileDialog, QComboBox, QStyledItemDelegate, QShortcut)
@@ -1036,39 +1037,96 @@ def sync_design_params_to_element_params(product_id):
     tube_ca = ca_map.get("腐蚀裕量*", {}).get("管程数值", "")
     shell_ca = ca_map.get("腐蚀裕量*", {}).get("壳程数值", "")
 
-    # ✅ 2. 获取设计压力 + 公称直径，查垫片参数
+    # ✅ 2. 判断当前产品是否有元件材料
+    conn1 = get_connection(**db_config_2)
     try:
-        pn = float(ca_map.get("设计压力*", {}).get("管程数值") or 0)
-        dn = int(float(ca_map.get("公称直径*", {}).get("管程数值") or 0))
-    except:
-        pn, dn = 0, 0
+        with conn1.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM 产品设计活动表_元件附加参数表 WHERE 产品ID=%s LIMIT 1",
+                (product_id,)
+            )
+            exists = cur.fetchone() is not None
+    finally:
+        conn1.close()
 
-    dims = get_gasket_contact_dims_from_db(pn, dn)
+    if not exists:
+        # 这个产品还没有元件附加参数，不做批量写回
+        return
 
-    # ✅ 3. 写入数据库
+    # ✅ 3. 搜集当前产品下的垫片
+    conn1 = get_connection(**db_config_2)
+    try:
+        with conn1.cursor() as cur:
+            cur.execute("""
+                    SELECT 元件名称, 参数名称, 参数值
+                    FROM 产品设计活动表_元件附加参数表
+                    WHERE 产品ID = %s
+                      AND 元件名称 LIKE %s
+                      AND 参数名称 IN ('垫片标准','垫片类型')
+                """, (product_id, "%垫片%"))
+            rows = cur.fetchall() or []
+    finally:
+        conn1.close()
+
+    gaskets = {}
+    for r in rows:
+        en = (r.get("元件名称") or "").strip()
+        pnam = (r.get("参数名称") or "").strip()
+        pval = (r.get("参数值") or "").strip()
+        if not en:
+            continue
+        info = gaskets.setdefault(en, {"name": "", "standard": "", "type": ""})
+        if pnam == "垫片名称" and pval:
+            info["name"] = pval
+        elif pnam == "垫片标准" and pval:
+            info["standard"] = pval
+        elif pnam == "垫片类型" and pval:
+            info["type"] = pval
+
+    # ✅ 4. 垫片数值写回数据库
+    def _norm_out(v: str) -> str:
+        """字段值兜底：空/None -> '程序推荐'"""
+        if v is None: return "程序推荐"
+        s = str(v).strip()
+        return s if s else "程序推荐"
+
+    for element_name, meta in gaskets.items():
+        gasket_name = meta["name"] or element_name  # 名称缺省用元件名
+        gasket_standard = meta["standard"]
+        gasket_type = meta["type"]
+
+        try:
+            spec = resolve_gasket_dimensions(
+                product_id=product_id,
+                gasket_name=gasket_name,
+                gasket_standard=gasket_standard,
+                gasket_type=gasket_type
+            )
+        except Exception as e:
+            # 任何异常均写“程序推荐”
+            update_element_name_data(product_id, element_name, "垫片名义外径D2n", "程序推荐")
+            update_element_name_data(product_id, element_name, "垫片名义内径D1n", "程序推荐")
+            update_element_name_data(product_id, element_name, "环内径d1", "程序推荐")
+            continue
+
+        # 命中情况下，有些字段可能仍为空 -> 单字段兜底为“程序推荐”
+        if not spec.get("nonstd", False):
+            update_element_name_data(product_id, element_name, "垫片名义外径D2n", _norm_out(spec.get("外直径D")))
+            update_element_name_data(product_id, element_name, "垫片名义内径D1n", _norm_out(spec.get("内直径d")))
+            update_element_name_data(product_id, element_name, "环内径d1", _norm_out(spec.get("环内径d1")))
+        else:
+            update_element_name_data(product_id, element_name, "垫片名义外径D2n", "程序推荐")
+            update_element_name_data(product_id, element_name, "垫片名义内径D1n", "程序推荐")
+            update_element_name_data(product_id, element_name, "环内径d1", "程序推荐")
+
+
+    # ✅ 5. 腐蚀裕量写入数据库
     if tube_ca:
         update_element_name_data(product_id, "固定管板", "管程侧腐蚀裕量", str(tube_ca))
     if shell_ca:
         update_element_name_data(product_id, "固定管板", "壳程侧腐蚀裕量", str(shell_ca))
 
-        # ✅ 垫片参数 → 多个元件名称写入
-    gasket_targets = ["管箱垫片", "管箱侧垫片", "平盖垫片"]
-    for element_name in gasket_targets:
-        for pname, pval in dims.items():
-            update_element_name_data(product_id, element_name, pname, str(pval))
 
-        # 推算 D2n、D1n
-        try:
-            if "垫片与密封面接触外径D2" in dims:
-                d2 = float(dims["垫片与密封面接触外径D2"])
-                d2n = d2 + 2
-                d2n_str = str(int(d2n)) if d2n.is_integer() else str(round(d2n, 3))
-                update_element_name_data(product_id, element_name, "垫片名义外径D2n", d2n_str)
-        except Exception as e:
-            print(f"[错误] 推算 D2n 失败: {e}")
-        if "垫片与密封面接触内径D1" in dims:
-            d1 = dims["垫片与密封面接触内径D1"]
-            update_element_name_data(product_id, element_name, "垫片名义内径D1n", str(d1))
 
 def sync_corrosion_to_guankou_param(product_id, guankou_codes, category_label=None):
     """
