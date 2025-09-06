@@ -265,13 +265,18 @@ class DeleteKeyFilter(QObject):
                     cmd = CellEditCommand(self.table, row, col, old_value, "")
                     self.undo_stack.push(cmd)
 
-                # ✅ 主动触发联动逻辑（确保 delete/backspace 也能触发自动清空）
+                # ✅ 标记修改过
+                if self.viewer and hasattr(self.viewer, "_set_modified"):
+                    self.viewer._set_modified(True)
+
+                # ✅ 主动触发联动逻辑
                 if self.viewer:
                     from .funcs_cdt_input import handle_cross_table_triggers
                     handle_cross_table_triggers(self.viewer, self.table, row, col)
 
             return True  # 拦截默认行为
         return super().eventFilter(obj, event)
+
 
 
 def handle_copy(table: QTableWidget):
