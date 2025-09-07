@@ -1725,8 +1725,8 @@ def get_ref_data_excel_path(product_id: int) -> str:
         yezhu_path = project_row['业主名称']
         pinjie_path = f"{yezhu_path}_{project_path}"
 
-        # ✅ 拼接文件夹名：序号_产品名称_产品编号_设备位号（自动跳过空值）
-        parts = [serial, product_name, product_code, device_loc_id]
+        # ✅ 拼接文件夹名：序号_产品名称_设备位号_产品编号（自动跳过空值）
+        parts = [serial, product_name, device_loc_id, product_code]
         folder_name = "_".join([str(p).strip() for p in parts if p and str(p).strip()])
 
         full_path = os.path.join(project_save_path, pinjie_path, folder_name, "条件输入数据表.xlsx")
