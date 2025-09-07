@@ -30,11 +30,12 @@ def save_project_to_db():
 
     try:
         # 将最近存入
-        open_project.save_last_used_path(project_path)
+        # open_project.save_last_used_path(project_path)
         # 如果是新建项目，创建文件夹
         if bianl.project_mode == "new":
             # 生成项目id
             project_id = common_usage.get_next_project_id()
+            # 存入了
             bianl.current_project_id = project_id
             # 创建文件夹
             project_folder = os.path.join(project_path, f"{owner}_{project_name}")

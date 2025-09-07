@@ -197,7 +197,13 @@ class cpgl_Stats(QtWidgets.QWidget):
         # 产品信息 监控
         # cellChanged单元格被改变的时候 开始调用这个函数 进行删增
         #  确认
-        bianl.product_table.cellChanged.connect(auto_edit_row.handle_auto_add_row)
+        # bianl.product_table.cellChanged.connect(auto_edit_row.handle_auto_add_row)
+        # 避免有产品id的时候自删
+        try:
+            bianl.product_table.cellChanged.disconnect()
+        except Exception:
+            pass
+        bianl.product_table.cellChanged.connect(main.on_product_cell_changed_router)
 
         self.findChild(QtWidgets.QPushButton, "confirm_product_btn").clicked.connect(product_confirm_qbtn.handle_confirm_product)
         # 改成修改产品的编辑状态

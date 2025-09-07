@@ -55,6 +55,31 @@ from typing import Callable, List, Optional
 from PyQt5.QtCore import Qt, QObject
 from PyQt5.QtWidgets import QStyledItemDelegate, QComboBox, QTableWidget, QTableWidgetItem, QWidget
 
+# 拦截 没有产品id的自删自增
+def _row_has_product_id(row: int) -> bool:
+    st = bianl.product_table_row_status.get(row, {})
+    return bool(isinstance(st, dict) and st.get("product_id"))
+
+def on_product_cell_changed_router(row: int, col: int):
+    if row < 0:
+        return
+    table = bianl.product_table
+    # 防递归
+    if getattr(table, "_routing", False):
+        return
+    table._routing = True
+    try:
+        if not _row_has_product_id(row):
+            # 只有“无 product_id”的行，才继续走原来的自动增/删逻辑
+            auto_edit_row.handle_auto_add_row(row, col)
+        else:
+            # 已有 product_id：禁止自增/自删 -> 什么也不做
+            pass
+    finally:
+        table._routing = False
+
+
+
 # 下拉框
 class EditOnlyComboDelegate(QStyledItemDelegate):
     """
@@ -365,6 +390,7 @@ class ReturnKeyJumpFilter(QObject):
 # 新建类 窗口关闭 检查内容是否已经保存
 class CustomMainWindow(QMainWindow):
     def closeEvent(self, event):
+        # 检查有没有保存
         if not check_if_all_saved():
             # 自定义按钮文本
             msg_box = QMessageBox(self)
@@ -758,7 +784,7 @@ def on_product_row_clicked(row, column):
     if not isinstance(row_status, dict):
         clear_product_definition_fields()
         return
-
+                                   
     # 🔧 先彻底复位控件状态 (防止继承)
     # ✅ 每次点击前统一复位所有控件状态，消除锁死继承
     reset_product_definition_controls()
@@ -1332,13 +1358,13 @@ def fetch_and_display_image_by_type_form(product_type, product_form):
 
 """删除产品"""
 # 文件夹名称重命名 可以用来找文件夹
-def build_pd_folder_name(serial, name, number, position):
+def build_pd_folder_name(serial, name, position, number):
     # 统一清洗 & 顺序：序号_产品名称_产品编号_设备位号（空值自动跳过）
     parts = [
         (serial or "").strip(),
         (name or "").strip(),
-        (number or "").strip(),
         (position or "").strip(),
+        (number or "").strip(),
     ]
     parts = [p for p in parts if p]  # 跳过空
     return "_".join(parts)
@@ -1362,7 +1388,7 @@ def rename_remaining_product_folders(project_root):
         position = pos_item.text().strip() if pos_item else ""
         number = num_item.text().strip() if num_item else ""
 
-        new_folder_name = build_pd_folder_name(serial, name, number, position)
+        new_folder_name = build_pd_folder_name(serial, name, position, number)
         new_folder = os.path.join(project_root, new_folder_name)
 
         # ★修改：必须有 old_xxx 才能找到旧文件夹
@@ -1370,7 +1396,7 @@ def rename_remaining_product_folders(project_root):
         old_name   = status.get("old_name")
         old_number = status.get("old_number")
         old_pos    = status.get("old_position")
-        old_folder_name = build_pd_folder_name(old_serial, old_name, old_number, old_pos)
+        old_folder_name = build_pd_folder_name(old_serial, old_name, old_pos, old_number)
         old_folder = os.path.join(project_root, old_folder_name)
 
         if old_folder != new_folder and os.path.isdir(old_folder):
@@ -1387,10 +1413,6 @@ def rename_remaining_product_folders(project_root):
             except Exception as e:
                 print(f"[重命名失败] {old_folder} -> {new_folder}: {e}")
 
-
-
-
-
 # 删除产品的函数
 def delete_selected_product():
     total_rows = bianl.product_table.rowCount()
@@ -1404,9 +1426,11 @@ def delete_selected_product():
         try:
             if current_status == "view":
                 serial_item = bianl.product_table.item(row, 0)
-                number_item = bianl.product_table.item(row, 1)
-                name_item = bianl.product_table.item(row, 2)
-                position_item = bianl.product_table.item(row, 3)
+                name_item = bianl.product_table.item(row, 1)
+                position_item = bianl.product_table.item(row, 2)
+                number_item = bianl.product_table.item(row, 3)
+
+
 
                 old_serial = serial_item.text().strip().zfill(3) if serial_item and serial_item.text().strip() else ""
                 old_number = number_item.text().strip() if number_item else ""
@@ -1514,7 +1538,7 @@ def delete_selected_product():
             xudelete_number = num_item.text().strip() if num_item and num_item.text() else ""
             xudelete_position = pos_item.text().strip() if pos_item and pos_item.text() else ""
 
-            folder_name = build_pd_folder_name(xudelete_serial, xudelete_product_name, xudelete_number, xudelete_position)
+            folder_name = build_pd_folder_name(xudelete_serial, xudelete_product_name, xudelete_position, xudelete_number)
             folder_path = os.path.join(folder_root, folder_name)
             print(f"[删除操作] 产品文件夹路径: {folder_path}")
 
@@ -1792,186 +1816,210 @@ def paste_cells_to_table():
 def load_last_project():
     try:
         # 获取最近使用的项目路径
-        last_path = open_project.get_last_used_path()
-        if last_path and os.path.exists(last_path):
-            # 查找最近路径下的所有项目文件夹（包含id.csv的文件夹）
-            project_folders = []
-            for root, dirs, files in os.walk(last_path):
-                if 'id.csv' in files:
-                    project_folders.append(root)
-                    break  # 只取第一个找到的项目
+        # last_path = open_project.get_last_used_path()
+        # if last_path and os.path.exists(last_path):
+        #     # 查找最近路径下的所有项目文件夹（包含id.csv的文件夹）
+        #     project_folders = []
+        #     for root, dirs, files in os.walk(last_path):
+        #         if 'id.csv' in files:
+        #             project_folders.append(root)
+        #             break  # 只取第一个找到的项目
+        #
+        #     if project_folders:
+        #         # 模拟打开项目
+        #         folder_path = project_folders[0]
+        #         csv_file_path = os.path.join(folder_path, 'id.csv')
+        #
+        #         with open(csv_file_path, 'r', encoding='utf-8') as f:
+        #             project_id = f.read().strip()
+        # project_id = bianl.current_project_id
+        # 在这里取上一个项目id
+        # 加载项目信息
+        # ① 先按 last_opened 找最近一次项目
+        conn = common_usage.get_mysql_connection_project()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT last_project_id FROM 上一个项目id LIMIT 1;
+        """)
+        pid = cur.fetchone()
+        cur.close()
+        conn.close()
 
-            if project_folders:
-                # 模拟打开项目
-                folder_path = project_folders[0]
-                csv_file_path = os.path.join(folder_path, 'id.csv')
 
-                with open(csv_file_path, 'r', encoding='utf-8') as f:
-                    project_id = f.read().strip()
+        if pid:
+            # 兼容 dict / tuple 两种返回
+            project_id = pid.get("last_project_id") if isinstance(pid, dict) else pid[0]
+            # 把 'None'、空字符串 统一视为 None
+            if project_id in (None, "", "None"):
+                project_id = None
 
-                if project_id:
-                    print(f"自动加载最后使用的项目: {project_id}")
-                    # 设置当前项目ID
-                    bianl.current_project_id = project_id
+        if project_id:
+            print(f"自动加载最后使用的项目: {project_id}")
+            # 准备打开了 就更新一下
+            # 设置当前项目ID
+            bianl.current_project_id = project_id
+            print(f"current_project_id:{bianl.current_project_id}")
+            # 这里需要复制 open_project 函数中的加载逻辑
+            # 加载项目信息
+            conn_project = common_usage.get_mysql_connection_project()
+            cursor_project = conn_project.cursor()
+            cursor_project.execute("SELECT * FROM 项目需求表 WHERE 项目ID = %s", (project_id,))
+            project_info = cursor_project.fetchone()
+            cursor_project.close()
+            conn_project.close()
 
-                    # 这里需要复制 open_project 函数中的加载逻辑
-                    # 加载项目信息
-                    conn_project = common_usage.get_mysql_connection_project()
-                    cursor_project = conn_project.cursor()
-                    cursor_project.execute("SELECT * FROM 项目需求表 WHERE 项目ID = %s", (project_id,))
-                    project_info = cursor_project.fetchone()
-                    cursor_project.close()
-                    conn_project.close()
+            if project_info:
+                # 填充项目信息到UI
+                bianl.owner_input.setText(str(project_info.get('业主名称') or ''))
+                bianl.project_number_input.setText(str(project_info.get('项目编号') or ''))
+                bianl.project_name_input.setText(str(project_info.get('项目名称') or ''))
+                bianl.department_input.setText(str(project_info.get('所属部门') or ''))
+                bianl.contractor_input.setText(str(project_info.get('工程总包方') or ''))
+                bianl.project_path_input.setText(str(project_info.get('项目保存路径') or ''))
 
-                    if project_info:
-                        # 填充项目信息到UI
-                        bianl.owner_input.setText(str(project_info.get('业主名称') or ''))
-                        bianl.project_number_input.setText(str(project_info.get('项目编号') or ''))
-                        bianl.project_name_input.setText(str(project_info.get('项目名称') or ''))
-                        bianl.department_input.setText(str(project_info.get('所属部门') or ''))
-                        bianl.contractor_input.setText(str(project_info.get('工程总包方') or ''))
-                        bianl.project_path_input.setText(str(project_info.get('项目保存路径') or ''))
+                create_date = project_info.get('建立日期')
+                if isinstance(create_date, str):
+                    bianl.date_edit.setDate(QDate.fromString(create_date, "yyyy-MM-dd"))
+                elif create_date:
+                    bianl.date_edit.setDate(QDate(create_date.year, create_date.month, create_date.day))
+                else:
+                    bianl.date_edit.setDate(QDate.currentDate())
 
-                        create_date = project_info.get('建立日期')
-                        if isinstance(create_date, str):
-                            bianl.date_edit.setDate(QDate.fromString(create_date, "yyyy-MM-dd"))
-                        elif create_date:
-                            bianl.date_edit.setDate(QDate(create_date.year, create_date.month, create_date.day))
+                bianl.old_owner = bianl.owner_input.text()
+                bianl.old_project_name = bianl.project_name_input.text()
+                bianl.old_project_path = bianl.project_path_input.text()
+                bianl.project_mode = "view"
+                common_usage.set_project_inputs_editable(False)
+
+                # 加载产品数据
+                conn_product = common_usage.get_mysql_connection_product()
+                cursor_product = conn_product.cursor()
+                cursor_product.execute("SELECT * FROM 产品需求表 WHERE 项目ID = %s", (project_id,))
+                products = cursor_product.fetchall()
+                cursor_product.close()
+                conn_product.close()
+
+                product_count = len(products)
+                total_rows = max(3, product_count + 1)
+
+                bianl.product_table.setRowCount(total_rows)
+                bianl.product_table.clearContents()
+                bianl.product_table_row_status.clear()
+                #改66
+                for row in range(total_rows):
+                    if row < product_count:
+                        product = products[row]
+
+
+                        # 原顺序：编号(1)、名称(2)、位号(3) → 新顺序：名称(1)、位号(2)、编号(3)改1 改66
+                        bianl.product_table.setItem(row, 1,QTableWidgetItem(product.get("产品名称", "")))  # 列1：产品名称
+                        bianl.product_table.setItem(row, 2,QTableWidgetItem(product.get("设备位号", "")))  # 列2：设备位号
+                        bianl.product_table.setItem(row, 3,QTableWidgetItem(product.get("产品编号", "")))  # 列3：产品编号
+                        bianl.product_table.setItem(row, 4,QTableWidgetItem(product.get("设计阶段", "")))  # 列4：设计阶段
+                        bianl.product_table.setItem(row, 5,QTableWidgetItem(product.get("设计版次", "")))  # 列5：设计版次
+
+                        bianl.product_table_row_status[row] = {
+                            "status": "view",
+                            "product_id": product.get("产品ID", ""),
+                        }
+                        #改77
+                        product_type = product.get("产品类型", None)
+                        product_form = product.get("产品型式", None)
+
+
+                        if product_type and product_form:
+                            bianl.product_table_row_status[row]["definition_status"] = "view"
                         else:
-                            bianl.date_edit.setDate(QDate.currentDate())
+                            bianl.product_table_row_status[row]["definition_status"] = "edit"
 
-                        bianl.old_owner = bianl.owner_input.text()
-                        bianl.old_project_name = bianl.project_name_input.text()
-                        bianl.old_project_path = bianl.project_path_input.text()
-                        bianl.project_mode = "view"
-                        common_usage.set_project_inputs_editable(False)
+                        product_confirm_qianzhi.set_row_editable(row, False)
+                    else:
+                        bianl.product_table_row_status[row] = {"status": "start"}
+                        bianl.product_table_row_status[row]["definition_status"] = "start"
+                        open_project.lock_combo(bianl.product_form_combo)
+                        open_project.lock_combo(bianl.product_type_combo)
 
-                        # 加载产品数据
-                        conn_product = common_usage.get_mysql_connection_product()
-                        cursor_product = conn_product.cursor()
-                        cursor_product.execute("SELECT * FROM 产品需求表 WHERE 项目ID = %s", (project_id,))
-                        products = cursor_product.fetchall()
-                        cursor_product.close()
-                        conn_product.close()
+                        open_project.lock_line_edit(bianl.product_model_input)
+                        open_project.lock_line_edit(bianl.drawing_prefix_input)
+                        product_confirm_qianzhi.set_row_editable(row, True)
 
-                        product_count = len(products)
-                        total_rows = max(3, product_count + 1)
+                if product_count > 0:
+                    first_product = products[0]
+                    row0_status = bianl.product_table_row_status[0].get("definition_status", None)
 
-                        bianl.product_table.setRowCount(total_rows)
-                        bianl.product_table.clearContents()
-                        bianl.product_table_row_status.clear()
-                        #改66
-                        for row in range(total_rows):
-                            if row < product_count:
-                                product = products[row]
+                    bianl.product_type_combo.setCurrentText(first_product.get("产品类型", "") or "")
+                    bianl.product_form_combo.setCurrentText(first_product.get("产品型式", "") or "")
+                    bianl.product_model_input.setText(first_product.get("设计版次", "") or "")
+                    bianl.drawing_prefix_input.setText(first_product.get("图号前缀", "") or "")
 
 
-                                # 原顺序：编号(1)、名称(2)、位号(3) → 新顺序：名称(1)、位号(2)、编号(3)改1 改66
-                                bianl.product_table.setItem(row, 1,QTableWidgetItem(product.get("产品名称", "")))  # 列1：产品名称
-                                bianl.product_table.setItem(row, 2,QTableWidgetItem(product.get("设备位号", "")))  # 列2：设备位号
-                                bianl.product_table.setItem(row, 3,QTableWidgetItem(product.get("产品编号", "")))  # 列3：产品编号
-                                bianl.product_table.setItem(row, 4,QTableWidgetItem(product.get("设计阶段", "")))  # 列4：设计阶段
-                                bianl.product_table.setItem(row, 5,QTableWidgetItem(product.get("设计版次", "")))  # 列5：设计版次
+                    bianl.design_input.setText(first_product.get("设计", "") or "")
+                    bianl.proofread_input.setText(first_product.get("校对", "") or "")
+                    bianl.review_input.setText(first_product.get("审核", "") or "")
+                    bianl.standardization_input.setText(first_product.get("标准化", "") or "")
+                    bianl.approval_input.setText(first_product.get("批准", "") or "")
+                    bianl.co_signature_input.setText(first_product.get("会签", "") or "")
 
-                                bianl.product_table_row_status[row] = {
-                                    "status": "view",
-                                    "product_id": product.get("产品ID", ""),
-                                }
-                                #改77
-                                product_type = product.get("产品类型", None)
-                                product_form = product.get("产品型式", None)
+                    if row0_status == "view":
+                        bianl.product_table_row_status[0]["definition_status"] = "view"
+                        open_project.lock_combo(bianl.product_type_combo)
+                        open_project.lock_combo(bianl.product_form_combo)
+                        open_project.unlock_line_edit(bianl.product_model_input)
+                        open_project.unlock_line_edit(bianl.drawing_prefix_input)
 
+                        open_project.unlock_line_edit(bianl.design_input)
+                        open_project.unlock_line_edit(bianl.proofread_input)
+                        open_project.unlock_line_edit(bianl.review_input)
+                        open_project.unlock_line_edit(bianl.standardization_input)
+                        open_project.unlock_line_edit(bianl.approval_input)
+                        open_project.unlock_line_edit(bianl.co_signature_input)
 
-                                if product_type and product_form:
-                                    bianl.product_table_row_status[row]["definition_status"] = "view"
-                                else:
-                                    bianl.product_table_row_status[row]["definition_status"] = "edit"
-
-                                product_confirm_qianzhi.set_row_editable(row, False)
-                            else:
-                                bianl.product_table_row_status[row] = {"status": "start"}
-                                bianl.product_table_row_status[row]["definition_status"] = "start"
-                                open_project.lock_combo(bianl.product_form_combo)
-                                open_project.lock_combo(bianl.product_type_combo)
-
-                                open_project.lock_line_edit(bianl.product_model_input)
-                                open_project.lock_line_edit(bianl.drawing_prefix_input)
-                                product_confirm_qianzhi.set_row_editable(row, True)
-
-                        if product_count > 0:
-                            first_product = products[0]
-                            row0_status = bianl.product_table_row_status[0].get("definition_status", None)
-
-                            bianl.product_type_combo.setCurrentText(first_product.get("产品类型", "") or "")
-                            bianl.product_form_combo.setCurrentText(first_product.get("产品型式", "") or "")
-                            bianl.product_model_input.setText(first_product.get("设计版次", "") or "")
-                            bianl.drawing_prefix_input.setText(first_product.get("图号前缀", "") or "")
+                    else:
+                        bianl.product_table_row_status[0]["definition_status"] = "edit"
+                        open_project.unlock_combo(bianl.product_type_combo)
+                        open_project.unlock_combo(bianl.product_form_combo)
+                        open_project.unlock_line_edit(bianl.product_model_input)
+                        open_project.unlock_line_edit(bianl.drawing_prefix_input)
 
 
-                            bianl.design_input.setText(first_product.get("设计", "") or "")
-                            bianl.proofread_input.setText(first_product.get("校对", "") or "")
-                            bianl.review_input.setText(first_product.get("审核", "") or "")
-                            bianl.standardization_input.setText(first_product.get("标准化", "") or "")
-                            bianl.approval_input.setText(first_product.get("批准", "") or "")
-                            bianl.co_signature_input.setText(first_product.get("会签", "") or "")
+                        open_project.unlock_line_edit(bianl.design_input)
+                        open_project.unlock_line_edit(bianl.proofread_input)
+                        open_project.unlock_line_edit(bianl.review_input)
+                        open_project.unlock_line_edit(bianl.standardization_input)
+                        open_project.unlock_line_edit(bianl.approval_input)
+                        open_project.unlock_line_edit(bianl.co_signature_input)
 
-                            if row0_status == "view":
-                                bianl.product_table_row_status[0]["definition_status"] = "view"
-                                open_project.lock_combo(bianl.product_type_combo)
-                                open_project.lock_combo(bianl.product_form_combo)
-                                open_project.unlock_line_edit(bianl.product_model_input)
-                                open_project.unlock_line_edit(bianl.drawing_prefix_input)
+                    # 自动调用on_product_row_clicked方法，获取第一行产品的id 改5
+                    on_product_row_clicked(0, 1)
+                    # 显式设置产品表格的当前选中行
+                    bianl.product_table.setCurrentCell(0, 0)
+                    # 确保bianl.row和bianl.colum被正确设置
+                    bianl.row = 0
+                    bianl.colum = 0
 
-                                open_project.unlock_line_edit(bianl.design_input)
-                                open_project.unlock_line_edit(bianl.proofread_input)
-                                open_project.unlock_line_edit(bianl.review_input)
-                                open_project.unlock_line_edit(bianl.standardization_input)
-                                open_project.unlock_line_edit(bianl.approval_input)
-                                open_project.unlock_line_edit(bianl.co_signature_input)
+                bianl.product_info_group.show()
 
-                            else:
-                                bianl.product_table_row_status[0]["definition_status"] = "edit"
-                                open_project.unlock_combo(bianl.product_type_combo)
-                                open_project.unlock_combo(bianl.product_form_combo)
-                                open_project.unlock_line_edit(bianl.product_model_input)
-                                open_project.unlock_line_edit(bianl.drawing_prefix_input)
+                # 清除旧点击状态
+                bianl.row = None
+                bianl.colum = None
 
+                # 刷新序号列颜色
+                for r in range(bianl.product_table.rowCount()):
+                    item = QTableWidgetItem(f"{r + 1:02d}")
+                    item.setTextAlignment(Qt.AlignCenter)
+                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
 
-                                open_project.unlock_line_edit(bianl.design_input)
-                                open_project.unlock_line_edit(bianl.proofread_input)
-                                open_project.unlock_line_edit(bianl.review_input)
-                                open_project.unlock_line_edit(bianl.standardization_input)
-                                open_project.unlock_line_edit(bianl.approval_input)
-                                open_project.unlock_line_edit(bianl.co_signature_input)
+                    status = bianl.product_table_row_status.get(r, {}).get("status", "")
+                    if status == "view":
+                        item.setForeground(QBrush(QColor("#888888")))
+                    else:
+                        item.setForeground(QBrush(Qt.black))
 
-                            # 自动调用on_product_row_clicked方法，获取第一行产品的id 改5
-                            on_product_row_clicked(0, 1)
-                            # 显式设置产品表格的当前选中行
-                            bianl.product_table.setCurrentCell(0, 0)
-                            # 确保bianl.row和bianl.colum被正确设置
-                            bianl.row = 0
-                            bianl.colum = 0
+                    item.setBackground(QBrush(QColor("#ffffff")))
+                    bianl.product_table.setItem(r, 0, item)
+        else:
+            new_project_button.prepare_new_project()
 
-                        bianl.product_info_group.show()
-
-                        # 清除旧点击状态
-                        bianl.row = None
-                        bianl.colum = None
-
-                        # 刷新序号列颜色
-                        for r in range(bianl.product_table.rowCount()):
-                            item = QTableWidgetItem(f"{r + 1:02d}")
-                            item.setTextAlignment(Qt.AlignCenter)
-                            item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-
-                            status = bianl.product_table_row_status.get(r, {}).get("status", "")
-                            if status == "view":
-                                item.setForeground(QBrush(QColor("#888888")))
-                            else:
-                                item.setForeground(QBrush(Qt.black))
-
-                            item.setBackground(QBrush(QColor("#ffffff")))
-                            bianl.product_table.setItem(r, 0, item)
 
     except Exception as e:
         print(f"自动加载最后项目失败: {e}")

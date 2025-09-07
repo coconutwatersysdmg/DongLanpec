@@ -121,6 +121,15 @@ def handle_confirm_product():
         #     每一行都要进行的处理
         # 首先调用全局变量
         get_input_must_var(row)
+        # 修改的时候不允许 必填项为空
+        if curr_product_id and not (curr_row_product_name):
+            QMessageBox.warning(
+                bianl.main_window,
+                "必填项未填",
+                f"第 {row + 1} 行已生成产品，不允许保存为空白行。\n"
+                f"请至少填写必填项【产品名称】（或使用“删除产品”按钮来删除该产品）。"
+            )
+            return
 
         try:
             # 提取文本信息

@@ -91,139 +91,57 @@ def get_pinggai_data(product_id):
     finally:
         conn.close()
 def fill_calculation_report(json_path, excel_path, output_path):
-    """
-    综合写入逻辑：
-    - 将每个模块中的 Id、Name、Value 分别写入 A/B/C 列（第1/2/3列）；
-    - 同时根据 Id+Name 匹配，将 Value 写入 C列；
-    - 特殊处理：固定管板合并壳体法兰字段，法兰/平盖做归属区分。
-    """
     with open(json_path, "r", encoding="utf-8") as f:
         json_data = json.load(f)
 
     dict_out_data = json_data.get("DictOutDatas", {})
     wb = load_workbook(excel_path)
 
-    def extract_flange_fields(flange_module_name, expected_value, include_suffix):
-        result_map = {}
-        flange_module = dict_out_data.get(flange_module_name, {})
-        flange_datas = flange_module.get("Datas", [])
-
-        id_to_position = {
-            item["Id"]: item["Value"]
-            for item in flange_datas
-            if item.get("Name") == "法兰位置" and item.get("Id", "").startswith("m_NameFl")
-        }
-
-        for item in flange_datas:
-            id_ = item.get("Id", "").strip()
-            name = item.get("Name", "").strip()
-            val = item.get("Value", "")
-            if not id_ or not name:
+    # -----------------------------
+    # 特殊处理：接管模板
+    # -----------------------------
+    pipe_modules = []
+    if "接管" in wb.sheetnames:
+        template_sheet = wb["接管"]
+        # 找出 JSON 中所有名称包含 "接管" 的模块
+        pipe_modules = [k for k in dict_out_data.keys() if "接管" in k]
+        for module_name in pipe_modules:
+            if module_name in wb.sheetnames:
                 continue
+            new_sheet = wb.copy_worksheet(template_sheet)
+            new_sheet.title = module_name
 
-            has_suffix = id_.endswith("2")
-            if has_suffix != include_suffix:
-                continue
+        # ✅ 删除接管模板
+        std = wb["接管"]
+        wb.remove(std)
 
-            ref_id = "m_NameFl2" if has_suffix else "m_NameFl"
-            if id_to_position.get(ref_id, "") != expected_value:
-                continue
-
-            result_map[(id_, name)] = val
-
-        return result_map
-
+    # -----------------------------
+    # 遍历工作表填充数据
+    # -----------------------------
     for sheet_name in wb.sheetnames:
         if sheet_name not in dict_out_data:
             print(f"⚠️ JSON 中未找到模块：{sheet_name}，跳过该表")
             continue
 
         module_data = dict_out_data[sheet_name]
-        datas = module_data.get("Datas", [])
-        if not isinstance(datas, list):
-            print(f"⚠️ 模块 `{sheet_name}` 数据无效，跳过")
-            continue
+        datas = module_data.get("Datas", []) if module_data else []
 
         sheet = wb[sheet_name]
         print(f"✅ 正在写入模块：{sheet_name}")
 
-        # 清空 A/B/C 列内容
+        # 清空 A/B/C 列
         for row in sheet.iter_rows(min_row=2):
             for cell in row[:3]:
                 cell.value = None
 
-        # Step 1: 写入 A/B/C 列
+        # 写入 A/B/C 列
         for idx, item in enumerate(datas, start=2):
             sheet.cell(row=idx, column=1, value=item.get("Id", ""))
             sheet.cell(row=idx, column=2, value=item.get("Name", ""))
             sheet.cell(row=idx, column=3, value=item.get("Value", ""))
 
-        # Step 2: 构建 (Id, Name) → Value 映射
-        id_name_to_value_map = {}
-        for item in datas:
-            id_ = item.get("Id", "").strip()
-            name = item.get("Name", "").strip()
-            value = item.get("Value", "")
-            if id_ and name:
-                id_name_to_value_map[(id_, name)] = value
-
-
-        # ✅ 固定管板：合并部分壳体法兰字段
-        if sheet_name == "固定管板":
-            extra_fields = {
-                "垫片系数", "比压力", "垫片有效外径", "垫片有效内径", "垫片压紧力作用中心圆直径DG",
-                "垫片名义内径", "垫片名义外径", "垫片"
-            }
-            flange_data = dict_out_data.get("壳体法兰", {}).get("Datas", [])
-            for item in flange_data:
-                id_ = item.get("Id", "").strip()
-                name = item.get("Name", "").strip()
-                value = item.get("Value", "")
-                if name in extra_fields and id_:
-                    id_name_to_value_map[(id_, name)] = value
-
-        # ✅ 法兰归属处理
-        if sheet_name in ("壳体法兰", "管箱法兰"):
-            is_pipe_flange = (sheet_name == "管箱法兰")
-            extracted = extract_flange_fields(
-                "壳体法兰",
-                "壳体法兰" if is_pipe_flange else "管箱法兰",
-                include_suffix=is_pipe_flange
-            )
-            id_name_to_value_map.update(extracted)
-
-        if sheet_name == "管箱平盖":
-            extracted = extract_flange_fields("管箱平盖", "管箱平盖", include_suffix=True)
-            id_name_to_value_map.update(extracted)
-
-        # Step 3: 根据 A列和B列匹配 (Id, Name) → 填入 C列
-        for row in sheet.iter_rows(min_row=2):
-            id_val = str(row[0].value).strip() if row[0].value else ""
-            name_val = str(row[1].value).strip() if row[1].value else ""
-            key = (id_val, name_val)
-            if key in id_name_to_value_map:
-                row[2].value = id_name_to_value_map[key]
-            else:
-                print(f"❌ `{sheet_name}` 中未匹配字段名：{key}")
-
-        # Step 4: 追加表中不存在的字段 (Id, Name) 对
-        existing_pairs = {
-            (str(row[0].value).strip(), str(row[1].value).strip())
-            for row in sheet.iter_rows(min_row=2)
-            if row[0].value and row[1].value
-        }
-
-        for (id_, name), value in id_name_to_value_map.items():
-            if (id_, name) not in existing_pairs:
-                next_row = sheet.max_row + 1
-                sheet.cell(row=next_row, column=1, value=id_)
-                sheet.cell(row=next_row, column=2, value=name)
-                sheet.cell(row=next_row, column=3, value=value)
-
     wb.save(output_path)
-    print(f"✅ 综合填充完成，保存为：{output_path}")
-# def auto_map_bool(val):
-#     if str(val).lower() == "true":
+    print(f"✅ 综合填充完成，保存为：{output_path}")#     if str(val).lower() == "true":
 #         return "是"
 #     elif str(val).lower() == "false":
 #         return "否"
@@ -316,10 +234,7 @@ bool_field_names = {
 
 def fill_final_excel_from_intermediate(intermediate_excel_path, target_excel_path, output_excel_path, json_path):
     import json
-    import os
-    import configparser
-    import chardet
-    import pymysql
+
     from openpyxl import load_workbook
 
     # === 用户提供 product_id 外部变量 ===
@@ -406,6 +321,7 @@ def fill_final_excel_from_intermediate(intermediate_excel_path, target_excel_pat
 
     # === 加载中间 Excel 数据 ===
     inter_wb = load_workbook(intermediate_excel_path, data_only=True)
+
     inter_data_map = {}
     for sheet in inter_wb.worksheets:
         name_value_map = {}
@@ -432,6 +348,55 @@ def fill_final_excel_from_intermediate(intermediate_excel_path, target_excel_pat
     field_reverse_maps2 = {"压力试验类型": {"1": "液压", "2": "气压", "3": "气液"}}
 
     target_wb = load_workbook(target_excel_path)
+    # === 先展开接管模板，生成 ...接管 sheet ===
+    if "接管" in target_wb.sheetnames:
+        template_sheet = target_wb["接管"]
+        pipe_modules = [k for k in dict_out_data.keys() if "接管" in k]
+
+        for module_name in pipe_modules:
+            if module_name not in target_wb.sheetnames:
+                new_sheet = target_wb.copy_worksheet(template_sheet)
+                new_sheet.title = module_name
+                new_sheet["B2"].value = f"{module_name}计算报告"
+                print(f"✅ 由模板 '接管' 生成工作表：{module_name}，并修改 B2:E2 → {new_sheet['B2'].value}")
+
+        # 删除模板 "接管" —— 改成按名字取
+        if "接管" in target_wb.sheetnames:
+            del target_wb["接管"]
+            print("🗑️ 已删除模板工作表：接管")
+    # === 特殊匹配：浮头法兰 / 外头盖封头 ===
+    special_match_map = {
+        "浮头法兰": ["浮头法兰（TNC）", "浮头法兰（SNC）", "浮头法兰（TC）", "浮头法兰（SC）", "B型钩圈"],
+        "外头盖封头": ["球冠形封头"]
+    }
+
+    for inter_name, target_sheets in special_match_map.items():
+        if inter_name not in inter_data_map:
+            continue
+        name_value_map = inter_data_map[inter_name]
+
+        for sheet_name in target_sheets:
+            if sheet_name not in target_wb.sheetnames:
+                print(f"⚠️ 跳过目标表 `{sheet_name}`，因最终Excel中不存在")
+                continue
+
+            sheet = target_wb[sheet_name]
+            print(f"📄 正在处理特殊匹配目标表：{sheet_name}（来自中间表 {inter_name}）")
+
+            # 填充关键字 → 值
+            for row in sheet.iter_rows(min_row=2):
+                keyword_cell = row[0]
+                output_cell = row[3]
+                keyword = keyword_cell.value
+
+                if keyword in name_value_map and (output_cell.value is None or str(output_cell.value).strip() == ""):
+                    val = name_value_map[keyword]
+                    output_cell.value = val
+
+            # 修改第二行 B~E 合并单元格
+            sheet["B2"].value = f"{sheet_name}计算报告"
+            print(f"✅ 更新 {sheet_name} 的 B2:E2 → {sheet['B2'].value}")
+
     for sheet in target_wb.worksheets:
         sheet_name = sheet.title
         if sheet_name == "管箱平盖":
@@ -452,30 +417,40 @@ def fill_final_excel_from_intermediate(intermediate_excel_path, target_excel_pat
                 if c_val == "焊接接头系数ф" and not d_cell.value:
                     d_cell.value = jietouxishu
                     print(f"📌 写入 焊接接头系数ф → {jietouxishu}")
-        # ✅ 固定管板额外字段写入（来自布管输入参数 JSON）
+        import pymysql
+
+        # ✅ 固定管板额外字段写入（来自 MySQL 产品设计活动表_布管参数表）
         if sheet_name == "固定管板":
-            # === 从布管输入参数中读取值 ===
-            config_path = os.path.expandvars(r"%APPDATA%\UDS\蓝滨数字化合作\data\config.ini")
-            with open(config_path, 'rb') as f:
-                raw = f.read()
-                encoding = chardet.detect(raw)['encoding'] or 'utf-8'
-            config = configparser.ConfigParser()
-            config.read_string(raw.decode(encoding))
-            product_dir = os.path.normpath(config.get('ProjectInfo', 'product_directory', fallback=''))
-            tube_json_path = os.path.join(product_dir, "中间数据", "布管输入参数.json")
+            # === 数据库连接 ===
+            conn = pymysql.connect(
+                host="localhost",
+                port=3306,
+                user="root",
+                password="123456",
+                database="产品设计活动库",
+                charset="utf8mb4"
+            )
+            cursor = conn.cursor()
+
+            # 这里需要你传入
 
             tube_length = ""
             tube_pass_count = ""
 
-            if os.path.exists(tube_json_path):
-                with open(tube_json_path, 'r', encoding='utf-8') as f:
-                    tube_json_data = json.load(f)
-                params_list = tube_json_data if isinstance(tube_json_data, list) else tube_json_data.get("params", [])
-                for param in params_list:
-                    if param.get("paramName") == "换热管公称长度LN":
-                        tube_length = str(param.get("paramValue", ""))
-                    elif param.get("paramName") == "管程数":
-                        tube_pass_count = str(param.get("paramValue", ""))
+            sql = """
+                SELECT 参数名, 参数值
+                FROM 产品设计活动表_布管参数表
+                WHERE 产品ID = %s
+            """
+            cursor.execute(sql, (product_id,))
+            for param_name, param_value in cursor.fetchall():
+                if param_name == "热交换器公称（换热管）长度 L":
+                    tube_length = str(param_value)
+                elif param_name == "管程数":
+                    tube_pass_count = str(param_value)
+
+            cursor.close()
+            conn.close()
 
             # === 将换热管长度Lt 和 管程数 写入 D列 ===
             for idx in range(2, sheet.max_row + 1):

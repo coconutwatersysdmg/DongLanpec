@@ -250,8 +250,6 @@ def apply_combobox_to_table(table: QTableWidget, column_data_map: dict,
 
 
 
-
-
 def on_combo_changed(guankou_define_info, table, row, col, product_id, viewer_instance, category_label):
     """
     下拉框内容改变时的事件处理函数

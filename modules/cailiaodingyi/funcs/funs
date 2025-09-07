@@ -1,0 +1,61 @@
+def make_on_flange_face_changed(component_info_copy, viewer_instance_copy, row_index):
+    """法兰密封面 → 图片刷新（强制要求元件名称 + 覆层）"""
+    def handler(value):
+        def _do():
+            try:
+                seal_face_name = (value or "").strip()
+                print(component_info_copy.items())
+                comp_name = component_info_copy.get("零件名称")
+                print(comp_name)
+                if not seal_face_name or not comp_name or not component_info_copy or not viewer_instance_copy:
+                    return
+
+                # 覆层状态（从 component_info_copy 里读取）
+                covering_flag = "否"
+                covering_val = component_info_copy.get("是否添加覆层")
+                if covering_val and str(covering_val).strip() == "是":
+                    covering_flag = "是"
+
+                # 查法兰示意图表
+                image_path = _query_flange_image(seal_face_name, covering_flag, comp_name)
+                print(image_path)
+                _set_pixmap_if_changed(viewer_instance_copy, image_path)
+
+            except Exception as e:
+                print(f"[错误] 第{row_index}行处理法兰密封面图片失败: {e}")
+
+        QTimer.singleShot(60, _do)
+
+    return handler
+
+
+def _query_flange_image(seal_face_name, covering_flag, component_name):
+    """材料库：法兰示意图表 → 匹配密封面名称 + 有无覆层 + 元件名称"""
+    connection = None
+    try:
+        connection = get_connection(**db_config_2)
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT 示意图 FROM 法兰示意图表
+                WHERE 密封面名称=%s AND 有无覆层=%s AND 元件名称=%s
+                LIMIT 1
+            """
+            cursor.execute(sql, (seal_face_name, covering_flag, component_name))
+            row = cursor.fetchone()
+        print(seal_face_name)
+        print(covering_flag)
+        if not row:
+            return None
+        if isinstance(row, dict):
+            return row.get("示意图")
+        return row[0] if len(row) > 0 else None
+
+    except Exception as e:
+        print(f"[错误] 法兰示意图查询失败: {e}")
+        return None
+    finally:
+        if connection:
+            try:
+                connection.close()
+            except Exception:
+                pass

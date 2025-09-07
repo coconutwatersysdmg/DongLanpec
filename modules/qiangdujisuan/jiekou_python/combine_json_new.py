@@ -4135,30 +4135,14 @@ def calculate_heat_exchanger_strength(product_id):
             ])
         ]
 
-    # def update_all_flange_types(obj):
-    #     if isinstance(obj, dict):
-    #         for key in obj:
-    #             if isinstance(obj[key], dict):
-    #                 update_all_flange_types(obj[key])
-    #             elif isinstance(obj[key], list):
-    #                 for item in obj[key]:
-    #                     update_all_flange_types(item)
-    #             elif isinstance(key, str) and (
-    #                     key.startswith("法兰类型管前左") or key.startswith("法兰类型壳后右")
-    #             ):
-    #                 obj[key] = "整体法兰2"
 
-    # update_all_flange_types(result)
-    # 保存结果到JSON文件
 
+    # # 读取JSON文件并转换为紧凑格式
     with open("shuru_jisuan.json", "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=4)
 
-    # # 获取当前脚本所在的绝对路径
-    # base_dir = os.path.dirname(os.path.abspath(__file__))
-    #
-    # # 构造 DLL 文件的相对路径
-    # dll_path = os.path.join(base_dir, 'CalCulationPartLib.dll')
+    # 获取当前脚本所在的绝对路径
+    base_dir = os.path.dirname(os.path.abspath(__file__))
 
     # print("当前脚本路径：", base_dir)
     # print("构造的 DLL 路径：", dll_path)
@@ -4171,7 +4155,61 @@ def calculate_heat_exchanger_strength(product_id):
         json_input = f.read()
     parsed = json.loads(json_input)
     compact_json = json.dumps(parsed, separators=(',', ':'))
+    conn = pymysql.connect(
+        host="localhost",  # 改成你的数据库地址
+        user="root",  # 改成你的用户名
+        password="123456",  # 改成你的密码
+        database="产品设计活动库",  # 改成你的数据库名
+        charset="utf8mb4"
+    )
+    cursor = conn.cursor()
 
+    try:
+        # 3. 先删除旧数据
+        cursor.execute("DELETE FROM 产品设计活动表_计算提交表 WHERE 产品ID = %s", (product_id,))
+        cursor.execute("DELETE FROM 产品设计活动表_管口计算提交表 WHERE 产品ID = %s", (product_id,))
+        cursor.execute("DELETE FROM 产品设计活动表_设计数据计算提交表 WHERE 产品ID = %s", (product_id,))
+
+        # 4. 插入新数据
+        # 4.1 产品设计活动表_计算提交表
+        for component_name, kvs in parsed.get("DictDatas", {}).items():
+            for k, v in kvs.items():
+                cursor.execute("""
+                    INSERT INTO 产品设计活动表_计算提交表 (产品ID, 元件名称, `key`, `value`)
+                    VALUES (%s, %s, %s, %s)
+                """, (product_id, component_name, k, v))
+
+        # 4.2 产品设计活动表_管口计算提交表
+        for nozzle_no, kvs in parsed.get("TTDict", {}).items():
+            for k, v in kvs.items():
+                cursor.execute("""
+                    INSERT INTO 产品设计活动表_管口计算提交表 (产品ID, 管口号, `key`, `value`)
+                    VALUES (%s, %s, %s, %s)
+                """, (product_id, nozzle_no, k, v))
+
+        # 4.3 产品设计活动表_设计数据计算提交表
+        # 处理 WSList
+        for ws_dict in parsed.get("WSList", []):
+            for k, v in ws_dict.items():
+                cursor.execute("""
+                    INSERT INTO 产品设计活动表_设计数据计算提交表 (产品ID, `key`, `value`)
+                    VALUES (%s, %s, %s)
+                """, (product_id, k, v))
+
+        # 处理 DesignParams
+        for k, v in parsed.get("DesignParams", {}).items():
+            cursor.execute("""
+                INSERT INTO 产品设计活动表_设计数据计算提交表 (产品ID, `key`, `value`)
+                VALUES (%s, %s, %s)
+            """, (product_id, k, v))
+
+        # 5. 提交事务
+        conn.commit()
+        print(f"产品ID {product_id} 的数据已成功保存")
+
+    except Exception as e:
+        conn.rollback()
+        print("写入数据库失败:", e)
     cpi = CalPartInterface()
     calculation_result = cpi.IntergratedEquipment(compact_json)
 
@@ -4179,6 +4217,62 @@ def calculate_heat_exchanger_strength(product_id):
     # with open("modules/qiangdujisuan/jiekou_python/jisuan_output.json", "w", encoding="utf-8") as f:
     with open("jisuan_output_new.json", "w", encoding="utf-8") as f:
         json.dump(json.loads(calculation_result), f, ensure_ascii=False, indent=4)
+    with open("jisuan_output_new.json", "r", encoding="utf-8") as f:
+        parsed = json.load(f)
+
+    # 一个小工具：把任意对象转成文本（确保中文不转义）
+    def _to_text(x):
+        if x is None:
+            return ""
+        if isinstance(x, str):
+            return x
+        return json.dumps(x, ensure_ascii=False)
+
+    try:
+        # === 3) 产品设计活动表_计算结果日志表：只插一行 ===
+        cursor.execute("DELETE FROM 产品设计活动表_计算结果日志表 WHERE 产品ID = %s", (product_id,))
+
+        # 1. Logs 数组拼接为一行
+        logs_joined = "；".join(_to_text(item) for item in parsed.get("Logs", []))
+
+        # 2. 元件结果：元件名=IsSuccess
+        dict_out = parsed.get("DictOutDatas", {}) or {}
+        comp_results = []
+        for comp_name, comp_dict in dict_out.items():
+            if isinstance(comp_dict, dict):
+                is_success = comp_dict.get("IsSuccess")
+                comp_results.append(f"{comp_name}={_to_text(is_success)}")
+        comp_results_joined = "；".join(comp_results)
+
+        # 插入一条记录
+        cursor.execute("""
+                INSERT INTO 产品设计活动表_计算结果日志表 (产品ID, Logs, 元件结果)
+                VALUES (%s, %s, %s)
+            """, (product_id, logs_joined, comp_results_joined))
+
+        # ========== 产品设计活动表_元件计算结果表 ==========
+        cursor.execute("DELETE FROM 产品设计活动表_元件计算结果表 WHERE 产品ID = %s", (product_id,))
+
+        for comp_name, comp_dict in parsed.get("DictOutDatas", {}).items():
+            datas_list = comp_dict.get("Datas", [])
+            for data_item in datas_list:
+                cursor.execute("""
+                    INSERT INTO 产品设计活动表_元件计算结果表 (产品ID, 元件名称, Id, Name, Value)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    product_id,
+                    comp_name,
+                    data_item.get("Id"),
+                    data_item.get("Name"),
+                    data_item.get("Value")
+                ))
+
+        conn.commit()
+        print(f"产品ID {product_id} 的计算结果已成功保存")
+
+    except Exception as e:
+        conn.rollback()
+        print("写入数据库失败:", e)
     return calculation_result
 
 if __name__ == "__main__":

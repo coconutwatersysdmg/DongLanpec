@@ -29,8 +29,8 @@ from modules.guankoudingyi.funcs.funcs_pipe_sort import setup_header_click_sort
 from modules.guankoudingyi.funcs.funs_enter_key import connect_save_button
 from modules.guankoudingyi.view_drawing.main_view import embed_heat_exchanger_view, HeatExchangerView
 
+# 几个界面连接所添加的产品ID的传送
 product_id = None
-
 
 def on_product_id_changed(new_id):
     print(f"Received new PRODUCT_ID: {new_id}")
@@ -167,6 +167,7 @@ class CustomSelectionModel(QItemSelectionModel):
 
         return True
 
+# === 主程序 ===
 class Stats(QtWidgets.QWidget):
     def __init__(self, line_tip=None):
         super().__init__()
@@ -175,8 +176,13 @@ class Stats(QtWidgets.QWidget):
 
         # 保存product_id为实例变量，这样其他方法可以访问
         self.product_id = product_id
-        print('product_id11111111',self.product_id)
-        
+        print('product_id1111111111',self.product_id)
+
+        # === ✅检查产品ID是否存在 ===
+        if not self.product_id:
+            QMessageBox.warning(self, "提示", "请先至项目管理处选择产品！")
+            return  # 中止初始化，避免后续出错
+
         # 保存旧的管口代号
         self.old_port_code = None
         # 修改管口代号但是管口代号重复，回退成之前的管口代号时用于阻隔信号
@@ -259,11 +265,6 @@ class Stats(QtWidgets.QWidget):
         self.tableWidget_pipe.cellClicked.connect(self.handle_pipe_cell_click)
         # 高亮行
         self.tableWidget_pipe.selectionModel().selectionChanged.connect(self.highlight_selected_rows)
-
-        # # 设置管口功能列为不可编辑
-        # set_pipe_function_column_readonly(self)
-        # # 如果“管口功能”列有非“-”值，则将“管口所属元件”列设为不可编辑
-        # lock_belong_if_function_filled(self)
 
         # 在表格初始化时连接信号
         self.tableWidget_pipe.cellChanged.connect(lambda row, column: handle_pipe_cell_changed(self, row, column, self.product_id))

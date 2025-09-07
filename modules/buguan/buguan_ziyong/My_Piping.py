@@ -1672,7 +1672,7 @@ class TubeLayoutEditor(QMainWindow):
 
             if param_name in param_mapping:
                 json_key, value_map = param_mapping[param_name]
-
+                print("param_mapping[param_name]",param_mapping[param_name])
                 if json_key == "SlipWays":
                     try:
                         input_json[json_key] = json.loads(param_value)
@@ -1719,7 +1719,7 @@ class TubeLayoutEditor(QMainWindow):
             elif 25 <= od_val <= 57:
                 input_json['LB_TieRodD'] = "16"
             else:
-                input_json['LB_TieRodD'] = "未知"
+                input_json['LB_TieRodD'] = "12"
         input_json['LB_ClapboardType'] = '2'
 
         # 3. 根据产品ID从数据库获取产品型式并设置热交换器类型
@@ -1752,9 +1752,75 @@ class TubeLayoutEditor(QMainWindow):
                     conn.close()
 
         input_json['LB_HEType'] = he_type
-        if input_json['LB_TotalTubesCountNeed'] == '' or input_json['LB_TotalTubesCountNeed'] == None:
-            input_json['LB_TotalTubesCountNeed'] = "10000"
+
+        # ---------------- 新增：如果值为None或空字符串，则从布管默认参数表中取值 ----------------
+        param_mapping2 = {
+            "LB_IsRangeCenter": "换热管布置方式",
+            "LB_BPBThick": "旁路挡板厚度",
+            "LB_Tubeform": "管程分程形式",
+            "LB_SlipWayHeight": "滑道高度",
+            "LB_TieRodD": "拉杆直径",
+            "LB_DN": "公称直径 DN",
+            "LB_TubePassCount": "管程程数",
+            "Shell_NumberOfPasses": "壳程程数",
+            "LB_Di": "壳体内直径 Di",
+            "LB_DL": "布管限定圆 DL",
+            "LB_TotalTubesCountNeed": "换热管孔需求数量",
+            "LB_TubeD": "换热管外径 do",
+            "LB_TubeThick": "换热管壁厚 δ",
+            "LB_RangeType": "换热管排列方式",
+            "LB_TubeLong": "换热管公称长度 LN",
+            "LB_S": "换热管中心距 S",
+            "LB_BaffleDirection": "折流板切口方向",
+            "LB_BafflePerStr": "折流板要求切口率 (%)",
+            "LB_BaffleToODistance": "切口距垂直中心线间距",
+            "BaffleSpacing": "折流/支持板间距",
+            "LB_BaffleOD": "折流板外径",
+            "LB_SN": "分程隔板两侧相邻管中心距（竖直）",
+            "LB_SNH": "分程隔板两侧相邻管中心距（水平）",
+            "LB_SpacerPositionSize": "隔条位置尺寸 W",
+            "LB_SlipWayThick": "滑道厚度",
+            "LB_SlipWayAngle": "滑道与竖直中心线夹角",
+            "LB_BaffleThick": "防冲板厚度",
+            "LB_BaffleA": "防冲板折边角度",
+            "LB_BafflePosition": "与圆筒连接防冲板方位",
+            "LB_BaffleW": "与圆筒连接防冲板宽度",
+            "LB_BaffleDis": "与圆筒连接防冲板至圆筒内壁最大距离",
+            "LB_ClapboardType": "分程隔板放置型式",
+            "LB_HEType": "热交换器类型",
+
+            # 这里继续补充需要的映射
+        }
+
+        defaults = {}
+        conn = None
+        try:
+            conn = create_component_connection()  # 元件库连接
+            if conn:
+                with conn.cursor() as cursor:
+                    cursor.execute("SELECT 参数名, 参数值 FROM 布管参数默认表")
+                    rows = cursor.fetchall()
+                    for row in rows:
+                        param_name = row['参数名'].strip()
+                        param_value = row['参数值']
+                        defaults[param_name] = param_value
+        except pymysql.MySQLError as e:
+            print(f"查询布管默认参数表失败: {e}")
+        finally:
+            if conn and conn.open:
+                conn.close()
+
+        for eng_key, cn_key in param_mapping2.items():
+            if eng_key not in input_json or input_json[eng_key] in [None, '']:
+                if cn_key in defaults:
+                    input_json[eng_key] = defaults[cn_key]
+
+        # -----------------------------------------------------------------------------------
+
         self.input_json = input_json
+        self.save_layout_input(product_id, self.input_json)
+
+
         print(self.input_json)
 
         # 4. 执行布管计算
@@ -1765,7 +1831,7 @@ class TubeLayoutEditor(QMainWindow):
             self.output_data = json_str
             self.update_pipe_parameters()
             result = parse_heat_exchanger_json(json_str)
-
+            self.save_layout_result(product_id, result)
             # 处理计算结果
             target_list = []
             for tube_param in result['raw']['TubesParam']:
@@ -1836,6 +1902,49 @@ class TubeLayoutEditor(QMainWindow):
             QMessageBox.critical(self, "计算错误", f"布管计算过程中发生错误: {str(e)}")
             return None
 
+    def save_layout_input(self, product_id, input_json: dict):
+        """
+        将布管输入数据保存到产品设计活动表_布管输入表
+        :param product_id: 当前产品ID
+        :param input_json: dict 输入数据
+        """
+        conn = create_product_connection()
+        if conn is None:
+            return False
+
+        try:
+            with conn.cursor() as cursor:
+                # 先删除已有数据
+                delete_sql = """
+                    DELETE FROM 产品设计活动表_布管输入表
+                    WHERE 产品ID = %s
+                """
+                cursor.execute(delete_sql, (product_id,))
+
+                # 插入新数据
+                insert_sql = """
+                    INSERT INTO 产品设计活动表_布管输入表 (产品ID, `key`, `value`)
+                    VALUES (%s, %s, %s)
+                """
+
+                for k, v in input_json.items():
+                    if isinstance(v, dict):
+                        # 如果 value 还是字典，展开存储
+                        for sub_k, sub_v in v.items():
+                            cursor.execute(insert_sql, (product_id, sub_k, str(sub_v)))
+                    else:
+                        cursor.execute(insert_sql, (product_id, k, str(v)))
+
+            conn.commit()
+            return True
+
+        except pymysql.MySQLError as e:
+            QMessageBox.critical(None, "数据库错误", f"保存布管输入失败: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+
     def hide_specific_params(self, hidden_params):
         """隐藏指定参数名的行"""
         row_count = self.param_table.rowCount()
@@ -1844,6 +1953,49 @@ class TubeLayoutEditor(QMainWindow):
             if name_item and name_item.text() in hidden_params:
                 self.param_table.setRowHidden(row, True)
         self.renumber_visible_rows()
+
+    def save_layout_result(self, product_id, result: dict):
+        """
+        将布管计算结果保存到产品设计活动表_布管结果表
+        :param product_id: 当前产品ID
+        :param result: dict 结果数据
+        """
+        conn = create_product_connection()
+        if conn is None:
+            return False
+
+        try:
+            with conn.cursor() as cursor:
+                # 先删除已有数据
+                delete_sql = """
+                    DELETE FROM 产品设计活动表_布管结果表
+                    WHERE 产品ID = %s
+                """
+                cursor.execute(delete_sql, (product_id,))
+
+                # 插入新数据
+                insert_sql = """
+                    INSERT INTO 产品设计活动表_布管结果表 (产品ID, `key`, `value`)
+                    VALUES (%s, %s, %s)
+                """
+
+                for k, v in result.items():
+                    if k == "raw" and isinstance(v, dict):
+                        # 拆分嵌套字典
+                        for sub_k, sub_v in v.items():
+                            cursor.execute(insert_sql, (product_id, sub_k, str(sub_v)))
+                    else:
+                        cursor.execute(insert_sql, (product_id, k, str(v)))
+
+            conn.commit()
+            return True
+
+        except pymysql.MySQLError as e:
+            QMessageBox.critical(None, "数据库错误", f"保存布管结果失败: {e}")
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
 
     def renumber_visible_rows(self):
         """重新为可见行分配连续序号（1,2,3...）"""

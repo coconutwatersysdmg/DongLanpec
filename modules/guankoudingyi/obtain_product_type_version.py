@@ -1,14 +1,6 @@
 import pymysql
 
-from modules.guankoudingyi.db_cnt import get_connection
-
-db_config_2 = {
-    'host': 'localhost',
-    'port': 3306,
-    'user': 'root',
-    'password': '123456',
-    'database': '产品设计活动库'
-}
+from modules.guankoudingyi.db_cnt import get_connection, db_config_2
 
 def get_product_type_and_version(product_id):
     """

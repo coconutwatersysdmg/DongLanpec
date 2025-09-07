@@ -1,25 +1,9 @@
 import pymysql
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QMessageBox, QLabel, QComboBox, QTableWidgetItem
-from modules.guankoudingyi.db_cnt import get_connection
+from modules.guankoudingyi.db_cnt import get_connection, db_config_1, db_config_2
 from modules.guankoudingyi.funcs.funcs_pipe_comboBox_value import get_standard_flange_pressure_level_default_value,get_weld_end_spec_sch_options, ComboBoxDelegate, update_nominal_size_delegate_options
 from modules.guankoudingyi.funcs.pipe_get_units_types import get_unit_types_from_db, get_current_unit_types_from_ui
-
-db_config_1 = {
-    'host': 'localhost',
-    'port': 3306,
-    'user': 'root',
-    'password': '123456',
-    'database': '元件库'
-}
-
-db_config_2 = {
-    'host': 'localhost',
-    'port': 3306,
-    'user': 'root',
-    'password': '123456',
-    'database': '产品设计活动库'
-}
 
 
 """三个类型的选择会有对应的事件发生，这里是对下拉框产生的事件处理"""

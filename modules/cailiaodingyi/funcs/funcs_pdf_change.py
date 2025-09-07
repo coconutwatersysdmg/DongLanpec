@@ -1,5 +1,7 @@
 import json
 import re
+from collections import defaultdict
+from decimal import Decimal
 from typing import Iterable, Tuple, Any, Dict, List
 
 from PyQt5.QtWidgets import QTableWidget, QComboBox, QLineEdit, QTableWidgetItem
@@ -1030,26 +1032,90 @@ def get_template_and_element_id(product_id, part_name):
 
 
 def get_dependency_mapping_from_db():
-    connection = get_connection(**db_config_2)
+    """
+    读取《法兰参数联动表》，构造：
+      mapping[主字段][主值][从字段] = [候选...]
+      mapping["_compound_rules"] = [
+        {"masters":[(name,val),...], "dependent":"从字段", "options":[...]}
+      ]
+    允许“主参数名称”是“垫片类型+垫片标准”这种复合形式；
+    允许“主参数值”用“|”分隔（如：金属波齿复合垫片|SH/T 3430-2018）。
+    """
+    import json, re
+    conn = get_connection(**db_config_2)
     try:
-        with connection.cursor() as cursor:
-            sql = "SELECT 主参数名称, 主参数值, 被联动参数名称, 联动选项 FROM 法兰参数联动表"
-            cursor.execute(sql)
-            rows = cursor.fetchall()
-
+        with conn.cursor() as cur:
             mapping = {}
-            for row in rows:
-                master_name = row["主参数名称"].strip()
-                master_value = row["主参数值"].strip()
-                dependent_name = row["被联动参数名称"].strip()
-                options = json.loads(row["联动选项"])
 
-                mapping.setdefault(master_name, {})
-                mapping[master_name].setdefault(master_value, {})
-                mapping[master_name][master_value][dependent_name] = options
+            def _to_list(s):
+                """把“联动选项”安全转成 list，支持 JSON 和常见分隔符"""
+                if isinstance(s, list):
+                    return [str(x).strip() for x in s]
+                t = (s or "").strip()
+                if not t:
+                    return []
+                try:
+                    j = json.loads(t)
+                    if isinstance(j, (list, tuple)):
+                        return [str(x).strip() for x in j]
+                except Exception:
+                    pass
+                # 普通分隔
+                parts = re.split(r"[，、,;；\s]+", t)
+                return [p.strip() for p in parts if p.strip()]
+
+            # 1) 单主字段
+            sql1 = """
+                SELECT 主参数名称, 主参数值, 被联动参数名称, 联动选项
+                FROM 法兰参数联动表
+                WHERE 主参数名称 NOT LIKE '%%+%%'
+            """
+            cur.execute(sql1)
+            rows1 = cur.fetchall() or []
+            for r in rows1:
+                mname = (r["主参数名称"] or "").strip()
+                mval  = (r["主参数值"] or "").strip()
+                dname = (r["被联动参数名称"] or "").strip()
+                opts  = _to_list(r["联动选项"])
+
+                if not (mname and mval and dname):
+                     continue
+                mapping.setdefault(mname, {})
+                mapping[mname].setdefault(mval, {})
+                mapping[mname][mval][dname] = opts
+
+
+            # 2) 复合字段（名称里带 +）
+            sql2 = """
+                SELECT 主参数名称, 主参数值, 被联动参数名称, 联动选项
+                FROM 法兰参数联动表
+                WHERE 主参数名称 LIKE '%%+%%'
+            """
+            cur.execute(sql2)
+            rows2 = cur.fetchall() or []
+            rules = []
+            for r in rows2:
+                mnames = [s.strip() for s in re.split(r"[+＋]", (r["主参数名称"] or "")) if s.strip()]
+                # 约定“主参数值”用 | 或 ｜ 分隔成与 mnames 对应的取值
+                mvals  = [s.strip() for s in re.split(r"[|｜]", (r["主参数值"] or "")) if s.strip()]
+                dname  = (r["被联动参数名称"] or "").strip()
+                opts   = _to_list(r["联动选项"])
+
+                if not (mnames and mvals and dname) or len(mnames) != len(mvals):
+                     continue
+
+                masters = list(zip(mnames, mvals))
+                rules.append({"masters": masters, "dependent": dname, "options": opts})
+
+
+            mapping["_compound_rules"] = rules
             return mapping
     finally:
-        connection.close()
+        conn.close()
+
+
+
+
 
 
 def toggle_dependent_fields(table, trigger_combo, trigger_value: str, target_field_names: list, logic="=="):
@@ -1552,6 +1618,26 @@ def query_template_codes(product_id):
         connection.close()
 
 
+
+def query_extra_param_value(product_id, param_name):
+    """从 `产品设计活动表_元件附加参数表` 读取换热管外径"""
+    conn = get_connection(**db_config_1)
+    try:
+        with conn.cursor() as cur:
+            sql = """
+                SELECT 参数值
+                FROM 产品设计活动表_元件附加参数表
+                WHERE 产品ID = %s AND 参数名称 = %s
+            """
+            cur.execute(sql, (product_id, param_name))
+            row = cur.fetchone()
+            return None if not row else row.get("参数值")
+    finally:
+        conn.close()
+
+
+
+
 def update_guankou_params_bulk(rows: Iterable[Tuple[str, str, str, Any]],
                                treat_empty_as_null: bool = False) -> Dict[str, Any]:
     """
@@ -1590,139 +1676,110 @@ def update_guankou_params_bulk(rows: Iterable[Tuple[str, str, str, Any]],
     return {"updated": updated, "missing": missing}
 
 
-def get_numeric_rules(conn_factory, db_cfg) -> Tuple[Set[str], Set[str], Dict[str, tuple]]:
-    """
-    读取数据库里的数值校验规则。
-    返回：
-      gt0_set    -> 需 >0 的参数名集合
-      ge0_set    -> 需 ≥0 的参数名集合
-      range_map  -> 需范围校验的参数名 -> (lo, hi, lo_inc, hi_inc)
-                    lo/hi 可为 None；lo_inc/hi_inc 为 bool，表示是否包含端点
-    若读取失败或表为空，自动回退到一份内置默认集（与你现在逻辑一致）。
-    """
-    gt0_set, ge0_set, range_map = set(), set(), {}
-
-    try:
-        conn = conn_factory(**db_cfg)
-        try:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT 参数名称, 规则类型, 最小值, 最大值, 含下限, 含上限
-                    FROM 参数校验规则表
-                    WHERE 是否启用=1
-                """)
-                rows = cur.fetchall()
-        finally:
-            conn.close()
-
-        for name, rtype, lo, hi, lo_inc, hi_inc in rows:
-            name  = (name  or "").strip()
-            rtype = (rtype or "").strip().lower()
-            if not name or not rtype:
-                continue
-
-            if rtype == "gt0":
-                gt0_set.add(name)
-            elif rtype == "ge0":
-                ge0_set.add(name)
-            elif rtype == "range":
-                try:
-                    lo_f = None if lo is None or lo == "" else float(lo)
-                    hi_f = None if hi is None or hi == "" else float(hi)
-                except Exception:
-                    lo_f, hi_f = None, None
-                lo_in = bool(lo_inc) if lo_inc is not None else True
-                hi_in = bool(hi_inc) if hi_inc is not None else True
-                range_map[name] = (lo_f, hi_f, lo_in, hi_in)
-
-    except Exception as e:
-        print(f"[警告] 读取 参数校验规则表 失败，使用默认规则：{e}")
-
-    # 若三类都为空 -> 使用默认（与你原先集合一致）
-    if not gt0_set and not ge0_set and not range_map:
-        default_gt0 = {
-            "隔板管板侧削边角度", "隔板管板侧削边长度", "隔板管板侧端部与管箱法兰密封面差值", "铭牌板厚度", "铭牌板倒圆半径",
-            "排净孔轴向定位x倍隔板轴向长度", "削边角度", "削边长度", "旁路挡板厚度", "中间挡板厚度", "管板凸台高度",
-            "滑道高度", "滑道厚度", "滑道与竖直中心线夹角", "切边长度 L1", "切边高度 h", "封头总深度H/总高度Ho",
-            "球面部分内半径R", "过渡圆转角半径r", "铭牌板倒圆半径", "垫片与密封面接触内径D1", "铭牌板长度", "铭牌板宽度",
-            "垫片与密封面接触外径D2", "铭牌支架长度", "铭牌支架宽度", "铭牌支架厚度", "铭牌支架高度", "铭牌支架铆钉孔直径",
-            "铭牌支架长度方向铆钉孔间距", "铭牌支架宽度方向铆钉孔间距", "铭牌支架折弯圆角半径", "铭牌支架与铭牌板边距",
-            "垫片名义内径D1n", "垫片名义外径D2n", "垫片厚度", "三角缺口高度", "圆孔直径",
-            "隔板平盖侧削边长度", "隔板平盖侧削边角度", "隔板平盖侧端部与头盖法兰密封面差值"
-        }
-        default_ge0 = {
-            "凸面高度", "隔板槽深度", "覆层厚度", "凹槽深度",
-            "附加弯矩", "轴向拉伸载荷", "预设厚度1", "预设厚度2", "预设厚度3",
-            "管程侧分程隔板槽深度", "壳程侧分程隔板槽深度", "分程隔板槽宽",
-            "管程侧腐蚀裕量", "壳程侧腐蚀裕量", "管程侧覆层厚度", "壳程侧覆层厚度",
-            "防冲板厚度", "排气通液槽高度h", "鞍座高度h", "垫片比压力y", "垫片系数m",
-        }
-        default_range = {
-            # 角度：30 < x < 120
-            "三角缺口角度": (30.0, 120.0, False, False)
-        }
-        return default_gt0, default_ge0, default_range
-
-    return gt0_set, ge0_set, range_map
 
 
 
 
-def get_numeric_rules() -> Tuple[Set[str], Set[str], Dict[str, Tuple[Optional[float], Optional[float], bool, bool]]]:
-    """
-    读取【参数校验规则表】里的规则。
-    返回:
-      gt0_set   -> 需 >0 的参数名集合
-      ge0_set   -> 需 ≥0 的参数名集合
-      range_map -> 需范围校验的参数名 -> (lo, hi, lo_inc, hi_inc)
-    不做任何默认兜底；表为空或查询失败时，返回空集合/空字典。
-    """
+def get_numeric_rules() -> Tuple[
+    Set[str],
+    Set[str],
+    Dict[str, Tuple[Optional[float], Optional[float], bool, bool]],
+    Dict[str, Set[str]]
+]:
     gt0_set: Set[str] = set()
     ge0_set: Set[str] = set()
     range_map: Dict[str, Tuple[Optional[float], Optional[float], bool, bool]] = {}
+    allowed_map: Dict[str, Set[str]] = defaultdict(set)
 
-    conn = None
+    def _to_float(x):
+        if x is None or x == "":
+            return None
+        if isinstance(x, Decimal):
+            return float(x)
+        try:
+            return float(x)
+        except Exception:
+            return None
+
+    def _norm_rule(rt) -> str:
+        if rt is None:
+            return ""
+        s = str(rt).strip().lower()
+        # 常见写法统一
+        s = (s.replace("＞", ">").replace("＜", "<").replace("＝", "=")
+               .replace("～", "~").replace("－", "-"))
+        if s in {"gt0", ">0", "大于0"}:
+            return "gt0"
+        if s in {"ge0", ">=0", "≥0", "大于等于0"}:
+            return "ge0"
+        if s in {"range", "范围"}:
+            return "range"
+        return s  # 其余交给下面的 warn 统计
+
+    conn = get_connection(**db_config_2)
     try:
-        conn = pymysql.connect(**db_config_2)
+        # 用 DictCursor，rows 是 dict 列表（你的环境就是这个）
         with conn.cursor() as cur:
             cur.execute("""
-                SELECT 参数名称, 规则类型, 最小值, 最大值, 含下限, 含上限
+                SELECT 参数名称, 规则类型, 最小值, 最大值, 含下限, 含上限, 允许字面值
                 FROM 参数校验规则表
                 WHERE 是否启用=1
             """)
             rows = cur.fetchall() or []
 
-        for name, rtype, lo, hi, lo_inc, hi_inc in rows:
-            name  = (name or "").strip()
-            rtype = (rtype or "").strip().lower()
-            if not name or not rtype:
+        unknown_rules = []
+
+        for row in rows:
+            # --- 全部按列名取值 ---
+            name      = (row.get("参数名称") or "").strip()
+            rtype_raw = row.get("规则类型")
+            lo_raw    = row.get("最小值")
+            hi_raw    = row.get("最大值")
+            lo_inc    = row.get("含下限")
+            hi_inc    = row.get("含上限")
+            allow_txt = row.get("允许字面值")
+
+            if not name:
                 continue
 
+            rtype = _norm_rule(rtype_raw)
+
+            # 允许字面值
+            if allow_txt:
+                for seg in str(allow_txt).replace("，", ",").split(","):
+                    s = seg.strip()
+                    if s:
+                        allowed_map[name].add(s)
+
+            # 数值端点 & 包含端点
+            lo_f = _to_float(lo_raw)
+            hi_f = _to_float(hi_raw)
+            lo_in = bool(int(lo_inc)) if lo_inc is not None else True
+            hi_in = bool(int(hi_inc)) if hi_inc is not None else True
+
+            # 三类规则
             if rtype == "gt0":
                 gt0_set.add(name)
             elif rtype == "ge0":
                 ge0_set.add(name)
             elif rtype == "range":
-                # None / 空串 -> None；边界布尔默认 True（包含）
-                try:
-                    lo_f = None if lo in (None, "") else float(lo)
-                    hi_f = None if hi in (None, "") else float(hi)
-                except Exception:
-                    lo_f, hi_f = None, None
-                lo_in = bool(lo_inc) if lo_inc is not None else True
-                hi_in = bool(hi_inc) if hi_inc is not None else True
                 range_map[name] = (lo_f, hi_f, lo_in, hi_in)
+            else:
+                # 未识别写法，记录一下方便一次性修表
+                unknown_rules.append((name, rtype_raw))
 
-    except Exception:
-        # 按你的要求，不做兜底也不报噪音；直接返回空集合/字典
-        pass
+        if unknown_rules:
+            preview = ", ".join([f"{n}:{t}" for n, t in unknown_rules[:10]])
+            print(f"[rules][warn] 未识别的规则类型写法（示例）: {preview} … 共 {len(unknown_rules)} 条")
+
+
     finally:
         try:
-            if conn: conn.close()
+            conn.close()
         except Exception:
             pass
 
-    return gt0_set, ge0_set, range_map
+    return gt0_set, ge0_set, range_map, dict(allowed_map)
 
 
 
@@ -1931,7 +1988,7 @@ def query_guankou_affiliation(product_id, guankou_code):
                 elem_type = (raw_elem or "").strip().lower()
                 if "管" in elem_type:
                     affiliation = "管程"
-                elif "壳" in elem_type:
+                elif "壳" in elem_type or "外头盖" in elem_type:      # 加上外头盖，取壳程数值，是AES和BES新加的
                     affiliation = "壳程"
                 print(f"[调试] 产品ID={product_id}, 管口={guankou_code}, 数据库值='{raw_elem}', 归类='{affiliation}'")
             else:
@@ -2085,6 +2142,590 @@ def query_template_name_by_product(product_id: str) -> str:
             return ""
     finally:
         conn.close()
+
+
+
+def _normalize_seg(s: str) -> str:
+    if not s: return ""
+    s = str(s).strip()
+    # 全角数字和符号常见替换
+    table = {
+        '＋': '+', '－': '-', '＜': '<', '＞': '>', '＝': '=',
+        '～': '~', '—': '-', '–': '-', '－': '-', '——': '-',
+        '，': ',', '：': ':',
+        '（': '(', '）': ')',
+        '。': '.', '、': ',', '·': '.',
+        '　': ' ',  # 全角空格
+    }
+    for k, v in table.items():
+        s = s.replace(k, v)
+    # 统一小于等/大于等的多种写法
+    s = s.replace('≤', '<=').replace('≥', '>=')
+    # 去掉所有空格
+    s = re.sub(r'\s+', '', s)
+    return s
+
+def _parse_range_text_to_bounds(txt: str):
+    """
+    返回 (lo, hi, lo_inc, hi_inc)
+    约定：
+      - 右端缺比较符 => 默认 <=
+      - 左端缺比较符 => 默认 >=
+      - 示例：'>25~38' => (25, 38, False, True)
+    """
+    if not txt:
+        return (None, None, True, True)
+
+    s = _normalize_seg(txt)
+
+    # 单端形式
+    m = re.fullmatch(r'(<=|>=|<|>)(-?\d+(\.\d+)?)', s)
+    if m:
+        op, num = m.group(1), float(m.group(2))
+        if op in ('<', '<='):
+            return (None, num, False, op == '<=')
+        else:
+            return (num, None, op == '>=', False)
+
+    # 允许的区间分隔符：-、~、至
+    # 例：>25-<=38, >=25-<38, >25~38, 25-57
+    # 右端或左端可带比较符；缺省则左端>=，右端<=
+    # 先按分隔符切两段
+    parts = re.split(r'[-~至]', s)
+    if len(parts) != 2:
+        # 兜底：如果没切出两段，当作无法识别的单值，返回全开区间
+        # 这样不会再抛“expected 2”异常
+        return (None, None, True, True)
+
+    left, right = parts[0], parts[1]
+    # 解析左段
+    mL = re.fullmatch(r'(>=|>|<=|<)?(-?\d+(\.\d+)?)', left)
+    if not mL:
+        return (None, None, True, True)
+    opL = mL.group(1) or '>='   # 缺省 >=
+    nL  = float(mL.group(2))
+
+    # 解析右段
+    mR = re.fullmatch(r'(>=|>|<=|<)?(-?\d+(\.\d+)?)', right)
+    if not mR:
+        return (None, None, True, True)
+    opR = mR.group(1) or '<='   # 缺省 <=
+    nR  = float(mR.group(2))
+
+    # 左端
+    if opL == '>=': lo, lo_inc = nL, True
+    elif opL == '>': lo, lo_inc = nL, False
+    elif opL == '<=':  # 少见，但给出合理解释：x <= nL … 与右端一起由 _in_range 处理
+        lo, lo_inc = None, True
+        # 这种写法通常是笔误，这里不强行抛错
+    elif opL == '<':
+        lo, lo_inc = None, False
+    else:
+        lo, lo_inc = nL, True
+
+    # 右端
+    if opR == '<=': hi, hi_inc = nR, True
+    elif opR == '<': hi, hi_inc = nR, False
+    elif opR == '>=':
+        hi, hi_inc = None, True
+    elif opR == '>':
+        hi, hi_inc = None, False
+    else:
+        hi, hi_inc = nR, True
+
+    return (lo, hi, lo_inc, hi_inc)
+
+
+
+def _in_range(x: float, lo, hi, lo_inc: bool, hi_inc: bool) -> bool:
+    if lo is not None:
+        if lo_inc and not (x >= lo): return False
+        if not lo_inc and not (x >  lo): return False
+    if hi is not None:
+        if hi_inc and not (x <= hi): return False
+        if not hi_inc and not (x <  hi): return False
+    return True
+
+
+def query_tube_specs_by_level_and_od(bundle_level: str, tube_od_mm: float) -> dict:
+    """
+    只从数据库取：
+      - 换热管外径允许偏差 ：来自《换热管外径允许偏差表》（按区间匹配）
+      - 管孔直径 / 管孔直径允许偏差：来自《换热管管孔直径允许偏差表》（精确到表值；无则留空）
+    不做任何规则兜底或四舍五入。
+    返回键名与 UI 行名一致：
+      {"换热管外径允许偏差": str, "管孔直径": str 或 None, "管孔直径允许偏差": str}
+    """
+    res = {"换热管外径允许偏差": "", "管孔直径": None, "管孔直径允许偏差": ""}
+
+    conn = get_connection(**db_config_2)  # 材料库
+    try:
+        with conn.cursor() as cur:
+            # === 1) 外径允许偏差：区间匹配 ===
+            sql1 = "SELECT * FROM 换热管外径允许偏差表 WHERE 管束级别 = %s"
+            cur.execute(sql1, (bundle_level,))
+            rows = cur.fetchall() or []
+            if rows:
+                cols = list(rows[0].keys())
+                known = {"换热管外径允许偏差", "管束级别"}
+                cand_cols = [c for c in cols if c not in known]
+
+                def looks_like_range(v: str) -> bool:
+                    if not isinstance(v, str): return False
+                    s = v.strip()
+                    # 兼容 -, ~, ～, 至 以及全/半角比较符
+                    return any(ch in s for ch in ['≤','≥','<','>','-','~','～','至']) and len(s) <= 24
+
+                # 优先用“分档条序”列名；没有则自动识别
+                range_col = "分档条序" if "分档条序" in cols else None
+                if range_col is None:
+                    for c in cand_cols:
+                        vv = str(rows[0].get(c) or "")
+                        if looks_like_range(vv):
+                            range_col = c; break
+                    if not range_col and cand_cols:
+                        range_col = cand_cols[0]
+
+                if range_col:
+                    for r in rows:
+                        seg = (r.get(range_col) or "").strip()
+                        tol = (r.get("换热管外径允许偏差") or "").strip()
+                        if not seg or not tol:
+                            continue
+                        lo, hi, lo_inc, hi_inc = _parse_range_text_to_bounds(seg)  # 你的鲁棒解析版
+                        if _in_range(tube_od_mm, lo, hi, lo_inc, hi_inc):
+                            res["换热管外径允许偏差"] = tol
+                            break
+
+            # === 2) 管孔直径 & 管孔直径允许偏差：只查表，不兜底 ===
+            # 用容差匹配避免浮点比较误差（DECIMAL 也安全）
+            sql3 = """
+            SELECT 管孔直径, 管孔直径允许偏差
+            FROM 换热管管孔直径允许偏差表
+            WHERE 管束级别 = %s AND ABS(换热管外径 - %s) < 1e-6
+            LIMIT 1
+            """
+            cur.execute(sql3, (bundle_level, tube_od_mm))
+            r3 = cur.fetchone()
+            if r3:
+                if r3.get("管孔直径") is not None:
+                    # 直接转字符串，保留 57.70/32.45 这样的精度
+                    res["管孔直径"] = str(r3["管孔直径"])
+                if r3.get("管孔直径允许偏差"):
+                    res["管孔直径允许偏差"] = (r3["管孔直径允许偏差"] or "").strip()
+
+            # 不再做任何“历史表”回退或规则加值
+    finally:
+        conn.close()
+
+    return res
+
+
+def _first_nonempty(*vals):
+    for v in vals:
+        if v not in (None, ""):
+            return str(v).strip()
+    return ""
+
+def _normalize_dn(s):
+    if not s: return ""
+    try:
+        f = float(s)
+        return str(int(round(f))) if abs(f - round(f)) < 1e-9 else s
+    except Exception:
+        return s
+
+def get_dn_by_side(product_id: str, side: str) -> str:
+    """
+    DN 从《产品设计活动表_设计数据表》读取：
+      参数名优先级: 公称直径DN > 公称直径* > 公称直径
+      side: '管程'取管程数值，'壳程'取壳程数值，其他 -> 先管程、空则壳程
+    """
+    dn_names = ("公称直径DN", "公称直径*", "公称直径")
+    prefer_tube  = "管程" in (side or "")
+    prefer_shell = "壳程" in (side or "")
+
+    conn = get_connection(**db_config_1)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT 参数名称, 管程数值, 壳程数值
+                FROM 产品设计活动表_设计数据表
+                WHERE 产品ID=%s
+            """, (product_id,))
+            rows = cur.fetchall() or []
+    finally:
+        conn.close()
+
+    idx = { (r.get("参数名称") or "").strip(): (r.get("管程数值"), r.get("壳程数值")) for r in rows }
+    for nm in dn_names:
+        if nm in idx:
+            tube, shell = idx[nm]
+            if prefer_tube:
+                val = _first_nonempty(tube, shell)
+            elif prefer_shell:
+                val = _first_nonempty(shell, tube)
+            else:
+                val = _first_nonempty(tube, shell)
+            return _normalize_dn(val)
+    return ""
+
+
+def query_gasket_material_options_by_type_std(gasket_type: str, gasket_standard: str) -> dict:
+    """
+    返回:
+    {
+        "垫片材料候选": ["柔性石墨", "金属缠绕", ...],  # 供“垫片材料”下拉用
+        "垫片比压力y": "3.0",                      # 可空
+        "垫片系数m": "1.0"                         # 可空
+    }
+    取不到返回 {}
+    """
+    t = (gasket_type or "").strip()
+    st = (gasket_standard or "").strip()
+    if not t or not st:
+        return {}
+
+    conn = get_connection(**db_config_2)  # 材料库
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cur:
+            # 取候选材料
+            sql_mats = """
+                SELECT DISTINCT 垫片材料
+                FROM 垫片定义表
+                WHERE 垫片类型=%s AND (垫片标准=%s OR 垫片标准 LIKE %s)
+                ORDER BY 垫片材料
+            """
+            cur.execute(sql_mats, (t, st, f"%{st}%"))
+            mats = [ (row.get("垫片材料") or "").strip() for row in cur.fetchall() if (row.get("垫片材料") or "").strip() ]
+
+            # 取 y/m（优先精确命中）
+            sql_ym = """
+                SELECT 垫片比压力y, 垫片系数m
+                FROM 垫片定义表
+                WHERE 垫片类型=%s AND (垫片标准=%s OR 垫片标准 LIKE %s)
+                ORDER BY CASE WHEN 垫片标准=%s THEN 0 ELSE 1 END
+                LIMIT 1
+            """
+            cur.execute(sql_ym, (t, st, f"%{st}%", st))
+            ym = cur.fetchone() or {}
+
+            def _fmt(v):
+                return "" if v in (None, "") else str(v)
+
+            return {
+                "垫片材料候选": list(dict.fromkeys(mats)),  # 去重保序
+                "垫片比压力y": _fmt(ym.get("垫片比压力y")),
+                "垫片系数m": _fmt(ym.get("垫片系数m")),
+            }
+    finally:
+        conn.close()
+
+
+
+
+
+
+def _fetch_design_rows(product_id: str):
+    conn = get_connection(**db_config_1)
+    try:
+        with conn.cursor() as cur:
+            sql = f"""
+                SELECT 参数名称, 管程数值, 壳程数值
+                FROM 产品设计活动表_设计数据表
+                WHERE 产品ID=%s AND 参数名称='设计压力* '
+            """
+            cur.execute(sql, (product_id,))
+            return cur.fetchall() or []
+    finally:
+        conn.close()
+
+_PN_NAME_CANDIDATES = ("设计压力*", "设计压力", "公称压力PN", "公称压力", "压力等级PN", "压力等级")
+
+def get_design_pressure_side(product_id: str, side: str) -> str:
+    """
+    侧别：'管程'取管程值，'壳程'取壳程值，其他 -> 先管程空则壳程
+    参数名按 _PN_NAME_CANDIDATES 的优先级依次尝试。
+    """
+    prefer_tube  = "管程" in (side or "")
+    prefer_shell = "壳程" in (side or "")
+
+    rows = _fetch_design_rows(product_id)
+    # 建一个 name -> (tube, shell) 的索引
+    idx = { (r.get("参数名称") or "").strip(): (r.get("管程数值"), r.get("壳程数值")) for r in rows }
+
+    for nm in _PN_NAME_CANDIDATES:
+        if nm in idx:
+            tube, shell = idx[nm]
+            if prefer_tube:
+                return _first_nonempty(tube, shell)
+            if prefer_shell:
+                return _first_nonempty(shell, tube)
+            return _first_nonempty(tube, shell)
+    return ""
+
+def get_design_pressure_max(product_id: str) -> str:
+    """
+    浮头法兰/钩圈：两侧取最大；读不到时按“先管程空则壳程”。
+    """
+    rows = _fetch_design_rows(product_id)
+    idx = { (r.get("参数名称") or "").strip(): (r.get("管程数值"), r.get("壳程数值")) for r in rows }
+
+    for nm in _PN_NAME_CANDIDATES:
+        if nm in idx:
+            tube, shell = idx[nm]
+            try:
+                vals = [float(v) for v in (tube, shell) if v not in (None, "")]
+                if vals:
+                    return str(max(vals))
+            except Exception:
+                pass
+            # 解析失败就按非空优先返回
+            return _first_nonempty(tube, shell)
+    return ""
+
+
+
+
+def get_dn_for_outer_head_cylinder(product_id: str) -> str:
+    """
+    固定来源：
+      表：产品设计活动表_元件附加参数表（产品库）
+      条件：产品ID = ? AND 元件名称 = '外头盖圆筒' AND 参数名称 = '公称直径'
+    读取“参数数值”，过滤掉空值/“程序推荐”，取最近一条可用记录。
+    返回：整数字符串（例如 800.0 -> '800'）；取不到返回 ""。
+    """
+    conn = get_connection(**db_config_1)
+    try:
+        with conn.cursor() as cur:
+            sql = """
+                SELECT 参数数值
+                FROM 产品设计活动表_元件附加参数表
+                WHERE 产品ID=%s
+                  AND 元件名称='外头盖圆筒'
+                  AND 参数名称='公称直径'
+            """
+            cur.execute(sql, (product_id,))
+            rows = cur.fetchall() or []
+
+            for row in rows:
+                v = row.get("参数数值")
+                if v in (None, ""):
+                    continue
+                s = str(v).strip()
+                if s == "程序推荐":
+                    continue
+                # 只接受纯数值
+                try:
+                    f = float(s)
+                except Exception:
+                    continue
+                # 归一化：800.0 -> '800'
+                return str(int(round(f))) if abs(f - round(f)) < 1e-9 else s
+
+            return ""
+    finally:
+        conn.close()
+
+
+
+
+
+
+def get_gasket_mapping(gasket_name: str) -> dict:
+    """
+    FROM 材料库.垫片配套法兰映射表
+    返回: {"flange": 配套法兰, "flange_side": 法兰管壳程, "gasket_side": 垫片管壳程}
+    """
+    res = {"flange": "", "flange_side": "", "gasket_side": ""}
+    if not gasket_name:
+        return res
+    conn = get_connection(**db_config_2)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT 配套法兰, 法兰管壳程, 垫片管壳程
+                FROM 垫片配套法兰映射表
+                WHERE 垫片名称=%s
+                LIMIT 1
+            """, (gasket_name.strip(),))
+            row = cur.fetchone()
+            if row:
+                res["flange"]      = (row.get("配套法兰") or "").strip()
+                res["flange_side"] = (row.get("法兰管壳程") or "").strip()
+                res["gasket_side"] = (row.get("垫片管壳程") or "").strip()
+    finally:
+        conn.close()
+    return res
+
+
+def get_dn_for_gasket(product_id: str, gasket_name: str) -> str:
+    """
+    DN 取值规则：
+      - 看映射表“垫片管壳程”
+         · 若为“参数定义” 且 垫片=外头盖垫片 -> 取 外头盖圆筒 的 公称直径
+         · 否则 -> 按该侧别 get_dn_by_side
+    """
+    m = get_gasket_mapping(gasket_name or "")
+    gasket_side = m.get("gasket_side", "")
+    if gasket_side == "参数定义" and (gasket_name or "").strip() == "外头盖垫片":
+        return get_dn_for_outer_head_cylinder(product_id)
+    return get_dn_by_side(product_id, gasket_side)
+
+
+def get_pn_for_gasket(product_id: str, gasket_name: str) -> str:
+    """
+    压力等级(=《设计压力*》) 取值规则：
+      - 看映射表“配套法兰/法兰管壳程”
+      - 若配套法兰 ∈ {浮头法兰, 钩圈} -> 取两侧《设计压力*》最大值
+      - 否则 -> 按“法兰管壳程”取对应侧《设计压力*》
+    """
+    m = get_gasket_mapping(gasket_name or "")
+    flange      = m.get("flange", "")
+    flange_side = m.get("flange_side", "")
+    print(f"f{flange}")
+
+    if flange in {"浮头法兰", "钩圈"}:
+        return get_design_pressure_max(product_id)
+    return get_design_pressure_side(product_id, flange_side)
+
+
+
+def map_gasket_type_code_from_db(gasket_type: str) -> str:
+    """
+    从《垫片类型对照表》把垫片类型映射到类型代号（如 SWG/JG/MCG/FG/NMG）
+    读不到返回空串
+    """
+    if not gasket_type:
+        return ""
+    conn = get_connection(**db_config_2)
+    try:
+        with conn.cursor() as cur:
+            sql = "SELECT 垫片名称代号 FROM 垫片类型对照表 WHERE 垫片类型=%s LIMIT 1"
+            cur.execute(sql, (gasket_type.strip(),))
+            row = cur.fetchone()
+            return (row.get("垫片名称代号") or "").strip() if row else ""
+    finally:
+        conn.close()
+
+
+# 你按实际补全：示例
+_GASKET_NAME_CODE_MAP = {
+    "管箱垫片": "G-T-C",
+    "平盖垫片": "G-T-C",
+    "管箱侧垫片": "G-T-C",   # 示例
+    "浮头垫片": "F",
+    "外头盖垫片": "W"
+}
+
+def map_gasket_name_code(gasket_name: str) -> str:
+    """
+    直接用本地字典做名称->代号映射；没有就返回空串
+    """
+    return _GASKET_NAME_CODE_MAP.get((gasket_name or "").strip(), "")
+
+
+
+
+# 《垫片尺寸》主表
+_GSK_TBL_SIZE = "垫片尺寸"
+def _like(tok: str) -> str: return f"%{tok}%" if tok else "%"
+
+def query_gasket_D_d_d1_from_size(*, dn: str, pn: str, cs_code: str, st_abbr: str, gp_code: str) -> dict:
+    """
+    命中 -> 返回 {"D": "...", "d": "...", "d1": "...", "nonstd": False, "msg": ""}
+    未中 -> 返回 {"D": "程序推荐", "d": "程序推荐", "d1": "程序推荐", "nonstd": True, "msg": "..."}
+    """
+    if not (dn and pn and cs_code and st_abbr and gp_code):
+        return {"外直径D":"程序推荐","内直径d":"程序推荐","环内径d1":"程序推荐","nonstd":True,"msg":"检索条件不完整(DN/PN/CS/ST/GP)"}
+
+    conn = get_connection(**db_config_2)
+    try:
+        with conn.cursor() as cur:
+            sql = """
+            SELECT 外直径D,内直径d,环内径d1
+            FROM 垫片尺寸表
+            WHERE 公称直径DN=%s AND 压力等级PN=%s
+              AND 垫片名称CS LIKE %s AND 标准号ST LIKE %s AND 分类GP LIKE %s
+            LIMIT 1
+            """
+            cur.execute(sql, (dn, pn, _like(cs_code), _like(st_abbr), _like(gp_code)))
+            row = cur.fetchone()
+            if row:
+                return {
+                    "外直径D":  "" if row.get("外直径D")  is None else str(row.get("外直径D")),
+                    "内直径d":  "" if row.get("内直径d")  is None else str(row.get("内直径d")),
+                    "环内径d1": "" if row.get("环内径d1") is None else str(row.get("环内径d1")),
+                    "nonstd": False, "msg": ""
+                }
+            return {"外直径D":"程序推荐","内直径d":"程序推荐","环内径d1":"程序推荐","nonstd":True,"msg":"《垫片尺寸》未命中记录"}
+    finally:
+        conn.close()
+
+
+
+def resolve_gasket_dimensions(
+    product_id: str,
+    gasket_name: str,      # 页面“垫片名称”（没有就用元件名）
+    gasket_standard: str,  # ★ 页面“垫片标准”，直接作为 ST 使用
+    gasket_type: str       # 页面“垫片型式/垫片类型”
+) -> dict:
+    """
+    流程：
+      1) 取所属（垫片配置法兰映射表）
+      2) 按所属取 DN/PN（仅查产品设计活动库，不回落其它）
+      3) 名称→代号（本地映射 map_gasket_name_code）
+         类型→代号（垫片类型对照表 map_gasket_type_code_from_db）
+         ★ 标准 ST：直接用 gasket_standard（LIKE 匹配）
+      4) 《垫片尺寸》查询，返回 D/d/d1；未命中 -> “程序推荐”
+    """
+    dn = get_dn_for_gasket(product_id, gasket_name or "")
+    pn = get_pn_for_gasket(product_id, gasket_name or "")
+
+    cs_code = map_gasket_name_code(gasket_name or "")
+    gp_code = map_gasket_type_code_from_db(gasket_type or "")
+    st_abbr = (gasket_standard or "").strip()
+    print(f"dn{dn},pn{pn},cscode{cs_code},gp_code{gp_code}")
+
+    return query_gasket_D_d_d1_from_size(
+        dn=dn, pn=pn, cs_code=cs_code, st_abbr=st_abbr, gp_code=gp_code
+    )
+
+
+def update_extra_param_value_by_name(product_id: str, param_name: str, value: str):
+    """按 产品ID + 参数名称 产品设计活动表_元件附加参数表中的 参数值。"""
+    conn = get_connection(**db_config_1)
+    try:
+        with conn.cursor() as cur:
+            sql = """
+                UPDATE 产品设计活动表_元件附加参数表
+                SET 参数值 = %s
+                WHERE 产品ID = %s AND 参数名称 = %s
+            """
+            cur.execute(sql, (value, product_id, param_name))
+        conn.commit()
+    finally:
+        conn.close()
+
+def sync_baffle_thickness_to_db(product_id: str, names: set, value: str):
+    """把同一个值写入同一产品下 names 里所有‘厚度’参数。"""
+    if not product_id or not names:
+        return
+    conn = get_connection(**db_config_1)
+    try:
+        with conn.cursor() as cur:
+            sql = """
+                UPDATE 产品设计活动表_元件附加参数表
+                SET 参数值 = %s
+                WHERE 产品ID = %s AND 参数名称 = %s
+            """
+            for n in names:
+                cur.execute(sql, (value, product_id, n))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 
 
 

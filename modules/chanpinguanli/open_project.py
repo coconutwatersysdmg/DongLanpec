@@ -18,12 +18,12 @@ from PyQt5.QtWidgets import QFileDialog
 
 
 # 最近使用的文件夹的路径记录
-def save_last_used_path(path):
-    try:
-        with open("last_project_path.txt", "w", encoding="utf-8") as f:
-            f.write(path)
-    except Exception as e:
-        print("项目，文件夹写入最近路径失败", e)
+# def save_last_used_path(path):
+#     try:
+#         with open("last_project_path.txt", "w", encoding="utf-8") as f:
+#             f.write(path)
+#     except Exception as e:
+#         print("项目，文件夹写入最近路径失败", e)
 
 
 
@@ -435,8 +435,8 @@ def open_project():
 
         QMessageBox.information(bianl.main_window, "成功", "项目和产品数据加载成功！")
         # 存最近打开的项目文件夹
-        parent_folder = os.path.dirname(folder_path)
-        save_last_used_path(parent_folder)
+        # parent_folder = os.path.dirname(folder_path)
+        # save_last_used_path(parent_folder)
         # 产品信息字体颜色灰色刷新
         # apply_table_font_style()
 

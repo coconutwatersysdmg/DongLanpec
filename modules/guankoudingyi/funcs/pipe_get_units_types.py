@@ -1,12 +1,4 @@
-from modules.guankoudingyi.db_cnt import get_connection
-
-db_config_2 = {
-    'host': 'localhost',
-    'port': 3306,
-    'user': 'root',
-    'password': '123456',
-    'database': '产品设计活动库'
-}
+from modules.guankoudingyi.db_cnt import get_connection, db_config_2
 
 """获取产品的单位类型"""
 def get_unit_types_from_db(product_id):

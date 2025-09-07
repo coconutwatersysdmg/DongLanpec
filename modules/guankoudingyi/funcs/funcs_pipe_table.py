@@ -6,23 +6,7 @@ from PyQt5.QtWidgets import QAbstractItemView
 from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QTableWidgetSelectionRange
 
-from modules.guankoudingyi.db_cnt import get_connection
-
-db_config_1 = {
-    'host': 'localhost',
-    'port': 3306,
-    'user': 'root',
-    'password': '123456',
-    'database': '元件库'
-}
-
-db_config_2 = {
-    'host': 'localhost',
-    'port': 3306,
-    'user': 'root',
-    'password': '123456',
-    'database': '产品设计活动库'
-}
+from modules.guankoudingyi.db_cnt import get_connection, db_config_1, db_config_2
 
 # —— 运行期隐藏ID映射 + 待删ID 集合 ——
 def ensure_hidden_maps(stats_widget):

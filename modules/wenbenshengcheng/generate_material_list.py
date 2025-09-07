@@ -41,23 +41,28 @@ import pymysql
 mapping_dict = {
     "管箱封头": [("管箱封头", "椭圆形封头质量 kg", "质量")],
     "管箱圆筒": [("管箱圆筒", "圆筒重量kg", "质量")],
+    "外头盖圆筒": [("外头盖圆筒", "圆筒重量kg", "质量")],
+
     "管箱法兰": [("管箱法兰", "法兰毛坯质量", "质量")],
     "固定管板": [("固定管板", "管板重量-毛坯", "质量")],
-    "U形换热管": [
-        ("固定管板", "换热管根数", "数量")
-    ],
+    "U形换热管": [("固定管板", "换热管根数", "数量")],
     "壳体法兰": [("壳体法兰", "法兰毛坯质量", "质量")],
     "管箱平盖":[("管箱平盖", "法兰毛坯质量", "质量")],
     "头盖法兰":[("头盖法兰", "法兰毛坯质量", "质量")],
+    "外头盖法兰": [("外头盖法兰", "法兰毛坯质量", "质量")],
+    "外头盖侧法兰": [("外头盖侧法兰", "法兰毛坯质量", "质量")],
     "壳体圆筒": [("壳体圆筒", "圆筒重量kg", "质量")],
     "壳体封头": [("壳体封头", "椭圆形封头质量 kg", "质量")],
     "固定鞍座": [("固定鞍座", "鞍式支座质量", "质量")],
     "螺柱（管箱法兰）": [("管箱法兰", "螺栓数量", "数量")],
     "尾部支撑": [("管束", "尾部支撑数量", "数量")],
     "折流板": [("管束", "折流板数量", "数量")],
-    "分程隔板": [("管箱分程隔板", "水平隔板数量", "数量"),
-                 ("管箱分程隔板", "管箱分程隔板重量", "质量")],
-    "螺柱（壳体法兰）": [("壳体法兰", "螺栓数量", "数量")]
+    "分程隔板": [("管箱分程隔板", "水平隔板数量", "数量"),("管箱分程隔板", "管箱分程隔板重量", "质量")],
+    "螺柱（壳体法兰）": [("壳体法兰", "螺栓数量", "数量")],
+    "螺柱（浮头法兰）": [("浮头法兰", "螺栓数量", "数量")],
+    "换热管": [("固定管板", "换热管根数", "数量")],
+    "钩圈": [("浮头法兰", "钩圈重量", "质量")],
+
 }
 
 def load_json_file(path):
@@ -134,9 +139,41 @@ def get_material_density(component_name, product_id):
     except Exception as e:
         print(f"❌ 获取材料密度失败: {e}")
     return None
-def fill_special_items(sheet, jisuan_data, pipe_data, pipe_input_data, product_id):
+def fill_special_items(sheet, jisuan_data, product_id):
     import re
+    pipe_data={}
+    pipe_input_data={}
+    conn = pymysql.connect(
+        host="localhost", user="root", password="123456",
+        database="产品设计活动库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+    )
+    cursor = conn.cursor()
 
+    # 读取布管结果表
+    sql_result = """
+                SELECT `key`, `value` 
+                FROM 产品设计活动表_布管结果表
+                WHERE 产品ID = %s
+            """
+    cursor.execute(sql_result, (product_id,))
+    rows = cursor.fetchall()
+    pipe_data.clear()
+    for row in rows:
+        pipe_data[row["key"]] = row["value"]
+    print("pip_data:", pipe_data)
+    # 读取布管输入表
+    sql_input = """
+                SELECT `key`, `value` 
+                FROM 产品设计活动表_布管输入表
+                WHERE 产品ID = %s
+            """
+    cursor.execute(sql_input, (product_id,))
+    rows = cursor.fetchall()
+    pipe_input_data.clear()
+    for row in rows:
+        pipe_input_data[row["key"]] = row["value"]
+    print("pipe_input_data:", pipe_input_data)
+    cursor.close()
 
     def get_actual_diameter(dh):
         try:
@@ -187,13 +224,16 @@ def fill_special_items(sheet, jisuan_data, pipe_data, pipe_input_data, product_i
     # === 滑道质量计算 ===
     def calc_slipway_mass(pipe_input_data, jisuan_output_data, density):
         # === 从布管输入参数.json 中获取高度和厚度 ===
-        slipway_height = None
-        slipway_thick = None
-        for item in pipe_input_data:
-            if item.get("paramId") == "LB_SlipWayHeight":
-                slipway_height = float(item.get("paramValue", 0)) / 1000
-            elif item.get("paramId") == "LB_SlipWayThick":
-                slipway_thick = float(item.get("paramValue", 0)) / 1000
+
+        try:
+            slipway_height = float(pipe_input_data.get("LB_SlipWayHeight", 0)) / 1000.0
+        except (TypeError, ValueError):
+            slipway_height = 0.0
+
+        try:
+            slipway_thick = float(pipe_input_data.get("LB_SlipWayThick", 0)) / 1000.0
+        except (TypeError, ValueError):
+            slipway_thick = 0.0
 
         if not slipway_height or not slipway_thick:
             print("❌ 未找到滑道高度或厚度")
@@ -346,8 +386,20 @@ def fill_special_items(sheet, jisuan_data, pipe_data, pipe_input_data, product_i
                     dh_val = None
                 print(dh_val)
                 R = dh_val / 2 if dh_val else None
-                H1= get_param(jisuan_data.get("DictOutDatas", {}).get("管束", {}).get("Datas", []), "拉杆长度1")
-                H2= get_param(jisuan_data.get("DictOutDatas", {}).get("管束", {}).get("Datas", []), "拉杆长度2")
+                # 先取 DictOutDatas
+                dict_out = jisuan_data.get("DictOutDatas", {})
+
+                # 优先取 "管束"，如果没有就取 "浮头管束"
+                if "管束" in dict_out:
+                    datas = dict_out["管束"].get("Datas", [])
+                elif "浮头管束" in dict_out:
+                    datas = dict_out["浮头管束"].get("Datas", [])
+                else:
+                    datas = []
+
+                # 然后取参数
+                H1 = get_param(datas, "拉杆长度1")
+                H2 = get_param(datas, "拉杆长度2")
                 H = max(H1,H2)
                 print(H)
                 density = get_material_density("拉杆", product_id)
@@ -528,7 +580,17 @@ def fill_special_items(sheet, jisuan_data, pipe_data, pipe_input_data, product_i
                 mass_luozhu = round((math.pi * (R / 1000) ** 2 / 4) * (H / 1000) * density*1000, 2)
                 row[7].value = mass_luozhu
 
-
+        elif name == "螺柱（浮头法兰）" :
+            dh = get_value(jisuan_data, "管箱法兰", "螺栓公称直径")
+            R = get_actual_diameter(dh)
+            H = get_luozhu_length(jisuan_data, product_id)
+            density = get_material_density("螺柱（浮头法兰）", product_id)
+            print("R",R)
+            print("H",H)
+            print("density",density)
+            if R and H and density:
+                mass_luozhu = round((math.pi * (R / 1000) ** 2 / 4) * (H / 1000) * density*1000, 2)
+                row[7].value = mass_luozhu
 
         elif name == "螺母（管箱法兰）" and luozhu_qty:
             row[6].value = luozhu_qty * 2
@@ -616,6 +678,12 @@ def fill_special_items(sheet, jisuan_data, pipe_data, pipe_input_data, product_i
             uhx_mass = get_param(uhx_data, "单根换热管重量kg")
             uhx_mass = float(uhx_mass) if uhx_mass not in (None, "", "None") else None
             row[7].value = uhx_mass
+        elif name == "换热管":
+            # 获取换热管质量
+            uhx_data = jisuan_data.get("DictOutDatas", {}).get("固定管板", {}).get("Datas", [])
+            uhx_mass = get_param(uhx_data, "单根换热管重量kg")
+            uhx_mass = float(uhx_mass) if uhx_mass not in (None, "", "None") else None
+            row[7].value = uhx_mass
         elif name in {"固定鞍座", "滑动鞍座"}:
             if not row[6].value:
                 row[6].value = 1
@@ -695,26 +763,11 @@ def generate_material_list(product_id: str, output_path: str):
         sheet[f"K{row_idx}"] = "/" if row["材料类型"] == "见参数定义" else row["材料类型"]
         sheet[f"J{row_idx}"] = "/" if row["供货状态"] == "见参数定义" else row["供货状态"]
 
-    config_path = os.path.expandvars(r"%APPDATA%\UDS\蓝滨数字化合作\data\config.ini")
-    if not os.path.exists(config_path):
-        print(f"❌ 配置文件未找到: {config_path}")
-        wb.save(output_path)
-        return
-
-    with open(config_path, 'rb') as f:
-        raw = f.read()
-        encoding = chardet.detect(raw)['encoding'] or 'utf-8'
-    config = configparser.ConfigParser()
-    config.read_string(raw.decode(encoding))
-    product_dir = os.path.normpath(config.get('ProjectInfo', 'product_directory', fallback=''))
-
     # 加载 JSON
     json_jisuan = load_json_file(os.path.join(os.getcwd(), "jisuan_output_new.json"))
-    json_pipe = load_json_file(os.path.join(product_dir, "中间数据", "布管输出参数.json"))
-    pipe_input_data = load_json_file(os.path.join(product_dir, "中间数据", "布管输入参数.json"))
     # 填写信息
     fill_quantity_weight(json_jisuan, sheet)
-    fill_special_items(sheet, json_jisuan, json_pipe, pipe_input_data,product_id)
+    fill_special_items(sheet, json_jisuan,product_id)
 
     # 保存
     wb.save(output_path)

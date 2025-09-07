@@ -1,15 +1,7 @@
 from PyQt5.QtWidgets import QMessageBox, QLabel, QComboBox
 import pymysql
-from modules.guankoudingyi.db_cnt import get_connection
+from modules.guankoudingyi.db_cnt import get_connection, db_config_2
 from modules.guankoudingyi.funcs.funcs_pipe_table import ensure_hidden_maps, get_next_pipe_id_runtime
-
-db_config_2 = {
-    'host': 'localhost',
-    'port': 3306,
-    'user': 'root',
-    'password': '123456',
-    'database': '产品设计活动库'
-}
 
 def save_all_pipe_data(stats_widget):
     """

@@ -1,3 +1,4 @@
+import math
 import os
 import re
 import string
@@ -201,28 +202,15 @@ def calculate_heat_exchanger_strength(product_id):
 
         # === 查询管程分程形式 ===
         cursor.execute("""
-            SELECT 参数值 
-            FROM 产品设计活动表_布管参数表
-            WHERE 产品ID = %s AND 参数名 = '管程程数'
-            LIMIT 1
-        """, (product_id,))
+                SELECT 参数值 
+                FROM 产品设计活动表_布管参数表
+                WHERE 产品ID = %s AND 参数名 = '管程分程形式'
+                LIMIT 1
+            """, (product_id,))
         row = cursor.fetchone()
         tube_form = row["参数值"].strip() if row and row.get("参数值") else None
-        # === 处理查询结果并赋值给 design_params ===
-        if tube_form:
-            if re.match(r"^\d+_\d+$", tube_form):
-                design_params["管/壳程布置型式"] = tube_form.replace("_", ".")
-            elif tube_form == "2":
-                design_params["管/壳程布置型式"] = "2.1"
-            elif tube_form == "4":
-                design_params["管/壳程布置型式"] = "4.2"
-            elif tube_form == "6":
-                design_params["管/壳程布置型式"] = "6.2"
-            else:
-                design_params["管/壳程布置型式"] = tube_form
-        else:
-            print(f"⚠️ 未找到 产品ID={product_id} 的管程分程形式")
-            design_params["管/壳程布置型式"] = ""
+        design_params["管/壳程布置型式"] = tube_form
+
         # === 查询设计数据表 ===
         cursor.execute("""
             SELECT 参数名称, 壳程数值, 管程数值
@@ -304,8 +292,8 @@ def calculate_heat_exchanger_strength(product_id):
         "球冠形封头预设厚度1": "0", #球冠形封头
         "球冠形封头预设厚度2": "10",#球冠形封头
         "球冠形封头预设厚度3": "20",#球冠形封头
-        "外头盖内径距浮头法兰和钩圈外径最小距离": "10", #无
-        "外头盖圆筒内径递增值": "5",#无
+        # "外头盖内径距浮头法兰和钩圈外径最小距离": "10", #无
+        # "外头盖圆筒内径递增值": "5",#无
         "浮动管板名义厚度": "10",#无
         "浮动管板名义外径": "990", #无
         "公称直径": "1000", #管程
@@ -323,8 +311,8 @@ def calculate_heat_exchanger_strength(product_id):
         "球冠形封头材料牌号": "Q345R", #球冠形封头
         "球冠形封头耐压试验温度": "20", #无
         "球冠形封头装入深度": "27", #球冠形封头，封头焊入法兰深度
-        "球冠形封头焊接接头系数": "1", #无
-        "法兰密封面凸台高度": "6", #无
+        "球冠形封头焊接接头系数": "1", #无 #！暂时无
+        "法兰密封面凸台高度": "6", #无 #！暂时无
         "球冠形封头管程覆层厚度": "1",#球冠形封头
         "球冠形封头壳程覆层厚度": "2",#球冠形封头
         "管程球冠形封头腐蚀裕量": "2",#球冠形封头
@@ -337,41 +325,56 @@ def calculate_heat_exchanger_strength(product_id):
         "球冠形封头带覆层时的焊接凹槽深度": "2",  #无
         "B型钩圈试验温度": "20", #无
         "B型钩圈材料类型": "钢板", #钩圈
-        "B型钩圈材料名称": "Q345R", #钩圈
+        "B型钩圈材料牌号": "Q345R", #钩圈
         "B型钩圈覆层厚度": "3", #钩圈
-        "覆层位置": "双侧", #无
+        "覆层位置": "双侧", #无 #钩圈
         "螺栓中心圆直径": "2013", #无
         "螺栓材料牌号": "35CrMo", #螺柱（浮头法兰）
         "螺栓公称直径": "M20", #无
         "螺栓数量": "76", #无
         "螺栓根径": "0", #无
-        "垫片序号": "1", #无
+        # "垫片序号": "1", #无
         "垫片材料牌号": "复合柔性石墨波齿金属板(不锈钢)", #浮头垫片
         "m": "3",#浮头垫片
         "y": "50",#浮头垫片
         "垫片厚度": "3",#浮头垫片
         "分程隔板与垫片接触面面积": "0", #无
         "垫片实际密封宽度": "0", #无
-        "垫片代号": "2.1", #无
+        "垫片代号": "2.1", #无 #布管，管程分程形式
         "隔条位置尺寸": "0", #布管，隔条位置尺寸
-        "垫片标准号": "GB/T 29463-2023"#浮头垫片
+        "垫片标准号": "GB/T 29463-2023",#浮头垫片
+        "分程隔板槽宽度":  "2"# 固定管板
     }
-    # === 查询隔条位置尺寸 ===
+    cursor.execute("""
+                SELECT 参数名称, 参数值
+                FROM 产品设计活动表_元件附加参数表
+                WHERE 产品ID = %s AND 元件名称 = '浮动管板'
+            """, (product_id,))
+    rows = cursor.fetchall()
+    row_map = {row["参数名称"].strip(): safe_str(row["参数值"]) for row in rows}
+
+    futou_falan["分程隔板槽宽度"] = row_map.get("分程隔板槽宽", "0")
+    cursor.execute("""
+                SELECT 参数名称, 参数值
+                FROM 产品设计活动表_元件附加参数表
+                WHERE 产品ID = %s AND 元件名称 = '浮头垫片'
+            """, (product_id,))
+    rows = cursor.fetchall()
+    row_map = {row["参数名称"].strip(): safe_str(row["参数值"]) for row in rows}
+
+    futou_falan["垫片标准号"] = row_map.get("垫片标准", "0")
+
+        # === 查询隔条位置尺寸 ===
     cursor.execute("""
                     SELECT 参数值
                     FROM 产品设计活动表_布管参数表
-                    WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸'
+                    WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸 W'
                     LIMIT 1
                 """, (product_id,))
     row = cursor.fetchone()
     raw_val = row["参数值"].strip() if row and row.get("参数值") else None
+    val11 = str(float(raw_val)) if raw_val not in (None, "", " ", "None") else "10"
 
-
-    # === 处理参数值（空或无效默认 10） ===
-    try:
-        val11 = str(float(raw_val)) if raw_val not in (None, "", " ", "None") else "10"
-    except ValueError:
-        val11 = "10"
 
     futou_falan["隔条位置尺寸"] = val11
     # 查询浮头垫片名义外径和内径
@@ -436,7 +439,27 @@ def calculate_heat_exchanger_strength(product_id):
             futou_falan["球冠形封头壳程覆层厚度"] = "0"
         else:
             futou_falan["球冠形封头壳程覆层厚度"] = params.get("壳程侧覆层厚度", "")
+        # 查询球冠形封头相关参数
+        cursor.execute("""
+            SELECT 参数名称, 参数值
+            FROM 产品设计活动表_元件附加参数表
+            WHERE 产品ID = %s
+              AND 元件名称 = '钩圈'
+              AND 参数名称 IN (
+                  '管程侧是否添加覆层',
+                  '壳程侧是否添加覆层'
+              )
+        """, (product_id,))
 
+        rows = cursor.fetchall()
+        if rows:
+            params = {row.get("参数名称"): safe_str(row.get("参数值")) for row in rows}
+        if params.get("管程侧是否添加覆层") == "否" and params.get("壳程侧是否添加覆层") == "否":
+            futou_falan["覆层位置"] = "无"
+        elif  params.get("管程侧是否添加覆层") == "是" and params.get("壳程侧是否添加覆层") == "是":
+            futou_falan["覆层位置"] = "双侧"
+        else:
+            futou_falan["覆层位置"] = "单侧"
     # 查询球冠形封头装入深度
     cursor.execute("""
         SELECT 参数值
@@ -448,7 +471,10 @@ def calculate_heat_exchanger_strength(product_id):
 
     row = cursor.fetchone()
     if row:
-        futou_falan["球冠形封头装入深度"] = safe_str(row.get("参数值"))
+        shendu = safe_str(row.get("参数值"))
+        if shendu == "程序推荐":
+                shendu = "27"
+        futou_falan["球冠形封头装入深度"] = shendu
 
     # 查询球冠形封头材料信息
     cursor.execute("""
@@ -647,7 +673,7 @@ def calculate_heat_exchanger_strength(product_id):
                """, (product_id,))
         rows = cursor.fetchall()
         falan_params = {r["参数名称"]: r["参数值"] for r in rows}
-        for name in ["材料类型"]:
+        for name in ["材料类型","材料牌号"]:
             if name in falan_params:
                 futou_falan[f"B型钩圈{name}"] = safe_str(falan_params[name])
         extra_map = {row["参数名称"].strip(): row["参数值"] for row in rows}
@@ -832,7 +858,7 @@ def calculate_heat_exchanger_strength(product_id):
         if val:
             waitougai_yuantong["压力试验类型"] = str(val).replace("试验", "").strip()
     waitougai_falan = {
-        "换热器型号": "BES",
+        "换热器型号": "BEU",
         "壳程液柱密度": "1", #壳程液柱密度
         "管程液柱密度": "1", #管程液柱密度
         "壳程液柱静压力": "0", #壳程液柱静压力
@@ -845,7 +871,7 @@ def calculate_heat_exchanger_strength(product_id):
         "法兰类型": "松式法兰4", #外头盖法兰
         "法兰材料类型": "", #外头盖法兰
         "法兰材料牌号": "", #法兰材料牌号
-        "法兰材料腐蚀裕量": "3", #管程
+        "法兰材料腐蚀裕量": "3", #管程 #壳程
         "法兰颈部大端有效厚度": "26", #无
         "法兰颈部小端有效厚度": "16",#无
         "法兰名义内径": "1020", #壳程
@@ -855,7 +881,7 @@ def calculate_heat_exchanger_strength(product_id):
         "覆层厚度": "0", #外头盖法兰
         "管程还是壳程": "壳程", #无
         "法兰为夹持法兰": "是", #无
-        "法兰位置": "外头盖法兰", #无
+        "法兰位置": "管箱法兰", #无
         "圆筒名义厚度": "10", #无
         "圆筒有效厚度": "8", #无
         "圆筒名义内径": "800", #壳程公称直径
@@ -865,24 +891,24 @@ def calculate_heat_exchanger_strength(product_id):
         "焊缝高度": "0", #无
         "焊缝长度": "0", #无
         "焊缝深度": "0", #无
-        "法兰种类": "长颈", #外头盖法兰 法兰类型
+        "法兰种类": "整体法兰2", #外头盖法兰 法兰类型
         "公称直径管前左": "1000", #壳程
-        "公称直径壳后右": "1200", #壳程
+        "公称直径壳后右": "1200", #壳程 #外头盖圆筒内径
         "对接元件管前左材料类型": "板材", #壳体圆筒
         "对接元件壳后右材料类型": "板材", #外头盖圆筒
         "对接元件管前左材料牌号": "Q345R", #壳体圆筒
         "对接元件壳后右材料牌号": "Q345R", #外头盖圆筒
         "是否带分程隔板管前左": "是", #无
         "是否带分程隔板壳后右": "是", #无
-        "法兰类型管前左": "整体法兰2", #壳体法兰
-        "法兰材料类型管前左": "",  #壳体法兰
-        "法兰材料牌号管前左": "", #体法兰
+        "法兰类型管前左": "整体法兰2", #壳体法兰 #外头盖侧法兰
+        "法兰材料类型管前左": "",  #壳体法兰 #外头盖侧法兰
+        "法兰材料牌号管前左": "", #体法兰 #外头盖侧法兰
         "法兰材料腐蚀裕量管前左": "3", #壳程
         "法兰类型壳后右": "整体法兰2", #外头盖法兰
         "法兰材料类型壳后右": "", #外头盖法兰
         "法兰材料牌号壳后右": "", #外头盖法兰
         "法兰材料腐蚀裕量壳后右": "3", #壳程
-        "覆层厚度管前左": "0", #壳体法兰
+        "覆层厚度管前左": "0", #壳体法兰 #外头盖侧法兰
         "覆层厚度壳后右": "0", #外头盖法兰
         "对接元件覆层厚度管前左": "1.5", #壳体圆筒
         "对接元件覆层厚度壳后右": "1.6", #外头盖圆筒
@@ -902,13 +928,13 @@ def calculate_heat_exchanger_strength(product_id):
         "螺栓公称直径": "M16", #无
         "螺栓数量": "60", #无
         "螺栓根径": "0", #无
-        "垫片序号": "1", #无
+        # "垫片序号": "1", #无
         "垫片材料牌号": "复合柔性石墨波齿金属板(不锈钢)", #外头盖垫片
         "m": "3", #外头盖垫片，垫片系数m
         "y": "50", #外头盖垫片，垫片比压力y
         "垫片厚度": "3", #外头盖垫片
-        "垫片有效外径": "0", #外头盖垫片，垫片与密封面接触外径D2
-        "垫片有效内径": "0", #外头盖垫片，垫片与密封面接触内径D1
+        "垫片有效外径": "1063",
+        "垫片有效内径": "1023",
         "分程隔板与垫片接触面面积": "0",  #无
         "垫片代号": "2.1", #无
         "隔条位置尺寸": "0", #布管，隔条位置尺寸
@@ -919,6 +945,28 @@ def calculate_heat_exchanger_strength(product_id):
     }
     # === 获取管箱垫片的垫片厚度 ===
     cursor.execute("""
+            SELECT 参数值
+            FROM 产品设计活动表_元件附加参数表
+            WHERE 产品ID = %s AND 元件名称 = '外头盖圆筒' AND 参数名称 = '公称直径'
+        """, (product_id,))
+    row = cursor.fetchone()
+    val = row["参数值"] if row and row["参数值"] not in (None, "", "None") else "4.5"
+    if str(val) == "程序推荐":
+        # === 查询设计数据表 ===
+        cursor.execute("""
+                SELECT 参数名称, 壳程数值
+                FROM 产品设计活动表_设计数据表
+                WHERE 产品ID = %s
+            """, (product_id,))
+        rows = cursor.fetchall()
+        param_map = {row["参数名称"].strip(): row for row in rows}
+
+        waitougai_falan["公称直径壳后右"] = str(param_map["公称直径*"].get("壳程数值", ""))
+    else:
+        waitougai_falan["公称直径壳后右"] = str(val)
+
+    # === 获取管箱垫片的垫片厚度 ===
+    cursor.execute("""
         SELECT 参数值
         FROM 产品设计活动表_元件附加参数表
         WHERE 产品ID = %s AND 元件名称 = '外头盖垫片' AND 参数名称 = '垫片厚度'
@@ -927,17 +975,17 @@ def calculate_heat_exchanger_strength(product_id):
     val = row["参数值"] if row and row["参数值"] not in (None, "", "None") else "4.5"
     waitougai_falan["垫片厚度"] = str(val)
     # 查询浮头垫片的压紧面形状
-    cursor.execute("""
-        SELECT 参数值
-        FROM 产品设计活动表_元件附加参数表
-        WHERE 产品ID = %s
-          AND 元件名称 = '外头盖法兰'
-          AND 参数名称 = '法兰类型'
-    """, (product_id,))
-
-    row = cursor.fetchone()
-    if row:
-        waitougai_falan["法兰种类"] = safe_str(row.get("参数值"))
+    # cursor.execute("""
+    #     SELECT 参数值
+    #     FROM 产品设计活动表_元件附加参数表
+    #     WHERE 产品ID = %s
+    #       AND 元件名称 = '外头盖法兰'
+    #       AND 参数名称 = '法兰类型'
+    # """, (product_id,))
+    #
+    # row = cursor.fetchone()
+    # if row:
+    #     waitougai_falan["法兰种类"] = safe_str(row.get("参数值"))
 
     # === 查询设计数据表 ===
     cursor.execute("""
@@ -978,7 +1026,7 @@ def calculate_heat_exchanger_strength(product_id):
     param_map2 = {
         "轴向拉伸载荷": "轴向外力",
         "附加弯矩": "外力矩",
-        "法兰类型": "法兰类型",
+        # "法兰类型": "法兰类型",
         "材料类型": "法兰材料类型",
         "材料牌号": "法兰材料牌号"
     }
@@ -1155,7 +1203,7 @@ def calculate_heat_exchanger_strength(product_id):
     cursor.execute("""
                    SELECT 参数名称, 参数值
                    FROM 产品设计活动表_元件附加参数表
-                   WHERE 产品ID = %s AND 元件名称 = '壳体法兰'
+                   WHERE 产品ID = %s AND 元件名称 = '外头盖侧法兰'
                """, (product_id,))
     rows = cursor.fetchall()
     qt_data = {row["参数名称"]: str(row["参数值"]).strip() for row in rows if row["参数值"] not in (None, "", "None")}
@@ -1176,7 +1224,7 @@ def calculate_heat_exchanger_strength(product_id):
         cursor.execute("""
                 SELECT 参数值
                 FROM 产品设计活动表_布管参数表
-                WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸'
+                WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸 W'
                 LIMIT 1
             """, (product_id,))
         row = cursor.fetchone()
@@ -1233,8 +1281,8 @@ def calculate_heat_exchanger_strength(product_id):
     gasket_map = {
         "垫片名义外径D2n": "垫片名义外径",
         "垫片名义内径D1n": "垫片名义内径",
-        "垫片与密封面接触外径D2": "垫片有效外径",
-        "垫片与密封面接触内径D1": "垫片有效内径"
+        # "垫片与密封面接触外径D2": "垫片有效外径",
+        # "垫片与密封面接触内径D1": "垫片有效内径"
     }
 
     for k, v in gasket_map.items():
@@ -1267,11 +1315,10 @@ def calculate_heat_exchanger_strength(product_id):
 
     # 设计参数（sheji_param）
     sheji_param = {
-        "法兰材料腐蚀裕量": ("腐蚀裕量*", "管程数值"),
+        "法兰材料腐蚀裕量": ("腐蚀裕量*", "壳程数值"),
         "法兰材料腐蚀裕量管前左": ("腐蚀裕量*", "壳程数值"),
         "法兰材料腐蚀裕量壳后右": ("腐蚀裕量*", "壳程数值"),
         "公称直径管前左": ("公称直径*", "壳程数值"),
-        "公称直径壳后右": ("公称直径*", "壳程数值"),
         "纵向焊接接头系数": ("焊接接头系数*", "壳程数值"),
     }
     for field, (param, side) in sheji_param.items():
@@ -1298,20 +1345,20 @@ def calculate_heat_exchanger_strength(product_id):
     yuanjian_param = {
         ("外头盖法兰", "轴向拉伸载荷"): "轴向外力",
         ("外头盖法兰", "附加弯矩"): "外力矩",
-        ("外头盖法兰", "法兰类型"): "法兰类型壳后右",
+        # ("外头盖法兰", "法兰类型"): "法兰类型壳后右",
         ("外头盖法兰", "材料类型"): "法兰材料类型壳后右",
         ("外头盖法兰", "材料牌号"): "法兰材料牌号壳后右",
         # ("外头盖侧法兰", "覆层厚度"): "覆层厚度壳后右",
         ("外头盖法兰", "覆层厚度"): "覆层厚度",
         ("壳体圆筒", "材料类型"): "圆筒材料类型",
         ("壳体圆筒", "材料牌号"): "圆筒材料牌号",
-        ("壳体法兰", "法兰类型"): "法兰类型管前左",
-        ("壳体法兰", "材料类型"): "法兰材料类型管前左",
-        ("壳体法兰", "材料牌号"): "法兰材料牌号管前左",
+        # ("外头盖侧法兰", "法兰类型"): "法兰类型管前左",
+        ("外头盖侧法兰", "材料类型"): "法兰材料类型管前左",
+        ("外头盖侧法兰", "材料牌号"): "法兰材料牌号管前左",
         # ("壳体平盖", "平盖类型"): "平盖序号",
         ("螺柱（外头盖法兰）", "材料牌号"): "螺栓材料牌号",
         ("外头盖垫片", "垫片材料"): "垫片材料牌号",
-        ("外头盖垫片", "材料标准"): "垫片标准号",
+        ("外头盖垫片", "垫片标准"): "垫片标准号",
 
         ("外头盖垫片", "垫片系数m"): "m",
         ("外头盖垫片", "垫片比压力y"): "y",
@@ -1338,7 +1385,7 @@ def calculate_heat_exchanger_strength(product_id):
                 val = "50"
         waitougai_falan[field] = apply_special_defaults(field, val)
     waitougaice_falan = {
-        "换热器型号": "BES",
+        "换热器型号": "BEU",
         "壳程液柱密度": "1", #壳程液柱密度
         "管程液柱密度": "1", #管程液柱密度
         "壳程液柱静压力": "0", #壳程液柱静压力
@@ -1361,17 +1408,17 @@ def calculate_heat_exchanger_strength(product_id):
         "覆层厚度": "0", #外头盖测法兰
         "管程还是壳程": "管程",  #无
         "法兰为夹持法兰": "是",  #无
-        "法兰位置": "外头盖侧法兰",  #无
+        "法兰位置": "管箱法兰",  #无
         "圆筒名义厚度": "10", #无
         "圆筒有效厚度": "8", #无
-        "圆筒名义内径": "800",#管程公称直径
-        "圆筒名义外径": "1020",#壳程公称直径
+        "圆筒名义内径": "800",#壳程公称直径
+        "圆筒名义外径": "1020",#管程公称直径
         "圆筒材料类型": "板材", #外头盖圆筒
         "圆筒材料牌号": "Q345R", #外头盖圆筒
         "焊缝高度": "0", #无
         "焊缝长度": "0", #无
         "焊缝深度": "0", #无
-        "法兰种类": "长颈", #外头盖侧法兰，法兰类型
+        "法兰种类": "整体法兰2", #外头盖侧法兰，法兰类型
         "公称直径管前左": "1000", #壳程
         "公称直径壳后右": "1200", #壳程
         "对接元件管前左材料类型": "板材", #壳体圆筒
@@ -1380,15 +1427,15 @@ def calculate_heat_exchanger_strength(product_id):
         "对接元件壳后右材料牌号": "Q345R", #外头盖圆筒
         "是否带分程隔板管前左": "是", #无
         "是否带分程隔板壳后右": "是", #无
-        "法兰类型管前左": "整体法兰2", #壳体法兰
-        "法兰材料类型管前左": "", #壳体法兰
-        "法兰材料牌号管前左": "", #壳体法兰
+        "法兰类型管前左": "整体法兰2", #壳体法兰 #外头盖侧法兰
+        "法兰材料类型管前左": "", #壳体法兰 #外头盖侧法兰
+        "法兰材料牌号管前左": "", #壳体法兰  #外头盖侧法兰
         "法兰材料腐蚀裕量管前左": "3", #壳程
         "法兰类型壳后右": "整体法兰2",  #外头盖法兰
         "法兰材料类型壳后右": "",  #外头盖法兰
         "法兰材料牌号壳后右": "",  #外头盖法兰
         "法兰材料腐蚀裕量壳后右": "3", #壳程
-        "覆层厚度管前左": "0", #壳体法兰
+        "覆层厚度管前左": "0", #壳体法兰 #外头盖侧法兰
         "覆层厚度壳后右": "0", #外头盖法兰
         "对接元件覆层厚度管前左": "1.5",  #壳体圆筒
         "对接元件覆层厚度壳后右": "1.6", #外头盖圆筒
@@ -1401,39 +1448,39 @@ def calculate_heat_exchanger_strength(product_id):
         "平盖分程隔板槽深度": "6",#无
         "平盖材料腐蚀裕量": "0.1",#无
         "平盖名义厚度": "96",#无
-        "垫片名义外径": "1060", #管箱侧垫片
-        "垫片名义内径": "1020", #管箱侧垫片
+        "垫片名义外径": "1060", #外头盖垫片
+        "垫片名义内径": "1020", #外头盖垫片
         "螺栓中心圆直径": "1200",#无
         "螺栓材料牌号": "35CrMo", #螺柱（外头盖侧法兰）
         "螺栓公称直径": "M16",#无
         "螺栓数量": "60",#无
         "螺栓根径": "0",#无
-        "垫片序号": "1",#无
-        "垫片材料牌号": "复合柔性石墨波齿金属板(不锈钢)",  #管箱侧垫片
-        "m": "3",  #管箱侧垫片，垫片系数m
-        "y": "50", #管箱侧垫片，垫片比压力y
-        "垫片厚度": "3", #管箱侧垫片
-        "垫片有效外径": "0",  #管箱侧垫片
-        "垫片有效内径": "0",  #管箱侧垫片
+        # "垫片序号": "1",#无
+        "垫片材料牌号": "复合柔性石墨波齿金属板(不锈钢)",  #外头盖垫片
+        "m": "3",  #外头盖垫片，垫片系数m
+        "y": "50", #外头盖垫片，垫片比压力y
+        "垫片厚度": "3", #外头盖垫片
+        "垫片有效外径": "1063",  #外头盖垫片
+        "垫片有效内径": "1023",  #外头盖垫片
         "分程隔板与垫片接触面面积": "0",#无
         "垫片代号": "2.1",#无
         "隔条位置尺寸": "0", #布管，隔条位置尺寸
         "介质情况": "毒性", #壳程，介质特性（爆炸危险程度）+管程和壳程，介质特性（毒性危害程度）
-        "垫片标准号": "GB/T 29463-2023",  #管箱侧垫片
+        "垫片标准号": "GB/T 29463-2023",  #外头盖垫片
         "垫片实际密封宽度": "0",#无
         "分程隔板槽宽度": "" #浮动管板
     }
-    cursor.execute("""
-        SELECT 参数值
-        FROM 产品设计活动表_元件附加参数表
-        WHERE 产品ID = %s
-          AND 元件名称 = '外头盖侧法兰'
-          AND 参数名称 = '法兰类型'
-    """, (product_id,))
-
-    row = cursor.fetchone()
-    if row:
-        waitougai_falan["法兰种类"] = safe_str(row.get("参数值"))
+    # cursor.execute("""
+    #     SELECT 参数值
+    #     FROM 产品设计活动表_元件附加参数表
+    #     WHERE 产品ID = %s
+    #       AND 元件名称 = '外头盖侧法兰'
+    #       AND 参数名称 = '法兰类型'
+    # """, (product_id,))
+    #
+    # row = cursor.fetchone()
+    # if row:
+    #     waitougai_falan["法兰种类"] = safe_str(row.get("参数值"))
     # === 查询设计数据表 ===
     cursor.execute("""
                 SELECT 参数名称, 壳程数值, 管程数值
@@ -1445,8 +1492,8 @@ def calculate_heat_exchanger_strength(product_id):
 
     # 公称直径（管程）
     if "公称直径*" in param_map:
-        waitougaice_falan["圆筒名义外径"] = str(param_map["公称直径*"].get("壳程数值", ""))
-        waitougaice_falan["圆筒名义内径"] = str(param_map["公称直径*"].get("管程数值", ""))
+        waitougaice_falan["圆筒名义外径"] = str(param_map["公称直径*"].get("管程数值", ""))
+        waitougaice_falan["圆筒名义内径"] = str(param_map["公称直径*"].get("壳程数值", ""))
     # 查询浮头垫片的压紧面形状
     cursor.execute("""
         SELECT 参数值
@@ -1463,22 +1510,16 @@ def calculate_heat_exchanger_strength(product_id):
     cursor.execute("""
         SELECT 参数值
         FROM 产品设计活动表_元件附加参数表
-        WHERE 产品ID = %s AND 元件名称 = '管箱侧垫片' AND 参数名称 = '垫片厚度'
+        WHERE 产品ID = %s AND 元件名称 = '外头盖垫片' AND 参数名称 = '垫片厚度'
     """, (product_id,))
     row = cursor.fetchone()
     val = row["参数值"] if row and row["参数值"] not in (None, "", "None") else "4.5"
     waitougai_falan["垫片厚度"] = str(val)
+
     param_map2 = {
         "轴向拉伸载荷": "轴向外力",
         "附加弯矩": "外力矩",
-        "法兰类型": "法兰类型",
-        "材料类型": "法兰材料类型",
-        "材料牌号": "法兰材料牌号"
-    }
-    param_map2 = {
-        "轴向拉伸载荷": "轴向外力",
-        "附加弯矩": "外力矩",
-        "法兰类型": "法兰类型",
+        # "法兰类型": "法兰类型",
         "材料类型": "法兰材料类型",
         "材料牌号": "法兰材料牌号"
     }
@@ -1533,7 +1574,7 @@ def calculate_heat_exchanger_strength(product_id):
         """, (product_id,))
     rows = cursor.fetchall()
     param_map = {row["参数名称"].strip(): row for row in rows}
-    # 管箱侧垫片参数 → 名称映射
+    # 外头盖垫片参数 → 名称映射
     media_parts = []
     if "介质特性（爆炸危险程度）" in param_map:
         expl = param_map["介质特性（爆炸危险程度）"].get("壳程数值", "")
@@ -1654,7 +1695,7 @@ def calculate_heat_exchanger_strength(product_id):
     cursor.execute("""
                    SELECT 参数名称, 参数值
                    FROM 产品设计活动表_元件附加参数表
-                   WHERE 产品ID = %s AND 元件名称 = '壳体法兰'
+                   WHERE 产品ID = %s AND 元件名称 = '外头盖侧法兰'
                """, (product_id,))
     rows = cursor.fetchall()
     qt_data = {row["参数名称"]: str(row["参数值"]).strip() for row in rows if row["参数值"] not in (None, "", "None")}
@@ -1675,7 +1716,7 @@ def calculate_heat_exchanger_strength(product_id):
         cursor.execute("""
                 SELECT 参数值
                 FROM 产品设计活动表_布管参数表
-                WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸'
+                WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸 W'
                 LIMIT 1
             """, (product_id,))
         row = cursor.fetchone()
@@ -1715,11 +1756,11 @@ def calculate_heat_exchanger_strength(product_id):
         waitougaice_falan["法兰名义内径"] = safe_str(row.get("壳程数值"))
         waitougaice_falan["法兰名义外径"] = safe_str(row.get("管程数值"))
 
-    # 管箱侧垫片参数 → 名称映射
+    # 外头盖垫片参数 → 名称映射
     cursor.execute("""
             SELECT 参数名称, 参数值
             FROM 产品设计活动表_元件附加参数表
-            WHERE 产品ID = %s AND 元件名称 = '管箱侧垫片'
+            WHERE 产品ID = %s AND 元件名称 = '外头盖垫片'
         """, (product_id,))
     rows = cursor.fetchall()
 
@@ -1732,8 +1773,8 @@ def calculate_heat_exchanger_strength(product_id):
     gasket_map = {
         "垫片名义外径D2n": "垫片名义外径",
         "垫片名义内径D1n": "垫片名义内径",
-        "垫片与密封面接触外径D2": "垫片有效外径",
-        "垫片与密封面接触内径D1": "垫片有效内径"
+        # "垫片与密封面接触外径D2": "垫片有效外径",
+        # "垫片与密封面接触内径D1": "垫片有效内径"
     }
 
     for k, v in gasket_map.items():
@@ -1796,7 +1837,7 @@ def calculate_heat_exchanger_strength(product_id):
     component_map.setdefault(comp, {})[param] = val
     # 元件参数映射
     yuanjian_param = {
-        ("外头盖法兰", "法兰类型"): "法兰类型壳后右",
+        # ("外头盖法兰", "法兰类型"): "法兰类型壳后右",
         ("外头盖法兰", "材料类型"): "法兰材料类型壳后右",
         ("外头盖法兰", "材料牌号"): "法兰材料牌号壳后右",
         ("外头盖侧法兰", "覆层厚度"): "覆层厚度",
@@ -1805,16 +1846,16 @@ def calculate_heat_exchanger_strength(product_id):
         # ("外头盖法兰", "覆层厚度"): "覆层厚度管前左",
         ("壳体圆筒", "材料类型"): "圆筒材料类型",
         ("壳体圆筒", "材料牌号"): "圆筒材料牌号",
-        ("壳体法兰", "法兰类型"): "法兰类型管前左",
-        ("壳体法兰", "材料类型"): "法兰材料类型管前左",
-        ("壳体法兰", "材料牌号"): "法兰材料牌号管前左",
+        # ("外头盖侧法兰", "法兰类型"): "法兰类型管前左",
+        ("外头盖侧法兰", "材料类型"): "法兰材料类型管前左",
+        ("外头盖侧法兰", "材料牌号"): "法兰材料牌号管前左",
         # ("壳体平盖", "平盖类型"): "平盖序号",
         ("螺柱（外头盖侧法兰）", "材料牌号"): "螺栓材料牌号",
-        ("管箱侧垫片", "垫片材料"): "垫片材料牌号",
-        ("管箱侧垫片", "材料标准"): "垫片标准号",
+        ("外头盖垫片", "垫片材料"): "垫片材料牌号",
+        ("外头盖垫片", "垫片标准"): "垫片标准号",
 
-        ("管箱侧垫片", "垫片系数m"): "m",
-        ("管箱侧垫片", "垫片比压力y"): "y",
+        ("外头盖垫片", "垫片系数m"): "m",
+        ("外头盖垫片", "垫片比压力y"): "y",
 
     }
     special_force_fields = {"轴向拉伸载荷", "附加弯矩"}
@@ -1868,7 +1909,7 @@ def calculate_heat_exchanger_strength(product_id):
         "焊缝高度": "0",
         "焊缝长度": "0",
         "焊缝深度": "0",
-        "法兰种类": "长颈",
+        "法兰种类": "整体法兰2",
         "公称直径管前左": "1000",
         "公称直径壳后右": "1200",
         "对接元件管前左材料类型": "板材",
@@ -1905,13 +1946,13 @@ def calculate_heat_exchanger_strength(product_id):
         "螺栓公称直径": "M16",
         "螺栓数量": "60",
         "螺栓根径": "0",
-        "垫片序号": "1",
+        # "垫片序号": "1",
         "垫片材料牌号": "复合柔性石墨波齿金属板(不锈钢)",
         "m": "3",
         "y": "50",
         "垫片厚度": "3",
-        "垫片有效外径": "0",
-        "垫片有效内径": "0",
+        "垫片有效外径": "1063",
+        "垫片有效内径": "1023",
         "分程隔板与垫片接触面面积": "0",
         "垫片代号": "2.1",
         "隔条位置尺寸": "0",
@@ -2070,7 +2111,7 @@ def calculate_heat_exchanger_strength(product_id):
         cursor.execute("""
             SELECT 参数值
             FROM 产品设计活动表_布管参数表
-            WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸'
+            WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸 W'
             LIMIT 1
         """, (product_id,))
         row = cursor.fetchone()
@@ -2125,8 +2166,8 @@ def calculate_heat_exchanger_strength(product_id):
     gasket_map = {
         "垫片名义外径D2n": "垫片名义外径",
         "垫片名义内径D1n": "垫片名义内径",
-        "垫片与密封面接触外径D2": "垫片有效外径",
-        "垫片与密封面接触内径D1": "垫片有效内径"
+        # "垫片与密封面接触外径D2": "垫片有效外径",
+        # "垫片与密封面接触内径D1": "垫片有效内径"
     }
 
     for k, v in gasket_map.items():
@@ -2205,7 +2246,7 @@ def calculate_heat_exchanger_strength(product_id):
         ("管箱平盖", "平盖类型"): "平盖序号",
         ("螺柱（平盖法兰）", "材料牌号"): "螺栓材料牌号",
         ("平盖垫片", "垫片材料"): "垫片材料牌号",
-        ("平盖垫片", "材料标准"): "垫片标准号",
+        ("平盖垫片", "垫片标准"): "垫片标准号",
 
         ("平盖垫片", "垫片系数m"): "m",
         ("平盖垫片", "垫片比压力y"): "y",
@@ -2261,7 +2302,7 @@ def calculate_heat_exchanger_strength(product_id):
         "焊缝高度": "0",
         "焊缝长度": "10",
         "焊缝深度": "0",
-        "法兰种类": "长颈",
+        "法兰种类": "整体法兰2",
         "介质情况": "毒性",
         "公称直径管前左": "",
         "公称直径壳后右": "",
@@ -2299,13 +2340,13 @@ def calculate_heat_exchanger_strength(product_id):
         "螺栓公称直径": "M16",
         "螺栓数量": "60",
         "螺栓根径": "0",
-        "垫片序号": "1",
+        # "垫片序号": "1",
         "垫片材料牌号": "复合柔性石墨波齿金属板(不锈钢)",
         "m": "3",
         "y": "50",
         "垫片厚度": "3",
-        "垫片有效外径": "0",
-        "垫片有效内径": "0",
+        "垫片有效外径": "1063",
+        "垫片有效内径": "1023",
         "分程隔板与垫片接触面面积": "0",
         "垫片代号": "2.1",
         "隔条位置尺寸": "0",
@@ -2351,8 +2392,8 @@ def calculate_heat_exchanger_strength(product_id):
     gasket_map = {
         "垫片名义外径D2n": "垫片名义外径",
         "垫片名义内径D1n": "垫片名义内径",
-        "垫片与密封面接触外径D2": "垫片有效外径",
-        "垫片与密封面接触内径D1": "垫片有效内径"
+        # "垫片与密封面接触外径D2": "垫片有效外径",
+        # "垫片与密封面接触内径D1": "垫片有效内径"
     }
 
     for k, v in gasket_map.items():
@@ -2452,7 +2493,7 @@ def calculate_heat_exchanger_strength(product_id):
         cursor.execute("""
             SELECT 参数值
             FROM 产品设计活动表_布管参数表
-            WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸'
+            WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸 W'
             LIMIT 1
         """, (product_id,))
         row = cursor.fetchone()
@@ -2535,7 +2576,7 @@ def calculate_heat_exchanger_strength(product_id):
     param_map2 = {
         "轴向拉伸载荷": "轴向外力",
         "附加弯矩": "外力矩",
-        "法兰类型": "法兰类型",
+        # "法兰类型": "法兰类型",
         "材料类型": "法兰材料类型",
         "材料牌号": "法兰材料牌号"
     }
@@ -2555,7 +2596,7 @@ def calculate_heat_exchanger_strength(product_id):
 
     # ========== yuanjian_param 结构 ==========
     yuanjian_param = {
-        ("头盖法兰", "法兰类型"): "法兰类型",
+        # ("头盖法兰", "法兰类型"): "法兰类型",
         ("头盖法兰", "材料类型"): "法兰材料类型",
         ("头盖法兰", "材料牌号"): "法兰材料牌号",
         # ("壳体法兰", "法兰类型"): "法兰类型壳后右",
@@ -2571,7 +2612,7 @@ def calculate_heat_exchanger_strength(product_id):
         ("管箱平盖", "平盖类型"): "平盖序号",
         ("螺柱（管箱平盖）", "材料牌号"): "螺栓材料牌号",
         ("平盖垫片", "垫片材料"): "垫片材料牌号",
-        ("平盖垫片", "材料标准"): "垫片标准号",
+        ("平盖垫片", "垫片标准"): "垫片标准号",
 
         ("平盖垫片", "垫片比压力y"): "y",
 
@@ -3291,7 +3332,7 @@ def calculate_heat_exchanger_strength(product_id):
         "焊缝高度": "0",
         "焊缝长度": "0",
         "焊缝深度": "0",
-        "法兰种类": "长颈",
+        "法兰种类": "整体法兰2",
         "公称直径管前左": "1000",
         "公称直径壳后右": "1200",
         "对接元件管前左材料类型": "板材",
@@ -3328,13 +3369,13 @@ def calculate_heat_exchanger_strength(product_id):
         "螺栓公称直径": "M16",
         "螺栓数量": "60",
         "螺栓根径": "0",
-        "垫片序号": "1",
+        # "垫片序号": "1",
         "垫片材料牌号": "复合柔性石墨波齿金属板(不锈钢)",
         "m": "3",
         "y": "50",
         "垫片厚度": "3",
-        "垫片有效外径": "0",
-        "垫片有效内径": "0",
+        "垫片有效外径": "1063",
+        "垫片有效内径": "1023",
         "分程隔板与垫片接触面面积": "0",
         "垫片代号": "2.1",
         "隔条位置尺寸": "0",
@@ -3390,8 +3431,8 @@ def calculate_heat_exchanger_strength(product_id):
     gasket_map = {
         "垫片名义外径D2n": "垫片名义外径",
         "垫片名义内径D1n": "垫片名义内径",
-        "垫片与密封面接触外径D2": "垫片有效外径",
-        "垫片与密封面接触内径D1": "垫片有效内径"
+        # "垫片与密封面接触外径D2": "垫片有效外径",
+        # "垫片与密封面接触内径D1": "垫片有效内径"
     }
 
     for k, v in gasket_map.items():
@@ -3473,7 +3514,7 @@ def calculate_heat_exchanger_strength(product_id):
         cursor.execute("""
             SELECT 参数值
             FROM 产品设计活动表_布管参数表
-            WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸'
+            WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸 W'
             LIMIT 1
         """, (product_id,))
         row = cursor.fetchone()
@@ -3620,10 +3661,10 @@ def calculate_heat_exchanger_strength(product_id):
         ("管箱法兰", "覆层厚度"): "覆层厚度",
         ("管箱圆筒", "材料类型"): "圆筒材料类型",
         ("管箱圆筒", "材料牌号"): "圆筒材料牌号",
-        ("管箱平盖", "平盖类型"): "平盖序号",
+        # ("管箱平盖", "平盖类型"): "平盖序号",
         ("螺柱（管箱法兰）", "材料牌号"): "螺栓材料牌号",
         ("管箱垫片", "垫片材料"): "垫片材料牌号",
-        ("管箱垫片", "材料标准"): "垫片标准号",
+        ("管箱垫片", "垫片标准"): "垫片标准号",
 
         ("管箱垫片", "垫片系数m"): "m",
         ("管箱垫片", "垫片比压力y"): "y",
@@ -3682,7 +3723,7 @@ def calculate_heat_exchanger_strength(product_id):
         "焊缝高度": "0",
         "焊缝长度": "0",
         "焊缝深度": "0",
-        "法兰种类": "长颈",
+        "法兰种类": "整体法兰2",
         "公称直径管前左": "1000",
         "公称直径壳后右": "1200",
         "对接元件管前左材料类型": "板材",
@@ -3719,13 +3760,13 @@ def calculate_heat_exchanger_strength(product_id):
         "螺栓公称直径": "M16",
         "螺栓数量": "60",
         "螺栓根径": "0",
-        "垫片序号": "1",
+        # "垫片序号": "1",
         "垫片材料牌号": "复合柔性石墨波齿金属板(不锈钢)",
         "m": "3",
         "y": "50",
         "垫片厚度": "3",
-        "垫片有效外径": "0",
-        "垫片有效内径": "0",
+        "垫片有效外径": "1063",
+        "垫片有效内径": "1023",
         "分程隔板与垫片接触面面积": "0",
         "垫片代号": "2.1",
         "隔条位置尺寸": "0",
@@ -3892,7 +3933,7 @@ def calculate_heat_exchanger_strength(product_id):
         cursor.execute("""
             SELECT 参数值
             FROM 产品设计活动表_布管参数表
-            WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸'
+            WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸 W'
             LIMIT 1
         """, (product_id,))
         row = cursor.fetchone()
@@ -3949,8 +3990,8 @@ def calculate_heat_exchanger_strength(product_id):
     gasket_map = {
         "垫片名义外径D2n": "垫片名义外径",
         "垫片名义内径D1n": "垫片名义内径",
-        "垫片与密封面接触外径D2": "垫片有效外径",
-        "垫片与密封面接触内径D1": "垫片有效内径"
+        # "垫片与密封面接触外径D2": "垫片有效外径",
+        # "垫片与密封面接触内径D1": "垫片有效内径"
     }
 
     for k, v in gasket_map.items():
@@ -4025,10 +4066,10 @@ def calculate_heat_exchanger_strength(product_id):
         # ("管箱法兰", "法兰类型"): "法兰类型管前左",
         ("管箱法兰", "材料类型"): "法兰材料类型管前左",
         ("管箱法兰", "材料牌号"): "法兰材料牌号管前左",
-        ("壳体平盖", "平盖类型"): "平盖序号",
+        # ("壳体平盖", "平盖类型"): "平盖序号",
         ("螺柱（壳体法兰）", "材料牌号"): "螺栓材料牌号",
         ("管箱侧垫片", "垫片材料"): "垫片材料牌号",
-        ("管箱侧垫片", "材料标准"): "垫片标准号",
+        ("管箱侧垫片", "垫片标准"): "垫片标准号",
 
         ("管箱侧垫片", "垫片系数m"): "m",
         ("管箱侧垫片", "垫片比压力y"): "y",
@@ -4135,7 +4176,7 @@ def calculate_heat_exchanger_strength(product_id):
         cursor.execute("""
             SELECT 参数值
             FROM 产品设计活动表_布管参数表
-            WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸'
+            WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸 W'
             LIMIT 1
         """, (product_id,))
         row = cursor.fetchone()
@@ -4481,7 +4522,7 @@ def calculate_heat_exchanger_strength(product_id):
         "竖直隔板槽两侧相邻管中心距": sn_val, #布管
         "相邻隔板槽中心距": "204", #无
         "管板分程处面积Ad": "0", #无
-        "'十字'交叉沿水平隔板槽单侧的排管根数": "30", #无
+        "'十字'交叉沿水平隔板槽单侧的排管根数": "0", #无
         "沿竖直隔板槽单侧的排管根数": "12", #无
         "'丁字'交叉沿水平隔板槽连续侧的排管根数": "15", #无
         "'丁字'交叉沿水平隔板槽不连续侧的排管根数": "15", #无
@@ -4494,6 +4535,9 @@ def calculate_heat_exchanger_strength(product_id):
         "沿竖直隔板槽单侧的管排最两端管孔中心距": "364" #无
 
     }
+
+
+
         # === 获取管箱垫片的垫片厚度 ===
     cursor.execute("""
         SELECT 参数值
@@ -4543,9 +4587,18 @@ def calculate_heat_exchanger_strength(product_id):
     """, (product_id,))
 
     row = cursor.fetchone()
-    if row:
-        guanban_a["是否可以保证在任何情况下管壳程压力都能同时作用"] = safe_str(row.get("参数值"))
-
+    if safe_str(row.get("参数值")) == "是":
+        guanban_a["是否可以保证在任何情况下管壳程压力都能同时作用"] = "1"
+    else:
+        guanban_a["是否可以保证在任何情况下管壳程压力都能同时作用"] = "0"
+    cursor.execute("""
+                               SELECT 参数值 
+                               FROM 产品设计活动表_布管参数表
+                               WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸 W'
+                               LIMIT 1
+                           """, (product_id,))
+    row = cursor.fetchone()
+    getiao_chicun = row["参数值"].strip() if row and row.get("参数值") != "未提供具体数值" else None
     try:
         conn = pymysql.connect(
             host="localhost", user="root", password="123456",
@@ -4595,33 +4648,442 @@ def calculate_heat_exchanger_strength(product_id):
 
         # === 查询管程分程形式 ===
         cursor.execute("""
-            SELECT 参数值 
-            FROM 产品设计活动表_布管参数表
-            WHERE 产品ID = %s AND 参数名 = '管程程数'
-            LIMIT 1
-        """, (product_id,))
+                SELECT 参数值 
+                FROM 产品设计活动表_布管参数表
+                WHERE 产品ID = %s AND 参数名 = '管程分程形式'
+                LIMIT 1
+            """, (product_id,))
         row = cursor.fetchone()
         tube_form = row["参数值"].strip() if row and row.get("参数值") else None
 
+        # === 查询折流板切口方向 ===
+        cursor.execute("""
+                SELECT 参数值 
+                FROM 产品设计活动表_布管参数表
+                WHERE 产品ID = %s AND 参数名 = '折流板切口方向'
+                LIMIT 1
+            """, (product_id,))
+        row = cursor.fetchone()
+        cut_dir = row["参数值"].strip() if row and row.get("参数值") else None
+
+        # === 查询换热管排列方式 ===
+        cursor.execute("""
+                SELECT 参数值 
+                FROM 产品设计活动表_布管参数表
+                WHERE 产品ID = %s AND 参数名 = '换热管排列方式'
+                LIMIT 1
+            """, (product_id,))
+        row = cursor.fetchone()
+        tube_arr = row["参数值"].strip() if row and row.get("参数值") else None
+
     except Exception as e:
         print(f"❌ 查询失败: {e}")
+        tube_form, cut_dir, tube_arr = None, None, None
 
+    fenchengxingshi = f"{tube_form}" if tube_form else ""
     # === 处理查询结果并赋值给 design_params ===
-    if tube_form:
-        if re.match(r"^\d+_\d+$", tube_form):
-            guanban_a["管/壳程布置型式"] = tube_form.replace("_", ".")
-        elif tube_form == "2":
-            guanban_a["管/壳程布置型式"] = "2.1"
-        elif tube_form == "4":
-            guanban_a["管/壳程布置型式"] = "4.2"
-        elif tube_form == "6":
-            guanban_a["管/壳程布置型式"] = "6.2"
-        else:
-            guanban_a["管/壳程布置型式"] = tube_form
+    if fenchengxingshi:
+        guanban_a["管/壳程布置型式"] = fenchengxingshi
     else:
-        print(f"⚠️ 未找到 产品ID={product_id} 的管程分程形式")
+        print(f"⚠️ 未找到 产品ID={product_id} 的管程程数或壳程程数")
         guanban_a["管/壳程布置型式"] = ""
 
+    # === 判断条件，决定取一排还是两排 ===
+    need_two_rows = (
+            (cut_dir == "竖直左右" and tube_arr == "正三角形")
+            or (cut_dir == "水平上下" and tube_arr == "转角正三角形")
+    )
+
+    if fenchengxingshi in ("4.2", "6.1") or need_two_rows:
+        sql = """
+                SELECT `管孔数量（上）` AS tube_count
+                FROM 产品设计活动表_布管数量表
+                WHERE 产品ID = %s
+                ORDER BY `至水平中心线行号` ASC
+            """
+        cursor.execute(sql, (product_id,))
+        rows = cursor.fetchall()
+
+        tube_num1 = None
+        selected_coords = []
+
+        if need_two_rows:
+            # 取两排非零数据
+            nonzero_counts = []
+            row_indexes = []
+            for idx, row in enumerate(rows):
+                try:
+                    num = int(row["tube_count"])
+                except (TypeError, ValueError):
+                    continue
+                if num != 0:
+                    nonzero_counts.append(num)
+                    row_indexes.append(idx + 1)  # 假设行号就是表里的顺序
+                if len(nonzero_counts) >= 2:
+                    break
+
+            if len(nonzero_counts) >= 2:
+                tube_num1 = sum(nonzero_counts[:2])
+            elif nonzero_counts:
+                tube_num1 = nonzero_counts[0]
+
+            # 拿这两排对应的坐标
+            if row_indexes:
+                sql = """
+                    SELECT x坐标, y坐标
+                    FROM 产品设计活动表_布管坐标表
+                    WHERE 产品ID = %s AND 至水平中心线行号 IN %s
+                """
+                cursor.execute(sql, (product_id, tuple(row_indexes)))
+                coords = cursor.fetchall()
+                selected_coords.extend([(float(r["x坐标"]), float(r["y坐标"])) for r in coords])
+
+        else:
+            # === 查询所有坐标 ===
+            cursor.execute("""
+                SELECT x坐标, y坐标
+                FROM 产品设计活动表_布管坐标表
+                WHERE 产品ID = %s
+            """, (product_id,))
+            rows = cursor.fetchall()
+
+            # 转成浮点数并过滤无效数据
+            coords = [(float(r["x坐标"]), float(r["y坐标"]))
+                      for r in rows if r.get("x坐标") is not None and r.get("y坐标") is not None]
+
+            tube_num1 = 0
+            selected_coords = []
+
+            if coords:
+                # 找到 y 最小的非零排（第一排）
+                y_values_sorted = sorted({y for x, y in coords})
+                for y_val in y_values_sorted:
+                    # 统计该 y 值对应的管孔数
+                    tube_in_row = [x for x, y in coords if y == y_val]
+                    if tube_in_row:
+                        tube_num1 = len(tube_in_row)
+                        # 保存这一排的坐标用于后续最大间距计算
+                        selected_coords.extend([(x, y_val) for x in tube_in_row])
+                        break
+
+            guanban_a["'十字'交叉沿水平隔板槽单侧的排管根数"] = tube_num1
+
+        # === 计算最大间距 ===
+        max_distance = 0.0
+        if len(selected_coords) >= 2:
+            for i in range(len(selected_coords)):
+                x1, y1 = selected_coords[i]
+                for j in range(i + 1, len(selected_coords)):
+                    x2, y2 = selected_coords[j]
+                    dist = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
+                    if dist > max_distance:
+                        max_distance = dist
+
+        guanban_a["'十字'交叉沿水平隔板槽单侧管排1最两端管孔中心距"] = max_distance
+
+    elif fenchengxingshi == "6.2":
+        sql = """
+               SELECT y坐标, x坐标
+               FROM 产品设计活动表_布管坐标表
+               WHERE 产品ID = %s
+               ORDER BY y坐标 ASC
+           """
+        cursor.execute(sql, (product_id,))
+        rows = cursor.fetchall()
+        y_values = [float(r["y坐标"]) for r in rows if r.get("y坐标") is not None]
+
+        tube_num1, tube_num2 = None, None
+        selected_coords = []
+
+        if y_values:
+            # 上侧：找到第一个 y > getiao_chicun 的最小值
+            y_above = [y for y in y_values if y > getiao_chicun]
+            if y_above:
+                min_above = min(y_above)
+                cursor.execute("""
+                    SELECT x坐标, y坐标
+                    FROM 产品设计活动表_布管坐标表
+                    WHERE 产品ID = %s AND y坐标 = %s
+                """, (product_id, min_above))
+                rows_above = cursor.fetchall()
+                selected_coords.extend([(float(r["x坐标"]), float(r["y坐标"])) for r in rows_above])
+                tube_num1 = len(rows_above)
+
+            # 下侧：找到第一个 y < -getiao_chicun 的最大值
+            y_below = [y for y in y_values if y < -getiao_chicun]
+            if y_below:
+                max_below = max(y_below)
+                cursor.execute("""
+                    SELECT x坐标, y坐标
+                    FROM 产品设计活动表_布管坐标表
+                    WHERE 产品ID = %s AND y坐标 = %s
+                """, (product_id, max_below))
+                rows_below = cursor.fetchall()
+                selected_coords.extend([(float(r["x坐标"]), float(r["y坐标"])) for r in rows_below])
+                tube_num2 = len(rows_below)
+
+        guanban_a["'十字'交叉沿水平隔板槽单侧的排管根数"] = (tube_num1 or 0) + (tube_num2 or 0)
+
+        # === 计算最大间距 ===
+        max_distance = 0.0
+        if len(selected_coords) >= 2:
+            for i in range(len(selected_coords)):
+                x1, y1 = selected_coords[i]
+                for j in range(i + 1, len(selected_coords)):
+                    x2, y2 = selected_coords[j]
+                    dist = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
+                    if dist > max_distance:
+                        max_distance = dist
+
+        guanban_a["'十字'交叉沿水平隔板槽单侧管排1最两端管孔中心距"] = max(max_distance,guanban_a["'十字'交叉沿水平隔板槽单侧管排1最两端管孔中心距"])
+
+    if fenchengxingshi == "6.2" or fenchengxingshi == "4.1" or fenchengxingshi == "4.3" or fenchengxingshi == "6.1":
+        # === 读取换热管排列方式 ===
+        guanban_a["相邻隔板槽中心距"] = getiao_chicun
+    # === 查询折流板切口方向 & 换热管排列方式 ===
+    cursor.execute("""
+        SELECT 参数名, 参数值
+        FROM 产品设计活动表_布管参数表
+        WHERE 产品ID = %s 
+          AND 参数名 IN ('折流板切口方向', '换热管排列方式')
+    """, (product_id,))
+    params = {row["参数名"]: row["参数值"] for row in cursor.fetchall()}
+
+    cut_dir = params.get("折流板切口方向", "").strip()
+    arrange = params.get("换热管排列方式", "").strip()
+
+    # === 查询所有坐标 ===
+    cursor.execute("""
+        SELECT x坐标, y坐标
+        FROM 产品设计活动表_布管坐标表
+        WHERE 产品ID = %s
+    """, (product_id,))
+    rows = cursor.fetchall()
+
+    coords = []
+    for r in rows:
+        try:
+            x = float(r["x坐标"])
+            y = float(r["y坐标"])
+            coords.append((x, y))
+        except (TypeError, ValueError):
+            continue  # 跳过无效数据
+
+    # 过滤 y 范围（如果 fenchengxingshi 是 6.x 或 4.x）
+    if re.match(r"^6\.\d+$", fenchengxingshi) or re.match(r"^4\.\d+$", fenchengxingshi):
+        coords = [(x, y) for x, y in coords if -float(getiao_chicun) <= y <= float(getiao_chicun)]
+
+    selected_coords = []
+    # 找出所有 x < 0 的唯一值，排序（降序取最大、次大）
+    x_negatives = sorted({x for x, _ in coords if x < 0}, reverse=True)
+
+    tube_count = 0
+    if x_negatives:
+        # 默认取最大值一列
+        max_x = x_negatives[0]
+        tube_count += sum(1 for x, y in coords if x == max_x)
+
+        # 如果满足特殊条件 → 再加次大列
+        if ((cut_dir == "竖直左右" and arrange == "正三角形") or
+                (cut_dir == "水平上下" and arrange == "转角正三角形")):
+            if len(x_negatives) > 1:
+                second_x = x_negatives[1]
+                tube_count += sum(1 for x, y in coords if x == second_x)
+
+    guanban_a["沿竖直隔板槽单侧的排管根数"] = tube_count
+    # === 计算最远水平距离（同一 y 行内最左最右的间距） ===
+    max_distance = 0.0
+    if selected_coords:
+        # 以 y 为键分组
+        y_groups = {}
+        for x, y in selected_coords:
+            y_groups.setdefault(y, []).append(x)
+
+        for y_val, x_list in y_groups.items():
+            if len(x_list) >= 2:
+                dist = max(x_list) - min(x_list)
+                if dist > max_distance:
+                    max_distance = dist
+
+    guanban_a["沿竖直隔板槽单侧的管排最两端管孔中心距"] = max_distance
+    if fenchengxingshi == "4.3" or fenchengxingshi == "6.1":
+        # === 连续侧 ===
+        cursor.execute("""
+                SELECT x坐标, y坐标
+                FROM 产品设计活动表_布管坐标表
+                WHERE 产品ID = %s
+            """, (product_id,))
+        rows = cursor.fetchall()
+        y_values = [float(r["y坐标"]) for r in rows if r.get("y坐标") is not None]
+
+        tube_num1, tube_num2 = 0, 0
+        selected_coords_cont = []
+
+        # 确保 getiao_chicun 是 float
+        try:
+            getiao_chicun = float(getiao_chicun)
+        except (TypeError, ValueError):
+            getiao_chicun = 0.0  # 或者给个默认值
+
+        if y_values:
+            y_above = [y for y in y_values if y > getiao_chicun]
+            if y_above:
+                min_above = min(y_above)
+                cursor.execute("""
+                        SELECT x坐标, y坐标
+                        FROM 产品设计活动表_布管坐标表
+                        WHERE 产品ID = %s AND y坐标 = %s
+                    """, (product_id, min_above))
+                rows_above = cursor.fetchall()
+                tube_num1 = len(rows_above)
+                selected_coords_cont.extend([(float(r["x坐标"]), float(r["y坐标"])) for r in rows_above])
+
+            y_below = [y for y in y_values if y < -getiao_chicun]
+            if y_below:
+                max_below = max(y_below)
+                cursor.execute("""
+                        SELECT x坐标, y坐标
+                        FROM 产品设计活动表_布管坐标表
+                        WHERE 产品ID = %s AND y坐标 = %s
+                    """, (product_id, max_below))
+                rows_below = cursor.fetchall()
+                tube_num2 = len(rows_below)
+                selected_coords_cont.extend([(float(r["x坐标"]), float(r["y坐标"])) for r in rows_below])
+
+        guanban_a["'丁字'交叉沿水平隔板槽连续侧的排管根数"] = tube_num1 + tube_num2
+
+        max_distance_cont = 0.0
+        if len(selected_coords_cont) >= 2:
+            for i in range(len(selected_coords_cont)):
+                for j in range(i + 1, len(selected_coords_cont)):
+                    x1, y1 = selected_coords_cont[i]
+                    x2, y2 = selected_coords_cont[j]
+                    dist = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
+                    max_distance_cont = max(max_distance_cont, dist)
+
+        # === 不连续侧 ===
+        cursor.execute("""
+                SELECT x坐标, y坐标
+                FROM 产品设计活动表_布管坐标表
+                WHERE 产品ID = %s
+            """, (product_id,))
+        rows = cursor.fetchall()
+        y_values = [float(r["y坐标"]) for r in rows if r.get("y坐标") is not None]
+
+        tube_num1, tube_num2 = 0, 0
+        selected_coords_uncont = []
+
+        if y_values:
+            y_below = [y for y in y_values if y < getiao_chicun]
+            if y_below:
+                max_below = max(y_below)
+                cursor.execute("""
+                        SELECT x坐标, y坐标
+                        FROM 产品设计活动表_布管坐标表
+                        WHERE 产品ID = %s AND y坐标 = %s
+                    """, (product_id, max_below))
+                rows_below = cursor.fetchall()
+                tube_num1 = len(rows_below)
+                selected_coords_uncont.extend([(float(r["x坐标"]), float(r["y坐标"])) for r in rows_below])
+
+            y_above = [y for y in y_values if y > -getiao_chicun]
+            if y_above:
+                min_above = min(y_above)
+                cursor.execute("""
+                        SELECT x坐标, y坐标
+                        FROM 产品设计活动表_布管坐标表
+                        WHERE 产品ID = %s AND y坐标 = %s
+                    """, (product_id, min_above))
+                rows_above = cursor.fetchall()
+                tube_num2 = len(rows_above)
+                selected_coords_uncont.extend([(float(r["x坐标"]), float(r["y坐标"])) for r in rows_above])
+
+        guanban_a["'丁字'交叉沿水平隔板槽不连续侧的排管根数"] = tube_num1 + tube_num2
+
+        max_distance_uncont = 0.0
+        if len(selected_coords_uncont) >= 2:
+            for i in range(len(selected_coords_uncont)):
+                for j in range(i + 1, len(selected_coords_uncont)):
+                    x1, y1 = selected_coords_uncont[i]
+                    x2, y2 = selected_coords_uncont[j]
+                    dist = ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
+                    max_distance_uncont = max(max_distance_uncont, dist)
+
+        # === 取最大间距 ===
+        guanban_a["'丁字'交叉沿水平隔板槽不连续侧管排1最两端管孔中心距"] = max(max_distance_cont, max_distance_uncont)
+
+    # === 查询折流板切口方向 & 换热管排列方式 ===
+    cursor.execute("""
+        SELECT 参数名, 参数值
+        FROM 产品设计活动表_布管参数表
+        WHERE 产品ID = %s 
+          AND 参数名 IN ('折流板切口方向', '换热管排列方式')
+    """, (product_id,))
+    params = {row["参数名"]: row["参数值"] for row in cursor.fetchall()}
+
+    cut_dir = params.get("折流板切口方向", "").strip()
+    if cut_dir == "竖直左右":
+        # === 查询所有布管坐标 ===
+        cursor.execute("""
+            SELECT x坐标, y坐标
+            FROM 产品设计活动表_布管坐标表
+            WHERE 产品ID = %s
+        """, (product_id,))
+        rows = cursor.fetchall()
+
+        coords = [
+            (float(r["x坐标"]), float(r["y坐标"]))
+            for r in rows if r.get("x坐标") is not None and r.get("y坐标") is not None
+        ]
+
+        # === 计算实际布管区域最大高度 ===
+        if coords:
+            y_groups = defaultdict(list)
+
+            # 按 y 分组
+            for x, y in coords:
+                y_groups[y].append(x)
+
+            # 计算每一行的宽度
+            max_height = 0.0
+            for y, x_list in y_groups.items():
+                row_width = max(x_list) - min(x_list)
+                if row_width > max_height:
+                    max_height = row_width
+
+            guanban_a["实际布管区域最大高度"] = max_height
+        elif cut_dir == "水平上下":
+            # === 查询所有布管坐标 ===
+            cursor.execute("""
+                SELECT x坐标, y坐标
+                FROM 产品设计活动表_布管坐标表
+                WHERE 产品ID = %s
+            """, (product_id,))
+            rows = cursor.fetchall()
+
+            coords = [
+                (float(r["x坐标"]), float(r["y坐标"]))
+                for r in rows if r.get("x坐标") is not None and r.get("y坐标") is not None
+            ]
+
+            # === 计算实际布管区域最大高度 ===
+            if coords:
+                x_groups = defaultdict(list)
+
+                # 按 y 分组
+                for x, y in coords:
+                    x_groups[x].append(y)
+
+                # 计算每一行的宽度
+                max_height = 0.0
+                for x, y_list in y_groups.items():
+                    row_width = max(y_list) - min(y_list)
+                    if row_width > max_height:
+                        max_height = row_width
+
+                guanban_a["实际布管区域最大高度"] = max_height
+            else:
+                guanban_a["实际布管区域最大高度"] = 0
     # 默认值
     e_val = 0.0
     g_val = 0.0
@@ -4853,28 +5315,27 @@ def calculate_heat_exchanger_strength(product_id):
         "旁路挡板厚度": "11", #旁路挡板
         "导流筒内部折边倒角": "2", #无
         "换热管壁厚": "2", #布管
-        "换热管孔间距": "25",  #无
+        "换热管孔间距": s_val,  #无 #换热管中心距
         "接管布置型式": "1",  #无
-        "折流板布置型式": "1",  #无
         "管程数": "2", #布管
         "换热管排列方式": "正三角形",#布管
         "折流板切口方向": "水平",#布管
-        "水平分程隔板槽两侧相邻管中心距水平上下": sn_val, #布管
-        "竖直分程隔板槽两侧相邻管中心距垂直左右": snh_val,#布管
+        "水平分程隔板槽两侧相邻管中心距水平上下": snh_val, #布管
+        "竖直分程隔板槽两侧相邻管中心距垂直左右": sn_val,#布管
         "水平分程隔板槽数量": "1",#无
         "竖直分程隔板槽数量": "0",#无
         "布管限定圆直径": "784",#布管
         "换热管理论直管长度": "6000",  # 热交换器公称（换热管）长度 L
         "换热管伸出管板值": "4.5", #无
-        "管板名义厚度": "80",  #无
-        "折流板切口与中心线间距": "200",  #无
+        # "管板名义厚度": "80",  #无
+        "折流板切口与中心线间距": "300",  #无
         "圆筒内径": "800", #布管，壳体内直径
         "公称直径": "1000", #管程
-        "滑道伸出折流板/支持板最小值": "50", #无
-        "接管外径1": "273", #无
-        "接管外径2": "219",#无
-        "接管1名义厚度": "16", #无
-        "接管2名义厚度": "12", #无
+        # "滑道伸出折流板/支持板最小值": "50", #无
+        # "接管外径1": "273", #无
+        # "接管外径2": "219",#无
+        # "接管1名义厚度": "16", #无
+        # "接管2名义厚度": "12", #无
         "圆筒名义厚度": "12",#无
         "管板类型": "a", #无
         "管板凸台高度": "5", #固定管板
@@ -4891,6 +5352,118 @@ def calculate_heat_exchanger_strength(product_id):
         "换热管材料类型": "钢管", #换热管
         "换热管材料牌号": "10(GB8163)"#换热管
     }
+    # === 查询所有布管坐标 ===
+    cursor.execute("""
+        SELECT x坐标, y坐标
+        FROM 产品设计活动表_布管坐标表
+        WHERE 产品ID = %s
+    """, (product_id,))
+    rows = cursor.fetchall()
+
+    coords = [
+        (float(r["x坐标"]), float(r["y坐标"]))
+        for r in rows if r.get("x坐标") is not None and r.get("y坐标") is not None
+    ]
+
+    # === 计算实际布管区域最大直径 ===
+    if coords:
+        # 最大半径
+        max_radius = max(math.hypot(x, y) for x, y in coords)
+        # 直径 = 半径 × 2
+        tube_bundle["实际布管区域最大直径"] = max_radius * 2
+    else:
+        tube_bundle["实际布管区域最大直径"] = 0
+    cursor.execute("""
+                SELECT 参数值
+                FROM 产品设计活动表_元件附加参数表
+                WHERE 产品ID = %s AND 元件名称 = '内导流筒' AND 参数名称 = '导流筒直边高度'
+            """, (product_id,))
+    row = cursor.fetchone()
+
+    tube_bundle["导流筒边缘过水平中心线距离"] = str(row["参数值"]).strip()
+    cursor
+    cursor.execute("""
+            SELECT 参数值
+            FROM 产品设计活动表_元件附加参数表
+            WHERE 产品ID = %s AND 元件名称 = '内导流筒' AND 参数名称 = '导流筒直边高度'
+        """, (product_id,))
+    row = cursor.fetchone()
+
+    tube_bundle["导流筒边缘过水平中心线距离"] = str(row["参数值"]).strip()
+    cursor.execute("""
+                SELECT 参数值
+                FROM 产品设计活动表_元件附加参数表
+                WHERE 产品ID = %s AND 元件名称 = '内导流筒' AND 参数名称 = '倒圆半径'
+            """, (product_id,))
+    row = cursor.fetchone()
+
+    tube_bundle["导流筒内部折边倒角"] = str(row["参数值"]).strip()
+
+    # sql = """
+    #     SELECT 管板类型
+    #     FROM 产品设计活动表_管板形式表
+    #     WHERE 产品ID = %s
+    #     LIMIT 1
+    # """
+    # cursor.execute(sql, (product_id,))
+    # row = cursor.fetchone()
+    # if row:
+    #     tube_bundle["管板类型"] = str(row["管板类型"])[0]  # 取第一个字母
+
+    sql = """
+            SELECT 参数值
+            FROM 产品设计活动表_管板连接表
+            WHERE 产品ID = %s
+              AND 参数名 = '换热管伸出管板长度 L'
+            LIMIT 1
+        """
+    cursor.execute(sql, (product_id,))
+    row = cursor.fetchone()
+    if row:
+        tube_bundle["换热管伸出管板值"] = str(row["参数值"])  # 取参数值
+    sql = """
+               SELECT 参数值
+               FROM 产品设计活动表_布管参数表
+               WHERE 产品ID = %s
+                 AND 参数名 = '折流板切口与中心线间距'
+               LIMIT 1
+           """
+    cursor.execute(sql, (product_id,))
+    row = cursor.fetchone()
+    if row:
+        tube_bundle["折流板切口与中心线间距"] = str(row["参数值"])  # 取参数值
+    sql = """
+                   SELECT 参数值
+                   FROM 产品设计活动表_布管参数表
+                   WHERE 产品ID = %s
+                     AND 参数名 = '折流板/支持板间距'
+                   LIMIT 1
+               """
+    cursor.execute(sql, (product_id,))
+    row = cursor.fetchone()
+    if row:
+        tube_bundle["折流板需求间距"] = str(row["参数值"])  # 取参数值
+    sql = """
+           SELECT 管口功能, `周向方位（°）`
+           FROM 产品设计活动表_管口表
+           WHERE 产品ID = %s
+             AND 管口功能 IN ('壳程入口', '壳程出口')
+       """
+    cursor.execute(sql, (product_id,))
+    rows = cursor.fetchall()
+
+    # 2. 提取周向方位
+    orientations = [row["周向方位（°）"] for row in rows if row.get("周向方位（°）") is not None]
+
+    if len(orientations) < 2:
+        print("⚠️ 未找到两个管口（壳程入口/出口），无法判定")
+        layout_type = None
+    else:
+        layout_type = "2" if orientations[0] == orientations[1] else "1"
+
+    tube_bundle["接管布置型式"] = layout_type
+
+
     # 查询换热管材料级别
     cursor.execute("""
         SELECT 参数值
@@ -4946,7 +5519,7 @@ def calculate_heat_exchanger_strength(product_id):
         SELECT 参数值
         FROM 产品设计活动表_元件附加参数表
         WHERE 产品ID = %s
-          AND 元件名称 = '导流筒'
+          AND 元件名称 = '内导流筒'
           AND 参数名称 = '导流筒厚度'
     """, (product_id,))
 
@@ -5132,29 +5705,49 @@ def calculate_heat_exchanger_strength(product_id):
             database="产品设计活动库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
         )
         cursor = conn.cursor()  # ✅ 不使用 with，游标保持可用
+        # === 读取管程数 ===
+        cursor.execute("""
+                   SELECT 参数值 
+                   FROM 产品设计活动表_布管参数表
+                   WHERE 产品ID = %s AND 参数名 = '管程程数'
+                   LIMIT 1
+               """, (product_id,))
+        row = cursor.fetchone()
+        tube_passes1 = row["参数值"].strip() if row and row.get("参数值") else ""
+        tube_bundle["管程数"] = tube_passes1
 
         # === 读取管程数 ===
         cursor.execute("""
             SELECT 参数值 
             FROM 产品设计活动表_布管参数表
-            WHERE 产品ID = %s AND 参数名 = '管程数'
+            WHERE 产品ID = %s AND 参数名 = '管程分程形式'
             LIMIT 1
         """, (product_id,))
         row = cursor.fetchone()
         tube_passes = row["参数值"].strip() if row and row.get("参数值") else ""
 
-        if tube_passes:
-            tube_bundle["管程数"] = tube_passes
-            # === 根据管程数设置分程隔板槽数量 ===
-            if tube_passes == "2":
-                tube_bundle["水平分程隔板槽数量"] = "1"
-                tube_bundle["竖直分程隔板槽数量"] = "0"
-            elif tube_passes == "4":
-                tube_bundle["水平分程隔板槽数量"] = "1"
-                tube_bundle["竖直分程隔板槽数量"] = "1"
-            else:
-                tube_bundle["水平分程隔板槽数量"] = "0"
-                tube_bundle["竖直分程隔板槽数量"] = "0"
+        # === 根据管程数设置分程隔板槽数量 ===
+        if tube_passes == "2.1":
+            tube_bundle["水平分程隔板槽数量"] = "1"
+            tube_bundle["竖直分程隔板槽数量"] = "0"
+        elif tube_passes == "4.2":
+            tube_bundle["水平分程隔板槽数量"] = "1"
+            tube_bundle["竖直分程隔板槽数量"] = "1"
+        elif tube_passes == "4.1":
+            tube_bundle["水平分程隔板槽数量"] = "3"
+            tube_bundle["竖直分程隔板槽数量"] = "0"
+        elif tube_passes == "4.3":
+            tube_bundle["水平分程隔板槽数量"] = "2"
+            tube_bundle["竖直分程隔板槽数量"] = "1"
+        elif tube_passes == "6.1":
+            tube_bundle["水平分程隔板槽数量"] = "3"
+            tube_bundle["竖直分程隔板槽数量"] = "1"
+        elif tube_passes == "6.2":
+            tube_bundle["水平分程隔板槽数量"] = "2"
+            tube_bundle["竖直分程隔板槽数量"] = "1"
+        else:
+            tube_bundle["水平分程隔板槽数量"] = "0"
+            tube_bundle["竖直分程隔板槽数量"] = "0"
 
     except Exception as e:
         print(f"❌ 查询失败: {e}")
@@ -5412,6 +6005,25 @@ def calculate_heat_exchanger_strength(product_id):
             "覆层材料类型":""
         }
         cursor.execute("""
+            SELECT 管口功能, 管口所属元件, 公称尺寸,
+                   偏心距, `轴向夹角（°）`, 外伸高度
+            FROM 产品设计活动表_管口表
+            WHERE 产品ID = %s AND 管口代号 = %s
+            LIMIT 1
+        """, (product_id, guankou_daihao))
+        row = cursor.fetchone()
+
+        if row:
+            jieguan["开孔元件名称"] = row.get("管口所属元件", "").strip()
+            jieguan["接管中心线至筒体轴线距离(偏心距)"] = str(row.get("偏心距", "0"))
+            jieguan["接管中心线与法线夹角(包括封头)"] = str(row.get("轴向夹角（°）", "0"))
+            jieguan["接管实际外伸长度"] = str(row.get("外伸高度", "0"))
+
+        # 程序推荐兜底
+        if jieguan.get("接管实际外伸长度") == "程序推荐":
+            jieguan["接管实际外伸长度"] = "0"
+
+        cursor.execute("""
             SELECT 参数名称, 管程数值
             FROM 产品设计活动表_设计数据表
             WHERE 产品ID = %s AND 参数名称 IN ('工作温度（入口）', '工作温度（出口）')
@@ -5444,36 +6056,43 @@ def calculate_heat_exchanger_strength(product_id):
         else:
             jieguan["正常操作工况下操作温度变化范围"] = "10"  # 默认值
 
-        # 查询材料信息
+        # === 获取管口材料分类 ===
         cursor.execute("""
-            SELECT 零件名称, 材料类型, 材料牌号
-            FROM 产品设计活动表_管口零件材料表
-            WHERE 产品ID = %s AND 零件名称 IN ('接管', '接管2', '接管3')
-        """, (product_id,))
-        material_rows = cursor.fetchall()
-
-        # 建立 映射：零件名称 -> (材料类型, 材料牌号)
-        material_map = {
-            row["零件名称"]: (row["材料类型"], row["材料牌号"])
-            for row in material_rows
-        }
-
-        # 更新 jieguan 中的材料字段
-        for i, part_name in enumerate(["接管", "接管2", "接管3"], start=1):
-            mat_type, mat_grade = material_map.get(part_name, ("", ""))
-            jieguan[f"接管材料类型{i}"] = mat_type
-            jieguan[f"接管材料牌号{i}"] = mat_grade
-
-        cursor.execute("""
-            SELECT 公称尺寸
-            FROM 产品设计活动表_管口表
-            WHERE 产品ID = %s AND 管口功能 = '管程入口'
+            SELECT 材料分类
+            FROM 产品设计活动表_管口类别表
+            WHERE 产品ID = %s AND 管口代号 = %s
             LIMIT 1
-        """, (product_id,))
+        """, (product_id, guankou_daihao))
         row = cursor.fetchone()
 
-        if row and row["公称尺寸"] is not None:
-            jieguan["接管内/外径"] = str(row["公称尺寸"])
+        if row and row.get("材料分类"):
+            category = row["材料分类"].strip()
+        else:
+            category = ""  # 默认分类
+
+        print(f"✅ 管口代号 {guankou_daihao} 使用材料分类: {category}")
+
+        # === 根据材料分类，从附加参数表里取材料参数 ===
+        cursor.execute("""
+            SELECT 参数名称, 参数值
+            FROM 产品设计活动表_管口附加参数表
+            WHERE 产品ID = %s AND 类别 = %s
+              AND 参数名称 IN (
+                  '接管材料类型1','接管材料类型2','接管材料类型3',
+                  '接管材料牌号1','接管材料牌号2','接管材料牌号3'
+              )
+        """, (product_id, category))
+        material_rows = cursor.fetchall()
+
+        material_map = {
+            r["参数名称"].strip(): str(r["参数值"]).strip()
+            for r in material_rows if r.get("参数名称") and r.get("参数值") not in (None, "", "None")
+        }
+
+        # 更新到 jieguan
+        for i in range(1, 3 + 1):
+            jieguan[f"接管材料类型{i}"] = material_map.get(f"接管材料类型{i}", "")
+            jieguan[f"接管材料牌号{i}"] = material_map.get(f"接管材料牌号{i}", "")
 
         # ===== 获取公称直径、绝热厚度、毒性/爆炸危险等 =====
         cursor.execute("""
@@ -5489,14 +6108,6 @@ def calculate_heat_exchanger_strength(product_id):
             jieguan["设备公称直径"] = str(param_map["公称直径*"].get("管程数值", ""))
         # 参数映射：数据库参数名 → jieguan 字典键名
 
-        jieguan_param_map = {
-            "覆层成型工艺": "覆层复合方式",
-            "覆层厚度": "接管覆层厚度",
-            "是否覆层": "是否覆层",
-            "覆层材料类型": "覆层材料类型"
-
-        }
-
         # === 获取该管口的材料分类 ===
         cursor.execute("""
             SELECT 材料分类
@@ -5510,16 +6121,6 @@ def calculate_heat_exchanger_strength(product_id):
         category = material_classes[0] if use_category_filter else None
         print(f"✅ 材料分类（{guankou_daihao}）: {material_classes or '统一材料'}")
 
-        # === 获取接管零件ID ===
-        cursor.execute("""
-            SELECT 管口零件ID
-            FROM 产品设计活动表_管口零件材料表
-            WHERE 产品ID = %s AND 零件名称 = '接管'
-            LIMIT 1
-        """, (product_id,))
-        row = cursor.fetchone()
-        jieguan_part_id = row["管口零件ID"] if row and row["管口零件ID"] not in (None, "", "None") else None
-        print(f"✅ 接管零件ID: {jieguan_part_id}")
 
         # === 获取管口功能 ===
         cursor.execute("""
@@ -5531,16 +6132,52 @@ def calculate_heat_exchanger_strength(product_id):
         row = cursor.fetchone()
         guankou_gongneng = row["管口功能"].strip() if row and row["管口功能"] else ""
         print(f"✅ 管口功能: {guankou_gongneng}")
+        # === 获取管口功能和所属元件 ===
+        cursor.execute("""
+            SELECT 管口功能, 管口所属元件, 公称尺寸
+            FROM 产品设计活动表_管口表
+            WHERE 产品ID = %s AND 管口代号 = %s
+            LIMIT 1
+        """, (product_id, guankou_daihao))
+        row = cursor.fetchone()
 
-        if "管程" in guankou_gongneng:
-            corrosion_param_name = "管程接管腐蚀裕量"
-        elif "壳程" in guankou_gongneng:
-            corrosion_param_name = "壳程接管腐蚀裕量"
-        else:
-            corrosion_param_name = None
-        print(f"✅ 腐蚀裕量参数名: {corrosion_param_name}")
+        guankou_gongneng = row["管口功能"].strip() if row and row["管口功能"] else ""
+        suoshuyuanjian = row["管口所属元件"].strip() if row and row["管口所属元件"] else ""
+        gongcheng_size = row["公称尺寸"] if row else None
 
-        material_map = {}
+        print(f"✅ 管口功能: {guankou_gongneng}")
+        print(f"✅ 所属元件: {suoshuyuanjian}")
+
+        if gongcheng_size is not None:
+            jieguan["接管内/外径"] = str(gongcheng_size)
+
+        # # === 根据所属元件，从设计数据表获取腐蚀裕量 ===
+        # corrosion_value = None
+        # if "管箱" in suoshuyuanjian:
+        #     cursor.execute("""
+        #         SELECT 管程数值
+        #         FROM 产品设计活动表_设计数据表
+        #         WHERE 产品ID = %s
+        #         LIMIT 1
+        #     """, (product_id,))
+        #     row = cursor.fetchone()
+        #     corrosion_value = row["管程数值"] if row and row["管程数值"] is not None else None
+        #
+        # elif "外头盖" in suoshuyuanjian or "壳体" in suoshuyuanjian:
+        #     cursor.execute("""
+        #         SELECT 壳程数值
+        #         FROM 产品设计活动表_设计数据表
+        #         WHERE 产品ID = %s
+        #         LIMIT 1
+        #     """, (product_id,))
+        #     row = cursor.fetchone()
+        #     corrosion_value = row["壳程数值"] if row and row["壳程数值"] is not None else None
+        #
+        # if corrosion_value is not None:
+        #     jieguan["接管腐蚀裕量"] = str(corrosion_value)
+        #
+        # print(f"✅ 接管腐蚀裕量: {jieguan.get('接管腐蚀裕量')}")
+
 
         # === 获取材料分类 ===
         cursor.execute("""
@@ -5555,117 +6192,66 @@ def calculate_heat_exchanger_strength(product_id):
         # === 遍历接管/2/3 获取材料参数 ===
         material_map = {}  # 放循环外：存全部接管材料类型/牌号
         param_map_total = {}  # 放循环外：存所有参数（用于后续统一处理）
-
-        for part_name in ["接管", "接管2", "接管3"]:
-            # 获取该接管对应的零件 ID
-            cursor.execute("""
-                SELECT 管口零件ID, 材料类型, 材料牌号
-                FROM 产品设计活动表_管口零件材料表 
-                WHERE 产品ID = %s AND 零件名称 = %s
-            """, (product_id, part_name))
-            row = cursor.fetchone()
-
-            part_id = row["管口零件ID"] if row and row.get("管口零件ID") not in (None, "", "None") else None
-            material_type = row.get("材料类型", "").strip() if row else ""
-            material_grade = row.get("材料牌号", "").strip() if row else ""
-            material_map[part_name] = (material_type, material_grade)
-            print(f"📌 {part_name} 材料类型: {material_type}, 材料牌号: {material_grade}")
-
-            if not part_id:
-                continue
-
-            # 查询其余材料参数
-            if use_category_filter:
-                cursor.execute("""
-                    SELECT 参数名称, 参数值 
-                    FROM 产品设计活动表_管口零件材料参数表 
-                    WHERE 产品ID = %s AND 管口零件ID = %s AND 类别 = %s
-                """, (product_id, part_id, category))
-            else:
-                cursor.execute("""
-                    SELECT 参数名称, 参数值 
-                    FROM 产品设计活动表_管口零件材料参数表 
-                    WHERE 产品ID = %s AND 管口零件ID = %s
-                """, (product_id, part_id))
-
-            rows = cursor.fetchall()
-            sub_param_map = {
-                r["参数名称"].strip(): str(r["参数值"]).strip()
-                for r in rows if r.get("参数名称") and r.get("参数值") not in (None, "", "None")
-            }
-            param_map_total.update(sub_param_map)
-            print(f"📌 {part_name} 参数: {sub_param_map}")
-
-        # 🔄 循环外一次性查壳体圆筒的覆层参数
+        # === 查询接管覆层参数（新的逻辑：来自 管口附加参数表）===
         cursor.execute("""
-            SELECT 参数名称, 参数值 
-            FROM 产品设计活动表_元件附加参数表
-            WHERE 产品ID = %s AND 元件名称 = '壳体圆筒'
+            SELECT 参数名称, 参数值
+            FROM 产品设计活动表_管口附加参数表
+            WHERE 产品ID = %s 
+              AND 参数名称 IN ('接管是否添加覆层','覆层材料类型','覆层成型工艺','覆层厚度')
         """, (product_id,))
-        extra_rows = cursor.fetchall()
-        extra_map = {row["参数名称"].strip(): str(row["参数值"]).strip() for row in extra_rows}
+        cover_rows = cursor.fetchall()
 
-        # ✅ 循环外统一写入材料类型/牌号 + 覆层逻辑
-        for i, part_name in enumerate(["接管", "接管2", "接管3"], start=1):
-            mat_type, mat_grade = material_map.get(part_name, ("", ""))
-            jieguan[f"接管材料类型{i}"] = mat_type
-            jieguan[f"接管材料牌号{i}"] = mat_grade
-            print(f"✅ 写入接管{i}: 类型={mat_type}, 牌号={mat_grade}")
-
-            # 用 extra_map 判断覆层
-            if extra_map.get("是否添加覆层") == "是":
-                jieguan["是否覆层"] = "1"
-                jieguan["覆层材料类型"] = extra_map.get("覆层材料类型", "未知")
-                jieguan["覆层复合方式"] = extra_map.get("覆层成型工艺", "轧制复合")
-                jieguan["接管覆层厚度"] = extra_map.get("覆层厚度", "0")
-                has_cover = True
-            else:
-                jieguan["是否覆层"] = "0"
-                jieguan["覆层材料类型"] = "钢板"
-                jieguan["覆层复合方式"] = "无"
-                jieguan["接管覆层厚度"] = "0"
-                has_cover = False
-
-            # 腐蚀裕量
-            if corrosion_param_name:
-                corrosion_val = param_map_total.get(corrosion_param_name, "0")
-                print(f"✅ 腐蚀裕量值: {corrosion_val}")
-                jieguan["接管腐蚀余量"] = corrosion_val
-
-            # 其余参数映射
-            for raw_param, mapped_key in jieguan_param_map.items():
-                val = param_map_total.get(raw_param)
-                print(f"✅ 参数 {raw_param} → {val}")
-                if not has_cover:
-                    jieguan[mapped_key] = "0" if "厚度" in mapped_key else "无"
-                else:
-                    jieguan[mapped_key] = val if val else ("0" if "厚度" in mapped_key else "无覆层")
-
-            print(f"\n🟢 最终输出: {jieguan}")
-
-        # 映射关系：元件名称 + 字段 → jieguan 中的字段
-        material_field_map = {
-            ("接管补强圈", "材料类型"): "补强圈材料类型",
-            ("接管补强圈", "材料牌号"): "补强圈材料牌号"
+        cover_map = {
+            r["参数名称"].strip(): str(r["参数值"]).strip()
+            for r in cover_rows if r.get("参数名称") and r.get("参数值") not in (None, "", "None")
         }
 
+        if cover_map.get("接管是否添加覆层") == "是":
+            jieguan["是否覆层"] = "1"
+            jieguan["覆层材料类型"] = cover_map.get("覆层材料类型", "未知")
+            jieguan["覆层复合方式"] = cover_map.get("覆层成型工艺", "轧制复合")
+            jieguan["接管覆层厚度"] = cover_map.get("覆层厚度", "0")
+            has_cover = True
+        else:
+            jieguan["是否覆层"] = "0"
+            jieguan["覆层材料类型"] = "钢板"
+            jieguan["覆层复合方式"] = "无"
+            jieguan["接管覆层厚度"] = "0"
+            has_cover = False
+
+
+
+        # === 查询补强圈材料信息（按顺序优先：1 → 2 → 3）===
         cursor.execute("""
-            SELECT 零件名称, 材料类型, 材料牌号
-            FROM 产品设计活动表_管口零件材料表
-            WHERE 产品ID = %s
+            SELECT 参数名称, 参数值
+            FROM 产品设计活动表_管口附加参数表
+            WHERE 产品ID = %s 
+              AND 参数名称 IN (
+                  '补强圈材料类型1','补强圈材料牌号1',
+                  '补强圈材料类型2','补强圈材料牌号2',
+                  '补强圈材料类型3','补强圈材料牌号3'
+              )
         """, (product_id,))
         rows = cursor.fetchall()
 
-        for row in rows:
-            part_name = (row.get("零件名称") or "").strip()
-            material_type = (row.get("材料类型") or "").strip()
-            material_grade = (row.get("材料牌号") or "").strip()
+        extra_map = {
+            r["参数名称"].strip(): str(r["参数值"]).strip()
+            for r in rows if r.get("参数名称") and r.get("参数值") not in (None, "", "None")
+        }
 
-            # 接管
-            if (part_name, "材料类型") in material_field_map:
-                jieguan[material_field_map[(part_name, "材料类型")]] = material_type or "0"
-            if (part_name, "材料牌号") in material_field_map:
-                jieguan[material_field_map[(part_name, "材料牌号")]] = material_grade or "0"
+        # 默认值
+        jieguan["补强圈材料类型"] = "钢板"
+        jieguan["补强圈材料牌号"] = "0"
+
+        # 按顺序查找
+        for i in range(1, 4):
+            mat_type = extra_map.get(f"补强圈材料类型{i}", "").strip()
+            mat_grade = extra_map.get(f"补强圈材料牌号{i}", "").strip()
+            if mat_type or mat_grade:  # 有一个非空就用
+                jieguan["补强圈材料类型"] = mat_type if mat_type else "0"
+                jieguan["补强圈材料牌号"] = mat_grade if mat_grade else "0"
+                break  # 找到就停
+
         cursor.execute("""
             SELECT `偏心距`, `轴向夹角（°）`
             FROM 产品设计活动表_管口表
@@ -5844,11 +6430,65 @@ def calculate_heat_exchanger_strength(product_id):
     clr.AddReference("CalCulationPartLib")  # 不加 .dll 后缀
     from CalCulationPartLib import CalPartInterface
     # # 读取JSON文件并转换为紧凑格式
-    with open("shuru_jisuan_ceshi.json", "r", encoding="utf-8") as f:
+    with open("shuru_jisuan.json", "r", encoding="utf-8") as f:
         json_input = f.read()
     parsed = json.loads(json_input)
     compact_json = json.dumps(parsed, separators=(',', ':'))
+    conn = pymysql.connect(
+        host="localhost",  # 改成你的数据库地址
+        user="root",  # 改成你的用户名
+        password="123456",  # 改成你的密码
+        database="产品设计活动库",  # 改成你的数据库名
+        charset="utf8mb4"
+    )
+    cursor = conn.cursor()
 
+    try:
+        # 3. 先删除旧数据
+        cursor.execute("DELETE FROM 产品设计活动表_计算提交表 WHERE 产品ID = %s", (product_id,))
+        cursor.execute("DELETE FROM 产品设计活动表_管口计算提交表 WHERE 产品ID = %s", (product_id,))
+        cursor.execute("DELETE FROM 产品设计活动表_设计数据计算提交表 WHERE 产品ID = %s", (product_id,))
+
+        # 4. 插入新数据
+        # 4.1 产品设计活动表_计算提交表
+        for component_name, kvs in parsed.get("DictDatas", {}).items():
+            for k, v in kvs.items():
+                cursor.execute("""
+                    INSERT INTO 产品设计活动表_计算提交表 (产品ID, 元件名称, `key`, `value`)
+                    VALUES (%s, %s, %s, %s)
+                """, (product_id, component_name, k, v))
+
+        # 4.2 产品设计活动表_管口计算提交表
+        for nozzle_no, kvs in parsed.get("TTDict", {}).items():
+            for k, v in kvs.items():
+                cursor.execute("""
+                    INSERT INTO 产品设计活动表_管口计算提交表 (产品ID, 管口号, `key`, `value`)
+                    VALUES (%s, %s, %s, %s)
+                """, (product_id, nozzle_no, k, v))
+
+        # 4.3 产品设计活动表_设计数据计算提交表
+        # 处理 WSList
+        for ws_dict in parsed.get("WSList", []):
+            for k, v in ws_dict.items():
+                cursor.execute("""
+                    INSERT INTO 产品设计活动表_设计数据计算提交表 (产品ID, `key`, `value`)
+                    VALUES (%s, %s, %s)
+                """, (product_id, k, v))
+
+        # 处理 DesignParams
+        for k, v in parsed.get("DesignParams", {}).items():
+            cursor.execute("""
+                INSERT INTO 产品设计活动表_设计数据计算提交表 (产品ID, `key`, `value`)
+                VALUES (%s, %s, %s)
+            """, (product_id, k, v))
+
+        # 5. 提交事务
+        conn.commit()
+        print(f"产品ID {product_id} 的数据已成功保存")
+
+    except Exception as e:
+        conn.rollback()
+        print("写入数据库失败:", e)
     cpi = CalPartInterface()
     calculation_result = cpi.IntergratedEquipment(compact_json)
 
@@ -5856,10 +6496,80 @@ def calculate_heat_exchanger_strength(product_id):
     # with open("modules/qiangdujisuan/jiekou_python/jisuan_output.json", "w", encoding="utf-8") as f:
     with open("jisuan_output_new.json", "w", encoding="utf-8") as f:
         json.dump(json.loads(calculation_result), f, ensure_ascii=False, indent=4)
+    with open("jisuan_output_new.json", "r", encoding="utf-8") as f:
+        parsed = json.load(f)
+
+    # 一个小工具：把任意对象转成文本（确保中文不转义）
+    def _to_text(x):
+        if x is None:
+            return ""
+        if isinstance(x, str):
+            return x
+        return json.dumps(x, ensure_ascii=False)
+
+    try:
+        # === 3) 产品设计活动表_计算结果日志表：只插一行 ===
+        cursor.execute("DELETE FROM 产品设计活动表_计算结果日志表 WHERE 产品ID = %s", (product_id,))
+
+        # 1. Logs 数组拼接为一行
+        logs_joined = "；".join(_to_text(item) for item in parsed.get("Logs", []))
+
+        # 2. 元件结果：元件名=IsSuccess
+        dict_out = parsed.get("DictOutDatas", {}) or {}
+        comp_results = []
+        for comp_name, comp_dict in dict_out.items():
+            if isinstance(comp_dict, dict):
+                is_success = comp_dict.get("IsSuccess")
+                comp_results.append(f"{comp_name}={_to_text(is_success)}")
+        comp_results_joined = "；".join(comp_results)
+
+        # 插入一条记录
+        cursor.execute("""
+                INSERT INTO 产品设计活动表_计算结果日志表 (产品ID, Logs, 元件结果)
+                VALUES (%s, %s, %s)
+            """, (product_id, logs_joined, comp_results_joined))
+
+        # ========== 产品设计活动表_元件计算结果表 ==========
+        cursor.execute("DELETE FROM 产品设计活动表_元件计算结果表 WHERE 产品ID = %s", (product_id,))
+
+        dict_out = parsed.get("DictOutDatas", {}) or {}
+        if not isinstance(dict_out, dict):
+            dict_out = {}
+
+        for comp_name, comp_dict in dict_out.items():
+            if not isinstance(comp_dict, dict):
+                continue  # 跳过异常格式
+
+            datas_list = comp_dict.get("Datas", []) or []
+            if not isinstance(datas_list, list):
+                continue  # 跳过异常格式
+
+            for data_item in datas_list:
+                if not isinstance(data_item, dict):
+                    continue  # 保证 data_item 可用 .get
+
+                cursor.execute("""
+                    INSERT INTO 产品设计活动表_元件计算结果表 (产品ID, 元件名称, Id, Name, Value)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (
+                    product_id,
+                    comp_name,
+                    data_item.get("Id"),
+                    data_item.get("Name"),
+                    data_item.get("Value")
+                ))
+
+        conn.commit()
+        print(f"产品ID {product_id} 的计算结果已成功保存")
+
+
+    except Exception as e:
+        conn.rollback()
+        print("写入数据库失败:", e)
     return calculation_result
 
 if __name__ == "__main__":
-    product_id = 'PD2025082810495601'
+    product_id = 'PD2025090510130901'
     print("当前ID为",product_id)
     # product_id = 'PD20250706001'  # 替换为你自己的产品ID
     result = calculate_heat_exchanger_strength(product_id)

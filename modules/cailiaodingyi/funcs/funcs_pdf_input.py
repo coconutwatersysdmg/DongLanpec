@@ -745,7 +745,7 @@ def insert_updated_element_para_data(template_id, updated_element_para):
         connection.close()
 
 
-def insert_guankou_define_data(template_id, updated_guankou_define, product_type, product_form):
+def insert_guankou_define_data(template_id, updated_guankou_define):
     """将从活动库的管口定义表读出的数据写入材料库中的元件附加参数表"""
     connection = get_connection(**db_config_2)
     try:
@@ -753,23 +753,18 @@ def insert_guankou_define_data(template_id, updated_guankou_define, product_type
 
             for item in updated_guankou_define:
                 sql = """
-                        INSERT INTO 管口零件材料表
-                        (管口零件ID, 模板ID, 零件名称, 材料类型, 材料牌号, 供货状态, 材料标准, 产品类型, 产品型式 ,类别, 元件示意图)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                        INSERT INTO 管口附加参数表
+                        (管口附加参数ID, 模板ID, 参数名称, 参数数值, 参数单位, 所属分类)
+                        VALUES (%s, %s, %s, %s, %s, %s);
                     """
                 # 将查询结果和产品ID一起插入
                 cursor.execute(sql, (
-                    item['管口零件ID'],
+                    item['管口零件参数ID'],
                     template_id,
-                    item['零件名称'],
-                    item['材料类型'],
-                    item['材料牌号'],
-                    item['供货状态'],
-                    item['材料标准'],
-                    product_type,
-                    product_form,
+                    item['参数名称'],
+                    item['参数值'],
+                    item['参数单位'],
                     item['类别'],
-                    item['元件示意图']
                 ))
 
             # 提交事务
@@ -1357,6 +1352,54 @@ def _find_row(table, label_text: str):
         if it and it.text().strip() == label_text:
             return r
     return None
+
+
+
+def init_buguan_defaults(product_id):
+    """
+    新产品初始化：将元件库的布管参数默认表数据插入到
+    产品设计活动库.产品设计活动表_布管参数表
+    （仅在该产品在活动库中不存在布管参数时执行）
+    """
+    conn1 = get_connection("localhost", 3306, "root", "123456", "产品设计活动库")
+    conn2 = get_connection("localhost", 3306, "root", "123456", "元件库")
+    try:
+        with conn1.cursor() as cur1, conn2.cursor() as cur2:
+            # 1. 检查活动库是否已有布管参数
+            cur1.execute("""
+                SELECT COUNT(*) as cnt
+                FROM 产品设计活动表_布管参数表
+                WHERE 产品ID=%s
+            """, (product_id,))
+            row = cur1.fetchone()
+            if row and row["cnt"] > 0:
+                print(f"[布管参数] 产品 {product_id} 已有布管参数，跳过初始化")
+                return
+
+            # 2. 从元件库读取默认布管参数
+            cur2.execute("SELECT 参数名, 参数值, 单位 FROM 布管参数默认表")
+            defaults = cur2.fetchall()
+
+            # 3. 插入到活动库
+            for d in defaults:
+                cur1.execute("""
+                    INSERT INTO 产品设计活动表_布管参数表(产品ID, 参数名, 参数值, 单位)
+                    VALUES (%s, %s, %s, %s)
+                """, (
+                    product_id,
+                    d.get("参数名", ""),
+                    d.get("默认值", ""),
+                    d.get("单位", "")
+                ))
+
+        conn1.commit()
+        print(f"[布管参数] 产品 {product_id} 默认参数已初始化")
+    except Exception as e:
+        conn1.rollback()
+        print(f"[布管参数] 初始化失败: {e}")
+    finally:
+        conn1.close()
+        conn2.close()
 
 
 

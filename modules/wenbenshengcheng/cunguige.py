@@ -7,6 +7,7 @@ import configparser
 import openpyxl
 import pymysql
 
+from modules.buguan.buguan_ziyong.My_Piping import create_product_connection
 from modules.condition_input.funcs.db_cnt import get_connection
 from openpyxl.styles import Alignment, Border, Side, Font
 
@@ -53,7 +54,7 @@ def generate_spec(component_name, data, product_id=None):
     根据元件名称返回其规格字符串，如：EHA500X10;h=8
     如果无法生成返回 None
     """
-
+    print('component_name',component_name)
     if component_name == "管箱封头":
         dh = get_value(data, "管箱封头", "封头类型代号")
         d = get_value(data, "管箱封头", "椭圆形封头计算内径")
@@ -62,18 +63,50 @@ def generate_spec(component_name, data, product_id=None):
         h = get_value(data, "管箱封头", "椭圆形封头直边高度")
         if None not in (dh,d, t, h):
             return f"{dh}{d}×{t}({t_plus});h={h}"
-
+    elif component_name == "外头盖封头":
+        dh = get_value(data, "外头盖封头", "封头类型代号")
+        d = get_value(data, "外头盖封头", "椭圆形封头计算内径")
+        t = get_value(data, "外头盖封头", "椭圆形封头名义厚度")
+        t_plus = get_value(data, "外头盖封头", "椭圆形封头最小成型厚度")
+        h = get_value(data, "外头盖封头", "椭圆形封头直边高度")
+        if None not in (dh,d, t, h):
+            return f"{dh}{d}×{t}({t_plus});h={h}"
     elif component_name == "管箱圆筒":
         id_ = get_value(data, "管箱圆筒", "圆筒内径")
         t = get_value(data, "管箱圆筒", "圆筒名义厚度")
         l = get_value(data, "管箱圆筒", "圆筒长度")
         if None not in (id_, t, l):
             return f"ID{id_}×{t};L={l}"
-
+    elif component_name == "外头盖圆筒":
+        id_ = get_value(data, "外头盖圆筒", "圆筒内径")
+        t = get_value(data, "外头盖圆筒", "圆筒名义厚度")
+        l = get_value(data, "外头盖圆筒", "圆筒长度")
+        if None not in (id_, t, l):
+            return f"ID{id_}×{t};L={l}"
     elif component_name == "管箱法兰":
         w = get_value(data, "管箱法兰", "法兰名义外径")
         n = get_value(data, "管箱法兰", "法兰名义内径")
         h = get_value(data, "管箱法兰", "法兰颈部高度")+get_value(data, "管箱法兰", "法兰名义厚度")
+        if None not in (w, n, h):
+            return f"Ø{w}/Ø{n}；H={h}"
+    elif component_name == "外头盖法兰":
+        w = get_value(data, "外头盖法兰", "法兰名义外径")
+        n = get_value(data, "外头盖法兰", "法兰名义内径")
+        h = get_value(data, "外头盖法兰", "法兰颈部高度")+get_value(data, "外头盖法兰", "法兰名义厚度")
+        if None not in (w, n, h):
+            return f"Ø{w}/Ø{n}；H={h}"
+    elif component_name == "外头盖侧法兰":
+        w = get_value(data, "外头盖侧法兰", "法兰名义外径")
+        n = get_value(data, "外头盖侧法兰", "法兰名义内径")
+        h = get_value(data, "外头盖侧法兰", "法兰颈部高度")+get_value(data, "外头盖侧法兰", "法兰名义厚度")
+        if None not in (w, n, h):
+            return f"Ø{w}/Ø{n}；H={h}"
+    elif component_name == "浮头法兰":
+        w = get_value(data, "浮头法兰", "浮头法兰名义外径(含覆层厚度)")
+        n = get_value(data, "浮头法兰", "垫片名义内径")
+        h1 = get_value(data, "浮头法兰", "法兰颈部高度") or 0
+        h2 = get_value(data, "浮头法兰", "浮头法兰名义厚度") or 0
+        h = h1 + h2
         if None not in (w, n, h):
             return f"Ø{w}/Ø{n}；H={h}"
 
@@ -87,15 +120,31 @@ def generate_spec(component_name, data, product_id=None):
         n = get_value(data, "管箱法兰", "垫片名义内径")
         if None not in (w, n):
             return f"Ø{w}/Ø{n}"
+    elif component_name == "外头盖垫片":
+        w = get_value(data, "外头盖法兰", "垫片名义外径")
+        n = get_value(data, "外头盖法兰", "垫片名义内径")
+        if None not in (w, n):
+            return f"Ø{w}/Ø{n}"
+    elif component_name == "浮头垫片":
+        w = get_value(data, "浮头法兰", "垫片名义外径")
+        n = get_value(data, "浮头法兰", "垫片名义内径")
+        if None not in (w, n):
+            return f"Ø{w}/Ø{n}"
 
     elif component_name == "U形换热管":
         w = get_value(data, "固定管板", "换热管外径")
         b = get_value(data, "固定管板", "换热管壁厚")
-        l = get_pipe_param_value("换热管公称长度LN")
+        l = get_pipe_param_value(product_id,"换热管公称长度LN")
+        if None not in (w, b, l):
+            return f"Ø{w}×Ø{b};L={l}"
+    elif component_name == "换热管":
+        w = get_value(data, "固定管板", "换热管外径")
+        b = get_value(data, "固定管板", "换热管壁厚")
+        l = get_pipe_param_value(product_id,"换热管公称长度LN")
         if None not in (w, b, l):
             return f"Ø{w}×Ø{b};L={l}"
     elif component_name == "旁路挡板":
-        w = get_pipe_param_value("旁路挡板厚度")
+        w = get_pipe_param_value(product_id,"LB_BaffleThick")
         if w not in(None,"Null","null"):
             return f"δ={w}"
     elif component_name == "固定管板":
@@ -112,32 +161,68 @@ def generate_spec(component_name, data, product_id=None):
         #     return f"Ø{w}×{n};L={l}"
         w = get_value(data, "固定管板", "换热管外径")
         b = get_value(data, "固定管板", "换热管壁厚")
-        l = get_pipe_param_value("换热管公称长度LN")
+        l = get_pipe_param_value(product_id,"换热管公称长度LN")
         if None not in (w, b, l):
             return f"Ø{w}×Ø{b};L={l}"
     elif component_name == "折流板":
         w = get_value(data, "管束", "折流板厚度")
+        if w is None:
+            w = get_value(data, "浮头管束", "折流板厚度")
+        if w is not None:
+            return f"δ={w}"
+    elif component_name == "内折流板":
+        w = get_value(data, "管束", "折流板厚度")
+        if w is None:
+            w = get_value(data, "浮头管束", "折流板厚度")
+        if w is not None:
+            return f"δ={w}"
+    elif component_name == "异形折流板":
+        w = get_value(data, "管束", "折流板厚度")
+        if w is None:
+            w = get_value(data, "浮头管束", "折流板厚度")
+        if w is not None:
+            return f"δ={w}"
+    elif component_name == "弓形折流板":
+        w = get_value(data, "管束", "折流板厚度")
+        if w is None:
+            w = get_value(data, "浮头管束", "折流板厚度")
         if w is not None:
             return f"δ={w}"
     elif component_name == "防冲板":
-        w = get_pipe_param_value("防冲板厚度")
+        w = get_pipe_param_value(product_id,"LB_BPBThick")
         if w is not None:
             return f"δ={w}"
+
     elif component_name == "支持板":
         w = get_value(data, "管束", "支持板厚度")
+        if w is None:
+            w = get_value(data, "浮头管束", "支持板厚度")
         if w is not None:
             return f"δ={w}"
+
     elif component_name == "挡管":
         w = get_value(data, "固定管板", "换热管外径")
         b = get_value(data, "固定管板", "换热管壁厚")
         l = get_value(data, "管束", "中间挡管/挡板长度")
+        if l is None:
+            l = get_value(data, "浮头管束", "中间挡管/挡板长度")
         if None not in (w, b, l):
             return f"Ø{w}×{b};L={l}"
+
     elif component_name == "拉杆":
         val1 = get_value(data, "管束", "拉杆长度1")
+        if val1 is None:
+            val1 = get_value(data, "浮头管束", "拉杆长度1")
+
         val2 = get_value(data, "管束", "拉杆长度2")
-        w = max(val1, val2)
+        if val2 is None:
+            val2 = get_value(data, "浮头管束", "拉杆长度2")
+
+        w = max(val1, val2) if None not in (val1, val2) else None
         l = get_value(data, "固定管板", "换热管外径")
+        if None not in (w, l):
+            return f"Ø{w};L={l}"
+
         if l is not None:
             try:
                 l = float(l)
@@ -216,7 +301,14 @@ def generate_spec(component_name, data, product_id=None):
         h = get_value(data, "壳体封头", "椭圆形封头直边高度")
         if None not in (dh,d, t, h):
             return f"{dh}{d}×{t}({t_plus});h={h}"
-
+    elif component_name == "球冠形封头":
+        dh = get_value(data, "外头盖封头", "封头类型代号")
+        d = get_value(data, "浮头法兰", "球冠形封头内半径")
+        t = get_value(data, "浮头法兰", "球冠形封头名义厚度")
+        t_plus = get_value(data, "外头盖封头", "椭圆形封头最小成型厚度")
+        h = get_value(data, "外头盖封头", "椭圆形封头直边高度")
+        if None not in (dh,d, t, h):
+            return f"{dh}{d}×{t}({t_plus});h={h}"
 
     elif component_name == "固定鞍座":
         conn = get_connection(**db_config1)
@@ -279,7 +371,6 @@ def generate_spec(component_name, data, product_id=None):
             return ""
     elif component_name == "螺柱（管箱法兰）":
         dh = get_value(data, "管箱法兰", "螺栓公称直径")
-
         if dh is None:
             return None
 
@@ -297,8 +388,30 @@ def generate_spec(component_name, data, product_id=None):
         l = 20 + 2 * dh_val + flange_thk_1 + gasket_thk_1 + flange_thk_2 + gasket_thk_2 - 2 * ttgd
 
         return f"{dh}x{l}"
+    elif component_name == "螺柱（浮头法兰）":
+        dh = get_value(data, "浮头法兰", "螺栓公称直径")
+        if dh is None:
+            return None
+        try:
+            dh_val = int(re.search(r'\d+', str(dh)).group())
+        except:
+            dh_val = 0
+        flange_thk_1 = get_value(data, "管箱法兰", "法兰名义厚度") or 0
+        gasket_thk_1 = get_value(data, "管箱法兰", "垫片厚度") or 0
+        flange_thk_2 = get_value(data, "壳体法兰", "法兰名义厚度") or 0
+        gasket_thk_2 = get_value(data, "壳体法兰", "垫片厚度") or 0
+        ttgd = get_ttgd_from_db(product_id) or 0
+
+        l = 20 + 2 * dh_val + flange_thk_1 + gasket_thk_1 + flange_thk_2 + gasket_thk_2 - 2 * ttgd
+
+        return f"{dh}x{l}"
     elif component_name == "螺母（管箱法兰）":
         dh = get_value(data, "管箱法兰", "螺栓公称直径")
+
+        if dh is not None:
+            return f"{dh}"
+    elif component_name == "螺母（浮头法兰）":
+        dh = get_value(data, "浮头法兰", "螺栓公称直径")
         if dh is not None:
             return f"{dh}"
     elif component_name == "螺柱（管箱平盖）":
@@ -358,7 +471,7 @@ def generate_spec(component_name, data, product_id=None):
         return "δ=2"
     elif component_name == "铆钉":
         return "Ø3×14"
-    elif component_name in {"管程入口接管", "管程出口接管", "壳程入口接管", "壳程出口接管"}:
+    elif component_name.endswith("接管"):
         print(component_name)
         od = get_value(data, component_name, "接管大端外径")
         thick = get_value(data, component_name, "接管大端壁厚")
@@ -393,48 +506,48 @@ def write_spec_to_excel(data, excel_path, sheet_name, product_id):
     wb.save(excel_path)
     print(f"✅ 已填写规格列至 Excel：{excel_path}")
 
-def get_pipe_param_value(field_name):
+def get_pipe_param_value(product_id, field_name):
     """
-    从固定路径的“布管输入参数.json”中获取指定 paramName 对应的 paramValue。
-
-    参数:
-        field_name: str - 要查找的参数名称（paramName）
-
-    返回:
-        paramValue (str) 或 None
+    从产品设计活动表_布管输入表中获取指定字段值
+    特殊逻辑：当 field_name = "换热管公称长度" 时，从布管参数表获取 "热交换器公称（换热管）长度 L"
     """
+    conn = create_product_connection()
+    if conn is None:
+        return None
+
     try:
-        # === 1. 读取 config.ini 获取 product_directory 路径 ===
-        config_path = os.path.expandvars(r"%APPDATA%\UDS\蓝滨数字化合作\data\config.ini")
-        if not os.path.exists(config_path):
-            print(f"❌ 配置文件未找到: {config_path}")
-            return None
+        cursor = conn.cursor()
 
-        with open(config_path, 'rb') as f:
-            raw = f.read()
-            encoding = chardet.detect(raw)['encoding'] or 'utf-8'
+        # 特殊逻辑
+        if field_name == "换热管公称长度LN":
+            sql = """
+                SELECT `参数值`
+                FROM 产品设计活动表_布管参数表
+                WHERE 产品ID = %s AND 参数名 = '热交换器公称（换热管）长度 L'
+                LIMIT 1
+            """
+            cursor.execute(sql, (product_id,))
+            row = cursor.fetchone()
+            return row["参数值"] if row else None
 
-        config = configparser.ConfigParser()
-        config.read_string(raw.decode(encoding))
-        product_dir = os.path.normpath(config.get('ProjectInfo', 'product_directory', fallback=''))
+        # 普通逻辑：从布管输入表读取
+        sql = """
+            SELECT `key`, `value`
+            FROM 产品设计活动表_布管输入表
+            WHERE 产品ID = %s
+        """
+        cursor.execute(sql, (product_id,))
+        rows = cursor.fetchall()
 
-        # === 2. 拼接布管输入参数 JSON 路径 ===
-        pipe_json_path = os.path.join(product_dir, "中间数据", "布管输入参数.json")
-        if not os.path.exists(pipe_json_path):
-            print(f"❌ 未找到布管输入参数文件: {pipe_json_path}")
-            return None
+        data = {row["key"]: row["value"] for row in rows}
+        return data.get(field_name)
 
-        # === 3. 加载 JSON 并查找字段值 ===
-        with open(pipe_json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        for item in data:
-            if item.get("paramName") == field_name:
-                return item.get("paramValue")
     except Exception as e:
-        print(f"❌ 读取参数 `{field_name}` 失败: {e}")
-
-    return None
+        print(f"❌ 获取参数 `{field_name}` 失败: {e}")
+        return None
+    finally:
+        cursor.close()
+        conn.close()
 def get_ttgd_from_db(product_id):
     try:
         conn = get_connection(**db_config1)
@@ -585,8 +698,9 @@ def insert_jiaguan_falan_rows(sheet, product_id, json_data):
                 database="材料库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
             )
 
-            # Step 1: 获取 公称尺寸类型、公称压力类型
-            with conn1.cursor() as cursor:
+            try:
+                # Step 1: 获取 公称尺寸类型、公称压力类型
+                cursor = conn1.cursor()
                 cursor.execute("""
                     SELECT 公称尺寸类型, 公称压力类型 
                     FROM 产品设计活动表_管口类型选择表 
@@ -595,19 +709,21 @@ def insert_jiaguan_falan_rows(sheet, product_id, json_data):
                 config = cursor.fetchone()
                 size_type = config.get("公称尺寸类型", "DN").strip()
                 press_type = config.get("公称压力类型", "PN").strip()
+                cursor.close()
 
-            # Step 2: 获取 N1~N4 管口信息
-            with conn1.cursor() as cursor:
+                # Step 2: 获取当前产品ID下所有管口信息
+                cursor = conn1.cursor()
                 cursor.execute("""
-                    SELECT 管口代号, 公称尺寸, 压力等级, 法兰型式 
+                    SELECT 管口代号, 管口功能, 公称尺寸, 压力等级, 法兰型式 
                     FROM 产品设计活动表_管口表 
-                    WHERE 产品ID = %s AND 管口代号 IN ('N1', 'N2', 'N3', 'N4')
+                    WHERE 产品ID = %s
                 """, (product_id,))
                 kou_rows = cursor.fetchall()
+                cursor.close()
 
-            # Step 3: 查询 材料库.管法兰质量表
-            flange_mass_map = {}
-            with conn2.cursor() as cursor2:
+                # Step 3: 查询 材料库.管法兰质量表
+                flange_mass_map = {}
+                cursor2 = conn2.cursor()
                 for row in kou_rows:
                     kou_id = row["管口代号"]
                     size = str(row["公称尺寸"]).strip()
@@ -625,29 +741,32 @@ def insert_jiaguan_falan_rows(sheet, product_id, json_data):
                     """, (standard, flange_type, size, pressure))
                     res = cursor2.fetchone()
                     flange_mass_map[kou_id] = float(res["质量"]) if res and res.get("质量") else 0.0
-                    print("✅ flange_mass_map =", flange_mass_map)
 
-            conn1.close()
-            conn2.close()
+                cursor2.close()
+            finally:
+                conn1.close()
+                conn2.close()
+
+            print("✅ flange_mass_map =", flange_mass_map)
 
             # Step 4: 写入到 Excel 对应行
             for row in sheet.iter_rows(min_row=2):
                 part_name = str(row[3].value).strip()
                 print(f"【检查行名】第{row[0].row}行: '{part_name}'")
 
-                if part_name == "管程入口接管法兰":
-                    row[7].value = flange_mass_map.get("N1", 0)
-                elif part_name == "管程出口接管法兰":
-                    row[7].value = flange_mass_map.get("N2", 0)
-                elif part_name == "壳程入口接管法兰":
-                    row[7].value = flange_mass_map.get("N3", 0)
-                elif part_name == "壳程出口接管法兰":
-                    row[7].value = flange_mass_map.get("N4", 0)
+                # 遍历管口列表动态匹配
+                for kou in kou_rows:
+                    kou_id = kou["管口代号"]
+                    kou_func = kou.get("管口功能", "").strip()
+                    expected_name = f"{kou_func}接管法兰"
+                    if part_name == expected_name:
+                        row[7].value = flange_mass_map.get(kou_id, 0)
+                        break  # 找到匹配就跳出内层循环
 
         except Exception as e:
-            print(f"❌ 获取接管法兰质量失败: {e}")
+            print(f"❌ 获取接管法兰质量或写入 Excel 失败: {e}")
     except Exception as e:
-        print(f"❌ 插入接管法兰时出错: {e}")
+        print(f"❌ 获取接管法兰质量或写入 Excel 失败: {e}")
 
 import json
 
@@ -699,8 +818,21 @@ def insert_jiaguan_rows(sheet, product_id, data, jisuan_json_path):
         return
 
     # === 固定四个接管名称 ===
-    jieguan_names = ["管程入口接管", "管程出口接管", "壳程入口接管", "壳程出口接管"]
+    # === 动态获取接管名称列表 ===
+    conn = get_connection(**db_config1)
+    cursor = conn.cursor()
 
+    cursor.execute("""
+        SELECT DISTINCT 元件名称
+        FROM 产品设计活动表_元件计算结果表
+        WHERE 产品ID = %s AND 元件名称 LIKE %s
+    """, (product_id, '%接管'))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    # 提取成列表
+    jieguan_names = [row["元件名称"] for row in rows if row["元件名称"]]
     # === 倒序插入 ===
     for name in reversed(jieguan_names):
         spec = generate_spec(name, data) or ""

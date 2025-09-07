@@ -4,28 +4,12 @@ from PyQt5.QtWidgets import (
     QApplication, QLineEdit
 )
 from PyQt5.QtCore import Qt, QEvent, QRect, QObject
-from modules.guankoudingyi.db_cnt import get_connection
+from modules.guankoudingyi.db_cnt import get_connection, db_config_1, db_config_2
 import pymysql.cursors
 import traceback
 
 from modules.guankoudingyi.obtain_product_type_version import get_product_type_and_version
 from modules.guankoudingyi.funcs.pipe_get_units_types import get_unit_types_from_db, get_current_unit_types_from_ui
-
-db_config_1 = {
-    'host': 'localhost',
-    'port': 3306,
-    'user': 'root',
-    'password': '123456',
-    'database': '元件库'
-}
-
-db_config_2 = {
-    'host': 'localhost',
-    'port': 3306,
-    'user': 'root',
-    'password': '123456',
-    'database': '产品设计活动库'
-}
 
 
 # 补丁：禁止滚轮改值的下拉框
@@ -660,9 +644,13 @@ def handle_pipe_cell_click(stats_widget, row, column):
             if hasattr(stats_widget, 'row_hidden_pipe_id') and row in stats_widget.row_hidden_pipe_id:
                 pipe_id = stats_widget.row_hidden_pipe_id[row]
 
+            # 读取管口代号（第1列）
+            pipe_code_item = table.item(row, 1)
+            pipe_code = pipe_code_item.text().strip() if pipe_code_item else ""
+
             if pipe_belong and hasattr(stats_widget, 'line_tip'):
                 try:
-                    tip_message = generate_pressure_level_tips(stats_widget.product_id, pipe_belong, pressure_type, pipe_id)
+                    tip_message = generate_pressure_level_tips(stats_widget.product_id, pipe_belong, pressure_type, pipe_id, pipe_code)
                     # # ✅ 显示提示：主显示 + tooltip 显示完整内容
                     # display_text = tip_message[:80].replace("\n", " | ")
                     # if len(tip_message) > 80:
@@ -1421,78 +1409,6 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
             if hasattr(stats_widget, 'view') and stats_widget.view:
                 stats_widget.view.set_pipe_data(stats_widget.get_all_pipe_data())
 
-    # # 验证压力等级（第6列）
-    # elif column == 6:
-    #
-    #     # 限定只有点击并编辑该单元格才验证
-    #     if getattr(stats_widget, 'current_editing_cell', None) != (row, column):
-    #         return
-    #
-    #     # 获取当前值和之前点击时的原始值
-    #     new_value = item.text().strip()
-    #     old_value = getattr(stats_widget, 'original_cell_value', "")
-    #
-    #     # 如果值没变，则认为无需验证，直接返回并清除状态
-    #     if new_value == old_value:
-    #         stats_widget.current_editing_cell = None
-    #         stats_widget.original_cell_value = None
-    #         return
-    #
-    #     # 清除记录，防止下次误触发
-    #     stats_widget.current_editing_cell = None
-    #     stats_widget.original_cell_value = None
-    #
-    #     # 获取第六列的压力等级
-    #     pressure_level_text = item.text().strip()
-    #     if not pressure_level_text:
-    #         return
-    #
-    #     # 提前尝试获取类别号，如果失败就跳过后续所有验证
-    #     # 获取 pressure_type：优先使用界面监听值，其次数据库，最后默认 Class
-    #     pressure_type = getattr(stats_widget, "current_pressure_type", None)
-    #
-    #     if not pressure_type:
-    #         unit_types = get_unit_types_from_db(product_id)
-    #         pressure_type = unit_types.get("公称压力类型", "Class")
-    #
-    #     # 提前尝试获取类别号，如果失败就跳过后续所有验证
-    #     category_no, cat_err = get_material_category_number_by_product(product_id, pressure_type)
-    #     if category_no is None:
-    #         if not hasattr(stats_widget, "pressure_material_warning_shown"):
-    #             QMessageBox.warning(stats_widget, "验证提示", cat_err or "未找到接管法兰的材料信息，跳过压力等级验证")
-    #             stats_widget.pressure_material_warning_shown = True
-    #         return  # 跳过整个验证过程
-    #
-    #     # 获取第十列的管口所属元件
-    #     belong_item = table.item(row, 10)
-    #     pipe_belong = belong_item.text().strip() if belong_item else None
-    #     if not pipe_belong:
-    #         # 弹窗提示
-    #         QMessageBox.warning(stats_widget, "验证错误", "请先选择管口所属元件")
-    #         # 清空当前单元格的值
-    #         table.blockSignals(True)  # 防止触发二次cellChanged
-    #         item.setText("")  # 清空值
-    #         table.blockSignals(False)
-    #         return
-    #
-    #     # 获取最大工作温度
-    #     max_temp, temp_err = get_max_working_temperature_by_belong(product_id, pipe_belong)
-    #     if temp_err:
-    #         QMessageBox.warning(stats_widget, "验证错误", temp_err)
-    #         return
-    #
-    #     # 将最大工作温度转换为查询温度（若小于等于38，则统一按38处理）
-    #     if max_temp <= 38:
-    #         query_temp = 38
-    #     else:
-    #         query_temp = max_temp
-    #
-    #     success, message = check_pressure_limit(product_id, pipe_belong, pressure_level_text, query_temp, pressure_type)
-    #
-    #     # 其它错误继续提示
-    #     if not success:
-    #         QMessageBox.warning(stats_widget, "压力等级验证失败", message)
-
 
 """对压力等级列进行验证的步骤，所调用的方法"""
 # step1.分别确定三个接管法兰的类别号
@@ -1501,7 +1417,6 @@ def get_material_category_number_by_product(product_id, pressure_type, pipe_id=N
     先从产品设计活动表_管口类别表读取管口属于哪个类别，
     然后从产品设计活动表_管口附加参数表中获取对应类别的接管法兰零件材料类型和材料牌号，
     再去元件库中的材料温压值类别表中查找对应的类别号。
-
     :param product_id: 产品ID
     :param pressure_type: 压力类型（Class或PN）
     :param pipe_id: 管口ID（可选，如果提供则只查询该管口的分类）
@@ -1543,7 +1458,6 @@ def get_material_category_number_by_product(product_id, pressure_type, pipe_id=N
         for category_row in categories:
             category = category_row['材料分类']
 
-
             # 查询该分类下所有接管法兰材料类型参数
             cursor_design.execute("""
                 SELECT 参数名称, 参数值
@@ -1564,7 +1478,6 @@ def get_material_category_number_by_product(product_id, pressure_type, pipe_id=N
             type_dict = {row['参数名称']: row['参数值'] for row in type_results if row['参数值']}
             grade_dict = {row['参数名称']: row['参数值'] for row in grade_results if row['参数值']}
 
-
             # 匹配材料类型和材料牌号
             for type_param, material_type in type_dict.items():
                 # 从参数名称中提取编号（如"接管法兰材料类型1" -> "1"）
@@ -1580,7 +1493,7 @@ def get_material_category_number_by_product(product_id, pressure_type, pipe_id=N
                     }
                     material_type_mapped = type_mapping.get(material_type, material_type)
 
-                    print(f"[DEBUG_02] 分类={category}, 接管法兰号={type_number}, 材料类型={material_type}, "
+                    print(f"[DEBUG_02] 管口材料分类={category}, 接管法兰号={type_number}, 材料类型={material_type}, "
                           f"材料牌号={material_grade}, 映射后类型={material_type_mapped}")
 
                     # === 第二步：查元件库中的材料温压值类别表 ===
@@ -1599,6 +1512,7 @@ def get_material_category_number_by_product(product_id, pressure_type, pipe_id=N
                         # 仍然添加法兰信息，但标记为无类别号
                         print(f"[DEBUG_03] ❌ 未找到类别号 → 材料类型={material_type_mapped}, "
                               f"材料牌号={material_grade}, 压力类型={pressure_type}")
+
                         flange_info = {
                             'flange_number': type_number,
                             'category': category,
@@ -1610,6 +1524,7 @@ def get_material_category_number_by_product(product_id, pressure_type, pipe_id=N
                         }
                     else:
                         print(f"[DEBUG_04] ✅ 找到类别号: {category_result['类别号']}")
+
                         flange_info = {
                             'flange_number': type_number,
                             'category': category,
@@ -1639,6 +1554,7 @@ def get_material_category_number_by_product(product_id, pressure_type, pipe_id=N
             conn_design.close()
         if conn_component:
             conn_component.close()
+
 # step2. 获取管口所属元件
 # step3. 根据上一步的管口所属元件确定取管程还是壳程数值，获得最大工作温度
 def get_max_working_temperature_by_belong(product_id, pipe_belong):
@@ -1684,6 +1600,7 @@ def get_max_working_temperature_by_belong(product_id, pipe_belong):
     finally:
         cursor and cursor.close()
         conn and conn.close()
+
 # step4. 根据step2的管口所属元件确定取管程还是壳程数值，获得工作压力
 def get_working_pressure_by_belong(product_id, pipe_belong):
     """
@@ -1722,7 +1639,7 @@ def get_working_pressure_by_belong(product_id, pipe_belong):
         cursor.execute(f"""
             SELECT `{value_field}` AS val
             FROM 产品设计活动表_设计数据表
-            WHERE 产品ID = %s AND 参数名称 = '设计压力*'
+            WHERE 产品ID = %s AND 参数名称 LIKE '设计压力%%'
             LIMIT 1
         """, (product_id,))
         result = cursor.fetchone()
@@ -1733,6 +1650,7 @@ def get_working_pressure_by_belong(product_id, pipe_belong):
                 return float(val), None
             except (ValueError, TypeError):
                 return None, f"{value_field} 的设计压力*不是有效数字"
+
         return None, f"{value_field} 中未找到有效的设计压力*"
 
     except Exception as e:
@@ -1740,8 +1658,9 @@ def get_working_pressure_by_belong(product_id, pipe_belong):
     finally:
         cursor and cursor.close()
         conn and conn.close()
+
 # step5.确定每个接管法兰压力等级的推荐值（允许部分成功）
-def get_minimum_pressure_level_for_flanges(product_id, pipe_belong, pressure_type, pipe_id=None):
+def get_minimum_pressure_level_for_flanges(product_id, pipe_belong, pressure_type, pipe_id=None, pipe_code=None):
     """
     允许“部分成功”；识别出>=1组材料即进行计算推荐
     未填写/未匹配到类别号，则作为警告返回，不吞掉成功的结果，即对三组均有反馈
@@ -1896,14 +1815,16 @@ def get_minimum_pressure_level_for_flanges(product_id, pipe_belong, pressure_typ
         # 整合非致命警告并返回（不吞掉已成功结果）
         warn_parts = []
         if no_category_list:
-            parts = [f"接管法兰{f['flange_number']}（材料类型：{f['material_type']}，材料牌号：{f['material_grade']}）"
-                     for f in no_category_list]
-            warn_parts.append(f"数据库中无此类压力等级推荐：{', '.join(parts)}")
+            for f in no_category_list:
+                prefix = f"管口代号为 {pipe_code} 的" if pipe_code else ""
+                warn_parts.append(
+                    f"{prefix}接管法兰材料类型为 {f['material_type']}，牌号为 {f['material_grade']} 时，未查询到其适用的最小压力等级!"
+                )
         if missing_nums:
             warn_parts.append("请完善接管法兰材料信息：" +
                               "、".join([f"接管法兰{n}" for n in sorted(missing_nums, key=int)]) +
                               "的材料类型或材料牌号未填写")
-        warn_msg = "；".join(warn_parts) if warn_parts else None
+        warn_msg = " ".join(warn_parts) if warn_parts else None
 
         # 若一组都算不出来，再把警告作为错误抛上去
         if not flange_pressure_info:
@@ -1916,14 +1837,18 @@ def get_minimum_pressure_level_for_flanges(product_id, pipe_belong, pressure_typ
         return None, f"计算最小压力等级失败: {str(e)}"
 
 # step6.打印提示
-def generate_pressure_level_tips(product_id, pipe_belong, pressure_type, pipe_id=None):
+def generate_pressure_level_tips(product_id, pipe_belong, pressure_type, pipe_id=None,pipe_code=None):
     """
-    任何一组有成果就展示最小压力等级推荐；
-    同时把上游返回的警告（缺失/无类别号等）附加在末尾一起显示
-    只有在完全没有成功结果时，才把错误/警告作为失败返回
+    按要求生成压力等级提示：
+    - 如果有1~2组通过，显示通过组和未通过组的不同提示
+    - 如果三组全部通过，显示三条通过提示
+    - 如果三组全部未通过，显示三条未通过提示
+     统一句式：
+      通过组：  管口代号为**的接管法兰材料类型为**，牌号为**时，适用最小压力等级为**
+      未通过组：管口代号为**的接管法兰材料类型为**，牌号为**时，未查询到其适用的最小压力等级！
     """
     try:
-        flange_info, error = get_minimum_pressure_level_for_flanges(product_id, pipe_belong, pressure_type, pipe_id)
+        flange_info, error = get_minimum_pressure_level_for_flanges(product_id, pipe_belong, pressure_type, pipe_id, pipe_code)
 
         # 只有“材料信息不完整”这类错误才直接返回；其他错误（如：部分接管法兰无类别）如果同时有部分成功结果，不要吞掉成功的部分
         if not flange_info:
@@ -1932,7 +1857,7 @@ def generate_pressure_level_tips(product_id, pipe_belong, pressure_type, pipe_id
                 if "请完善接管法兰材料信息" in error:
                     return error  # 直接返回原始错误信息
                 else:
-                    return f"提示获取失败: {error}"  # 无任何成功结果时，再作为失败提示
+                    return error  # 无任何成功结果时，再作为失败提示
             # 没有结果也没有错误提示
             return "未找到接管法兰材料信息"
 
@@ -1945,13 +1870,16 @@ def generate_pressure_level_tips(product_id, pipe_belong, pressure_type, pipe_id
 
         # 生成提示信息
         tips = []
+        prefix = f"管口代号为 {pipe_code} 的" if pipe_code else ""
         for flange in unique_tips.values():
-            tip = f"当接管法兰材料类型为 {flange['material_type']}，材料牌号为 {flange['material_grade']} 时，适用最小压力等级为 {flange['min_pressure_level']}"
+            tip = f"{prefix}接管法兰材料类型为 {flange['material_type']}，牌号为 {flange['material_grade']} 时，适用最小压力等级为 {flange['min_pressure_level']}。"
             tips.append(tip)
-        result = "; ".join(tips)
+
+        # 如果有未通过的警告（warn_msg 已经是逐条拼好的失败提示），拼接在后面
+        result = " ".join(tips)
 
         if error:
-            result = f"{result}; {error}"
+            result = f"{result} {error}"
 
         return result
 
@@ -1959,4 +1887,4 @@ def generate_pressure_level_tips(product_id, pipe_belong, pressure_type, pipe_id
         # 添加更详细的错误信息
         error_detail = traceback.format_exc()
         # print(f"DEBUG: 异常发生: {str(e)}\n{error_detail}")
-        return f"提示获取失败: {str(e)}\n详细错误:\n{error_detail}"
+        return f"{str(e)}\n详细错误:\n{error_detail}"

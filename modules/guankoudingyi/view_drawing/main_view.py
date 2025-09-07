@@ -3,15 +3,8 @@ from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QFont, QPolygonF
 from PyQt5.QtCore import Qt, QRectF, QPointF
 import math
 
-from modules.guankoudingyi.db_cnt import get_connection
+from modules.guankoudingyi.db_cnt import get_connection, db_config_2
 from modules.guankoudingyi.obtain_product_type_version import get_product_type_and_version
-db_config_2 = {
-    'host': 'localhost',
-    'port': 3306,
-    'user': 'root',
-    'password': '123456',
-    'database': '产品设计活动库'
-}
 class HeatExchangerView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -219,7 +212,7 @@ class HeatExchangerView(QWidget):
                         nominal_dn = int(self.nps_to_dn_map[nominal_size])
                     else:
                         nominal_dn = int(nominal_size)
-                    add_width = max(1, int(nominal_dn / 40))
+                    add_width = max(1, int(nominal_dn / 50))
                 except:
                     add_width = 1
 
@@ -228,9 +221,9 @@ class HeatExchangerView(QWidget):
                     if height not in ("程序推荐", ""):
                         line_len = float(height) // 40    # 外伸高度缩小 40 倍
                     else:
-                        line_len = 10  # 默认设为 10 个像素点
+                        line_len = 15  # 默认设为 10 个像素点
                 except:
-                    line_len = 10
+                    line_len = 15
 
                 # 判断管口所属元件类型
                 # ================= 圆筒部分 =================
@@ -289,9 +282,8 @@ class HeatExchangerView(QWidget):
                         painter.drawPolygon(polygon)
 
                         # 橙色法兰 ： 反向贴合
-                        cap_len = add_width/2  #法兰的厚度，向管口方向延申的长度
-                        # cap_wid = 3 * add_width   #法兰的水平宽度
-                        cap_wid = min(15, 3 * add_width)
+                        cap_len = add_width/3  #法兰的厚度，向管口方向延申的长度
+                        cap_wid = add_width + 2 * 3   # 法兰的水平宽度
                         cap_dx = ux * cap_len    #垂直中心线方向向外
                         cap_dy = uy * cap_len    #垂直中心线方向向外
                         cap_nx = nx * cap_wid
@@ -386,9 +378,8 @@ class HeatExchangerView(QWidget):
                     painter.drawPolygon(polygon)
 
                     # 橙色盖板（贴在管口末端）
-                    cap_len = add_width/2
-                    # cap_wid = 3 * add_width
-                    cap_wid = min(15, 3 * add_width)
+                    cap_len = add_width/3
+                    cap_wid = add_width + 2 * 3
                     cap_dx = ux * cap_len
                     cap_dy = uy * cap_len
                     cap_nx = nx * cap_wid
@@ -508,8 +499,9 @@ class HeatExchangerView(QWidget):
                     painter.drawPolygon(polygon)
 
                     # 橙色法兰（垂直方向朝外扩展）
-                    cap_len = add_width/2  # 法兰厚度
-                    cap_wid = min(15, 3 * add_width)
+                    cap_len = add_width/3  # 法兰厚度
+                    # cap_wid = min(15, 3 * add_width)
+                    cap_wid = add_width + 2 * 3
                     cap_ux = ux * cap_len
                     cap_uy = uy * cap_len
                     cap_nx = nx * cap_wid
@@ -604,7 +596,7 @@ class HeatExchangerView(QWidget):
                         nominal_dn = int(self.nps_to_dn_map[nominal_size])
                     else:
                         nominal_dn = int(nominal_size)
-                    add_width = max(1, int(nominal_dn / 40))
+                    add_width = max(1, int(nominal_dn / 50))
                 except:
                     add_width = 1
 
@@ -613,9 +605,9 @@ class HeatExchangerView(QWidget):
                     if height not in ("程序推荐", ""):
                         line_len = float(height) // 40  # 外伸高度缩小 40 倍
                     else:
-                        line_len = 10  # 默认设为 10 个像素点
+                        line_len = 15  # 默认设为 15 个像素点
                 except:
-                    line_len = 10
+                    line_len = 15
 
                 # 判断管口所属元件类型
                 # ================= 圆筒部分 =================
@@ -686,9 +678,8 @@ class HeatExchangerView(QWidget):
                         painter.drawPolygon(polygon)
 
                         # 橙色法兰 ： 反向贴合
-                        cap_len = add_width / 2  # 法兰的厚度，向管口方向延申的长度
-                        # cap_wid = 3 * add_width   #法兰的水平宽度
-                        cap_wid = min(15, 3 * add_width)
+                        cap_len = add_width / 3  # 法兰的厚度，向管口方向延申的长度
+                        cap_wid = add_width + 2 * 3  #法兰的水平宽度
                         cap_dx = ux * cap_len  # 垂直中心线方向向外
                         cap_dy = uy * cap_len  # 垂直中心线方向向外
                         cap_nx = nx * cap_wid
@@ -785,9 +776,8 @@ class HeatExchangerView(QWidget):
                     painter.drawPolygon(polygon)
 
                     # 橙色盖板（贴在管口末端）
-                    cap_len = add_width / 2
-                    # cap_wid = 3 * add_width
-                    cap_wid = min(15, 3 * add_width)
+                    cap_len = add_width / 3
+                    cap_wid = add_width + 2 * 3
                     cap_dx = ux * cap_len
                     cap_dy = uy * cap_len
                     cap_nx = nx * cap_wid
@@ -906,8 +896,8 @@ class HeatExchangerView(QWidget):
                     painter.drawPolygon(polygon)
 
                     # 橙色法兰（垂直方向朝外扩展）
-                    cap_len = add_width / 2  # 法兰厚度
-                    cap_wid = min(15, 3 * add_width)
+                    cap_len = add_width / 3  # 法兰厚度
+                    cap_wid = add_width + 2 * 3
                     cap_ux = ux * cap_len
                     cap_uy = uy * cap_len
                     cap_nx = nx * cap_wid

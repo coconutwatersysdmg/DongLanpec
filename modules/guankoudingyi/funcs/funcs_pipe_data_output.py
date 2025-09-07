@@ -1,6 +1,6 @@
 """
-导出 Nozzle Listing 到模板
-使用 openpyxl 读取项目目录下的《NOZZLE LISTING-导出&预览模板.xlsx》，
+导出有关管口的数据到模板
+使用 openpyxl 读取项目目录下的《管口导出模板.xlsx》，
 把界面“管口定义”表（tableWidget_pipe）的数据写入模板中。
 """
 import os
@@ -118,7 +118,7 @@ def _build_row_index_by_param_name(ws):
     return name2row
 
 def export_nozzle_listing(stats_widget, template_rel_dir="guankoudingyi/table_template",
-                          template_name="NOZZLE LISTING-导出&预览模板.xlsx",
+                          template_name="管口导出模板.xlsx",
                           out_dir_rel="exports"):
     """
     导出主方法：读取模板 → 填值 → 隐藏“隐藏列” → 另存
@@ -224,14 +224,6 @@ def export_nozzle_listing(stats_widget, template_rel_dir="guankoudingyi/table_te
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=ws.max_column)
     title_cell = ws.cell(row=1, column=1)
     title_cell.alignment = openpyxl.styles.Alignment(horizontal="center", vertical="center")
-
-    # # 10) 另存为（项目/exports 目录）
-    # out_dir = os.path.join(proj_root, out_dir_rel)
-    # os.makedirs(out_dir, exist_ok=True)
-    # ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    # out_path = os.path.join(out_dir, f"NOZZLE_LISTING_导出_{ts}.xlsx")
-    # wb.save(out_path)
-    # return out_path
 
     # 10) 另存为：让用户选择保存路径和文件名（而不是固定到项目/exports）
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")

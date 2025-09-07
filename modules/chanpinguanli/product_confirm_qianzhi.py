@@ -12,13 +12,13 @@ import traceback
 import shutil
 
 
-def build_pd_folder_name(serial, name, number, position):
+def build_pd_folder_name(serial, name, position, number):
     # 统一清洗 & 顺序：序号_产品名称_产品编号_设备位号（空值自动跳过）
     parts = [
         (serial or "").strip(),
         (name or "").strip(),
-        (number or "").strip(),
         (position or "").strip(),
+        (number or "").strip(),
     ]
     parts = [p for p in parts if p]  # 跳过空
     return "_".join(parts)
@@ -95,7 +95,7 @@ def save_new_product(row,curr_row_serial,curr_row_product_name,curr_row_product_
     bianl.product_table_row_status[row]["old_position"] = curr_row_device_position
 
     # === 新建产品文件夹名称：加序号前缀 ===                            # 改3
-    pd_folder_name = build_pd_folder_name(curr_row_serial, curr_row_product_name, curr_row_product_number, curr_row_device_position)
+    pd_folder_name = build_pd_folder_name(curr_row_serial, curr_row_product_name, curr_row_device_position , curr_row_product_number)
 
     # parts = [curr_row_serial, curr_row_product_name, curr_row_product_number, curr_row_device_position]
     # pd_folder_name = "_".join([p for p in parts if p])  # 自动跳过空字段
@@ -221,8 +221,8 @@ def update_existing_product(row, new_serial, new_name, new_number, new_position,
             # 旧的产品文件夹的路径
             # old_parts = [old_serial, old_name, old_number, old_position]
             # old_folder_name = "_".join([p for p in old_parts if p])  # 自动跳过空字段
-            old_folder_name = build_pd_folder_name(old_serial, old_name, old_number, old_position)
-            new_folder_name = build_pd_folder_name(curr_row_serial, curr_row_product_name, curr_row_product_number, curr_row_device_position)
+            old_folder_name = build_pd_folder_name(old_serial, old_name, old_position, old_number)
+            new_folder_name = build_pd_folder_name(curr_row_serial, curr_row_product_name, curr_row_device_position, curr_row_product_number)
 
             # 新的产品文件夹名称的路径
             # new_parts = [curr_row_serial, curr_row_product_name, curr_row_product_number, curr_row_device_position]

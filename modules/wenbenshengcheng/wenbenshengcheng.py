@@ -112,10 +112,15 @@ class DocumentGenerationDialog(QDialog):
                             if exchanger_type == "AEU":
                                 excel_template = "强度计算元件输出参数表_AEU.xlsx"
                                 target_path = "计算报告（AEU）.xlsx"
-                            else:
+                            elif exchanger_type == "BEU":
                                 excel_template = "强度计算元件输出参数表_BEU.xlsx"
                                 target_path = "计算报告（BEU）.xlsx"
-
+                            elif exchanger_type == "BES":
+                                excel_template = "强度计算元件输出参数表_BES.xlsx"
+                                target_path = "计算报告（BES）.xlsx"
+                            elif exchanger_type == "AES":
+                                excel_template = "强度计算元件输出参数表_AES.xlsx"
+                                target_path = "计算报告（AES）.xlsx"
                             output_path = os.path.join(save_dir, "计数输出参数总览表.xlsx")
                             fill_calculation_report(json_path, excel_template, output_path)
 

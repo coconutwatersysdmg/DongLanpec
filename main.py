@@ -5,6 +5,7 @@ import sys
 import threading
 
 from PyQt5 import QtWidgets, uic, Qt, QtCore
+from PyQt5.QtGui import QDesktopServices
 
 from modules.buguan.buguan_ziyong.My_Piping import TubeLayoutEditor
 from modules.qiangdujisuan.jiekou_python.jisuanjiemian import JisuanResultViewer
@@ -14,6 +15,7 @@ from PyQt5.QtMultimediaWidgets import QVideoWidget
 from PyQt5.QtCore import QUrl, QTimer
 from PyQt5.QtWidgets import QWidget, QTabBar, QPushButton, QMessageBox, QDesktopWidget, QApplication, QLabel
 
+from modules.cailiaodingyi.controllers.check_dianpian import check_gasket_params
 from modules.TwoD.TwoD_tab import TwoDGeneratorTab
 from modules.cailiaodingyi.paradefine_view import DesignParameterDefineInputerViewer
 from modules.chanpinguanli import bianl, chanpinguanli_main
@@ -45,7 +47,8 @@ from modules.chanpinguanli.common_usage import get_mysql_connection_product
 import modules.chanpinguanli.bianl as bianl
 
 def on_product_id_changed(new_id):
-    bianl.current_product_id = new_id  # 保存最新 ID
+    global current_product_id
+    current_product_id = new_id  # 保存最新 ID
     update_current_product_info(new_id)
 
 
@@ -97,7 +100,10 @@ def clear_current_product_info():
         print("[清除失败] 无法获取主窗口或标签控件")
 
 import subprocess
+import time
 import os
+import configparser
+import json
 
 
 
@@ -153,6 +159,32 @@ class OutputDialog(QtWidgets.QDialog):
         for cb in self.checkboxes:
             cb.setChecked(checked)
 
+class TipHistoryDialog(QtWidgets.QDialog):
+    def __init__(self, text, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("提示信息")
+        self.resize(600, 400)  # 初始大小大一些
+
+        # 允许缩放 & 最大化
+        self.setSizeGripEnabled(True)
+        self.setWindowFlags(
+            self.windowFlags()
+            & ~QtCore.Qt.WindowContextHelpButtonHint
+            | QtCore.Qt.WindowMinMaxButtonsHint
+        )
+
+        layout = QtWidgets.QVBoxLayout(self)
+
+        self.text_edit = QtWidgets.QTextEdit(self)
+        self.text_edit.setReadOnly(True)
+        self.text_edit.setLineWrapMode(QtWidgets.QTextEdit.WidgetWidth)  # ✅ 自动换行
+        self.text_edit.setText(text)
+        layout.addWidget(self.text_edit)
+
+        btn_close = QtWidgets.QPushButton("关闭", self)
+        btn_close.clicked.connect(self.close)
+        layout.addWidget(btn_close)
+
 
 class tiaojianPage(QWidget):
     def __init__(self):
@@ -176,6 +208,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.tab_widget = self.findChild(QtWidgets.QTabWidget, "tabWidget")
         self.line_tip = self.findChild(QtWidgets.QLineEdit, "line_tip")
+        if self.line_tip:
+            self.line_tip.setReadOnly(True)  # 防止用户误输入
+            self.line_tip.setCursor(QtCore.Qt.IBeamCursor)
+            self.line_tip.mouseDoubleClickEvent = self.show_tip_history
 
         self._tip_timer = QTimer(self)
         self._tip_timer.setSingleShot(True)
@@ -201,6 +237,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # 获取菜单项（根据你 .ui 文件中设置的 objectName）
         self.action_scheme = self.findChild(QtWidgets.QAction, "scheme_design")
         self.action_detail = self.findChild(QtWidgets.QAction, "detailed_deisign")
+        # 新增！
+        self.action_help_doc = self.findChild(QtWidgets.QAction, "action_help_doc")  # 新增
 
         # 绑定槽函数
         if self.action_scheme:
@@ -208,6 +246,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if self.action_detail:
             self.action_detail.triggered.connect(self.show_detail_design_dialog)
+        # 新增！ 帮助文档
+        if self.action_help_doc:
+            self.action_help_doc.triggered.connect(self.show_help_document)  # 新增
 
 
         # 获取图片控件并添加点击事件
@@ -231,12 +272,23 @@ class MainWindow(QtWidgets.QMainWindow):
         }
         self.stats_page_instance = None
 
+        self._skip_first_gasket_check = False
+
 
         for btn_name, (title, widget_class) in self.page_buttons.items():
             btn = self.findChild(QPushButton, btn_name)
             if btn:
                 btn.clicked.connect(lambda _, t=title, w=widget_class: self.open_tab(t, w()))
                 btn.setEnabled(False)  # 初始禁用
+
+    def show_tip_history(self, event):
+        if not self.line_tip:
+            return
+        # 优先取 tooltip 的完整内容
+        text = self.line_tip.toolTip() or self.line_tip.text()
+        dlg = TipHistoryDialog(text, self)
+        dlg.show()  # 非模态
+        dlg.raise_()
 
     def show_scheme_design_dialog(self):
         dialog = OutputDialog("方案设计", self)
@@ -249,7 +301,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.process_output_selection(dialog)
 
 
-
+# 新增 -- 在本地浏览器中打开
+    def show_help_document(self):
+        """在系统默认浏览器中打开软件使用文档"""
+        # 本地文件方式
+        url = QUrl.fromLocalFile(resource_path("help.html"))
+        QDesktopServices.openUrl(url)
 
     def process_output_selection(self, dialog):
         selections = {
@@ -290,11 +347,20 @@ class MainWindow(QtWidgets.QMainWindow):
                     btn = self.findChild(QPushButton, btn_name)
                     if btn:
                         btn.setEnabled(True)
-
+    #新增
+    def on_tab_changed(self, index):
+        if self._last_tab_index is not None and self._last_tab_index != index:
+            last_widget = self.tab_widget.widget(self._last_tab_index)
+            if hasattr(last_widget, "check_and_save_data"):
+                # 延迟保存，等界面切换完成再执行，避免卡顿
+                QTimer.singleShot(100, lambda: last_widget.check_and_save_data())
+        self._last_tab_index = index
+    #改
     def open_tab(self, title, widget):
         import modules.chanpinguanli.bianl as bianl
-        print(
-            f"[DEBUG][open_tab] current={bianl.current_product_id}, last_confirmed={self.last_confirmed_product_id}, tabs={[self.tab_widget.tabText(i) for i in range(self.tab_widget.count())]}")
+
+        if title == "元件定义":
+            self._skip_first_gasket_check = True
 
         # 只统计非首页、非项目管理的 tab
         other_tabs = [
@@ -328,8 +394,23 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_tab_changed(self, index):
         import modules.chanpinguanli.bianl as bianl
-        print(
-            f"[DEBUG][on_tab_changed] index={index}, current={bianl.current_product_id}, last_confirmed={self.last_confirmed_product_id}")
+
+        # 🚩 在切换前保存上一个 tab（如果支持）
+        last_index = getattr(self, "_last_tab_index", None)
+        if last_index is not None and last_index != index:
+            last_widget = self.tab_widget.widget(last_index)
+            if hasattr(last_widget, "check_and_save_data"):
+                if not last_widget.check_and_save_data(force=False):
+                    # 如果保存失败，就强制留在原来的 tab
+                    self.tab_widget.blockSignals(True)
+                    self.tab_widget.setCurrentIndex(last_index)
+                    self.tab_widget.blockSignals(False)
+                    return
+
+            # 🚩 如果离开的是元件定义 → 进行垫片校验
+            last_tab_text = self.tab_widget.tabText(last_index)
+            if last_tab_text == "元件定义":
+                check_gasket_params(self)
 
         if index == self.home_tab_index:
             self._last_tab_index = index
@@ -357,6 +438,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # ✅ 更新记录：允许切换
         self._last_tab_index = index
+        self._tip_timer.start(4000)
 
     def close_tab(self, index):
         widget = self.tab_widget.widget(index)
@@ -366,8 +448,14 @@ class MainWindow(QtWidgets.QMainWindow):
             if not widget.check_and_save_data():
                 return
 
-        self._tip_timer.start(5000)
+        self._tip_timer.start(4000)
+
+        tab_text = self.tab_widget.tabText(index)
         self.tab_widget.removeTab(index)
+
+        if tab_text == "元件定义":
+            check_gasket_params(self)
+            self._skip_first_gasket_check = False
 
         # === 新增：如果只剩下首页和项目管理，重置 last_confirmed_product_id ===
         import modules.chanpinguanli.bianl as bianl
@@ -382,6 +470,32 @@ class MainWindow(QtWidgets.QMainWindow):
                 f"[DEBUG][close_tab] 所有模块已关闭，last_confirmed_product_id 重置为 {self.last_confirmed_product_id}")
 
     def closeEvent(self, event):
+        # 关闭的时候检查 存进取
+        # ✅ 新增：把“当前项目”记到数据库（项目需求表.last_opened）
+        try:
+            from modules.chanpinguanli import bianl, common_usage
+            pid = getattr(bianl, "current_project_id", None)
+
+            value = None if pid in (None, "", "None") else pid
+
+            conn = common_usage.get_mysql_connection_project()
+            cur = conn.cursor()
+
+            sql = """
+                    UPDATE 上一个项目id
+                    SET last_project_id = %s,
+                        updated_at = NOW()
+                """
+            cur.execute(sql, (value,))
+            print(f"[closeEvent] UPDATE rowcount = {cur.rowcount}")  # 调试：受影响行数
+
+            conn.commit()
+            cur.close()
+            conn.close()
+
+        except Exception as e:
+            print(f"[closeEvent] 写 last_opened 失败: {e}")
+
         # ✅ 检查每个 tab 页是否保存成功
         for i in range(self.tab_widget.count()):
             widget = self.tab_widget.widget(i)
@@ -398,7 +512,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # ✅ 允许关闭
         event.accept()
-        self._tip_timer.start(5000)
+        self._tip_timer.start(4000)
 
     def clear_line_tip(self):
         if self.line_tip:

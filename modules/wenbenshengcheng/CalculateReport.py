@@ -177,7 +177,7 @@ pipe_param_source = {
 db_config = {
     'host': 'localhost',
     'port': 3306,
-    'user': 'donghua704',
+    'user': 'root',
     'password': '123456',
     'database': '产品设计活动库'
 }
@@ -948,18 +948,6 @@ def fill_excel_with_dictoutdatas(file_path: str, json_path: str):
                     key = mapping.get(name)
                     if key:
                         value_map[key] = value
-
-
-
-
-
-
-
-
-
-
-
-
 
         for row in sheet.iter_rows(min_row=5, max_col=4):
             if len(row) < 4 or not row[2].value:
