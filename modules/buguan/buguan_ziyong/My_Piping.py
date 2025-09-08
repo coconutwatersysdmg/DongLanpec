@@ -1365,7 +1365,6 @@ class TubeLayoutEditor(QMainWindow):
         #     QMessageBox.warning(self, "计算警告", f"第二次计算布管布局失败: {str(e)}")
 
         # 解析输入参数部分保持不变
-        print(self.input_json)
         try:
             if not hasattr(self, 'input_json') or not isinstance(self.input_json, dict):
                 raise ValueError("self.input_json不存在或不是字典类型")
@@ -1580,7 +1579,6 @@ class TubeLayoutEditor(QMainWindow):
 
         self.has_piped = True
         self.left_data_pd = []
-        print(self.param_table)
 
         # 1. 读取参数
         DL = None
@@ -1672,7 +1670,7 @@ class TubeLayoutEditor(QMainWindow):
 
             if param_name in param_mapping:
                 json_key, value_map = param_mapping[param_name]
-                print("param_mapping[param_name]",param_mapping[param_name])
+
                 if json_key == "SlipWays":
                     try:
                         input_json[json_key] = json.loads(param_value)
@@ -1725,6 +1723,7 @@ class TubeLayoutEditor(QMainWindow):
         # 3. 根据产品ID从数据库获取产品型式并设置热交换器类型
         he_type = '2'  # 默认U型管式
         product_type_str = ''  # 用于存储产品型式字符串
+        self.heat_exchanger = product_type_str
         if self.productID:
             conn = None
             try:
@@ -1737,6 +1736,7 @@ class TubeLayoutEditor(QMainWindow):
 
                         if result and '产品型式' in result:
                             product_type_str = result['产品型式'].strip().upper()  # 标准化处理并保存
+                            self.heat_exchanger = product_type_str
 
                             # 根据产品型式判断热交换器类型
                             if product_type_str in ['AEU', 'BEU']:
@@ -1819,9 +1819,6 @@ class TubeLayoutEditor(QMainWindow):
 
         self.input_json = input_json
         self.save_layout_input(product_id, self.input_json)
-
-
-        print(self.input_json)
 
         # 4. 执行布管计算
         try:
@@ -2111,7 +2108,6 @@ class TubeLayoutEditor(QMainWindow):
         current_type = ""
         if combo and isinstance(combo, QComboBox):
             current_type = combo.currentText()
-            print(f"当前选择的文本: '{current_type}'")
 
         if baffle_type_row is None:
             QMessageBox.warning(self, "配置错误", "未找到'防冲板形式'参数")
@@ -2367,12 +2363,11 @@ class TubeLayoutEditor(QMainWindow):
             if di_item and di_item.text().strip():
                 try:
                     di_value = float(di_item.text())
-                    print(f"获取到壳体内直径 Di: {di_value}")
                 except ValueError:
                     print("壳体内直径 Di 参数值格式错误")
                     return
 
-        # 2.2 换热管外径 do - 修复获取逻辑
+        # 2.2 换热管外径 do
         do_value = None
         if do_row != -1:
             do_widget = self.param_table.cellWidget(do_row, 2)
@@ -2381,7 +2376,6 @@ class TubeLayoutEditor(QMainWindow):
                     selected_text = do_widget.currentText()
                     if selected_text.strip():
                         do_value = float(selected_text)
-                        print(f"获取到换热管外径 do: {do_value}")
                 except ValueError as e:
                     print(f"换热管外径 do 转换错误: {e}")
                     return
@@ -2400,7 +2394,6 @@ class TubeLayoutEditor(QMainWindow):
             range_type_widget = self.param_table.cellWidget(range_type_row, 2)
             if isinstance(range_type_widget, QComboBox):
                 range_type_value = range_type_widget.currentText()
-                print(f"获取到换热管排列方式: {range_type_value}")
             else:
                 range_type_item = self.param_table.item(range_type_row, 2)
                 if range_type_item and range_type_item.text().strip():
@@ -2411,11 +2404,53 @@ class TubeLayoutEditor(QMainWindow):
             print("缺少必要参数，无法进行计算")
             return
 
-        # 3. 计算并更新布管限定圆 DL
+        # 3. 根据换热器型号计算布管限定圆 DL
         if dl_row != -1:
-            b3 = max(0.25 * do_value, 8.0)
-            dl_value = di_value - 2 * b3
-            print(f"计算布管限定圆 DL: {di_value} - 2 * max(0.25 * {do_value}, 8.0) = {dl_value:.1f}")
+            # 获取换热器型号
+            heat_exchanger_type = self.heat_exchanger
+
+            # 根据型号选择不同的计算方式
+            if heat_exchanger_type in ["AEU", "BEU", "BEM", "NEN"]:
+                # 计算方式1: DL = Di - 2b₃, b₃ = max(0.25do, 8)
+                b3 = max(0.25 * do_value, 8.0)
+                dl_value = di_value - 2 * b3
+                print(
+                    f"计算布管限定圆 DL ({heat_exchanger_type}): {di_value} - 2 * max(0.25 * {do_value}, 8.0) = {dl_value:.1f}")
+
+            elif heat_exchanger_type in ["AES", "BES"]:
+                # 计算方式2: DL = Di - 2(b₁ + b₂ + b)
+
+                # 确定b的值
+                if di_value < 1000:
+                    b = 4.0  # 默认值
+                else:  # 1000 ≤ Di ≤ 2600
+                    b = 5.0  # 默认值
+
+                # 确定b₁和bₙ的值
+                if di_value <= 700:
+                    b_n = 10.0
+                    b_1 = 3.0
+                elif di_value <= 1200:
+                    b_n = 13.0
+                    b_1 = 5.0
+                elif di_value <= 2000:
+                    b_n = 16.0
+                    b_1 = 6.0
+                else:  # di_value ≤ 2600
+                    b_n = 20.0
+                    b_1 = 7.0
+
+                # 计算b₂
+                b_2 = b_n + 1.5
+
+                # 计算DL
+                dl_value = di_value - 2 * (b_1 + b_2 + b)
+                print(
+                    f"计算布管限定圆 DL ({heat_exchanger_type}): {di_value} - 2 * ({b_1} + {b_2} + {b}) = {dl_value:.1f}")
+
+            else:
+                print(f"未知的换热器型号: {heat_exchanger_type}")
+                return
 
             # 临时断开信号避免循环触发
             original_handler = None
@@ -2426,6 +2461,7 @@ class TubeLayoutEditor(QMainWindow):
                 except:
                     pass
 
+            # 更新布管限定圆 DL
             dl_item = self.param_table.item(dl_row, 2)
             if dl_item:
                 dl_item.setText(f"{dl_value:.1f}")
@@ -2510,26 +2546,19 @@ class TubeLayoutEditor(QMainWindow):
 
         # 查找映射关系
         key = (float(do_value), range_type_value)
-        print(f"查找映射键: {key}")
 
         if key in center_distance_map:
             center_distance, sn_value = center_distance_map[key]
-            print(f"找到映射: 中心距 S = {center_distance}, SN值 = {sn_value}")
 
             # 更新换热管中心距 S
             if center_distance_row != -1:
                 self._update_table_cell(center_distance_row, 2, f"{center_distance:.1f}")
-                print(f"已更新换热管中心距 S: {center_distance:.1f}")
-
             # 更新分程隔板两侧相邻管中心距（竖直）
             if sn_vertical_row != -1:
                 self._update_table_cell(sn_vertical_row, 2, f"{sn_value:.1f}")
-                print(f"已更新分程隔板两侧相邻管中心距（竖直）: {sn_value:.1f}")
-
             # 更新分程隔板两侧相邻管中心距（水平）
             if sn_horizontal_row != -1:
                 self._update_table_cell(sn_horizontal_row, 2, f"{sn_value:.1f}")
-                print(f"已更新分程隔板两侧相邻管中心距（水平）: {sn_value:.1f}")
         else:
             print(f"未找到匹配的映射关系 for {key}")
 
@@ -2568,7 +2597,6 @@ class TubeLayoutEditor(QMainWindow):
 
             if baffle_diameter:
                 self._update_table_cell(baffle_row, 2, baffle_diameter)
-                print(f"已更新折流板外径: {baffle_diameter}")
 
     def _update_table_cell(self, row, column, value):
         """安全更新表格单元格的辅助方法"""
@@ -2605,7 +2633,6 @@ class TubeLayoutEditor(QMainWindow):
                 self.param_table.itemChanged.connect(original_handler)
             except:
                 pass
-
 
     def update_baffle_parameters(self, changed_param_name):
         """
@@ -2722,7 +2749,6 @@ class TubeLayoutEditor(QMainWindow):
         return ""
 
     def setup_parameters(self, params):
-        print(params)
         self.param_table.setRowCount(len(params))
         self._is_validating = False  # 添加验证标志位
         self._original_values = {}  # 存储每个单元格的原始值
@@ -2850,7 +2876,6 @@ class TubeLayoutEditor(QMainWindow):
                     elif param['参数名'] == "换热管布置方式":
                         combo.addItems(["对中", "跨中", "任意"])
                     elif param['参数名'] == "管程分程形式":
-                        print(param['参数值'])
                         # 保存管程分程形式下拉框引用和行索引
                         self.tube_pass_form_combo = combo
                         self.tube_pass_form_row = row
@@ -3053,7 +3078,6 @@ class TubeLayoutEditor(QMainWindow):
             combo.addItem(f"图片缺失: {identifier}")
             # 存储标识
             combo.setItemData(combo.count() - 1, identifier, Qt.UserRole)
-            print(f"错误：图片不存在 - {image_path}")
             return
 
         # 尝试加载图片
@@ -3062,7 +3086,6 @@ class TubeLayoutEditor(QMainWindow):
             combo.addItem(f"无法加载: {identifier}")
             # 存储标识
             combo.setItemData(combo.count() - 1, identifier, Qt.UserRole)
-            print(f"错误：无法加载图片 - {image_path}")
         else:
             # 添加带图片的选项，显示图片但不显示文字
             combo.addItem(QIcon(pixmap), "")
@@ -3075,7 +3098,6 @@ class TubeLayoutEditor(QMainWindow):
         combo.clear()
         if self.input_json:
             input_json = self.input_json
-            print(input_json['LB_TubePassCount'])
 
         # 使用绝对路径
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -6073,24 +6095,20 @@ class TubeLayoutEditor(QMainWindow):
                 QMessageBox.warning(dialog, "输入错误", "请输入有效的数字")
                 return
 
-            # 关键修改：在构建前先更新参数表
             update_param_table(rod_diameter)
 
             if hasattr(self, 'output_data') and isinstance(self.output_data, dict):
                 self.output_data['TieRodD'] = str(rod_diameter)
 
-            # 检查是否有选中的圆
             if not hasattr(self, 'selected_centers') or not self.selected_centers:
                 QMessageBox.warning(self, "未选中", "请先选中至少一个小圆")
                 return
 
-            # 调用构建函数
             if self.isSymmetry:
                 selected_centers = self.judge_linkage(self.selected_centers)
             else:
                 selected_centers = self.selected_centers
 
-            # 调用build_lagan函数
             updated_centers = self.build_lagan(selected_centers)
 
             # 自动关闭弹窗
@@ -6227,8 +6245,6 @@ class TubeLayoutEditor(QMainWindow):
             center for center in self.current_centers
             if center not in set(current_coords)
         ]
-
-
 
     def build_sql_for_component(self):
         conn = create_product_connection()
