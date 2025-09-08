@@ -5986,6 +5986,139 @@ class TubeLayoutEditor(QMainWindow):
         return current_coords
 
     # 拉杆功能
+    def on_lagan_click(self):
+        """拉杆点击事件 - 添加参数输入弹窗"""
+        # 修正导入语句，QPointF来自QtCore
+        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QMessageBox, \
+            QComboBox, QTableWidgetItem, QGraphicsEllipseItem
+        from PyQt5.QtCore import QPointF  # 单独导入QPointF
+
+        # 查找参数表中拉杆直径的行和当前值
+        param_row = -1
+        default_diameter = 12.0  # 默认直径
+        row_count = self.param_table.rowCount()
+        for row in range(row_count):
+            name_item = self.param_table.item(row, 1)
+            if name_item and name_item.text() == "拉杆直径":
+                param_row = row
+                # 显示该参数行
+                self.param_table.setRowHidden(row, False)
+                # 获取当前值
+                cell_widget = self.param_table.cellWidget(row, 2)
+                if isinstance(cell_widget, QComboBox):
+                    value_text = cell_widget.currentText()
+                else:
+                    value_item = self.param_table.item(row, 2)
+                    value_text = value_item.text() if value_item else ""
+                try:
+                    default_diameter = float(value_text)
+                except:
+                    pass
+                break
+
+        # 创建弹窗
+        dialog = QDialog(self)
+        dialog.setWindowTitle("拉杆参数设置")
+        dialog.setModal(True)  # 模态窗口，阻止其他操作
+
+        # 布局
+        layout = QVBoxLayout(dialog)
+
+        # 直径输入
+        diameter_layout = QHBoxLayout()
+        diameter_label = QLabel("拉杆直径:")
+        self.diameter_input = QLineEdit(str(default_diameter))
+        diameter_layout.addWidget(diameter_label)
+        diameter_layout.addWidget(self.diameter_input)
+        layout.addLayout(diameter_layout)
+
+        # 按钮布局
+        btn_layout = QHBoxLayout()
+        self.confirm_btn = QPushButton("确定")
+        self.close_btn = QPushButton("关闭")
+        btn_layout.addWidget(self.confirm_btn)
+        btn_layout.addWidget(self.close_btn)
+        layout.addLayout(btn_layout)
+
+        # 确定按钮点击事件
+        def on_confirm():
+            # 获取输入的直径值
+            try:
+                rod_diameter = float(self.diameter_input.text())
+                if rod_diameter <= 0:
+                    QMessageBox.warning(dialog, "输入错误", "拉杆直径必须大于0")
+                    return
+            except ValueError:
+                QMessageBox.warning(dialog, "输入错误", "请输入有效的数字")
+                return
+
+            # 检查是否有选中的圆
+            if not hasattr(self, 'selected_centers') or not self.selected_centers:
+                QMessageBox.warning(self, "未选中", "请先选中至少一个小圆")
+                return
+
+            # 调用构建函数
+            if self.isSymmetry:
+                selected_centers = self.judge_linkage(self.selected_centers)
+            else:
+                selected_centers = self.selected_centers
+
+            # 调用build_lagan函数
+            updated_centers = self.build_lagan(selected_centers)
+
+            # 自动关闭弹窗
+            dialog.close()
+
+            # 更新当前中心点
+            self.current_centers = updated_centers
+
+            # 清除选中状态及淡蓝色涂层
+            if hasattr(self, 'selected_centers') and self.selected_centers:
+                for row_label, col_label in self.selected_centers:
+                    row_idx = abs(row_label) - 1
+                    col_idx = abs(col_label) - 1
+
+                    # 选择对应分组的圆心列表
+                    if row_label > 0:
+                        centers_group = self.full_sorted_current_centers_up
+                    else:
+                        centers_group = self.full_sorted_current_centers_down
+
+                    if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
+                        x, y = centers_group[row_idx][col_idx]
+                        # 擦除淡蓝色选中涂层
+                        click_point = QPointF(x, y)
+                        for item in self.graphics_scene.items(click_point):
+                            if isinstance(item, QGraphicsEllipseItem):
+                                self.graphics_scene.removeItem(item)
+                                break
+
+                self.selected_centers.clear()
+
+        def on_close():
+            # 保存输入的值到参数表
+            try:
+                diameter = float(self.diameter_input.text())
+                if diameter > 0 and param_row != -1:
+                    # 更新参数表中的值
+                    cell_widget = self.param_table.cellWidget(param_row, 2)
+                    if isinstance(cell_widget, QComboBox):
+                        index = cell_widget.findText(str(diameter))
+                        if index >= 0:
+                            cell_widget.setCurrentIndex(index)
+                        else:
+                            cell_widget.addItem(str(diameter))
+                            cell_widget.setCurrentText(str(diameter))
+                    else:
+                        self.param_table.setItem(param_row, 2, QTableWidgetItem(str(diameter)))
+            except ValueError:
+                pass  # 输入无效则不更新
+            dialog.close()
+
+        self.confirm_btn.clicked.connect(on_confirm)
+        self.close_btn.clicked.connect(on_close)
+        dialog.exec_()
+
     def build_lagan(self, selected_centers):
         if not selected_centers:
             return []
@@ -6069,6 +6202,8 @@ class TubeLayoutEditor(QMainWindow):
 
         # # 显示绘制结果
         # QMessageBox.information(self, "已绘制", "绘制圆心:\n" + "\n".join(msg_lines))
+        self.clear_selection_highlight()
+        self.selected_centers.clear()
 
         # 返回移除已绘制拉杆后的中心坐标列表
         return [
@@ -6076,18 +6211,7 @@ class TubeLayoutEditor(QMainWindow):
             if center not in set(current_coords)
         ]
 
-    def on_lagan_click(self):
-        if hasattr(self, 'selected_centers') and self.selected_centers:
-            if self.isSymmetry:
-                selected_centers = self.judge_linkage(self.selected_centers)
-            else:
-                selected_centers = self.selected_centers
-            updated_centers = self.build_lagan(selected_centers)
-            self.current_centers = updated_centers
-            # 清空选中列表
-            self.selected_centers.clear()
-        else:
-            QMessageBox.warning(self, "未选中", "请先点击图形区域中的一个或多个小圆以选中圆心")
+
 
     def build_sql_for_component(self):
         conn = create_product_connection()
@@ -6348,7 +6472,7 @@ class TubeLayoutEditor(QMainWindow):
         absolute_coords_to_remove = set(selected_centers_list)
 
         # 定义删除样式（浅灰色空心圆）
-        gray_pen = QPen(QColor(254, 254, 254))
+        gray_pen = QPen(QColor(255, 255, 255))
         gray_pen.setWidth(1)
         gray_brush = QBrush(Qt.NoBrush)  # 空心圆
         blue_tube_pen = QColor(0, 0, 80)

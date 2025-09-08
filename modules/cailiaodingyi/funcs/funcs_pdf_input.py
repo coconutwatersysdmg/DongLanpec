@@ -1380,17 +1380,30 @@ def init_buguan_defaults(product_id):
             cur2.execute("SELECT 参数名, 参数值, 单位 FROM 布管参数默认表")
             defaults = cur2.fetchall()
 
-            # 3. 插入到活动库
+            # 3. 查询设计数据表中的“公称直径*”值
+            cur1.execute("""
+                SELECT 参数值
+                FROM 产品设计活动表_设计数据表
+                WHERE 产品ID=%s AND 参数名称 LIKE '公称直径%%'
+                LIMIT 1
+            """, (product_id,))
+            design_row = cur1.fetchone()
+            design_dn = design_row["参数值"] if design_row else None
+
+            # 4. 插入到活动库
             for d in defaults:
+                param_name = d.get("参数名", "")
+                param_value = d.get("参数值", "")
+                unit = d.get("单位", "")
+
+                # 如果是 公称直径 DN，则替换成设计数据表里的值
+                if param_name == "公称直径 DN" and design_dn is not None:
+                    param_value = design_dn
+
                 cur1.execute("""
                     INSERT INTO 产品设计活动表_布管参数表(产品ID, 参数名, 参数值, 单位)
                     VALUES (%s, %s, %s, %s)
-                """, (
-                    product_id,
-                    d.get("参数名", ""),
-                    d.get("默认值", ""),
-                    d.get("单位", "")
-                ))
+                """, (product_id, param_name, param_value, unit))
 
         conn1.commit()
         print(f"[布管参数] 产品 {product_id} 默认参数已初始化")
