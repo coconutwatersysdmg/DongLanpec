@@ -2798,7 +2798,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 特殊处理换热管公称长度 LN（原换热管公称长度 LN）
                 if param['参数名'] in ["换热管公称长度 LN", "换热管公称长度 LN"]:
                     # 创建可编辑的下拉框
-                    combo = QComboBox()
+                    combo = NoWheelComboBox()
                     combo.setEditable(True)  # 关键修改：设置为可编辑，允许手动输入
 
                     # 添加下拉选项
