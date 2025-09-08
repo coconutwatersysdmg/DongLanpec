@@ -5991,7 +5991,7 @@ class TubeLayoutEditor(QMainWindow):
         # 修正导入语句，QPointF来自QtCore
         from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QMessageBox, \
             QComboBox, QTableWidgetItem, QGraphicsEllipseItem
-        from PyQt5.QtCore import QPointF  # 单独导入QPointF
+        from PyQt5.QtCore import QPointF
 
         # 查找参数表中拉杆直径的行和当前值
         param_row = -1
@@ -6040,6 +6040,27 @@ class TubeLayoutEditor(QMainWindow):
         btn_layout.addWidget(self.close_btn)
         layout.addLayout(btn_layout)
 
+        def update_param_table(diameter_value):
+            """更新参数表中的拉杆直径值"""
+            if param_row != -1:
+                cell_widget = self.param_table.cellWidget(param_row, 2)
+                if isinstance(cell_widget, QComboBox):
+                    # 如果是下拉框，尝试找到匹配项
+                    index = cell_widget.findText(str(diameter_value))
+                    if index >= 0:
+                        cell_widget.setCurrentIndex(index)
+                    else:
+                        # 找不到则添加并选中
+                        cell_widget.addItem(str(diameter_value))
+                        cell_widget.setCurrentText(str(diameter_value))
+                else:
+                    # 如果是普通单元格，直接设置文本
+                    item = self.param_table.item(param_row, 2)
+                    if item:
+                        item.setText(str(diameter_value))
+                    else:
+                        self.param_table.setItem(param_row, 2, QTableWidgetItem(str(diameter_value)))
+
         # 确定按钮点击事件
         def on_confirm():
             # 获取输入的直径值
@@ -6051,6 +6072,12 @@ class TubeLayoutEditor(QMainWindow):
             except ValueError:
                 QMessageBox.warning(dialog, "输入错误", "请输入有效的数字")
                 return
+
+            # 关键修改：在构建前先更新参数表
+            update_param_table(rod_diameter)
+
+            if hasattr(self, 'output_data') and isinstance(self.output_data, dict):
+                self.output_data['TieRodD'] = str(rod_diameter)
 
             # 检查是否有选中的圆
             if not hasattr(self, 'selected_centers') or not self.selected_centers:
@@ -6096,21 +6123,11 @@ class TubeLayoutEditor(QMainWindow):
                 self.selected_centers.clear()
 
         def on_close():
-            # 保存输入的值到参数表
+            # 保存输入的值到参数表（关闭时也更新）
             try:
                 diameter = float(self.diameter_input.text())
-                if diameter > 0 and param_row != -1:
-                    # 更新参数表中的值
-                    cell_widget = self.param_table.cellWidget(param_row, 2)
-                    if isinstance(cell_widget, QComboBox):
-                        index = cell_widget.findText(str(diameter))
-                        if index >= 0:
-                            cell_widget.setCurrentIndex(index)
-                        else:
-                            cell_widget.addItem(str(diameter))
-                            cell_widget.setCurrentText(str(diameter))
-                    else:
-                        self.param_table.setItem(param_row, 2, QTableWidgetItem(str(diameter)))
+                if diameter > 0:
+                    update_param_table(diameter)
             except ValueError:
                 pass  # 输入无效则不更新
             dialog.close()
@@ -7187,6 +7204,27 @@ class TubeLayoutEditor(QMainWindow):
         btn_layout.addWidget(self.close_btn)
         layout.addLayout(btn_layout)
 
+        def update_param_table(thickness_value):
+            """更新参数表中的旁路挡板厚度值"""
+            if param_row != -1:
+                cell_widget = self.param_table.cellWidget(param_row, 2)
+                if isinstance(cell_widget, QComboBox):
+                    # 如果是下拉框，尝试找到匹配项
+                    index = cell_widget.findText(str(thickness_value))
+                    if index >= 0:
+                        cell_widget.setCurrentIndex(index)
+                    else:
+                        # 找不到则添加并选中
+                        cell_widget.addItem(str(thickness_value))
+                        cell_widget.setCurrentText(str(thickness_value))
+                else:
+                    # 如果是普通单元格，直接设置文本
+                    item = self.param_table.item(param_row, 2)
+                    if item:
+                        item.setText(str(thickness_value))
+                    else:
+                        self.param_table.setItem(param_row, 2, QTableWidgetItem(str(thickness_value)))
+
         # 确定按钮点击事件
         def on_confirm():
             # 获取输入的厚度值
@@ -7195,6 +7233,9 @@ class TubeLayoutEditor(QMainWindow):
             except ValueError:
                 QMessageBox.warning(dialog, "输入错误", "请输入有效的数字")
                 return
+
+            # 关键修改：在构建前先更新参数表
+            update_param_table(block_height)
 
             # 检查是否有选中的圆
             if not hasattr(self, 'selected_centers') or not self.selected_centers:
@@ -7232,27 +7273,11 @@ class TubeLayoutEditor(QMainWindow):
                 self.selected_centers.clear()
                 dialog.close()
 
-            # QMessageBox.information(self, "添加完成", f"共添加 {added_count} 个小挡板")
-
         def on_close():
-            # 保存输入的值到参数表
+            # 保存输入的值到参数表（关闭时也更新）
             try:
                 thickness = float(self.thickness_input.text())
-                if param_row != -1:
-                    # 更新参数表中的值
-                    cell_widget = self.param_table.cellWidget(param_row, 2)
-                    if isinstance(cell_widget, QComboBox):
-                        # 如果是下拉框，尝试找到匹配项
-                        index = cell_widget.findText(str(thickness))
-                        if index >= 0:
-                            cell_widget.setCurrentIndex(index)
-                        else:
-                            # 找不到则添加并选中
-                            cell_widget.addItem(str(thickness))
-                            cell_widget.setCurrentText(str(thickness))
-                    else:
-                        # 如果是普通单元格
-                        self.param_table.setItem(param_row, 2, QTableWidgetItem(str(thickness)))
+                update_param_table(thickness)
             except ValueError:
                 pass  # 输入无效则不更新
             dialog.close()
