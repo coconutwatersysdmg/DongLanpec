@@ -996,7 +996,7 @@ class TubeLayoutEditor(QMainWindow):
             "旁路挡板厚度", "防冲板形式", "防冲板厚度", "防冲板折边角度",
             "与圆筒焊接折边式防冲板宽度", "与圆筒焊接折边式防冲板方位角",
             "与圆筒焊接折边式防冲板至圆筒内壁最大距离", "切边长度L1",
-            "切边高度 h"
+            "切边高度 h", "拉杆直径", "中间挡板厚度"
         ]
 
         # 标志位，标记是否成功从产品设计活动库加载参数
@@ -2791,7 +2791,7 @@ class TubeLayoutEditor(QMainWindow):
             special_params = ["是否以外径为基准", "分程布置形式", "换热管排列方式", "滑道定位",
                               "折流板切口方向", "管程分程形式", "防冲板形式", "换热管外径 do", "管程程数",
                               "换热管布置方式", "换热管公称长度 LN", "换热管公称长度 LN",
-                              "滑道定位"]  # 添加重命名后的参数名
+                              "滑道定位", "拉杆形式"]  # 添加重命名后的参数名
 
             if param['参数名'] in special_params:
 
@@ -2805,7 +2805,6 @@ class TubeLayoutEditor(QMainWindow):
                     standard_lengths = ["1000", "1500", "2000", "2500", "3000", "4500",
                                         "6000", "7500", "8000", "9000", "12000"]
                     combo.addItems(standard_lengths)
-
                     # 设置输入验证器，只允许输入大于0的整数
                     validator = QIntValidator(1, 99999, self)  # 最小值1，最大值99999
                     combo.setValidator(validator)
@@ -2865,6 +2864,8 @@ class TubeLayoutEditor(QMainWindow):
                         combo.addItems(["正三角形", "转角正三角形", "正方形", "转角正方形"])
                     elif param['参数名'] == "折流板切口方向":
                         combo.addItems(["水平上下", "垂直左右"])
+                    elif param['参数名'] == "拉杆形式":
+                        combo.addItems(["焊接拉杆", "螺纹拉杆"])
                     elif param['参数名'] == "滑道定位":
                         combo.addItems(["滑道与管板焊接", "滑道与第一块折流板焊接"])
                     elif param['参数名'] == "管程程数":
@@ -9199,9 +9200,9 @@ class TubeLayoutEditor(QMainWindow):
         from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QMessageBox, \
             QComboBox, QTableWidgetItem
 
-        # 查找参数表中“中间挡板厚度”的行和当前默认值
+        # 查找参数表中"中间挡板厚度"的行和当前默认值
         param_row = -1
-        default_thickness = 3.0  # 默认厚度（可根据需求调整）
+        default_thickness = 3.0  # 默认厚度
         row_count = self.param_table.rowCount()
         for row in range(row_count):
             name_item = self.param_table.item(row, 1)
@@ -9222,10 +9223,10 @@ class TubeLayoutEditor(QMainWindow):
                     pass
                 break
 
-        # 1. 创建弹窗实例（关键：确保dialog为局部变量，后续可直接调用close）
+        # 1. 创建弹窗实例
         dialog = QDialog(self)
         dialog.setWindowTitle("中间挡板参数设置")
-        dialog.setModal(True)  # 模态窗口，阻止外部操作
+        dialog.setModal(True)
 
         # 2. 弹窗布局
         layout = QVBoxLayout(dialog)
@@ -9240,13 +9241,13 @@ class TubeLayoutEditor(QMainWindow):
 
         # 按钮区域（确定+关闭）
         btn_layout = QHBoxLayout()
-        confirm_btn = QPushButton("确定")  # 按钮直接定义为局部变量，避免属性冲突
+        confirm_btn = QPushButton("确定")
         close_btn = QPushButton("关闭")
         btn_layout.addWidget(confirm_btn)
         btn_layout.addWidget(close_btn)
         layout.addLayout(btn_layout)
 
-        # 3. 确定按钮点击事件（核心：执行绘制后强制关闭弹窗）
+        # 3. 确定按钮点击事件
         def on_confirm_click():
             # 校验厚度输入有效性
             try:
@@ -9268,72 +9269,79 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 selected_centers = self.selected_centers
 
+            # 关键修改：更新参数表中的值（仿照滑道函数的逻辑）
+            for row in range(self.param_table.rowCount()):
+                param_name = self.param_table.item(row, 1).text()
+                if param_name == "中间挡板厚度":
+                    new_value = str(block_thickness)
+
+                    # 根据控件类型更新值
+                    widget = self.param_table.cellWidget(row, 2)
+                    if isinstance(widget, QComboBox):
+                        # 查找并设置下拉框选项
+                        index = widget.findText(new_value)
+                        if index >= 0:
+                            widget.setCurrentIndex(index)
+                        else:
+                            # 如果找不到匹配项，添加新选项
+                            widget.addItem(new_value)
+                            widget.setCurrentText(new_value)
+                    else:
+                        # 更新普通文本单元格
+                        item = self.param_table.item(row, 2)
+                        if item:
+                            item.setText(new_value)
+                        else:
+                            self.param_table.setItem(row, 2, QTableWidgetItem(new_value))
+                    break
+
             # 执行中间挡板绘制
             self.build_center_dangban(selected_centers, block_thickness)
 
-            # 清除选中状态（恢复小圆原始样式）
-            if hasattr(self, 'selected_centers') and self.selected_centers:
-                from PyQt5.QtCore import QPointF
-                from PyQt5.QtGui import QPen, QBrush, QColor
-                from PyQt5.QtWidgets import QGraphicsEllipseItem
+            # 清除选中状态
+            self.clear_selection_highlight()
+            self.selected_centers.clear()
 
-                for row_label, col_label in self.selected_centers:
-                    row_idx = abs(row_label) - 1
-                    col_idx = abs(col_label) - 1
-                    # 选择对应圆心分组（上/下）
-                    centers_group = self.sorted_current_centers_up if row_label > 0 else self.sorted_current_centers_down
-                    if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
-                        x, y = centers_group[row_idx][col_idx]
-                        # 移除淡蓝色选中涂层
-                        click_point = QPointF(x, y)
-                        for item in self.graphics_scene.items(click_point):
-                            if isinstance(item, QGraphicsEllipseItem):
-                                self.graphics_scene.removeItem(item)
-                                break
-                        # 重绘原始深蓝色圆
-                        pen_restore = QPen(QColor(0, 0, 80))
-                        pen_restore.setWidth(1)
-                        self.graphics_scene.addEllipse(
-                            x - self.r, y - self.r, 2 * self.r, 2 * self.r,
-                            pen_restore, QBrush(Qt.NoBrush)
-                        )
-                self.selected_centers.clear()
-
-            # ---------------- 关键：点击确定后强制关闭弹窗 ----------------
-            dialog.close()  # 直接调用dialog的close方法，确保弹窗关闭
-            # 额外保险：若close无效，用accept()结束弹窗（QDialog标准关闭方式）
+            # 关闭弹窗
             dialog.accept()
 
-        # 4. 关闭按钮点击事件（同步参数+关闭弹窗）
+        # 4. 关闭按钮点击事件
         def on_close_click():
-            # 同步输入的厚度到参数表
+            # 同步输入的厚度到参数表（与确定按钮相同的逻辑）
             try:
                 thickness = float(self.thickness_input.text())
-                if param_row != -1:
-                    cell_widget = self.param_table.cellWidget(param_row, 2)
-                    if isinstance(cell_widget, QComboBox):
-                        index = cell_widget.findText(str(thickness))
-                        if index >= 0:
-                            cell_widget.setCurrentIndex(index)
+                for row in range(self.param_table.rowCount()):
+                    param_name = self.param_table.item(row, 1).text()
+                    if param_name == "中间挡板厚度":
+                        new_value = str(thickness)
+
+                        widget = self.param_table.cellWidget(row, 2)
+                        if isinstance(widget, QComboBox):
+                            index = widget.findText(new_value)
+                            if index >= 0:
+                                widget.setCurrentIndex(index)
+                            else:
+                                widget.addItem(new_value)
+                                widget.setCurrentText(new_value)
                         else:
-                            cell_widget.addItem(str(thickness))
-                            cell_widget.setCurrentText(str(thickness))
-                    else:
-                        self.param_table.setItem(param_row, 2, QTableWidgetItem(str(thickness)))
+                            item = self.param_table.item(row, 2)
+                            if item:
+                                item.setText(new_value)
+                            else:
+                                self.param_table.setItem(row, 2, QTableWidgetItem(new_value))
+                        break
             except ValueError:
                 pass
+
             # 关闭弹窗
-            dialog.close()
             dialog.accept()
 
-        # 绑定按钮点击事件（直接绑定局部函数，避免属性引用问题）
+        # 绑定按钮点击事件
         confirm_btn.clicked.connect(on_confirm_click)
         close_btn.clicked.connect(on_close_click)
 
         # 显示弹窗
         dialog.exec_()
-        self.clear_selection_highlight()
-        self.selected_centers.clear()
 
     def build_center_dangban(self, selected_centers, block_thickness):
         """构建紫色中间挡板（接收厚度参数，执行绘制逻辑）"""
