@@ -416,7 +416,6 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
 class TubeLayoutEditor(QMainWindow):
     def __init__(self, line_tip=None):
         super().__init__()
-
         self.productID = product_id  # 产品ID
         self.isSymmetry = False
         self.selected_side_blocks = []
@@ -990,6 +989,7 @@ class TubeLayoutEditor(QMainWindow):
         return results
 
     def load_initial_data(self):
+        print("加载初始数据")
 
         hidden_params = [
             "滑道定位", "滑道高度", "滑道厚度", "滑道与竖直中心线夹角",
@@ -1253,20 +1253,20 @@ class TubeLayoutEditor(QMainWindow):
 
                                                     elif param_name == "是否以外径为基准":
                                                         design_query = """
-                                                            SELECT 壳程数值 
-                                                            FROM 产品设计活动表_设计数据表 
+                                                            SELECT 数值 
+                                                            FROM 产品设计活动表_通用数据表 
                                                             WHERE 产品ID = %s AND 参数名称 = %s
                                                         """
                                                         design_cursor.execute(design_query,
-                                                                              (self.productID, "是否以外径为基准"))
+                                                                              (self.productID, "是否以外径为基准*"))
                                                         design_data = design_cursor.fetchone()
 
                                                         if isinstance(design_data,
-                                                                      dict) and '壳程数值' in design_data and \
-                                                                design_data['壳程数值']:
+                                                                      dict) and '数值' in design_data and \
+                                                                design_data['数值']:
                                                             processed_params.append({
                                                                 '参数名': param_name,
-                                                                '参数值': design_data['壳程数值'],
+                                                                '参数值': design_data['数值'],
                                                                 '单位': unit
                                                             })
                                                         else:
@@ -1377,6 +1377,7 @@ class TubeLayoutEditor(QMainWindow):
             height = float(self.input_json.get('LB_SlipWayHeight', 0))
             thickness = float(self.input_json.get('LB_SlipWayThick', 0))
             angle = float(self.input_json.get('LB_SlipWayAngle', 0))
+            # block_thickness=float(self.input_json.get('LB_SlipWayAngle', 0))
 
             if tube_outer_diameter <= 0:
                 print("管子外径必须大于0，使用默认值10")
@@ -1492,7 +1493,8 @@ class TubeLayoutEditor(QMainWindow):
                     if i + 1 < len(centers_list):
                         pair = [centers_list[i], centers_list[i + 1]]
                         if isinstance(pair, list) and len(pair) == 2:
-                            self.build_center_dangban(pair)
+                            thickness = float(self.block_thickness)
+                            self.build_center_dangban(pair, thickness)
                         else:
                             print(f"无效的中间挡板坐标对: {pair}")
                     else:
@@ -1623,11 +1625,13 @@ class TubeLayoutEditor(QMainWindow):
 
         # 转换为DataFrame
         self.left_data_pd = pd.DataFrame(self.left_data_pd)
+        print(self.tube_pass_form_value)
 
         # 2. 构造JSON映射
         param_mapping = {
             "换热管布置方式": ("LB_IsRangeCenter", {"对中": "0", "跨中": "1", "任意": "2"}),
             "旁路挡板厚度": ("LB_BPBThick", None),
+            "分程隔板放置型式": ("LB_ClapboardType", None),
             "管程分程形式": ("LB_Tubeform", None),
             "滑道高度": ("LB_SlipWayHeight", None),
             "拉杆直径": ("LB_TieRodD", None),
@@ -1658,7 +1662,7 @@ class TubeLayoutEditor(QMainWindow):
             "与圆筒连接防冲板方位": ("LB_BafflePosition", None),
             "与圆筒连接防冲板宽度": ("LB_BaffleW", None),
             "与圆筒连接防冲板至圆筒内壁最大距离": ("LB_BaffleDis", None),
-            "分程隔板放置型式": ("LB_ClapboardType", {"未选择": "0", "形式1": "1", "形式2": "2", "形式3": "3"}),
+            # "分程隔板放置型式": ("LB_ClapboardType", {"未选择": "0", "形式1": "1", "形式2": "2", "形式3": "3"}),
             "热交换器类型": (
                 "LB_HEType", {"未选择": "2", "浮头式热交换器": "0", "固定管板式热交换器": "1", "U型管式热交换器": "2"})
         }
@@ -1667,6 +1671,8 @@ class TubeLayoutEditor(QMainWindow):
         for _, row in self.left_data_pd.iterrows():
             param_name = row["参数名"]
             param_value = str(row["参数值"]).strip()
+            if param_name == "中间挡板厚度":
+                self.block_thickness = param_value
 
             if param_name in param_mapping:
                 json_key, value_map = param_mapping[param_name]
@@ -1753,6 +1759,15 @@ class TubeLayoutEditor(QMainWindow):
 
         input_json['LB_HEType'] = he_type
 
+        LB_ClapboardType = '0'
+        if self.tube_pass_form_value == "4.1":
+            LB_ClapboardType = '2'
+        elif self.tube_pass_form_value == "4.2" or self.tube_pass_form_value == "6.2":
+            LB_ClapboardType = '0'
+        else:
+            LB_ClapboardType = '1'
+        input_json['LB_ClapboardType'] = LB_ClapboardType
+
         # ---------------- 新增：如果值为None或空字符串，则从布管默认参数表中取值 ----------------
         param_mapping2 = {
             "LB_IsRangeCenter": "换热管布置方式",
@@ -1818,6 +1833,7 @@ class TubeLayoutEditor(QMainWindow):
         # -----------------------------------------------------------------------------------
 
         self.input_json = input_json
+        print(self.input_json)
         self.save_layout_input(product_id, self.input_json)
 
         # 4. 执行布管计算
@@ -2749,6 +2765,10 @@ class TubeLayoutEditor(QMainWindow):
         return ""
 
     def setup_parameters(self, params):
+        for param in params:
+            if param['参数名'] == '管程分程形式':
+                self.tube_pass_partition = param['参数值']
+                break
         self.param_table.setRowCount(len(params))
         self._is_validating = False  # 添加验证标志位
         self._original_values = {}  # 存储每个单元格的原始值
@@ -2877,6 +2897,10 @@ class TubeLayoutEditor(QMainWindow):
                     elif param['参数名'] == "换热管布置方式":
                         combo.addItems(["对中", "跨中", "任意"])
                     elif param['参数名'] == "管程分程形式":
+                        # 打印管程分程形式的信息
+                        print(self.tube_pass_partition)
+                        initial_tube_pattern = str(self.tube_pass_partition)  # 获取初始值并转换为字符串
+
                         # 保存管程分程形式下拉框引用和行索引
                         self.tube_pass_form_combo = combo
                         self.tube_pass_form_row = row
@@ -2907,6 +2931,21 @@ class TubeLayoutEditor(QMainWindow):
 
                             # 加载图片到下拉框
                             self.load_tube_pass_images(combo, tube_pass)
+
+                            # 设置初始选中的图片
+                            # 遍历下拉框项，找到与初始值匹配的项并选中
+                            for i in range(combo.count()):
+                                # 假设每个项的data存储了对应的数值（如"2"、"4.1"）
+                                item_data = combo.itemData(i)
+                                if item_data == initial_tube_pattern:
+                                    combo.setCurrentIndex(i)
+                                    break
+                            else:
+                                # 如果没有找到匹配项，尝试根据文本匹配
+                                index = combo.findText(initial_tube_pattern)
+                                if index >= 0:
+                                    combo.setCurrentIndex(index)
+
                             # 绑定选择变化事件，更新参数值
                             combo.currentIndexChanged.connect(self.on_tube_pass_form_changed)
 
@@ -3507,7 +3546,7 @@ class TubeLayoutEditor(QMainWindow):
             "滑道与竖直中心线夹角": None,
             "切边长度 L1": None,
             "切边高度 h": None,
-            "管程分程形式": None  # 添加管程分程形式参数
+            "管程分程形式": None
         }
 
         for data in tube_data:
