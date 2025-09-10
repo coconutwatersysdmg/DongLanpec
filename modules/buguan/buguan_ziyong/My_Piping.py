@@ -996,7 +996,7 @@ class TubeLayoutEditor(QMainWindow):
             "旁路挡板厚度", "防冲板形式", "防冲板厚度", "防冲板折边角度",
             "与圆筒焊接折边式防冲板宽度", "与圆筒焊接折边式防冲板方位角",
             "与圆筒焊接折边式防冲板至圆筒内壁最大距离", "切边长度L1",
-            "切边高度 h", "拉杆直径", "中间挡板厚度"
+            "切边高度 h", "中间挡板厚度"
         ]
 
         # 标志位，标记是否成功从产品设计活动库加载参数
@@ -3545,7 +3545,6 @@ class TubeLayoutEditor(QMainWindow):
             "换热管外径 do": "换热管外径",
             "中间挡板厚度": "中间挡板厚度",
             "拉杆形式": "拉杆型式",
-            # “拉杆直径”单独在后面也会写（含 self.output_data['TieRodD'] 的场景）
             "拉杆直径": "拉杆规格",
             "旁路挡板厚度": "旁路挡板厚度",
             "防冲板形式": "防冲板形式",
@@ -6045,20 +6044,17 @@ class TubeLayoutEditor(QMainWindow):
 
     # 拉杆功能
     def on_lagan_click(self):
-        """拉杆点击事件 - 添加参数输入弹窗"""
+        """拉杆点击事件 - 直接调用build_lagan方法"""
         # 修正导入语句，QPointF来自QtCore
-        from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QMessageBox, \
-            QComboBox, QTableWidgetItem, QGraphicsEllipseItem
+        from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QGraphicsEllipseItem
         from PyQt5.QtCore import QPointF
 
-        # 查找参数表中拉杆直径的行和当前值
-        param_row = -1
-        default_diameter = 12.0  # 默认直径
+        # 查找参数表中拉杆直径的当前值
+        rod_diameter = 12.0  # 默认直径
         row_count = self.param_table.rowCount()
         for row in range(row_count):
             name_item = self.param_table.item(row, 1)
             if name_item and name_item.text() == "拉杆直径":
-                param_row = row
                 # 显示该参数行
                 self.param_table.setRowHidden(row, False)
                 # 获取当前值
@@ -6069,126 +6065,54 @@ class TubeLayoutEditor(QMainWindow):
                     value_item = self.param_table.item(row, 2)
                     value_text = value_item.text() if value_item else ""
                 try:
-                    default_diameter = float(value_text)
+                    rod_diameter = float(value_text)
                 except:
                     pass
                 break
 
-        # 创建弹窗
-        dialog = QDialog(self)
-        dialog.setWindowTitle("拉杆参数设置")
-        dialog.setModal(True)  # 模态窗口，阻止其他操作
+        # 更新输出数据中的拉杆直径
+        if hasattr(self, 'output_data') and isinstance(self.output_data, dict):
+            self.output_data['TieRodD'] = str(rod_diameter)
 
-        # 布局
-        layout = QVBoxLayout(dialog)
+        # 检查是否选中了小圆
+        if not hasattr(self, 'selected_centers') or not self.selected_centers:
+            QMessageBox.warning(self, "未选中", "请先选中至少一个小圆")
+            return
 
-        # 直径输入
-        diameter_layout = QHBoxLayout()
-        diameter_label = QLabel("拉杆直径:")
-        self.diameter_input = QLineEdit(str(default_diameter))
-        diameter_layout.addWidget(diameter_label)
-        diameter_layout.addWidget(self.diameter_input)
-        layout.addLayout(diameter_layout)
+        # 处理对称性
+        if self.isSymmetry:
+            selected_centers = self.judge_linkage(self.selected_centers)
+        else:
+            selected_centers = self.selected_centers
 
-        # 按钮布局
-        btn_layout = QHBoxLayout()
-        self.confirm_btn = QPushButton("确定")
-        self.close_btn = QPushButton("关闭")
-        btn_layout.addWidget(self.confirm_btn)
-        btn_layout.addWidget(self.close_btn)
-        layout.addLayout(btn_layout)
+        # 直接调用build_lagan方法
+        updated_centers = self.build_lagan(selected_centers)
 
-        def update_param_table(diameter_value):
-            """更新参数表中的拉杆直径值"""
-            if param_row != -1:
-                cell_widget = self.param_table.cellWidget(param_row, 2)
-                if isinstance(cell_widget, QComboBox):
-                    # 如果是下拉框，尝试找到匹配项
-                    index = cell_widget.findText(str(diameter_value))
-                    if index >= 0:
-                        cell_widget.setCurrentIndex(index)
-                    else:
-                        # 找不到则添加并选中
-                        cell_widget.addItem(str(diameter_value))
-                        cell_widget.setCurrentText(str(diameter_value))
+        # 更新当前中心点
+        self.current_centers = updated_centers
+
+        # 清除选中状态及淡蓝色涂层
+        if hasattr(self, 'selected_centers') and self.selected_centers:
+            for row_label, col_label in self.selected_centers:
+                row_idx = abs(row_label) - 1
+                col_idx = abs(col_label) - 1
+
+                # 选择对应分组的圆心列表
+                if row_label > 0:
+                    centers_group = self.full_sorted_current_centers_up
                 else:
-                    # 如果是普通单元格，直接设置文本
-                    item = self.param_table.item(param_row, 2)
-                    if item:
-                        item.setText(str(diameter_value))
-                    else:
-                        self.param_table.setItem(param_row, 2, QTableWidgetItem(str(diameter_value)))
+                    centers_group = self.full_sorted_current_centers_down
 
-        # 确定按钮点击事件
-        def on_confirm():
-            # 获取输入的直径值
-            try:
-                rod_diameter = float(self.diameter_input.text())
-                if rod_diameter <= 0:
-                    QMessageBox.warning(dialog, "输入错误", "拉杆直径必须大于0")
-                    return
-            except ValueError:
-                QMessageBox.warning(dialog, "输入错误", "请输入有效的数字")
-                return
+                if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
+                    x, y = centers_group[row_idx][col_idx]
+                    # 擦除淡蓝色选中涂层
+                    click_point = QPointF(x, y)
+                    for item in self.graphics_scene.items(click_point):
+                        if isinstance(item, QGraphicsEllipseItem):
+                            self.graphics_scene.removeItem(item)
+                            break
 
-            update_param_table(rod_diameter)
-
-            if hasattr(self, 'output_data') and isinstance(self.output_data, dict):
-                self.output_data['TieRodD'] = str(rod_diameter)
-
-            if not hasattr(self, 'selected_centers') or not self.selected_centers:
-                QMessageBox.warning(self, "未选中", "请先选中至少一个小圆")
-                return
-
-            if self.isSymmetry:
-                selected_centers = self.judge_linkage(self.selected_centers)
-            else:
-                selected_centers = self.selected_centers
-
-            updated_centers = self.build_lagan(selected_centers)
-
-            # 自动关闭弹窗
-            dialog.close()
-
-            # 更新当前中心点
-            self.current_centers = updated_centers
-
-            # 清除选中状态及淡蓝色涂层
-            if hasattr(self, 'selected_centers') and self.selected_centers:
-                for row_label, col_label in self.selected_centers:
-                    row_idx = abs(row_label) - 1
-                    col_idx = abs(col_label) - 1
-
-                    # 选择对应分组的圆心列表
-                    if row_label > 0:
-                        centers_group = self.full_sorted_current_centers_up
-                    else:
-                        centers_group = self.full_sorted_current_centers_down
-
-                    if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
-                        x, y = centers_group[row_idx][col_idx]
-                        # 擦除淡蓝色选中涂层
-                        click_point = QPointF(x, y)
-                        for item in self.graphics_scene.items(click_point):
-                            if isinstance(item, QGraphicsEllipseItem):
-                                self.graphics_scene.removeItem(item)
-                                break
-
-                self.selected_centers.clear()
-
-        def on_close():
-            # 保存输入的值到参数表（关闭时也更新）
-            try:
-                diameter = float(self.diameter_input.text())
-                if diameter > 0:
-                    update_param_table(diameter)
-            except ValueError:
-                pass  # 输入无效则不更新
-            dialog.close()
-
-        self.confirm_btn.clicked.connect(on_confirm)
-        self.close_btn.clicked.connect(on_close)
-        dialog.exec_()
+            self.selected_centers.clear()
 
     def build_lagan(self, selected_centers):
         if not selected_centers:
