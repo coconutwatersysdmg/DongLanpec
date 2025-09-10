@@ -8593,12 +8593,6 @@ class TubeLayoutEditor(QMainWindow):
             "至圆筒内壁距离"
         ]
 
-        # row_count = self.param_table.rowCount()
-        # for row in range(row_count):
-        #     name_item = self.param_table.item(row, 1)
-        #     if name_item and name_item.text() in slide_params:
-        #         self.param_table.setRowHidden(row, False)
-
         # 创建参数输入弹窗
         class BaffleParamDialog(QDialog):
             def __init__(self, parent, initial_params):
@@ -8689,25 +8683,58 @@ class TubeLayoutEditor(QMainWindow):
                 button_layout.addWidget(self.close_btn)
                 layout.addLayout(button_layout)
 
+                # 初始设置：同步更新折边角度、宽度、方位角、内壁距离的编辑状态
+                current_baffle_type = baffle_type_combo.currentText()
+                self.update_angle_edit_state(current_baffle_type)
+                self.update_special_params_state(current_baffle_type)
+
+                # 连接信号：防冲板形式改变时，同步更新所有关联参数的编辑状态
+                baffle_type_combo.currentTextChanged.connect(self.update_angle_edit_state)
+                baffle_type_combo.currentTextChanged.connect(self.update_special_params_state)
+
                 # 连接按钮信号
                 self.ok_btn.clicked.connect(self.accept)
                 self.close_btn.clicked.connect(self.reject)
 
+            def update_angle_edit_state(self, baffle_type):
+                """根据防冲板形式更新折边角度的编辑状态（原有逻辑保留）"""
+                angle_edit = self.param_widgets["防冲板折边角度"]
+                if baffle_type == "平板形":
+                    angle_edit.setEnabled(False)  # 禁用编辑
+                    angle_edit.setStyleSheet("background-color: #f0f0f0; color: #808080;")  # 灰色背景和文字
+                else:
+                    angle_edit.setEnabled(True)  # 启用编辑
+                    angle_edit.setStyleSheet("")  # 恢复默认样式
+
+            def update_special_params_state(self, baffle_type):
+                """新增：根据防冲板形式更新宽度、方位角、至圆筒内壁距离的编辑状态"""
+                # 定义需要控制的参数名称列表
+                special_params = ["防冲板宽度", "防冲板方位角", "至圆筒内壁距离"]
+                # 判定条件：当形式为平板形或圆弧形时，禁用参数
+                if baffle_type in ["平板形", "圆弧形"]:
+                    for param_name in special_params:
+                        widget = self.param_widgets[param_name]
+                        widget.setEnabled(False)
+                        widget.setStyleSheet("background-color: #f0f0f0; color: #808080;")  # 灰显样式
+                else:
+                    # 其他形式（如焊接式）时，恢复可编辑状态
+                    for param_name in special_params:
+                        widget = self.param_widgets[param_name]
+                        widget.setEnabled(True)
+                        widget.setStyleSheet("")  # 清除灰显样式
+
             def get_params(self):
-                """获取弹窗中的参数值"""
+                """获取弹窗中的参数值（原有逻辑保留）"""
                 return {
                     "防冲板形式": self.param_widgets["防冲板形式"].currentText(),
                     "防冲板厚度": self.param_widgets["防冲板厚度"].toPlainText().strip(),
                     "防冲板折边角度": self.param_widgets["防冲板折边角度"].toPlainText().strip(),
-                    "防冲板宽度": self.param_widgets[
-                        "防冲板宽度"].toPlainText().strip(),
-                    "防冲板方位角": self.param_widgets[
-                        "防冲板方位角"].toPlainText().strip(),
-                    "至圆筒内壁距离": self.param_widgets[
-                        "至圆筒内壁距离"].toPlainText().strip()
+                    "防冲板宽度": self.param_widgets["防冲板宽度"].toPlainText().strip(),
+                    "防冲板方位角": self.param_widgets["防冲板方位角"].toPlainText().strip(),
+                    "至圆筒内壁距离": self.param_widgets["至圆筒内壁距离"].toPlainText().strip()
                 }
 
-        # 从左侧参数表获取初始参数
+        # 从左侧参数表获取初始参数（原有逻辑保留）
         initial_params = {}
         for row in range(self.param_table.rowCount()):
             param_name_item = self.param_table.item(row, 1)
@@ -8723,65 +8750,64 @@ class TubeLayoutEditor(QMainWindow):
                     param_value = value_item.text() if value_item else ""
                 initial_params[param_name] = param_value
 
-        # 显示弹窗
+        # 显示弹窗（原有逻辑保留）
         dialog = BaffleParamDialog(self, initial_params)
         result = dialog.exec_()
 
-        # 处理弹窗关闭逻辑
+        # 处理弹窗关闭逻辑（原有逻辑保留）
         if result == QDialog.Rejected:
-            final_params = dialog.get_params()
-            for row in range(self.param_table.rowCount()):
-                param_name_item = self.param_table.item(row, 1)
-                if not param_name_item:
-                    continue
-                param_name = param_name_item.text()
-                if param_name in final_params:
-                    cell_widget = self.param_table.cellWidget(row, 2)
-                    if isinstance(cell_widget, QComboBox):
-                        cell_widget.setCurrentText(final_params[param_name])
-                    else:
-                        value_item = self.param_table.item(row, 2)
-                        if value_item:
-                            value_item.setText(final_params[param_name])
-                        else:
-                            self.param_table.setItem(row, 2, QTableWidgetItem(final_params[param_name]))
+            # 用户点击关闭按钮，不做任何操作
             return
 
-        # 获取弹窗参数并解析
+        # 获取弹窗参数并解析（原有逻辑保留）
         current_params = dialog.get_params()
         baffle_type = current_params["防冲板形式"]
 
-        # 解析防冲板参数（转换为数值类型）
+        # 解析防冲板参数（转换为数值类型）（原有逻辑保留）
         try:
             baffle_thickness = float(current_params["防冲板厚度"]) if current_params["防冲板厚度"] else None
         except ValueError:
             QMessageBox.warning(self, "参数错误", "防冲板厚度必须为数值")
             return
         try:
+            # 即使防冲板形式为平板形，也读取折边角度的值
             baffle_angle = float(current_params["防冲板折边角度"]) if current_params["防冲板折边角度"] else None
         except ValueError:
-            QMessageBox.warning(self, "参数错误", "防冲板折边角度必须为数值")
-            return
+            # 如果是平板形，折边角度可以为空或任意值（因为不会使用）
+            if baffle_type != "平板形":
+                QMessageBox.warning(self, "参数错误", "防冲板折边角度必须为数值")
+                return
+            else:
+                baffle_angle = None  # 平板形时折边角度设为None
         try:
-            baffle_width = float(current_params["防冲板宽度"]) if current_params[
-                "防冲板宽度"] else None
+            baffle_width = float(current_params["防冲板宽度"]) if current_params["防冲板宽度"] else None
         except ValueError:
-            QMessageBox.warning(self, "参数错误", "防冲板宽度必须为数值")
-            return
+            # 新增判定：仅当参数可编辑时（即形式为焊接式），才校验数值有效性
+            if baffle_type == "焊接式":
+                QMessageBox.warning(self, "参数错误", "防冲板宽度必须为数值")
+                return
+            else:
+                baffle_width = None  # 禁用状态时设为None（避免后续使用错误）
         try:
-            baffle_azimuth = float(current_params["防冲板方位角"]) if current_params[
-                "防冲板方位角"] else None
+            baffle_azimuth = float(current_params["防冲板方位角"]) if current_params["防冲板方位角"] else None
         except ValueError:
-            QMessageBox.warning(self, "参数错误", "防冲板方位角必须为数值")
-            return
+            # 新增判定：仅当参数可编辑时（即形式为焊接式），才校验数值有效性
+            if baffle_type == "焊接式":
+                QMessageBox.warning(self, "参数错误", "防冲板方位角必须为数值")
+                return
+            else:
+                baffle_azimuth = None  # 禁用状态时设为None（避免后续使用错误）
         try:
-            baffle_distance = float(current_params["至圆筒内壁距离"]) if current_params[
-                "至圆筒内壁距离"] else None
+            baffle_distance = float(current_params["至圆筒内壁距离"]) if current_params["至圆筒内壁距离"] else None
         except ValueError:
-            QMessageBox.warning(self, "参数错误", "至圆筒内壁距离必须为数值")
-            return
+            # 新增判定：仅当参数可编辑时（即形式为焊接式），才校验数值有效性
+            if baffle_type == "焊接式":
+                QMessageBox.warning(self, "参数错误", "至圆筒内壁距离必须为数值")
+                return
+            else:
+                baffle_distance = None  # 禁用状态时设为None（避免后续使用错误）
 
-        # 获取换热管相关参数（传递给构建函数）
+        # 获取换热管相关参数（传递给构建函数）（原有逻辑保留）
         tube_outer_diameter = None
         tube_pitch = None
         for row in range(self.param_table.rowCount()):
@@ -8808,7 +8834,7 @@ class TubeLayoutEditor(QMainWindow):
                     QMessageBox.warning(self, "参数错误", "换热管中心距 S 必须为数值")
                     return
 
-        # 调用防冲板构建函数
+        # 调用防冲板构建函数（原有逻辑保留）
         self.build_impingement_plate(
             selected_centers=self.selected_centers if hasattr(self, 'selected_centers') else None,
             baffle_type=baffle_type,
@@ -8821,7 +8847,7 @@ class TubeLayoutEditor(QMainWindow):
             tube_pitch=tube_pitch
         )
 
-        # 更新参数表
+        # 更新参数表（原有逻辑保留）
         for row in range(self.param_table.rowCount()):
             param_name_item = self.param_table.item(row, 1)
             if not param_name_item:
