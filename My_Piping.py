@@ -877,8 +877,8 @@ class TubeLayoutEditor(QMainWindow):
         hidden_params = [
             "滑道定位", "滑道高度", "滑道厚度", "滑道与竖直中心线夹角",
             "旁路挡板厚度", "防冲板形式", "防冲板厚度", "防冲板折边角度",
-            "与圆筒焊接折边式防冲板宽度", "与圆筒焊接折边式防冲板方位角",
-            "与圆筒焊接折边式防冲板至圆筒内壁最大距离", "切边长度L1",
+            "防冲板宽度", "防冲板方位角",
+            "至圆筒内壁距离", "切边长度L1",
             "切边高度 h", "拉杆直径"
         ]
 
@@ -1401,7 +1401,7 @@ class TubeLayoutEditor(QMainWindow):
                         pair = [centers_list[i], centers_list[i + 1]]
                         if isinstance(pair, list) and len(pair) == 2:
                             self.build_impingement_plate(
-                                pair, "与定距管/拉杆焊接平板式",
+                                pair, "平板形",
                                 baffle_thickness, baffle_angle,
                                 0, 0, 0, tube_outer_diameter, tube_pitch
                             )
@@ -1428,7 +1428,7 @@ class TubeLayoutEditor(QMainWindow):
                         pair = [centers_list[i], centers_list[i + 1]]
                         if isinstance(pair, list) and len(pair) == 2:
                             self.build_impingement_plate(
-                                pair, "与定距管/拉杆焊接折边式",
+                                pair, "圆弧形",
                                 baffle_thickness, baffle_angle,
                                 0, 0, 0, tube_outer_diameter, tube_pitch
                             )
@@ -1660,9 +1660,9 @@ class TubeLayoutEditor(QMainWindow):
             "防冲板形式": None,
             "防冲板厚度": None,
             "防冲板折边角度": None,
-            "与圆筒焊接折边式防冲板宽度": None,
-            "与圆筒焊接折边式防冲板方位角": None,
-            "与圆筒焊接折边式防冲板至圆筒内壁最大距离": None
+            "防冲板宽度": None,
+            "防冲板方位角": None,
+            "至圆筒内壁距离": None
         }
 
         # 1. 初始化参数并记录行索引
@@ -1675,12 +1675,12 @@ class TubeLayoutEditor(QMainWindow):
                 if param_name == "防冲板形式":
                     combo = QComboBox()
                     combo.addItems([
-                        "与定距管/拉杆焊接平板式",
-                        "与定距管/拉杆焊接折边式",
-                        "与圆筒焊接折边式"
+                        "平板形",
+                        "圆弧形",
+                        "焊接式"
                     ])
                     # 设置默认值，现在为了方便搞成了折边式，记得改回平板式
-                    default_val = "与定距管/拉杆焊接折边式"
+                    default_val = "圆弧形"
                     combo.setCurrentText(default_val if default_val in [combo.itemText(i) for i in
                                                                         range(combo.count())] else combo.itemText(0))
                     self.param_table.setCellWidget(row, 2, combo)
@@ -1705,24 +1705,24 @@ class TubeLayoutEditor(QMainWindow):
                 if item:
                     item.textChanged.connect(lambda: self.validate_baffle_parameter("防冲板折边角度"))
 
-            elif param_name == "与圆筒焊接折边式防冲板宽度":
+            elif param_name == "防冲板宽度":
                 self._original_values[(row, 2)] = param['参数值']
                 item = self.param_table.item(row, 2)
                 if item:
-                    item.textChanged.connect(lambda: self.validate_baffle_parameter("与圆筒焊接折边式防冲板宽度"))
+                    item.textChanged.connect(lambda: self.validate_baffle_parameter("防冲板宽度"))
 
-            elif param_name == "与圆筒焊接折边式防冲板方位角":
+            elif param_name == "防冲板方位角":
                 self._original_values[(row, 2)] = param['参数值']
                 item = self.param_table.item(row, 2)
                 if item:
-                    item.textChanged.connect(lambda: self.validate_baffle_parameter("与圆筒焊接折边式防冲板方位角"))
+                    item.textChanged.connect(lambda: self.validate_baffle_parameter("防冲板方位角"))
 
-            elif param_name == "与圆筒焊接折边式防冲板至圆筒内壁最大距离":
+            elif param_name == "至圆筒内壁距离":
                 self._original_values[(row, 2)] = param['参数值']
                 item = self.param_table.item(row, 2)
                 if item:
                     item.textChanged.connect(
-                        lambda: self.validate_baffle_parameter("与圆筒焊接折边式防冲板至圆筒内壁最大距离"))
+                        lambda: self.validate_baffle_parameter("至圆筒内壁距离"))
 
         # 初始化时触发一次显示控制
         # 关键修复：获取当前选中索引并传递
@@ -1737,9 +1737,9 @@ class TubeLayoutEditor(QMainWindow):
         baffle_type_row = self.baffle_param_rows["防冲板形式"]
         thickness_row = self.baffle_param_rows["防冲板厚度"]
         angle_row = self.baffle_param_rows["防冲板折边角度"]
-        width_row = self.baffle_param_rows["与圆筒焊接折边式防冲板宽度"]
-        angle_pos_row = self.baffle_param_rows["与圆筒焊接折边式防冲板方位角"]
-        distance_row = self.baffle_param_rows["与圆筒焊接折边式防冲板至圆筒内壁最大距离"]
+        width_row = self.baffle_param_rows["防冲板宽度"]
+        angle_pos_row = self.baffle_param_rows["防冲板方位角"]
+        distance_row = self.baffle_param_rows["至圆筒内壁距离"]
 
         # 获取下拉框并打印当前文本
         combo = self.param_table.cellWidget(baffle_type_row, 2)
@@ -1756,21 +1756,21 @@ class TubeLayoutEditor(QMainWindow):
             QMessageBox.warning(self, "配置错误", "'防冲板形式'参数的单元格类型不是下拉框")
             return
 
-        if current_type == "与定距管/拉杆焊接平板式":
+        if current_type == "平板形":
             self.set_param_visibility(thickness_row, True)
             self.set_param_visibility(angle_row, False)
             self.set_param_visibility(width_row, False)
             self.set_param_visibility(angle_pos_row, False)
             self.set_param_visibility(distance_row, False)
 
-        elif current_type == "与定距管/拉杆焊接折边式":
+        elif current_type == "圆弧形":
             self.set_param_visibility(thickness_row, True)
             self.set_param_visibility(angle_row, True)
             self.set_param_visibility(width_row, False)
             self.set_param_visibility(angle_pos_row, False)
             self.set_param_visibility(distance_row, False)
 
-        elif current_type == "与圆筒焊接折边式":
+        elif current_type == "焊接式":
             self.set_param_visibility(thickness_row, True)
             self.set_param_visibility(angle_row, True)
             self.set_param_visibility(width_row, True)
@@ -1844,7 +1844,7 @@ class TubeLayoutEditor(QMainWindow):
                     QMessageBox.warning(self, "输入错误", f"您输入的“{param_name}”必须在30°到90°之间，请核对后重新输入！")
                     item.setText(original_value)
 
-            elif param_name == "与圆筒焊接折边式防冲板宽度":
+            elif param_name == "防冲板宽度":
                 # 获取折流板外径
                 baffle_diameter = self.get_baffle_diameter()
                 if baffle_diameter is not None and (value <= 0 or value >= baffle_diameter):
@@ -1852,12 +1852,12 @@ class TubeLayoutEditor(QMainWindow):
                                         f"您输入的“{param_name}”必须大于0且小于折流板外径，请核对后重新输入！")
                     item.setText(original_value)
 
-            elif param_name == "与圆筒焊接折边式防冲板方位角":
+            elif param_name == "防冲板方位角":
                 if not (0 <= value < 360):
                     QMessageBox.warning(self, "输入错误", f"您输入的“{param_name}”必须在0°到360°之间，请核对后重新输入！")
                     item.setText(original_value)
 
-            elif param_name == "与圆筒焊接折边式防冲板至圆筒内壁最大距离":
+            elif param_name == "至圆筒内壁距离":
                 # 获取折流板外径
                 baffle_diameter = self.get_baffle_diameter()
                 if baffle_diameter is not None and (value <= 0 or value >= baffle_diameter / 2):
@@ -2393,7 +2393,7 @@ class TubeLayoutEditor(QMainWindow):
                     )
 
                 elif param['参数名'] == "防冲板形式":
-                    combo.addItems(["与定距管/拉杆焊接平板式", "与定距管/拉杆焊接折边式", "与圆筒焊接折边式"])
+                    combo.addItems(["平板形", "圆弧形", "焊接式"])
                 elif param['参数名'] == "换热管外径 do":
                     combo.addItems(["10", "12", "14", "16", "19", "25", "30", "32", "35", "38", "45", "50", "55", "57"])
                     # 绑定变更事件
@@ -6658,9 +6658,9 @@ class TubeLayoutEditor(QMainWindow):
             "防冲板形式",
             "防冲板厚度",
             "防冲板折边角度",
-            "与圆筒焊接折边式防冲板宽度",
-            "与圆筒焊接折边式防冲板方位角",
-            "与圆筒焊接折边式防冲板至圆筒内壁最大距离"
+            "防冲板宽度",
+            "防冲板方位角",
+            "至圆筒内壁距离"
         ]
 
         # row_count = self.param_table.rowCount()
@@ -6689,9 +6689,9 @@ class TubeLayoutEditor(QMainWindow):
                 form_layout.addWidget(QLabel("防冲板形式:"), row_idx, 0)
                 baffle_type_combo = QComboBox()
                 baffle_types = [
-                    "与定距管/拉杆焊接平板式",
-                    "与定距管/拉杆焊接折边式",
-                    "与圆筒焊接折边式"
+                    "平板形",
+                    "圆弧形",
+                    "焊接式"
                 ]
                 baffle_type_combo.addItems(baffle_types)
                 baffle_type_combo.setCurrentText(self.params.get("防冲板形式", baffle_types[0]))
@@ -6719,32 +6719,32 @@ class TubeLayoutEditor(QMainWindow):
                 form_layout.addWidget(QLabel("°"), row_idx, 2)
                 row_idx += 1
 
-                # 与圆筒焊接折边式防冲板宽度
+                # 防冲板宽度
                 form_layout.addWidget(QLabel("防冲板宽度:"), row_idx, 0)
                 width_edit = QTextEdit()
                 width_edit.setFixedHeight(30)
-                width_edit.setText(str(self.params.get("与圆筒焊接折边式防冲板宽度", "")))
-                self.param_widgets["与圆筒焊接折边式防冲板宽度"] = width_edit
+                width_edit.setText(str(self.params.get("防冲板宽度", "")))
+                self.param_widgets["防冲板宽度"] = width_edit
                 form_layout.addWidget(width_edit, row_idx, 1)
                 form_layout.addWidget(QLabel("mm"), row_idx, 2)
                 row_idx += 1
 
-                # 与圆筒焊接折边式防冲板方位角
+                # 防冲板方位角
                 form_layout.addWidget(QLabel("防冲板方位角:"), row_idx, 0)
                 azimuth_edit = QTextEdit()
                 azimuth_edit.setFixedHeight(30)
-                azimuth_edit.setText(str(self.params.get("与圆筒焊接折边式防冲板方位角", "")))
-                self.param_widgets["与圆筒焊接折边式防冲板方位角"] = azimuth_edit
+                azimuth_edit.setText(str(self.params.get("防冲板方位角", "")))
+                self.param_widgets["防冲板方位角"] = azimuth_edit
                 form_layout.addWidget(azimuth_edit, row_idx, 1)
                 form_layout.addWidget(QLabel("°"), row_idx, 2)
                 row_idx += 1
 
-                # 与圆筒焊接折边式防冲板至圆筒内壁最大距离
+                # 至圆筒内壁距离
                 form_layout.addWidget(QLabel("至圆筒内壁距离:"), row_idx, 0)
                 distance_edit = QTextEdit()
                 distance_edit.setFixedHeight(30)
-                distance_edit.setText(str(self.params.get("与圆筒焊接折边式防冲板至圆筒内壁最大距离", "")))
-                self.param_widgets["与圆筒焊接折边式防冲板至圆筒内壁最大距离"] = distance_edit
+                distance_edit.setText(str(self.params.get("至圆筒内壁距离", "")))
+                self.param_widgets["至圆筒内壁距离"] = distance_edit
                 form_layout.addWidget(distance_edit, row_idx, 1)
                 form_layout.addWidget(QLabel("mm"), row_idx, 2)
                 row_idx += 1
@@ -6769,12 +6769,12 @@ class TubeLayoutEditor(QMainWindow):
                     "防冲板形式": self.param_widgets["防冲板形式"].currentText(),
                     "防冲板厚度": self.param_widgets["防冲板厚度"].toPlainText().strip(),
                     "防冲板折边角度": self.param_widgets["防冲板折边角度"].toPlainText().strip(),
-                    "与圆筒焊接折边式防冲板宽度": self.param_widgets[
-                        "与圆筒焊接折边式防冲板宽度"].toPlainText().strip(),
-                    "与圆筒焊接折边式防冲板方位角": self.param_widgets[
-                        "与圆筒焊接折边式防冲板方位角"].toPlainText().strip(),
-                    "与圆筒焊接折边式防冲板至圆筒内壁最大距离": self.param_widgets[
-                        "与圆筒焊接折边式防冲板至圆筒内壁最大距离"].toPlainText().strip()
+                    "防冲板宽度": self.param_widgets[
+                        "防冲板宽度"].toPlainText().strip(),
+                    "防冲板方位角": self.param_widgets[
+                        "防冲板方位角"].toPlainText().strip(),
+                    "至圆筒内壁距离": self.param_widgets[
+                        "至圆筒内壁距离"].toPlainText().strip()
                 }
 
         # 从左侧参数表获取初始参数
@@ -6833,20 +6833,20 @@ class TubeLayoutEditor(QMainWindow):
             QMessageBox.warning(self, "参数错误", "防冲板折边角度必须为数值")
             return
         try:
-            baffle_width = float(current_params["与圆筒焊接折边式防冲板宽度"]) if current_params[
-                "与圆筒焊接折边式防冲板宽度"] else None
+            baffle_width = float(current_params["防冲板宽度"]) if current_params[
+                "防冲板宽度"] else None
         except ValueError:
             QMessageBox.warning(self, "参数错误", "防冲板宽度必须为数值")
             return
         try:
-            baffle_azimuth = float(current_params["与圆筒焊接折边式防冲板方位角"]) if current_params[
-                "与圆筒焊接折边式防冲板方位角"] else None
+            baffle_azimuth = float(current_params["防冲板方位角"]) if current_params[
+                "防冲板方位角"] else None
         except ValueError:
             QMessageBox.warning(self, "参数错误", "防冲板方位角必须为数值")
             return
         try:
-            baffle_distance = float(current_params["与圆筒焊接折边式防冲板至圆筒内壁最大距离"]) if current_params[
-                "与圆筒焊接折边式防冲板至圆筒内壁最大距离"] else None
+            baffle_distance = float(current_params["至圆筒内壁距离"]) if current_params[
+                "至圆筒内壁距离"] else None
         except ValueError:
             QMessageBox.warning(self, "参数错误", "至圆筒内壁距离必须为数值")
             return
@@ -6926,7 +6926,7 @@ class TubeLayoutEditor(QMainWindow):
             self.baffle_items = []
 
         # 处理不同类型的防冲板
-        if baffle_type == "与定距管/拉杆焊接平板式":
+        if baffle_type == "平板形":
             # 解析选中的中心点
             selected_centers_list = []
             if isinstance(selected_centers, list):
@@ -7030,7 +7030,7 @@ class TubeLayoutEditor(QMainWindow):
             baffle_item.setPen(pen)
             # 不设置刷子，保持线条效果而非填充效果
             baffle_item.original_pen = pen
-            baffle_item.baffle_type = "与定距管/拉杆焊接平板式"
+            baffle_item.baffle_type = "平板形"
             baffle_item.setZValue(5)
 
             # 存储防冲板信息
@@ -7059,7 +7059,7 @@ class TubeLayoutEditor(QMainWindow):
 
             self.selected_centers.clear()
 
-        elif baffle_type == "与定距管/拉杆焊接折边式":
+        elif baffle_type == "圆弧形":
             # 解析选中的中心点
             selected_centers_list = []
             if isinstance(selected_centers, list):
@@ -7196,7 +7196,7 @@ class TubeLayoutEditor(QMainWindow):
             baffle_item.setPen(pen)
             # 不设置刷子，保持线条效果而非填充效果
             baffle_item.original_pen = pen
-            baffle_item.baffle_type = "与定距管/拉杆焊接折边式"
+            baffle_item.baffle_type = "圆弧形"
             baffle_item.setZValue(5)
 
             # 存储防冲板信息
@@ -7232,7 +7232,7 @@ class TubeLayoutEditor(QMainWindow):
 
             self.selected_centers.clear()
 
-        elif baffle_type == "与圆筒焊接折边式":
+        elif baffle_type == "焊接式":
             print("待开发")
             self.selected_centers.clear()
 
