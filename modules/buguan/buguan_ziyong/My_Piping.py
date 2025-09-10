@@ -2347,6 +2347,161 @@ class TubeLayoutEditor(QMainWindow):
         update_row_status(sn_row)  # 处理分程隔板两侧相邻管中心距（竖直）
         update_row_status(lev_row)  # 处理分程隔板两侧相邻管中心距（水平）
 
+    def update_lagan(self):
+        do_row = -1
+        lg_row = -1
+        lg_diameter_row = -1  # 拉杆直径行索引
+        row_count = self.param_table.rowCount()
+
+        for row in range(row_count):
+            param_name_item = self.param_table.item(row, 1)
+            if not param_name_item:
+                continue
+            param_name = param_name_item.text()
+
+            if param_name == "换热管外径 do":
+                do_row = row
+            elif param_name == "拉杆形式":
+                lg_row = row
+            elif param_name == "拉杆直径":
+                lg_diameter_row = row
+
+        # 获取换热管外径 do 的值
+        do_value = None
+        if do_row != -1:
+            do_widget = self.param_table.cellWidget(do_row, 2)
+            if isinstance(do_widget, QComboBox):
+                try:
+                    selected_text = do_widget.currentText()
+                    if selected_text.strip():
+                        do_value = float(selected_text)
+                except ValueError as e:
+                    print(f"换热管外径 do 转换错误: {e}")
+                    return
+            else:
+                do_item = self.param_table.item(do_row, 2)
+                if do_item and do_item.text().strip():
+                    try:
+                        do_value = float(do_item.text())
+                    except ValueError:
+                        print("换热管外径 do 参数值格式错误")
+                        return
+
+        # 获取拉杆形式的值
+        lg_type_value = None
+        if lg_row != -1:
+            lg_widget = self.param_table.cellWidget(lg_row, 2)
+            if isinstance(lg_widget, QComboBox):
+                lg_type_value = lg_widget.currentText()
+            else:
+                lg_item = self.param_table.item(lg_row, 2)
+                if lg_item and lg_item.text().strip():
+                    lg_type_value = lg_item.text()
+
+        # 临时断开信号避免循环触发
+        original_handler = None
+        if hasattr(self, 'handle_param_change'):
+            try:
+                self.param_table.itemChanged.disconnect(self.handle_param_change)
+                original_handler = self.handle_param_change
+            except:
+                pass
+
+        # 根据拉杆形式处理拉杆直径
+        if lg_diameter_row != -1:
+            if lg_type_value == "焊接拉杆":
+                # 焊接拉杆，拉杆直径默认等于换热管外径do，允许手动输入且大于0
+                if do_value is not None:
+                    # 检查当前拉杆直径单元格部件类型
+                    lg_diameter_widget = self.param_table.cellWidget(lg_diameter_row, 2)
+                    if isinstance(lg_diameter_widget, QLineEdit):
+                        # 是输入框，设置默认值
+                        lg_diameter_widget.setText(f"{do_value}")
+                    else:
+                        # 创建输入框并设置默认值
+                        line_edit = QLineEdit()
+                        line_edit.setText(f"{do_value}")
+                        self.param_table.setCellWidget(lg_diameter_row, 2, line_edit)
+                        # 连接信号，检查输入是否大于0
+                        line_edit.textChanged.connect(
+                            lambda text, row=lg_diameter_row: self._check_lg_diameter(text, row))
+            elif lg_type_value == "螺纹拉杆":
+                # 螺纹拉杆，通过下拉框选择，选项为10、12、16、27
+                # 检查当前拉杆直径单元格部件类型
+                lg_diameter_widget = self.param_table.cellWidget(lg_diameter_row, 2)
+                if isinstance(lg_diameter_widget, QComboBox):
+                    # 是下拉框，根据换热管外径选择默认值
+                    default_value = self._get_default_lg_diameter(do_value)
+                    current_index = lg_diameter_widget.findText(str(default_value))
+                    if current_index >= 0:
+                        lg_diameter_widget.setCurrentIndex(current_index)
+                else:
+                    # 创建下拉框并添加选项
+                    combo_box = QComboBox()
+                    combo_box.addItems(["10", "12", "16", "27"])
+                    # 根据换热管外径选择默认值
+                    default_value = self._get_default_lg_diameter(do_value)
+                    current_index = combo_box.findText(str(default_value))
+                    if current_index >= 0:
+                        combo_box.setCurrentIndex(current_index)
+                    self.param_table.setCellWidget(lg_diameter_row, 2, combo_box)
+
+        # 重新连接信号
+        if original_handler:
+            try:
+                self.param_table.itemChanged.connect(original_handler)
+            except:
+                pass
+
+    def _get_default_lg_diameter(self, do_value):
+        # 根据换热管外径确定螺纹拉杆默认直径
+        if do_value is None:
+            return "10"
+        if 10 <= do_value <= 14:
+            return "10"
+        elif 14 < do_value <= 25:
+            return "12"
+        elif 25 < do_value <= 32:
+            return "16"
+        elif 32 < do_value <= 57:
+            return "27"
+        else:
+            return "10"
+
+    def _check_lg_diameter(self, text, row):
+        # 检查拉杆直径是否大于0
+        try:
+            value = float(text)
+            if value <= 0:
+                # 弹出提示或进行其他处理，这里简单打印
+                print("拉杆直径必须大于0")
+                # 恢复为默认值（换热管外径do的值，这里假设能获取到）
+                do_row = -1
+                row_count = self.param_table.rowCount()
+                for r in range(row_count):
+                    param_name_item = self.param_table.item(r, 1)
+                    if param_name_item and param_name_item.text() == "换热管外径 do":
+                        do_row = r
+                        break
+                do_value = None
+                if do_row != -1:
+                    do_widget = self.param_table.cellWidget(do_row, 2)
+                    if isinstance(do_widget, QComboBox):
+                        selected_text = do_widget.currentText()
+                        if selected_text.strip():
+                            do_value = float(selected_text)
+                    else:
+                        do_item = self.param_table.item(do_row, 2)
+                        if do_item and do_item.text().strip():
+                            do_value = float(do_item.text())
+                if do_value is not None:
+                    lg_diameter_widget = self.param_table.cellWidget(row, 2)
+                    if isinstance(lg_diameter_widget, QLineEdit):
+                        lg_diameter_widget.setText(f"{do_value}")
+        except ValueError:
+            print("拉杆直径格式错误，必须为数字")
+            # 同样可恢复为默认值等操作
+
     def update_baffle_diameter(self):
         # 1. 查找参数表中各关键参数的行索引
         di_row = -1
@@ -2357,6 +2512,7 @@ class TubeLayoutEditor(QMainWindow):
         center_distance_row = -1
         sn_vertical_row = -1  # 分程隔板两侧相邻管中心距（竖直）行索引
         sn_horizontal_row = -1  # 分程隔板两侧相邻管中心距（水平）行索引
+        lg_row = -1
         row_count = self.param_table.rowCount()
 
         for row in range(row_count):
@@ -2381,6 +2537,8 @@ class TubeLayoutEditor(QMainWindow):
                 sn_vertical_row = row
             elif param_name == "分程隔板两侧相邻管中心距（水平）":
                 sn_horizontal_row = row
+            elif param_name == "拉杆形式":
+                lg_row = row
 
         # 2. 获取关键参数值
         # 2.1 壳体内直径 Di
@@ -2625,6 +2783,37 @@ class TubeLayoutEditor(QMainWindow):
             if baffle_diameter:
                 self._update_table_cell(baffle_row, 2, baffle_diameter)
 
+        # 5. 更新拉杆形式
+        if lg_row != -1 and do_value is not None:
+            # 获取当前拉杆形式的单元格部件
+            lg_widget = self.param_table.cellWidget(lg_row, 2)
+
+            # 如果单元格是下拉框，则更新选择；否则创建下拉框
+            if isinstance(lg_widget, QComboBox):
+                # 根据换热管外径确定默认选项
+                default_option = "螺纹拉杆" if do_value >= 19 else "焊接拉杆"
+
+                # 设置当前选择
+                current_index = lg_widget.findText(default_option)
+                if current_index >= 0:
+                    lg_widget.setCurrentIndex(current_index)
+            else:
+                # 创建下拉框
+                combo_box = QComboBox()
+                combo_box.addItems(["螺纹拉杆", "焊接拉杆"])
+
+                # 根据换热管外径设置默认选项
+                default_option = "螺纹拉杆" if do_value >= 19 else "焊接拉杆"
+                current_index = combo_box.findText(default_option)
+                if current_index >= 0:
+                    combo_box.setCurrentIndex(current_index)
+
+                # 设置下拉框到单元格
+                self.param_table.setCellWidget(lg_row, 2, combo_box)
+
+                # 连接信号，允许用户手动更改
+                combo_box.currentTextChanged.connect(lambda: self.handle_param_change())
+
     def _update_table_cell(self, row, column, value):
         """安全更新表格单元格的辅助方法"""
         # 临时断开信号避免循环触发
@@ -2821,8 +3010,8 @@ class TubeLayoutEditor(QMainWindow):
             # 处理特殊字段（下拉框）
             special_params = ["是否以外径为基准", "分程布置形式", "换热管排列方式", "滑道定位",
                               "折流板切口方向", "管程分程形式", "防冲板形式", "换热管外径 do", "管程程数",
-                              "换热管布置方式", "换热管公称长度 LN", "换热管公称长度 LN",
-                              "滑道定位", "拉杆形式"]  # 添加重命名后的参数名
+                              "换热管布置方式", "换热管公称长度 LN",
+                              "滑道定位", "拉杆形式", "拉杆直径"]  # 添加重命名后的参数名
 
             if param['参数名'] in special_params:
 
@@ -2907,6 +3096,8 @@ class TubeLayoutEditor(QMainWindow):
                         )
                     elif param['参数名'] == "换热管布置方式":
                         combo.addItems(["对中", "跨中", "任意"])
+                    elif param['参数名'] == "拉杆直径":
+                        combo.addItems(["10", "12", "16", "27"])
                     elif param['参数名'] == "管程分程形式":
                         # 打印管程分程形式的信息
                         print(self.tube_pass_partition)
@@ -3035,7 +3226,7 @@ class TubeLayoutEditor(QMainWindow):
                 target_params = [
                     "非布管区域弦高（0°/180°）", "非布管区域弦高（90°/270°）",
                     "壳体内直径 Di", "换热管外径 do",
-                    "折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)", "管程程数"
+                    "折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)", "管程程数", "拉杆形式"
                 ]
                 if param['参数名'] in target_params:
                     # 保存原始值（字符串形式）
@@ -3053,6 +3244,8 @@ class TubeLayoutEditor(QMainWindow):
                                     self.update_baffle_diameter()
                                 if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)"]:
                                     self.update_baffle_parameters(param_name)
+                                if param_name in ["拉杆形式"]:
+                                    self.update_lagan()
                                 if param_name == "管程程数":
                                     # 当管程程数变化时，更新管程分程形式的图片
                                     self.update_SN()
