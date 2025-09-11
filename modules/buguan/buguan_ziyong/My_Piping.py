@@ -1910,9 +1910,9 @@ class TubeLayoutEditor(QMainWindow):
 
             # 如果找到按钮，根据产品型式设置可用状态
             if cross_pipe_btn is not None:
-                if product_type_str == 'BES':
+                if product_type_str == 'BES' or product_type_str == 'AES':
                     cross_pipe_btn.setEnabled(False)  # BES 产品禁用按钮
-                    cross_pipe_btn.setToolTip("BES 产品不支持交叉布管功能")  # 可选：添加提示
+                    cross_pipe_btn.setToolTip("浮头式产品不支持交叉布管功能")  # 可选：添加提示
                 else:
                     cross_pipe_btn.setEnabled(True)  # 其他产品启用按钮
                     cross_pipe_btn.setToolTip("")  # 清除提示
@@ -4045,9 +4045,9 @@ class TubeLayoutEditor(QMainWindow):
         return [query_sql, delete_sql, insert_sql]
 
     def build_sql_for_tube_form(self):
-        if not self.tube_form_data:
-            QMessageBox.warning(self, "警告", "缺少必要的参数信息！")
-            return None
+        # if not self.tube_form_data:
+        #     QMessageBox.warning(self, "警告", "缺少必要的参数信息！")
+        #     return None
 
         table_name = "`产品设计活动表_管板形式表`"
 
