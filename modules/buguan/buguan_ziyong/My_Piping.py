@@ -2855,14 +2855,20 @@ class TubeLayoutEditor(QMainWindow):
         根据参数变化更新折流板相关参数的联动关系
         :param changed_param_name: 发生变化的参数名称
         """
-        # 查找三个参数在表格中的行索引和当前值
-        baffle_diameter_row = None
-        cut_spacing_row = None
-        cut_rate_row = None
+        # 查找四个关键参数在表格中的行索引和当前值
+        shell_inner_diameter_row = None  # 壳体内直径 Di
+        baffle_diameter_row = None  # 折流板外径
+        cut_spacing_row = None  # 折流板切口与中心线间距
+        cut_rate_row = None  # 折流板要求切口率 (%)
+
+        shell_inner_diameter = None
         baffle_diameter = None
         cut_spacing = None
         cut_rate = None
-        default_cut_rate = None  # 保存默认值用于恢复
+
+        # 保存原始值用于恢复
+        default_cut_rate = None
+        default_cut_spacing = None
 
         # 遍历表格找到目标参数
         for row in range(self.param_table.rowCount()):
@@ -2880,7 +2886,13 @@ class TubeLayoutEditor(QMainWindow):
                 param_value = value_item.text() if value_item else ""
 
             # 记录各参数的行索引和值
-            if param_name == "折流板外径":
+            if param_name == "壳体内直径 Di":
+                shell_inner_diameter_row = row
+                try:
+                    shell_inner_diameter = float(param_value)
+                except ValueError:
+                    shell_inner_diameter = None
+            elif param_name == "折流板外径":
                 baffle_diameter_row = row
                 try:
                     baffle_diameter = float(param_value)
@@ -2892,17 +2904,20 @@ class TubeLayoutEditor(QMainWindow):
                     cut_spacing = float(param_value)
                 except ValueError:
                     cut_spacing = None
+                # 保存原始值
+                default_cut_spacing = self._original_values.get((row, 2), "0")
             elif param_name == "折流板要求切口率 (%)":
                 cut_rate_row = row
                 try:
                     cut_rate = float(param_value)
                 except ValueError:
                     cut_rate = None
-                # 保存默认值（从原始值字典获取）
-                default_cut_rate = self._original_values.get((row, 2), "0")
+                # 保存原始值
+                default_cut_rate = self._original_values.get((row, 2), "30")  # 默认30%
 
         # 检查必要参数是否存在
-        if not all([baffle_diameter_row is not None,
+        if not all([shell_inner_diameter_row is not None,
+                    baffle_diameter_row is not None,
                     cut_spacing_row is not None,
                     cut_rate_row is not None]):
             return  # 必要参数不存在，不执行更新
@@ -2911,47 +2926,75 @@ class TubeLayoutEditor(QMainWindow):
         self._is_validating = True
 
         try:
-            # 1. 折流板外径变化或折流板切口与中心线间距变化时，更新切口率
-            if changed_param_name in ["折流板外径", "折流板切口与中心线间距"]:
-                if baffle_diameter and baffle_diameter > 0 and cut_spacing is not None:
-                    new_rate = (cut_spacing / baffle_diameter) * 100
-                    new_rate_rounded = int(round(new_rate))
-                    # 更新切口率参数
-                    rate_item = self.param_table.item(cut_rate_row, 2)
-                    if rate_item:
-                        rate_item.setText(str(new_rate_rounded))
+            # 1. 已知切口率(A)，计算切口与中心线间距(B)
+            if changed_param_name in ["折流板要求切口率 (%)", "壳体内直径 Di", "折流板外径"]:
+                if cut_rate is not None and shell_inner_diameter is not None and baffle_diameter is not None:
+                    # 验证切口率范围 [0,50]%
+                    if not (0 <= cut_rate <= 50):
+                        # 恢复默认值
+                        rate_item = self.param_table.item(cut_rate_row, 2)
+                        if rate_item:
+                            rate_item.setText(default_cut_rate)
+                        QMessageBox.warning(self, "输入错误",
+                                            "折流板切口率必须在0%到50%范围内！")
+                        return
 
-            # 2. 折流板要求切口率变化时，更新切口与中心线间距
-            elif changed_param_name == "折流板要求切口率 (%)":
-                # 验证切口率合法性
-                if cut_rate is None:
-                    # 输入为空或非数值，恢复默认值
-                    rate_item = self.param_table.item(cut_rate_row, 2)
-                    if rate_item:
-                        rate_item.setText(default_cut_rate)
-                    QMessageBox.warning(self, "输入错误",
-                                        "您输入的“折流板要求切口率”的参数值不合法，请核对后重新输入！")
-                    return
+                    # 计算切口与中心线间距 B = (Dp/2) - (A × Di)
+                    baffle_radius = baffle_diameter / 2
+                    cut_size = (cut_rate / 100) * shell_inner_diameter  # A × Di
+                    new_spacing = baffle_radius - cut_size
 
-                # 检查范围是否合理
-                if not (0 <= cut_rate <= 50):
-                    rate_item = self.param_table.item(cut_rate_row, 2)
-                    if rate_item:
-                        rate_item.setText(default_cut_rate)
-                    QMessageBox.warning(self, "输入错误",
-                                        "您输入的“折流板要求切口率”的参数值不合理，请核对后重新输入！")
-                    return
+                    # 验证间距范围 [0, Dp/2]
+                    if new_spacing < 0 or new_spacing > baffle_radius:
+                        # 恢复默认值
+                        rate_item = self.param_table.item(cut_rate_row, 2)
+                        if rate_item:
+                            rate_item.setText(default_cut_rate)
+                        QMessageBox.warning(self, "计算错误",
+                                            f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)")
+                        return
 
-                # 计算并更新间距
-                if baffle_diameter and baffle_diameter > 0:
-                    new_spacing = (cut_rate / 100) * baffle_diameter
-                    new_spacing_rounded = int(round(new_spacing))
+                    # 更新间距参数，保留1位小数
                     spacing_item = self.param_table.item(cut_spacing_row, 2)
                     if spacing_item:
-                        spacing_item.setText(str(new_spacing_rounded))
+                        spacing_item.setText(f"{new_spacing:.1f}")
+
+            # 2. 已知切口与中心线间距(B)，反算切口率(A)
+            elif changed_param_name == "折流板切口与中心线间距":
+                if cut_spacing is not None and shell_inner_diameter is not None and baffle_diameter is not None:
+                    # 验证间距范围 [0, Dp/2]
+                    baffle_radius = baffle_diameter / 2
+                    if not (0 <= cut_spacing <= baffle_radius):
+                        # 恢复默认值
+                        spacing_item = self.param_table.item(cut_spacing_row, 2)
+                        if spacing_item:
+                            spacing_item.setText(default_cut_spacing)
+                        QMessageBox.warning(self, "输入错误",
+                                            f"切口与中心线间距必须在0到{baffle_radius:.1f}mm范围内！")
+                        return
+
+                    # 反算切口率 A = [(Dp/2) - B] ÷ Di
+                    baffle_radius = baffle_diameter / 2
+                    new_cut_rate = ((baffle_radius - cut_spacing) / shell_inner_diameter) * 100
+
+                    # 验证切口率范围 [0,50]%
+                    if not (0 <= new_cut_rate <= 50):
+                        # 恢复默认值
+                        spacing_item = self.param_table.item(cut_spacing_row, 2)
+                        if spacing_item:
+                            spacing_item.setText(default_cut_spacing)
+                        QMessageBox.warning(self, "计算错误",
+                                            f"计算出的切口率({new_cut_rate:.1f}%)超出合理范围(0-50%)")
+                        return
+
+                    # 更新切口率参数，保留1位小数
+                    rate_item = self.param_table.item(cut_rate_row, 2)
+                    if rate_item:
+                        rate_item.setText(f"{new_cut_rate:.1f}")
 
         except Exception as e:
             logging.error(f"更新折流板参数失败: {str(e)}")
+            QMessageBox.warning(self, "计算错误", f"参数计算过程中发生错误: {str(e)}")
         finally:
             # 恢复事件触发
             self._is_validating = False
