@@ -60,7 +60,8 @@ from modules.cailiaodingyi.funcs.funcs_pdf_input import (
     update_material_category_in_db, query_guankou_param_by_template, load_guankou_param_leibie, load_guankou_param_byid,
     delete_guankou_data_from_db, load_dropdown_options, load_guankou_param_structure_from_db,
     insert_guankou_param_leibie, query_guankou_default, insert_guankou_info, query_assigned_codes_by_tab, _find_row,
-    query_guankou_codes_by_product, query_unassigned_codes, query_codes_for_tab_raw, init_buguan_defaults
+    query_guankou_codes_by_product, query_unassigned_codes, query_codes_for_tab_raw, init_buguan_defaults,
+    clear_guankou_leibie
 )
 from modules.cailiaodingyi.funcs.funcs_pdf_render import render_guankou_param_to_ui, _set_text_center
 from modules.chanpinguanli import chanpinguanli_main
@@ -464,6 +465,7 @@ class DesignParameterDefineInputerViewer(QWidget):
         # 删库
         if getattr(self, "product_id", None):
             delete_guankou_data_from_db(self.product_id, tab_name)
+            clear_guankou_leibie(self.product_id, tab_name)
         else:
             print("[警告] 当前 product_id 不存在，无法删除数据库记录")
 

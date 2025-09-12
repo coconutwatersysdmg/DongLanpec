@@ -366,14 +366,24 @@ def fill_final_excel_from_intermediate(intermediate_excel_path, target_excel_pat
             print("🗑️ 已删除模板工作表：接管")
     # === 特殊匹配：浮头法兰 / 外头盖封头 ===
     special_match_map = {
-        "浮头法兰": ["浮头法兰（TNC）", "浮头法兰（SNC）", "浮头法兰（TC）", "浮头法兰（SC）", "B型钩圈"],
-        "外头盖封头": ["球冠形封头"]
+        "浮头法兰": ["浮头法兰（TNC）", "浮头法兰（SNC）", "浮头法兰（TC）", "浮头法兰（SC）", "B型钩圈（SC）", "B型钩圈（SNC）",
+                     "球冠形封头"],
+        "固定管板": ["球冠形封头", "固定管板"],  # 固定管板目标表，同时要写入固定管板和浮头管束的数据
     }
 
     for inter_name, target_sheets in special_match_map.items():
         if inter_name not in inter_data_map:
             continue
-        name_value_map = inter_data_map[inter_name]
+
+        # 特殊情况：固定管板需要合并浮头管束数据
+        if inter_name == "固定管板":
+            name_value_map = {}
+            name_value_map.update(inter_data_map.get("固定管板", {}))
+            name_value_map.update(inter_data_map.get("浮头管束", {}))  # 合并浮头管束
+            name_value_map.update(inter_data_map.get("管箱法兰", {}))  # 合并浮头管束
+
+        else:
+            name_value_map = inter_data_map[inter_name]
 
         for sheet_name in target_sheets:
             if sheet_name not in target_wb.sheetnames:
@@ -394,7 +404,6 @@ def fill_final_excel_from_intermediate(intermediate_excel_path, target_excel_pat
                     output_cell.value = val
 
             # 修改第二行 B~E 合并单元格
-            sheet["B2"].value = f"{sheet_name}计算报告"
             print(f"✅ 更新 {sheet_name} 的 B2:E2 → {sheet['B2'].value}")
 
     for sheet in target_wb.worksheets:
@@ -418,8 +427,240 @@ def fill_final_excel_from_intermediate(intermediate_excel_path, target_excel_pat
                     d_cell.value = jietouxishu
                     print(f"📌 写入 焊接接头系数ф → {jietouxishu}")
         import pymysql
+        # ✅ B型钩圈额外字段写入（来自 MySQL 产品设计活动表_元件附加参数表）
+        # ✅ B型钩圈额外字段写入（来自 MySQL 产品设计活动表_元件附加参数表）
+        if sheet_name == "B型钩圈（SNC）":
+            conn = pymysql.connect(
+                host="localhost",
+                port=3306,
+                user="root",
+                password="123456",
+                database="产品设计活动库",
+                charset="utf8mb4"
+            )
+            cursor = conn.cursor()
 
+            sql = """
+                SELECT 参数名称, 参数值
+                FROM 产品设计活动表_元件附加参数表
+                WHERE 产品ID = %s AND 元件名称 = '钩圈'
+            """
+            cursor.execute(sql, (product_id,))
+            params = {r[0]: r[1] for r in cursor.fetchall()}
+
+            cursor.close()
+            conn.close()
+
+            # 映射关系：参数名称 -> Excel中C列对应名称
+            mapping = {
+                "材料牌号": "B型钩圈材料牌号",
+                "材料类型": "B型钩圈材料类型",
+                "壳程侧覆层厚度": "B型钩圈侧覆层厚度",
+            }
+
+            for idx in range(2, sheet.max_row + 1):
+                c_cell = sheet.cell(row=idx, column=3)
+                d_cell = sheet.cell(row=idx, column=4)
+                c_val = str(c_cell.value).strip() if c_cell.value else ""
+
+                for param_name, excel_c_name in mapping.items():
+                    if c_val == excel_c_name and not d_cell.value and param_name in params:
+                        param_val = params[param_name]
+
+                        # ✅ 如果是厚度类字段，空值时填 0
+                        if param_name in ("壳程侧覆层厚度", "管程侧覆层厚度"):
+                            if param_val is None or str(param_val).strip() == "":
+                                param_val = 0
+
+                        d_cell.value = param_val
+                        print(f"📌 写入 {excel_c_name} → {param_val}")
+        if sheet_name == "B型钩圈（SC）" or  sheet_name == ("B型钩圈（SNC）"):
+            conn = pymysql.connect(
+                host="localhost",
+                port=3306,
+                user="root",
+                password="123456",
+                database="产品设计活动库",
+                charset="utf8mb4"
+            )
+            cursor = conn.cursor()
+
+            sql = """
+                SELECT 参数名称, 参数值
+                FROM 产品设计活动表_元件附加参数表
+                WHERE 产品ID = %s AND 元件名称 = '钩圈'
+            """
+            cursor.execute(sql, (product_id,))
+            params = {r[0]: r[1] for r in cursor.fetchall()}
+
+            cursor.close()
+            conn.close()
+
+            # 映射关系：参数名称 -> Excel中C列对应名称
+            mapping = {
+                "材料牌号": "B型钩圈材料牌号",
+                "材料类型": "B型钩圈材料类型",
+                "壳程侧覆层厚度": "B型钩圈覆层厚度",
+            }
+
+            for idx in range(2, sheet.max_row + 1):
+                c_cell = sheet.cell(row=idx, column=3)
+                d_cell = sheet.cell(row=idx, column=4)
+                c_val = str(c_cell.value).strip() if c_cell.value else ""
+
+                for param_name, excel_c_name in mapping.items():
+                    if c_val == excel_c_name and not d_cell.value and param_name in params:
+                        param_val = params[param_name]
+
+                        # ✅ 如果是厚度类字段，空值时填 0
+                        if param_name in ("壳程侧覆层厚度", "管程侧覆层厚度"):
+                            if param_val is None or str(param_val).strip() == "":
+                                param_val = 0
+
+                        d_cell.value = param_val
+                        print(f"📌 写入 {excel_c_name} → {param_val}")
         # ✅ 固定管板额外字段写入（来自 MySQL 产品设计活动表_布管参数表）
+        # ✅ 球冠形封头额外字段写入
+        if sheet_name == "球冠形封头":
+            conn = pymysql.connect(
+                host="localhost",
+                port=3306,
+                user="root",
+                password="123456",
+                database="产品设计活动库",
+                charset="utf8mb4"
+            )
+            cursor = conn.cursor()
+
+            # --- 来自 元件附加参数表 ---
+            sql1 = """
+                SELECT 参数名称, 参数值
+                FROM 产品设计活动表_元件附加参数表
+                WHERE 产品ID = %s AND 元件名称 = '球冠形封头'
+            """
+            cursor.execute(sql1, (product_id,))
+            params1 = {r[0]: r[1] for r in cursor.fetchall()}
+
+            # --- 来自 设计数据表 ---
+            sql2 = """
+                SELECT 参数名称, 壳程数值, 管程数值
+                FROM 产品设计活动表_设计数据表
+                WHERE 产品ID = %s
+            """
+            cursor.execute(sql2, (product_id,))
+            params2 = {r[0]: (r[1], r[2]) for r in cursor.fetchall()}
+
+            cursor.close()
+            conn.close()
+
+            # === Excel写入映射 ===
+            mapping1 = {
+                "管程侧腐蚀裕量": "管程侧腐蚀裕量C2t",
+                "壳程侧腐蚀裕量": "壳程侧腐蚀裕量C2s",
+                "壳程侧覆层厚度": "球冠形封头覆层厚度t",
+                "材料类型": "球冠形封头材料类型",
+                "材料牌号": "球冠形封头材料牌号",
+            }
+
+            mapping2 = {
+                "设计压力*": {"壳程设计压力": "壳程", "管程设计压力": "管程"},
+                "设计温度（最高）*": {"壳程设计温度": "壳程", "管程设计温度": "管程"},
+                "焊接接头系数*": {"纵向焊接接头系数ф": "壳程"},
+            }
+
+            # --- 写入 元件附加参数表 ---
+            for idx in range(2, sheet.max_row + 1):
+                c_cell = sheet.cell(row=idx, column=3)
+                d_cell = sheet.cell(row=idx, column=4)
+                c_val = str(c_cell.value).strip() if c_cell.value else ""
+
+                for param_name, excel_c_name in mapping1.items():
+                    if c_val == excel_c_name and not d_cell.value and param_name in params1:
+                        param_val = params1[param_name]
+                        print('param_name',param_name)
+                        print('param_val',param_val)
+                        # 厚度/裕量字段 → 空值填0
+                        if "覆层厚度" in param_name or "裕量" in param_name:
+                            if param_val is None or str(param_val).strip() == "":
+                                param_val = 0
+                        d_cell.value = param_val
+                        print(f"📌 写入 {excel_c_name} → {param_val}")
+
+            # --- 写入 设计数据表 ---
+            for idx in range(2, sheet.max_row + 1):
+                c_cell = sheet.cell(row=idx, column=3)
+                d_cell = sheet.cell(row=idx, column=4)
+                c_val = str(c_cell.value).strip() if c_cell.value else ""
+
+                for param_name, excel_map in mapping2.items():
+                    if param_name in params2:
+                        shell_val, tube_val = params2[param_name]
+
+                        for excel_c_name, which in excel_map.items():
+                            if c_val == excel_c_name and not d_cell.value:
+                                if which == "壳程":
+                                    val = shell_val if shell_val not in (None, "") else 0
+                                else:  # 管程
+                                    val = tube_val if tube_val not in (None, "") else 0
+                                d_cell.value = val
+                                print(f"📌 写入 {excel_c_name} → {val}")
+        # ✅ 浮头法兰相关字段写入
+        if "浮头法兰" in sheet_name:
+            conn = pymysql.connect(
+                host="localhost",
+                port=3306,
+                user="root",
+                password="123456",
+                database="产品设计活动库",
+                charset="utf8mb4"
+            )
+            cursor = conn.cursor()
+
+            sql = """
+                SELECT 元件名称, 参数名称, 参数值
+                FROM 产品设计活动表_元件附加参数表
+                WHERE 产品ID = %s
+                  AND 元件名称 IN ('浮头法兰', '球冠形封头', '螺柱（浮头法兰）')
+            """
+            cursor.execute(sql, (product_id,))
+            rows = cursor.fetchall()
+            cursor.close()
+            conn.close()
+
+            # 整理成 dict[(元件名称, 参数名称)] = 参数值
+            params = {(r[0], r[1]): r[2] for r in rows}
+
+            # 映射规则： (元件名称, 参数名称) → Excel C列匹配值
+            mapping = {
+                ("浮头法兰", "材料牌号"): "浮头法兰材料牌号",
+                ("浮头法兰", "材料类型"): "浮头法兰材料类型",
+                ("浮头法兰", "壳程侧腐蚀裕量"): "螺柱腐蚀裕量",
+                ("浮头法兰", "密封槽深度"): "浮头法兰密封面凸台高度",
+                ("球冠形封头", "材料牌号"): "球冠形封头材料牌号",
+                ("球冠形封头", "材料类型"): "球冠形封头材料类型",
+                ("球冠形封头", "壳程侧腐蚀裕量"): "球冠形封头腐蚀裕量（壳程侧）",
+                ("球冠形封头", "管程侧腐蚀裕量"): "球冠形封头腐蚀裕量（管程侧）",
+
+                ("螺柱（浮头法兰）", "材料牌号"): "螺栓材料牌号",
+                ("螺柱（浮头法兰）", "材料类型"): "螺栓材料类型",
+                ("浮头法兰", "密封槽深度"): "浮头法兰密封面凸台高度",
+            }
+
+            for idx in range(2, sheet.max_row + 1):
+                c_cell = sheet.cell(row=idx, column=3)
+                d_cell = sheet.cell(row=idx, column=4)
+                c_val = str(c_cell.value).strip() if c_cell.value else ""
+
+                for (comp, param), excel_c_name in mapping.items():
+                    if c_val == excel_c_name and not d_cell.value and (comp, param) in params:
+                        param_val = params[(comp, param)]
+                        # 对腐蚀裕量字段 → 空值填0
+                        if "腐蚀裕量" in param:
+                            if param_val is None or str(param_val).strip() == "":
+                                param_val = 0
+                        d_cell.value = param_val
+                        print(f"📌 写入 {excel_c_name} → {param_val}")
+
         if sheet_name == "固定管板":
             # === 数据库连接 ===
             conn = pymysql.connect(
@@ -533,8 +774,26 @@ def fill_final_excel_from_intermediate(intermediate_excel_path, target_excel_pat
     copy_nominal_thickness("壳体圆筒", "壳体法兰", target_wb)
     copy_nominal_thickness("管箱圆筒", "管箱法兰", target_wb)
     write_flange_values(intermediate_excel_path, target_wb)
+    process_test_type(target_wb)
+
+
     target_wb.save(output_excel_path)
     print(f"✅ 最终Excel已生成：{output_excel_path}")
+
+def process_test_type(target_wb):
+    """
+    遍历Excel所有工作表，将C列中值为'耐压试验类型'的行，
+    根据D列数值映射为对应文本。
+    """
+    mapping = {'1': "液压", '2': "气压", '3': "气液"}
+    for sheet in target_wb.worksheets:  # 遍历所有工作表
+        print("sheet",sheet.title)
+        for row in sheet.iter_rows(min_row=1, max_col=4):
+            c_cell = row[2]  # C列
+            d_cell = row[3]  # D列
+            if c_cell.value == "耐压试验类型" and d_cell.value in mapping:
+                d_cell.value = mapping[d_cell.value]
+
 def copy_nominal_thickness(sheet_from, sheet_to, wb):
     """
     在 sheet_from 中找出 C列为“名义厚度δn”的 D 列值，写入 sheet_to 中 C列为相同内容的那行的 D列。

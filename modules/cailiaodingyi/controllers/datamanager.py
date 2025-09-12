@@ -762,10 +762,13 @@ def apply_paramname_dependent_combobox(table: QTableWidget,
 
                 handler = make_on_covering_changed(component_info, viewer_instance, row)
                 handler2= make_on_flange_face_changed(component_info, viewer_instance, row)
+                handler3 = make_on_head_type_changed(component_info, viewer_instance, row)
                 combo.currentTextChanged.connect(handler)
 
                 handler(combo.currentText())
                 handler2(combo.currentText())
+                handler3(combo.currentText())
+
                 combo.currentTextChanged.connect(
                     lambda _, c=combo, p=param_name: toggle_covering_fields(table, c, p)
                 )
@@ -827,6 +830,76 @@ def _set_pixmap_if_changed(viewer_instance, image_path: str):
 # 全局缓存
 # 全局缓存（推荐用 comp_name 作为 key，而不是 row_index）
 _flange_state_cache = {}
+_head_state_cache = {}
+def make_on_head_type_changed(component_info_copy, viewer_instance_copy, row_index):
+    """封头类型代号 → 图片刷新（缓存 head_type_code）"""
+
+    def handler(value, pname):
+        def _do():
+            try:
+                comp_name = (component_info_copy.get("零件名称") or "").strip()
+                if comp_name not in ("壳体封头", "管箱封头", "外头盖封头"):
+                    return
+
+                # 初始化/更新缓存
+                state = _head_state_cache.setdefault(comp_name, {
+                    "head_type": "",
+                    "covering": "否"
+                })
+
+                if pname == "封头类型代号":
+                    state["head_type"] = (value or "").strip()
+                elif pname in ("是否添加覆层", "是否覆层", "覆层"):
+                    state["covering"] = "是" if (value or "").strip() == "是" else "否"
+                # 使用缓存里的值
+                head_type_code = state["head_type"]
+                covering_flag = state["covering"]
+
+                if not head_type_code or not viewer_instance_copy:
+                    return
+
+                image_path = _query_head_image(head_type_code, covering_flag, comp_name)
+                print("head_type_code:", head_type_code)
+                print("comp_name:", comp_name)
+                _set_pixmap_if_changed(viewer_instance_copy, image_path)
+
+            except Exception as e:
+                print(f"[错误] 第{row_index}行处理封头类型图片失败: {e}")
+
+        QTimer.singleShot(60, _do)
+
+    return handler
+
+
+def _query_head_image(head_type_code, covering_flag, component_name):
+    """材料库：封头示意图表 → 匹配封头类型代号 + 元件名称"""
+    connection = None
+    try:
+        connection = get_connection(**db_config_2)
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT 示意图 FROM 封头示意图表
+                WHERE 封头类型代号=%s AND 有无覆层=%s AND 元件名称=%s
+                LIMIT 1
+            """
+            cursor.execute(sql, (head_type_code, covering_flag, component_name))
+            row = cursor.fetchone()
+            print(row)
+        if not row:
+            return None
+        if isinstance(row, dict):
+            return row.get("示意图")
+        return row[0] if len(row) > 0 else None
+
+    except Exception as e:
+        print(f"[错误] 封头示意图查询失败: {e}")
+        return None
+    finally:
+        if connection:
+            try:
+                connection.close()
+            except Exception:
+                pass
 
 def make_on_flange_face_changed(component_info_copy, viewer_instance_copy, row_index):
     """法兰密封面 → 图片刷新（缓存 seal_face_name + covering_flag）"""
@@ -918,8 +991,10 @@ def make_on_covering_changed(component_info_copy, viewer_instance_copy, row_inde
                 if "法兰" in comp_name:
                     # 调用 make_on_flange_face_changed 逻辑
                     make_on_flange_face_changed(component_info_copy, viewer_instance_copy, row_index)(value,None)
-                    return  # 法兰处理完后不执行原本覆层逻辑
 
+                    return  # 法兰处理完后不执行原本覆层逻辑
+                if comp_name in ("壳体封头", "管箱封头", "外头盖封头"):
+                    make_on_head_type_changed(component_info_copy, viewer_instance_copy, row_index)(value,None)
                 # 原覆层处理逻辑
                 has_covering = (value or "").strip() == "是"
 
@@ -1188,20 +1263,43 @@ def _set_row_delegate(table, row, options, keep_current=False, current_text="", 
 def install_material_delegate_linkage(table, param_col, value_col, viewer_instance=None):
     """
     渲染完成后调用：
-      - 给‘材料类型/牌号/标准/供货状态’四行安装 MaterialInstantDelegate（触发“锻件级别”显隐）
-      - 给‘垫板材料类型/垫板材料牌号/垫板材料标准/垫板材料供货状态’四行安装 MaterialInstantDelegate（不触发“锻件级别”显隐）
+      - 只处理 【材料类型/牌号/标准/供货状态】 和 【垫板材料类型/牌号/标准/供货状态】
+      - 给这 8 行安装 MaterialInstantDelegate
+      - A 组触发锻件级别显隐，B 组不触发
+      - ✅ 新增：进入单元格前动态刷新，但仅限这 8 行
     """
-    from PyQt5.QtWidgets import QAbstractItemView
-    if getattr(table, "_material_delegates_installed", False):
-        return
+    from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem
+    from PyQt5.QtCore import Qt
+
     table.setEditTriggers(QAbstractItemView.SelectedClicked)
 
-    # ==== 工具 ====
-    def _get(r):
+    # ---------- 白名单参数名 ----------
+    NAMES_ALL = [
+        "材料类型","材料牌号","材料标准","供货状态",
+        "垫板材料类型","垫板材料牌号","垫板材料标准","垫板材料供货状态"
+    ]
+    NAMES_SET = set(NAMES_ALL)  # 用于快速判断
+
+    # ---------- 工具函数 ----------
+    def _row(name: str) -> int:
+        """查找指定参数名对应的行号"""
+        r = _find_row_by_param(table, param_col, name)
+        return r if (r is not None and r >= 0) else -1
+
+    def _ensure_editable(r: int):
+        if r < 0:
+            return
+        if table.cellWidget(r, value_col):
+            table.setCellWidget(r, value_col, None)
+        _ensure_editable_item(table, r, value_col)
+
+    def _get(r: int):
         it = table.item(r, value_col)
         return (it.text().strip() if it else "")
 
-    def _set(r, txt):
+    def _set(r: int, txt: str):
+        if r < 0:
+            return
         it = table.item(r, value_col)
         if it is None:
             it = QTableWidgetItem()
@@ -1210,99 +1308,104 @@ def install_material_delegate_linkage(table, param_col, value_col, viewer_instan
         it.setText(txt or "")
 
     def _install_row_delegate(field_name, row_idx, options, on_pick):
+        """为指定行安装下拉 delegate"""
         if row_idx < 0:
             return
+        if field_name not in NAMES_SET:  # ✅ 白名单过滤，非 8 行跳过
+            return
         seen, opts = set(), []
-        for o in options or []:
+        for o in list(options or []):
             s = (o or "").strip()
             if s and s not in seen:
-                seen.add(s); opts.append(o)
+                seen.add(s)
+                opts.append(s)
         table.setItemDelegateForRow(row_idx, MaterialInstantDelegate(opts, table, field_name, on_pick))
 
-    def _ensure_editable(r):
-        if table.cellWidget(r, value_col):
-            table.setCellWidget(r, value_col, None)
-        _ensure_editable_item(table, r, value_col)
-
-    # ==== 公共逻辑封装 ====
+    # ---------- 公共组装 ----------
     def _install_group(name_type, name_brand, name_std, name_status, forge_flag: bool):
-        # 查行号
-        r_type   = _find_row_by_param(table, param_col, name_type)
-        r_brand  = _find_row_by_param(table, param_col, name_brand)
-        r_std    = _find_row_by_param(table, param_col, name_std)
-        r_status = _find_row_by_param(table, param_col, name_status)
+        r_type   = _row(name_type)
+        r_brand  = _row(name_brand)
+        r_std    = _row(name_std)
+        r_status = _row(name_status)
         rows = [r for r in (r_type, r_brand, r_std, r_status) if r >= 0]
         if not rows:
-            return
+            return set()
 
-        # 确保可编辑
         for r in rows:
             _ensure_editable(r)
 
-        # 初始值
         cur_type, cur_brand, cur_std = _get(r_type), _get(r_brand), _get(r_std)
 
-        opts_type = get_filtered_material_options({}).get("材料类型", []) or []
-        opts_brand = get_filtered_material_options({"材料类型": cur_type} if cur_type else {}).get("材料牌号", []) or []
-        basis_std = {k:v for k,v in {"材料类型": cur_type, "材料牌号": cur_brand}.items() if v}
-        opts_std  = get_filtered_material_options(basis_std).get("材料标准", []) or []
-        basis_stat = {k:v for k,v in {"材料类型": cur_type, "材料牌号": cur_brand, "材料标准": cur_std}.items() if v}
-        opts_stat = get_filtered_material_options(basis_stat).get("供货状态", []) or []
+        opts_type  = (get_filtered_material_options({}) or {}).get("材料类型", []) or []
+        opts_brand = (get_filtered_material_options({"材料类型": cur_type} if cur_type else {}) or {}).get("材料牌号", []) or []
+        basis_std  = {k: v for k, v in {"材料类型": cur_type, "材料牌号": cur_brand}.items() if v}
+        opts_std   = (get_filtered_material_options(basis_std) or {}).get("材料标准", []) or []
+        basis_stat = {k: v for k, v in {"材料类型": cur_type, "材料牌号": cur_brand, "材料标准": cur_std}.items() if v}
+        opts_stat  = (get_filtered_material_options(basis_stat) or {}).get("供货状态", []) or []
 
-        # 回调
         def on_pick(field_name: str, new_text: str, row: int, col: int):
+            if field_name not in NAMES_SET:  # ✅ 白名单过滤
+                return
+
             cur_t = _get(r_type)
             cur_b = _get(r_brand)
             if field_name == name_type:
                 for rr in (r_brand, r_std, r_status):
-                    if rr >= 0: _set(rr, "")
+                    _set(rr, "")
                 b = get_filtered_material_options({"材料类型": new_text}) or {}
-                _install_row_delegate(name_brand, r_brand, b.get("材料牌号", []), on_pick)
-                _install_row_delegate(name_std, r_std, [], on_pick)
+                _install_row_delegate(name_brand,  r_brand,  b.get("材料牌号", []), on_pick)
+                _install_row_delegate(name_std,    r_std,    [], on_pick)
                 _install_row_delegate(name_status, r_status, [], on_pick)
             elif field_name == name_brand:
-                basis = {"材料类型": cur_t, "材料牌号": new_text}
-                f = get_filtered_material_options(basis) or {}
-                std_opts = f.get("材料标准", []) or []
-                _install_row_delegate(name_std, r_std, std_opts, on_pick)
-                if (not _get(r_std)) and len([x for x in std_opts if x]) == 1:
-                    _set(r_std, [x for x in std_opts if x][0])
+                f = get_filtered_material_options({"材料类型": cur_t, "材料牌号": new_text}) or {}
+                std_opts  = f.get("材料标准", []) or []
                 stat_opts = f.get("供货状态", []) or []
+                _install_row_delegate(name_std,    r_std,    std_opts,  on_pick)
                 _install_row_delegate(name_status, r_status, stat_opts, on_pick)
-                if (not _get(r_status)) and len([x for x in stat_opts if x]) == 1:
-                    _set(r_status, [x for x in stat_opts if x][0])
+                if (not _get(r_std))    and len(std_opts)  == 1: _set(r_std, std_opts[0])
+                if (not _get(r_status)) and len(stat_opts) == 1: _set(r_status, stat_opts[0])
             elif field_name == name_std:
-                basis = {"材料类型": cur_t, "材料牌号": cur_b, "材料标准": new_text}
-                f = get_filtered_material_options(basis) or {}
+                f = get_filtered_material_options({"材料类型": cur_t, "材料牌号": cur_b, "材料标准": new_text}) or {}
                 stat_opts = f.get("供货状态", []) or []
                 _install_row_delegate(name_status, r_status, stat_opts, on_pick)
-                if (not _get(r_status)) and len([x for x in stat_opts if x]) == 1:
-                    _set(r_status, [x for x in stat_opts if x][0])
+                if (not _get(r_status)) and len(stat_opts) == 1:
+                    _set(r_status, stat_opts[0])
 
-            # 仅 A 组触发“锻件级别”显隐
             if forge_flag and field_name == name_type:
                 _apply_forging_visibility(table, param_col, value_col, viewer_instance, new_text, write_db=True)
 
             table.viewport().update()
 
-        # 安装代理
+        # 初次安装
         _install_row_delegate(name_type,   r_type,   opts_type,  on_pick)
         _install_row_delegate(name_brand,  r_brand,  opts_brand, on_pick)
         _install_row_delegate(name_std,    r_std,    opts_std,   on_pick)
         _install_row_delegate(name_status, r_status, opts_stat,  on_pick)
 
-        # 初始锻件显隐
+        # 锻件级别显隐
         if forge_flag:
             _apply_forging_visibility(table, param_col, value_col, viewer_instance, cur_type, write_db=False)
 
-    # ==== 执行两组 ====
-    _install_group("材料类型", "材料牌号", "材料标准", "供货状态", forge_flag=True)
-    _install_group("垫板材料类型", "垫板材料牌号", "垫板材料标准", "垫板材料供货状态", forge_flag=False)
+        return set(rows)
 
-    table._material_delegates_installed = True
+    # ---------- 执行两组 ----------
+    rows_a = _install_group("材料类型","材料牌号","材料标准","供货状态", forge_flag=True)
+    rows_b = _install_group("垫板材料类型","垫板材料牌号","垫板材料标准","垫板材料供货状态", forge_flag=False)
 
-
-
+    # ✅ 只对这 8 行绑定动态刷新
+    target_rows = rows_a.union(rows_b)
+    if not getattr(table, "_material_dynamic_hook_installed", False):
+        def _on_cell_pressed(r, c):
+            if c != value_col or r not in target_rows:  # ✅ 限定只作用于 8 行
+                return
+            pname_item = table.item(r, param_col)
+            pname = pname_item.text().strip() if pname_item else ""
+            if pname not in NAMES_SET:
+                return
+            # 简单策略：重新执行安装逻辑
+            install_material_delegate_linkage(table, param_col, value_col, viewer_instance)
+        table.cellPressed.connect(_on_cell_pressed)
+        table._material_dynamic_hook_installed = True
 
 
 def install_covering_delegate_linkage(table: QTableWidget,
@@ -1369,8 +1472,10 @@ def install_covering_delegate_linkage(table: QTableWidget,
             if component_info and viewer_instance and pname == "是否添加覆层":
                 h = make_on_covering_changed(component_info, viewer_instance, r, table=table)
                 h2 = make_on_flange_face_changed(component_info, viewer_instance, r)
+                h3 = make_on_head_type_changed(component_info, viewer_instance, r)
                 h(val)
                 h2(val)
+                h3(val)
     # 断开旧连接，防重复触发
     try:
         table.itemChanged.disconnect(_on_item_changed)
@@ -2630,7 +2735,17 @@ def on_confirm_guankouparam(viewer_instance):  # 已修改
     refresh_all_tabs_after_save(viewer_instance, cur_idx, set(selected_codes))
 
     QMessageBox.information(viewer_instance, "提示", f"{tab_name} 已保存管口号：{selected_text or '无'}")
-
+    # 生成压力等级提示
+    if selected_codes:
+        try:
+            pressure_tips = generate_pressure_level_tips_for_guankou_codes(
+                viewer_instance.product_id,
+                selected_codes
+            )
+            if pressure_tips:
+                show_pressure_level_tips_dialog(viewer_instance, pressure_tips)
+        except Exception as e:
+            print(f"[警告] 生成压力等级提示失败: {e}")
 
 # ===压力等级提示新增方法:获取管口ID==
 def get_guankou_id_by_product_and_code(product_id: str, guankou_code: str) -> str:
@@ -2781,7 +2896,7 @@ def show_pressure_level_tips_dialog(parent, tips_dict: dict):
 
         # 如果被省略了，加上提示
         if elided_text != error_message:
-            elided_text += " ... (鼠标悬停查看完整内容)"
+            elided_text += "(鼠标悬停查看完整内容)"
 
         # 设置显示和悬浮提示
         parent.line_tip.setText(elided_text)
@@ -2807,7 +2922,7 @@ def show_pressure_level_tips_dialog(parent, tips_dict: dict):
         return
 
     # 合并所有提示信息
-    full_message = " | ".join(tip_messages)
+    full_message = "\n".join(tip_messages)
 
     try:
         # 使用 QFontMetrics 动态计算文字长度
@@ -2817,7 +2932,7 @@ def show_pressure_level_tips_dialog(parent, tips_dict: dict):
 
         # 如果被省略了，加上提示
         if elided_text != full_message:
-            elided_text += " ... (鼠标悬停查看完整内容)"
+            elided_text += "(鼠标悬停查看完整内容)"
 
         # 设置显示与悬浮完整提示
         parent.line_tip.setText(elided_text)
@@ -2835,7 +2950,7 @@ def show_pressure_level_tips_dialog(parent, tips_dict: dict):
 
         # 如果被省略了，加上提示
         if elided_text != error_message:
-            elided_text += " ... (鼠标悬停查看完整内容)"
+            elided_text += "(鼠标悬停查看完整内容)"
 
         # 设置显示和悬浮提示
         parent.line_tip.setText(elided_text)
@@ -3396,6 +3511,22 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
         it_sw = table.item(r_sw, value_col)
         return bool(it_sw and it_sw.text().strip() == "是")
 
+    # ---------- 锻件级别显隐：仅当材料类型=钢锻件时显示 ----------
+    def _apply_forging_visibility_local():
+        try:
+            r_mat_type = find_row_by_param_name(table, "材料类型", param_col)
+            r_forging = find_row_by_param_name(table, "锻件级别", param_col)
+            if r_forging is None:
+                return
+            mat_txt = ""
+            if r_mat_type is not None:
+                it = table.item(r_mat_type, value_col)
+                mat_txt = (it.text() if it else "").strip()
+            show = (mat_txt == "钢锻件")
+            table.setRowHidden(r_forging, not show)
+        except Exception as e:
+            print(f"[锻件级别显隐] 处理失败：{e}")
+
     # 可能会用到的外部数据
     try:
         param_names = set(get_all_param_name() or [])
@@ -3510,6 +3641,8 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
     except Exception as e:
         print(f"[显隐规则-初次评估失败] {e}")
 
+    _apply_forging_visibility_local()
+
     # 4) itemChanged：覆层联动 + 写库 + 图片刷新 + 再评估显隐
     def _on_item_changed(item: QTableWidgetItem):
         if item.column() != value_col: return
@@ -3518,6 +3651,9 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
         if not pitem: return
         pname = pitem.text().strip()
         val = (item.text() or "").strip()
+
+        if pname == "材料类型":
+            _apply_forging_visibility_local()
 
         if pname in CLADDING_TYPE_FIELDS:
             if not _is_covering_enabled_for(pname): return
@@ -3540,6 +3676,10 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                 viewer_instance.clicked_element_data, viewer_instance, r
             )
             handler2(val, pname)
+            handler3 = make_on_head_type_changed(
+                viewer_instance.clicked_element_data, viewer_instance, r
+            )
+            handler3(val, pname)
             class _Fake:
                 def __init__(self, t): self._t = t
                 def currentText(self): return self._t
@@ -3554,6 +3694,11 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                         _apply_cladding_type_logic(table, param_col, value_col, type_field, cur_type)
         if pname in "法兰密封面":
             handler = make_on_flange_face_changed(
+                viewer_instance.clicked_element_data, viewer_instance, r
+            )
+            handler(val,pname)
+        if pname in "封头类型代号":
+            handler = make_on_head_type_changed(
                 viewer_instance.clicked_element_data, viewer_instance, r
             )
             handler(val,pname)
@@ -3616,27 +3761,40 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
             except Exception as e:
                 print(f"[联动失败] μ→η: {e}")
 
-        # ==== 拉杆型式：根据换热管外径自动带入 ====
+        # ==== 拉杆型式：根据换热管外径自动带入（对比“库中外径数值”，变了才覆盖；允许用户改） ====
         try:
+            # 缓存：上次使用过的外径数值
+            if not hasattr(table, "_tierod_od_last"):
+                table._tierod_od_last = None
+
             r_tierod = find_row_by_param_name(table, "拉杆型式", param_col)
             if r_tierod is not None and getattr(viewer_instance, "product_id", None):
+                # 直接从库里拿当前外径（不依赖本表是否触发了 itemChanged）
                 od_txt = query_extra_param_value(viewer_instance.product_id, "换热管外径")
-                if od_txt:
-                    import re
-                    s_num = "".join(re.findall(r"[-\d.]+", str(od_txt).strip()))
-                    if s_num:
-                        od = float(s_num)
-                        target = "焊接拉杆" if od < 19.0 else "螺纹拉杆"
-                        if table.item(r_tierod, value_col) is None:
-                            ensure_editable_item(r_tierod, value_col, "")
-                        table.blockSignals(True)
-                        try:
-                            table.item(r_tierod, value_col).setText(target)
-                        finally:
-                            table.blockSignals(False)
+
+                import re
+                s_num = "".join(re.findall(r"[-\d.]+", str(od_txt or "").strip()))
+                od_val = float(s_num) if s_num else None
+
+                # 只有当“库中外径数值”与缓存不同，才覆盖拉杆型式
+                if od_val is not None and od_val != table._tierod_od_last:
+                    target = "焊接拉杆" if od_val < 19.0 else "螺纹拉杆"
+
+                    if table.item(r_tierod, value_col) is None:
+                        it = QTableWidgetItem("")
+                        it.setTextAlignment(Qt.AlignCenter)
+                        it.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
+                        table.setItem(r_tierod, value_col, it)
+
+                    table.blockSignals(True)
+                    try:
+                        table.item(r_tierod, value_col).setText(target)
+                    finally:
+                        table.blockSignals(False)
+
+                    table._tierod_od_last = od_val  # 更新缓存
         except Exception as e:
             print(f"[拉杆型式自动带入] 失败：{e}")
-
 
         # ==== 换热管 / U形换热管：级别或外径变化 -> 查库回填/清空 ====
         try:
@@ -3876,7 +4034,34 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
     except Exception: pass
     table.cellClicked.connect(_edit_on_click)
 
+    # —— 首次渲染后，主动按库中外径带入一次 ——
+    def _bootstrap_tierod_by_db():
+        try:
+            r_tierod = find_row_by_param_name(table, "拉杆型式", param_col)
+            if r_tierod is None or not getattr(viewer_instance, "product_id", None):
+                return
+            od_txt = query_extra_param_value(viewer_instance.product_id, "换热管外径")
+            import re
+            s_num = "".join(re.findall(r"[-\d.]+", str(od_txt or "").strip()))
+            od_val = float(s_num) if s_num else None
+            if od_val is None:
+                return
+            target = "焊接拉杆" if od_val < 19.0 else "螺纹拉杆"
+            if table.item(r_tierod, value_col) is None:
+                it = QTableWidgetItem("")
+                it.setTextAlignment(Qt.AlignCenter)
+                it.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
+                table.setItem(r_tierod, value_col, it)
+            table.blockSignals(True)
+            try:
+                table.item(r_tierod, value_col).setText(target)
+            finally:
+                table.blockSignals(False)
+            table._tierod_od_last = od_val  # 初始化缓存
+        except Exception as e:
+            print(f"[拉杆型式引导带入] 失败：{e}")
 
+    QTimer.singleShot(0, _bootstrap_tierod_by_db)
 
 
 

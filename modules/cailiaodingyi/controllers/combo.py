@@ -652,9 +652,39 @@ class MultiSelectDynamicOptionsDelegate(DynamicOptionsDelegate):
         })
         return cols if len(cols) >= 2 else []
 
+    # ---------- 新增：材料牌号进入编辑时，仅按“材料类型”取全集 ----------
     def createEditor(self, parent, option, index):
-        # 进入编辑前先把“多选列”快照下来（避免点击后选择被冲掉）
+        from PyQt5.QtWidgets import QComboBox
+        from modules.cailiaodingyi.funcs.funcs_pdf_change import get_filtered_material_options
+
+        # 进入编辑前先快照多选列
         self._targets_cache = self._snapshot_targets(index.row())
+
+        field = self._field_of_row(index.row())
+        if field == '材料牌号':
+            grp = self._group_map_of_row(index.row()) or {}
+            type_row = grp.get('材料类型')
+            # 同列（index.column()）下，读取“材料类型”的当前值
+            cur_type = ""
+            if type_row is not None:
+                it = self.table.item(type_row, index.column())
+                cur_type = (it.text().strip() if it else "")
+
+            # 仅按类型过滤，拿到“该类型下的所有牌号”
+            brand_opts = []
+            if cur_type:
+                m = get_filtered_material_options({'材料类型': cur_type}) or {}
+                brand_opts = list(dict.fromkeys(m.get('材料牌号', []) or []))
+
+            # 构造一个简单的单选下拉（与 MaterialInstantDelegate 行为一致）
+            cb = QComboBox(parent)
+            cb.setEditable(False)
+            cb.addItems(brand_opts)
+            # 进入即弹出，体验一致
+            QTimer.singleShot(0, cb.showPopup)
+            return cb
+
+        # 其他字段仍用父类默认编辑器
         return super().createEditor(parent, option, index)
 
     def _cur_vals(self, grp, col):
@@ -665,27 +695,48 @@ class MultiSelectDynamicOptionsDelegate(DynamicOptionsDelegate):
             d[k] = (it.text().strip() if it else "")
         return d
 
-    def setModelData(self, editor, model, index):
-        # 先按父类逻辑写当前格 + 单列联动
-        super().setModelData(editor, model, index)
+    # 补充分支：当 editor 是我们为“材料牌号”创建的 QComboBox 时，正确设置当前值
+    def setEditorData(self, editor, index):
+        from PyQt5.QtWidgets import QComboBox
+        field = self._field_of_row(index.row())
+        if isinstance(editor, QComboBox) and field == '材料牌号':
+            cur = (index.data() or "").strip()
+            if cur:
+                pos = editor.findText(cur)
+                if pos >= 0:
+                    editor.setCurrentIndex(pos)
+            return  # 其他字段交给父类
+        return super().setEditorData(editor, index)
 
+    # 写回：若是“材料牌号”的 QComboBox，用其 currentText 写回，然后继续走后续批量联动逻辑
+    def setModelData(self, editor, model, index):
+        from PyQt5.QtWidgets import QComboBox
+        field = self._field_of_row(index.row())
+        if isinstance(editor, QComboBox) and field == '材料牌号':
+            txt = editor.currentText() or ""
+            model.setData(index, txt)  # 先把当前格写回
+            # 然后走父类（会继续触发你的单列联动）；父类可能会再次 setData，但值相同无影响
+            super().setModelData(editor, model, index)
+        else:
+            super().setModelData(editor, model, index)
+
+        # ===== 以下保持你原有的批量逻辑不变 =====
         row, col = index.row(), index.column()
         sender_field = self._field_of_row(row)
         if sender_field not in ('材料类型', '材料牌号', '材料标准', '供货状态'):
             return
 
-        # —— 计算“同行多列”的目标列（进入编辑前的快照优先）——
         targets = list(getattr(self, "_targets_cache", []) or self._snapshot_targets(row))
-        self._targets_cache = []  # 用完清空
-
-        # 若没多选，正常结束（单选保持原有逻辑）
+        self._targets_cache = []
         if not targets:
             return
 
-        grp = self._group_map_of_row(row)  # {'材料类型': rX, '材料牌号': rY, '材料标准': rZ, '供货状态': rW}
-        new_val = editor.currentText()
+        grp = self._group_map_of_row(row)
+        new_val = model.data(index) or ""
 
-        # ===== 1) 若是在“材料类型”行：比较新旧，旧 != 新 则强清 3 项 =====
+        from modules.cailiaodingyi.funcs.funcs_pdf_change import get_filtered_material_options
+
+        # 1) 如果改了“材料类型”，清空其余三项（逐列）
         if sender_field == '材料类型':
             type_row = grp.get('材料类型')
             brand_row = grp.get('材料牌号')
@@ -694,16 +745,12 @@ class MultiSelectDynamicOptionsDelegate(DynamicOptionsDelegate):
 
             self.table.blockSignals(True)
             try:
-                # 也把“当前列”纳入批量逻辑（避免只清了其他列）
                 cols_to_apply = sorted(set(targets + [col]))
                 for cc in cols_to_apply:
-                    # 读旧类型
                     old_type = ""
                     if type_row is not None:
                         it = self.table.item(type_row, cc)
                         old_type = (it.text().strip() if it else "")
-
-                    # 当旧 != 新 → 清空“牌号/标准/状态”
                     if (new_val or "") != (old_type or ""):
                         for rr in (brand_row, std_row, stat_row):
                             if rr is None:
@@ -714,35 +761,37 @@ class MultiSelectDynamicOptionsDelegate(DynamicOptionsDelegate):
                                 it2.setTextAlignment(Qt.AlignCenter)
                                 self.table.setItem(rr, cc, it2)
                             if it2.text():
-                                it2.setText("")  # 清空
+                                it2.setText("")
             finally:
                 self.table.blockSignals(False)
 
-        # ===== 2) 批量写入“与当前行同字段”的值（逐列候选校验）=====
-        # （保持你现有的材料联动批量逻辑，不破坏候选校验）
-        from modules.cailiaodingyi.funcs.funcs_pdf_change import get_filtered_material_options
-
+        # 2) 批量把“同字段”的值写到其它被选列（并做候选校验）
         touched_cols = []
         self.table.blockSignals(True)
         try:
             for cc in targets:
                 if cc == col:
-                    continue  # 当前列已由父类写过
-                # 基于该列已有的四字段组合做候选校验
+                    continue
+                # 该列的当前四字段
                 cur_vals = {}
                 for k in ('材料类型', '材料牌号', '材料标准', '供货状态'):
                     rr = grp.get(k)
                     it = self.table.item(rr, cc) if rr is not None else None
                     cur_vals[k] = (it.text().strip() if it else "")
 
+                # 候选生成逻辑：材料牌号只看“类型”，其余照旧
                 if sender_field == '材料类型':
                     all_map = get_filtered_material_options({}) or {}
                     opts = list(dict.fromkeys(all_map.get('材料类型', [])))
                 else:
-                    filtered = get_filtered_material_options(cur_vals) or {}
-                    opts = filtered.get(sender_field, []) or []
+                    if sender_field == '材料牌号' and cur_vals.get('材料类型'):
+                        filtered = get_filtered_material_options({'材料类型': cur_vals['材料类型']}) or {}
+                        opts = filtered.get('材料牌号', []) or []
+                    else:
+                        filtered = get_filtered_material_options(cur_vals) or {}
+                        opts = filtered.get(sender_field, []) or []
 
-                if not opts or opts[0] != "":
+                if not opts or (opts and opts[0] != ""):
                     opts = [""] + list(dict.fromkeys(opts))
 
                 if new_val in opts:
@@ -757,14 +806,12 @@ class MultiSelectDynamicOptionsDelegate(DynamicOptionsDelegate):
         finally:
             self.table.blockSignals(False)
 
-        # ===== 3) 对被改动到的列逐列触发“材料联动”回调 =====
+        # 3) 逐列触发联动回调
         for cc in touched_cols:
             if cc == col:
                 continue
-            prev_cc = ""  # 如需严格“原值”，可在进入批量前缓存
+            prev_cc = ""
             on_material_field_changed_col(self.table, cc, grp, sender_field, prev_value=prev_cc)
-
-        self.table.setCurrentCell(row, col)
 
 
 

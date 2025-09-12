@@ -1,3 +1,4 @@
+import ast
 import json
 import math
 import os
@@ -42,6 +43,7 @@ mapping_dict = {
     "管箱封头": [("管箱封头", "椭圆形封头质量 kg", "质量")],
     "管箱圆筒": [("管箱圆筒", "圆筒重量kg", "质量")],
     "外头盖圆筒": [("外头盖圆筒", "圆筒重量kg", "质量")],
+    "外头盖封头": [("外头盖封头", "椭圆形封头质量 kg", "质量")],
 
     "管箱法兰": [("管箱法兰", "法兰毛坯质量", "质量")],
     "固定管板": [("固定管板", "管板重量-毛坯", "质量")],
@@ -303,7 +305,18 @@ def fill_special_items(sheet, jisuan_data, product_id):
     uhx_mass = float(uhx_mass) if uhx_mass not in (None, "", "None") else None
 
     tie_rods = pipe_data.get("TieRodsParam", [])
+    # 确保 bpb_list 是 list
+    if isinstance(tie_rods, str):
+        try:
+            # 先尝试 JSON
+            tie_rods = json.loads(tie_rods)
+        except json.JSONDecodeError:
+            # 如果不是 JSON，就尝试 eval 成 Python list
+            tie_rods = ast.literal_eval(tie_rods)
 
+    if not isinstance(tie_rods, list):
+        tie_rods = []
+    tie_list = len(tie_rods)
     # === 公称直径 DN ===
     dn_value = None
     try:
@@ -356,12 +369,12 @@ def fill_special_items(sheet, jisuan_data, product_id):
 
     quantity_map = {
         # "旁路挡板": count_valid_items(pipe_data, "BPBs"),
-        "拉杆": len(tie_rods),
+        "拉杆": tie_list,
         # "中间挡板": count_valid_items(pipe_data, "VerticalBaffle"),
         "滑道": count_valid_items(pipe_data, "SlipWays"),
         "防冲板": 1 if isinstance(pipe_data.get("ImpingementPlate"), dict) else 0,
-        "定距管": len(tie_rods),
-        "螺母（拉杆）": len(tie_rods),
+        "定距管": tie_list,
+        "螺母（拉杆）": tie_list,
         "管箱侧垫片": 1,
         "管箱垫片": 1,
     }
@@ -376,7 +389,7 @@ def fill_special_items(sheet, jisuan_data, product_id):
                 row[7].value = slipway_mass
             if name == "拉杆":
                 print(123123123123)
-                row[6].value = len(tie_rods)
+                row[6].value = tie_list
 
                 dh_str = get_value(jisuan_data, "管箱法兰", "螺栓公称直径")
                 try:
@@ -404,7 +417,7 @@ def fill_special_items(sheet, jisuan_data, product_id):
                 print(H)
                 density = get_material_density("拉杆", product_id)
                 print(density)
-                row[6].value = len(tie_rods)
+                row[6].value = tie_list
 
                 if R and H and density:
                     try:
@@ -445,7 +458,7 @@ def fill_special_items(sheet, jisuan_data, product_id):
                 uhx_mass = float(uhx_mass) if uhx_mass not in (None, "", "None") else None
                 row[7].value = uhx_mass
             # if name == "拉杆" and uhx_mass:
-            #     row[7].value = round(len(tie_rods) * uhx_mass, 2)
+            #     row[7].value = round(tie_list * uhx_mass, 2)
         # 替换原来 mapping_dict 的 "U形换热管" 项：
         elif name == "U形换热管":
             # 获取管程数
@@ -507,8 +520,19 @@ def fill_special_items(sheet, jisuan_data, product_id):
 
         elif name == "旁路挡板":
             bpb_list = pipe_data.get("BPBs", [])
-            heights = pipe_data.get("BPBHeights", [])
-            width_mm = pipe_data.get("BPBThick", 0)
+            heights = pipe_data.get("BPBThick", [])
+
+            # 确保 bpb_list 是 list
+            if isinstance(bpb_list, str):
+                try:
+                    # 先尝试 JSON
+                    bpb_list = json.loads(bpb_list)
+                except json.JSONDecodeError:
+                    # 如果不是 JSON，就尝试 eval 成 Python list
+                    bpb_list = ast.literal_eval(bpb_list)
+
+            if not isinstance(bpb_list, list):
+                bpb_list = []
 
             row[6].value = len(bpb_list)
 
@@ -530,9 +554,31 @@ def fill_special_items(sheet, jisuan_data, product_id):
                     row[7].value = round(mass, 2)
             except Exception as e:
                 print(f"❌ 计算旁路挡板质量失败: {e}")
+        elif name == "内折流板":
+            try:
+                datas = jisuan_data.get("DictOutDatas", {}).get("浮头管束", {}).get("Datas", [])
+                n_fixed = get_param(datas, "固定管板侧内折流板数量") or 0
+                n_float = get_param(datas, "浮动管板侧内折流板数量") or 0
 
+                row[6].value = int(n_fixed) + int(n_float)
+            except Exception as e:
+                print(f"❌ 计算内折流板数量失败: {e}")
+        elif name == "弓形折流板":
+            try:
+                datas = jisuan_data.get("DictOutDatas", {}).get("浮头管束", {}).get("Datas", [])
+                n_fixed = get_param(datas, "弓形/异形折流板实际数量") or 0
 
+                row[6].value = int(n_fixed)
+            except Exception as e:
+                print(f"❌ 计算弓形折流板数量失败: {e}")
+        elif name == "异形折流板":
+            try:
+                datas = jisuan_data.get("DictOutDatas", {}).get("浮头管束", {}).get("Datas", [])
+                n_fixed = get_param(datas, "弓形/异形折流板实际数量") or 0
 
+                row[6].value = int(n_fixed)
+            except Exception as e:
+                print(f"❌ 计算异形折流板数量失败: {e}")
 
         elif name == "中间挡板":
             vbaffles = pipe_data.get("VerticalBaffle", [])
@@ -670,8 +716,13 @@ def fill_special_items(sheet, jisuan_data, product_id):
                 row[7].value = calc_weight(support_R, support_t, density_zhichiban)
         elif name == "挡管":
             # 获取挡管数量
-            dummy_tubes = pipe_data.get("DummyTubesParam", [])
+            dummy_tubes = pipe_data.get("dummy_tubes", [])
+            if isinstance(dummy_tubes, str):
+                dummy_tubes = ast.literal_eval(dummy_tubes)
+
             dummy_count = len(dummy_tubes)
+            print(dummy_tubes)
+            print(dummy_count)
             row[6].value = dummy_count
             # 获取换热管质量
             uhx_data = jisuan_data.get("DictOutDatas", {}).get("固定管板", {}).get("Datas", [])
@@ -717,6 +768,29 @@ def fill_special_items(sheet, jisuan_data, product_id):
                     pass
             row[6].value = qty
         elif name == "带肩螺柱":
+            # === 获取防松支耳数量配置 ===
+            qty = None
+            if dn_value:
+                try:
+                    conn2 = pymysql.connect(
+                        host="localhost", user="root", password="123456",
+                        database="配置库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+                    )
+                    with conn2.cursor() as cursor:
+                        cursor.execute("SELECT value FROM user_config WHERE id = 2.16")
+                        roww = cursor.fetchone()
+                        if roww:
+                            config = eval(roww["value"])
+                            values = config[1][1:]
+                            if dn_value < 800:
+                                qty = values[0]
+                            elif 800 <= dn_value <= 2000:
+                                qty = values[1]
+                            else:
+                                qty = values[2]
+                    conn2.close()
+                except:
+                    pass
             row[6].value = qty
             row[7].value = mass_luozhu
 
@@ -815,7 +889,7 @@ def fill_quantity_by_relation(sheet):
 
         # 4. 一些元件固定数量为 1
         elif item_name in {
-            "管箱垫片", "支持板", "管箱侧垫片", "固定鞍座", "滑动鞍座","铭牌支架","铭牌板"
+            "管箱垫片", "支持板", "管箱侧垫片", "固定鞍座", "滑动鞍座","铭牌支架","铭牌板","浮头法兰","浮头垫片","球冠形封头","吊耳"
         }:
             qty_cell.value = 1
         elif item_name in {

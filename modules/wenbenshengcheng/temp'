@@ -1,0 +1,14 @@
+    # === 查询数据库 ===
+    cursor.execute("""
+        SELECT 参数名称, 壳程数值, 管程数值
+        FROM 产品设计活动表_设计数据表
+        WHERE 产品ID = %s
+    """, (product_id,))
+    rows = cursor.fetchall()
+
+    # === 构建参数映射表 ===
+    param_map = {row["参数名称"].strip(): row for row in rows}
+     if "耐压试验类型*" in param_map:
+        val = param_map["耐压试验类型*"].get("管程数值", "")
+        if val:
+            waitougai_yuantong["压力试验类型"] = str(val).replace("试验", "").strip()

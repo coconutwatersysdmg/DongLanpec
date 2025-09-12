@@ -878,7 +878,9 @@ def fill_excel_with_dictoutdatas(file_path: str, json_path: str):
         # ✅ 固定管板字段映射
         if sheet.title == "固定管板":
 
-            tubedata = outdatas.get("固定管板", {})
+            tubedata = {}
+            tubedata.update(outdatas.get("固定管板", {}))
+            tubedata.update(outdatas.get("浮头管束", {}))
             if tubedata and tubedata.get("IsSuccess"):
                 for item in tubedata.get("Datas", []):
                     id_ = item.get("Id", "")
@@ -980,6 +982,7 @@ def fill_excel_with_dictoutdatas(file_path: str, json_path: str):
 
 
 def save_report_to_user_path(temp_path: str):
+
     """
     让用户选择一个路径保存最终报告
     """

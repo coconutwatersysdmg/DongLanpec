@@ -1081,6 +1081,26 @@ def delete_guankou_data_from_db(product_id, tab_name):
         connection.close()
 
 
+def clear_guankou_leibie(product_id, tab_name):
+    """
+    根据产品ID和材料分类，将该材料分类清空（设为 NULL），保留行
+    """
+    try:
+        connection = get_connection(**db_config_1)
+        with connection.cursor() as cursor:
+            cursor.execute("""
+                UPDATE 产品设计活动表_管口类别表
+                SET 材料分类 = NULL
+                WHERE 产品ID = %s AND 材料分类 = %s
+            """, (product_id, tab_name))
+        connection.commit()
+    except Exception as e:
+        print(f"[错误] 清空 {tab_name} 失败: {e}")
+    finally:
+        connection.close()
+
+
+
 def update_material_category_in_db(product_id, old_label: str, new_label: str):
     """
     把‘类别标签/材料分类’从 old_label 改成 new_label

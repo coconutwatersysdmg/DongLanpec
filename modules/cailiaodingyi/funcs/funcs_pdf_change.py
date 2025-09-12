@@ -1263,6 +1263,8 @@ def get_design_params_from_db(product_id):
 
 
 def map_pn_interval(pn: float) -> float:
+    print("pn:",pn)
+    print("pn_type",type(pn))
     """将实际 PN 值映射为数据库中存储的标准 PN 值"""
     if pn <= 1:
         return 1
@@ -2633,17 +2635,21 @@ def _like(tok: str) -> str: return f"%{tok}%" if tok else "%"
 
 def query_gasket_D_d_d1_from_size(*, dn: str, pn: str, cs_code: str, st_abbr: str, gp_code: str) -> dict:
     """
-    命中 -> 返回 {"D": "...", "d": "...", "d1": "...", "nonstd": False, "msg": ""}
-    未中 -> 返回 {"D": "程序推荐", "d": "程序推荐", "d1": "程序推荐", "nonstd": True, "msg": "..."}
+    命中 -> 返回 {"外直径D": "...", "内直径d": "...", "环内径d1": "...", "nonstd": False, "msg": ""}
+    未中 -> 返回 {"外直径D": "程序推荐", "内直径d": "程序推荐", "环内径d1": "程序推荐", "nonstd": True, "msg": "..."}
     """
     if not (dn and pn and cs_code and st_abbr and gp_code):
-        return {"外直径D":"程序推荐","内直径d":"程序推荐","环内径d1":"程序推荐","nonstd":True,"msg":"检索条件不完整(DN/PN/CS/ST/GP)"}
+        return {
+            "外直径D": "程序推荐", "内直径d": "程序推荐", "环内径d1": "程序推荐",
+            "nonstd": True, "msg": "检索条件不完整(DN/PN/CS/ST/GP)"
+        }
 
     conn = get_connection(**db_config_2)
     try:
         with conn.cursor() as cur:
+            # 先尝试严格匹配
             sql = """
-            SELECT 外直径D,内直径d,环内径d1
+            SELECT 外直径D, 内直径d, 环内径d1
             FROM 垫片尺寸表
             WHERE 公称直径DN=%s AND 压力等级PN=%s
               AND 垫片名称CS LIKE %s AND 标准号ST LIKE %s AND 分类GP LIKE %s
@@ -2658,7 +2664,32 @@ def query_gasket_D_d_d1_from_size(*, dn: str, pn: str, cs_code: str, st_abbr: st
                     "环内径d1": "" if row.get("环内径d1") is None else str(row.get("环内径d1")),
                     "nonstd": False, "msg": ""
                 }
-            return {"外直径D":"程序推荐","内直径d":"程序推荐","环内径d1":"程序推荐","nonstd":True,"msg":"《垫片尺寸》未命中记录"}
+
+            # 如果未命中，查找比当前PN大的最小值
+            sql_next = """
+            SELECT 外直径D, 内直径d, 环内径d1, 压力等级PN
+            FROM 垫片尺寸表
+            WHERE 公称直径DN=%s AND CAST(压力等级PN AS DECIMAL) > CAST(%s AS DECIMAL)
+              AND 垫片名称CS LIKE %s AND 标准号ST LIKE %s AND 分类GP LIKE %s
+            ORDER BY CAST(压力等级PN AS DECIMAL) ASC
+            LIMIT 1
+            """
+            cur.execute(sql_next, (dn, pn, _like(cs_code), _like(st_abbr), _like(gp_code)))
+            row = cur.fetchone()
+            if row:
+                return {
+                    "外直径D":  "" if row.get("外直径D")  is None else str(row.get("外直径D")),
+                    "内直径d":  "" if row.get("内直径d")  is None else str(row.get("内直径d")),
+                    "环内径d1": "" if row.get("环内径d1") is None else str(row.get("环内径d1")),
+                    "nonstd": False,
+                    "msg": f"未找到PN={pn}的记录，已取大于它的最小PN={row.get('压力等级PN')}"
+                }
+
+            # 都没有找到
+            return {
+                "外直径D": "程序推荐", "内直径d": "程序推荐", "环内径d1": "程序推荐",
+                "nonstd": True, "msg": "《垫片尺寸》未命中记录"
+            }
     finally:
         conn.close()
 

@@ -893,6 +893,7 @@ class TubeLayoutEditor(QMainWindow):
             self.tube_hole_data.append(data)
         return self.tube_hole_data
 
+
     def get_current_tube_data(self):
         """TODO 获取左侧参数表格的当前数据列表"""
         self.tube_data = []
@@ -1587,6 +1588,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # TODO 后续取消注释
         # self.line_tip.setText("请确认"壳体内径Di"是否正确！")
+        # self.update_baffle_diameter()
 
     # TODO 布管函数
     def calculate_piping_layout(self):
@@ -2567,6 +2569,7 @@ class TubeLayoutEditor(QMainWindow):
             if not param_name_item:
                 continue
             param_name = param_name_item.text()
+            print(param_name)
 
             if param_name == "壳体内直径 Di":
                 di_row = row
@@ -3027,8 +3030,8 @@ class TubeLayoutEditor(QMainWindow):
                         rate_item = self.param_table.item(cut_rate_row, 2)
                         if rate_item:
                             rate_item.setText(default_cut_rate)
-                        QMessageBox.warning(self, "计算错误",
-                                            f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)")
+                        # QMessageBox.warning(self, "计算错误",
+                        #                     f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)")
                         return
 
                     # 更新间距参数，保留1位小数
@@ -3060,8 +3063,8 @@ class TubeLayoutEditor(QMainWindow):
                         spacing_item = self.param_table.item(cut_spacing_row, 2)
                         if spacing_item:
                             spacing_item.setText(default_cut_spacing)
-                        QMessageBox.warning(self, "计算错误",
-                                            f"计算出的切口率({new_cut_rate:.1f}%)超出合理范围(0-50%)")
+                        # QMessageBox.warning(self, "计算错误",
+                        #                     f"计算出的切口率({new_cut_rate:.1f}%)超出合理范围(0-50%)")
                         return
 
                     # 更新切口率参数，保留1位小数
