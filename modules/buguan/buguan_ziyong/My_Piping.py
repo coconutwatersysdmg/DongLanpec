@@ -2569,7 +2569,6 @@ class TubeLayoutEditor(QMainWindow):
             if not param_name_item:
                 continue
             param_name = param_name_item.text()
-            print(param_name)
 
             if param_name == "壳体内直径 Di":
                 di_row = row
@@ -3224,7 +3223,6 @@ class TubeLayoutEditor(QMainWindow):
                                         "35", "38", "45", "50", "55", "57"])
                     elif param['参数名'] == "管程分程形式":
                         # 打印管程分程形式的信息
-                        print(self.tube_pass_partition)
                         initial_tube_pattern = str(self.tube_pass_partition)  # 获取初始值并转换为字符串
 
                         # 保存管程分程形式下拉框引用和行索引
@@ -4910,49 +4908,68 @@ class TubeLayoutEditor(QMainWindow):
 
     # TODO 整行选中函数
     def on_row_selection_changed(self):
-        """响应右侧表格选中事件，高亮对应小圆或在未选中时恢复，并同步更新 self.selected_centers"""
+        """响应右侧表格选中事件，高亮对应小圆和表格整行，并同步更新 self.selected_centers"""
         if not hasattr(self, 'full_sorted_current_centers_up') or not hasattr(self, 'full_sorted_current_centers_down'):
             return
 
         # 清除旧高亮，恢复为标准小圆
         self.clear_selection_highlight()
 
-        # 获取当前选中的行（去重）
-        selected_rows = set()
-        for index in self.hole_distribution_table.selectedIndexes():
-            selected_rows.add(index.row())
+        # 清除表格所有行的高亮
+        for row in range(self.hole_distribution_table.rowCount()):
+            for col in range(self.hole_distribution_table.columnCount()):
+                item = self.hole_distribution_table.item(row, col)
+                if item:
+                    # 恢复默认样式
+                    item.setBackground(QBrush(Qt.NoBrush))
 
-        if not selected_rows:
+        # 获取当前选中的单元格
+        selected_indexes = self.hole_distribution_table.selectedIndexes()
+        if not selected_indexes:
             return
 
-        # 绘制新的高亮
+        # 获取选中的行（去重）
+        selected_rows = set(index.row() for index in selected_indexes)
+        # 只处理第一个选中的行
+        selected_row = next(iter(selected_rows))
+
+        # 高亮表格中选中行的所有列（三列）
+        for col in range(self.hole_distribution_table.columnCount()):
+            item = self.hole_distribution_table.item(selected_row, col)
+            if item:
+                # 设置单元格背景为蓝色
+                item.setBackground(QBrush(QColor(173, 216, 230)))  # LightBlue
+            else:
+                # 如果单元格不存在，创建一个临时项来设置背景
+                temp_item = QTableWidgetItem()
+                temp_item.setBackground(QBrush(QColor(173, 216, 230)))
+                self.hole_distribution_table.setItem(selected_row, col, temp_item)
+
+        # 绘制小圆的高亮
         pen = QPen(Qt.NoPen)
         brush = QBrush(QColor(173, 216, 230))  # LightBlue
 
-        for row in selected_rows:
-            # 处理下半部分（行号为负）
-            if row < len(self.full_sorted_current_centers_down):
-                centers_down = self.full_sorted_current_centers_down[row]
-                for col_idx, (x, y) in enumerate(centers_down):
-                    # 添加高亮标记
-                    marker = self.graphics_scene.addEllipse(
-                        x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
-                    )
-                    marker.setData(0, "marker")  # 标记这个圆是 marker
-                    col_num = -(col_idx + 1)
-                    self.selected_centers.append((-(row + 1), col_num))
+        # 处理下半部分（行号为负）
+        if selected_row < len(self.full_sorted_current_centers_down):
+            centers_down = self.full_sorted_current_centers_down[selected_row]
+            for col_idx, (x, y) in enumerate(centers_down):
+                marker = self.graphics_scene.addEllipse(
+                    x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
+                )
+                marker.setData(0, "marker")
+                col_num = -(col_idx + 1)
+                self.selected_centers.append((-(selected_row + 1), col_num))
 
-            # 处理上半部分（行号为正）
-            if row < len(self.full_sorted_current_centers_up):
-                centers_up = self.full_sorted_current_centers_up[row]
-                for col_idx, (x, y) in enumerate(centers_up):
-                    # 添加高亮标记
-                    marker = self.graphics_scene.addEllipse(
-                        x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
-                    )
-                    marker.setData(0, "marker")  # 标记这个圆是 marker
-                    col_num = (col_idx + 1)
-                    self.selected_centers.append(((row + 1), col_num))
+        # 处理上半部分（行号为正）
+        if selected_row < len(self.full_sorted_current_centers_up):
+            centers_up = self.full_sorted_current_centers_up[selected_row]
+            for col_idx, (x, y) in enumerate(centers_up):
+                marker = self.graphics_scene.addEllipse(
+                    x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
+                )
+                marker.setData(0, "marker")
+                col_num = (col_idx + 1)
+                self.selected_centers.append(((selected_row + 1), col_num))
 
     def clear_selection_highlight(self):
         if not hasattr(self, 'selected_centers') or not self.selected_centers:
@@ -5401,8 +5418,7 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 pair_x_info_down = seq_start
                 pair_x_info_up = seq_end
-            print(pair_x_info_up)
-            print(pair_x_info_down)
+
 
             # 验证初始序列长度相等
             assert len(pair_x_info_up) == len(pair_x_info_down), "序列长度必须相等"
