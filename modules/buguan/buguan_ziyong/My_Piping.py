@@ -893,7 +893,6 @@ class TubeLayoutEditor(QMainWindow):
             self.tube_hole_data.append(data)
         return self.tube_hole_data
 
-
     def get_current_tube_data(self):
         """TODO 获取左侧参数表格的当前数据列表"""
         self.tube_data = []
@@ -1382,7 +1381,11 @@ class TubeLayoutEditor(QMainWindow):
 
         # 后续计算和元素构建逻辑保持不变
         try:
+
             self.calculate_piping_layout()
+            # self.update_baffle_diameter()
+            # self.calculate_piping_layout()
+            # self.update_baffle_diameter()
         except Exception as e:
             print(f"第一次计算布管布局出错: {str(e)}")
             QMessageBox.warning(self, "计算警告", f"第一次计算布管布局失败: {str(e)}")
@@ -1588,7 +1591,6 @@ class TubeLayoutEditor(QMainWindow):
 
         # TODO 后续取消注释
         # self.line_tip.setText("请确认"壳体内径Di"是否正确！")
-        # self.update_baffle_diameter()
 
     # TODO 布管函数
     def calculate_piping_layout(self):
@@ -1618,6 +1620,7 @@ class TubeLayoutEditor(QMainWindow):
         height_0_180 = None
         height_90_270 = None
         DN = None
+        Di = None  # 新增：壳体内直径
         table = self.param_table
 
         for row in range(table.rowCount()):
@@ -1637,7 +1640,8 @@ class TubeLayoutEditor(QMainWindow):
 
             # 提取关键参数
             if param_name == "壳体内直径 Di":
-                DL = float(param_value) if param_value else None
+                Di = float(param_value) if param_value else None
+                DL = Di  # 先临时用Di的值
             elif param_name == "公称直径 DN":
                 DN = float(param_value) if param_value else None
             elif param_name == "换热管外径 do":
@@ -1647,15 +1651,114 @@ class TubeLayoutEditor(QMainWindow):
                 height_0_180 = float(param_value) if param_value else 0
             elif param_name == "非布管区域弦高（90°/270°）":
                 height_90_270 = float(param_value) if param_value else 0
+            elif param_name == "布管限定圆 DL":
+                # 保留用户输入的DL值，但后续可能会被计算值覆盖
+                DL = float(param_value) if param_value else None
 
         # 参数验证
-        if DL is None or do is None:
-            QMessageBox.warning(self, "提示", "请先填写 DL 和 do 两个参数。")
+        if Di is None or do is None:
+            QMessageBox.warning(self, "提示", "请先填写壳体内直径 Di 和换热管外径 do 两个参数。")
             return None
+
+        # 获取换热器型号
+        heat_exchanger_type = self.heat_exchanger if hasattr(self, 'heat_exchanger') else ''
+        if not heat_exchanger_type and self.productID:
+            # 如果没有换热器型号，从数据库获取
+            conn = None
+            try:
+                conn = create_product_connection()
+                if conn:
+                    with conn.cursor() as cursor:
+                        query = "SELECT 产品型式 FROM 产品设计活动表 WHERE 产品ID = %s"
+                        cursor.execute(query, (self.productID,))
+                        result = cursor.fetchone()
+                        if result and '产品型式' in result:
+                            heat_exchanger_type = result['产品型式'].strip().upper()
+                            self.heat_exchanger = heat_exchanger_type
+            except pymysql.MySQLError as e:
+                print(f"数据库查询产品型式失败: {e}")
+            finally:
+                if conn and conn.open:
+                    conn.close()
+
+        # 计算布管限定圆 DL
+        if heat_exchanger_type in ["AEU", "BEU", "BEM", "NEN"]:
+            # 计算方式1: DL = Di - 2b₃, b₃ = max(0.25do, 8)
+            b3 = max(0.25 * do, 8.0)
+            DL = Di - 2 * b3
+            print(f"计算布管限定圆 DL ({heat_exchanger_type}): {Di} - 2 * max(0.25 * {do}, 8.0) = {DL:.1f}")
+
+        elif heat_exchanger_type in ["AES", "BES"]:
+            # 计算方式2: DL = Di - 2(b₁ + b₂ + b)
+            # 确定b的值
+            if Di < 1000:
+                b = 4.0  # 默认值
+            else:  # 1000 ≤ Di ≤ 2600
+                b = 5.0  # 默认值
+
+            # 确定b₁和bₙ的值
+            if Di <= 700:
+                b_n = 10.0
+                b_1 = 3.0
+            elif Di <= 1200:
+                b_n = 13.0
+                b_1 = 5.0
+            elif Di <= 2000:
+                b_n = 16.0
+                b_1 = 6.0
+            else:  # Di <= 2600
+                b_n = 20.0
+                b_1 = 7.0
+
+            # 计算b₂
+            b_2 = b_n + 1.5
+
+            # 计算DL
+            DL = Di - 2 * (b_1 + b_2 + b)
+            print(f"计算布管限定圆 DL ({heat_exchanger_type}): {Di} - 2 * ({b_1} + {b_2} + {b}) = {DL:.1f}")
+
+        else:
+            print(f"未知的换热器型号: {heat_exchanger_type}，使用默认DL值")
+            if DL is None:
+                # 如果没有计算出DL且没有用户输入，使用默认值
+                DL = Di - 2 * max(0.25 * do, 8.0)
+
+        # 更新参数表中的DL值
+        dl_row = -1
+        row_count = self.param_table.rowCount()
+        for row in range(row_count):
+            param_name_item = self.param_table.item(row, 1)
+            if param_name_item and param_name_item.text() == "布管限定圆 DL":
+                dl_row = row
+                break
+
+        if dl_row != -1:
+            # 临时断开信号避免循环触发
+            original_handler = None
+            if hasattr(self, 'handle_param_change'):
+                try:
+                    self.param_table.itemChanged.disconnect(self.handle_param_change)
+                    original_handler = self.handle_param_change
+                except:
+                    pass
+
+            # 更新布管限定圆 DL
+            dl_item = self.param_table.item(dl_row, 2)
+            if dl_item:
+                dl_item.setText(f"{DL:.1f}")
+            else:
+                self.param_table.setItem(dl_row, 2, QTableWidgetItem(f"{DL:.1f}"))
+            print(f"已更新布管限定圆 DL: {DL:.1f}")
+
+            # 重新连接信号
+            if original_handler:
+                try:
+                    self.param_table.itemChanged.connect(original_handler)
+                except:
+                    pass
 
         # 转换为DataFrame
         self.left_data_pd = pd.DataFrame(self.left_data_pd)
-        print(self.tube_pass_form_value)
 
         # 2. 构造JSON映射
         param_mapping = {
@@ -1692,7 +1795,6 @@ class TubeLayoutEditor(QMainWindow):
             "与圆筒连接防冲板方位": ("LB_BafflePosition", None),
             "与圆筒连接防冲板宽度": ("LB_BaffleW", None),
             "与圆筒连接防冲板至圆筒内壁最大距离": ("LB_BaffleDis", None),
-            # "分程隔板放置型式": ("LB_ClapboardType", {"未选择": "0", "形式1": "1", "形式2": "2", "形式3": "3"}),
             "热交换器类型": (
                 "LB_HEType", {"未选择": "2", "浮头式热交换器": "0", "固定管板式热交换器": "1", "U型管式热交换器": "2"})
         }
@@ -1717,6 +1819,10 @@ class TubeLayoutEditor(QMainWindow):
                     input_json[json_key] = value_map.get(param_value, "0")
                 else:
                     input_json[json_key] = param_value
+
+        # 确保使用计算后的DL值
+        input_json['LB_DL'] = f"{DL:.1f}"
+        input_json['LB_Di'] = f"{Di:.1f}" if Di else ""
 
         # 补充默认值
         connection = pymysql.connect(
@@ -1745,7 +1851,7 @@ class TubeLayoutEditor(QMainWindow):
             # 焊接拉杆 → 直接取换热管外径
             input_json['LB_TieRodD'] = input_json.get('LB_TubeD', '')
         else:
-            od_val = float(input_json.get('LB_TieRodD', 0))
+            od_val = float(input_json.get('LB_TieRodD', 0)) if input_json.get('LB_TieRodD') else 0
             if 10 <= od_val <= 14:
                 input_json['LB_TieRodD'] = "10"
             elif 14 < od_val < 25:
@@ -1754,13 +1860,14 @@ class TubeLayoutEditor(QMainWindow):
                 input_json['LB_TieRodD'] = "16"
             else:
                 input_json['LB_TieRodD'] = "12"
+            input_json['LB_TieRodD'] = "16"
         input_json['LB_ClapboardType'] = '2'
 
         # 3. 根据产品ID从数据库获取产品型式并设置热交换器类型
         he_type = '2'  # 默认U型管式
-        product_type_str = ''  # 用于存储产品型式字符串
+        product_type_str = heat_exchanger_type  # 用于存储产品型式字符串
         self.heat_exchanger = product_type_str
-        if self.productID:
+        if self.productID and not product_type_str:
             conn = None
             try:
                 conn = create_product_connection()
@@ -1833,8 +1940,6 @@ class TubeLayoutEditor(QMainWindow):
             "LB_BaffleDis": "与圆筒连接防冲板至圆筒内壁最大距离",
             "LB_ClapboardType": "分程隔板放置型式",
             "LB_HEType": "热交换器类型",
-
-            # 这里继续补充需要的映射
         }
 
         defaults = {}
@@ -3048,8 +3153,8 @@ class TubeLayoutEditor(QMainWindow):
                         spacing_item = self.param_table.item(cut_spacing_row, 2)
                         if spacing_item:
                             spacing_item.setText(default_cut_spacing)
-                        QMessageBox.warning(self, "输入错误",
-                                            f"切口与中心线间距必须在0到{baffle_radius:.1f}mm范围内！")
+                        # QMessageBox.warning(self, "输入错误",
+                        #                     f"切口与中心线间距必须在0到{baffle_radius:.1f}mm范围内！")
                         return
 
                     # 反算切口率 A = [(Dp/2) - B] ÷ Di
@@ -5425,7 +5530,6 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 pair_x_info_down = seq_start
                 pair_x_info_up = seq_end
-
 
             # 验证初始序列长度相等
             assert len(pair_x_info_up) == len(pair_x_info_down), "序列长度必须相等"
