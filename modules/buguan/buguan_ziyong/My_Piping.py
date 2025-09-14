@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                              QGraphicsScene, QFrame,
                              QDialog, QDialogButtonBox, QStackedWidget, QGridLayout,
                              QSizePolicy, QHeaderView, QLineEdit, QCheckBox, QListView, QGraphicsRectItem,
-                             QGraphicsPathItem)
+                             QGraphicsPathItem, QGraphicsItem)
 from PyQt5.QtWidgets import QGraphicsEllipseItem
 from PyQt5.QtWidgets import QGraphicsPolygonItem, QMessageBox, QComboBox
 from PyQt5.QtWidgets import QTextEdit
@@ -4338,12 +4338,11 @@ class TubeLayoutEditor(QMainWindow):
         extension = R * 0.1  # 让坐标轴比大圆长10%
         total_length = R + extension
         arrow_size = 10  # 箭头大小
-        # 增大字体大小，从10改为14，更醒目
-        font = QFont("Arial", 14, QFont.Bold)
+        font = QFont("Arial", 12, QFont.Bold)  # 固定字体大小
 
         # 红色 X 轴
         pen_x = QPen(Qt.red)
-        pen_x.setWidth(5)  # 粗线
+        pen_x.setWidth(5)
         scene.addLine(-total_length, 0, total_length, 0, pen_x)
 
         # X轴箭头 (右)
@@ -4365,12 +4364,20 @@ class TubeLayoutEditor(QMainWindow):
         scene.addLine(0, total_length, -arrow_size / 2, total_length - arrow_size, pen_y)
         scene.addLine(0, total_length, arrow_size / 2, total_length - arrow_size, pen_y)
 
-        # TODO 角度文字
-        text_offset = 40
-        scene.addText("0°", font).setPos(-10, -total_length - text_offset)
-        scene.addText("90°", font).setPos(total_length + text_offset / 2, -30)
-        scene.addText("180°", font).setPos(-20, total_length + 5)
-        scene.addText("270°", font).setPos(-total_length - text_offset, -30)
+        # 角度文字 - 使用 ItemIgnoresTransformations 固定大小
+        text_offset = 80  # 固定偏移量
+
+        texts = [
+            ("0°", -10, -total_length - text_offset),
+            ("90°", total_length + text_offset / 2, -30),
+            ("180°", -20, total_length + 5),
+            ("270°", -total_length - text_offset, -30)
+        ]
+
+        for label, x, y in texts:
+            text_item = scene.addText(label, font)
+            text_item.setPos(x, y)
+            text_item.setFlag(QGraphicsItem.ItemIgnoresTransformations)  # 关键：忽略缩放
 
     # TODO 连接中心
     def connect_center(self, scene, centers: List[Tuple[float, float]], do: float):
