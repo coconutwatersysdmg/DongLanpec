@@ -28,7 +28,9 @@ from modules.buguan.buguan_ziyong.sheet_form_page import SheetFormPage
 from modules.buguan.buguan_ziyong.tube_sheet_connection import TubeSheetConnectionPage
 from modules.chanpinguanli.chanpinguanli_main import product_manager
 
-product_id = 'PD2025090422414303'
+# product_id = 'PD2025090422414303'
+
+product_id = 'PD2025091514545108'
 
 
 def on_product_id_changed(new_id):
@@ -454,6 +456,7 @@ class TubeLayoutEditor(QMainWindow):
         self.huanreguan = []
         self.isHuadao = False
         self.lagan_info = []
+        self.heat_exchanger = None
         self.sheet_form_param_layout = QVBoxLayout()
         self.sheet_form_image_labels = []
         self._current_centers = []
@@ -1009,10 +1012,10 @@ class TubeLayoutEditor(QMainWindow):
         print("加载初始数据")
 
         hidden_params = [
-            "滑道定位", "滑道高度", "滑道厚度", "滑道与竖直中心线夹角",
+            # "滑道定位", "滑道高度", "滑道厚度", "滑道与竖直中心线夹角",
             "旁路挡板厚度", "防冲板形式", "防冲板厚度", "防冲板折边角度",
             "防冲板宽度", "防冲板方位角",
-            "至圆筒内壁距离", "切边长度L1",
+            "至圆筒内壁距离", "切边长度 L1",
             "切边高度 h", "中间挡板厚度"
         ]
 
@@ -1056,6 +1059,10 @@ class TubeLayoutEditor(QMainWindow):
                                         '单位': unit
                                     })
                                     continue
+
+                                # 保存原始值，如果没有查询到新值则使用原始值
+                                final_value = param_value
+
                                 # 公称直径DN的个性化查询（仅产品库有设计数据表）
                                 if param_name == "公称直径 DN":
                                     try:
@@ -1070,25 +1077,12 @@ class TubeLayoutEditor(QMainWindow):
 
                                         if isinstance(design_data, dict) and '壳程数值' in design_data and design_data[
                                             '壳程数值']:
-                                            processed_params.append({
-                                                '参数名': param_name,
-                                                '参数值': design_data['壳程数值'],
-                                                '单位': unit
-                                            })
-                                        else:
-                                            processed_params.append({
-                                                '参数名': param_name,
-                                                '参数值': param_value,
-                                                '单位': unit
-                                            })
+                                            final_value = design_data['壳程数值']
+                                            print(f"更新公称直径 DN: {param_value} -> {final_value}")
                                     except Exception as e:
-                                        print(f"处理公称直径DN时出错: {str(e)}")
-                                        processed_params.append({
-                                            '参数名': param_name,
-                                            '参数值': param_value,
-                                            '单位': unit
-                                        })
-                                # 其他需要产品库设计数据表的参数处理（保持原逻辑）
+                                        print(f"处理公称直径DN时出错: {str(e)}，使用原值: {param_value}")
+
+                                # 其他需要产品库设计数据表的参数处理
                                 elif param_name == "是否以外径为基准":
                                     try:
                                         design_query = """
@@ -1101,24 +1095,10 @@ class TubeLayoutEditor(QMainWindow):
 
                                         if isinstance(design_data, dict) and '数值' in design_data and design_data[
                                             '数值']:
-                                            processed_params.append({
-                                                '参数名': param_name,
-                                                '参数值': design_data['数值'],
-                                                '单位': unit
-                                            })
-                                        else:
-                                            processed_params.append({
-                                                '参数名': param_name,
-                                                '参数值': param_value,
-                                                '单位': unit
-                                            })
+                                            final_value = design_data['数值']
+                                            print(f"更新是否以外径为基准: {param_value} -> {final_value}")
                                     except Exception as e:
-                                        print(f"处理是否以外径为基准时出错: {str(e)}")
-                                        processed_params.append({
-                                            '参数名': param_name,
-                                            '参数值': param_value,
-                                            '单位': unit
-                                        })
+                                        print(f"处理是否以外径为基准时出错: {str(e)}，使用原值: {param_value}")
 
                                 elif param_name == "壳体内直径 Di":
                                     try:
@@ -1132,26 +1112,12 @@ class TubeLayoutEditor(QMainWindow):
 
                                         if isinstance(design_data, dict) and '管程数值' in design_data and design_data[
                                             '管程数值']:
-                                            processed_params.append({
-                                                '参数名': param_name,
-                                                '参数值': design_data['管程数值'],
-                                                '单位': unit
-                                            })
-                                        else:
-                                            processed_params.append({
-                                                '参数名': param_name,
-                                                '参数值': param_value,
-                                                '单位': unit
-                                            })
+                                            final_value = design_data['管程数值']
+                                            print(f"更新壳体内直径 Di: {param_value} -> {final_value}")
                                     except Exception as e:
-                                        print(f"处理壳体内直径Di时出错: {str(e)}")
-                                        processed_params.append({
-                                            '参数名': param_name,
-                                            '参数值': param_value,
-                                            '单位': unit
-                                        })
+                                        print(f"处理壳体内直径Di时出错: {str(e)}，使用原值: {param_value}")
 
-                                # 其他参数处理逻辑（保持不变）
+                                # 其他参数处理逻辑
                                 elif param_name in ["旁路挡板厚度", "防冲板形式", "防冲板厚度", "滑道定位",
                                                     "滑道高度", "滑道厚度", "滑道与竖直中心线夹角",
                                                     "切边长度 L1", "切边高度 h", "换热管外径 do", "中间挡板厚度",
@@ -1167,45 +1133,34 @@ class TubeLayoutEditor(QMainWindow):
                                             query_param_name = "拉杆规格"
 
                                         design_query = """
-                                                                            SELECT 参数值 
-                                                                            FROM 产品设计活动表_元件附加参数表 
-                                                                            WHERE 产品ID = %s AND 参数名称 = %s
-                                                                        """
+                                            SELECT 参数值 
+                                            FROM 产品设计活动表_元件附加参数表 
+                                            WHERE 产品ID = %s AND 参数名称 = %s
+                                        """
                                         cursor.execute(design_query, (self.productID, query_param_name))
                                         design_data = cursor.fetchone()
 
                                         if isinstance(design_data, dict) and '参数值' in design_data and design_data[
                                             '参数值']:
-                                            processed_params.append({
-                                                '参数名': param_name,
-                                                '参数值': design_data['参数值'],
-                                                '单位': unit
-                                            })
-                                        else:
-                                            processed_params.append({
-                                                '参数名': param_name,
-                                                '参数值': param_value,
-                                                '单位': unit
-                                            })
+                                            final_value = design_data['参数值']
+                                            print(f"更新{param_name}: {param_value} -> {final_value}")
+                                            param_value = final_value
                                     except Exception as e:
-                                        print(f"处理{param_name}时出错: {str(e)}")
-                                        processed_params.append({
-                                            '参数名': param_name,
-                                            '参数值': param_value,
-                                            '单位': unit
-                                        })
+                                        print(f"处理{param_name}时出错: {str(e)}，使用原值: {param_value}")
 
-                                else:
-                                    processed_params.append({
-                                        '参数名': param_name,
-                                        '参数值': param_value,
-                                        '单位': unit
-                                    })
+                                # 将处理后的参数添加到结果列表
+                                processed_params.append({
+                                    '参数名': param_name,
+                                    '参数值': final_value,
+                                    '单位': unit
+                                })
                             else:
                                 print(f"参数格式错误，跳过: {param}")
 
                         if processed_params:
+                            print(processed_params)
                             self.setup_parameters(processed_params)
+
                             self.hide_specific_params(hidden_params)
                             self.update_leftpad_params()
                             product_params_loaded = True
@@ -1246,6 +1201,9 @@ class TubeLayoutEditor(QMainWindow):
                                     param_value = param['参数值']
                                     unit = param['单位']
 
+                                    # 保存原始值，如果没有查询到新值则使用原始值
+                                    final_value = param_value
+
                                     # 对于特殊参数，尝试从产品设计活动库的设计数据表中读取
                                     if param_name in ["公称直径 DN", "是否以外径为基准", "壳体内直径 Di"]:
                                         # 需要产品数据库连接来查询设计数据表
@@ -1267,17 +1225,8 @@ class TubeLayoutEditor(QMainWindow):
                                                         if isinstance(design_data,
                                                                       dict) and '壳程数值' in design_data and \
                                                                 design_data['壳程数值']:
-                                                            processed_params.append({
-                                                                '参数名': param_name,
-                                                                '参数值': design_data['壳程数值'],
-                                                                '单位': unit
-                                                            })
-                                                        else:
-                                                            processed_params.append({
-                                                                '参数名': param_name,
-                                                                '参数值': param_value,
-                                                                '单位': unit
-                                                            })
+                                                            final_value = design_data['壳程数值']
+                                                            print(f"更新公称直径 DN: {param_value} -> {final_value}")
 
                                                     elif param_name == "是否以外径为基准":
                                                         design_query = """
@@ -1292,17 +1241,9 @@ class TubeLayoutEditor(QMainWindow):
                                                         if isinstance(design_data,
                                                                       dict) and '数值' in design_data and \
                                                                 design_data['数值']:
-                                                            processed_params.append({
-                                                                '参数名': param_name,
-                                                                '参数值': design_data['数值'],
-                                                                '单位': unit
-                                                            })
-                                                        else:
-                                                            processed_params.append({
-                                                                '参数名': param_name,
-                                                                '参数值': param_value,
-                                                                '单位': unit
-                                                            })
+                                                            final_value = design_data['数值']
+                                                            print(
+                                                                f"更新是否以外径为基准: {param_value} -> {final_value}")
 
                                                     elif param_name == "壳体内直径 Di":
                                                         design_query = """
@@ -1317,31 +1258,10 @@ class TubeLayoutEditor(QMainWindow):
                                                         if isinstance(design_data,
                                                                       dict) and '管程数值' in design_data and \
                                                                 design_data['管程数值']:
-                                                            processed_params.append({
-                                                                '参数名': param_name,
-                                                                '参数值': design_data['管程数值'],
-                                                                '单位': unit
-                                                            })
-                                                        else:
-                                                            processed_params.append({
-                                                                '参数名': param_name,
-                                                                '参数值': param_value,
-                                                                '单位': unit
-                                                            })
-                                            else:
-                                                # 无法连接到产品数据库或没有产品ID，使用默认值
-                                                processed_params.append({
-                                                    '参数名': param_name,
-                                                    '参数值': param_value,
-                                                    '单位': unit
-                                                })
+                                                            final_value = design_data['管程数值']
+                                                            print(f"更新壳体内直径 Di: {param_value} -> {final_value}")
                                         except Exception as e:
-                                            print(f"处理{param_name}时出错: {str(e)}")
-                                            processed_params.append({
-                                                '参数名': param_name,
-                                                '参数值': param_value,
-                                                '单位': unit
-                                            })
+                                            print(f"处理{param_name}时出错: {str(e)}，使用原值: {param_value}")
                                         finally:
                                             if product_design_conn and hasattr(product_design_conn,
                                                                                'open') and product_design_conn.open:
@@ -1349,13 +1269,13 @@ class TubeLayoutEditor(QMainWindow):
                                                     product_design_conn.close()
                                                 except Exception as e:
                                                     print(f"关闭产品设计数据库连接时出错: {str(e)}")
-                                    else:
-                                        # 非特殊参数，直接使用默认值
-                                        processed_params.append({
-                                            '参数名': param_name,
-                                            '参数值': param_value,
-                                            '单位': unit
-                                        })
+
+                                    # 将处理后的参数添加到结果列表
+                                    processed_params.append({
+                                        '参数名': param_name,
+                                        '参数值': final_value,
+                                        '单位': unit
+                                    })
                                 else:
                                     print(f"参数格式错误，跳过: {param}")
 
@@ -1381,20 +1301,10 @@ class TubeLayoutEditor(QMainWindow):
 
         # 后续计算和元素构建逻辑保持不变
         try:
-
             self.calculate_piping_layout()
-            # self.update_baffle_diameter()
-            # self.calculate_piping_layout()
-            # self.update_baffle_diameter()
         except Exception as e:
             print(f"第一次计算布管布局出错: {str(e)}")
             QMessageBox.warning(self, "计算警告", f"第一次计算布管布局失败: {str(e)}")
-
-        # try:
-        #     self.calculate_piping_layout()
-        # except Exception as e:
-        #     print(f"第二次计算布管布局出错: {str(e)}")
-        #     QMessageBox.warning(self, "计算警告", f"第二次计算布管布局失败: {str(e)}")
 
         # 解析输入参数部分保持不变
         try:
@@ -1409,7 +1319,6 @@ class TubeLayoutEditor(QMainWindow):
             height = float(self.input_json.get('LB_SlipWayHeight', 0))
             thickness = float(self.input_json.get('LB_SlipWayThick', 0))
             angle = float(self.input_json.get('LB_SlipWayAngle', 0))
-            # block_thickness=float(self.input_json.get('LB_SlipWayAngle', 0))
 
             if tube_outer_diameter <= 0:
                 print("管子外径必须大于0，使用默认值10")
@@ -1486,19 +1395,6 @@ class TubeLayoutEditor(QMainWindow):
         impingement_plate_1_centers = all_coords.get("impingement_plate_1_centers", "")
         impingement_plate_2_centers = all_coords.get("impingement_plate_2_centers", "")
         del_centers = all_coords.get("del_centers", [])
-
-        # try:
-        #     if hasattr(self, 'global_centers'):
-        #         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
-        #             self.global_centers)
-        #     else:
-        #         print("self.global_centers不存在，无法分组中心点")
-        #         self.full_sorted_current_centers_up = []
-        #         self.full_sorted_current_centers_down = []
-        # except Exception as e:
-        #     print(f"分组中心点时出错: {str(e)}")
-        #     self.full_sorted_current_centers_up = []
-        #     self.full_sorted_current_centers_down = []
 
         self.build_lagan(lagan_centers)
         self.build_side_lagan(side_centers)
@@ -1745,10 +1641,10 @@ class TubeLayoutEditor(QMainWindow):
             # 更新布管限定圆 DL
             dl_item = self.param_table.item(dl_row, 2)
             if dl_item:
-                dl_item.setText(f"{DL:.1f}")
+                dl_item.setText(f"{DL: .1f}")
             else:
-                self.param_table.setItem(dl_row, 2, QTableWidgetItem(f"{DL:.1f}"))
-            print(f"已更新布管限定圆 DL: {DL:.1f}")
+                self.param_table.setItem(dl_row, 2, QTableWidgetItem(f"{DL: .1f}"))
+            print(f"已更新布管限定圆 DL: {DL: .1f}")
 
             # 重新连接信号
             if original_handler:
@@ -2657,6 +2553,7 @@ class TubeLayoutEditor(QMainWindow):
             # 同样可恢复为默认值等操作
 
     def update_baffle_diameter(self):
+        print("执行了没有？？？""")
         # 1. 查找参数表中各关键参数的行索引
         di_row = -1
         baffle_row = -1
@@ -2747,6 +2644,8 @@ class TubeLayoutEditor(QMainWindow):
         if dl_row != -1:
             # 获取换热器型号
             heat_exchanger_type = self.heat_exchanger
+            if heat_exchanger_type is None:
+                heat_exchanger_type="AEU"
 
             # 根据型号选择不同的计算方式
             if heat_exchanger_type in ["AEU", "BEU", "BEM", "NEN"]:
@@ -2835,8 +2734,8 @@ class TubeLayoutEditor(QMainWindow):
             (16.0, "转角正方形"): (22.0, 38.0),
             (19.0, "正三角形"): (25.0, 38.0),
             (19.0, "转角正三角形"): (25.0, 38.0),
-            (19.0, "正方形"): (25.0, 40.0),
-            (19.0, "转角正方形"): (25.0, 40.0),
+            (19.0, "正方形"): (25.0, 38.0),
+            (19.0, "转角正方形"): (25.0, 38.0),
             (20.0, "正三角形"): (26.0, 40.0),
             (20.0, "转角正三角形"): (26.0, 40.0),
             (20.0, "正方形"): (26.0, 42.0),
@@ -2901,12 +2800,17 @@ class TubeLayoutEditor(QMainWindow):
             # 更新换热管中心距 S
             if center_distance_row != -1:
                 self._update_table_cell(center_distance_row, 2, f"{center_distance:.1f}")
+                print(f"已更新换热管中心距 S: {center_distance:.1f}")
+
             # 更新分程隔板两侧相邻管中心距（竖直）
             if sn_vertical_row != -1:
                 self._update_table_cell(sn_vertical_row, 2, f"{sn_value:.1f}")
+                print(f"已更新分程隔板两侧相邻管中心距（竖直）: {sn_value:.1f}")
+
             # 更新分程隔板两侧相邻管中心距（水平）
             if sn_horizontal_row != -1:
                 self._update_table_cell(sn_horizontal_row, 2, f"{sn_value:.1f}")
+                print(f"已更新分程隔板两侧相邻管中心距（水平）: {sn_value:.1f}")
         else:
             print(f"未找到匹配的映射关系 for {key}")
 
@@ -2945,6 +2849,7 @@ class TubeLayoutEditor(QMainWindow):
 
             if baffle_diameter:
                 self._update_table_cell(baffle_row, 2, baffle_diameter)
+                print(f"已更新折流板外径: {baffle_diameter}")
 
         # 5. 更新拉杆形式
         if lg_row != -1 and do_value is not None:
@@ -2960,6 +2865,7 @@ class TubeLayoutEditor(QMainWindow):
                 current_index = lg_widget.findText(default_option)
                 if current_index >= 0:
                     lg_widget.setCurrentIndex(current_index)
+                    print(f"已更新拉杆形式: {default_option}")
             else:
                 # 创建下拉框
                 combo_box = QComboBox()
@@ -2973,6 +2879,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 设置下拉框到单元格
                 self.param_table.setCellWidget(lg_row, 2, combo_box)
+                print(f"已更新拉杆形式: {default_option}")
 
                 # 连接信号，允许用户手动更改
                 combo_box.currentTextChanged.connect(lambda: self.handle_param_change())
@@ -3192,10 +3099,14 @@ class TubeLayoutEditor(QMainWindow):
         return ""
 
     def setup_parameters(self, params):
+
         for param in params:
             if param['参数名'] == '管程分程形式':
                 self.tube_pass_partition = param['参数值']
-                break
+                # break
+            if param['参数名'] == '滑道厚度':
+                print(f"参数名: {param['参数名']}, 参数值: {param['参数值']}")  # 确认是否真的匹配
+                # break
         self.param_table.setRowCount(len(params))
         self._is_validating = False  # 添加验证标志位
         self._original_values = {}  # 存储每个单元格的原始值
@@ -3235,7 +3146,7 @@ class TubeLayoutEditor(QMainWindow):
                 self.baffle_params_rows[param['参数名']] = row
 
             # 处理特殊字段（下拉框）
-            special_params = ["是否以外径为基准", "分程布置形式", "换热管排列方式", "滑道定位",
+            special_params = ["是否以外径为基准", "分程布置形式", "换热管排列方式",
                               "折流板切口方向", "管程分程形式", "防冲板形式", "换热管外径 do", "管程程数",
                               "换热管布置方式", "换热管公称长度 LN",
                               "滑道定位", "拉杆形式", "拉杆直径"]  # 添加重命名后的参数名
@@ -3444,7 +3355,9 @@ class TubeLayoutEditor(QMainWindow):
                 if param_value is None:
                     display_value = ""
                 else:
+
                     display_value = str(param_value)
+                    print(display_value)
 
                 item = QTableWidgetItem(display_value)
                 item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
@@ -3579,18 +3492,27 @@ class TubeLayoutEditor(QMainWindow):
             combo.setItemData(0, "", Qt.UserRole)
             print(f"错误：图片基础目录不存在 - {base_path}")
             return
+        print(self.heat_exchanger)
+        print("pistol")
+
+        # 定义允许显示4.1图片的换热器类型
+        allowed_types = {"AES", "BES", "NEN", "BEM"}
+        # 检查当前换热器类型是否在允许列表中
+        show_4_1 = self.heat_exchanger in allowed_types
 
         # 根据管程程数加载对应图片，同时关联标识
         if tube_pass == "2":
             self.add_image_to_combo(combo, base_path, "2.png", "2")
         elif tube_pass == "4":
-            self.add_image_to_combo(combo, base_path, "4.1.png", "4.1")
+            # 只有允许的类型才显示4.1图片
+            if show_4_1:
+                self.add_image_to_combo(combo, base_path, "4.1.png", "4.1")
             self.add_image_to_combo(combo, base_path, "4.2.png", "4.2")
             self.add_image_to_combo(combo, base_path, "4.3.png", "4.3")
         elif tube_pass == "6":
             self.add_image_to_combo(combo, base_path, "6.1.png", "6.1")
             self.add_image_to_combo(combo, base_path, "6.2.png", "6.2")
-            self.add_image_to_combo(combo, base_path, "6.3.png", "6.3")
+            # self.add_image_to_combo(combo, base_path, "6.3.png", "6.3")
         else:
             combo.addItem("未选择")
             combo.setItemData(0, "", Qt.UserRole)
@@ -3936,7 +3858,7 @@ class TubeLayoutEditor(QMainWindow):
             return None
 
         table_name = "`产品设计活动表_布管参数表`"
-        component_table = "`产品设计活动表_元件附加参数表`"  # ← 新增：元件附加参数表
+        component_table = "`产品设计活动表_元件附加参数表`"  # 元件附加参数表
         productID = self.productID
         sql_statements = []
 
@@ -3948,7 +3870,7 @@ class TubeLayoutEditor(QMainWindow):
         delete_sql = f"DELETE FROM {table_name} WHERE `产品ID` = '{safe_productID}'"
         sql_statements.append(delete_sql)
 
-        # ----------------- 管程=2 时把“分程隔板两侧相邻管中心距（竖直）”置 0 -----------------
+        # 管程=2 时把“分程隔板两侧相邻管中心距（竖直）”置 0
         is_tube_pass_two = any(
             (data.get("参数名", "").strip() == "管程程数" and str(data.get("参数值", "")).strip() == "2")
             for data in tube_data
@@ -3958,15 +3880,14 @@ class TubeLayoutEditor(QMainWindow):
                 if data.get("参数名", "").strip() == "分程隔板两侧相邻管中心距（竖直）":
                     data["参数值"] = "0"
                     break
-        # ----------------------------------------------------------------------
 
         # 需要跨表同步的参数（从布管参数表 -> 元件附加参数表 的映射）
         # 左边是布管参数表里的“参数名”，右边是元件附加参数表里的“参数名称”
         cross_map = {
             "换热管外径 do": "换热管外径",
             "中间挡板厚度": "中间挡板厚度",
-            "拉杆形式": "拉杆型式",
-            "拉杆直径": "拉杆规格",
+            "拉杆形式": "拉杆型式",  # 映射为"拉杆型式"
+            "拉杆直径": "拉杆规格",  # 映射为"拉杆规格"
             "旁路挡板厚度": "旁路挡板厚度",
             "防冲板形式": "防冲板形式",
             "防冲板厚度": "防冲板厚度",
@@ -3978,7 +3899,7 @@ class TubeLayoutEditor(QMainWindow):
             "切边高度 h": "切边高度 h",
         }
 
-        # 用于后面写设计数据表/元件附加参数表的值暂存（保留你原有的 keys）
+        # 用于后面写设计数据表/元件附加参数表的值暂存
         cross_params = {
             "公称直径 DN": None,
             "旁路挡板厚度": None,
@@ -3991,11 +3912,11 @@ class TubeLayoutEditor(QMainWindow):
             "切边长度 L1": None,
             "切边高度 h": None,
             "管程分程形式": None,
-            # 下面四个是这次明确要做双向关联的
+            # 四个双向关联参数
             "换热管外径 do": None,
             "中间挡板厚度": None,
-            "拉杆形式": None,
-            "拉杆直径": None,
+            "拉杆形式": None,  # 布管参数表中的"拉杆形式"
+            "拉杆直径": None,  # 布管参数表中的"拉杆直径"
         }
 
         # 遍历前端参数，落表到“布管参数表”，并收集 cross_params
@@ -4020,7 +3941,7 @@ class TubeLayoutEditor(QMainWindow):
             )
             sql_statements.append(insert_sql)
 
-        # 处理“管程分程形式”的图标选择值（来自 self.tube_pass_form_value）
+        # 处理“管程分程形式”的图标选择值
         if hasattr(self, 'tube_pass_form_value') and self.tube_pass_form_value:
             param_name = "管程分程形式"
             param_value = self.tube_pass_form_value
@@ -4041,7 +3962,7 @@ class TubeLayoutEditor(QMainWindow):
                 f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
             )
 
-        # 原逻辑：把 self.output_data['TieRodD'] 也写到“拉杆直径”
+        # 把 self.output_data['TieRodD'] 写到“拉杆直径”
         tie_rod_d = self.output_data.get('TieRodD')
         if tie_rod_d is not None:
             cross_params["拉杆直径"] = str(tie_rod_d)
@@ -4060,7 +3981,7 @@ class TubeLayoutEditor(QMainWindow):
                 f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
             )
 
-        # 公称直径写回“设计数据表”（保持你原来的逻辑）
+        # 公称直径写回“设计数据表”
         if cross_params["公称直径 DN"] is not None:
             design_table = "`产品设计活动表_设计数据表`"
             safe_dn_value = escape_str(cross_params["公称直径 DN"])
@@ -4069,8 +3990,8 @@ class TubeLayoutEditor(QMainWindow):
                 f"WHERE `产品ID` = '{productID}' AND `参数名称` LIKE '公称直径%'"
             )
 
-        # —— 新增重点：把四个映射参数写回/更新到【产品设计活动表_元件附加参数表】 ——
-        # 这里做成 upsert（先 UPDATE；若不存在再 INSERT）
+        # 把映射参数写回/更新到【产品设计活动表_元件附加参数表】
+        # 采用upsert（先UPDATE；若不存在再INSERT）
         for tube_name, comp_name in cross_map.items():
             val = cross_params.get(tube_name)
             if val is None or str(val).strip() == "":
@@ -4091,7 +4012,7 @@ class TubeLayoutEditor(QMainWindow):
                 f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}')"
             )
 
-        # 执行所有 SQL（保持你的事务提交/回滚逻辑）
+        # 执行所有 SQL
         conn = create_product_connection()
         if not conn:
             return None
@@ -4909,8 +4830,8 @@ class TubeLayoutEditor(QMainWindow):
             "SN": "分程隔板两侧相邻管中心距（竖直）",
             "SNH": "分程隔板两侧相邻管中心距（水平）",
             "BaffleOD": "折流板外径",
-            "SlipWayThick": "滑道厚度",
-            "SlipWayAngle": "滑道与竖直中心线夹角",
+            # "SlipWayThick": "滑道厚度",
+            # "SlipWayAngle": "滑道与竖直中心线夹角",
             "SlipWayHeight": "滑道高度",
             # "DNs": "公称直径 DN",
             "DLs": "布管限定圆 DL",
@@ -8120,7 +8041,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 获取默认值
         default_values = {}
-        param_names = ["滑道定位", "滑道高度", "滑道厚度", "滑道与竖直中心线夹角", "切边长度L1", "切边高度 h"]
+        param_names = ["滑道定位", "滑道高度", "滑道厚度", "滑道与竖直中心线夹角", "切边长度 L1", "切边高度 h"]
 
         for row in range(self.param_table.rowCount()):
             param_name = self.param_table.item(row, 1).text()
@@ -8128,6 +8049,8 @@ class TubeLayoutEditor(QMainWindow):
                 widget = self.param_table.cellWidget(row, 2)
                 if isinstance(widget, QComboBox):
                     default_values[param_name] = widget.currentText()
+
+
                 else:
                     item = self.param_table.item(row, 2)
                     default_values[param_name] = item.text() if item else ""
@@ -8193,7 +8116,7 @@ class TubeLayoutEditor(QMainWindow):
                 "height": input_widgets["滑道高度"].text(),
                 "thickness": input_widgets["滑道厚度"].text(),
                 "angle": input_widgets["滑道与竖直中心线夹角"].text(),
-                "cut_length": input_widgets["切边长度L1"].text(),
+                "cut_length": input_widgets["切边长度 L1"].text(),
                 "cut_height": input_widgets["切边高度 h"].text()
             }
             self.build_huadao(**params)
