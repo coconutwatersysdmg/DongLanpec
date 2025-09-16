@@ -3298,7 +3298,7 @@ class TubeLayoutEditor(QMainWindow):
                         # 创建列表视图并设置为下拉框视图
                         list_view = QListView()
                         combo.setView(list_view)
-                        combo.setIconSize(QSize(75, 55))
+                        combo.setIconSize(QSize(100, 85))
 
                         # 查找管程程数所在行
                         tube_pass_row = -1
@@ -3552,8 +3552,7 @@ class TubeLayoutEditor(QMainWindow):
         if tube_pass == "2":
             self.add_image_to_combo(combo, base_path, "2.png", "2")
         elif tube_pass == "4":
-            # 只有允许的类型才显示4.1图片
-            print(show_4_1)
+
             if show_4_1:
                 self.add_image_to_combo(combo, base_path, "4.1.png", "4.1")
             self.add_image_to_combo(combo, base_path, "4.2.png", "4.2")
