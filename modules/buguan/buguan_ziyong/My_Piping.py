@@ -31,7 +31,7 @@ from modules.chanpinguanli.chanpinguanli_main import product_manager
 
 # product_id = 'PD2025090422414303'
 
-product_id = 'PD2025091514545108'
+product_id = 'PD2025091514545109'
 
 
 def on_product_id_changed(new_id):
@@ -1060,7 +1060,6 @@ class TubeLayoutEditor(QMainWindow):
                     print("产品型式查询连接已关闭")
                 except Exception as close_e:
                     print(f"关闭产品型式查询连接时出错: {str(close_e)}")
-
 
         hidden_params = [
             "滑道定位", "滑道高度", "滑道厚度", "滑道与竖直中心线夹角",
@@ -2560,9 +2559,9 @@ class TubeLayoutEditor(QMainWindow):
             return "10"
         if 10 <= do_value <= 14:
             return "10"
-        elif 14 < do_value <= 25:
+        elif 14 < do_value < 25:
             return "12"
-        elif 25 < do_value <= 32:
+        elif 25 <= do_value <= 32:
             return "16"
         elif 32 < do_value <= 57:
             return "27"
@@ -2794,10 +2793,10 @@ class TubeLayoutEditor(QMainWindow):
             (22.0, "转角正三角形"): (28.0, 42.0),
             (22.0, "正方形"): (28.0, 44.0),
             (22.0, "转角正方形"): (28.0, 44.0),
-            (25.0, "正三角形"): (32.0, 44.0),
-            (25.0, "转角正三角形"): (32.0, 44.0),
+            (25.0, "正三角形"): (32.0, 50.0),
+            (25.0, "转角正三角形"): (32.0, 50.0),
             (25.0, "正方形"): (32.0, 50.0),
-            (25.0, "转角正方形"): (32.0, 45.25),  # 这个值可能会被修改
+            (25.0, "转角正方形"): (32.0, 45.25),
             (30.0, "正三角形"): (38.0, 50.0),
             (30.0, "转角正三角形"): (38.0, 50.0),
             (30.0, "正方形"): (38.0, 52.0),
@@ -3555,12 +3554,15 @@ class TubeLayoutEditor(QMainWindow):
 
             if show_4_1:
                 self.add_image_to_combo(combo, base_path, "4.1.png", "4.1")
-            self.add_image_to_combo(combo, base_path, "4.2.png", "4.2")
+            self.add_image_to_combo(combo, base_path, "4.2.1.png", "4.2")
+            self.add_image_to_combo(combo, base_path, "4.2.2.png", "4.2")
             self.add_image_to_combo(combo, base_path, "4.3.png", "4.3")
         elif tube_pass == "6":
             if show_6_1:
-                self.add_image_to_combo(combo, base_path, "6.1.png", "6.1")
-            self.add_image_to_combo(combo, base_path, "6.2.png", "6.2")
+                self.add_image_to_combo(combo, base_path, "6.1.1.png", "6.1")
+                self.add_image_to_combo(combo, base_path, "6.1.2.png", "6.1")
+            self.add_image_to_combo(combo, base_path, "6.2.1.png", "6.2")
+            self.add_image_to_combo(combo, base_path, "6.2.2.png", "6.2")
             # self.add_image_to_combo(combo, base_path, "6.3.png", "6.3")
         else:
             combo.addItem("未选择")
@@ -3905,11 +3907,9 @@ class TubeLayoutEditor(QMainWindow):
         if not tube_data:
             QMessageBox.warning(self, "警告", "缺少必要的管孔参数数据！")
             return None
-        print(self.side_dangban_length)
-        print("旁路挡板宽度")
 
         table_name = "`产品设计活动表_布管参数表`"
-        component_table = "`产品设计活动表_元件附加参数表`"  # 元件附加参数表
+        component_table = "`产品设计活动表_元件附加参数表`"
         productID = self.productID
         sql_statements = []
 
