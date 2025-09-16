@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
 from PyQt5.QtWidgets import QGraphicsEllipseItem
 from PyQt5.QtWidgets import QGraphicsPolygonItem, QMessageBox, QComboBox
 from PyQt5.QtWidgets import QTextEdit
+from PyQt5.uic.Compiler.qtproxies import QtGui
 
 from modules.buguan.buguan_ziyong.api import run_layout_tube_calculate
 from modules.buguan.buguan_ziyong.json_process import parse_heat_exchanger_json
@@ -435,6 +436,7 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
 class TubeLayoutEditor(QMainWindow):
     def __init__(self, line_tip=None):
         super().__init__()
+
         self.productID = product_id  # 产品ID
         self.isSymmetry = False
         self.selected_side_blocks = []
@@ -456,12 +458,14 @@ class TubeLayoutEditor(QMainWindow):
         self.huanreguan = []
         self.isHuadao = False
         self.lagan_info = []
+        self.side_dangban_length = 0.0
         self.heat_exchanger = None
         self.sheet_form_param_layout = QVBoxLayout()
         self.sheet_form_image_labels = []
         self._current_centers = []
         self.global_centers = []
         self.slipway_centers = []  # 滑道干涉的坐标
+        self.block_thickness = 15
         self.sheet_form_current_images = None
         self.setWindowTitle("布管参数设计")
         self.setGeometry(200, 200, 1600, 900)  # TODO 窗格大小修改了一下，不改自动拉伸时会显得很局促
@@ -469,6 +473,7 @@ class TubeLayoutEditor(QMainWindow):
         self.setup_ui()
         self.connection_lines = []  # 用于存储所有绘制的连线
         self.r = 0
+        self.center_dangban_length = 0
         self.mouse_x = 0
         self.mouse_y = 0
         self.selected_centers = []
@@ -1010,13 +1015,59 @@ class TubeLayoutEditor(QMainWindow):
 
     def load_initial_data(self):
         print("加载初始数据")
+        self.heat_exchanger = None
+        product_conn_for_type = None
+        try:
+            # 1. 校验产品ID是否有效
+            if not self.productID:
+                print("产品ID为空，无法查询产品型式")
+                raise ValueError("产品ID为空，无法查询产品型式")
+
+            # 2. 创建产品设计活动库连接
+            product_conn_for_type = create_product_connection()
+            if not product_conn_for_type:
+                print("创建产品数据库连接失败，无法查询产品型式")
+                return
+
+            # 3. 执行SQL查询：根据产品ID查询产品型式（表名：产品设计活动表，字段：产品型式）
+            with product_conn_for_type.cursor() as cursor:
+                query = """
+                       SELECT 产品型式 
+                       FROM 产品设计活动表 
+                       WHERE 产品ID = %s
+                   """
+                cursor.execute(query, (self.productID,))
+                result = cursor.fetchone()  # 获取单条记录（产品ID唯一）
+
+                # 4. 处理查询结果
+                if result and isinstance(result, dict) and '产品型式' in result:
+                    product_type = result['产品型式']
+                    if product_type is not None and product_type.strip():
+                        self.heat_exchanger = product_type.strip()
+                        # print(f"成功查询到产品型式: {self.heat_exchanger}，已赋值给self.heat_exchanger")
+                    else:
+                        print(f"查询到的产品型式为空值（产品ID: {self.productID}）")
+                else:
+                    print(f"未查询到产品ID为{self.productID}的产品型式记录")
+
+        except Exception as e:
+            print(f"查询产品型式时发生错误: {str(e)}")
+        finally:
+            # 5. 确保关闭数据库连接，避免资源泄漏
+            if product_conn_for_type and hasattr(product_conn_for_type, 'open') and product_conn_for_type.open:
+                try:
+                    product_conn_for_type.close()
+                    print("产品型式查询连接已关闭")
+                except Exception as close_e:
+                    print(f"关闭产品型式查询连接时出错: {str(close_e)}")
+
 
         hidden_params = [
-            # "滑道定位", "滑道高度", "滑道厚度", "滑道与竖直中心线夹角",
+            "滑道定位", "滑道高度", "滑道厚度", "滑道与竖直中心线夹角",
             "旁路挡板厚度", "防冲板形式", "防冲板厚度", "防冲板折边角度",
             "防冲板宽度", "防冲板方位角",
             "至圆筒内壁距离", "切边长度 L1",
-            "切边高度 h", "中间挡板厚度"
+            "切边高度 h", "中间挡板厚度", "中间挡板宽度", "旁路挡板宽度"
         ]
 
         # 标志位，标记是否成功从产品设计活动库加载参数
@@ -1158,7 +1209,7 @@ class TubeLayoutEditor(QMainWindow):
                                 print(f"参数格式错误，跳过: {param}")
 
                         if processed_params:
-                            print(processed_params)
+
                             self.setup_parameters(processed_params)
 
                             self.hide_specific_params(hidden_params)
@@ -2553,7 +2604,6 @@ class TubeLayoutEditor(QMainWindow):
             # 同样可恢复为默认值等操作
 
     def update_baffle_diameter(self):
-        print("执行了没有？？？""")
         # 1. 查找参数表中各关键参数的行索引
         di_row = -1
         baffle_row = -1
@@ -2645,7 +2695,7 @@ class TubeLayoutEditor(QMainWindow):
             # 获取换热器型号
             heat_exchanger_type = self.heat_exchanger
             if heat_exchanger_type is None:
-                heat_exchanger_type="AEU"
+                heat_exchanger_type = "AEU"
 
             # 根据型号选择不同的计算方式
             if heat_exchanger_type in ["AEU", "BEU", "BEM", "NEN"]:
@@ -3357,7 +3407,6 @@ class TubeLayoutEditor(QMainWindow):
                 else:
 
                     display_value = str(param_value)
-                    print(display_value)
 
                 item = QTableWidgetItem(display_value)
                 item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
@@ -3492,25 +3541,26 @@ class TubeLayoutEditor(QMainWindow):
             combo.setItemData(0, "", Qt.UserRole)
             print(f"错误：图片基础目录不存在 - {base_path}")
             return
-        print(self.heat_exchanger)
-        print("pistol")
 
         # 定义允许显示4.1图片的换热器类型
         allowed_types = {"AES", "BES", "NEN", "BEM"}
         # 检查当前换热器类型是否在允许列表中
         show_4_1 = self.heat_exchanger in allowed_types
+        show_6_1 = self.heat_exchanger in allowed_types
 
         # 根据管程程数加载对应图片，同时关联标识
         if tube_pass == "2":
             self.add_image_to_combo(combo, base_path, "2.png", "2")
         elif tube_pass == "4":
             # 只有允许的类型才显示4.1图片
+            print(show_4_1)
             if show_4_1:
                 self.add_image_to_combo(combo, base_path, "4.1.png", "4.1")
             self.add_image_to_combo(combo, base_path, "4.2.png", "4.2")
             self.add_image_to_combo(combo, base_path, "4.3.png", "4.3")
         elif tube_pass == "6":
-            self.add_image_to_combo(combo, base_path, "6.1.png", "6.1")
+            if show_6_1:
+                self.add_image_to_combo(combo, base_path, "6.1.png", "6.1")
             self.add_image_to_combo(combo, base_path, "6.2.png", "6.2")
             # self.add_image_to_combo(combo, base_path, "6.3.png", "6.3")
         else:
@@ -3856,6 +3906,8 @@ class TubeLayoutEditor(QMainWindow):
         if not tube_data:
             QMessageBox.warning(self, "警告", "缺少必要的管孔参数数据！")
             return None
+        print(self.side_dangban_length)
+        print("旁路挡板宽度")
 
         table_name = "`产品设计活动表_布管参数表`"
         component_table = "`产品设计活动表_元件附加参数表`"  # 元件附加参数表
@@ -3882,13 +3934,14 @@ class TubeLayoutEditor(QMainWindow):
                     break
 
         # 需要跨表同步的参数（从布管参数表 -> 元件附加参数表 的映射）
-        # 左边是布管参数表里的“参数名”，右边是元件附加参数表里的“参数名称”
         cross_map = {
             "换热管外径 do": "换热管外径",
             "中间挡板厚度": "中间挡板厚度",
-            "拉杆形式": "拉杆型式",  # 映射为"拉杆型式"
-            "拉杆直径": "拉杆规格",  # 映射为"拉杆规格"
+            "中间挡板宽度": "中间挡板宽度",  # 新增中间挡板宽度的跨表映射
+            "拉杆形式": "拉杆型式",
+            "拉杆直径": "拉杆规格",
             "旁路挡板厚度": "旁路挡板厚度",
+            "旁路挡板宽度": "旁路挡板宽度",  # 新增旁路挡板宽度的跨表映射
             "防冲板形式": "防冲板形式",
             "防冲板厚度": "防冲板厚度",
             "滑道定位": "滑道定位",
@@ -3903,6 +3956,7 @@ class TubeLayoutEditor(QMainWindow):
         cross_params = {
             "公称直径 DN": None,
             "旁路挡板厚度": None,
+            "旁路挡板宽度": None,  # 新增旁路挡板宽度的暂存键
             "防冲板形式": None,
             "防冲板厚度": None,
             "滑道定位": None,
@@ -3912,11 +3966,11 @@ class TubeLayoutEditor(QMainWindow):
             "切边长度 L1": None,
             "切边高度 h": None,
             "管程分程形式": None,
-            # 四个双向关联参数
             "换热管外径 do": None,
             "中间挡板厚度": None,
-            "拉杆形式": None,  # 布管参数表中的"拉杆形式"
-            "拉杆直径": None,  # 布管参数表中的"拉杆直径"
+            "中间挡板宽度": None,  # 新增中间挡板宽度的暂存键
+            "拉杆形式": None,
+            "拉杆直径": None,
         }
 
         # 遍历前端参数，落表到“布管参数表”，并收集 cross_params
@@ -3940,6 +3994,56 @@ class TubeLayoutEditor(QMainWindow):
                 f"VALUES ('{productID}', '{safe_line_num}', '{safe_holes_up}', {safe_holes_down})"
             )
             sql_statements.append(insert_sql)
+
+        # 处理“中间挡板宽度”参数，包含单位mm
+        if hasattr(self, 'center_dangban_length') and self.center_dangban_length is not None:
+            param_name = "中间挡板宽度"
+            param_value = str(self.center_dangban_length)
+            unit = "mm"  # 设置单位为mm
+
+            safe_param_name = escape_str(param_name)
+            safe_param_value = escape_str(param_value)
+            safe_unit = "NULL" if unit.strip() == "" else f"'{escape_str(unit)}'"
+
+            # 先更新已有记录
+            sql_statements.append(
+                f"UPDATE {table_name} SET `参数值` = '{safe_param_value}', `单位` = {safe_unit} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}'"
+            )
+            # 不存在则插入新记录
+            sql_statements.append(
+                f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
+                f"SELECT '{productID}', '{safe_param_name}', '{safe_param_value}', {safe_unit} "
+                f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
+            )
+            # 存入cross_params用于跨表同步
+            cross_params[param_name] = param_value
+
+        # 处理“旁路挡板宽度”参数，包含单位mm
+        if hasattr(self, 'side_dangban_length') and self.side_dangban_length is not None:
+            param_name = "旁路挡板宽度"
+            param_value = str(self.side_dangban_length)
+            unit = "mm"  # 设置单位为mm
+
+            safe_param_name = escape_str(param_name)
+            safe_param_value = escape_str(param_value)
+            safe_unit = "NULL" if unit.strip() == "" else f"'{escape_str(unit)}'"
+
+            # 先更新已有记录
+            sql_statements.append(
+                f"UPDATE {table_name} SET `参数值` = '{safe_param_value}', `单位` = {safe_unit} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}'"
+            )
+            # 不存在则插入新记录
+            sql_statements.append(
+                f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
+                f"SELECT '{productID}', '{safe_param_name}', '{safe_param_value}', {safe_unit} "
+                f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
+            )
+            # 存入cross_params用于跨表同步
+            cross_params[param_name] = param_value
 
         # 处理“管程分程形式”的图标选择值
         if hasattr(self, 'tube_pass_form_value') and self.tube_pass_form_value:
@@ -3991,7 +4095,6 @@ class TubeLayoutEditor(QMainWindow):
             )
 
         # 把映射参数写回/更新到【产品设计活动表_元件附加参数表】
-        # 采用upsert（先UPDATE；若不存在再INSERT）
         for tube_name, comp_name in cross_map.items():
             val = cross_params.get(tube_name)
             if val is None or str(val).strip() == "":
@@ -7589,6 +7692,63 @@ class TubeLayoutEditor(QMainWindow):
                 selected_centers = self.judge_linkage(self.selected_centers)
             else:
                 selected_centers = self.selected_centers
+            do = self.get_tube_do()
+            do_value = float(do)
+            tube_bridge = self.get_nominal_bridge_width(do_value)
+            actual_coord = self.selected_to_current_coords(selected_centers)
+            # bendblock = self.get_tube_bendblock()
+            # 1. 找到与 selected_centers 最左边的第二个坐标
+            # selected_centers 是 [(61.113, -61.113)]，只有一个点
+            # 我们需要找到与这个点纵坐标相同但横坐标不同的点
+
+            # 从 global_centers 中筛选出纵坐标与 selected_centers 相同但横坐标不同的点
+            selected_y = actual_coord[0][1]  # 获取纵坐标 -61.113
+            same_y_points = [point for point in self.global_centers
+                             if abs(point[1] - selected_y) < 1e-6 < abs(point[0] - selected_centers[0][0])]  # 横坐标不同
+
+            # 按横坐标排序，找到最左边的第二个点
+            if len(same_y_points) >= 2:
+                sorted_points = sorted(same_y_points, key=lambda p: p[0])
+                near_center = sorted_points[1]  # 最左边的第二个点
+                n_x, n_y = near_center
+            else:
+                # 如果没有足够的点，使用默认值或处理异常
+                n_x, n_y = selected_centers[0]  # 使用原始点作为备选
+
+            # 2. 计算 y = n_y 与折流板外径圆的交点
+            # 获取折流板外径（相当于圆的直径）
+            bendblock = self.get_tube_bendblock()  # 这是折流板外径，相当于圆的直径
+            bendblock_value = float(bendblock)
+            R_bend = bendblock_value / 2.0  # 计算半径
+
+            # 圆的方程: x² + y² = R_bend²
+            # 已知 y = n_y，求 x
+            # x = ±√(R_bend² - n_y²)
+
+            # 计算交点
+            if abs(n_y) <= R_bend:  # 确保直线与圆相交
+                x_offset = math.sqrt(R_bend ** 2 - n_y ** 2)
+                intersection1 = (x_offset, n_y)  # 右侧交点
+                intersection2 = (-x_offset, n_y)  # 左侧交点
+            else:
+                # 直线不与圆相交，处理异常情况
+                intersection1 = (R_bend, n_y)  # 使用近似值
+                intersection2 = (-R_bend, n_y)
+
+            print(f"Near center: ({n_x}, {n_y})")
+            print(
+                f"Intersection points: ({intersection1[0]}, {intersection1[1]}) and ({intersection2[0]}, {intersection2[1]})")
+            try:
+                block_height_val = float(block_height)
+                tube_bridge_val = float(tube_bridge)
+                self.side_dangban_length = abs(abs(intersection2[0]) - abs(n_x)) - block_height_val - tube_bridge_val
+            except ValueError as e:
+                print(f"数值转换错误: {e}")
+                self.side_dangban_length = 0.0
+
+            # print(self.global_centers)
+            # print(actual_coord)
+
             added_count = self.build_side_dangban(selected_centers, block_height)
 
             # 清除选中状态及淡蓝色涂层
@@ -9547,6 +9707,48 @@ class TubeLayoutEditor(QMainWindow):
         # 显示弹窗
         dialog.exec_()
 
+    def get_tube_do(self):
+        row_count = self.param_table.rowCount()
+        for row in range(row_count):
+            # 获取当前行的参数名
+            name_item = self.param_table.item(row, 1)
+            if not name_item:
+                continue
+
+            if name_item.text() == "换热管外径 do":
+                # 检查单元格是否是QComboBox控件
+                cell_widget = self.param_table.cellWidget(row, 2)
+                if isinstance(cell_widget, QComboBox):
+                    return cell_widget.currentText()
+                else:
+                    # 普通文本单元格
+                    value_item = self.param_table.item(row, 2)
+                    return value_item.text() if value_item else None
+
+        # 未找到参数时返回None
+        return None
+
+    def get_tube_bendblock(self):
+        row_count = self.param_table.rowCount()
+        for row in range(row_count):
+            # 获取当前行的参数名
+            name_item = self.param_table.item(row, 1)
+            if not name_item:
+                continue
+
+            if name_item.text() == "折流板外径":
+                # 检查单元格是否是QComboBox控件
+                cell_widget = self.param_table.cellWidget(row, 2)
+                if isinstance(cell_widget, QComboBox):
+                    return cell_widget.currentText()
+                else:
+                    # 普通文本单元格
+                    value_item = self.param_table.item(row, 2)
+                    return value_item.text() if value_item else None
+
+        # 未找到参数时返回None
+        return None
+
     # 中间挡板
     def on_purple_block_click(self):
         """点击紫色挡板按钮：先弹出参数设置弹窗，确定后绘制并关闭弹窗"""
@@ -9696,17 +9898,44 @@ class TubeLayoutEditor(QMainWindow):
         # 显示弹窗
         dialog.exec_()
 
+    # TODO 查找名义管桥宽度
+    def get_nominal_bridge_width(self, d):
+        # 定义换热管外径与名义管桥宽度的对应关系
+        width_map = {
+            14: 4.75,
+            16: 5.75,
+            19: 5.75,
+            25: 6.75,
+            30: 7.65,
+            32: 7.60,
+            35: 8.60,
+            38: 9.55,
+            45: 11.50,
+            50: 13.45,
+            55: 14.35,
+            57: 14.35
+        }
+        # 检查输入的换热管外径是否在字典中
+        if d in width_map:
+            return width_map[d]
+        else:
+            return "未找到该换热管外径对应的名义管桥宽度"
+
     def build_center_dangban(self, selected_centers, block_thickness):
         """构建紫色中间挡板（接收厚度参数，执行绘制逻辑）"""
         from PyQt5.QtCore import Qt, QPointF
         from PyQt5.QtGui import QPen, QBrush, QColor, QPainterPath
         from PyQt5.QtWidgets import QMessageBox, QGraphicsEllipseItem
         import ast
-        print(block_thickness)
 
         # 1. 解析并校验选中的圆心坐标
         if not selected_centers:
             return []
+        distance = self.calculate_distance(selected_centers)
+        do = self.get_tube_do()
+        do_value = float(do)
+        tube_bridge = self.get_nominal_bridge_width(do_value)
+        self.center_dangban_length = distance - do_value - tube_bridge * 2
 
         selected_centers_list = []
         if isinstance(selected_centers, list):
@@ -10016,8 +10245,13 @@ class TubeLayoutEditor(QMainWindow):
         return super().eventFilter(obj, event)
 
 
+import sys
+from PyQt5.QtWidgets import QApplication
+from PyQt5.QtGui import QFont  # 直接导入QFont
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    app.setFont(QFont("Arial", 12))  # 直接使用QFont
     window = TubeLayoutEditor()
     window.show()
     sys.exit(app.exec_())

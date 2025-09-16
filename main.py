@@ -522,6 +522,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
+
     window = MainWindow()
     window.show()
     QtCore.QTimer.singleShot(200, window.show_login_dialog)
