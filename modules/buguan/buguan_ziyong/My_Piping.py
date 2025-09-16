@@ -31,7 +31,7 @@ from modules.chanpinguanli.chanpinguanli_main import product_manager
 
 # product_id = 'PD2025090422414303'
 
-product_id = 'PD2025091514545109'
+product_id = 'PD2025091619233101'
 
 
 def on_product_id_changed(new_id):
@@ -1174,7 +1174,7 @@ class TubeLayoutEditor(QMainWindow):
                                 elif param_name in ["旁路挡板厚度", "防冲板形式", "防冲板厚度", "滑道定位",
                                                     "滑道高度", "滑道厚度", "滑道与竖直中心线夹角",
                                                     "切边长度 L1", "切边高度 h", "换热管外径 do", "中间挡板厚度",
-                                                    "拉杆形式", "拉杆直径"]:
+                                                    "拉杆形式", "拉杆直径", "防冲板折边角度"]:
                                     try:
                                         # 根据参数名映射实际查询用的名称
                                         query_param_name = param_name
@@ -3190,6 +3190,7 @@ class TubeLayoutEditor(QMainWindow):
         return ""
 
     def setup_parameters(self, params):
+        print(params)
 
         for param in params:
             if param['参数名'] == '管程分程形式':
