@@ -2762,6 +2762,7 @@ class TubeLayoutEditor(QMainWindow):
                     self.param_table.itemChanged.connect(original_handler)
                 except:
                     pass
+        print(self.heat_exchanger)
 
         # 中心距映射表 - 使用浮点数键确保匹配
         center_distance_map = {
@@ -2851,15 +2852,53 @@ class TubeLayoutEditor(QMainWindow):
                 self._update_table_cell(center_distance_row, 2, f"{center_distance:.1f}")
                 print(f"已更新换热管中心距 S: {center_distance:.1f}")
 
-            # 更新分程隔板两侧相邻管中心距（竖直）
-            if sn_vertical_row != -1:
-                self._update_table_cell(sn_vertical_row, 2, f"{sn_value:.1f}")
-                print(f"已更新分程隔板两侧相邻管中心距（竖直）: {sn_value:.1f}")
+            # 对于AEU和BEU型号，使用U形换热管的最小弯曲半径Rmin作为分程隔板两侧相邻管中心距
+            if self.heat_exchanger in ["AEU", "BEU"]:
+                # U形换热管最小弯曲半径映射表
+                rmin_map = {
+                    10.0: 20.0,
+                    12.0: 24.0,
+                    14.0: 30.0,
+                    16.0: 32.0,
+                    19.0: 40.0,
+                    20.0: 40.0,
+                    22.0: 45.0,
+                    25.0: 50.0,
+                    30.0: 60.0,
+                    32.0: 65.0,
+                    35.0: 70.0,
+                    38.0: 76.0,
+                    45.0: 90.0,
+                    50.0: 100.0,
+                    55.0: 110.0,
+                    57.0: 115.0
+                }
 
-            # 更新分程隔板两侧相邻管中心距（水平）
-            if sn_horizontal_row != -1:
-                self._update_table_cell(sn_horizontal_row, 2, f"{sn_value:.1f}")
-                print(f"已更新分程隔板两侧相邻管中心距（水平）: {sn_value:.1f}")
+                # 获取对应的Rmin值
+                rmin_value = rmin_map.get(float(do_value))
+                if rmin_value is not None:
+                    # 更新分程隔板两侧相邻管中心距（竖直）
+                    if sn_vertical_row != -1:
+                        self._update_table_cell(sn_vertical_row, 2, f"{rmin_value:.1f}")
+                        print(f"已更新分程隔板两侧相邻管中心距（竖直）: {rmin_value:.1f}")
+
+                    # 更新分程隔板两侧相邻管中心距（水平）
+                    if sn_horizontal_row != -1:
+                        self._update_table_cell(sn_horizontal_row, 2, f"{rmin_value:.1f}")
+                        print(f"已更新分程隔板两侧相邻管中心距（水平）: {rmin_value:.1f}")
+                else:
+                    print(f"未找到换热管外径 {do_value} 对应的最小弯曲半径 Rmin")
+            else:
+                # 非AEU/BEU型号，使用原来的映射表逻辑
+                # 更新分程隔板两侧相邻管中心距（竖直）
+                if sn_vertical_row != -1:
+                    self._update_table_cell(sn_vertical_row, 2, f"{sn_value:.1f}")
+                    print(f"已更新分程隔板两侧相邻管中心距（竖直）: {sn_value:.1f}")
+
+                # 更新分程隔板两侧相邻管中心距（水平）
+                if sn_horizontal_row != -1:
+                    self._update_table_cell(sn_horizontal_row, 2, f"{sn_value:.1f}")
+                    print(f"已更新分程隔板两侧相邻管中心距（水平）: {sn_value:.1f}")
         else:
             print(f"未找到匹配的映射关系 for {key}")
 
@@ -3276,7 +3315,34 @@ class TubeLayoutEditor(QMainWindow):
                     elif param['参数名'] == "滑道定位":
                         combo.addItems(["滑道与管板焊接", "滑道与第一块折流板焊接"])
                     elif param['参数名'] == "管程程数":
-                        combo.addItems(["2", "4", "6", "8", "10", "12"])
+                        # 获取当前值
+                        current_value = str(param['参数值']) if param['参数值'] is not None else ""
+
+                        # 根据换热器类型确定可用的管程程数选项
+                        if self.heat_exchanger in ["AEU", "BEU"]:
+                            # AEU和BEU类型不显示"1"选项
+                            combo.addItems(["2", "4", "6", "8", "10", "12"])
+
+                            # 如果当前值是"1"，需要调整为默认值"2"
+                            if current_value == "1":
+                                combo.setCurrentIndex(0)  # 设置为第一个选项"2"
+                                # 同时更新原始值记录
+                                self._original_values[(row, 2)] = "2"
+                            elif current_value and combo.findText(current_value) >= 0:
+                                # 如果当前值在可用选项中，设置它
+                                combo.setCurrentText(current_value)
+                            else:
+                                # 否则设置为第一个选项
+                                combo.setCurrentIndex(0)
+                        else:
+                            # 其他类型显示所有选项
+                            combo.addItems(["1", "2", "4", "6", "8", "10", "12"])
+                            # 设置当前值
+                            if current_value and combo.findText(current_value) >= 0:
+                                combo.setCurrentText(current_value)
+                            else:
+                                combo.setCurrentIndex(0)
+
                         # 为管程程数下拉框单独绑定信号
                         combo.currentIndexChanged.connect(
                             lambda index, r=row: self.on_tube_pass_combo_changed(r)
