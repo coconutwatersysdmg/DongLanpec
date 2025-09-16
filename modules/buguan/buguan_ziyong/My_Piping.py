@@ -855,7 +855,10 @@ class TubeLayoutEditor(QMainWindow):
         self.hole_distribution_table = QTableWidget()
         self.hole_distribution_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.hole_distribution_table.setColumnCount(3)
-        self.hole_distribution_table.setHorizontalHeaderLabels(["至水平中心线行号", "管孔数量(上)", "管孔数量(下)"])
+        headers = ["至水平中心线行号", "管孔数量(上)", "管孔数量(下)"]
+        self.hole_distribution_table.setHorizontalHeaderLabels(headers)
+        for i, header_text in enumerate(headers):
+            self.hole_distribution_table.horizontalHeaderItem(i).setToolTip(header_text)
         self.hole_distribution_table.verticalHeader().setVisible(False)
         self.hole_distribution_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.hole_distribution_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
