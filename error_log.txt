@@ -459,3 +459,27 @@ Traceback (most recent call last):
 UnboundLocalError: cannot access local variable 'project_id' where it is not associated with a value
 
 
+自动加载最后项目失败: cannot access local variable 'project_id' where it is not associated with a value
+Traceback (most recent call last):
+  File "E:\Homework\AALB\A代码\DongLanpec\modules\chanpinguanli\chanpinguanli_main.py", line 1856, in load_last_project
+    if project_id:
+       ^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'project_id' where it is not associated with a value
+
+
+自动加载最后项目失败: cannot access local variable 'project_id' where it is not associated with a value
+Traceback (most recent call last):
+  File "E:\Homework\AALB\A代码\DongLanpec\modules\chanpinguanli\chanpinguanli_main.py", line 1856, in load_last_project
+    if project_id:
+       ^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'project_id' where it is not associated with a value
+
+
+自动加载最后项目失败: cannot access local variable 'project_id' where it is not associated with a value
+Traceback (most recent call last):
+  File "E:\Homework\AALB\A代码\DongLanpec\modules\chanpinguanli\chanpinguanli_main.py", line 1856, in load_last_project
+    if project_id:
+       ^^^^^^^^^^
+UnboundLocalError: cannot access local variable 'project_id' where it is not associated with a value
+
+

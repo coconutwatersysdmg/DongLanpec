@@ -31,7 +31,7 @@ from modules.chanpinguanli.chanpinguanli_main import product_manager
 
 # product_id = 'PD2025090422414303'
 
-product_id = 'PD202'
+product_id = '12234'
 
 
 def on_product_id_changed(new_id):
@@ -1210,11 +1210,108 @@ class TubeLayoutEditor(QMainWindow):
                                 })
                             else:
                                 print(f"参数格式错误，跳过: {param}")
+                        # 从完整的processed_params中提取参数（确保能同时获取Di和do）
+                        Di = None
+                        do = None
+                        DL = None
+
+                        # 提取并转换关键参数
+                        for param in processed_params:
+                            if param['参数名'] == "壳体内直径 Di" and param['参数值']:
+                                try:
+                                    Di = float(param['参数值'])  # 强制类型转换，避免字符串计算错误
+                                except (ValueError, TypeError) as e:
+                                    print(f"壳体内直径 Di 转换失败: {str(e)}")
+                            elif param['参数名'] == "换热管外径 do" and param['参数值']:
+                                try:
+                                    do = float(param['参数值'])  # 强制类型转换
+                                except (ValueError, TypeError) as e:
+                                    print(f"换热管外径 do 转换失败: {str(e)}")
+
+                        # 验证关键参数有效性
+                        if Di is None or do is None:
+                            print(f"无法计算DL：壳体内直径 Di={Di}，换热管外径 do={do}（参数不完整或无效）")
+                        elif Di <= 0 or do <= 0:
+                            print(f"无法计算DL：壳体内直径 Di={Di}，换热管外径 do={do}（数值必须大于0）")
+
+                        else:
+                            if not self.heat_exchanger:
+                                self.heat_exchanger="AEU"
+                            # 根据换热器型号计算DL
+                            if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN"]:
+                                # 计算方式1: DL = Di - 2×b₃，其中b₃ = max(0.25×do, 8mm)
+                                b3 = max(0.25 * do, 8.0)  # 取两者较大值作为b3
+                                DL = Di - 2 * b3
+                                print(f"计算布管限定圆 DL（型号{self.heat_exchanger}）: "
+                                      f"{Di} - 2×max(0.25×{do}, 8.0) = {Di} - 2×{b3} = {DL:.1f}")
+
+                            elif self.heat_exchanger in ["AES", "BES"]:
+                                # 计算方式2: DL = Di - 2×(b₁ + b₂ + b)
+                                # 1. 确定b值（根据Di范围）
+                                if Di < 1000:
+                                    b = 4.0  # Di < 1000mm时的默认值
+                                else:  # 1000 ≤ Di ≤ 2600mm
+                                    b = 5.0  # 大直径壳程的默认值
+
+                                # 2. 确定b₁（第一圈管到壳体内壁距离）和bₙ（最外圈管到壳体内壁距离）
+                                if Di <= 700:
+                                    b_n = 10.0
+                                    b_1 = 3.0
+                                elif Di <= 1200:
+                                    b_n = 13.0
+                                    b_1 = 5.0
+                                elif Di <= 2000:
+                                    b_n = 16.0
+                                    b_1 = 6.0
+                                else:  # Di > 2000mm（最大到2600mm）
+                                    b_n = 20.0
+                                    b_1 = 7.0
+
+                                # 3. 计算b₂（第二圈管到第一圈管距离）
+                                b_2 = b_n + 1.5  # 固定公式
+
+                                # 4. 最终计算DL
+                                DL = Di - 2 * (b_1 + b_2 + b)
+                                print(f"计算布管限定圆 DL（型号{self.heat_exchanger}）: "
+                                      f"{Di} - 2×({b_1} + {b_2} + {b}) = {Di} - 2×{b_1 + b_2 + b} = {DL:.1f}")
+
+                            else:
+                                # 未知型号处理：使用方式1的默认计算
+                                b3 = max(0.25 * do, 8.0)
+                                DL = Di - 2 * b3
+                                print(f"未知换热器型号{self.heat_exchanger}，使用默认公式计算DL: "
+                                      f"{Di} - 2×max(0.25×{do}, 8.0) = {DL:.1f}")
+
+                            # 验证DL合理性（必须小于壳体内直径Di）
+                            if DL >= Di:
+                                print(f"警告：计算的DL={DL:.1f} ≥ 壳体内直径Di={Di}，结果不合理")
+                                # 强制修正为Di的95%（避免无效值）
+                                DL = Di * 0.95
+                                print(f"已自动修正DL为壳体内直径的95%: {DL:.1f}")
+
+                        # 强制更新/添加DL参数到processed_params
+                        if DL is not None:
+                            dl_exists = False
+                            # 检查是否已有DL参数，有则更新
+                            for i, param in enumerate(processed_params):
+                                if param['参数名'] == "布管限定圆 DL":
+                                    processed_params[i]['参数值'] = f"{DL:.1f}"
+                                    dl_exists = True
+                                    break
+                            # 没有则新增DL参数
+                            if not dl_exists:
+                                processed_params.append({
+                                    '参数名': "布管限定圆 DL",
+                                    '参数值': f"{DL:.1f}",
+                                    '单位': "mm"  # 假设单位为毫米，可根据实际场景调整
+                                })
+                            print(f"最终确定布管限定圆 DL值: {DL:.1f} mm")
+                        else:
+                            print("未计算出有效DL值，不更新参数")
 
                         if processed_params:
 
                             self.setup_parameters(processed_params)
-
                             self.hide_specific_params(hidden_params)
                             self.update_leftpad_params()
                             product_params_loaded = True
@@ -1332,6 +1429,103 @@ class TubeLayoutEditor(QMainWindow):
                                     })
                                 else:
                                     print(f"参数格式错误，跳过: {param}")
+                            # 从完整的processed_params中提取参数（确保能同时获取Di和do）
+                            Di = None
+                            do = None
+                            DL = None
+
+                            # 提取并转换关键参数
+                            for param in processed_params:
+                                if param['参数名'] == "壳体内直径 Di" and param['参数值']:
+                                    try:
+                                        Di = float(param['参数值'])  # 强制类型转换，避免字符串计算错误
+                                    except (ValueError, TypeError) as e:
+                                        print(f"壳体内直径 Di 转换失败: {str(e)}")
+                                elif param['参数名'] == "换热管外径 do" and param['参数值']:
+                                    try:
+                                        do = float(param['参数值'])  # 强制类型转换
+                                    except (ValueError, TypeError) as e:
+                                        print(f"换热管外径 do 转换失败: {str(e)}")
+
+                            # 验证关键参数有效性
+                            if Di is None or do is None:
+                                print(f"无法计算DL：壳体内直径 Di={Di}，换热管外径 do={do}（参数不完整或无效）")
+                            elif Di <= 0 or do <= 0:
+                                print(f"无法计算DL：壳体内直径 Di={Di}，换热管外径 do={do}（数值必须大于0）")
+                            elif not self.heat_exchanger:
+                                print("无法计算DL：未获取到换热器型号")
+                            else:
+                                # 根据换热器型号计算DL
+                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN"]:
+                                    # 计算方式1: DL = Di - 2×b₃，其中b₃ = max(0.25×do, 8mm)
+                                    b3 = max(0.25 * do, 8.0)  # 取两者较大值作为b3
+                                    DL = Di - 2 * b3
+                                    print(f"计算布管限定圆 DL（型号{self.heat_exchanger}）: "
+                                          f"{Di} - 2×max(0.25×{do}, 8.0) = {Di} - 2×{b3} = {DL:.1f}")
+
+                                elif self.heat_exchanger in ["AES", "BES"]:
+                                    # 计算方式2: DL = Di - 2×(b₁ + b₂ + b)
+                                    # 1. 确定b值（根据Di范围）
+                                    if Di < 1000:
+                                        b = 4.0  # Di < 1000mm时的默认值
+                                    else:  # 1000 ≤ Di ≤ 2600mm
+                                        b = 5.0  # 大直径壳程的默认值
+
+                                    # 2. 确定b₁（第一圈管到壳体内壁距离）和bₙ（最外圈管到壳体内壁距离）
+                                    if Di <= 700:
+                                        b_n = 10.0
+                                        b_1 = 3.0
+                                    elif Di <= 1200:
+                                        b_n = 13.0
+                                        b_1 = 5.0
+                                    elif Di <= 2000:
+                                        b_n = 16.0
+                                        b_1 = 6.0
+                                    else:  # Di > 2000mm（最大到2600mm）
+                                        b_n = 20.0
+                                        b_1 = 7.0
+
+                                    # 3. 计算b₂（第二圈管到第一圈管距离）
+                                    b_2 = b_n + 1.5  # 固定公式
+
+                                    # 4. 最终计算DL
+                                    DL = Di - 2 * (b_1 + b_2 + b)
+                                    print(f"计算布管限定圆 DL（型号{self.heat_exchanger}）: "
+                                          f"{Di} - 2×({b_1} + {b_2} + {b}) = {Di} - 2×{b_1 + b_2 + b} = {DL:.1f}")
+
+                                else:
+                                    # 未知型号处理：使用方式1的默认计算
+                                    b3 = max(0.25 * do, 8.0)
+                                    DL = Di - 2 * b3
+                                    print(f"未知换热器型号{self.heat_exchanger}，使用默认公式计算DL: "
+                                          f"{Di} - 2×max(0.25×{do}, 8.0) = {DL:.1f}")
+
+                                # 验证DL合理性（必须小于壳体内直径Di）
+                                if DL >= Di:
+                                    print(f"警告：计算的DL={DL:.1f} ≥ 壳体内直径Di={Di}，结果不合理")
+                                    # 强制修正为Di的95%（避免无效值）
+                                    DL = Di * 0.95
+                                    print(f"已自动修正DL为壳体内直径的95%: {DL:.1f}")
+
+                            # 强制更新/添加DL参数到processed_params
+                            if DL is not None:
+                                dl_exists = False
+                                # 检查是否已有DL参数，有则更新
+                                for i, param in enumerate(processed_params):
+                                    if param['参数名'] == "布管限定圆 DL":
+                                        processed_params[i]['参数值'] = f"{DL:.1f}"
+                                        dl_exists = True
+                                        break
+                                # 没有则新增DL参数
+                                if not dl_exists:
+                                    processed_params.append({
+                                        '参数名': "布管限定圆 DL",
+                                        '参数值': f"{DL:.1f}",
+                                        '单位': "mm"  # 假设单位为毫米，可根据实际场景调整
+                                    })
+                                print(f"最终确定布管限定圆 DL值: {DL:.1f} mm")
+                            else:
+                                print("未计算出有效DL值，不更新参数")
 
                             if processed_params:
                                 self.setup_parameters(processed_params)
@@ -1355,6 +1549,8 @@ class TubeLayoutEditor(QMainWindow):
 
         # 后续计算和元素构建逻辑保持不变
         try:
+            self.set_baffle_cut_rate_to_25()
+            self.set_tie_rod_diameter_to_16()
             self.calculate_piping_layout()
         except Exception as e:
             print(f"第一次计算布管布局出错: {str(e)}")
@@ -1539,6 +1735,7 @@ class TubeLayoutEditor(QMainWindow):
             print(f"处理折边式防冲板时出错: {str(e)}")
         self.delete_huanreguan(del_centers)
 
+
         # TODO 后续取消注释
         # self.line_tip.setText("请确认"壳体内径Di"是否正确！")
 
@@ -1637,7 +1834,7 @@ class TubeLayoutEditor(QMainWindow):
         #     b3 = max(0.25 * do, 8.0)
         #     DL = Di - 2 * b3
         #     print(f"计算布管限定圆 DL ({heat_exchanger_type}): {Di} - 2 * max(0.25 * {do}, 8.0) = {DL:.1f}")
-
+        #
         # elif heat_exchanger_type in ["AES", "BES"]:
         #     # 计算方式2: DL = Di - 2(b₁ + b₂ + b)
         #     # 确定b的值
@@ -3038,6 +3235,61 @@ class TubeLayoutEditor(QMainWindow):
                 # 连接信号，允许用户手动更改
                 combo_box.currentTextChanged.connect(lambda: self.handle_param_change())
 
+    def set_tie_rod_diameter_to_16(self):
+        """
+        将拉杆直径更新为16
+        """
+        # 查找拉杆直径在表格中的行索引
+        tie_rod_diameter_row = None
+
+        # 遍历表格找到目标参数
+        for row in range(self.param_table.rowCount()):
+            param_name_item = self.param_table.item(row, 1)
+            if not param_name_item:
+                continue
+
+            param_name = param_name_item.text()
+            if param_name == "拉杆直径":
+                tie_rod_diameter_row = row
+                break
+
+        # 检查是否找到该参数
+        if tie_rod_diameter_row is None:
+            QMessageBox.warning(self, "参数未找到", "未在表格中找到'拉杆直径'参数")
+            return
+
+        # 禁用事件触发，避免不必要的连锁更新
+        self._is_validating = True
+
+        try:
+            # 获取参数单元格的控件
+            cell_widget = self.param_table.cellWidget(tie_rod_diameter_row, 2)
+
+            # 根据不同的控件类型设置值
+            if isinstance(cell_widget, QComboBox):
+                # 如果是下拉框，尝试找到16的选项并选中
+                index = cell_widget.findText("16")
+                if index >= 0:
+                    cell_widget.setCurrentIndex(index)
+                else:
+                    # 如果没有精确匹配项，直接设置文本
+                    cell_widget.setCurrentText("16")
+            else:
+                # 如果是普通文本单元格，直接设置值
+                diameter_item = self.param_table.item(tie_rod_diameter_row, 2)
+                if diameter_item:
+                    diameter_item.setText("16")
+                else:
+                    # 如果单元格不存在，创建新单元格并设置值
+                    self.param_table.setItem(tie_rod_diameter_row, 2, QTableWidgetItem("16"))
+
+        except Exception as e:
+            logging.error(f"设置拉杆直径为16失败: {str(e)}")
+            QMessageBox.warning(self, "操作错误", f"设置拉杆直径时发生错误: {str(e)}")
+        finally:
+            # 恢复事件触发
+            self._is_validating = False
+
     def get_config_value(self, config_id):
         """从配置库获取配置值"""
         try:
@@ -3437,6 +3689,61 @@ class TubeLayoutEditor(QMainWindow):
         except Exception as e:
             logging.error(f"更新折流板参数失败: {str(e)}")
             QMessageBox.warning(self, "计算错误", f"参数计算过程中发生错误: {str(e)}")
+        finally:
+            # 恢复事件触发
+            self._is_validating = False
+
+    def set_baffle_cut_rate_to_25(self):
+        """
+        将折流板要求切口率 (%) 更新为 25%
+        """
+        # 查找折流板要求切口率在表格中的行索引
+        cut_rate_row = None
+
+        # 遍历表格找到目标参数
+        for row in range(self.param_table.rowCount()):
+            param_name_item = self.param_table.item(row, 1)
+            if not param_name_item:
+                continue
+
+            param_name = param_name_item.text()
+            if param_name == "折流板要求切口率 (%)":
+                cut_rate_row = row
+                break
+
+        # 检查是否找到该参数
+        if cut_rate_row is None:
+            QMessageBox.warning(self, "参数未找到", "未在表格中找到'折流板要求切口率 (%)'参数")
+            return
+
+        # 禁用事件触发，避免不必要的连锁更新
+        self._is_validating = True
+
+        try:
+            # 获取参数单元格的控件
+            cell_widget = self.param_table.cellWidget(cut_rate_row, 2)
+
+            # 根据不同的控件类型设置值
+            if isinstance(cell_widget, QComboBox):
+                # 如果是下拉框，尝试找到25%的选项并选中
+                index = cell_widget.findText("25.0")
+                if index >= 0:
+                    cell_widget.setCurrentIndex(index)
+                else:
+                    # 如果没有精确匹配项，直接设置文本
+                    cell_widget.setCurrentText("25.0")
+            else:
+                # 如果是普通文本单元格，直接设置值
+                rate_item = self.param_table.item(cut_rate_row, 2)
+                if rate_item:
+                    rate_item.setText("25.0")
+                else:
+                    # 如果单元格不存在，创建新单元格并设置值
+                    self.param_table.setItem(cut_rate_row, 2, QTableWidgetItem("25.0"))
+
+        except Exception as e:
+            logging.error(f"设置折流板切口率为25%失败: {str(e)}")
+            QMessageBox.warning(self, "操作错误", f"设置切口率时发生错误: {str(e)}")
         finally:
             # 恢复事件触发
             self._is_validating = False
@@ -3858,12 +4165,13 @@ class TubeLayoutEditor(QMainWindow):
                                 # 处理参数联动
                                 if param_name in ["壳体内直径 Di", "换热管外径 do"]:
                                     self.update_baffle_diameter()
+                                if param_name in ["折流板要求切口率 (%)"]:
+                                    self.update_baffle_parameters_3(param_name)
                                 if param_name in ["折流板外径"]:
                                     self.update_baffle_parameters_1(param_name)
                                 if param_name in ["折流板切口与中心线间距"]:
                                     self.update_baffle_parameters_2(param_name)
-                                if param_name in ["折流板要求切口率 (%)"]:
-                                    self.update_baffle_parameters_3(param_name)
+
                                 if param_name in ["拉杆形式", "换热管外径 do"]:
                                     self.update_lagan()
                                 if param_name == "管程程数":
