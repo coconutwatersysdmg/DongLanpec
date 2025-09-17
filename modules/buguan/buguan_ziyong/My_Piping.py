@@ -31,7 +31,7 @@ from modules.chanpinguanli.chanpinguanli_main import product_manager
 
 # product_id = 'PD2025090422414303'
 
-product_id = 'PD2025091619233101'
+product_id = 'PD2025091514545108'
 
 
 def on_product_id_changed(new_id):
@@ -1174,7 +1174,8 @@ class TubeLayoutEditor(QMainWindow):
                                 elif param_name in ["旁路挡板厚度", "防冲板形式", "防冲板厚度", "滑道定位",
                                                     "滑道高度", "滑道厚度", "滑道与竖直中心线夹角",
                                                     "切边长度 L1", "切边高度 h", "换热管外径 do", "中间挡板厚度",
-                                                    "拉杆形式", "拉杆直径", "防冲板折边角度"]:
+                                                    "拉杆形式", "拉杆直径", "防冲板折边角度", "防冲板宽度",
+                                                    "防冲板方位角", "至圆筒内壁距离"]:
                                     try:
                                         # 根据参数名映射实际查询用的名称
                                         query_param_name = param_name
@@ -1630,47 +1631,47 @@ class TubeLayoutEditor(QMainWindow):
                 if conn and conn.open:
                     conn.close()
 
-        # 计算布管限定圆 DL
-        if heat_exchanger_type in ["AEU", "BEU", "BEM", "NEN"]:
-            # 计算方式1: DL = Di - 2b₃, b₃ = max(0.25do, 8)
-            b3 = max(0.25 * do, 8.0)
-            DL = Di - 2 * b3
-            print(f"计算布管限定圆 DL ({heat_exchanger_type}): {Di} - 2 * max(0.25 * {do}, 8.0) = {DL:.1f}")
+        # # 计算布管限定圆 DL
+        # if heat_exchanger_type in ["AEU", "BEU", "BEM", "NEN"]:
+        #     # 计算方式1: DL = Di - 2b₃, b₃ = max(0.25do, 8)
+        #     b3 = max(0.25 * do, 8.0)
+        #     DL = Di - 2 * b3
+        #     print(f"计算布管限定圆 DL ({heat_exchanger_type}): {Di} - 2 * max(0.25 * {do}, 8.0) = {DL:.1f}")
 
-        elif heat_exchanger_type in ["AES", "BES"]:
-            # 计算方式2: DL = Di - 2(b₁ + b₂ + b)
-            # 确定b的值
-            if Di < 1000:
-                b = 4.0  # 默认值
-            else:  # 1000 ≤ Di ≤ 2600
-                b = 5.0  # 默认值
-
-            # 确定b₁和bₙ的值
-            if Di <= 700:
-                b_n = 10.0
-                b_1 = 3.0
-            elif Di <= 1200:
-                b_n = 13.0
-                b_1 = 5.0
-            elif Di <= 2000:
-                b_n = 16.0
-                b_1 = 6.0
-            else:  # Di <= 2600
-                b_n = 20.0
-                b_1 = 7.0
-
-            # 计算b₂
-            b_2 = b_n + 1.5
-
-            # 计算DL
-            DL = Di - 2 * (b_1 + b_2 + b)
-            print(f"计算布管限定圆 DL ({heat_exchanger_type}): {Di} - 2 * ({b_1} + {b_2} + {b}) = {DL:.1f}")
-
-        else:
-            print(f"未知的换热器型号: {heat_exchanger_type}，使用默认DL值")
-            if DL is None:
-                # 如果没有计算出DL且没有用户输入，使用默认值
-                DL = Di - 2 * max(0.25 * do, 8.0)
+        # elif heat_exchanger_type in ["AES", "BES"]:
+        #     # 计算方式2: DL = Di - 2(b₁ + b₂ + b)
+        #     # 确定b的值
+        #     if Di < 1000:
+        #         b = 4.0  # 默认值
+        #     else:  # 1000 ≤ Di ≤ 2600
+        #         b = 5.0  # 默认值
+        #
+        #     # 确定b₁和bₙ的值
+        #     if Di <= 700:
+        #         b_n = 10.0
+        #         b_1 = 3.0
+        #     elif Di <= 1200:
+        #         b_n = 13.0
+        #         b_1 = 5.0
+        #     elif Di <= 2000:
+        #         b_n = 16.0
+        #         b_1 = 6.0
+        #     else:  # Di <= 2600
+        #         b_n = 20.0
+        #         b_1 = 7.0
+        #
+        #     # 计算b₂
+        #     b_2 = b_n + 1.5
+        #
+        #     # 计算DL
+        #     DL = Di - 2 * (b_1 + b_2 + b)
+        #     print(f"计算布管限定圆 DL ({heat_exchanger_type}): {Di} - 2 * ({b_1} + {b_2} + {b}) = {DL:.1f}")
+        #
+        # else:
+        #     print(f"未知的换热器型号: {heat_exchanger_type}，使用默认DL值")
+        #     if DL is None:
+        #         # 如果没有计算出DL且没有用户输入，使用默认值
+        #         DL = Di - 2 * max(0.25 * do, 8.0)
 
         # 更新参数表中的DL值
         dl_row = -1
@@ -1816,6 +1817,13 @@ class TubeLayoutEditor(QMainWindow):
         he_type = '2'  # 默认U型管式
         product_type_str = heat_exchanger_type  # 用于存储产品型式字符串
         self.heat_exchanger = product_type_str
+        # 根据产品型式判断热交换器类型
+        if product_type_str in ['AEU', 'BEU']:
+            he_type = '2'  # U型管式
+        elif product_type_str == 'NEM':
+            he_type = '1'  # 固定管板式
+        elif product_type_str in ['AES', 'BES']:
+            he_type = '0'  # 浮头式
         if self.productID and not product_type_str:
             conn = None
             try:
@@ -1844,6 +1852,9 @@ class TubeLayoutEditor(QMainWindow):
                     conn.close()
 
         input_json['LB_HEType'] = he_type
+        # 4.1 为平行，传“2”
+        # 4.2，6.2为double，传“0”
+        # 4.3,6.1为H，传“1”
 
         LB_ClapboardType = '0'
         if self.tube_pass_form_value == "4.1":
@@ -2442,7 +2453,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 获取换热管外径 do 的值和下拉框选项
         do_value = None
-        do_options = ["10", "12", "14", "16", "19", "25", "27", "30", "32", "35", "38", "45", "50", "55",
+        do_options = ["10", "12", "14", "16", "19", "22","25", "30", "32", "35", "38", "45", "50", "55",
                       "57"]  # 预设的do选项
         if do_row != -1:
             do_widget = self.param_table.cellWidget(do_row, 2)
@@ -3095,7 +3106,7 @@ class TubeLayoutEditor(QMainWindow):
                 except ValueError:
                     cut_rate = None
                 # 保存原始值
-                default_cut_rate = self._original_values.get((row, 2), "30")  # 默认30%
+                default_cut_rate = self._original_values.get((row, 2), "25")  # 默认30%
 
         # 检查必要参数是否存在
         if not all([shell_inner_diameter_row is not None,
@@ -3181,6 +3192,300 @@ class TubeLayoutEditor(QMainWindow):
             # 恢复事件触发
             self._is_validating = False
 
+    def update_baffle_parameters_1(self, changed_param_name):
+        """
+        当"折流板外径"变化时，更新其他相关参数
+        :param changed_param_name: 发生变化的参数名称
+        """
+        # 查找四个关键参数在表格中的行索引和当前值
+        shell_inner_diameter_row = None  # 壳体内直径 Di
+        baffle_diameter_row = None  # 折流板外径
+        cut_spacing_row = None  # 折流板切口与中心线间距
+        cut_rate_row = None  # 折流板要求切口率 (%)
+
+        shell_inner_diameter = None
+        baffle_diameter = None
+        cut_spacing = None
+        cut_rate = None
+
+        # 遍历表格找到目标参数
+        for row in range(self.param_table.rowCount()):
+            param_name_item = self.param_table.item(row, 1)
+            if not param_name_item:
+                continue
+            param_name = param_name_item.text()
+
+            # 获取参数值（区分QComboBox和普通文本项）
+            cell_widget = self.param_table.cellWidget(row, 2)
+            if isinstance(cell_widget, QComboBox):
+                param_value = cell_widget.currentText()
+            else:
+                value_item = self.param_table.item(row, 2)
+                param_value = value_item.text() if value_item else ""
+
+            # 记录各参数的行索引和值
+            if param_name == "壳体内直径 Di":
+                shell_inner_diameter_row = row
+                try:
+                    shell_inner_diameter = float(param_value)
+                except ValueError:
+                    shell_inner_diameter = None
+            elif param_name == "折流板外径":
+                baffle_diameter_row = row
+                try:
+                    baffle_diameter = float(param_value)
+                except ValueError:
+                    baffle_diameter = None
+            elif param_name == "折流板切口与中心线间距":
+                cut_spacing_row = row
+                try:
+                    cut_spacing = float(param_value)
+                except ValueError:
+                    cut_spacing = None
+            elif param_name == "折流板要求切口率 (%)":
+                cut_rate_row = row
+                try:
+                    cut_rate = float(param_value)
+                except ValueError:
+                    cut_rate = None
+
+        # 检查必要参数是否存在
+        if not all([shell_inner_diameter_row is not None,
+                    baffle_diameter_row is not None,
+                    cut_spacing_row is not None,
+                    cut_rate_row is not None]):
+            return  # 必要参数不存在，不执行更新
+
+        # 禁用事件触发，避免循环更新
+        self._is_validating = True
+
+        try:
+            # 折流板外径变化时，保持切口率不变，重新计算切口与中心线间距
+            if cut_rate is not None and shell_inner_diameter is not None and baffle_diameter is not None:
+                # 验证切口率范围 [0,50]%
+                if not (0 <= cut_rate <= 50):
+                    QMessageBox.warning(self, "输入错误", "折流板切口率必须在0%到50%范围内！")
+                    return
+
+                # 计算切口与中心线间距 B = (Dp/2) - (A × Di)
+                baffle_radius = baffle_diameter / 2
+                cut_size = (cut_rate / 100) * shell_inner_diameter  # A × Di
+                new_spacing = baffle_radius - cut_size
+
+                # 验证间距范围 [0, Dp/2]
+                if new_spacing < 0 or new_spacing > baffle_radius:
+                    QMessageBox.warning(self, "计算错误",
+                                        f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)")
+                    return
+
+                # 更新间距参数，保留1位小数
+                spacing_item = self.param_table.item(cut_spacing_row, 2)
+                if spacing_item:
+                    spacing_item.setText(f"{new_spacing:.1f}")
+
+        except Exception as e:
+            logging.error(f"更新折流板参数失败: {str(e)}")
+            QMessageBox.warning(self, "计算错误", f"参数计算过程中发生错误: {str(e)}")
+        finally:
+            # 恢复事件触发
+            self._is_validating = False
+
+    def update_baffle_parameters_2(self, changed_param_name):
+        """
+        当"折流板切口与中心线间距"变化时，更新其他相关参数
+        :param changed_param_name: 发生变化的参数名称
+        """
+        # 查找四个关键参数在表格中的行索引和当前值
+        shell_inner_diameter_row = None  # 壳体内直径 Di
+        baffle_diameter_row = None  # 折流板外径
+        cut_spacing_row = None  # 折流板切口与中心线间距
+        cut_rate_row = None  # 折流板要求切口率 (%)
+
+        shell_inner_diameter = None
+        baffle_diameter = None
+        cut_spacing = None
+        cut_rate = None
+
+        # 遍历表格找到目标参数
+        for row in range(self.param_table.rowCount()):
+            param_name_item = self.param_table.item(row, 1)
+            if not param_name_item:
+                continue
+            param_name = param_name_item.text()
+
+            # 获取参数值（区分QComboBox和普通文本项）
+            cell_widget = self.param_table.cellWidget(row, 2)
+            if isinstance(cell_widget, QComboBox):
+                param_value = cell_widget.currentText()
+            else:
+                value_item = self.param_table.item(row, 2)
+                param_value = value_item.text() if value_item else ""
+
+            # 记录各参数的行索引和值
+            if param_name == "壳体内直径 Di":
+                shell_inner_diameter_row = row
+                try:
+                    shell_inner_diameter = float(param_value)
+                except ValueError:
+                    shell_inner_diameter = None
+            elif param_name == "折流板外径":
+                baffle_diameter_row = row
+                try:
+                    baffle_diameter = float(param_value)
+                except ValueError:
+                    baffle_diameter = None
+            elif param_name == "折流板切口与中心线间距":
+                cut_spacing_row = row
+                try:
+                    cut_spacing = float(param_value)
+                except ValueError:
+                    cut_spacing = None
+            elif param_name == "折流板要求切口率 (%)":
+                cut_rate_row = row
+                try:
+                    cut_rate = float(param_value)
+                except ValueError:
+                    cut_rate = None
+
+        # 检查必要参数是否存在
+        if not all([shell_inner_diameter_row is not None,
+                    baffle_diameter_row is not None,
+                    cut_spacing_row is not None,
+                    cut_rate_row is not None]):
+            return  # 必要参数不存在，不执行更新
+
+        # 禁用事件触发，避免循环更新
+        self._is_validating = True
+
+        try:
+            # 切口与中心线间距变化时，保持折流板外径不变，重新计算切口率
+            if cut_spacing is not None and shell_inner_diameter is not None and baffle_diameter is not None:
+                # 验证间距范围 [0, Dp/2]
+                baffle_radius = baffle_diameter / 2
+                if not (0 <= cut_spacing <= baffle_radius):
+                    QMessageBox.warning(self, "输入错误",
+                                        f"切口与中心线间距必须在0到{baffle_radius:.1f}mm范围内！")
+                    return
+
+                # 反算切口率 A = [(Dp/2) - B] ÷ Di
+                baffle_radius = baffle_diameter / 2
+                new_cut_rate = ((baffle_radius - cut_spacing) / shell_inner_diameter) * 100
+
+                # 验证切口率范围 [0,50]%
+                if not (0 <= new_cut_rate <= 50):
+                    QMessageBox.warning(self, "计算错误",
+                                        f"计算出的切口率({new_cut_rate:.1f}%)超出合理范围(0-50%)")
+                    return
+
+                # 更新切口率参数，保留1位小数
+                rate_item = self.param_table.item(cut_rate_row, 2)
+                if rate_item:
+                    rate_item.setText(f"{new_cut_rate:.1f}")
+
+        except Exception as e:
+            logging.error(f"更新折流板参数失败: {str(e)}")
+            QMessageBox.warning(self, "计算错误", f"参数计算过程中发生错误: {str(e)}")
+        finally:
+            # 恢复事件触发
+            self._is_validating = False
+
+    def update_baffle_parameters_3(self, changed_param_name):
+        """
+        当"折流板要求切口率 (%)"变化时，更新其他相关参数
+        :param changed_param_name: 发生变化的参数名称
+        """
+        # 查找四个关键参数在表格中的行索引和当前值
+        shell_inner_diameter_row = None  # 壳体内直径 Di
+        baffle_diameter_row = None  # 折流板外径
+        cut_spacing_row = None  # 折流板切口与中心线间距
+        cut_rate_row = None  # 折流板要求切口率 (%)
+
+        shell_inner_diameter = None
+        baffle_diameter = None
+        cut_spacing = None
+        cut_rate = None
+
+        # 遍历表格找到目标参数
+        for row in range(self.param_table.rowCount()):
+            param_name_item = self.param_table.item(row, 1)
+            if not param_name_item:
+                continue
+            param_name = param_name_item.text()
+
+            # 获取参数值（区分QComboBox和普通文本项）
+            cell_widget = self.param_table.cellWidget(row, 2)
+            if isinstance(cell_widget, QComboBox):
+                param_value = cell_widget.currentText()
+            else:
+                value_item = self.param_table.item(row, 2)
+                param_value = value_item.text() if value_item else ""
+
+            # 记录各参数的行索引和值
+            if param_name == "壳体内直径 Di":
+                shell_inner_diameter_row = row
+                try:
+                    shell_inner_diameter = float(param_value)
+                except ValueError:
+                    shell_inner_diameter = None
+            elif param_name == "折流板外径":
+                baffle_diameter_row = row
+                try:
+                    baffle_diameter = float(param_value)
+                except ValueError:
+                    baffle_diameter = None
+            elif param_name == "折流板切口与中心线间距":
+                cut_spacing_row = row
+                try:
+                    cut_spacing = float(param_value)
+                except ValueError:
+                    cut_spacing = None
+            elif param_name == "折流板要求切口率 (%)":
+                cut_rate_row = row
+                try:
+                    cut_rate = float(param_value)
+                except ValueError:
+                    cut_rate = None
+
+        # 检查必要参数是否存在
+        if not all([shell_inner_diameter_row is not None,
+                    baffle_diameter_row is not None,
+                    cut_spacing_row is not None,
+                    cut_rate_row is not None]):
+            return  # 必要参数不存在，不执行更新
+
+        # 禁用事件触发，避免循环更新
+        self._is_validating = True
+
+        try:
+            # 切口率变化时，保持折流板外径不变，重新计算切口与中心线间距
+            if cut_rate is not None and shell_inner_diameter is not None and baffle_diameter is not None:
+                # 验证切口率范围 [0,50]%
+                if not (0 <= cut_rate <= 50):
+                    QMessageBox.warning(self, "输入错误", "折流板切口率必须在0%到50%范围内！")
+                    return
+
+                # 计算切口与中心线间距 B = (Dp/2) - (A × Di)
+                baffle_radius = baffle_diameter / 2
+                cut_size = (cut_rate / 100) * shell_inner_diameter  # A × Di
+                new_spacing = baffle_radius - cut_size
+
+                # 验证间距范围 [0, Dp/2]
+                if new_spacing < 0 or new_spacing > baffle_radius:
+                    QMessageBox.warning(self, "计算错误",
+                                        f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)")
+                    return
+
+                # 更新间距参数，保留1位小数
+                spacing_item = self.param_table.item(cut_spacing_row, 2)
+                if spacing_item:
+                    spacing_item.setText(f"{new_spacing:.1f}")
+
+        except Exception as e:
+            logging.error(f"更新折流板参数失败: {str(e)}")
+            QMessageBox.warning(self, "计算错误", f"参数计算过程中发生错误: {str(e)}")
+        finally:
+            # 恢复事件触发
+            self._is_validating = False
     def get_selected_tube_pass_form(self):
         """获取当前选中的管程分程形式标识"""
         if self.tube_pass_form_combo:
@@ -3500,8 +3805,12 @@ class TubeLayoutEditor(QMainWindow):
                                 # 处理参数联动
                                 if param_name in ["壳体内直径 Di", "换热管外径 do"]:
                                     self.update_baffle_diameter()
-                                if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)"]:
-                                    self.update_baffle_parameters(param_name)
+                                if param_name in ["折流板外径"]:
+                                    self.update_baffle_parameters_1(param_name)
+                                if param_name in ["折流板切口与中心线间距"]:
+                                    self.update_baffle_parameters_2(param_name)
+                                if param_name in ["折流板要求切口率 (%)"]:
+                                    self.update_baffle_parameters_3(param_name)
                                 if param_name in ["拉杆形式", "换热管外径 do"]:
                                     self.update_lagan()
                                 if param_name == "管程程数":
@@ -3532,8 +3841,8 @@ class TubeLayoutEditor(QMainWindow):
             unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
             self.param_table.setItem(row, 3, unit_item)
 
-        # 初始化时触发一次折流板参数联动计算
-        self.update_baffle_parameters(None)
+        # # 初始化时触发一次折流板参数联动计算
+        # self.update_baffle_parameters(None)
 
     # 新增验证函数
     def validate_tube_length_input(self, combo_box, text, row_idx):
@@ -4589,7 +4898,7 @@ class TubeLayoutEditor(QMainWindow):
         # 先清除已有的连线
         self.clear_connection_lines(scene)
         # 更新需求，所有圆心都要有连线，后续如有需求再修改这句
-        # centers = self.global_centers
+        centers = self.global_centers
         # 获取排列方式和中心距
         layout_type = None
         S = do  # 默认 fallback
@@ -5006,7 +5315,7 @@ class TubeLayoutEditor(QMainWindow):
             # "SlipWayAngle": "滑道与竖直中心线夹角",
             "SlipWayHeight": "滑道高度",
             # "DNs": "公称直径 DN",
-            "DLs": "布管限定圆 DL",
+            # "DLs": "布管限定圆 DL",
             "BPBThick": "旁路挡板厚度",
             "S": "换热管中心距 S"
         }
@@ -9319,6 +9628,37 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 baffle_distance = None  # 禁用状态时设为None（避免后续使用错误）
 
+        # 新增：更新参数表格中的防冲板参数值
+        def update_param_table(param_name, param_value):
+            """更新参数表中的指定参数值"""
+            for row in range(self.param_table.rowCount()):
+                name_item = self.param_table.item(row, 1)
+                if not name_item or name_item.text() != param_name:
+                    continue
+
+                cell_widget = self.param_table.cellWidget(row, 2)
+                if isinstance(cell_widget, QComboBox):
+                    # 如果是下拉框，尝试找到匹配项
+                    index = cell_widget.findText(str(param_value))
+                    if index >= 0:
+                        cell_widget.setCurrentIndex(index)
+                    else:
+                        # 找不到则添加并选中
+                        cell_widget.addItem(str(param_value))
+                        cell_widget.setCurrentText(str(param_value))
+                else:
+                    # 如果是普通单元格，直接设置文本
+                    item = self.param_table.item(row, 2)
+                    if item:
+                        item.setText(str(param_value))
+                    else:
+                        self.param_table.setItem(row, 2, QTableWidgetItem(str(param_value)))
+                break
+
+        # 更新所有防冲板相关参数到表格中
+        for param_name, param_value in current_params.items():
+            update_param_table(param_name, param_value)
+
         # 获取换热管相关参数（传递给构建函数）（原有逻辑保留）
         tube_outer_diameter = None
         tube_pitch = None
@@ -9358,23 +9698,6 @@ class TubeLayoutEditor(QMainWindow):
             tube_outer_diameter=tube_outer_diameter,
             tube_pitch=tube_pitch
         )
-
-        # 更新参数表（原有逻辑保留）
-        for row in range(self.param_table.rowCount()):
-            param_name_item = self.param_table.item(row, 1)
-            if not param_name_item:
-                continue
-            param_name = param_name_item.text()
-            if param_name in current_params:
-                cell_widget = self.param_table.cellWidget(row, 2)
-                if isinstance(cell_widget, QComboBox):
-                    cell_widget.setCurrentText(current_params[param_name])
-                else:
-                    value_item = self.param_table.item(row, 2)
-                    if value_item:
-                        value_item.setText(current_params[param_name])
-                    else:
-                        self.param_table.setItem(row, 2, QTableWidgetItem(current_params[param_name]))
 
     def build_impingement_plate(self, selected_centers, baffle_type, baffle_thickness, baffle_angle,
                                 baffle_width, baffle_azimuth, baffle_distance, tube_outer_diameter, tube_pitch):

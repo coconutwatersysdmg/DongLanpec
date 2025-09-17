@@ -67,8 +67,8 @@ class TubeSheetConnectionPage(QWidget):
 
         self.connection_type_combo = QComboBox()
         self.connection_type_combo.addItems(
-            ["机械胀接管孔结构", "强度焊接的焊缝形式", "机械强度胀接加密封焊管孔结构",
-             "强度焊接加贴胀管孔结构", "内孔焊接头形式"])
+            ["强度焊接加贴胀管孔结构", "机械胀接管孔结构", "强度焊接的焊缝形式", "机械强度胀接加密封焊管孔结构",
+             "内孔焊接头形式"])
         self.connection_type_combo.setFixedHeight(30)
         self.connection_type_combo.setStyleSheet("""
             QComboBox {
