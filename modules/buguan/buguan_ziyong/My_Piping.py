@@ -1771,8 +1771,8 @@ class TubeLayoutEditor(QMainWindow):
                     input_json[json_key] = param_value
 
         # 确保使用计算后的DL值
-        input_json['LB_DL'] = f"{DL:.1f}"
-        input_json['LB_Di'] = f"{Di:.1f}" if Di else ""
+        input_json['LB_DL'] = f"{DL: .1f}"
+        input_json['LB_Di'] = f"{Di: .1f}" if Di else ""
 
         # 补充默认值
         connection = pymysql.connect(
@@ -4046,7 +4046,7 @@ class TubeLayoutEditor(QMainWindow):
             # 遍历所有圆心坐标
             for center in centers:
                 x, y = center
-                if -Chorda - do < x < Chorda + do and ((ha - do < y < Ri) or (-Ri < y < -ha + do)):
+                if -Chorda < x < Chorda and ((ha - do < y < Ri) or (-Ri < y < -ha + do)):
                     none_tube_0_180.append(center)
 
             self.delete_centers(none_tube_0_180)
@@ -4059,7 +4059,7 @@ class TubeLayoutEditor(QMainWindow):
             # 遍历所有圆心坐标
             for center in centers:
                 x, y = center
-                if -Chordb - do < y < Chordb + do and ((hb - do < x < Ri) or (-Ri < x < -hb + do)):
+                if -Chordb < y < Chordb and ((hb - do < x < Ri) or (-Ri < x < -hb + do)):
                     none_tube_90_270.append(center)
 
             self.delete_centers(none_tube_90_270)
