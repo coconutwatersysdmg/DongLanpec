@@ -2866,7 +2866,7 @@ class TubeLayoutEditor(QMainWindow):
                 self._update_table_cell(center_distance_row, 2, f"{center_distance:.1f}")
                 print(f"已更新换热管中心距 S: {center_distance:.1f}")
 
-            # 对于AEU和BEU型号，使用U形换热管的最小弯曲半径Rmin作为分程隔板两侧相邻管中心距
+            # 根据不同的换热器类型进行不同的处理
             if self.heat_exchanger in ["AEU", "BEU"]:
                 # U形换热管最小弯曲半径映射表
                 rmin_map = {
@@ -2898,12 +2898,38 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 更新分程隔板两侧相邻管中心距（水平）
                     if sn_horizontal_row != -1:
-                        self._update_table_cell(sn_horizontal_row, 2, f"{rmin_value:.1f}")
-                        print(f"已更新分程隔板两侧相邻管中心距（水平）: {rmin_value:.1f}")
+                        if self.heat_exchanger == "AEU":
+                            # AEU 型号使用 U 形换热管最小弯曲半径 Rmin 作为分程隔板两侧相邻管中心距（水平）
+                            self._update_table_cell(sn_horizontal_row, 2, f"{rmin_value:.1f}")
+                            print(f"已更新分程隔板两侧相邻管中心距（水平）: {rmin_value:.1f}")
+                        elif self.heat_exchanger == "BEU":
+                            # BEU 型号从对应表格中获取分程隔板两侧相邻管中心距（水平）
+                            beu_horizontal_map = {
+                                10.0: 30.0,
+                                12.0: 32.0,
+                                14.0: 35.0,
+                                16.0: 38.0,
+                                19.0: 38.0,
+                                25.0: 50.0,
+                                30.0: 52.0,
+                                32.0: 56.0,
+                                35.0: 60.0,
+                                38.0: 68.0,
+                                45.0: 76.0,
+                                50.0: 78.0,
+                                55.0: 80.0,
+                                57.0: 80.0
+                            }
+                            beu_horizontal_value = beu_horizontal_map.get(float(do_value))
+                            if beu_horizontal_value is not None and pd.notna(beu_horizontal_value):
+                                self._update_table_cell(sn_horizontal_row, 2, f"{beu_horizontal_value:.1f}")
+                                print(f"已更新分程隔板两侧相邻管中心距（水平）: {beu_horizontal_value:.1f}")
+                            else:
+                                print(f"未找到 BEU 型号下换热管外径 {do_value} 对应的分程隔板两侧相邻管中心距（水平）")
                 else:
                     print(f"未找到换热管外径 {do_value} 对应的最小弯曲半径 Rmin")
             else:
-                # 非AEU/BEU型号，使用原来的映射表逻辑
+                # 非 AEU/BEU 型号，使用原来的映射表逻辑
                 # 更新分程隔板两侧相邻管中心距（竖直）
                 if sn_vertical_row != -1:
                     self._update_table_cell(sn_vertical_row, 2, f"{sn_value:.1f}")
@@ -2911,8 +2937,34 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 更新分程隔板两侧相邻管中心距（水平）
                 if sn_horizontal_row != -1:
-                    self._update_table_cell(sn_horizontal_row, 2, f"{sn_value:.1f}")
-                    print(f"已更新分程隔板两侧相邻管中心距（水平）: {sn_value:.1f}")
+                    if self.heat_exchanger == "AES" or self.heat_exchanger == "BES":
+                        aes_bes_horizontal_map = {
+                            10.0: 28.0,
+                            12.0: 30.0,
+                            14.0: 32.0,
+                            16.0: 35.0,
+                            19.0: 38.0,
+                            20.0: 40,
+                            22.0: 42,
+                            25.0: 50.0,
+                            30.0: 50.0,
+                            32.0: 52.0,
+                            35.0: 56.0,
+                            38.0: 60.0,
+                            45.0: 68.0,
+                            50.0: 76.0,
+                            55.0: 78.0,
+                            57.0: 80.0
+                        }
+                        aes_bes_horizontal_value = aes_bes_horizontal_map.get(float(do_value))
+                        if aes_bes_horizontal_value is not None and pd.notna(aes_bes_horizontal_value):
+                            self._update_table_cell(sn_horizontal_row, 2, f"{aes_bes_horizontal_value:.1f}")
+                            print(f"已更新分程隔板两侧相邻管中心距（水平）: {aes_bes_horizontal_value:.1f}")
+                        else:
+                            print(f"未找到 AES/BES 型号下换热管外径 {do_value} 对应的分程隔板两侧相邻管中心距（水平）")
+                    else:
+                        self._update_table_cell(sn_horizontal_row, 2, f"{sn_value:.1f}")
+                        print(f"已更新分程隔板两侧相邻管中心距（水平）: {sn_value:.1f}")
         else:
             print(f"未找到匹配的映射关系 for {key}")
 
