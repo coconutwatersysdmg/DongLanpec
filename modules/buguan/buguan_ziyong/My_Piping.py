@@ -31,7 +31,7 @@ from modules.chanpinguanli.chanpinguanli_main import product_manager
 
 # product_id = 'PD2025090422414303'
 
-product_id = 'PD2025091514545108'
+product_id = 'PD202'
 
 
 def on_product_id_changed(new_id):
@@ -2453,7 +2453,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 获取换热管外径 do 的值和下拉框选项
         do_value = None
-        do_options = ["10", "12", "14", "16", "19", "22","25", "30", "32", "35", "38", "45", "50", "55",
+        do_options = ["10", "12", "14", "16", "19", "22", "25", "30", "32", "35", "38", "45", "50", "55",
                       "57"]  # 预设的do选项
         if do_row != -1:
             do_widget = self.param_table.cellWidget(do_row, 2)
@@ -3486,6 +3486,7 @@ class TubeLayoutEditor(QMainWindow):
         finally:
             # 恢复事件触发
             self._is_validating = False
+
     def get_selected_tube_pass_form(self):
         """获取当前选中的管程分程形式标识"""
         if self.tube_pass_form_combo:
@@ -5080,9 +5081,13 @@ class TubeLayoutEditor(QMainWindow):
         return pos_grouped, neg_grouped
 
     def draw_baffle_plates(self):
-        """根据参数绘制折流板线段"""
+        """根据参数绘制折流板线段，并存储折流板位置信息"""
         from PyQt5.QtGui import QPen, QColor
         from PyQt5.QtWidgets import QMessageBox
+        import math  # 确保导入math模块用于计算
+
+        # 清空之前的折流板信息
+        self.baffle_lines = []
 
         # 获取折流板相关参数
         cut_direction = None  # 折流板切口方向
@@ -5134,26 +5139,38 @@ class TubeLayoutEditor(QMainWindow):
 
         if cut_direction == "水平上下":
             # 绘制与x轴平行的两条弦（上下各一条）
-            # 计算弦长：根据圆半径和距离x轴的距离
             if cut_spacing >= shell_radius:
                 QMessageBox.warning(self, "参数错误", "折流板切口与中心线间距不能大于壳体内半径")
                 return
 
+            # 计算弦长
             chord_half_length = math.sqrt(shell_radius ** 2 - cut_spacing ** 2)
 
-            # 上侧线段（y=cut_spacing）
-            self.graphics_scene.addLine(
+            # 上侧线段（y=cut_spacing）并存储信息
+            upper_line = self.graphics_scene.addLine(
                 -chord_half_length, cut_spacing,
                 chord_half_length, cut_spacing,
                 pen
             )
+            self.baffle_lines.append({
+                'type': 'horizontal',
+                'y_level': cut_spacing,
+                'x_range': (-chord_half_length, chord_half_length),
+                'line_item': upper_line
+            })
 
-            # 下侧线段（y=-cut_spacing）
-            self.graphics_scene.addLine(
+            # 下侧线段（y=-cut_spacing）并存储信息
+            lower_line = self.graphics_scene.addLine(
                 -chord_half_length, -cut_spacing,
                 chord_half_length, -cut_spacing,
                 pen
             )
+            self.baffle_lines.append({
+                'type': 'horizontal',
+                'y_level': -cut_spacing,
+                'x_range': (-chord_half_length, chord_half_length),
+                'line_item': lower_line
+            })
 
             # 记录操作
             self.operations.append({
@@ -5169,21 +5186,34 @@ class TubeLayoutEditor(QMainWindow):
                 QMessageBox.warning(self, "参数错误", "折流板切口与中心线间距不能大于壳体内半径")
                 return
 
+            # 计算弦长
             chord_half_length = math.sqrt(shell_radius ** 2 - cut_spacing ** 2)
 
-            # 右侧线段（x=cut_spacing）
-            self.graphics_scene.addLine(
+            # 右侧线段（x=cut_spacing）并存储信息
+            right_line = self.graphics_scene.addLine(
                 cut_spacing, -chord_half_length,
                 cut_spacing, chord_half_length,
                 pen
             )
+            self.baffle_lines.append({
+                'type': 'vertical',
+                'x_level': cut_spacing,
+                'y_range': (-chord_half_length, chord_half_length),
+                'line_item': right_line
+            })
 
-            # 左侧线段（x=-cut_spacing）
-            self.graphics_scene.addLine(
+            # 左侧线段（x=-cut_spacing）并存储信息
+            left_line = self.graphics_scene.addLine(
                 -cut_spacing, -chord_half_length,
                 -cut_spacing, chord_half_length,
                 pen
             )
+            self.baffle_lines.append({
+                'type': 'vertical',
+                'x_level': -cut_spacing,
+                'y_range': (-chord_half_length, chord_half_length),
+                'line_item': left_line
+            })
 
             # 记录操作
             self.operations.append({
@@ -8082,11 +8112,52 @@ class TubeLayoutEditor(QMainWindow):
         # 清空选中列表
         self.selected_center_dangguan.clear()
 
+    def is_outside_baffle_cut(self):
+        """
+        检查选中的旁路挡板位置是否在折流板切口之外
+        返回True表示在切口之外，False表示在切口之间
+        """
+        if not hasattr(self, 'selected_centers') or not self.selected_centers:
+            return False
+
+        if not hasattr(self, 'baffle_lines') or not self.baffle_lines:
+            return False  # 没有折流板信息，无法判断
+
+        # 获取选中点的实际坐标
+        actual_coords = self.selected_to_current_coords(self.selected_centers)
+        if not actual_coords:
+            return False
+
+        # 检查每个选中的点
+        for x, y in actual_coords:
+            for baffle in self.baffle_lines:
+                if baffle['type'] == 'horizontal':
+                    # 水平折流板：检查y坐标是否在折流板线之外
+                    if abs(y) > abs(baffle['y_level']):
+                        return True  # 在折流板上下之外
+
+                elif baffle['type'] == 'vertical':
+                    # 垂直折流板：检查x坐标是否在折流板线之外
+                    if abs(x) > abs(baffle['x_level']):
+                        return True  # 在折流板左右之外
+
+        return False  # 所有点都在折流板切口之间
+
     # 旁路挡板
     def on_side_block_click(self):
         """在选中圆所在行的最左右两端添加蓝色小挡板矩形 旁路挡板"""
         from PyQt5.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QHBoxLayout, QMessageBox, \
             QComboBox, QTableWidgetItem
+        import math
+
+        # 检查是否在折流板切口之外设置旁路挡板
+        if self.is_outside_baffle_cut():
+            reply = QMessageBox.question(self, "位置提示",
+                                         "旁路挡板宜设在折流板切口之间\n是否继续设置？",
+                                         QMessageBox.Yes | QMessageBox.No,
+                                         QMessageBox.No)
+            if reply == QMessageBox.No:
+                return
 
         # 查找参数表中旁路挡板厚度的行和当前值
         param_row = -1
@@ -8182,15 +8253,11 @@ class TubeLayoutEditor(QMainWindow):
             do_value = float(do)
             tube_bridge = self.get_nominal_bridge_width(do_value)
             actual_coord = self.selected_to_current_coords(selected_centers)
-            # bendblock = self.get_tube_bendblock()
-            # 1. 找到与 selected_centers 最左边的第二个坐标
-            # selected_centers 是 [(61.113, -61.113)]，只有一个点
-            # 我们需要找到与这个点纵坐标相同但横坐标不同的点
 
-            # 从 global_centers 中筛选出纵坐标与 selected_centers 相同但横坐标不同的点
-            selected_y = actual_coord[0][1]  # 获取纵坐标 -61.113
+            # 1. 找到与 selected_centers 最左边的第二个坐标
+            selected_y = actual_coord[0][1]  # 获取纵坐标
             same_y_points = [point for point in self.global_centers
-                             if abs(point[1] - selected_y) < 1e-6 < abs(point[0] - selected_centers[0][0])]  # 横坐标不同
+                             if abs(point[1] - selected_y) < 1e-6 < abs(point[0] - selected_centers[0][0])]
 
             # 按横坐标排序，找到最左边的第二个点
             if len(same_y_points) >= 2:
@@ -8198,42 +8265,41 @@ class TubeLayoutEditor(QMainWindow):
                 near_center = sorted_points[1]  # 最左边的第二个点
                 n_x, n_y = near_center
             else:
-                # 如果没有足够的点，使用默认值或处理异常
                 n_x, n_y = selected_centers[0]  # 使用原始点作为备选
 
             # 2. 计算 y = n_y 与折流板外径圆的交点
-            # 获取折流板外径（相当于圆的直径）
-            bendblock = self.get_tube_bendblock()  # 这是折流板外径，相当于圆的直径
+            bendblock = self.get_tube_bendblock()
             bendblock_value = float(bendblock)
-            R_bend = bendblock_value / 2.0  # 计算半径
-
-            # 圆的方程: x² + y² = R_bend²
-            # 已知 y = n_y，求 x
-            # x = ±√(R_bend² - n_y²)
+            R_bend = bendblock_value / 2.0
 
             # 计算交点
-            if abs(n_y) <= R_bend:  # 确保直线与圆相交
+            if abs(n_y) <= R_bend:
                 x_offset = math.sqrt(R_bend ** 2 - n_y ** 2)
-                intersection1 = (x_offset, n_y)  # 右侧交点
-                intersection2 = (-x_offset, n_y)  # 左侧交点
+                intersection1 = (x_offset, n_y)
+                intersection2 = (-x_offset, n_y)
             else:
-                # 直线不与圆相交，处理异常情况
-                intersection1 = (R_bend, n_y)  # 使用近似值
+                intersection1 = (R_bend, n_y)
                 intersection2 = (-R_bend, n_y)
 
-            print(f"Near center: ({n_x}, {n_y})")
-            print(
-                f"Intersection points: ({intersection1[0]}, {intersection1[1]}) and ({intersection2[0]}, {intersection2[1]})")
+            # 计算最外层换热管与折流板外缘距离
+            distance = abs(abs(intersection2[0]) - abs(n_x))
+
+            # 新增判断逻辑：当距离小于等于16mm时提示用户
+            if distance <= 16:
+                reply = QMessageBox.question(self, "间距提示",
+                                             "间距小于等于16mm，是否设置旁路挡板？",
+                                             QMessageBox.Yes | QMessageBox.No,
+                                             QMessageBox.No)
+                if reply == QMessageBox.No:
+                    return
+
             try:
                 block_height_val = float(block_height)
                 tube_bridge_val = float(tube_bridge)
-                self.side_dangban_length = abs(abs(intersection2[0]) - abs(n_x)) - block_height_val - tube_bridge_val
+                self.side_dangban_length = distance - block_height_val - tube_bridge_val
             except ValueError as e:
                 print(f"数值转换错误: {e}")
                 self.side_dangban_length = 0.0
-
-            # print(self.global_centers)
-            # print(actual_coord)
 
             added_count = self.build_side_dangban(selected_centers, block_height)
 
@@ -8243,7 +8309,6 @@ class TubeLayoutEditor(QMainWindow):
                     row_idx = abs(row_label) - 1
                     col_idx = abs(col_label) - 1
 
-                    # 选择对应分组的圆心列表
                     if row_label > 0:
                         centers_group = self.full_sorted_current_centers_up
                     else:
@@ -8251,7 +8316,6 @@ class TubeLayoutEditor(QMainWindow):
 
                     if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
                         x, y = centers_group[row_idx][col_idx]
-                        # 擦除淡蓝色选中涂层
                         click_point = QPointF(x, y)
                         for item in self.graphics_scene.items(click_point):
                             if isinstance(item, QGraphicsEllipseItem):
@@ -8262,12 +8326,11 @@ class TubeLayoutEditor(QMainWindow):
                 dialog.close()
 
         def on_close():
-            # 保存输入的值到参数表（关闭时也更新）
             try:
                 thickness = float(self.thickness_input.text())
                 update_param_table(thickness)
             except ValueError:
-                pass  # 输入无效则不更新
+                pass
             dialog.close()
 
         self.confirm_btn.clicked.connect(on_confirm)
