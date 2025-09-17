@@ -4301,14 +4301,14 @@ class TubeLayoutEditor(QMainWindow):
         delete_sql = f"DELETE FROM {table_name} WHERE `产品ID` = '{safe_productID}'"
         sql_statements.append(delete_sql)
 
-        # 管程=2 时把“分程隔板两侧相邻管中心距（竖直）”置 0
+        # 管程=2 时把“分程隔板两侧相邻管中心距（水平）”置 0
         is_tube_pass_two = any(
             (data.get("参数名", "").strip() == "管程程数" and str(data.get("参数值", "")).strip() == "2")
             for data in tube_data
         )
         if is_tube_pass_two:
             for data in tube_data:
-                if data.get("参数名", "").strip() == "分程隔板两侧相邻管中心距（竖直）":
+                if data.get("参数名", "").strip() == "分程隔板两侧相邻管中心距（水平）":
                     data["参数值"] = "0"
                     break
 
