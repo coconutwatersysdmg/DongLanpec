@@ -8287,9 +8287,8 @@ class TubeLayoutEditor(QMainWindow):
 
         import ast
         from PyQt5.QtCore import QRectF, Qt
-        from PyQt5.QtGui import QPen, QBrush
-        from PyQt5.QtWidgets import QMessageBox
-        from PyQt5.QtWidgets import QGraphicsRectItem
+        from PyQt5.QtGui import QPen, QBrush, QPainterPath  # 补充QPainterPath导入（原代码可能遗漏）
+        from PyQt5.QtWidgets import QMessageBox, QGraphicsRectItem
         import math
 
         def is_point_in_rect(point, rect_x, rect_y, rect_w, rect_h):
@@ -8426,7 +8425,7 @@ class TubeLayoutEditor(QMainWindow):
             QMessageBox.warning(self, "参数缺失", "未找到换热管外径 do，请先配置参数表")
             return 0
 
-        # -------------------------- 4. 原逻辑：绘制挡板 + 新增干涉处理 --------------------------
+        # -------------------------- 4. 修正逻辑：绘制挡板（贴紧大圆边缘）+ 新增干涉处理 --------------------------
         if selected_centers:
             for selected_center in selected_centers:
                 row_label, col_label = selected_center
@@ -8444,36 +8443,35 @@ class TubeLayoutEditor(QMainWindow):
                 if not row:  # 空行跳过
                     continue
 
-                # 获取当前行的y坐标
+                # 获取当前行的y坐标（所有管子在同一行，取第一个的y即可）
                 _, y = row[0]
 
-                # 计算最大允许的x坐标（确保在大圆内）
+                # 关键：计算大圆在当前Y坐标的左右边界（X的最大/最小值）
                 if not hasattr(self, 'R_nei'):
                     QMessageBox.warning(self, "参数错误", "未找到大内圆半径参数R_nei")
                     return 0
-                max_x = math.sqrt(self.R_nei ** 2 - y ** 2)
+                max_x = math.sqrt(self.R_nei ** 2 - y ** 2)  # 右侧边界X值（正数）
+                min_x = -max_x  # 左侧边界X值（负数）
 
-                # 计算最左和最右挡板位置（不超出大圆）
-                left_x = max(row[0][0] - 40, -max_x)  # 最左圆左侧40单位
-                right_x = min(row[-1][0] + 20, max_x - block_width)  # 最右圆右侧20单位
+                # 修正1：直接以大圆边界为基准计算挡板位置（贴紧边缘）
+                # 左挡板：左上角X = 左侧边界（min_x），确保左边缘与大圆左侧对齐
+                left_rect_x = min_x
+                # 右挡板：左上角X = 右侧边界（max_x） - 挡板宽度，确保右边缘与大圆右侧对齐
+                right_rect_x = max_x - block_width
 
-                # 计算矩形中心位置
-                left_rect_center_x = max(left_x - block_width / 2, -max_x + block_width / 2)
-                right_rect_center_x = min(right_x + block_width / 2, max_x - block_width / 2)
-
-                # 确保挡板高度不超过大圆在该y坐标处的高度
-                max_block_height = 2 * math.sqrt(self.R_nei ** 2 - y ** 2)
+                # 修正2：挡板高度取用户输入与大圆当前Y坐标高度的最小值（避免超出圆）
+                max_block_height = 2 * math.sqrt(self.R_nei ** 2 - y ** 2)  # 大圆当前Y坐标的高度（上下边界距离）
                 actual_block_height = min(block_height, max_block_height)
+                # 挡板Y坐标：居中对齐（以当前行y为中心）
+                rect_y = y - actual_block_height / 2
 
                 # 绘制蓝色矩形挡板（一对）
                 pen = QPen(Qt.blue)
                 brush = QBrush(Qt.blue)
 
                 # -------------------------- 左侧挡板：绘制 + 干涉检测 --------------------------
-                # 1. 创建左侧挡板
-                left_rect_x = left_rect_center_x - block_width / 2  # 左上角x
-                left_rect_y = y - actual_block_height / 2  # 左上角y
-                left_rect = QRectF(left_rect_x, left_rect_y, block_width, actual_block_height)
+                # 1. 创建左侧挡板（参数：左上角X、Y，宽度，高度）
+                left_rect = QRectF(left_rect_x, rect_y, block_width, actual_block_height)
                 path = QPainterPath()
                 path.addRect(left_rect)  # 将QRectF添加到路径中
                 left_block = ClickableRectItem(path, is_side_block=True, editor=self)
@@ -8487,20 +8485,17 @@ class TubeLayoutEditor(QMainWindow):
                 added_count += 1
 
                 # 2. 检测左侧挡板的干涉管
-                left_rect_params = (left_rect_x, left_rect_y, block_width, actual_block_height)
+                left_rect_params = (left_rect_x, rect_y, block_width, actual_block_height)
                 left_interfering = check_tube_block_interference(
                     rect_params=left_rect_params,
                     all_tube_centers=self.current_centers,
                     tube_diameter=do
                 )
-                # 加入临时集合（去重）
-                current_interfering_tubes.update(left_interfering)
+                current_interfering_tubes.update(left_interfering)  # 加入临时集合去重
 
                 # -------------------------- 右侧挡板：绘制 + 干涉检测 --------------------------
-                # 1. 创建右侧挡板
-                right_rect_x = right_rect_center_x - block_width / 2  # 左上角x
-                right_rect_y = y - actual_block_height / 2  # 左上角y
-                right_rect = QRectF(right_rect_x, right_rect_y, block_width, actual_block_height)
+                # 1. 创建右侧挡板（参数：左上角X、Y，宽度，高度）
+                right_rect = QRectF(right_rect_x, rect_y, block_width, actual_block_height)
                 right_block = ClickableRectItem(right_rect, is_side_block=True, editor=self)
                 right_block.setPen(pen)
                 right_block.setBrush(brush)
@@ -8512,31 +8507,30 @@ class TubeLayoutEditor(QMainWindow):
                 added_count += 1
 
                 # 2. 检测右侧挡板的干涉管
-                right_rect_params = (right_rect_x, right_rect_y, block_width, actual_block_height)
+                right_rect_params = (right_rect_x, rect_y, block_width, actual_block_height)
                 right_interfering = check_tube_block_interference(
                     rect_params=right_rect_params,
                     all_tube_centers=self.current_centers,
                     tube_diameter=do
                 )
-                # 加入临时集合（去重）
-                current_interfering_tubes.update(right_interfering)
+                current_interfering_tubes.update(right_interfering)  # 加入临时集合去重
 
                 # 双向绑定配对挡板
                 left_block.set_paired_block(right_block)
 
-                # 存储挡板信息，用于后续识别 - 使用实际的selected_center坐标
+                # 存储挡板信息，用于后续识别
                 left_block.original_selected_center = selected_center
                 right_block.original_selected_center = selected_center
 
-                # 记录操作（补充挡板参数）
+                # 记录操作（补充挡板参数和干涉管数量）
                 self.operations.append({
                     "type": "side_block",
                     "row": row_label,
                     "rects": [
-                        (left_rect_x, left_rect_y, block_width, actual_block_height),
-                        (right_rect_x, right_rect_y, block_width, actual_block_height)
+                        (left_rect_x, rect_y, block_width, actual_block_height),
+                        (right_rect_x, rect_y, block_width, actual_block_height)
                     ],
-                    "interfering_tubes_count": len(current_interfering_tubes)  # 新增：记录干涉管数量
+                    "interfering_tubes_count": len(current_interfering_tubes)
                 })
 
                 done_rows.add(row_label)
@@ -8546,45 +8540,39 @@ class TubeLayoutEditor(QMainWindow):
             # 转换为列表（集合不可迭代）
             interfering_list = list(current_interfering_tubes)
 
+            # 计算干涉管的相对坐标（用于后续识别）
             interfering_selected_coords = []
             for abs_coord in interfering_list:
                 rel_coord = self.actual_to_selected_coords(abs_coord)
                 if rel_coord is not None:
                     interfering_selected_coords.append(rel_coord)
 
-            # 执行删除
+            # 执行干涉管删除（调用已有删除方法 + 过滤当前中心列表）
             self.delete_huanreguan(interfering_selected_coords)
             interfering_set = set(interfering_list)
             self.current_centers = [coord for coord in self.current_centers if coord not in interfering_set]
 
-            # 修改存储结构：[[绘制坐标, 干涉坐标1, 干涉坐标2, ...], ...]
-            # 为每个绘制的挡板创建对应的条目
+            # 存储：[绘制坐标, 干涉坐标1, 干涉坐标2, ...]（按行关联）
             for selected_center in selected_centers:
                 row_label, col_label = selected_center
                 if row_label in done_rows:
-                    # 找到这个挡板对应的干涉管
-                    dangban_interfering_tubes = []
-                    for interfering_coord in interfering_selected_coords:
-                        # 如果干涉管的行号与挡板行号相同（考虑正负号）
-                        if (interfering_coord[0] == row_label or
-                                interfering_coord[0] == -row_label or
-                                abs(interfering_coord[0]) == abs(row_label)):
-                            dangban_interfering_tubes.append(interfering_coord)
-
-                    # 创建存储条目
-                    dangban_entry = [selected_center]  # 第一个是绘制坐标
-                    dangban_entry.extend(dangban_interfering_tubes)  # 后面是干涉坐标
-
+                    # 筛选当前行的干涉管（按行号匹配，考虑正负）
+                    dangban_interfering_tubes = [
+                        coord for coord in interfering_selected_coords
+                        if abs(coord[0]) == abs(row_label)
+                    ]
+                    # 构建存储条目
+                    dangban_entry = [selected_center] + dangban_interfering_tubes
                     self.sdangban_selected_centers.append(dangban_entry)
 
-            self.update_tube_nums()
+            self.update_tube_nums()  # 更新换热管数量显示
 
         else:
-
+            # 无干涉管：仅存储绘制坐标
             for selected_center in selected_centers:
                 row_label, col_label = selected_center
                 if row_label in done_rows:
-                    self.sdangban_selected_centers.append([selected_center])  # 只存储绘制坐标
+                    self.sdangban_selected_centers.append([selected_center])
 
         return added_count
 
