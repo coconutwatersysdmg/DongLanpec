@@ -10742,7 +10742,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 查找参数表中"中间挡板厚度"的行和当前默认值
         param_row = -1
-        default_thickness = 3.0  # 默认厚度
+        default_thickness = 3  # 默认厚度
         row_count = self.param_table.rowCount()
         for row in range(row_count):
             name_item = self.param_table.item(row, 1)
@@ -10763,6 +10763,13 @@ class TubeLayoutEditor(QMainWindow):
                     pass
                 break
 
+        # 计算中间挡板宽度
+        distance = self.calculate_distance(self.selected_centers)
+        do = self.get_tube_do()
+        do_value = float(do)
+        tube_bridge = self.get_nominal_bridge_width(do_value)
+        self.center_dangban_length = distance - do_value - tube_bridge * 2
+
         # 1. 创建弹窗实例
         dialog = QDialog(self)
         dialog.setWindowTitle("中间挡板参数设置")
@@ -10778,6 +10785,14 @@ class TubeLayoutEditor(QMainWindow):
         thickness_layout.addWidget(thickness_label)
         thickness_layout.addWidget(self.thickness_input)
         layout.addLayout(thickness_layout)
+
+        # 显示计算得到的宽度
+        width_layout = QHBoxLayout()
+        width_label = QLabel("计算的挡板宽度:")
+        width_value_label = QLabel(f"{self.center_dangban_length:.2f}")
+        width_layout.addWidget(width_label)
+        width_layout.addWidget(width_value_label)
+        layout.addLayout(width_layout)
 
         # 按钮区域（确定+关闭）
         btn_layout = QHBoxLayout()
@@ -10809,7 +10824,7 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 selected_centers = self.selected_centers
 
-            # 关键修改：更新参数表中的值（仿照滑道函数的逻辑）
+            # 更新参数表中的厚度值
             for row in range(self.param_table.rowCount()):
                 param_name = self.param_table.item(row, 1).text()
                 if param_name == "中间挡板厚度":
@@ -10835,8 +10850,13 @@ class TubeLayoutEditor(QMainWindow):
                             self.param_table.setItem(row, 2, QTableWidgetItem(new_value))
                     break
 
-            # 执行中间挡板绘制
-            self.build_center_dangban(selected_centers, block_thickness)
+            # 执行中间挡板绘制，同时传入宽度和厚度参数
+            # 注意：这里假设build_center_dangban函数已修改为接收width参数
+            self.build_center_dangban(
+                selected_centers,
+                block_thickness,  # 维持原逻辑的厚度参数
+                self.center_dangban_length  # 新增的宽度参数
+            )
 
             # 清除选中状态
             self.clear_selection_highlight()
@@ -10847,7 +10867,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 4. 关闭按钮点击事件
         def on_close_click():
-            # 同步输入的厚度到参数表（与确定按钮相同的逻辑）
+            # 同步输入的厚度到参数表
             try:
                 thickness = float(self.thickness_input.text())
                 for row in range(self.param_table.rowCount()):
@@ -10906,11 +10926,11 @@ class TubeLayoutEditor(QMainWindow):
         else:
             return "未找到该换热管外径对应的名义管桥宽度"
 
-    def build_center_dangban(self, selected_centers, block_thickness):
-        """构建紫色中间挡板（接收厚度参数，执行绘制逻辑）"""
+    def build_center_dangban(self, selected_centers, block_thickness, block_width):
+        """构建紫色中间挡板（接收厚度和宽度参数，执行绘制逻辑）"""
         from PyQt5.QtCore import Qt, QPointF
-        from PyQt5.QtGui import QPen, QBrush, QColor, QPainterPath
-        from PyQt5.QtWidgets import QMessageBox, QGraphicsEllipseItem
+        from PyQt5.QtGui import QPen, QBrush, QColor, QPainterPath, QPainter
+        from PyQt5.QtWidgets import QMessageBox, QGraphicsRectItem, QGraphicsPathItem
         import ast
 
         # 1. 解析并校验选中的圆心坐标
@@ -11001,34 +11021,45 @@ class TubeLayoutEditor(QMainWindow):
                         self.center_dangban.remove(center)
                 return
 
-            # 6. 绘制紫色挡板（使用用户设置的厚度）
+            # 6. 绘制紫色挡板（使用用户设置的厚度和计算的宽度）
             pen = QPen(QColor(128, 0, 128))
-            pen.setWidth(int(block_thickness))  # 应用厚度参数（转int避免小数宽度异常）
+            pen.setWidth(1)  # 边框宽度
+            brush = QBrush(QColor(128, 0, 128))  # 填充颜色
 
             if is_horizontal:
-                # 水平对称：绘制两条水平线段
-                x_start = min(x1, x2) + self.r
-                x_end = max(x1, x2) - self.r
-                # 绘制线段
-                line1 = self.graphics_scene.addLine(x_start, y1, x_end, y1, pen)
-                line2 = self.graphics_scene.addLine(x_start, -y1, x_end, -y1, pen)
+                # 水平对称：绘制两个水平矩形（宽度为block_width，厚度为block_thickness）
+                # 计算矩形位置（居中放置）
+                mid_x = (x1 + x2) / 2
+                half_width = block_width / 2
+                half_thickness = block_thickness / 2
+
+                # 第一个矩形
+                rect1_x = mid_x - half_width
+                rect1_y = y1 - half_thickness
+                rect1 = self.graphics_scene.addRect(rect1_x, rect1_y, block_width, block_thickness, pen, brush)
+
+                # 第二个矩形（对称位置）
+                rect2_x = mid_x - half_width
+                rect2_y = -y1 - half_thickness
+                rect2 = self.graphics_scene.addRect(rect2_x, rect2_y, block_width, block_thickness, pen, brush)
+
                 # 创建可选中图形项
                 path1 = QPainterPath()
-                path1.moveTo(x_start, y1)
-                path1.lineTo(x_end, y1)
+                path1.addRect(rect1_x, rect1_y, block_width, block_thickness)
                 item1 = ClickableRectItem(path1, is_center_dangban=True, editor=self)
                 item1.setPen(pen)
+                item1.setBrush(brush)
                 item1.original_coords = selected_centers
-                item1.related_line_items = [line1]
+                item1.related_line_items = [rect1]
                 self.graphics_scene.addItem(item1)
 
                 path2 = QPainterPath()
-                path2.moveTo(x_start, -y1)
-                path2.lineTo(x_end, -y1)
+                path2.addRect(rect2_x, rect2_y, block_width, block_thickness)
                 item2 = ClickableRectItem(path2, is_center_dangban=True, editor=self)
                 item2.setPen(pen)
+                item2.setBrush(brush)
                 item2.original_coords = selected_centers
-                item2.related_line_items = [line2]
+                item2.related_line_items = [rect2]
                 self.graphics_scene.addItem(item2)
 
                 # 绑定配对关系
@@ -11036,43 +11067,54 @@ class TubeLayoutEditor(QMainWindow):
                 item2.set_paired_block(item1)
 
             else:
-                # 竖直对称：绘制两条竖直线段
-                y_start = min(y1, y2) + self.r
-                y_end = max(y1, y2) - self.r
-                # 绘制线段
-                line1 = self.graphics_scene.addLine(x1, y_start, x1, y_end, pen)
-                line2 = self.graphics_scene.addLine(-x1, y_start, -x1, y_end, pen)
+                # 竖直对称：绘制两个竖直矩形（宽度为block_thickness，长度为block_width）
+                # 计算矩形位置（居中放置）
+                mid_y = (y1 + y2) / 2
+                half_width = block_thickness / 2  # 竖直方向宽度为厚度
+                half_length = block_width / 2  # 长度为block_width
+
+                # 第一个矩形
+                rect1_x = x1 - half_width
+                rect1_y = mid_y - half_length
+                rect1 = self.graphics_scene.addRect(rect1_x, rect1_y, block_thickness, block_width, pen, brush)
+
+                # 第二个矩形（对称位置）
+                rect2_x = -x1 - half_width
+                rect2_y = mid_y - half_length
+                rect2 = self.graphics_scene.addRect(rect2_x, rect2_y, block_thickness, block_width, pen, brush)
+
                 # 创建可选中图形项
                 path1 = QPainterPath()
-                path1.moveTo(x1, y_start)
-                path1.lineTo(x1, y_end)
+                path1.addRect(rect1_x, rect1_y, block_thickness, block_width)
                 item1 = ClickableRectItem(path1, is_center_dangban=True, editor=self)
                 item1.setPen(pen)
+                item1.setBrush(brush)
                 item1.original_coords = selected_centers
-                item1.related_line_items = [line1]
+                item1.related_line_items = [rect1]
                 self.graphics_scene.addItem(item1)
 
                 path2 = QPainterPath()
-                path2.moveTo(-x1, y_start)
-                path2.lineTo(-x1, y_end)
+                path2.addRect(rect2_x, rect2_y, block_thickness, block_width)
                 item2 = ClickableRectItem(path2, is_center_dangban=True, editor=self)
                 item2.setPen(pen)
+                item2.setBrush(brush)
                 item2.original_coords = selected_centers
-                item2.related_line_items = [line2]
+                item2.related_line_items = [rect2]
                 self.graphics_scene.addItem(item2)
 
                 # 绑定配对关系
                 item1.set_paired_block(item2)
                 item2.set_paired_block(item1)
 
-            # 7. 记录操作日志
+            # 7. 记录操作日志（增加宽度信息）
             if not hasattr(self, 'operations'):
                 self.operations = []
             self.operations.append({
                 "type": "purple_block",
                 "from": [(x1, y1), (x2, y2)],
                 "mode": "horizontal" if is_horizontal else "vertical",
-                "thickness": block_thickness
+                "thickness": block_thickness,
+                "width": block_width  # 记录宽度参数
             })
         self.clear_selection_highlight()
         self.selected_centers.clear()
