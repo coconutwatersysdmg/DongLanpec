@@ -1236,7 +1236,7 @@ class TubeLayoutEditor(QMainWindow):
 
                         else:
                             if not self.heat_exchanger:
-                                self.heat_exchanger="AEU"
+                                self.heat_exchanger = "AEU"
                             # 根据换热器型号计算DL
                             if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN"]:
                                 # 计算方式1: DL = Di - 2×b₃，其中b₃ = max(0.25×do, 8mm)
@@ -1549,6 +1549,8 @@ class TubeLayoutEditor(QMainWindow):
 
         # 后续计算和元素构建逻辑保持不变
         try:
+            if self.heat_exchanger in ["AEU", "BEU"]:
+                self.set_partition_plate_pipe_spacing_to_50()
             self.set_baffle_cut_rate_to_25()
             self.set_tie_rod_diameter_to_16()
             self.calculate_piping_layout()
@@ -1734,7 +1736,6 @@ class TubeLayoutEditor(QMainWindow):
         except (SyntaxError, ValueError, TypeError) as e:
             print(f"处理折边式防冲板时出错: {str(e)}")
         self.delete_huanreguan(del_centers)
-
 
         # TODO 后续取消注释
         # self.line_tip.setText("请确认"壳体内径Di"是否正确！")
@@ -3748,6 +3749,77 @@ class TubeLayoutEditor(QMainWindow):
             # 恢复事件触发
             self._is_validating = False
 
+    def set_partition_plate_pipe_spacing_to_50(self):
+        """
+        将分程隔板两侧相邻管中心距（竖直）和分程隔板两侧相邻管中心距（水平）都更新为50
+        """
+        # 查找两个目标参数在表格中的行索引
+        vertical_spacing_row = None  # 分程隔板两侧相邻管中心距（竖直）
+        horizontal_spacing_row = None  # 分程隔板两侧相邻管中心距（水平）
+
+        # 遍历表格找到目标参数
+        for row in range(self.param_table.rowCount()):
+            param_name_item = self.param_table.item(row, 1)
+            if not param_name_item:
+                continue
+
+            param_name = param_name_item.text()
+            if param_name == "分程隔板两侧相邻管中心距（竖直）":
+                vertical_spacing_row = row
+            elif param_name == "分程隔板两侧相邻管中心距（水平）":
+                horizontal_spacing_row = row
+
+            # 两个参数都找到后可提前退出循环
+            if vertical_spacing_row is not None and horizontal_spacing_row is not None:
+                break
+
+        # 检查是否找到所有参数
+        missing_params = []
+        if vertical_spacing_row is None:
+            missing_params.append("分程隔板两侧相邻管中心距（竖直）")
+        if horizontal_spacing_row is None:
+            missing_params.append("分程隔板两侧相邻管中心距（水平）")
+
+        if missing_params:
+            QMessageBox.warning(self, "参数未找到",
+                                f"未在表格中找到以下参数: {', '.join(missing_params)}")
+            return
+
+        # 禁用事件触发，避免不必要的连锁更新
+        self._is_validating = True
+
+        try:
+            # 定义设置参数值的内部函数，避免重复代码
+            def set_param_value(row):
+                cell_widget = self.param_table.cellWidget(row, 2)
+                if isinstance(cell_widget, QComboBox):
+                    # 如果是下拉框，尝试找到50的选项并选中
+                    index = cell_widget.findText("50")
+                    if index >= 0:
+                        cell_widget.setCurrentIndex(index)
+                    else:
+                        # 如果没有精确匹配项，直接设置文本
+                        cell_widget.setCurrentText("50")
+                else:
+                    # 如果是普通文本单元格，直接设置值
+                    item = self.param_table.item(row, 2)
+                    if item:
+                        item.setText("50")
+                    else:
+                        # 如果单元格不存在，创建新单元格并设置值
+                        self.param_table.setItem(row, 2, QTableWidgetItem("50"))
+
+            # 设置两个参数的值
+            set_param_value(vertical_spacing_row)
+            set_param_value(horizontal_spacing_row)
+
+        except Exception as e:
+            logging.error(f"设置分程隔板相邻管中心距为50失败: {str(e)}")
+            QMessageBox.warning(self, "操作错误", f"设置中心距时发生错误: {str(e)}")
+        finally:
+            # 恢复事件触发
+            self._is_validating = False
+
     def update_baffle_parameters_3(self, changed_param_name):
         """
         当"折流板要求切口率 (%)"变化时，更新其他相关参数
@@ -4285,6 +4357,7 @@ class TubeLayoutEditor(QMainWindow):
         allowed_types = {"AES", "BES", "NEN", "BEM"}
         # 检查当前换热器类型是否在允许列表中
         show_4_1 = self.heat_exchanger in allowed_types
+        show_4_3 = self.heat_exchanger in allowed_types
         show_6_1 = self.heat_exchanger in allowed_types
 
         # 根据管程程数加载对应图片，同时关联标识
@@ -4296,7 +4369,8 @@ class TubeLayoutEditor(QMainWindow):
                 self.add_image_to_combo(combo, base_path, "4.1.png", "4.1")
             self.add_image_to_combo(combo, base_path, "4.2.1.png", "4.2")
             self.add_image_to_combo(combo, base_path, "4.2.2.png", "4.2")
-            self.add_image_to_combo(combo, base_path, "4.3.png", "4.3")
+            if show_4_3:
+                self.add_image_to_combo(combo, base_path, "4.3.png", "4.3")
         elif tube_pass == "6":
             if show_6_1:
                 self.add_image_to_combo(combo, base_path, "6.1.1.png", "6.1")
