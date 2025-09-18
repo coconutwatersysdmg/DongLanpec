@@ -134,7 +134,7 @@ def export_nozzle_listing(stats_widget, template_rel_dir="guankoudingyi/table_te
     # 2) 收集界面数据
     nozzle_cols = _collect_nozzle_rows_from_ui(stats_widget)
     if not nozzle_cols:
-        raise RuntimeError("没有可导出的管口数据（请先填写管口代号等信息）")
+        raise RuntimeError("没有可导出的管口数据（请先输入管口代号等信息）")
 
     # 3) 打开模板
     wb = load_workbook(template_path)

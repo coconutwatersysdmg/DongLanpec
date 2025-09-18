@@ -227,7 +227,7 @@ class RegisterDialog(QDialog):
 
         # 验证输入
         if not all([username, company, password, confirm_password, captcha]):
-            QMessageBox.warning(self, "警告", "所有内容都必须填写!")
+            QMessageBox.warning(self, "警告", "所有内容都必须输入!")
             return
 
         # 验证账号格式
@@ -442,7 +442,7 @@ class LoginWindow(QtWidgets.QDialog):
         password = self.password_input.text().strip()
 
         if not all([username, company, password]):
-            QtWidgets.QMessageBox.warning(self, "警告", "所有内容都必须填写!")
+            QtWidgets.QMessageBox.warning(self, "警告", "所有内容都必须输入!")
             return
 
         if len(username) != 6 or not username.isalnum():

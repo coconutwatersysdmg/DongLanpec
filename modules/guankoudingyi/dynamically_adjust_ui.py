@@ -591,7 +591,7 @@ class Stats(QtWidgets.QWidget):
         if column == 1 and not hasattr(self, 'old_port_code'):
             self.old_port_code = ''
 
-        # # ✅ 如果是最后一行的管口代号被填写，自动添加新行
+        # # ✅ 如果是最后一行的管口代号被输入，自动添加新行
         # if column == 1 and row == self.tableWidget_pipe.rowCount() - 1:
         #     item = self.tableWidget_pipe.item(row, column)
         #     if item and item.text().strip():

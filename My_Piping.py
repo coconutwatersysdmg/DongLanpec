@@ -1499,7 +1499,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 参数验证
         if DL is None or do is None:
-            QMessageBox.warning(self, "提示", "请先填写 DL 和 do 两个参数。")
+            QMessageBox.warning(self, "提示", "请先输入 DL 和 do 两个参数。")
             return None
 
         # 转换为DataFrame
@@ -3740,7 +3740,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 验证关键参数
         if DL is None or do is None:
-            QMessageBox.warning(self, "提示", "请先填写 DL 和 do 两个参数。")
+            QMessageBox.warning(self, "提示", "请先输入 DL 和 do 两个参数。")
             return False
 
         # 转换为DataFrame
@@ -7101,7 +7101,7 @@ class TubeLayoutEditor(QMainWindow):
                 QMessageBox.warning(self, "参数错误", "防冲板折边角度只能在30°到90°之间（不含90°）")
                 return
             if tube_outer_diameter is None or tube_pitch is None:
-                QMessageBox.warning(self, "参数缺失", "请确保已填写换热管外径 do 和中心距 S")
+                QMessageBox.warning(self, "参数缺失", "请确保已输入换热管外径 do 和中心距 S")
                 return
 
             # 验证选中数量

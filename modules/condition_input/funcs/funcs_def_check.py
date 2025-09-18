@@ -316,7 +316,7 @@ def check_work_temp_out(value, tip_widget, param_name, column_name, table_widget
 def check_work_pressure_max(value, tip_widget, param_name, column_name, table_widget, col_index) -> Tuple[str, str]:
     """
     校验“最高允许工作压力”：
-    - 若设计压力 < 0，则禁止填写；
+    - 若设计压力 < 0，则禁止输入；
     - 若设计压力 ≥ 0，最高允许工作压力必须 ≥ 设计压力；
     - 类型要求：float
     - 1）低于设计压力时，提醒：最高允许工作压力不得低于设计压力！不合理。
@@ -355,7 +355,7 @@ def check_work_pressure_max(value, tip_widget, param_name, column_name, table_wi
                     dp = float(v_item.text())
                     print(f"[check_work_pressure_max][DEBUG] 找到设计压力={dp}, 对比 max_wp={max_wp}")
                     if dp < 0:
-                        return "error", "设计压力为负时不允许填写最高允许工作压力，请核对后输入"
+                        return "error", "设计压力为负时不允许输入最高允许工作压力，请核对后输入"
                     elif dp > max_wp:
                         return "warn", "最高允许工作压力不得低于设计压力！不合理。"
                     elif max_wp / dp > 1.03:

@@ -129,7 +129,7 @@ class DocumentGenerationDialog(QDialog):
                         elif doc["name"] == "材料清单":
                             output_path = os.path.join(save_dir, "材料清单.xlsx")
                             generate_material_list(product_id, output_path)  # ✅ 此函数现在负责基本信息 + G列 + H列
-                            cunguige.main(json_path, output_path, 'Sheet1', product_id)  # ✅ 此函数负责填写规格（E列）
+                            cunguige.main(json_path, output_path, 'Sheet1', product_id)  # ✅ 此函数负责输入规格（E列）
                         else:
                             self.copy_template_document(doc["name"], doc["ext"], doc["filter"], save_dir)
 
@@ -246,7 +246,7 @@ from openpyxl.cell.cell import MergedCell
 #     # json_path="../qiangdujisuan/jiekou_python/jisuan_output_new.json",
 #     json_path="jisuan_output_new.json",
 #
-#     output_path="填写完成_圆筒映射.xlsx",
+#     output_path="输入完成_圆筒映射.xlsx",
 #     module_name="管箱圆筒",
 #     sheet_name="管箱圆筒"
 #

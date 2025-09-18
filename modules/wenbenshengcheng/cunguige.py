@@ -526,7 +526,7 @@ def write_spec_to_excel(data, excel_path, sheet_name, product_id):
                 print(f"⚠️ 无法生成规格：{name}")
 
     wb.save(excel_path)
-    print(f"✅ 已填写规格列至 Excel：{excel_path}")
+    print(f"✅ 已输入规格列至 Excel：{excel_path}")
 
 def get_pipe_param_value(product_id, field_name):
     """
@@ -639,7 +639,7 @@ def insert_jiaguan_falan_rows(sheet, product_id, json_data):
             print("❌ 未找到“管口”行，无法插入接管法兰")
             return
 
-        # 3️⃣ 倒序插入并填写
+        # 3️⃣ 倒序插入并输入
         for data in reversed(rows):
             sheet.insert_rows(insert_index)
 

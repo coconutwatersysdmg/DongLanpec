@@ -1039,7 +1039,7 @@ def twoDgeneration(product_id):
         # === ① 生成材料清单（G/H列） ===
         generate_material_list(product_id, output_path)
         json_path = "jisuan_output_new.json"
-        # === ② 填写规格（E列） ===
+        # === ② 输入规格（E列） ===
         cunguige.main(json_path, output_path, 'Sheet1', product_id)
 
         # === ③ 计算 7785F ===

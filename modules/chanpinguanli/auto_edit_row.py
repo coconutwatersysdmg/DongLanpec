@@ -211,7 +211,7 @@ def finalize_row_edit(row, new_text):
     #
     # def is_row_empty(r):
     #     return all(not (table.item(r, c) and table.item(r, c).text().strip()) for c in range(1, total_columns))
-        # ✅ 初始行数只有3行时，全部填写完毕，自动新增行
+        # ✅ 初始行数只有3行时，全部输入完毕，自动新增行
     if total_rows == 3 and all(is_row_filled(r) for r in range(3)):
 
         add_table_row()

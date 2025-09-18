@@ -761,7 +761,7 @@ def fill_final_excel_from_intermediate(intermediate_excel_path, target_excel_pat
             elif keyword in name_value_map:
                 print(f"⚠️ `{sheet_name}` 字段 `{keyword}` 已有值，跳过写入")
 
-        # ✅ 填写结论
+        # ✅ 输入结论
         if sheet_name in module_success_map:
             result = "合格" if module_success_map[sheet_name] else "不合格"
             for row in sheet.iter_rows(min_row=2):

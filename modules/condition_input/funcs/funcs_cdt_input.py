@@ -1131,8 +1131,8 @@ def sync_design_params_to_element_params(product_id):
 def sync_corrosion_to_guankou_param(product_id, guankou_codes, category_label=None):
     """
     将条件输入（设计数据表）的腐蚀裕量同步到管口参数：
-    - case1: 当管程/壳程腐蚀裕量数值相同 → 用该值填写管口3列默认值
-    - case2: 如果管口号都属于管程或壳程 → 用对应的腐蚀裕量值填写
+    - case1: 当管程/壳程腐蚀裕量数值相同 → 用该值输入管口3列默认值
+    - case2: 如果管口号都属于管程或壳程 → 用对应的腐蚀裕量值输入
     - case3: 以上两种情况都不满足时 → 不填，保持为空
     """
 
@@ -1246,8 +1246,8 @@ def save_all_tables(viewer, product_id):
 def validate_required_fields(table_widget, mode="设计数据"):
     """
     检查带星号的“参数名称”对应的必填字段是否为空
-    - mode="设计数据"：要求壳程数值、管程数值必须填写
-    - mode="通用数据"：要求参数值必须填写
+    - mode="设计数据"：要求壳程数值、管程数值必须输入
+    - mode="通用数据"：要求参数值必须输入
     - 特殊强制：进、出口压力差 的管程数值为必填
     """
     required_col_name = {
@@ -1291,7 +1291,7 @@ def validate_required_fields(table_widget, mode="设计数据"):
                         missing_rows.append((row, name_text))
                         break
 
-        # ✅ 强制补充项：进、出口压力差 的“管程数值”必须填写
+        # ✅ 强制补充项：进、出口压力差 的“管程数值”必须输入
         if mode == "设计数据" and name_text == "进、出口压力差":
             col = header_map.get("管程数值")
             if col is not None:

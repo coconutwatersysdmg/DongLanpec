@@ -42,10 +42,10 @@
     #                 pass
 
     #     if DL is None:
-    #         QMessageBox.warning(self, "提示", "请先填写'壳体内直径 Di'参数。")
+    #         QMessageBox.warning(self, "提示", "请先输入'壳体内直径 Di'参数。")
     #         return
     #     if do is None:
-    #         QMessageBox.warning(self, "提示", "请先填写'换热管外径 do'参数。")
+    #         QMessageBox.warning(self, "提示", "请先输入'换热管外径 do'参数。")
     #         return
 
     #     # 构造 JSON 映射字典

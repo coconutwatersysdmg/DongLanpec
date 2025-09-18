@@ -98,7 +98,7 @@ def calculate_heat_exchanger_strength(product_id):
         "设计温度2（设计工况2）": ("ShellWorkingTemperature", "TubeWorkingTemperature"),
     }
 
-    # 填写数据
+    # 输入数据
     for row in rows:
         param = row["参数名称"].strip()
         shell_val, tube_val = row["壳程数值"], row["管程数值"]

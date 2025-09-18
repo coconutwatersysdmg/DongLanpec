@@ -30,7 +30,7 @@ product_manager.product_id_changed.connect(on_product_id_changed)
 
 
 
-# === 数量 & 单重填写逻辑 ===
+# === 数量 & 单重输入逻辑 ===
 import os
 import json
 import openpyxl
@@ -839,7 +839,7 @@ def generate_material_list(product_id: str, output_path: str):
 
     # 加载 JSON
     json_jisuan = load_json_file(os.path.join(os.getcwd(), "jisuan_output_new.json"))
-    # 填写信息
+    # 输入信息
     fill_quantity_weight(json_jisuan, sheet)
     fill_special_items(sheet, json_jisuan,product_id)
 
@@ -849,7 +849,7 @@ def generate_material_list(product_id: str, output_path: str):
 
 def fill_quantity_by_relation(sheet):
     """
-    根据其他元件的数量或默认规则，补充填写G列数量。
+    根据其他元件的数量或默认规则，补充输入G列数量。
     """
     # 收集所有结构件 → 数量映射（G列）
     name_to_qty = {}
@@ -897,7 +897,7 @@ def fill_quantity_by_relation(sheet):
         }:
             qty_cell.value = 8
 
-    print("✅ 已填写依赖关系数量（如与拉杆相同、固定为1等）")
+    print("✅ 已输入依赖关系数量（如与拉杆相同、固定为1等）")
 
 
 def fill_additional_quantities(sheet, path_to_json):
@@ -935,6 +935,6 @@ def fill_additional_quantities(sheet, path_to_json):
             if qty_cell.value in [None, ""]:
                 qty_cell.value = quantity_map[item_name]
 
-    print("✅ 已从布管输出参数中填写附加数量（修正字段匹配）")
+    print("✅ 已从布管输出参数中输入附加数量（修正字段匹配）")
 
 

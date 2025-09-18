@@ -243,7 +243,7 @@ def get_filtered_pipe_options(field, filters, unit_map, pressure_type = None):
     查询管口关系对应表，根据其他字段值过滤出指定字段候选值
     注意：不支持"公称尺寸"字段的筛选，公称尺寸独立于其他字段
     :param field: 当前目标字段（如"压力等级"、"法兰型式"等，不包括"公称尺寸"）
-    :param filters: 其他字段的已填写值，如 {"密封面型式": "RF", "法兰型式": "SO"}
+    :param filters: 其他字段的已输入值，如 {"密封面型式": "RF", "法兰型式": "SO"}
     :param unit_map: 单位映射，如 {"压力等级": "Class"}
     :return: 候选值列表
     """
@@ -471,7 +471,7 @@ def get_axial_position_base_options(product_id, pipe_belong=None):
         """
         params = [product_type, product_version]
 
-        #只有在用户已填写“管口所属元件”时，才把它作为额外的查询条件加到 SQL 语句中
+        #只有在用户已输入“管口所属元件”时，才把它作为额外的查询条件加到 SQL 语句中
         if pipe_belong:
             sql += " AND 管口所属元件 = %s"
             params.append(pipe_belong)
@@ -934,7 +934,7 @@ def get_nominal_diameter(product_id, pipe_belong):
         print(result)
 
         if result is None or result.get(param_field) is None:
-            return False, "未获取到公称直径，须先至条件输入填写公称直径并保存"
+            return False, "未获取到公称直径，须先至条件输入输入公称直径并保存"
         return True, float(result[param_field])
     except Exception as e:
         return False, f"数据库错误: {str(e)}"
@@ -1073,7 +1073,7 @@ def validate_eccentricity(eccentricity_text, product_id, pipe_belong, emit_error
 
         eccentricity = float(eccentricity_text)
 
-        # 管口所属元件未填写，显示最大值为 0.0
+        # 管口所属元件未输入，显示最大值为 0.0
         if not pipe_belong:
             if eccentricity == 0.0:
                 return True, 0.0
@@ -1173,7 +1173,7 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
     pipe_code_item = table.item(row, 1)
     has_pipe_code = pipe_code_item.text().strip() != ""
     
-    # ✅ 优先处理：如果是最后一行的管口代号列且刚填写完成，解冻其他列
+    # ✅ 优先处理：如果是最后一行的管口代号列且刚输入完成，解冻其他列
     if is_last_row and column == 1 and has_pipe_code:
         # 导入解冻函数
         from modules.guankoudingyi.funcs.funcs_pipe_table import control_last_row_editable_state
@@ -1663,16 +1663,16 @@ def get_working_pressure_by_belong(product_id, pipe_belong):
 def get_minimum_pressure_level_for_flanges(product_id, pipe_belong, pressure_type, pipe_id=None, pipe_code=None):
     """
     允许“部分成功”；识别出>=1组材料即进行计算推荐
-    未填写/未匹配到类别号，则作为警告返回，不吞掉成功的结果，即对三组均有反馈
+    未输入/未匹配到类别号，则作为警告返回，不吞掉成功的结果，即对三组均有反馈
     """
     try:
         # Step 1: 获取所有接管法兰材料信息
         flange_materials, error = get_material_category_number_by_product(product_id, pressure_type, pipe_id)
-        # 没有填写接管法兰的材料信息
+        # 没有输入接管法兰的材料信息
         if error or not flange_materials:
             return None, error or "请完善接管法兰材料信息"
 
-        # 把经过Step 1后的情况分为三种：未填写、无类别号、可计算
+        # 把经过Step 1后的情况分为三种：未输入、无类别号、可计算
         missing_nums = []        # 有该组但材料类型/牌号缺失
         no_category_list = []    # 材料类型和牌号齐全但是没有找到对应的类别号（去温压值表失败）
         computable = []          # 可以计算的组，即能够识别出类别号
@@ -1823,7 +1823,7 @@ def get_minimum_pressure_level_for_flanges(product_id, pipe_belong, pressure_typ
         if missing_nums:
             warn_parts.append("请完善接管法兰材料信息：" +
                               "、".join([f"接管法兰{n}" for n in sorted(missing_nums, key=int)]) +
-                              "的材料类型或材料牌号未填写")
+                              "的材料类型或材料牌号未输入")
         warn_msg = " ".join(warn_parts) if warn_parts else None
 
         # 若一组都算不出来，再把警告作为错误抛上去
