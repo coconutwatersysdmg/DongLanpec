@@ -31,7 +31,7 @@ from modules.chanpinguanli.chanpinguanli_main import product_manager
 
 # product_id = 'PD2025090422414303'
 
-product_id = '122345'
+product_id = '1223457'
 
 
 def on_product_id_changed(new_id):
@@ -449,6 +449,7 @@ class TubeLayoutEditor(QMainWindow):
         self.current_leftpad = []
         self.line_tip = line_tip
         self.del_centers = []
+        self.all_params = []
         self.red_dangban = []
         self.center_dangguan = []
         self.center_dangban = []
@@ -1301,7 +1302,12 @@ class TubeLayoutEditor(QMainWindow):
                                     processed_params[i]['参数值'] = f"{DL: .1f}"
                                     dl_exists = True
                                 if param['参数名'] == "旁路挡板宽度":
-                                    self.side_dangban_length=processed_params[i]['参数值']
+                                    self.side_dangban_length = processed_params[i]['参数值']
+                                    dl_exists = True
+                                if param['参数名'] == "拉杆直径":
+                                    if processed_params[i]['参数值'] == "程序推荐":
+                                        processed_params[i]['参数值'] = "16"
+
                                     dl_exists = True
 
                             # 没有则新增DL参数
@@ -1317,7 +1323,7 @@ class TubeLayoutEditor(QMainWindow):
 
                         if processed_params:
 
-                            self.setup_parameters(processed_params)
+                            self.setup_parameters(processed_params, setup_listeners=False)
                             self.hide_specific_params(hidden_params)
                             self.update_leftpad_params()
                             product_params_loaded = True
@@ -1345,8 +1351,15 @@ class TubeLayoutEditor(QMainWindow):
                 if component_conn:
                     with component_conn.cursor() as cursor:
                         # 组件库仅从自身的布管参数默认表加载，不涉及产品库的设计数据表
-                        cursor.execute("SELECT 参数名, 参数值, 单位 FROM 布管参数默认表")
-                        default_params = cursor.fetchall()
+                        if self.heat_exchanger in ["AEU", "BEU"]:
+                            cursor.execute("SELECT 参数名, 参数值, 单位 FROM 布管参数默认表_U型管")
+                            default_params = cursor.fetchall()
+                        elif self.heat_exchanger in ["AES", "BES"]:
+                            cursor.execute("SELECT 参数名, 参数值, 单位 FROM 布管参数默认表_浮头式")
+                            default_params = cursor.fetchall()
+                        else:
+                            cursor.execute("SELECT 参数名, 参数值, 单位 FROM 布管参数默认表_浮头式")
+                            default_params = cursor.fetchall()
 
                         if default_params and isinstance(default_params, (list, tuple)):
                             # 处理默认参数，对特殊参数需要从产品设计活动库的设计数据表中读取
@@ -1551,7 +1564,7 @@ class TubeLayoutEditor(QMainWindow):
 
                             if processed_params:
                                 self.side_dangban_length = 0
-                                self.setup_parameters(processed_params)
+                                self.setup_parameters(processed_params, setup_listeners=False)
                                 self.hide_specific_params(hidden_params)
                                 self.update_leftpad_params()
                             else:
@@ -1763,6 +1776,8 @@ class TubeLayoutEditor(QMainWindow):
 
         # TODO 后续取消注释
         # self.line_tip.setText("请确认"壳体内径Di"是否正确！")
+        # 在初始化完成后设置监听器
+        self.setup_parameter_listeners()
 
     # TODO 布管函数
     def calculate_piping_layout(self):
@@ -2130,12 +2145,27 @@ class TubeLayoutEditor(QMainWindow):
             conn = create_component_connection()  # 元件库连接
             if conn:
                 with conn.cursor() as cursor:
-                    cursor.execute("SELECT 参数名, 参数值 FROM 布管参数默认表")
-                    rows = cursor.fetchall()
-                    for row in rows:
-                        param_name = row['参数名'].strip()
-                        param_value = row['参数值']
-                        defaults[param_name] = param_value
+                    if self.heat_exchanger in ["AEU", "BEU"]:
+                        cursor.execute("SELECT 参数名, 参数值 FROM 布管参数默认表_U型管")
+                        rows = cursor.fetchall()
+                        for row in rows:
+                            param_name = row['参数名'].strip()
+                            param_value = row['参数值']
+                            defaults[param_name] = param_value
+                    elif self.heat_exchanger in ["AES", "BES"]:
+                        cursor.execute("SELECT 参数名, 参数值 FROM 布管参数默认表_浮头式")
+                        rows = cursor.fetchall()
+                        for row in rows:
+                            param_name = row['参数名'].strip()
+                            param_value = row['参数值']
+                            defaults[param_name] = param_value
+                    else:
+                        cursor.execute("SELECT 参数名, 参数值 FROM 布管参数默认表_浮头式")
+                        rows = cursor.fetchall()
+                        for row in rows:
+                            param_name = row['参数名'].strip()
+                            param_value = row['参数值']
+                            defaults[param_name] = param_value
         except pymysql.MySQLError as e:
             print(f"查询布管默认参数表失败: {e}")
         finally:
@@ -2654,89 +2684,91 @@ class TubeLayoutEditor(QMainWindow):
         update_row_status(lev_row)  # 处理分程隔板两侧相邻管中心距（水平）
 
     def update_lagan(self):
-        do_row = -1
-        lg_row = -1
-        lg_diameter_row = -1  # 拉杆直径行索引
-        row_count = self.param_table.rowCount()
+        try:
+            # 从all_params中获取所需参数值
+            do_value = None
+            lg_type_value = None
+            lg_current_value = None  # 当前拉杆直径值
 
-        # 查找相关参数的行索引
-        for row in range(row_count):
-            param_name_item = self.param_table.item(row, 1)
-            if not param_name_item:
-                continue
-            param_name = param_name_item.text()
+            # 预设的do选项
+            do_options = ["10", "12", "14", "16", "19", "22", "25", "30", "32", "35", "38", "45", "50", "55", "57"]
 
-            if param_name == "换热管外径 do":
-                do_row = row
-            elif param_name == "拉杆形式":
-                lg_row = row
-            elif param_name == "拉杆直径":
-                lg_diameter_row = row
-
-        # 获取换热管外径 do 的值和下拉框选项
-        do_value = None
-        do_options = ["10", "12", "14", "16", "19", "22", "25", "30", "32", "35", "38", "45", "50", "55",
-                      "57"]  # 预设的do选项
-        do_widget = None  # 初始化do_widget
-        if do_row != -1:
-            do_widget = self.param_table.cellWidget(do_row, 2)
-            # 检查do_widget是否存在
-            if do_widget is not None:
-                if isinstance(do_widget, QComboBox):
-                    # 从do的下拉框获取当前值和所有选项
+            # 遍历all_params获取需要的参数值
+            for param in self.all_params:
+                if param['参数名'] == "换热管外径 do":
                     try:
-                        selected_text = do_widget.currentText()
-                        if selected_text.strip():
-                            do_value = float(selected_text)
-                        # 获取do下拉框的所有选项
-                        do_options = [do_widget.itemText(i) for i in range(do_widget.count())]
+                        # 处理可能的空格
+                        do_value = float(param['参数值'].strip())
+                        print(f"获取到换热管外径 do: {do_value}")
                     except ValueError as e:
-                        print(f"换热管外径 do 转换错误: {e}")
+                        print(f"换热管外径 do 转换错误: {e}, 参数值: {param['参数值']}")
                         return
-                else:
-                    do_item = self.param_table.item(do_row, 2)
-                    if do_item and do_item.text().strip():
-                        try:
-                            do_value = float(do_item.text())
-                        except ValueError:
-                            print("换热管外径 do 参数值格式错误")
-                            return
-            else:
-                # do_widget为None，不进行后续更新操作
-                print("do_widget为None，不更新拉杆直径和拉杆形式")
+                elif param['参数名'] == "拉杆形式":
+                    lg_type_value = param['参数值']
+                    print(f"获取到拉杆形式: {lg_type_value}")
+                elif param['参数名'] == "拉杆直径":
+                    lg_current_value = param['参数值']
+                    print(f"当前拉杆直径: {lg_current_value}")
+
+            # 检查必要参数
+            if do_value is None:
+                print("缺少必要参数: 换热管外径 do")
+                return
+            if lg_type_value is None:
+                print("缺少必要参数: 拉杆形式")
                 return
 
-        # 如果do_widget不存在，上面已经return，不会执行到这里
-        # 获取拉杆形式的值
-        lg_type_value = None
-        if lg_row != -1:
-            lg_widget = self.param_table.cellWidget(lg_row, 2)
-            if isinstance(lg_widget, QComboBox):
-                lg_type_value = lg_widget.currentText()
-            else:
-                lg_item = self.param_table.item(lg_row, 2)
-                if lg_item and lg_item.text().strip():
-                    lg_type_value = lg_item.text()
+            # 查找拉杆直径在表格中的行索引
+            lg_diameter_row = -1
+            row_count = self.param_table.rowCount()
+            print(f"表格总行数: {row_count}")
 
-        # 临时断开信号避免循环触发
-        original_handler = None
-        if hasattr(self, 'handle_param_change'):
+            for row in range(row_count):
+                param_name_item = self.param_table.item(row, 1)
+                if param_name_item:
+                    param_name = param_name_item.text().strip()
+                    # 增加调试信息，查看所有参数名
+                    # print(f"行 {row}: 参数名={param_name}")
+                    if param_name == "拉杆直径":
+                        lg_diameter_row = row
+                        print(f"找到拉杆直径参数行: 行索引={lg_diameter_row}")
+                        break
+
+            # 如果找不到拉杆直径行，尝试更宽松的匹配
+            if lg_diameter_row == -1:
+                print("未找到精确匹配的拉杆直径参数行，尝试模糊匹配...")
+                for row in range(row_count):
+                    param_name_item = self.param_table.item(row, 1)
+                    if param_name_item and "拉杆直径" in param_name_item.text().strip():
+                        lg_diameter_row = row
+                        print(f"模糊匹配找到拉杆直径参数行: 行索引={lg_diameter_row}，参数名={param_name_item.text()}")
+                        break
+
+            # 如果仍然找不到拉杆直径行，返回错误
+            if lg_diameter_row == -1:
+                print("错误: 未找到拉杆直径参数行，请检查表格结构")
+                return
+
+            # 临时断开信号避免循环触发
+            original_handler = None
+            if hasattr(self, 'handle_param_change'):
+                try:
+                    self.param_table.itemChanged.disconnect(self.handle_param_change)
+                    original_handler = self.handle_param_change
+                    print("临时断开信号连接")
+                except Exception as e:
+                    print(f"断开信号连接时出错: {e}")
+
+            # 根据拉杆形式处理拉杆直径
             try:
-                self.param_table.itemChanged.disconnect(self.handle_param_change)
-                original_handler = self.handle_param_change
-            except:
-                pass
-
-        # 根据拉杆形式处理拉杆直径
-        if lg_diameter_row != -1:
-            if lg_type_value == "焊接拉杆":
-                # 焊接拉杆：下拉框选项与换热管外径do一致，允许手动输入且大于0
-                if do_value is not None:
+                if lg_type_value == "焊接拉杆":
+                    print("处理焊接拉杆类型")
+                    # 焊接拉杆：下拉框选项与换热管外径do一致
                     lg_diameter_widget = self.param_table.cellWidget(lg_diameter_row, 2)
 
                     # 创建或更新为可编辑的下拉框
                     if not (isinstance(lg_diameter_widget, QComboBox) and lg_diameter_widget.isEditable()):
-                        # 创建可编辑的下拉框
+                        print("创建新的可编辑下拉框")
                         combo_box = QComboBox()
                         combo_box.setEditable(True)
                         self.param_table.setCellWidget(lg_diameter_row, 2, combo_box)
@@ -2749,7 +2781,9 @@ class TubeLayoutEditor(QMainWindow):
                         # 添加与换热管外径相同的选项
                         lg_diameter_widget.addItems(do_options)
                         # 设置默认值为do的值
-                        lg_diameter_widget.setCurrentText(f"{do_value}")
+                        target_value = f"{do_value}"
+                        lg_diameter_widget.setCurrentText(target_value)
+                        print(f"焊接拉杆直径已设置为: {target_value}")
 
                         # 获取编辑器并连接输入检查信号
                         line_edit = lg_diameter_widget.lineEdit()
@@ -2763,88 +2797,150 @@ class TubeLayoutEditor(QMainWindow):
                             line_edit.textChanged.connect(
                                 lambda text, row=lg_diameter_row: self._check_lg_diameter(text, row))
 
-            elif lg_type_value == "螺纹拉杆":
-                # 螺纹拉杆，通过下拉框选择，选项为10、12、16、27
-                lg_diameter_widget = self.param_table.cellWidget(lg_diameter_row, 2)
-                if isinstance(lg_diameter_widget, QComboBox):
-                    # 是下拉框，确保选项正确
-                    current_items = [lg_diameter_widget.itemText(i) for i in range(lg_diameter_widget.count())]
-                    target_items = ["10", "12", "16", "27"]
-                    if current_items != target_items:
-                        lg_diameter_widget.clear()
-                        lg_diameter_widget.addItems(target_items)
+                elif lg_type_value == "螺纹拉杆":
+                    print("处理螺纹拉杆类型")
+                    # 螺纹拉杆，通过下拉框选择，选项为10、12、16、27
+                    lg_diameter_widget = self.param_table.cellWidget(lg_diameter_row, 2)
 
-                    # 根据换热管外径选择默认值
-                    default_value = self._get_default_lg_diameter(do_value)
-                    current_index = lg_diameter_widget.findText(str(default_value))
-                    if current_index >= 0:
-                        lg_diameter_widget.setCurrentIndex(current_index)
+                    # 定义螺纹拉杆直径选项
+                    thread_options = ["10", "12", "16", "27"]
+
+                    # 确定基于换热管外径的默认值
+                    # 这里根据行业惯例设置：do≤19→10，20≤do≤25→12，26≤do≤38→16，do>38→27
+                    if do_value <= 19:
+                        default_value = "10"
+                    elif do_value <= 25:  # 你的情况：25会进入这里
+                        default_value = "12"
+                    elif do_value <= 38:
+                        default_value = "16"
+                    else:
+                        default_value = "27"
+                    print(f"根据换热管外径 {do_value} 计算的默认螺纹拉杆直径: {default_value}")
+
+                    if isinstance(lg_diameter_widget, QComboBox):
+                        # 是下拉框，确保选项正确
+                        current_items = [lg_diameter_widget.itemText(i) for i in range(lg_diameter_widget.count())]
+                        if current_items != thread_options:
+                            lg_diameter_widget.clear()
+                            lg_diameter_widget.addItems(thread_options)
+                            print("更新了螺纹拉杆下拉框选项")
+
+                        # 设置默认值
+                        current_index = lg_diameter_widget.findText(default_value)
+                        if current_index >= 0:
+                            lg_diameter_widget.setCurrentIndex(current_index)
+                            print(f"螺纹拉杆直径已设置为: {default_value}")
+                        else:
+                            print(f"警告: 在下拉框中未找到默认值 {default_value}")
+                    else:
+                        # 创建下拉框并添加选项
+                        combo_box = QComboBox()
+                        combo_box.addItems(thread_options)
+                        # 设置默认值
+                        current_index = combo_box.findText(default_value)
+                        if current_index >= 0:
+                            combo_box.setCurrentIndex(current_index)
+                        self.param_table.setCellWidget(lg_diameter_row, 2, combo_box)
+                        print(f"创建新下拉框并设置螺纹拉杆直径为: {default_value}")
+
                 else:
-                    # 创建下拉框并添加选项
-                    combo_box = QComboBox()
-                    combo_box.addItems(["10", "12", "16", "27"])
-                    # 根据换热管外径选择默认值
-                    default_value = self._get_default_lg_diameter(do_value)
-                    current_index = combo_box.findText(str(default_value))
-                    if current_index >= 0:
-                        combo_box.setCurrentIndex(current_index)
-                    self.param_table.setCellWidget(lg_diameter_row, 2, combo_box)
+                    print(f"未处理的拉杆形式: {lg_type_value}")
 
-        # 重新连接信号
-        if original_handler:
-            try:
-                self.param_table.itemChanged.connect(original_handler)
-            except:
-                pass
+            except Exception as e:
+                print(f"处理拉杆直径时出错: {e}")
+
+            # 重新连接信号
+            if original_handler:
+                try:
+                    self.param_table.itemChanged.connect(original_handler)
+                    print("重新连接信号")
+                except Exception as e:
+                    print(f"重新连接信号时出错: {e}")
+
+            # 更新all_params中的拉杆直径值
+            for param in self.all_params:
+                if param['参数名'] == "拉杆直径":
+                    if lg_type_value == "焊接拉杆":
+                        param['参数值'] = str(do_value)
+                    else:
+                        param['参数值'] = default_value
+                    print(f"已更新all_params中的拉杆直径为: {param['参数值']}")
+                    break
+
+        except Exception as e:
+            print(f"update_lagan函数执行出错: {str(e)}")
 
     def _get_default_lg_diameter(self, do_value):
+        # 添加调试信息
+        print(f"计算推荐拉杆直径: do_value={do_value}, 类型={type(do_value)}")
+
         # 根据换热管外径确定螺纹拉杆默认直径
         if do_value is None:
             return do_value
         if 10 <= do_value <= 14:
-            return "10"
+            result = "10"
         elif 14 < do_value < 25:
-            return "12"
+            result = "12"
         elif 25 <= do_value <= 32:
-            return "16"
+            result = "16"
         elif 32 < do_value <= 57:
-            return "27"
+            result = "27"
         else:
-            return do_value
+            result = do_value
+
+        # 输出计算结果
+        print(f"推荐拉杆直径: {result}")
+        return result
 
     def _check_lg_diameter(self, text, row):
         # 检查拉杆直径是否大于0
         try:
             value = float(text)
             if value <= 0:
-                # 弹出提示或进行其他处理，这里简单打印
+                # 弹出提示或进行其他处理
                 print("拉杆直径必须大于0")
-                # 恢复为默认值（换热管外径do的值，这里假设能获取到）
-                do_row = -1
-                row_count = self.param_table.rowCount()
-                for r in range(row_count):
-                    param_name_item = self.param_table.item(r, 1)
-                    if param_name_item and param_name_item.text() == "换热管外径 do":
-                        do_row = r
-                        break
+
+                # 从self.all_params中获取换热管外径do的值
                 do_value = None
-                if do_row != -1:
-                    do_widget = self.param_table.cellWidget(do_row, 2)
-                    if isinstance(do_widget, QComboBox):
-                        selected_text = do_widget.currentText()
-                        if selected_text.strip():
-                            do_value = float(selected_text)
-                    else:
-                        do_item = self.param_table.item(do_row, 2)
-                        if do_item and do_item.text().strip():
-                            do_value = float(do_item.text())
+                for param in self.all_params:
+                    if param['参数名'] == '换热管外径 do':
+                        # 尝试转换参数值为浮点数
+                        try:
+                            do_value = float(param['参数值'])
+                        except ValueError:
+                            print("换热管外径 do 参数值格式错误")
+                        break
+
+                # 如果获取到有效的do值，则恢复为该值
                 if do_value is not None:
                     lg_diameter_widget = self.param_table.cellWidget(row, 2)
-                    if isinstance(lg_diameter_widget, QLineEdit):
+                    # 处理QComboBox的lineEdit情况
+                    if isinstance(lg_diameter_widget, QComboBox):
+                        line_edit = lg_diameter_widget.lineEdit()
+                        if line_edit:
+                            line_edit.setText(f"{do_value}")
+                    elif isinstance(lg_diameter_widget, QLineEdit):
                         lg_diameter_widget.setText(f"{do_value}")
         except ValueError:
             print("拉杆直径格式错误，必须为数字")
-            # 同样可恢复为默认值等操作
+            # 从self.all_params中获取换热管外径do的值用于恢复
+            do_value = None
+            for param in self.all_params:
+                if param['参数名'] == '换热管外径 do':
+                    try:
+                        do_value = float(param['参数值'])
+                    except ValueError:
+                        print("换热管外径 do 参数值格式错误")
+                    break
+
+            if do_value is not None:
+                lg_diameter_widget = self.param_table.cellWidget(row, 2)
+                if isinstance(lg_diameter_widget, QComboBox):
+                    line_edit = lg_diameter_widget.lineEdit()
+                    if line_edit:
+                        line_edit.setText(f"{do_value}")
+                elif isinstance(lg_diameter_widget, QLineEdit):
+                    lg_diameter_widget.setText(f"{do_value}")
 
     def update_baffle_diameter(self):
         # 1. 查找参数表中各关键参数的行索引
@@ -3170,6 +3266,8 @@ class TubeLayoutEditor(QMainWindow):
         # 查找“分程隔板两侧相邻管中心距（水平）”的行索引及当前用户设置值
         sn_horizontal_row_precheck = -1
         current_user_horizontal_value = None
+        # 获取当前管程数
+        tube_num = self.get_tube_pass_count()
 
         # 遍历参数表，定位水平中心距参数行
         for row in range(self.param_table.rowCount()):
@@ -3185,15 +3283,8 @@ class TubeLayoutEditor(QMainWindow):
                     current_user_horizontal_value = value_item.text().strip() if value_item else ""
                 break
 
-        # 若用户已手动设置有效值（非空、非0），则跳过自动更新
-        if current_user_horizontal_value and current_user_horizontal_value != "0":
-            print(f"用户已设置水平中心距为 {current_user_horizontal_value}，跳过自动更新")
-            return
-        # -------------------------- 原有逻辑开始 --------------------------
-
         # 查找参数表中相关参数的行索引
         do_row = -1
-        range_type_row = -1
         sn_vertical_row = -1
         sn_horizontal_row = -1
         row_count = self.param_table.rowCount()
@@ -3206,16 +3297,14 @@ class TubeLayoutEditor(QMainWindow):
 
             if param_name == "换热管外径 do":
                 do_row = row
-            elif param_name == "换热管排列方式":
-                range_type_row = row
             elif param_name == "分程隔板两侧相邻管中心距（竖直）":
                 sn_vertical_row = row
             elif param_name == "分程隔板两侧相邻管中心距（水平）":
                 sn_horizontal_row = row
 
-        # 获取关键参数值（增加行索引显式判断）
+        # -------------------------- 关键参数值获取（增加有效性校验） --------------------------
+        # 获取换热管外径do
         do_value = None
-        # 仅当行存在时才尝试读取值
         if do_row != -1:
             do_widget = self.param_table.cellWidget(do_row, 2)
             if isinstance(do_widget, QComboBox):
@@ -3223,219 +3312,155 @@ class TubeLayoutEditor(QMainWindow):
                     selected_text = do_widget.currentText().strip()
                     if selected_text:
                         do_value = float(selected_text)
+                        # 校验do值是否在有效范围内
+                        valid_do_values = {10.0, 12.0, 14.0, 16.0, 19.0, 20.0, 22.0, 25.0, 30.0, 32.0, 35.0, 38.0, 45.0,
+                                           50.0, 55.0, 57.0}
+                        if do_value not in valid_do_values:
+                            print(f"换热管外径 {do_value} mm 不在有效范围内，终止更新")
+                            do_value = None
                 except ValueError:
-                    do_value = None  # 明确标记为无效值
+                    print("换热管外径值格式错误，终止更新")
+                    do_value = None
             else:
                 do_item = self.param_table.item(do_row, 2)
                 if do_item and do_item.text().strip():
                     try:
                         do_value = float(do_item.text())
+                        valid_do_values = {10.0, 12.0, 14.0, 16.0, 19.0, 20.0, 22.0, 25.0, 30.0, 32.0, 35.0, 38.0, 45.0,
+                                           50.0, 55.0, 57.0}
+                        if do_value not in valid_do_values:
+                            print(f"换热管外径 {do_value} mm 不在有效范围内，终止更新")
+                            do_value = None
                     except ValueError:
-                        do_value = None  # 明确标记为无效值
+                        print("换热管外径值格式错误，终止更新")
+                        do_value = None
 
-        range_type_value = None
-        # 仅当行存在时才尝试读取值
-        if range_type_row != -1:
-            range_type_widget = self.param_table.cellWidget(range_type_row, 2)
-            if isinstance(range_type_widget, QComboBox):
-                range_type_value = range_type_widget.currentText().strip()
-            else:
-                range_type_item = self.param_table.item(range_type_row, 2)
-                if range_type_item:
-                    range_type_value = range_type_item.text().strip()
-            # 空字符串视为无效值
-            if not range_type_value:
-                range_type_value = None
-
-        # 核心判断：若行不存在或参数值无效，直接终止（不更新）
-        if do_value is None or range_type_value is None:
+        # 核心判断：若关键参数无效，直接终止
+        if do_value is None:
             return
 
-        # 中心距映射表
-        center_distance_map = {
-            (10.0, "正三角形"): 28.0,
-            (10.0, "转角正三角形"): 28.0,
-            (10.0, "正方形"): 30.0,
-            (10.0, "转角正方形"): 30.0,
-            (12.0, "正三角形"): 30.0,
-            (12.0, "转角正三角形"): 30.0,
-            (12.0, "正方形"): 32.0,
-            (12.0, "转角正方形"): 32.0,
-            (14.0, "正三角形"): 32.0,
-            (14.0, "转角正三角形"): 32.0,
-            (14.0, "正方形"): 35.0,
-            (14.0, "转角正方形"): 35.0,
-            (16.0, "正三角形"): 35.0,
-            (16.0, "转角正三角形"): 35.0,
-            (16.0, "正方形"): 38.0,
-            (16.0, "转角正方形"): 38.0,
-            (19.0, "正三角形"): 38.0,
-            (19.0, "转角正三角形"): 38.0,
-            (19.0, "正方形"): 38.0,
-            (19.0, "转角正方形"): 38.0,
-            (20.0, "正三角形"): 40.0,
-            (20.0, "转角正三角形"): 40.0,
-            (20.0, "正方形"): 42.0,
-            (20.0, "转角正方形"): 42.0,
-            (22.0, "正三角形"): 42.0,
-            (22.0, "转角正三角形"): 42.0,
-            (22.0, "正方形"): 44.0,
-            (22.0, "转角正方形"): 44.0,
-            (25.0, "正三角形"): 50.0,
-            (25.0, "转角正三角形"): 50.0,
-            (25.0, "正方形"): 50.0,
-            (25.0, "转角正方形"): 45.25,
-            (30.0, "正三角形"): 50.0,
-            (30.0, "转角正三角形"): 50.0,
-            (30.0, "正方形"): 52.0,
-            (30.0, "转角正方形"): 52.0,
-            (32.0, "正三角形"): 52.0,
-            (32.0, "转角正三角形"): 52.0,
-            (32.0, "正方形"): 56.0,
-            (32.0, "转角正方形"): 56.0,
-            (35.0, "正三角形"): 56.0,
-            (35.0, "转角正三角形"): 56.0,
-            (35.0, "正方形"): 60.0,
-            (35.0, "转角正方形"): 60.0,
-            (38.0, "正三角形"): 60.0,
-            (38.0, "转角正三角形"): 60.0,
-            (38.0, "正方形"): 68.0,
-            (38.0, "转角正方形"): 68.0,
-            (45.0, "正三角形"): 68.0,
-            (45.0, "转角正三角形"): 68.0,
-            (45.0, "正方形"): 76.0,
-            (45.0, "转角正方形"): 76.0,
-            (50.0, "正三角形"): 76.0,
-            (50.0, "转角正三角形"): 76.0,
-            (50.0, "正方形"): 78.0,
-            (50.0, "转角正方形"): 78.0,
-            (55.0, "正三角形"): 78.0,
-            (55.0, "转角正三角形"): 78.0,
-            (55.0, "正方形"): 80.0,
-            (55.0, "转角正方形"): 80.0,
-            (57.0, "正三角形"): 80.0,
-            (57.0, "转角正三角形"): 80.0,
-            (57.0, "正方形"): 80.0,
-            (57.0, "转角正方形"): 80.0,
+        # -------------------------- 基础数据映射表（基于文档表6-2、表6-9） --------------------------
+        # 1. 换热管外径与Sn（表6-2分程隔板槽两侧相邻管中心距）映射
+        sn_map = {
+            10.0: 28.0,
+            12.0: 30.0,
+            14.0: 32.0,
+            16.0: 35.0,
+            19.0: 38.0,
+            20.0: 40.0,
+            22.0: 42.0,
+            25.0: 44.0,
+            30.0: 50.0,
+            32.0: 52.0,
+            35.0: 56.0,
+            38.0: 60.0,
+            45.0: 68.0,
+            50.0: 76.0,
+            55.0: 78.0,
+            57.0: 80.0
         }
 
-        # 检查是否需要修改特定映射值
-        if (float(do_value), range_type_value) == (25.0, "转角正方形"):
-            config_value = self.get_config_value("2.10.1.2")
-            if config_value == "False":
-                if self.heat_exchanger in ["AEU", "BEU"]:
-                    center_distance_map[(25.0, "转角正方形")] = 50.0
-                    print("根据配置，已将(25.0, '转角正方形')的SN值修改为50.0")
-                else:
-                    center_distance_map[(25.0, "转角正方形")] = 44.0
-                    print("根据配置，已将(25.0, '转角正方形')的SN值修改为44.0")
+        # 2. 换热管外径与Rmin（表6-9最小弯曲半径）映射
+        rmin_map = {
+            10.0: 20.0,
+            12.0: 24.0,
+            14.0: 30.0,
+            16.0: 32.0,
+            19.0: 40.0,
+            20.0: 40.0,
+            22.0: 45.0,
+            25.0: 50.0,
+            30.0: 60.0,
+            32.0: 65.0,
+            35.0: 70.0,
+            38.0: 76.0,
+            45.0: 90.0,
+            50.0: 100.0,
+            55.0: 110.0,
+            57.0: 115.0
+        }
 
-        # 查找映射关系
-        key = (float(do_value), range_type_value)
-        sn_value = center_distance_map.get(key)
+        # 获取当前do对应的Sn和Rmin值
+        current_sn = sn_map.get(do_value)
+        current_rmin = rmin_map.get(do_value)
+        if current_sn is None or current_rmin is None:
+            print(f"未找到换热管外径 {do_value} mm 对应的Sn或Rmin值，终止更新")
+            return
 
-        if sn_value is not None:
-            # 根据不同的换热器类型进行不同的处理
-            if self.heat_exchanger in ["AEU", "BEU"]:
-                # U形换热管最小弯曲半径映射表
-                rmin_map = {
-                    10.0: 20.0,
-                    12.0: 24.0,
-                    14.0: 30.0,
-                    16.0: 32.0,
-                    19.0: 40.0,
-                    20.0: 40.0,
-                    22.0: 45.0,
-                    25.0: 50.0,
-                    30.0: 60.0,
-                    32.0: 65.0,
-                    35.0: 70.0,
-                    38.0: 76.0,
-                    45.0: 90.0,
-                    50.0: 100.0,
-                    55.0: 110.0,
-                    57.0: 115.0
-                }
+        # -------------------------- 按管程数逻辑更新目标参数 --------------------------
+        # 1. 2管程处理逻辑
+        if tube_num == 2:
+            print(f"当前为2管程，执行对应更新逻辑")
+            # 竖直中心距：2×Rmin
+            vertical_value = 2 * current_rmin
+            # 水平中心距：Sn（无用，仅赋值默认值）
+            horizontal_value = current_sn
 
-                # 获取对应的Rmin值
-                rmin_value = rmin_map.get(float(do_value))
-                if rmin_value is not None:
-                    # 更新分程隔板两侧相邻管中心距（竖直）
-                    if sn_vertical_row != -1:
-                        self._update_table_cell(sn_vertical_row, 2, f"{rmin_value:.1f}")
-                        print(f"已更新分程隔板两侧相邻管中心距（竖直）: {rmin_value:.1f}")
-
-                    # 更新分程隔板两侧相邻管中心距（水平）
-                    if sn_horizontal_row != -1:
-                        if self.heat_exchanger == "AEU":
-                            # AEU 型号使用 U 形换热管最小弯曲半径 Rmin 作为水平中心距
-                            self._update_table_cell(sn_horizontal_row, 2, f"{rmin_value:.1f}")
-                            print(f"已更新分程隔板两侧相邻管中心距（水平）: {rmin_value:.1f}")
-                        elif self.heat_exchanger == "BEU":
-                            # BEU 型号从对应表格中获取水平中心距
-                            beu_horizontal_map = {
-                                10.0: 30.0,
-                                12.0: 32.0,
-                                14.0: 35.0,
-                                16.0: 38.0,
-                                19.0: 38.0,
-                                25.0: 50.0,
-                                30.0: 52.0,
-                                32.0: 56.0,
-                                35.0: 60.0,
-                                38.0: 68.0,
-                                45.0: 76.0,
-                                50.0: 78.0,
-                                55.0: 80.0,
-                                57.0: 80.0
-                            }
-                            beu_horizontal_value = beu_horizontal_map.get(float(do_value))
-                            if beu_horizontal_value is not None:
-                                self._update_table_cell(sn_horizontal_row, 2, f"{beu_horizontal_value:.1f}")
-                                print(f"已更新分程隔板两侧相邻管中心距（水平）: {beu_horizontal_value:.1f}")
-                            else:
-                                print(f"未找到 BEU 型号下换热管外径 {do_value} 对应的水平中心距")
-                else:
-                    print(f"未找到换热管外径 {do_value} 对应的最小弯曲半径 Rmin")
+            # 更新竖直中心距
+            if sn_vertical_row != -1:
+                self._update_table_cell(sn_vertical_row, 2, f"{vertical_value:.1f}")
+                print(f"已更新2管程分程隔板两侧相邻管中心距（竖直）: {vertical_value:.1f} mm（2×Rmin={current_rmin:.1f}）")
             else:
-                # 非 AEU/BEU 型号，使用原来的映射表逻辑
-                # 更新分程隔板两侧相邻管中心距（竖直）
-                if sn_vertical_row != -1:
-                    self._update_table_cell(sn_vertical_row, 2, f"{sn_value:.1f}")
-                    print(f"已更新分程隔板两侧相邻管中心距（竖直）: {sn_value:.1f}")
+                print("未找到分程隔板两侧相邻管中心距（竖直）参数行，无法更新")
 
-                # 更新分程隔板两侧相邻管中心距（水平）
-                if sn_horizontal_row != -1:
-                    if self.heat_exchanger in ["AES", "BES"]:
-                        aes_bes_horizontal_map = {
-                            10.0: 28.0,
-                            12.0: 30.0,
-                            14.0: 32.0,
-                            16.0: 35.0,
-                            19.0: 38.0,
-                            20.0: 40.0,
-                            22.0: 42.0,
-                            25.0: 50.0,
-                            30.0: 50.0,
-                            32.0: 52.0,
-                            35.0: 56.0,
-                            38.0: 60.0,
-                            45.0: 68.0,
-                            50.0: 76.0,
-                            55.0: 78.0,
-                            57.0: 80.0
-                        }
-                        aes_bes_horizontal_value = aes_bes_horizontal_map.get(float(do_value))
-                        if aes_bes_horizontal_value is not None:
-                            self._update_table_cell(sn_horizontal_row, 2, f"{aes_bes_horizontal_value:.1f}")
-                            print(f"已更新分程隔板两侧相邻管中心距（水平）: {aes_bes_horizontal_value:.1f}")
-                        else:
-                            print(f"未找到 AES/BES 型号下换热管外径 {do_value} 对应的水平中心距")
-                    else:
-                        self._update_table_cell(sn_horizontal_row, 2, f"{sn_value:.1f}")
-                        print(f"已更新分程隔板两侧相邻管中心距（水平）: {sn_value:.1f}")
+            # 更新水平中心距（提示无用）
+            if sn_horizontal_row != -1:
+                self._update_table_cell(sn_horizontal_row, 2, f"{horizontal_value:.1f}")
+                print(
+                    f"2管程分程隔板两侧相邻管中心距（水平）无用，默认赋值为Sn={horizontal_value:.1f} mm（建议隐藏该参数项）")
+            else:
+                print("未找到分程隔板两侧相邻管中心距（水平）参数行，无法赋值默认值")
+
+        # 2. 4管程处理逻辑
+        elif tube_num == 4:
+            print(f"当前为4管程，执行对应更新逻辑")
+            # 竖直中心距：Sn
+            vertical_value = current_sn
+            # 水平中心距：2×Rmin
+            horizontal_value = 2 * current_rmin
+
+            # 更新竖直中心距
+            if sn_vertical_row != -1:
+                self._update_table_cell(sn_vertical_row, 2, f"{vertical_value:.1f}")
+                print(f"已更新4管程分程隔板两侧相邻管中心距（竖直）: {vertical_value:.1f} mm（Sn值）")
+            else:
+                print("未找到分程隔板两侧相邻管中心距（竖直）参数行，无法更新")
+
+            # 更新水平中心距
+            if sn_horizontal_row != -1:
+                self._update_table_cell(sn_horizontal_row, 2, f"{horizontal_value:.1f}")
+                print(
+                    f"已更新4管程分程隔板两侧相邻管中心距（水平）: {horizontal_value:.1f} mm（2×Rmin={current_rmin:.1f}）")
+            else:
+                print("未找到分程隔板两侧相邻管中心距（水平）参数行，无法更新")
+
+        # 3. 6管程处理逻辑
+        elif tube_num == 6:
+            print(f"当前为6管程，执行对应更新逻辑")
+            # 竖直中心距：Sn
+            vertical_value = current_sn
+            # 水平中心距：2×Rmin
+            horizontal_value = 2 * current_rmin
+
+            # 更新竖直中心距
+            if sn_vertical_row != -1:
+                self._update_table_cell(sn_vertical_row, 2, f"{vertical_value:.1f}")
+                print(f"已更新6管程分程隔板两侧相邻管中心距（竖直）: {vertical_value:.1f} mm（Sn值）")
+            else:
+                print("未找到分程隔板两侧相邻管中心距（竖直）参数行，无法更新")
+
+            # 更新水平中心距
+            if sn_horizontal_row != -1:
+                self._update_table_cell(sn_horizontal_row, 2, f"{horizontal_value:.1f}")
+                print(
+                    f"已更新6管程分程隔板两侧相邻管中心距（水平）: {horizontal_value:.1f} mm（2×Rmin={current_rmin:.1f}）")
+            else:
+                print("未找到分程隔板两侧相邻管中心距（水平）参数行，无法更新")
+
+        # 4. 未知管程数处理
         else:
-            print(f"未找到匹配的映射关系 for {key}")
+            print(f"当前管程数 {tube_num} 不支持（仅支持2/4/6管程），终止更新")
+            return
 
     def set_tie_rod_diameter_to_16(self):
         """
@@ -3552,23 +3577,19 @@ class TubeLayoutEditor(QMainWindow):
     def update_baffle_parameters(self, changed_param_name):
         """
         根据参数变化更新折流板相关参数的联动关系
-        :param changed_param_name: 发生变化的参数名称
+        :param changed_param_name: 发生变化的参数名称，该参数值将被固定
         """
-        # 查找四个关键参数在表格中的行索引和当前值
-        shell_inner_diameter_row = None  # 壳体内直径 Di
+        # 查找三个关键参数在表格中的行索引和当前值
         baffle_diameter_row = None  # 折流板外径
         cut_spacing_row = None  # 折流板切口与中心线间距
         cut_rate_row = None  # 折流板要求切口率 (%)
+        shell_inner_diameter_row = None  # 壳体内直径 Di（参考参数）
 
+        # 参数值变量
         shell_inner_diameter = None
         baffle_diameter = None
         cut_spacing = None
         cut_rate = None
-        cut_rate_text = ""  # 保存原始文本值用于精确判断
-
-        # 保存原始值用于恢复
-        default_cut_rate = None
-        default_cut_spacing = None
 
         # 遍历表格找到目标参数
         for row in range(self.param_table.rowCount()):
@@ -3604,18 +3625,12 @@ class TubeLayoutEditor(QMainWindow):
                     cut_spacing = float(param_value)
                 except ValueError:
                     cut_spacing = None
-                # 保存原始值
-                default_cut_spacing = self._original_values.get((row, 2), "0")
             elif param_name == "折流板要求切口率 (%)":
                 cut_rate_row = row
-                cut_rate_text = param_value  # 保存原始文本用于判断
                 try:
                     cut_rate = float(param_value)
-                    print(cut_rate)
                 except ValueError:
                     cut_rate = None
-                # 保存原始值
-                default_cut_rate = self._original_values.get((row, 2), "25")  # 默认25%
 
         # 检查必要参数是否存在
         if not all([shell_inner_diameter_row is not None,
@@ -3624,106 +3639,142 @@ class TubeLayoutEditor(QMainWindow):
                     cut_rate_row is not None]):
             return  # 必要参数不存在，不执行更新
 
+        # 检查必要的计算参数
+        if shell_inner_diameter is None or shell_inner_diameter <= 0:
+            QMessageBox.warning(self, "参数错误", "壳体内直径值无效")
+            return
+
         # 禁用事件触发，避免循环更新
         self._is_validating = True
 
         try:
-            # 仅通过原始文本值判断是否为25或25.0
-            is_fixed_25 = cut_rate_text in ["25", "25.0"]
+            # 1. 如果变化的是折流板外径，固定该值，计算其他两个参数
+            if changed_param_name == "折流板外径":
+                if baffle_diameter is None or baffle_diameter <= 0:
+                    QMessageBox.warning(self, "参数错误", "折流板外径值无效")
+                    return
 
-            if is_fixed_25:
-                # 固定切口率为25%，更新其他参数
-                if shell_inner_diameter is not None and baffle_diameter is not None:
-                    # 确保切口率显示为25.0
-                    rate_item = self.param_table.item(cut_rate_row, 2)
-                    if rate_item:
-                        rate_item.setText("25.0")
+                baffle_radius = baffle_diameter / 2
 
-                    # 计算切口与中心线间距 B = (Dp/2) - (25% × Di)
-                    baffle_radius = baffle_diameter / 2
-                    cut_size = 0.25 * shell_inner_diameter  # 25% × Di
+                # 计算切口率和切口间距
+                if cut_rate is not None:
+                    # 验证切口率范围 [0,50]%
+                    if not (0 <= cut_rate <= 50):
+                        QMessageBox.warning(self, "输入错误", "折流板切口率必须在0%到50%范围内！")
+                        return
+
+                    # 根据固定的外径和切口率计算切口间距
+                    cut_size = (cut_rate / 100) * shell_inner_diameter
                     new_spacing = baffle_radius - cut_size
 
-                    # 验证间距范围 [0, Dp/2]
+                    # 验证间距范围 [0, 折流板半径]
                     if new_spacing < 0 or new_spacing > baffle_radius:
-                        # 恢复默认值
-                        rate_item = self.param_table.item(cut_rate_row, 2)
-                        if rate_item:
-                            rate_item.setText(default_cut_rate)
                         QMessageBox.warning(self, "计算错误",
                                             f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)")
                         return
 
-                    # 更新间距参数，保留1位小数
+                    # 更新切口间距
                     spacing_item = self.param_table.item(cut_spacing_row, 2)
                     if spacing_item:
                         spacing_item.setText(f"{new_spacing:.1f}")
-            else:
-                # 1. 已知切口率(A)，计算切口与中心线间距(B)
-                if changed_param_name in ["折流板要求切口率 (%)", "壳体内直径 Di", "折流板外径"]:
-                    if cut_rate is not None and shell_inner_diameter is not None and baffle_diameter is not None:
-                        # 验证切口率范围 [0,50]%
-                        if not (0 <= cut_rate <= 50):
-                            # 恢复默认值
-                            rate_item = self.param_table.item(cut_rate_row, 2)
-                            if rate_item:
-                                rate_item.setText(default_cut_rate)
-                            QMessageBox.warning(self, "输入错误",
-                                                "折流板切口率必须在0%到50%范围内！")
-                            return
 
-                        # 计算切口与中心线间距 B = (Dp/2) - (A × Di)
-                        baffle_radius = baffle_diameter / 2
-                        cut_size = (cut_rate / 100) * shell_inner_diameter  # A × Di
-                        new_spacing = baffle_radius - cut_size
+                elif cut_spacing is not None:
+                    # 验证间距范围 [0, 折流板半径]
+                    if not (0 <= cut_spacing <= baffle_radius):
+                        QMessageBox.warning(self, "输入错误",
+                                            f"切口与中心线间距必须在0到{baffle_radius:.1f}mm范围内！")
+                        return
 
-                        # 验证间距范围 [0, Dp/2]
-                        if new_spacing < 0 or new_spacing > baffle_radius:
-                            # 恢复默认值
-                            rate_item = self.param_table.item(cut_rate_row, 2)
-                            if rate_item:
-                                rate_item.setText(default_cut_rate)
-                            QMessageBox.warning(self, "计算错误",
-                                                f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)")
-                            return
+                    # 根据固定的外径和切口间距计算切口率
+                    new_cut_rate = ((baffle_radius - cut_spacing) / shell_inner_diameter) * 100
 
-                        # 更新间距参数，保留1位小数
-                        spacing_item = self.param_table.item(cut_spacing_row, 2)
-                        if spacing_item:
-                            spacing_item.setText(f"{new_spacing:.1f}")
+                    # 验证切口率范围 [0,50]%
+                    if not (0 <= new_cut_rate <= 50):
+                        QMessageBox.warning(self, "计算错误",
+                                            f"计算出的切口率({new_cut_rate:.1f}%)超出合理范围(0-50%)")
+                        return
 
-                # 2. 已知切口与中心线间距(B)，反算切口率(A)
-                elif changed_param_name == "折流板切口与中心线间距":
-                    if cut_spacing is not None and shell_inner_diameter is not None and baffle_diameter is not None:
-                        # 验证间距范围 [0, Dp/2]
-                        baffle_radius = baffle_diameter / 2
-                        if not (0 <= cut_spacing <= baffle_radius):
-                            # 恢复默认值
-                            spacing_item = self.param_table.item(cut_spacing_row, 2)
-                            if spacing_item:
-                                spacing_item.setText(default_cut_spacing)
-                            QMessageBox.warning(self, "输入错误",
-                                                f"切口与中心线间距必须在0到{baffle_radius:.1f}mm范围内！")
-                            return
+                    # 更新切口率
+                    rate_item = self.param_table.item(cut_rate_row, 2)
+                    if rate_item:
+                        rate_item.setText(f"{new_cut_rate:.1f}")
 
-                        # 反算切口率 A = [(Dp/2) - B] ÷ Di
-                        baffle_radius = baffle_diameter / 2
-                        new_cut_rate = ((baffle_radius - cut_spacing) / shell_inner_diameter) * 100
+            # 2. 如果变化的是折流板切口与中心线间距，固定该值，计算其他两个参数
+            elif changed_param_name == "折流板切口与中心线间距":
+                if cut_spacing is None or cut_spacing < 0:
+                    QMessageBox.warning(self, "参数错误", "折流板切口与中心线间距值无效")
+                    return
 
-                        # 验证切口率范围 [0,50]%
-                        if not (0 <= new_cut_rate <= 50):
-                            # 恢复默认值
-                            spacing_item = self.param_table.item(cut_spacing_row, 2)
-                            if spacing_item:
-                                spacing_item.setText(default_cut_spacing)
-                            QMessageBox.warning(self, "计算错误",
-                                                f"计算出的切口率({new_cut_rate:.1f}%)超出合理范围(0-50%)")
-                            return
+                # 计算折流板外径和切口率
+                if baffle_diameter is not None and baffle_diameter > 0:
+                    baffle_radius = baffle_diameter / 2
 
-                        # 更新切口率参数，保留1位小数
-                        rate_item = self.param_table.item(cut_rate_row, 2)
-                        if rate_item:
-                            rate_item.setText(f"{new_cut_rate:.1f}")
+                    # 验证间距范围 [0, 折流板半径]
+                    if cut_spacing > baffle_radius:
+                        QMessageBox.warning(self, "输入错误",
+                                            f"切口与中心线间距必须在0到{baffle_radius:.1f}mm范围内！")
+                        return
+
+                    # 根据固定的间距和外径计算切口率
+                    new_cut_rate = ((baffle_radius - cut_spacing) / shell_inner_diameter) * 100
+
+                    # 验证切口率范围 [0,50]%
+                    if not (0 <= new_cut_rate <= 50):
+                        QMessageBox.warning(self, "计算错误",
+                                            f"计算出的切口率({new_cut_rate:.1f}%)超出合理范围(0-50%)")
+                        return
+
+                    # 更新切口率
+                    rate_item = self.param_table.item(cut_rate_row, 2)
+                    if rate_item:
+                        rate_item.setText(f"{new_cut_rate:.1f}")
+
+                elif cut_rate is not None and 0 <= cut_rate <= 50:
+                    # 根据固定的间距和切口率计算折流板外径
+                    cut_size = (cut_rate / 100) * shell_inner_diameter
+                    required_radius = cut_spacing + cut_size
+                    new_diameter = required_radius * 2
+
+                    # 更新折流板外径
+                    diameter_item = self.param_table.item(baffle_diameter_row, 2)
+                    if diameter_item:
+                        diameter_item.setText(f"{new_diameter:.1f}")
+
+            # 3. 如果变化的是折流板要求切口率，固定该值，计算其他两个参数
+            elif changed_param_name == "折流板要求切口率 (%)":
+                if cut_rate is None or not (0 <= cut_rate <= 50):
+                    QMessageBox.warning(self, "参数错误", "折流板要求切口率值无效，必须在0%到50%范围内")
+                    return
+
+                cut_size = (cut_rate / 100) * shell_inner_diameter
+
+                # 计算折流板外径和切口间距
+                if baffle_diameter is not None and baffle_diameter > 0:
+                    baffle_radius = baffle_diameter / 2
+
+                    # 根据固定的切口率和外径计算切口间距
+                    new_spacing = baffle_radius - cut_size
+
+                    # 验证间距范围 [0, 折流板半径]
+                    if new_spacing < 0 or new_spacing > baffle_radius:
+                        QMessageBox.warning(self, "计算错误",
+                                            f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)")
+                        return
+
+                    # 更新切口间距
+                    spacing_item = self.param_table.item(cut_spacing_row, 2)
+                    if spacing_item:
+                        spacing_item.setText(f"{new_spacing:.1f}")
+
+                elif cut_spacing is not None and cut_spacing >= 0:
+                    # 根据固定的切口率和间距计算折流板外径
+                    required_radius = cut_spacing + cut_size
+                    new_diameter = required_radius * 2
+
+                    # 更新折流板外径
+                    diameter_item = self.param_table.item(baffle_diameter_row, 2)
+                    if diameter_item:
+                        diameter_item.setText(f"{new_diameter:.1f}")
 
         except Exception as e:
             logging.error(f"更新折流板参数失败: {str(e)}")
@@ -4200,8 +4251,61 @@ class TubeLayoutEditor(QMainWindow):
                 return self.tube_pass_form_combo.itemData(index, Qt.UserRole)
         return ""
 
-    def setup_parameters(self, params):
+    def setup_parameter_listeners(self):
+        """设置参数表格的监听器"""
+        # 清空现有的监听器（避免重复）
+        try:
+            self.param_table.itemChanged.disconnect()
+        except:
+            pass  # 如果没有连接，忽略错误
+
+        # 为需要监听的参数设置监听器
+        target_params = [
+            "非布管区域弦高（0°/180°）", "非布管区域弦高（90°/270°）",
+            "壳体内直径 Di", "换热管外径 do",
+            "折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)", "管程程数", "拉杆形式"
+        ]
+
+        for row in range(self.param_table.rowCount()):
+            param_name_item = self.param_table.item(row, 1)
+            if not param_name_item:
+                continue
+
+            param_name = param_name_item.text()
+            if param_name in target_params:
+                # 创建参数变更处理函数
+                def create_on_change_handler(row, param_name):
+                    def on_change(changed_item):
+                        if changed_item.row() == row and changed_item.column() == 2:
+                            # 验证输入合法性
+                            self.validate_input(changed_item, row)
+
+                            # 处理参数联动
+                            if param_name in ["壳体内直径 Di", "换热管外径 do"]:
+                                self.update_baffle_diameter()
+                                self.update_partition_plate_center_distance()
+                            if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)"]:
+                                self.update_baffle_parameters(param_name)
+                            if param_name in ["拉杆形式", "换热管外径 do"]:
+                                self.update_lagan()
+                                self.update_partition_plate_center_distance()
+                            if param_name == "管程程数":
+                                # 当管程程数变化时，更新管程分程形式的图片
+                                self.update_SN()
+                                # 获取最新的管程程数值
+                                tube_pass = changed_item.text()
+                                # 更新分程形式下拉框的图片
+                                if self.tube_pass_form_combo:
+                                    self.load_tube_pass_images(self.tube_pass_form_combo, tube_pass)
+
+                    return on_change
+
+                handler = create_on_change_handler(row, param_name)
+                self.param_table.itemChanged.connect(handler)
+
+    def setup_parameters(self, params, setup_listeners=True):
         print(params)
+        self.all_params = params
 
         for param in params:
             if param['参数名'] == '管程分程形式':
@@ -4225,6 +4329,7 @@ class TubeLayoutEditor(QMainWindow):
         self.tube_pass_form_value = ""
         self.tube_pass_combo = None
         self.tube_pass_form_column = 2
+        listener_rows = []
 
         for row, param in enumerate(params):
             num_item = QTableWidgetItem(str(row + 1))
@@ -4436,33 +4541,52 @@ class TubeLayoutEditor(QMainWindow):
                     # 保存原始值（字符串形式）
                     self._original_values[(row, 2)] = display_value
 
-                    # 创建参数变更处理函数
-                    def create_on_change_handler(row, param_name):
-                        def on_change(changed_item):
-                            if changed_item.row() == row and changed_item.column() == 2:
-                                # 验证输入合法性
-                                self.validate_input(changed_item, row)
+                    # 只有在需要设置监听器时才创建和处理函数
+                    if setup_listeners:
+                        # 创建参数变更处理函数
+                        def create_on_change_handler(row, param_name):
+                            def on_change(changed_item):
+                                if changed_item.row() == row and changed_item.column() == 2:
+                                    # 验证输入合法性
+                                    self.validate_input(changed_item, row)
 
-                                # 处理参数联动
-                                if param_name in ["壳体内直径 Di", "换热管外径 do"]:
-                                    self.update_baffle_diameter()
-                                if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)"]:
-                                    self.update_baffle_parameters(param_name)
-                                if param_name in ["拉杆形式", "换热管外径 do"]:
-                                    self.update_lagan()
-                                if param_name == "管程程数":
-                                    # 当管程程数变化时，更新管程分程形式的图片
-                                    self.update_SN()
-                                    # 获取最新的管程程数值
-                                    tube_pass = changed_item.text()
-                                    # 更新分程形式下拉框的图片
-                                    if self.tube_pass_form_combo:
-                                        self.load_tube_pass_images(self.tube_pass_form_combo, tube_pass)
+                                    # 处理参数联动
+                                    if param_name in ["壳体内直径 Di", "换热管外径 do"]:
+                                        self.update_baffle_diameter()
+                                    if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)"]:
+                                        self.update_baffle_parameters(param_name)
+                                    if param_name in ["拉杆形式", "换热管外径 do"]:
+                                        self.update_lagan()
+                                    if param_name == "管程程数":
+                                        # 当管程程数变化时，更新管程分程形式的图片
+                                        self.update_SN()
+                                        # 获取最新的管程程数值
+                                        tube_pass = changed_item.text()
+                                        # 更新分程形式下拉框的图片
+                                        if self.tube_pass_form_combo:
+                                            self.load_tube_pass_images(self.tube_pass_form_combo, tube_pass)
 
-                        return on_change
+                            return on_change
 
-                    # 绑定变更事件
-                    handler = create_on_change_handler(row, param['参数名'])
+                        # 存储需要设置监听器的行信息
+                        listener_rows.append((row, param['参数名'], create_on_change_handler))
+
+                self.param_table.setItem(row, 2, item)
+
+                unit_value = param['单位']
+                if unit_value is None:
+                    unit_display = ""
+                else:
+                    unit_display = str(unit_value)
+
+                unit_item = QTableWidgetItem(unit_display)
+                unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
+                self.param_table.setItem(row, 3, unit_item)
+
+                # 统一设置监听器（只有在需要时才设置）
+            if setup_listeners:
+                for row, param_name, create_handler in listener_rows:
+                    handler = create_handler(row, param_name)
                     self.param_table.itemChanged.connect(handler)
 
                 self.param_table.setItem(row, 2, item)
@@ -4564,13 +4688,13 @@ class TubeLayoutEditor(QMainWindow):
         if tube_pass == "2":
             self.add_image_to_combo(combo, base_path, "2.png", "2")
         elif tube_pass == "4":
-
             if show_4_1:
                 self.add_image_to_combo(combo, base_path, "4.1.png", "4.1")
             self.add_image_to_combo(combo, base_path, "4.2.1.png", "4.2")
             self.add_image_to_combo(combo, base_path, "4.2.2.png", "4.2")
             if show_4_3:
-                self.add_image_to_combo(combo, base_path, "4.3.png", "4.3")
+                self.add_image_to_combo(combo, base_path, "4.3.1.png", "4.3")
+                self.add_image_to_combo(combo, base_path, "4.3.2.png", "4.3")
         elif tube_pass == "6":
             if show_6_1:
                 self.add_image_to_combo(combo, base_path, "6.1.1.png", "6.1")
@@ -5985,7 +6109,7 @@ class TubeLayoutEditor(QMainWindow):
         param_mapping = {
             # "SN": "分程隔板两侧相邻管中心距（竖直）",
             # "SNH": "分程隔板两侧相邻管中心距（水平）",
-            "BaffleOD": "折流板外径",
+            # "BaffleOD": "折流板外径",
             # "SlipWayThick": "滑道厚度",
             # "SlipWayAngle": "滑道与竖直中心线夹角",
             "SlipWayHeight": "滑道高度",
@@ -8942,7 +9066,7 @@ class TubeLayoutEditor(QMainWindow):
                 block_height_val = float(block_height)
                 tube_bridge_val = float(tube_bridge)
                 # self.side_dangban_length = distance - block_height_val - tube_bridge_val
-                self.side_dangban_length = distance - tube_bridge_val-do_value
+                self.side_dangban_length = distance - tube_bridge_val - do_value
                 print(self.side_dangban_length)
                 print("旁路挡板长度")
             except ValueError as e:
@@ -8986,7 +9110,7 @@ class TubeLayoutEditor(QMainWindow):
         dialog.exec_()
 
     def build_side_dangban(self, selected_centers, block_length, block_height):
-        """构建旁路挡板，确保所有挡板都在大内圆内且紧贴边缘，新增干涉换热管删除功能"""
+        """构建旁路挡板，确保所有挡板都在折流板外径圆内且紧贴边缘，新增干涉换热管删除功能"""
         if not selected_centers:
             return []
 
@@ -8998,7 +9122,7 @@ class TubeLayoutEditor(QMainWindow):
 
         import ast
         from PyQt5.QtCore import QRectF, Qt
-        from PyQt5.QtGui import QPen, QBrush, QPainterPath  # 补充QPainterPath导入（原代码可能遗漏）
+        from PyQt5.QtGui import QPen, QBrush, QPainterPath
         from PyQt5.QtWidgets import QMessageBox, QGraphicsRectItem
         import math
 
@@ -9135,7 +9259,16 @@ class TubeLayoutEditor(QMainWindow):
             QMessageBox.warning(self, "参数缺失", "未找到换热管外径 do，请先配置参数表")
             return 0
 
-        # -------------------------- 4. 修正逻辑：绘制挡板（贴紧大圆边缘）+ 新增干涉处理 --------------------------
+        # -------------------------- 4. 关键修改：获取折流板外径并计算半径 --------------------------
+        baffle_diameter = self.get_baffle_diameter()
+        if baffle_diameter is None:
+            QMessageBox.warning(self, "参数错误", "未找到折流板外径参数")
+            return 0
+
+        # 计算折流板半径（用于确定挡板边界）
+        R_baffle = baffle_diameter / 2.0
+
+        # -------------------------- 5. 修正逻辑：绘制挡板（贴紧折流板圆边缘）+ 新增干涉处理 --------------------------
         if selected_centers:
             for selected_center in selected_centers:
                 row_label, col_label = selected_center
@@ -9156,21 +9289,18 @@ class TubeLayoutEditor(QMainWindow):
                 # 获取当前行的y坐标（所有管子在同一行，取第一个的y即可）
                 _, y = row[0]
 
-                # 关键：计算大圆在当前Y坐标的左右边界（X的最大/最小值）
-                if not hasattr(self, 'R_nei'):
-                    QMessageBox.warning(self, "参数错误", "未找到大内圆半径参数R_nei")
-                    return 0
-                max_x = math.sqrt(self.R_nei ** 2 - y ** 2)  # 右侧边界X值（正数）
+                # 关键修改：计算折流板圆在当前Y坐标的左右边界（X的最大/最小值）
+                max_x = math.sqrt(R_baffle ** 2 - y ** 2)  # 右侧边界X值（正数）
                 min_x = -max_x  # 左侧边界X值（负数）
 
-                # 修正1：直接以大圆边界为基准计算挡板位置（贴紧边缘）
-                # 左挡板：左上角X = 左侧边界（min_x），确保左边缘与大圆左侧对齐
+                # 修正1：以折流板圆边界为基准计算挡板位置（贴紧边缘）
+                # 左挡板：左上角X = 左侧边界（min_x），确保左边缘与折流板圆左侧对齐
                 left_rect_x = min_x
-                # 右挡板：左上角X = 右侧边界（max_x） - 挡板长度，确保右边缘与大圆右侧对齐
+                # 右挡板：左上角X = 右侧边界（max_x） - 挡板长度，确保右边缘与折流板圆右侧对齐
                 right_rect_x = max_x - block_length
 
-                # 修正2：挡板高度取用户输入与大圆当前Y坐标高度的最小值（避免超出圆）
-                max_block_height = 2 * math.sqrt(self.R_nei ** 2 - y ** 2)  # 大圆当前Y坐标的高度（上下边界距离）
+                # 修正2：挡板高度取用户输入与折流板圆当前Y坐标高度的最小值（避免超出圆）
+                max_block_height = 2 * math.sqrt(R_baffle ** 2 - y ** 2)  # 折流板圆当前Y坐标的高度（上下边界距离）
                 actual_block_height = min(block_height, max_block_height)
                 # 挡板Y坐标：居中对齐（以当前行y为中心）
                 rect_y = y - actual_block_height / 2
@@ -9245,7 +9375,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 done_rows.add(row_label)
 
-        # -------------------------- 5. 新增：删除干涉管 + 存储相对坐标 --------------------------
+        # -------------------------- 6. 新增：删除干涉管 + 存储相对坐标 --------------------------
         if current_interfering_tubes:
             # 转换为列表（集合不可迭代）
             interfering_list = list(current_interfering_tubes)
