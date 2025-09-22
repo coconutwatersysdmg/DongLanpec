@@ -2,26 +2,25 @@ import json
 import logging
 import math
 import os
-import sys
+from collections import defaultdict
 from typing import List, Tuple
 
 import pandas as pd
 import pymysql
+from PyQt5.QtCore import QLineF
 from PyQt5.QtCore import QPointF, QRectF
 from PyQt5.QtCore import QSize
-from PyQt5.QtCore import Qt, QLineF
+from PyQt5.QtGui import QBrush, QIcon
 from PyQt5.QtGui import QColor, QPen, QPolygonF, QPainterPath, QIntValidator
-from PyQt5.QtGui import QPixmap, QFont, QBrush, QIcon
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-                             QTabWidget, QTableWidget, QTableWidgetItem, QPushButton, QLabel, QGraphicsView,
-                             QGraphicsScene, QFrame,
-                             QDialog, QDialogButtonBox, QStackedWidget, QGridLayout,
-                             QSizePolicy, QHeaderView, QLineEdit, QCheckBox, QListView, QGraphicsRectItem,
-                             QGraphicsPathItem, QGraphicsItem)
 from PyQt5.QtWidgets import QGraphicsEllipseItem
 from PyQt5.QtWidgets import QGraphicsPolygonItem, QMessageBox, QComboBox
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout,
+                             QTabWidget, QPushButton, QGraphicsView,
+                             QGraphicsScene, QFrame,
+                             QStackedWidget, QGridLayout,
+                             QSizePolicy, QHeaderView, QLineEdit, QCheckBox, QListView, QGraphicsPathItem,
+                             QGraphicsItem)
 from PyQt5.QtWidgets import QTextEdit
-from PyQt5.uic.Compiler.qtproxies import QtGui
 
 from modules.buguan.buguan_ziyong.api import run_layout_tube_calculate
 from modules.buguan.buguan_ziyong.json_process import parse_heat_exchanger_json
@@ -1804,6 +1803,7 @@ class TubeLayoutEditor(QMainWindow):
         self.setup_parameter_listeners()
         self.update_baffle_parameters("折流板要求切口率 (%)")
         self.update_baffle_diameter()
+        self.update_tube_center_distance()
 
     # TODO 布管函数
     def calculate_piping_layout(self):
@@ -2975,8 +2975,7 @@ class TubeLayoutEditor(QMainWindow):
         do_row = -1
         dl_row = -1
         range_type_row = -1  # 换热管排列方式行索引
-        center_distance_row = -1
-        lg_row = -1
+        lg_row = -1  # 拉杆形式行索引（移除center_distance_row）
         row_count = self.param_table.rowCount()
 
         for row in range(row_count):
@@ -2995,9 +2994,7 @@ class TubeLayoutEditor(QMainWindow):
                 dl_row = row
             elif param_name == "换热管排列方式":
                 range_type_row = row
-            elif param_name == "换热管中心距 S":
-                center_distance_row = row
-            elif param_name == "拉杆形式":
+            elif param_name == "拉杆形式":  # 移除换热管中心距S的行索引查找
                 lg_row = row
 
         # 2. 获取关键参数值
@@ -3044,12 +3041,12 @@ class TubeLayoutEditor(QMainWindow):
                 if range_type_item and range_type_item.text().strip():
                     range_type_value = range_type_item.text()
 
-        # 检查必要参数是否存在
+        # 检查必要参数是否存在（保留原依赖，用于布管限定圆和折流板计算）
         if di_value is None or do_value is None or range_type_value is None:
             print("缺少必要参数，无法进行计算")
             return
 
-        # 3. 根据换热器型号计算布管限定圆 DL
+        # 3. 根据换热器型号计算布管限定圆 DL（逻辑完全保留）
         if dl_row != -1:
             # 获取换热器型号
             heat_exchanger_type = self.heat_exchanger
@@ -3066,7 +3063,6 @@ class TubeLayoutEditor(QMainWindow):
 
             elif heat_exchanger_type in ["AES", "BES"]:
                 # 计算方式2: DL = Di - 2(b₁ + b₂ + b)
-
                 # 确定b的值
                 if di_value < 1000:
                     b = 4.0  # 默认值
@@ -3099,7 +3095,7 @@ class TubeLayoutEditor(QMainWindow):
                 print(f"未知的换热器型号: {heat_exchanger_type}")
                 return
 
-            # 临时断开信号避免循环触发
+            # 临时断开信号避免循环触发（逻辑保留）
             original_handler = None
             if hasattr(self, 'handle_param_change'):
                 try:
@@ -3108,7 +3104,7 @@ class TubeLayoutEditor(QMainWindow):
                 except:
                     pass
 
-            # 更新布管限定圆 DL
+            # 更新布管限定圆 DL（逻辑保留）
             dl_item = self.param_table.item(dl_row, 2)
             if dl_item:
                 dl_item.setText(f"{dl_value:.1f}")
@@ -3116,7 +3112,7 @@ class TubeLayoutEditor(QMainWindow):
                 self.param_table.setItem(dl_row, 2, QTableWidgetItem(f"{dl_value:.1f}"))
             print(f"已更新布管限定圆 DL: {dl_value: .1f}")
 
-            # 重新连接信号
+            # 重新连接信号（逻辑保留）
             if original_handler:
                 try:
                     self.param_table.itemChanged.connect(original_handler)
@@ -3124,99 +3120,7 @@ class TubeLayoutEditor(QMainWindow):
                     pass
         print(self.heat_exchanger)
 
-        # 中心距映射表 - 使用浮点数键确保匹配
-        center_distance_map = {
-            (10.0, "正三角形"): (14.0, 28.0),
-            (10.0, "转角正三角形"): (14.0, 28.0),
-            (10.0, "正方形"): (17.0, 30.0),
-            (10.0, "转角正方形"): (17.0, 30.0),
-            (12.0, "正三角形"): (16.0, 30.0),
-            (12.0, "转角正三角形"): (16.0, 30.0),
-            (12.0, "正方形"): (19.0, 32.0),
-            (12.0, "转角正方形"): (19.0, 32.0),
-            (14.0, "正三角形"): (19.0, 32.0),
-            (14.0, "转角正三角形"): (19.0, 32.0),
-            (14.0, "正方形"): (21.0, 35.0),
-            (14.0, "转角正方形"): (21.0, 35.0),
-            (16.0, "正三角形"): (22.0, 35.0),
-            (16.0, "转角正三角形"): (22.0, 35.0),
-            (16.0, "正方形"): (22.0, 38.0),
-            (16.0, "转角正方形"): (22.0, 38.0),
-            (19.0, "正三角形"): (25.0, 38.0),
-            (19.0, "转角正三角形"): (25.0, 38.0),
-            (19.0, "正方形"): (25.0, 38.0),
-            (19.0, "转角正方形"): (25.0, 38.0),
-            (20.0, "正三角形"): (26.0, 40.0),
-            (20.0, "转角正三角形"): (26.0, 40.0),
-            (20.0, "正方形"): (26.0, 42.0),
-            (20.0, "转角正方形"): (26.0, 42.0),
-            (22.0, "正三角形"): (28.0, 42.0),
-            (22.0, "转角正三角形"): (28.0, 42.0),
-            (22.0, "正方形"): (28.0, 44.0),
-            (22.0, "转角正方形"): (28.0, 44.0),
-            (25.0, "正三角形"): (32.0, 50.0),
-            (25.0, "转角正三角形"): (32.0, 50.0),
-            (25.0, "正方形"): (32.0, 50.0),
-            (25.0, "转角正方形"): (32.0, 45.25),
-            (30.0, "正三角形"): (38.0, 50.0),
-            (30.0, "转角正三角形"): (38.0, 50.0),
-            (30.0, "正方形"): (38.0, 52.0),
-            (30.0, "转角正方形"): (38.0, 52.0),
-            (32.0, "正三角形"): (40.0, 52.0),
-            (32.0, "转角正三角形"): (40.0, 52.0),
-            (32.0, "正方形"): (40.0, 56.0),
-            (32.0, "转角正方形"): (40.0, 56.0),
-            (35.0, "正三角形"): (44.0, 56.0),
-            (35.0, "转角正三角形"): (44.0, 56.0),
-            (35.0, "正方形"): (44.0, 60.0),
-            (35.0, "转角正方形"): (44.0, 60.0),
-            (38.0, "正三角形"): (48.0, 60.0),
-            (38.0, "转角正三角形"): (48.0, 60.0),
-            (38.0, "正方形"): (48.0, 68.0),
-            (38.0, "转角正方形"): (48.0, 68.0),
-            (45.0, "正三角形"): (57.0, 68.0),
-            (45.0, "转角正三角形"): (57.0, 68.0),
-            (45.0, "正方形"): (57.0, 76.0),
-            (45.0, "转角正方形"): (57.0, 76.0),
-            (50.0, "正三角形"): (64.0, 76.0),
-            (50.0, "转角正三角形"): (64.0, 76.0),
-            (50.0, "正方形"): (64.0, 78.0),
-            (50.0, "转角正方形"): (64.0, 78.0),
-            (55.0, "正三角形"): (70.0, 78.0),
-            (55.0, "转角正三角形"): (70.0, 78.0),
-            (55.0, "正方形"): (70.0, 80.0),
-            (55.0, "转角正方形"): (70.0, 80.0),
-            (57.0, "正三角形"): (72.0, 80.0),
-            (57.0, "转角正三角形"): (72.0, 80.0),
-            (57.0, "正方形"): (72.0, 80.0),
-            (57.0, "转角正方形"): (72.0, 80.0),
-        }
-
-        # 检查是否需要修改特定映射值
-        if (float(do_value), range_type_value) == (25.0, "转角正方形"):
-            # 查询配置库
-            config_value = self.get_config_value("2.10.1.2")
-            if config_value == "False":
-                # 修改映射值为44
-                if self.heat_exchanger in ["AEU", "BEU"]:
-                    center_distance_map[(25.0, "转角正方形")] = (32.0, 50.0)
-                    print("根据配置，已将(25.0, '转角正方形')的SN值修改为50.0")
-                else:
-                    center_distance_map[(25.0, "转角正方形")] = (32.0, 44.0)
-                    print("根据配置，已将(25.0, '转角正方形')的SN值修改为44.0")
-
-        # 查找映射关系
-        key = (float(do_value), range_type_value)
-
-        if key in center_distance_map:
-            center_distance, sn_value = center_distance_map[key]
-
-            # 更新换热管中心距 S
-            if center_distance_row != -1:
-                self._update_table_cell(center_distance_row, 2, f"{center_distance:.1f}")
-                print(f"已更新换热管中心距 S: {center_distance:.1f}")
-
-        # 4. 更新折流板外径
+        # 4. 更新折流板外径（逻辑完全保留，无修改）
         if di_value is not None and baffle_row != -1:
             # 假设壳体材料为钢管（实际应根据具体参数获取）
             shell_material_type = "钢管"
@@ -3253,7 +3157,7 @@ class TubeLayoutEditor(QMainWindow):
                 self._update_table_cell(baffle_row, 2, baffle_diameter)
                 print(f"已更新折流板外径: {baffle_diameter}")
 
-        # 5. 更新拉杆形式
+        # 5. 更新拉杆形式（逻辑完全保留，无修改）
         if lg_row != -1 and do_value is not None:
             # 获取当前拉杆形式的单元格部件
             lg_widget = self.param_table.cellWidget(lg_row, 2)
@@ -3286,475 +3190,290 @@ class TubeLayoutEditor(QMainWindow):
                 # 连接信号，允许用户手动更改
                 combo_box.currentTextChanged.connect(lambda: self.handle_param_change())
 
-    def update_partition_plate_center_distance(self):
-        """更新分程隔板两侧相邻管中心距（竖直）和（水平）"""
-        # 如果是 AES 或 BES 型号，执行函数1的逻辑
-        if self.heat_exchanger in ["AES", "BES"]:
-            # -------------------------- 新增：用户设置值检查逻辑 --------------------------
-            # 查找"分程隔板两侧相邻管中心距（水平）"的行索引及当前用户设置值
-            sn_horizontal_row_precheck = -1
-            current_user_horizontal_value = None
-            tube_num = self.get_tube_pass_count()
+    def update_tube_center_distance(self):
+        # 1. 定位关键参数行（换热管外径、排列方式、中心距）
+        target_params = {
+            "换热管外径 do": -1,
+            "换热管排列方式": -1,
+            "换热管中心距 S": -1
+        }
+        row_count = self.param_table.rowCount()
 
-            # 遍历参数表，定位水平中心距参数行
-            for row in range(self.param_table.rowCount()):
-                param_name_item = self.param_table.item(row, 1)
-                if param_name_item and param_name_item.text() == "分程隔板两侧相邻管中心距（水平）":
-                    sn_horizontal_row_precheck = row
-                    # 根据单元格控件类型（下拉框/普通文本）获取当前值
-                    cell_widget = self.param_table.cellWidget(row, 2)
-                    if isinstance(cell_widget, QComboBox):
-                        current_user_horizontal_value = cell_widget.currentText().strip()
-                    else:
-                        value_item = self.param_table.item(row, 2)
-                        current_user_horizontal_value = value_item.text().strip() if value_item else ""
-                    break
+        for row in range(row_count):
+            param_name_item = self.param_table.item(row, 1)
+            if not param_name_item:
+                continue
+            param_name = param_name_item.text().strip()
+            if param_name in target_params:
+                target_params[param_name] = row
 
-            # 查找参数表中相关参数的行索引
-            do_row = -1
-            range_type_row = -1
-            sn_vertical_row = -1
-            sn_horizontal_row = -1
-            row_count = self.param_table.rowCount()
+        # 检查是否缺失关键参数行，缺失则返回
+        missing_params = [k for k, v in target_params.items() if v == -1]
+        if missing_params:
+            print(f"未找到关键参数行：{', '.join(missing_params)}，无法更新中心距")
+            return
+        do_row, range_type_row, center_distance_row = target_params.values()
 
-            for row in range(row_count):
-                param_name_item = self.param_table.item(row, 1)
-                if not param_name_item:
-                    continue
-                param_name = param_name_item.text()
-
-                if param_name == "换热管外径 do":
-                    do_row = row
-                elif param_name == "换热管排列方式":
-                    range_type_row = row
-                elif param_name == "分程隔板两侧相邻管中心距（竖直）":
-                    sn_vertical_row = row
-                elif param_name == "分程隔板两侧相邻管中心距（水平）":
-                    sn_horizontal_row = row
-
-            # 获取关键参数值（增加行索引显式判断）
-            do_value = None
-            # 仅当行存在时才尝试读取值
-            if do_row != -1:
-                do_widget = self.param_table.cellWidget(do_row, 2)
-                if isinstance(do_widget, QComboBox):
-                    try:
-                        selected_text = do_widget.currentText().strip()
-                        if selected_text:
-                            do_value = float(selected_text)
-                    except ValueError:
-                        do_value = None  # 明确标记为无效值
-                else:
-                    do_item = self.param_table.item(do_row, 2)
-                    if do_item and do_item.text().strip():
-                        try:
-                            do_value = float(do_item.text())
-                        except ValueError:
-                            do_value = None  # 明确标记为无效值
-
-            range_type_value = None
-            # 仅当行存在时才尝试读取值
-            if range_type_row != -1:
-                range_type_widget = self.param_table.cellWidget(range_type_row, 2)
-                if isinstance(range_type_widget, QComboBox):
-                    range_type_value = range_type_widget.currentText().strip()
-                else:
-                    range_type_item = self.param_table.item(range_type_row, 2)
-                    if range_type_item:
-                        range_type_value = range_type_item.text().strip()
-                # 空字符串视为无效值
-                if not range_type_value:
-                    range_type_value = None
-
-            # 核心判断：若行不存在或参数值无效，直接终止（不更新）
-            if do_value is None or range_type_value is None:
-                return
-
-            # 中心距映射表
-            center_distance_map = {
-                (10.0, "正三角形"): 28.0,
-                (10.0, "转角正三角形"): 28.0,
-                (10.0, "正方形"): 30.0,
-                (10.0, "转角正方形"): 30.0,
-                (12.0, "正三角形"): 30.0,
-                (12.0, "转角正三角形"): 30.0,
-                (12.0, "正方形"): 32.0,
-                (12.0, "转角正方形"): 32.0,
-                (14.0, "正三角形"): 32.0,
-                (14.0, "转角正三角形"): 32.0,
-                (14.0, "正方形"): 35.0,
-                (14.0, "转角正方形"): 35.0,
-                (16.0, "正三角形"): 35.0,
-                (16.0, "转角正三角形"): 35.0,
-                (16.0, "正方形"): 38.0,
-                (16.0, "转角正方形"): 38.0,
-                (19.0, "正三角形"): 38.0,
-                (19.0, "转角正三角形"): 38.0,
-                (19.0, "正方形"): 38.0,
-                (19.0, "转角正方形"): 38.0,
-                (20.0, "正三角形"): 40.0,
-                (20.0, "转角正三角形"): 40.0,
-                (20.0, "正方形"): 42.0,
-                (20.0, "转角正方形"): 42.0,
-                (22.0, "正三角形"): 42.0,
-                (22.0, "转角正三角形"): 42.0,
-                (22.0, "正方形"): 44.0,
-                (22.0, "转角正方形"): 44.0,
-                (25.0, "正三角形"): 50.0,
-                (25.0, "转角正三角形"): 50.0,
-                (25.0, "正方形"): 50.0,
-                (25.0, "转角正方形"): 45.25,
-                (30.0, "正三角形"): 50.0,
-                (30.0, "转角正三角形"): 50.0,
-                (30.0, "正方形"): 52.0,
-                (30.0, "转角正方形"): 52.0,
-                (32.0, "正三角形"): 52.0,
-                (32.0, "转角正三角形"): 52.0,
-                (32.0, "正方形"): 56.0,
-                (32.0, "转角正方形"): 56.0,
-                (35.0, "正三角形"): 56.0,
-                (35.0, "转角正三角形"): 56.0,
-                (35.0, "正方形"): 60.0,
-                (35.0, "转角正方形"): 60.0,
-                (38.0, "正三角形"): 60.0,
-                (38.0, "转角正三角形"): 60.0,
-                (38.0, "正方形"): 68.0,
-                (38.0, "转角正方形"): 68.0,
-                (45.0, "正三角形"): 68.0,
-                (45.0, "转角正三角形"): 68.0,
-                (45.0, "正方形"): 76.0,
-                (45.0, "转角正方形"): 76.0,
-                (50.0, "正三角形"): 76.0,
-                (50.0, "转角正三角形"): 76.0,
-                (50.0, "正方形"): 78.0,
-                (50.0, "转角正方形"): 78.0,
-                (55.0, "正三角形"): 78.0,
-                (55.0, "转角正三角形"): 78.0,
-                (55.0, "正方形"): 80.0,
-                (55.0, "转角正方形"): 80.0,
-                (57.0, "正三角形"): 80.0,
-                (57.0, "转角正三角形"): 80.0,
-                (57.0, "正方形"): 80.0,
-                (57.0, "转角正方形"): 80.0,
-            }
-
-            # 检查是否需要修改特定映射值
-            if (float(do_value), range_type_value) == (25.0, "转角正方形"):
-                config_value = self.get_config_value("2.10.1.2")
-                if config_value == "False":
-                    if self.heat_exchanger in ["AEU", "BEU"]:
-                        center_distance_map[(25.0, "转角正方形")] = 50.0
-                        print("根据配置，已将(25.0, '转角正方形')的SN值修改为50.0")
-                    else:
-                        center_distance_map[(25.0, "转角正方形")] = 44.0
-                        print("根据配置，已将(25.0, '转角正方形')的SN值修改为44.0")
-
-            # 查找映射关系
-            key = (float(do_value), range_type_value)
-            sn_value = center_distance_map.get(key)
-
-            if sn_value is not None:
-                # 根据不同的换热器类型进行不同的处理
-                if self.heat_exchanger in ["AEU", "BEU"]:
-                    # U形换热管最小弯曲半径映射表
-                    rmin_map = {
-                        10.0: 20.0,
-                        12.0: 24.0,
-                        14.0: 30.0,
-                        16.0: 32.0,
-                        19.0: 40.0,
-                        20.0: 40.0,
-                        22.0: 45.0,
-                        25.0: 50.0,
-                        30.0: 60.0,
-                        32.0: 65.0,
-                        35.0: 70.0,
-                        38.0: 76.0,
-                        45.0: 90.0,
-                        50.0: 100.0,
-                        55.0: 110.0,
-                        57.0: 115.0
-                    }
-
-                    # 获取对应的Rmin值
-                    rmin_value = rmin_map.get(float(do_value))
-                    if rmin_value is not None:
-                        # 更新分程隔板两侧相邻管中心距（竖直）
-                        if sn_vertical_row != -1:
-                            self._update_table_cell(sn_vertical_row, 2, f"{rmin_value:.1f}")
-                            print(f"已更新分程隔板两侧相邻管中心距（竖直）: {rmin_value:.1f}")
-
-                        # 更新分程隔板两侧相邻管中心距（水平）
-                        if sn_horizontal_row != -1:
-                            if self.heat_exchanger == "AEU":
-                                # AEU 型号使用 U 形换热管最小弯曲半径 Rmin 作为水平中心距
-                                self._update_table_cell(sn_horizontal_row, 2, f"{rmin_value:.1f}")
-                                print(f"已更新分程隔板两侧相邻管中心距（水平）: {rmin_value:.1f}")
-                            elif self.heat_exchanger == "BEU":
-                                # BEU 型号从对应表格中获取水平中心距
-                                beu_horizontal_map = {
-                                    10.0: 30.0,
-                                    12.0: 32.0,
-                                    14.0: 35.0,
-                                    16.0: 38.0,
-                                    19.0: 38.0,
-                                    25.0: 50.0,
-                                    30.0: 52.0,
-                                    32.0: 56.0,
-                                    35.0: 60.0,
-                                    38.0: 68.0,
-                                    45.0: 76.0,
-                                    50.0: 78.0,
-                                    55.0: 80.0,
-                                    57.0: 80.0
-                                }
-                                beu_horizontal_value = beu_horizontal_map.get(float(do_value))
-                                if beu_horizontal_value is not None:
-                                    self._update_table_cell(sn_horizontal_row, 2, f"{beu_horizontal_value:.1f}")
-                                    print(f"已更新分程隔板两侧相邻管中心距（水平）: {beu_horizontal_value:.1f}")
-                                else:
-                                    print(f"未找到 BEU 型号下换热管外径 {do_value} 对应的水平中心距")
-                    else:
-                        print(f"未找到换热管外径 {do_value} 对应的最小弯曲半径 Rmin")
-                else:
-                    # 非 AEU/BEU 型号，使用原来的映射表逻辑
-                    # 更新分程隔板两侧相邻管中心距（竖直）
-                    if sn_vertical_row != -1:
-                        self._update_table_cell(sn_vertical_row, 2, f"{sn_value:.1f}")
-                        print(f"已更新分程隔板两侧相邻管中心距（竖直）: {sn_value:.1f}")
-
-                    # 更新分程隔板两侧相邻管中心距（水平）
-                    if sn_horizontal_row != -1:
-                        if self.heat_exchanger in ["AES", "BES"]:
-                            aes_bes_horizontal_map = {
-                                10.0: 28.0,
-                                12.0: 30.0,
-                                14.0: 32.0,
-                                16.0: 35.0,
-                                19.0: 38.0,
-                                20.0: 40.0,
-                                22.0: 42.0,
-                                25.0: 50.0,
-                                30.0: 50.0,
-                                32.0: 52.0,
-                                35.0: 56.0,
-                                38.0: 60.0,
-                                45.0: 68.0,
-                                50.0: 76.0,
-                                55.0: 78.0,
-                                57.0: 80.0
-                            }
-                            aes_bes_horizontal_value = aes_bes_horizontal_map.get(float(do_value))
-                            if aes_bes_horizontal_value is not None:
-                                self._update_table_cell(sn_horizontal_row, 2, f"{aes_bes_horizontal_value:.1f}")
-                                print(f"已更新分程隔板两侧相邻管中心距（水平）: {aes_bes_horizontal_value:.1f}")
-                            else:
-                                print(f"未找到 AES/BES 型号下换热管外径 {do_value} 对应的水平中心距")
-                        else:
-                            self._update_table_cell(sn_horizontal_row, 2, f"{sn_value:.1f}")
-                            print(f"已更新分程隔板两侧相邻管中心距（水平）: {sn_value:.1f}")
-            else:
-                print(f"未找到匹配的映射关系 for {key}")
-
-        # 对于非 AES/BES 型号，执行函数2的逻辑
+        # 2. 获取换热管外径（支持下拉框/文本框）
+        do_value = None
+        do_widget = self.param_table.cellWidget(do_row, 2)
+        if isinstance(do_widget, QComboBox):
+            do_text = do_widget.currentText().strip()
         else:
-            # 获取管程数
-            tube_num = self.get_tube_pass_count()
+            do_item = self.param_table.item(do_row, 2)
+            do_text = do_item.text().strip() if do_item else ""
 
-            # 查找参数表中相关参数的行索引
-            do_row = -1
-            range_type_row = -1
-            sn_vertical_row = -1
-            sn_horizontal_row = -1
-            row_count = self.param_table.rowCount()
+        try:
+            do_value = float(do_text)
+        except ValueError:
+            print(f"换热管外径格式错误（输入值：{do_text}），需为数字")
+            return
 
-            for row in range(row_count):
-                param_name_item = self.param_table.item(row, 1)
-                if not param_name_item:
-                    continue
-                param_name = param_name_item.text()
+        # 3. 获取换热管排列方式（支持下拉框/文本框），并归类为统一类型
+        range_type_value = None
+        range_type_widget = self.param_table.cellWidget(range_type_row, 2)
+        if isinstance(range_type_widget, QComboBox):
+            range_type_value = range_type_widget.currentText().strip()
+        else:
+            range_type_item = self.param_table.item(range_type_row, 2)
+            range_type_value = range_type_item.text().strip() if range_type_item else ""
 
-                if param_name == "换热管外径 do":
-                    do_row = row
-                elif param_name == "换热管排列方式":
-                    range_type_row = row
-                elif param_name == "分程隔板两侧相邻管中心距（竖直）":
-                    sn_vertical_row = row
-                elif param_name == "分程隔板两侧相邻管中心距（水平）":
-                    sn_horizontal_row = row
+        if not range_type_value:
+            print("未选择换热管排列方式（需为'正三角形'/'转角正三角形'/'正方形'/'转角正方形'）")
+            return
 
-            # 获取关键参数值（增加行索引显式判断）
-            do_value = None
-            if do_row != -1:
-                do_widget = self.param_table.cellWidget(do_row, 2)
-                if isinstance(do_widget, QComboBox):
-                    try:
-                        selected_text = do_widget.currentText().strip()
-                        if selected_text:
-                            do_value = float(selected_text)
-                    except ValueError:
-                        do_value = None
-                else:
-                    do_item = self.param_table.item(do_row, 2)
-                    if do_item and do_item.text().strip():
-                        try:
-                            do_value = float(do_item.text())
-                        except ValueError:
-                            do_value = None
+        # 排列方式归类：将细分类型统一为文档匹配的大类（三角形排列/正方形排列）
+        if range_type_value in ["正三角形", "转角正三角形"]:
+            unified_range_type = "三角形排列"
+        elif range_type_value in ["正方形", "转角正方形"]:
+            unified_range_type = "正方形排列"
+        else:
+            print(f"无效的排列方式：{range_type_value}，仅支持'正三角形'/'转角正三角形'/'正方形'/'转角正方形'")
+            return
 
-            range_type_value = None
-            if range_type_row != -1:
-                range_type_widget = self.param_table.cellWidget(range_type_row, 2)
-                if isinstance(range_type_widget, QComboBox):
-                    range_type_value = range_type_widget.currentText().strip()
-                else:
-                    range_type_item = self.param_table.item(range_type_row, 2)
-                    if range_type_item:
-                        range_type_value = range_type_item.text().strip()
-                if not range_type_value:
-                    range_type_value = None
+        # 4. 中心距映射表（匹配文档数据，同外径下同类排列方式中心距一致）
+        center_distance_map = {
+            (10.0, "三角形排列"): 14.0,
+            (10.0, "正方形排列"): 17.0,
+            (12.0, "三角形排列"): 16.0,
+            (12.0, "正方形排列"): 19.0,
+            (14.0, "三角形排列"): 19.0,
+            (14.0, "正方形排列"): 21.0,
+            (16.0, "三角形排列"): 22.0,
+            (16.0, "正方形排列"): 22.0,
+            (19.0, "三角形排列"): 25.0,
+            (19.0, "正方形排列"): 25.0,
+            (20.0, "三角形排列"): 26.0,
+            (20.0, "正方形排列"): 26.0,
+            (22.0, "三角形排列"): 28.0,
+            (22.0, "正方形排列"): 28.0,
+            (25.0, "三角形排列"): 32.0,
+            (25.0, "正方形排列"): 32.0,
+            (30.0, "三角形排列"): 38.0,
+            (30.0, "正方形排列"): 38.0,
+            (32.0, "三角形排列"): 40.0,
+            (32.0, "正方形排列"): 40.0,
+            (35.0, "三角形排列"): 44.0,
+            (35.0, "正方形排列"): 44.0,
+            (38.0, "三角形排列"): 48.0,
+            (38.0, "正方形排列"): 48.0,
+            (45.0, "三角形排列"): 57.0,
+            (45.0, "正方形排列"): 57.0,
+            (50.0, "三角形排列"): 64.0,
+            (50.0, "正方形排列"): 64.0,
+            (55.0, "三角形排列"): 70.0,
+            (55.0, "正方形排列"): 70.0,
+            (57.0, "三角形排列"): 72.0,
+            (57.0, "正方形排列"): 72.0,
+        }
 
-            # 若行不存在或参数值无效，直接终止
-            if do_value is None or range_type_value is None:
+        # 5. 匹配映射关系并更新中心距
+        key = (do_value, unified_range_type)
+        if key in center_distance_map:
+            center_distance = center_distance_map[key]
+            self._update_table_cell(center_distance_row, 2, f"{center_distance:.1f}")
+            print(
+                f"更新成功：外径{do_value}mm + {range_type_value}（归为{unified_range_type}）→ 中心距{center_distance:.1f}mm")
+        else:
+            print(
+                f"无匹配数据：未找到外径{do_value}mm + {unified_range_type}（对应原始排列方式：{range_type_value}）的中心距配置")
+
+    def update_partition_plate_center_distance(self):
+        """更新分程隔板两侧相邻管中心距（竖直）和（水平）- 严格匹配附件9文档数据"""
+        # 1. 定位关键参数行：换热管外径、排列方式、管程数、竖直中心距、水平中心距
+        target_params = {
+            "换热管外径 do": -1,
+            "换热管排列方式": -1,
+            "管程程数": -1,
+            "分程隔板两侧相邻管中心距（竖直）": -1,
+            "分程隔板两侧相邻管中心距（水平）": -1
+        }
+        row_count = self.param_table.rowCount()
+        for row in range(row_count):
+            param_name_item = self.param_table.item(row, 1)
+            if not param_name_item:
+                continue
+            param_name = param_name_item.text().strip()
+            if param_name in target_params:
+                target_params[param_name] = row
+
+        # 检查缺失关键参数，缺失则终止
+        missing_params = [k for k, v in target_params.items() if v == -1]
+        if missing_params:
+            print(f"未找到关键参数行：{', '.join(missing_params)}，无法更新分程隔板中心距")
+            return
+        do_row, range_type_row, tube_pass_row, sn_vertical_row, sn_horizontal_row = target_params.values()
+
+        # 2. 获取核心参数值（支持下拉框/文本框）
+        # 2.1 换热管外径 do
+        do_value = None
+        do_widget = self.param_table.cellWidget(do_row, 2)
+        if isinstance(do_widget, QComboBox):
+            do_text = do_widget.currentText().strip()
+        else:
+            do_item = self.param_table.item(do_row, 2)
+            do_text = do_item.text().strip() if do_item else ""
+        try:
+            do_value = float(do_text)
+        except ValueError:
+            print(f"换热管外径格式错误（输入：{do_text}），需为数字")
+            return
+
+        # 2.2 换热管排列方式（统一归类：正三角形/转角正三角形→三角形排列；正方形/转角正方形→正方形排列）
+        range_type_raw = None
+        range_type_widget = self.param_table.cellWidget(range_type_row, 2)
+        if isinstance(range_type_widget, QComboBox):
+            range_type_raw = range_type_widget.currentText().strip()
+        else:
+            range_type_item = self.param_table.item(range_type_row, 2)
+            range_type_raw = range_type_item.text().strip() if range_type_item else ""
+        # 排列方式归类判断
+        if range_type_raw in ["正三角形", "转角正三角形"]:
+            range_type = "三角形排列"
+        elif range_type_raw in ["正方形", "转角正方形"]:
+            range_type = "正方形排列"
+        else:
+            print(f"无效排列方式：{range_type_raw}，仅支持'正三角形'/'转角正三角形'/'正方形'/'转角正方形'")
+            return
+
+        # 2.3 管程程数（仅支持2/4/6管程，匹配文档）
+        tube_pass = None
+        tube_pass_widget = self.param_table.cellWidget(tube_pass_row, 2)
+        if isinstance(tube_pass_widget, QComboBox):
+            tube_pass = tube_pass_widget.currentText().strip()
+        else:
+            tube_pass_item = self.param_table.item(tube_pass_row, 2)
+            tube_pass = tube_pass_item.text().strip() if tube_pass_item else ""
+        if tube_pass not in ["2", "4", "6"]:
+            print(f"不支持的管程数：{tube_pass}，仅支持2/4/6管程")
+            return
+
+        # 3. 构建文档匹配的分程隔板中心距映射表（按换热器类型分类）
+        # 3.1 浮头式换热器（AES、BES）：2/4/6管程数据一致
+        aes_bes_map = {
+            10.0: {"三角形排列": 28.0, "正方形排列": 28.0},
+            12.0: {"三角形排列": 30.0, "正方形排列": 30.0},
+            14.0: {"三角形排列": 32.0, "正方形排列": 32.0},
+            16.0: {"三角形排列": 35.0, "正方形排列": 35.0},
+            19.0: {"三角形排列": 38.0, "正方形排列": 38.0},
+            20.0: {"三角形排列": 40.0, "正方形排列": 40.0},
+            22.0: {"三角形排列": 42.0, "正方形排列": 42.0},
+            25.0: {"三角形排列": 44.0, "正方形排列": 44.0},
+            30.0: {"三角形排列": 50.0, "正方形排列": 50.0},
+            32.0: {"三角形排列": 52.0, "正方形排列": 52.0},
+            35.0: {"三角形排列": 56.0, "正方形排列": 56.0},
+            38.0: {"三角形排列": 60.0, "正方形排列": 60.0},
+            45.0: {"三角形排列": 68.0, "正方形排列": 68.0},
+            50.0: {"三角形排列": 76.0, "正方形排列": 76.0},
+            55.0: {"三角形排列": 78.0, "正方形排列": 78.0},
+            57.0: {"三角形排列": 80.0, "正方形排列": 80.0},
+        }
+
+        # 3.2 U形管式换热器：2管程竖直中心距单独配置，4/6管程竖直=浮头式，水平单独配置
+        u_tube_2pass_vertical_map = {
+            10.0: 40.0, 12.0: 48.0, 14.0: 60.0, 16.0: 64.0, 19.0: 80.0,
+            20.0: 80.0, 22.0: 90.0, 25.0: 100.0, 30.0: 120.0, 32.0: 130.0,
+            35.0: 140.0, 38.0: 152.0, 45.0: 180.0, 50.0: 200.0, 55.0: 220.0, 57.0: 230.0
+        }
+
+        u_tube_horizontal_map = {
+            10.0: 40.0, 12.0: 48.0, 14.0: 60.0, 16.0: 64.0, 19.0: 80.0,
+            20.0: 80.0, 22.0: 90.0, 25.0: 100.0, 30.0: 120.0, 32.0: 130.0,
+            35.0: 140.0, 38.0: 152.0, 45.0: 180.0, 50.0: 200.0, 55.0: 220.0, 57.0: 230.0
+        }
+
+        # 4. 按换热器类型+管程数更新中心距
+        # 4.1 浮头式换热器（AES、BES）
+        if self.heat_exchanger in ["AES", "BES"]:
+            # 获取浮头式对应的中心距（竖直/水平一致）
+            if do_value not in aes_bes_map or range_type not in aes_bes_map[do_value]:
+                print(f"浮头式换热器：未找到外径{do_value}mm+{range_type}的分程隔板中心距数据")
                 return
+            sn_value = aes_bes_map[do_value][range_type]
 
-            # 中心距映射表（表6-2）
-            center_distance_map = {
-                (10.0, "正三角形"): 28.0,
-                (10.0, "转角正三角形"): 28.0,
-                (10.0, "正方形"): 30.0,
-                (10.0, "转角正方形"): 30.0,
-                (12.0, "正三角形"): 30.0,
-                (12.0, "转角正三角形"): 30.0,
-                (12.0, "正方形"): 32.0,
-                (12.0, "转角正方形"): 32.0,
-                (14.0, "正三角形"): 32.0,
-                (14.0, "转角正三角形"): 32.0,
-                (14.0, "正方形"): 35.0,
-                (14.0, "转角正方形"): 35.0,
-                (16.0, "正三角形"): 35.0,
-                (16.0, "转角正三角形"): 35.0,
-                (16.0, "正方形"): 38.0,
-                (16.0, "转角正方形"): 38.0,
-                (19.0, "正三角形"): 38.0,
-                (19.0, "转角正三角形"): 38.0,
-                (19.0, "正方形"): 38.0,
-                (19.0, "转角正方形"): 38.0,
-                (20.0, "正三角形"): 40.0,
-                (20.0, "转角正三角形"): 40.0,
-                (20.0, "正方形"): 42.0,
-                (20.0, "转角正方形"): 42.0,
-                (22.0, "正三角形"): 42.0,
-                (22.0, "转角正三角形"): 42.0,
-                (22.0, "正方形"): 44.0,
-                (22.0, "转角正方形"): 44.0,
-                (25.0, "正三角形"): 50.0,
-                (25.0, "转角正三角形"): 50.0,
-                (25.0, "正方形"): 50.0,
-                (25.0, "转角正方形"): 45.25,
-                (30.0, "正三角形"): 50.0,
-                (30.0, "转角正三角形"): 50.0,
-                (30.0, "正方形"): 52.0,
-                (30.0, "转角正方形"): 52.0,
-                (32.0, "正三角形"): 52.0,
-                (32.0, "转角正三角形"): 52.0,
-                (32.0, "正方形"): 56.0,
-                (32.0, "转角正方形"): 56.0,
-                (35.0, "正三角形"): 56.0,
-                (35.0, "转角正三角形"): 56.0,
-                (35.0, "正方形"): 60.0,
-                (35.0, "转角正方形"): 60.0,
-                (38.0, "正三角形"): 60.0,
-                (38.0, "转角正三角形"): 60.0,
-                (38.0, "正方形"): 68.0,
-                (38.0, "转角正方形"): 68.0,
-                (45.0, "正三角形"): 68.0,
-                (45.0, "转角正三角形"): 68.0,
-                (45.0, "正方形"): 76.0,
-                (45.0, "转角正方形"): 76.0,
-                (50.0, "正三角形"): 76.0,
-                (50.0, "转角正三角形"): 76.0,
-                (50.0, "正方形"): 78.0,
-                (50.0, "转角正方形"): 78.0,
-                (55.0, "正三角形"): 78.0,
-                (55.0, "转角正三角形"): 78.0,
-                (55.0, "正方形"): 80.0,
-                (55.0, "转角正方形"): 80.0,
-                (57.0, "正三角形"): 80.0,
-                (57.0, "转角正三角形"): 80.0,
-                (57.0, "正方形"): 80.0,
-                (57.0, "转角正方形"): 80.0,
-            }
+            # 更新竖直中心距
+            if sn_vertical_row != -1:
+                self._update_table_cell(sn_vertical_row, 2, f"{sn_value:.1f}")
+                print(f"浮头式({self.heat_exchanger})-{tube_pass}管程：已更新分程隔板中心距（竖直）：{sn_value:.1f}mm")
 
-            # 检查是否需要修改特定映射值
-            if (float(do_value), range_type_value) == (25.0, "转角正方形"):
-                config_value = self.get_config_value("2.10.1.2")
-                if config_value == "False":
-                    if self.heat_exchanger in ["AEU", "BEU"]:
-                        center_distance_map[(25.0, "转角正方形")] = 50.0
-                        print("根据配置，已将(25.0, '转角正方形')的SN值修改为50.0")
-                    else:
-                        center_distance_map[(25.0, "转角正方形")] = 44.0
-                        print("根据配置，已将(25.0, '转角正方形')的SN值修改为44.0")
-
-            # 查找映射关系
-            key = (float(do_value), range_type_value)
-            sn_value = center_distance_map.get(key)
-
-            if sn_value is None:
-                print(f"未找到匹配的映射关系 for {key}")
-                return
-
-            # U形换热管最小弯曲半径映射表（表6-9）
-            rmin_map = {
-                10.0: 20.0,
-                12.0: 24.0,
-                14.0: 30.0,
-                16.0: 32.0,
-                19.0: 40.0,
-                20.0: 40.0,
-                22.0: 45.0,
-                25.0: 50.0,
-                30.0: 60.0,
-                32.0: 65.0,
-                35.0: 70.0,
-                38.0: 76.0,
-                45.0: 90.0,
-                50.0: 100.0,
-                55.0: 110.0,
-                57.0: 115.0
-            }
-
-            rmin_value = rmin_map.get(float(do_value))
-            if rmin_value is None:
-                print(f"未找到换热管外径 {do_value} 对应的最小弯曲半径 Rmin")
-                return
-
-            # 根据管程数更新竖直和水平中心距
-            if tube_num == "2":
-                # 竖直：2 * Rmin
-                if sn_vertical_row != -1:
-                    self._update_table_cell(sn_vertical_row, 2, f"{2 * rmin_value:.1f}")
-                    print(f"已更新分程隔板两侧相邻管中心距（竖直）: {2 * rmin_value:.1f}")
-
-                # 水平：使用Sn（但建议隐藏）
-                if sn_horizontal_row != -1:
+            # 2管程：水平中心距隐藏/默认取竖直值；4/6管程正常更新
+            if sn_horizontal_row != -1:
+                if tube_pass == "2":
+                    # 文档要求：2管程水平中心距不可编辑，默认取竖直值
                     self._update_table_cell(sn_horizontal_row, 2, f"{sn_value:.1f}")
-                    print(f"已更新分程隔板两侧相邻管中心距（水平）: {sn_value:.1f}")
+                    print(f"浮头式({self.heat_exchanger})-2管程：水平中心距默认取竖直值：{sn_value:.1f}mm（建议隐藏）")
+                else:
+                    self._update_table_cell(sn_horizontal_row, 2, f"{sn_value:.1f}")
+                    print(f"浮头式({self.heat_exchanger})-{tube_pass}管程：已更新分程隔板中心距（水平）：{sn_value:.1f}mm")
 
-            elif tube_num in ["4", "6"]:
-                # 竖直：Sn
+        # 4.2 U形管式换热器
+        elif self.heat_exchanger in ["AEU", "BEU"]:
+            # 2管程：使用U形管专用竖直中心距数据
+            if tube_pass == "2":
+                if do_value not in u_tube_2pass_vertical_map:
+                    print(f"U形管式-2管程：未找到外径{do_value}mm的分程隔板中心距（竖直）数据")
+                    return
+                sn_vertical_value = u_tube_2pass_vertical_map[do_value]
+
+                # 更新竖直中心距
                 if sn_vertical_row != -1:
-                    self._update_table_cell(sn_vertical_row, 2, f"{sn_value:.1f}")
-                    print(f"已更新分程隔板两侧相邻管中心距（竖直）: {sn_value:.1f}")
+                    self._update_table_cell(sn_vertical_row, 2, f"{sn_vertical_value:.1f}")
+                    print(f"U形管式-2管程：已更新分程隔板中心距（竖直）：{sn_vertical_value:.1f}mm")
 
-                # 水平：2 * Rmin
+                # 2管程水平中心距按文档要求隐藏，默认取竖直值
                 if sn_horizontal_row != -1:
-                    self._update_table_cell(sn_horizontal_row, 2, f"{2 * rmin_value:.1f}")
-                    print(f"已更新分程隔板两侧相邻管中心距（水平）: {2 * rmin_value:.1f}")
+                    self._update_table_cell(sn_horizontal_row, 2, f"{sn_vertical_value:.1f}")
+                    print(f"U形管式-2管程：水平中心距默认取竖直值：{sn_vertical_value:.1f}mm（建议隐藏）")
 
+            # 4/6管程：更新竖直+水平中心距（竖直数据来自浮头式，水平数据来自U形管专用表）
+            elif tube_pass in ["4", "6"]:
+                # 获取竖直中心距（与浮头式数据一致）
+                if do_value not in aes_bes_map or range_type not in aes_bes_map[do_value]:
+                    print(f"U形管式-{tube_pass}管程：未找到外径{do_value}mm+{range_type}的分程隔板中心距（竖直）数据")
+                    return
+                sn_vertical_value = aes_bes_map[do_value][range_type]
+
+                # 更新竖直中心距
+                if sn_vertical_row != -1:
+                    self._update_table_cell(sn_vertical_row, 2, f"{sn_vertical_value:.1f}")
+                    print(f"U形管式-{tube_pass}管程：已更新分程隔板中心距（竖直）：{sn_vertical_value:.1f}mm")
+
+                # 更新水平中心距（专用映射表）
+                if do_value not in u_tube_horizontal_map:
+                    print(f"U形管式-{tube_pass}管程：未找到外径{do_value}mm的分程隔板中心距（水平）数据")
+                    return
+                sn_horizontal_value = u_tube_horizontal_map[do_value]
+                if sn_horizontal_row != -1:
+                    self._update_table_cell(sn_horizontal_row, 2, f"{sn_horizontal_value:.1f}")
+                    print(f"U形管式-{tube_pass}管程：已更新分程隔板中心距（水平）：{sn_horizontal_value:.1f}mm")
+
+            # 不支持的管程数
             else:
-                print(f"不支持的管程数: {tube_num}")
+                print(f"U形管式换热器：不支持{tube_pass}管程，仅支持2/4/6管程")
+
+        # 4.3 未匹配的换热器类型
+        else:
+            print(f"不支持的换热器类型：{self.heat_exchanger}，仅支持浮头式(AES/BES)和U形管式换热器")
 
     def set_tie_rod_diameter_to_16(self):
         """
@@ -3867,12 +3586,6 @@ class TubeLayoutEditor(QMainWindow):
                 self.param_table.itemChanged.connect(original_handler)
             except:
                 pass
-
-    import logging
-    from PyQt5.QtWidgets import QMessageBox, QComboBox
-
-    import logging
-    from PyQt5.QtWidgets import QMessageBox, QComboBox
 
     def update_baffle_parameters(self, changed_param_name):
         """
@@ -4211,8 +3924,9 @@ class TubeLayoutEditor(QMainWindow):
                             self.validate_input(changed_item, row)
 
                             # 处理参数联动
-                            if param_name in ["壳体内直径 Di", "换热管外径 do"]:
+                            if param_name in ["壳体内直径 Di", "换热管外径 do", "换热管排列方式"]:
                                 self.update_baffle_diameter()
+                                self.update_tube_center_distance()
                                 self.update_partition_plate_center_distance()
                             if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)"]:
                                 self.update_baffle_parameters(param_name)
@@ -4332,6 +4046,9 @@ class TubeLayoutEditor(QMainWindow):
                         combo.addItems(["未选择", "形式1", "形式2", "形式3"])
                     elif param['参数名'] == "换热管排列方式":
                         combo.addItems(["正三角形", "转角正三角形", "正方形", "转角正方形"])
+                        combo.currentIndexChanged.connect(
+                            lambda idx, r=row, p=param['参数名']: self.on_combobox_changed(r, p)
+                        )
                     elif param['参数名'] == "折流板切口方向":
                         combo.addItems(["水平上下", "垂直左右"])
                     elif param['参数名'] == "拉杆形式":
@@ -4481,8 +4198,9 @@ class TubeLayoutEditor(QMainWindow):
                                     self.validate_input(changed_item, row)
 
                                     # 处理参数联动
-                                    if param_name in ["壳体内直径 Di", "换热管外径 do"]:
+                                    if param_name in ["壳体内直径 Di", "换热管外径 do","换热管排列方式"]:
                                         self.update_baffle_diameter()
+                                        self.update_tube_center_distance()
                                     if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)"]:
                                         self.update_baffle_parameters(param_name)
                                     if param_name in ["拉杆形式", "换热管外径 do"]:
@@ -4669,7 +4387,18 @@ class TubeLayoutEditor(QMainWindow):
                 print(f"选中的换热管外径: {selected_value}")
 
             self.update_baffle_diameter()
+            self.update_tube_center_distance()
             self.update_lagan()
+            self.update_partition_plate_center_distance()
+        elif param_name == "换热管排列方式":
+            # 获取当前选中的值
+            do_widget = self.param_table.cellWidget(row, 2)
+            if isinstance(do_widget, QComboBox):
+                selected_value = do_widget.currentText()
+
+            self.update_baffle_diameter()
+            self.update_tube_center_distance()
+            # self.update_lagan()
             self.update_partition_plate_center_distance()
 
     def none_tube(self, height_0_180, height_90_270, Di, do, centers):
@@ -5779,56 +5508,8 @@ class TubeLayoutEditor(QMainWindow):
         # 刷新视图
         self.graphics_view.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
 
-    def group_centers_by_y(self, centers: List[Tuple[float, float]], tol: float = 1e-3) -> Tuple[
-        List[List[Tuple[float, float]]], List[List[Tuple[float, float]]]]:
-        """
-        将 centers 分别按 y>0 和 y<0 分组，y 相近（在 tol 范围内）视为同一组，并对每组按 x 坐标升序排列。
-        返回一个元组：(positive_groups, negative_groups)
-        始终保持与满布状态相同的行数结构，缺失的行用空列表填充
-        """
-        from collections import defaultdict
-
-        # 获取满布状态的行键作为参考
-        full_pos_keys = set()
-        full_neg_keys = set()
-
-        # 如果存在满布状态数据，获取其行键
-        if hasattr(self, 'full_sorted_current_centers_up') and hasattr(self, 'full_sorted_current_centers_down'):
-            # 获取满布状态的行键
-            for row in self.full_sorted_current_centers_up:
-                if row:  # 确保行不为空
-                    y = row[0][1]  # 取该行第一个点的y坐标
-                    full_pos_keys.add(int(round(abs(y) / tol)))
-
-            for row in self.full_sorted_current_centers_down:
-                if row:  # 确保行不为空
-                    y = row[0][1]  # 取该行第一个点的y坐标
-                    full_neg_keys.add(int(round(abs(y) / tol)))
-
-        # 处理当前传入的圆心
-        pos_groups = defaultdict(list)
-        neg_groups = defaultdict(list)
-
-        for x, y in centers:
-            y_key = int(round(abs(y) / tol))
-            if y >= 0:
-                pos_groups[y_key].append((x, y))
-            else:
-                neg_groups[y_key].append((x, y))
-
-        # 合并满布状态的行键和当前行键
-        all_pos_keys = full_pos_keys.union(pos_groups.keys()) if full_pos_keys else sorted(pos_groups.keys())
-        all_neg_keys = full_neg_keys.union(neg_groups.keys()) if full_neg_keys else sorted(neg_groups.keys())
-
-        # 对每组按 x 坐标排序，并返回排序后的分组列表（按 y 绝对值从小到大排列）
-        sorted_pos_keys = sorted(all_pos_keys)
-        sorted_neg_keys = sorted(all_neg_keys)
-
-        # 构建结果，确保所有行都存在，缺失的行用空列表填充
-        pos_grouped = [sorted(pos_groups.get(key, [])) for key in sorted_pos_keys]
-        neg_grouped = [sorted(neg_groups.get(key, [])) for key in sorted_neg_keys]
-
-        return pos_grouped, neg_grouped
+    from typing import List, Tuple
+    from collections import defaultdict
 
     def draw_baffle_plates(self):
         """根据折流板要求切口率参数绘制折流板线段，并存储折流板位置信息"""
@@ -5904,7 +5585,7 @@ class TubeLayoutEditor(QMainWindow):
 
         if cut_direction == "水平上下":
             # 计算弦长的一半
-            chord_half_length = math.sqrt((shell_radius/2) **2 - distance_from_center** 2)
+            chord_half_length = math.sqrt((shell_radius / 2) ** 2 - distance_from_center ** 2)
 
             # 上侧线段（y=distance_from_center）并存储信息
             upper_line = self.graphics_scene.addLine(
@@ -5943,7 +5624,7 @@ class TubeLayoutEditor(QMainWindow):
 
         elif cut_direction == "垂直左右":
             # 计算弦长的一半
-            chord_half_length = math.sqrt(shell_radius **2 - distance_from_center** 2)
+            chord_half_length = math.sqrt(shell_radius ** 2 - distance_from_center ** 2)
 
             # 右侧线段（x=distance_from_center）并存储信息
             right_line = self.graphics_scene.addLine(
@@ -6315,10 +5996,89 @@ class TubeLayoutEditor(QMainWindow):
     #             marker.setData(0, "marker")
     #             col_num = (col_idx + 1)
     #             self.selected_centers.append(((selected_row + 1), col_num))
+    def group_centers_by_y(self, centers: List[Tuple[float, float]], tol: float = 1e-3) -> Tuple[
+        List[List[Tuple[float, float]]], List[List[Tuple[float, float]]]]:
+        """
+        将 centers 分别按 y>0 和 y<0 分组，y 相近（在 tol 范围内）视为同一组，并对每组按 x 坐标升序排列。
+        返回一个元组：(positive_groups, negative_groups)
+        始终保持与满布状态相同的行数结构，缺失的行用空列表填充
+
+        特殊处理：当管程分程形式为4.3或6.2时，最中间一行只有正行，没有对称的负行
+        """
+        from collections import defaultdict
+
+        # 获取当前管程分程形式
+        is_special_layout = hasattr(self, 'tube_pass_form_value') and self.tube_pass_form_value in ["4.3", "6.2"]
+
+        # 获取满布状态的行键作为参考
+        full_pos_keys = set()
+        full_neg_keys = set()
+
+        # 如果存在满布状态数据，获取其行键
+        if hasattr(self, 'full_sorted_current_centers_up') and hasattr(self, 'full_sorted_current_centers_down'):
+            # 获取满布状态的行键
+            for row in self.full_sorted_current_centers_up:
+                if row:  # 确保行不为空
+                    y = row[0][1]  # 取该行第一个点的y坐标
+                    full_pos_keys.add(int(round(abs(y) / tol)))
+
+            for row in self.full_sorted_current_centers_down:
+                if row:  # 确保行不为空
+                    y = row[0][1]  # 取该行第一个点的y坐标
+                    full_neg_keys.add(int(round(abs(y) / tol)))
+
+        # 处理当前传入的圆心
+        pos_groups = defaultdict(list)
+        neg_groups = defaultdict(list)
+
+        for x, y in centers:
+            y_key = int(round(abs(y) / tol))
+            if y >= 0:
+                pos_groups[y_key].append((x, y))
+            else:
+                neg_groups[y_key].append((x, y))
+
+        # 合并满布状态的行键和当前行键
+        all_pos_keys = full_pos_keys.union(pos_groups.keys()) if full_pos_keys else sorted(pos_groups.keys())
+        all_neg_keys = full_neg_keys.union(neg_groups.keys()) if full_neg_keys else sorted(neg_groups.keys())
+
+        # 对每组按 x 坐标排序，并按 y 绝对值从小到大排列
+        sorted_pos_keys = sorted(all_pos_keys)
+        sorted_neg_keys = sorted(all_neg_keys)
+
+        # 构建初始结果
+        pos_grouped = [sorted(pos_groups.get(key, [])) for key in sorted_pos_keys]
+        neg_grouped = [sorted(neg_groups.get(key, [])) for key in sorted_neg_keys]
+
+        # 特殊布局处理：4.3或6.2分程形式
+        if is_special_layout:
+            # 确保第一行（最中间行）只有正行，负行对应位置为空
+            # 1. 找到最中间行（y绝对值最小的正行）
+            if pos_grouped:
+                # 2. 调整负行结构：
+                #    - 如果负行数量与正行相同，第一行置为空列表
+                #    - 如果负行数量比正行少，在开头添加空列表
+                if len(neg_grouped) == len(pos_grouped):
+                    neg_grouped[0] = []  # 第一行负组强制为空
+                elif len(neg_grouped) < len(pos_grouped):
+                    # 在负行开头插入空列表，确保第一行为空
+                    neg_grouped.insert(0, [])
+
+                # 3. 确保剩余行是偶数且正负对称
+                #    从第二行开始，只保留成对的行
+                max_paired_rows = min(len(pos_grouped) - 1, len(neg_grouped) - 1)
+                pos_grouped = [pos_grouped[0]] + pos_grouped[1:1 + max_paired_rows]
+                neg_grouped = [neg_grouped[0]] + neg_grouped[1:1 + max_paired_rows]
+
+        return pos_grouped, neg_grouped
+
     def on_row_selection_changed(self):
         """响应右侧表格选中事件，高亮对应小圆和表格整行，并同步更新 self.selected_centers"""
         if not hasattr(self, 'full_sorted_current_centers_up') or not hasattr(self, 'full_sorted_current_centers_down'):
             return
+
+        # 获取当前管程分程形式，判断是否为特殊布局
+        is_special_layout = hasattr(self, 'tube_pass_form_value') and self.tube_pass_form_value in ["4.3", "6.2"]
 
         # 清除旧高亮，恢复为标准小圆
         self.clear_selection_highlight()
@@ -6358,27 +6118,41 @@ class TubeLayoutEditor(QMainWindow):
 
         # 处理所有选中的行
         for row in selected_rows:
-            # 处理下半部分（行号为负）
-            if row < len(self.full_sorted_current_centers_down):
-                centers_down = self.full_sorted_current_centers_down[row]
-                for col_idx, (x, y) in enumerate(centers_down):
-                    marker = self.graphics_scene.addEllipse(
-                        x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
-                    )
-                    marker.setData(0, "marker")
-                    col_num = -(col_idx + 1)
-                    self.selected_centers.append((-(row + 1), col_num))
+            # 特殊布局处理：如果是第一行且是特殊布局，只处理正行
+            if is_special_layout and row == 0:
+                # 只处理上半部分的第一行（最中间的行）
+                if row < len(self.full_sorted_current_centers_up):
+                    centers_up = self.full_sorted_current_centers_up[row]
+                    for col_idx, (x, y) in enumerate(centers_up):
+                        marker = self.graphics_scene.addEllipse(
+                            x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
+                        )
+                        marker.setData(0, "marker")
+                        col_num = (col_idx + 1)
+                        self.selected_centers.append(((row + 1), col_num))
+            else:
+                # 正常处理：上下对称行
+                # 处理下半部分（行号为负）
+                if row < len(self.full_sorted_current_centers_down):
+                    centers_down = self.full_sorted_current_centers_down[row]
+                    for col_idx, (x, y) in enumerate(centers_down):
+                        marker = self.graphics_scene.addEllipse(
+                            x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
+                        )
+                        marker.setData(0, "marker")
+                        col_num = -(col_idx + 1)
+                        self.selected_centers.append((-(row + 1), col_num))
 
-            # 处理上半部分（行号为正）
-            if row < len(self.full_sorted_current_centers_up):
-                centers_up = self.full_sorted_current_centers_up[row]
-                for col_idx, (x, y) in enumerate(centers_up):
-                    marker = self.graphics_scene.addEllipse(
-                        x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
-                    )
-                    marker.setData(0, "marker")
-                    col_num = (col_idx + 1)
-                    self.selected_centers.append(((row + 1), col_num))
+                # 处理上半部分（行号为正）
+                if row < len(self.full_sorted_current_centers_up):
+                    centers_up = self.full_sorted_current_centers_up[row]
+                    for col_idx, (x, y) in enumerate(centers_up):
+                        marker = self.graphics_scene.addEllipse(
+                            x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
+                        )
+                        marker.setData(0, "marker")
+                        col_num = (col_idx + 1)
+                        self.selected_centers.append(((row + 1), col_num))
 
     def clear_selection_highlight(self):
         if not hasattr(self, 'selected_centers') or not self.selected_centers:
@@ -7788,7 +7562,7 @@ class TubeLayoutEditor(QMainWindow):
     def on_lagan_click(self):
         """拉杆点击事件 - 直接调用build_lagan方法"""
         # 修正导入语句，QPointF来自QtCore
-        from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QGraphicsEllipseItem
+        from PyQt5.QtWidgets import QMessageBox, QGraphicsEllipseItem
         from PyQt5.QtCore import QPointF
 
         # 查找参数表中拉杆直径的当前值
@@ -8378,7 +8152,7 @@ class TubeLayoutEditor(QMainWindow):
         :param selected_centers: 经过对称处理后的选中中心坐标（相对坐标）
         """
         from PyQt5.QtGui import QPen, QBrush, QColor
-        from PyQt5.QtWidgets import QMessageBox, QGraphicsEllipseItem
+        from PyQt5.QtWidgets import QGraphicsEllipseItem
         from PyQt5.QtCore import Qt
 
         # 检查是否有选中的中心（相对坐标）
@@ -10520,8 +10294,8 @@ class TubeLayoutEditor(QMainWindow):
         if not selected_centers:
             return []
 
-        from PyQt5.QtCore import QPointF, QLineF, Qt
-        from PyQt5.QtGui import QPen, QColor, QBrush, QPainterPath
+        from PyQt5.QtCore import QPointF
+        from PyQt5.QtGui import QPen, QColor, QPainterPath
         from PyQt5.QtWidgets import QMessageBox, QGraphicsEllipseItem
         import math
         import ast
@@ -11259,9 +11033,8 @@ class TubeLayoutEditor(QMainWindow):
 
     def build_center_dangban(self, selected_centers, block_thickness, block_width):
         """构建紫色中间挡板（接收厚度和宽度参数，执行绘制逻辑）"""
-        from PyQt5.QtCore import Qt, QPointF
-        from PyQt5.QtGui import QPen, QBrush, QColor, QPainterPath, QPainter
-        from PyQt5.QtWidgets import QMessageBox, QGraphicsRectItem, QGraphicsPathItem
+        from PyQt5.QtGui import QPen, QBrush, QColor, QPainterPath
+        from PyQt5.QtWidgets import QMessageBox
         import ast
 
         # 1. 解析并校验选中的圆心坐标
