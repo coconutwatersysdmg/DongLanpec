@@ -2254,6 +2254,8 @@ class TubeLayoutEditor(QMainWindow):
             # 强制刷新场景
             self.graphics_scene.update()
             QApplication.processEvents()
+            tube_pass=self.get_tube_pass_count()
+
             self.update_SN()
             self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
                 self.global_centers)
@@ -2644,6 +2646,7 @@ class TubeLayoutEditor(QMainWindow):
         lev_row = -1  # 分程隔板两侧相邻管中心距（水平）行索引
         row_count = self.param_table.rowCount()
 
+
         for row in range(row_count):
             param_name_item = self.param_table.item(row, 1)
             if not param_name_item:
@@ -2694,6 +2697,28 @@ class TubeLayoutEditor(QMainWindow):
                             cell_item.setFlags(cell_item.flags() & ~Qt.ItemIsEditable)
                             # 设置灰色背景
                             cell_item.setBackground(QBrush(QColor(240, 240, 240)))
+
+                    elif tube_pass == 4:
+
+                        if self.tube_pass_form_value == "4.1" and self.heat_exchanger in ["AES", "BES"]:
+                            if cell_widget:
+                                cell_widget.setEnabled(False)
+                                cell_widget.setStyleSheet("background-color: #f0f0f0;")  # 统一灰色背景
+                            if cell_item:
+                                # 取消编辑权限（清除ItemIsEditable标志）
+                                cell_item.setFlags(cell_item.flags() & ~Qt.ItemIsEditable)
+                                # 设置灰色背景
+                                cell_item.setBackground(QBrush(QColor(240, 240, 240)))
+                        else:
+                            # 其他管程数时：恢复默认可编辑状态
+                            if cell_widget:
+                                cell_widget.setEnabled(True)
+                                cell_widget.setStyleSheet("")  # 清空样式，恢复默认
+                            if cell_item:
+                                # 恢复编辑权限（添加ItemIsEditable标志）
+                                cell_item.setFlags(cell_item.flags() | Qt.ItemIsEditable)
+                                # 恢复白色默认背景
+                                cell_item.setBackground(QBrush(QColor(255, 255, 255)))
                     else:
                         # 其他管程数时：恢复默认可编辑状态
                         if cell_widget:
@@ -2711,32 +2736,81 @@ class TubeLayoutEditor(QMainWindow):
 
     def update_lagan(self):
         try:
-            # 从all_params中获取所需参数值
+            # 1. 查找参数表中各关键参数的行索引（新增：查找换热管外径、拉杆形式的行索引）
+            do_row = -1  # 换热管外径行索引
+            lg_type_row = -1  # 拉杆形式行索引
+            lg_diameter_row = -1  # 拉杆直径行索引
+            row_count = self.param_table.rowCount()
+
+            for row in range(row_count):
+                param_name_item = self.param_table.item(row, 1)
+                if not param_name_item:
+                    continue
+                param_name = param_name_item.text().strip()
+
+                if param_name == "换热管外径 do":
+                    do_row = row
+                elif param_name == "拉杆形式":
+                    lg_type_row = row
+                elif param_name == "拉杆直径":
+                    lg_diameter_row = row
+
+            # 2. 获取关键参数值（修改：从表格中获取换热管外径，不再使用all_params）
             do_value = None
             lg_type_value = None
             lg_current_value = None  # 当前拉杆直径值
 
-            # 预设的do选项
+            # 2.1 获取换热管外径 do（仿照update_baffle_diameter的获取逻辑）
+            if do_row != -1:
+                # 先检查单元格是否为下拉框（QComboBox）
+                do_widget = self.param_table.cellWidget(do_row, 2)
+                if isinstance(do_widget, QComboBox):
+                    try:
+                        selected_text = do_widget.currentText().strip()
+                        if selected_text:
+                            do_value = float(selected_text)
+                            print(f"从下拉框获取到换热管外径 do: {do_value}")
+                    except ValueError as e:
+                        print(f"换热管外径 do（下拉框）转换错误: {e}, 选中值: {selected_text}")
+                        return
+                else:
+                    # 单元格为文本项（QTableWidgetItem）
+                    do_item = self.param_table.item(do_row, 2)
+                    if do_item and do_item.text().strip():
+                        try:
+                            do_value = float(do_item.text().strip())
+                            print(f"从文本项获取到换热管外径 do: {do_value}")
+                        except ValueError as e:
+                            print(f"换热管外径 do（文本项）转换错误: {e}, 参数值: {do_item.text()}")
+                            return
+
+            # 2.2 获取拉杆形式（从表格中获取，不再使用all_params）
+            if lg_type_row != -1:
+                lg_type_widget = self.param_table.cellWidget(lg_type_row, 2)
+                if isinstance(lg_type_widget, QComboBox):
+                    lg_type_value = lg_type_widget.currentText().strip()
+                    print(f"从下拉框获取到拉杆形式: {lg_type_value}")
+                else:
+                    lg_type_item = self.param_table.item(lg_type_row, 2)
+                    if lg_type_item and lg_type_item.text().strip():
+                        lg_type_value = lg_type_item.text().strip()
+                        print(f"从文本项获取到拉杆形式: {lg_type_value}")
+
+            # 2.3 获取当前拉杆直径值（从表格中获取，不再使用all_params）
+            if lg_diameter_row != -1:
+                lg_diameter_widget = self.param_table.cellWidget(lg_diameter_row, 2)
+                if isinstance(lg_diameter_widget, QComboBox):
+                    lg_current_value = lg_diameter_widget.currentText().strip()
+                else:
+                    lg_diameter_item = self.param_table.item(lg_diameter_row, 2)
+                    if lg_diameter_item:
+                        lg_current_value = lg_diameter_item.text().strip()
+                print(f"当前拉杆直径: {lg_current_value}")
+
+            # 预设的do选项（保留原逻辑）
             do_options = ["10", "12", "14", "16", "19", "22", "25", "30", "32", "35", "38", "45", "50", "55", "57"]
 
-            # 遍历all_params获取需要的参数值
-            for param in self.all_params:
-                if param['参数名'] == "换热管外径 do":
-                    try:
-                        # 处理可能的空格
-                        do_value = float(param['参数值'].strip())
-                        print(f"获取到换热管外径 do: {do_value}")
-                    except ValueError as e:
-                        print(f"换热管外径 do 转换错误: {e}, 参数值: {param['参数值']}")
-                        return
-                elif param['参数名'] == "拉杆形式":
-                    lg_type_value = param['参数值']
-                    print(f"获取到拉杆形式: {lg_type_value}")
-                elif param['参数名'] == "拉杆直径":
-                    lg_current_value = param['参数值']
-                    print(f"当前拉杆直径: {lg_current_value}")
-
-            # 检查必要参数
+            # 检查必要参数（保留原逻辑）
             if do_value is None:
                 print("缺少必要参数: 换热管外径 do")
                 return
@@ -2744,23 +2818,7 @@ class TubeLayoutEditor(QMainWindow):
                 print("缺少必要参数: 拉杆形式")
                 return
 
-            # 查找拉杆直径在表格中的行索引
-            lg_diameter_row = -1
-            row_count = self.param_table.rowCount()
-            print(f"表格总行数: {row_count}")
-
-            for row in range(row_count):
-                param_name_item = self.param_table.item(row, 1)
-                if param_name_item:
-                    param_name = param_name_item.text().strip()
-                    # 增加调试信息，查看所有参数名
-                    # print(f"行 {row}: 参数名={param_name}")
-                    if param_name == "拉杆直径":
-                        lg_diameter_row = row
-                        print(f"找到拉杆直径参数行: 行索引={lg_diameter_row}")
-                        break
-
-            # 如果找不到拉杆直径行，尝试更宽松的匹配
+            # 补充：若未找到拉杆直径行，尝试模糊匹配（保留原逻辑）
             if lg_diameter_row == -1:
                 print("未找到精确匹配的拉杆直径参数行，尝试模糊匹配...")
                 for row in range(row_count):
@@ -2770,12 +2828,12 @@ class TubeLayoutEditor(QMainWindow):
                         print(f"模糊匹配找到拉杆直径参数行: 行索引={lg_diameter_row}，参数名={param_name_item.text()}")
                         break
 
-            # 如果仍然找不到拉杆直径行，返回错误
+            # 如果仍然找不到拉杆直径行，返回错误（保留原逻辑）
             if lg_diameter_row == -1:
                 print("错误: 未找到拉杆直径参数行，请检查表格结构")
                 return
 
-            # 临时断开信号避免循环触发
+            # 临时断开信号避免循环触发（保留原逻辑）
             original_handler = None
             if hasattr(self, 'handle_param_change'):
                 try:
@@ -2785,7 +2843,7 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception as e:
                     print(f"断开信号连接时出错: {e}")
 
-            # 根据拉杆形式处理拉杆直径
+            # 根据拉杆形式处理拉杆直径（保留原逻辑）
             try:
                 if lg_type_value == "焊接拉杆":
                     print("处理焊接拉杆类型")
@@ -2831,13 +2889,10 @@ class TubeLayoutEditor(QMainWindow):
                     # 定义螺纹拉杆直径选项
                     thread_options = ["10", "12", "16", "27"]
 
-                    # 确定基于换热管外径的默认值
-                    # 这里根据行业惯例设置：do≤19→10，20≤do≤25→12，26≤do≤38→16，do>38→27
-                    if do_value <= 19:
-                        default_value = "10"
-                    elif do_value <= 25:  # 你的情况：25会进入这里
+                    # 确定基于换热管外径的默认值（保留原逻辑）
+                    if 25 > do_value >= 19:
                         default_value = "12"
-                    elif do_value <= 38:
+                    elif do_value <= 32:
                         default_value = "16"
                     else:
                         default_value = "27"
@@ -2875,7 +2930,7 @@ class TubeLayoutEditor(QMainWindow):
             except Exception as e:
                 print(f"处理拉杆直径时出错: {e}")
 
-            # 重新连接信号
+            # 重新连接信号（保留原逻辑）
             if original_handler:
                 try:
                     self.param_table.itemChanged.connect(original_handler)
@@ -2883,13 +2938,13 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception as e:
                     print(f"重新连接信号时出错: {e}")
 
-            # 更新all_params中的拉杆直径值
+            # 更新all_params中的拉杆直径值（保留原逻辑，仅用于同步all_params，获取逻辑已不依赖它）
             for param in self.all_params:
                 if param['参数名'] == "拉杆直径":
                     if lg_type_value == "焊接拉杆":
                         param['参数值'] = str(do_value)
                     else:
-                        param['参数值'] = default_value
+                        param['参数值'] = default_value if 'default_value' in locals() else ""
                     print(f"已更新all_params中的拉杆直径为: {param['参数值']}")
                     break
 
@@ -3935,6 +3990,16 @@ class TubeLayoutEditor(QMainWindow):
                                 self.update_partition_plate_center_distance()
                             if param_name == "管程程数":
                                 # 当管程程数变化时，更新管程分程形式的图片
+                                tube_pass = self.get_tube_pass_count()
+                                if tube_pass == "2":
+                                    self.tube_pass_form_value = "2"
+                                elif tube_pass == "4":
+                                    self.tube_pass_form_value = "4.1"
+                                elif tube_pass == "6":
+                                    self.tube_pass_form_value = "6.1"
+                                print(self.tube_pass_form_value)
+                                print("Gordon")
+
                                 self.update_SN()
                                 # 获取最新的管程程数值
                                 tube_pass = changed_item.text()
@@ -4056,6 +4121,16 @@ class TubeLayoutEditor(QMainWindow):
                     elif param['参数名'] == "滑道定位":
                         combo.addItems(["滑道与管板焊接", "滑道与第一块折流板焊接"])
                     elif param['参数名'] == "管程程数":
+                        tube_pass = self.get_tube_pass_count()
+                        if tube_pass == "2":
+                            self.tube_pass_form_value = "2"
+                        elif tube_pass == "4":
+                            self.tube_pass_form_value = "4.1"
+                        elif tube_pass == "6":
+                            self.tube_pass_form_value = "6.1"
+                        print(self.tube_pass_form_value)
+                        print("Gordon")
+
                         current_value = str(param['参数值']) if param['参数值'] is not None else ""
 
                         if self.heat_exchanger in ["AEU", "BEU"]:
@@ -4198,7 +4273,7 @@ class TubeLayoutEditor(QMainWindow):
                                     self.validate_input(changed_item, row)
 
                                     # 处理参数联动
-                                    if param_name in ["壳体内直径 Di", "换热管外径 do","换热管排列方式"]:
+                                    if param_name in ["壳体内直径 Di", "换热管外径 do", "换热管排列方式"]:
                                         self.update_baffle_diameter()
                                         self.update_tube_center_distance()
                                     if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)"]:
@@ -4207,6 +4282,15 @@ class TubeLayoutEditor(QMainWindow):
                                         self.update_lagan()
                                     if param_name == "管程程数":
                                         # 当管程程数变化时，更新管程分程形式的图片
+                                        tube_pass = self.get_tube_pass_count()
+                                        if tube_pass == "2":
+                                            self.tube_pass_form_value = "2"
+                                        elif tube_pass == "4":
+                                            self.tube_pass_form_value = "4.1"
+                                        elif tube_pass == "6":
+                                            self.tube_pass_form_value = "6.1"
+                                        print(self.tube_pass_form_value)
+                                        print("Gordon")
                                         self.update_SN()
                                         self.update_partition_plate_center_distance()
                                         # 获取最新的管程程数值
@@ -4366,6 +4450,7 @@ class TubeLayoutEditor(QMainWindow):
         """当管程程数变化时，更新分程形式下拉框的图片"""
         if self.tube_pass_form_combo and self.tube_pass_combo:
             tube_pass = self.tube_pass_combo.currentText()
+
             self.load_tube_pass_images(self.tube_pass_form_combo, tube_pass)
             self.update_partition_plate_center_distance()
 
@@ -4374,6 +4459,18 @@ class TubeLayoutEditor(QMainWindow):
         if self.tube_pass_form_combo:
             # 获取当前选择项的标识作为参数值
             self.tube_pass_form_value = self.tube_pass_form_combo.itemData(index, Qt.UserRole)
+            tube_pass = self.get_tube_pass_count()
+            if self.tube_pass_form_value is None:
+                tube_pass = self.get_tube_pass_count()
+                if tube_pass == "2":
+                    self.tube_pass_form_value = "2"
+                elif tube_pass == "4":
+                    self.tube_pass_form_value = "4.1"
+                elif tube_pass == "6":
+                    self.tube_pass_form_value = "6.1"
+
+
+            self.update_SN()
 
     def on_combobox_changed(self, row, param_name):
         """处理下拉框类型参数的变更事件"""
