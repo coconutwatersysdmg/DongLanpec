@@ -250,6 +250,12 @@ class ClickableCircleItem(QGraphicsEllipseItem):
 
 
 # 预览对话框 -----------------------------------------------------
+from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QTableWidget, QTableWidgetItem,
+                             QDialogButtonBox, QLabel)
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QPixmap
+
+
 class PreviewDialog(QDialog):
     def __init__(self, parameters, parent=None):
         super().__init__(parent)
@@ -295,19 +301,33 @@ class PreviewDialog(QDialog):
             # 创建单元格项并设置数据
             num_item = QTableWidgetItem(num)
             name_item = QTableWidgetItem(name)
-            value_item = QTableWidgetItem(value)
             unit_item = QTableWidgetItem(unit)
 
             # 设置单元格
             self.table.setItem(row, 0, num_item)
             self.table.setItem(row, 1, name_item)
-            self.table.setItem(row, 2, value_item)
             self.table.setItem(row, 3, unit_item)
+
+            # 特殊处理管程分程形式，显示图片而非文本
+            if name == "管程分程形式" and "image" in param:
+                # 创建标签来显示图片
+                img_label = QLabel()
+                img_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                # 设置图片并保持比例
+                pixmap = param["image"]
+                if not pixmap.isNull():
+                    img_label.setPixmap(pixmap)
+                # 将标签设置为单元格部件
+                self.table.setCellWidget(row, 2, img_label)
+            else:
+                # 普通参数，使用文本
+                value_item = QTableWidgetItem(value)
+                self.table.setItem(row, 2, value_item)
 
         # 调整列宽后，重新设置对齐方式（确保生效）
         self.table.setColumnWidth(0, 50)
         self.table.setColumnWidth(1, 300)
-        self.table.setColumnWidth(2, 250)
+        self.table.setColumnWidth(2, 250)  # 此列可能包含图片，宽度适当加大
         self.table.setColumnWidth(3, 80)
 
         # 在数据填充完成后，强制设置对齐方式
@@ -317,11 +337,15 @@ class PreviewDialog(QDialog):
             if item:
                 item.setTextAlignment(Qt.AlignCenter)
 
-            # 其他列左对齐
-            for col in range(1, 4):
+            # 其他列左对齐（参数名和单位）
+            for col in [1, 3]:
                 item = self.table.item(row, col)
                 if item:
                     item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+            # 处理参数值列的对齐方式（如果是文本项）
+            if self.table.item(row, 2):
+                self.table.item(row, 2).setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         layout.addWidget(self.table)
 
@@ -3286,12 +3310,6 @@ class TubeLayoutEditor(QMainWindow):
                         current_user_horizontal_value = value_item.text().strip() if value_item else ""
                     break
 
-            # 若用户已手动设置有效值（非空、非0），则跳过自动更新
-            if current_user_horizontal_value and current_user_horizontal_value != "0":
-                print(f"用户已设置水平中心距为 {current_user_horizontal_value}，跳过自动更新")
-                return
-            # -------------------------- 原有逻辑开始 --------------------------
-
             # 查找参数表中相关参数的行索引
             do_row = -1
             range_type_row = -1
@@ -4325,7 +4343,7 @@ class TubeLayoutEditor(QMainWindow):
 
                         if self.heat_exchanger in ["AEU", "BEU"]:
                             combo.addItems(["2", "4", "6", "8", "10", "12"])
-                        if self.heat_exchanger in ["AES", "BES"]:
+                        elif self.heat_exchanger in ["AES", "BES"]:  # 这里将第二个if改为elif
                             combo.addItems(["2", "4", "6", "8", "10", "12"])
                             if current_value == "1":
                                 combo.setCurrentIndex(0)
@@ -4472,6 +4490,7 @@ class TubeLayoutEditor(QMainWindow):
                                     if param_name == "管程程数":
                                         # 当管程程数变化时，更新管程分程形式的图片
                                         self.update_SN()
+                                        self.update_partition_plate_center_distance()
                                         # 获取最新的管程程数值
                                         tube_pass = changed_item.text()
                                         # 更新分程形式下拉框的图片
@@ -4630,6 +4649,7 @@ class TubeLayoutEditor(QMainWindow):
         if self.tube_pass_form_combo and self.tube_pass_combo:
             tube_pass = self.tube_pass_combo.currentText()
             self.load_tube_pass_images(self.tube_pass_form_combo, tube_pass)
+            self.update_partition_plate_center_distance()
 
     def on_tube_pass_form_changed(self, index):
         """管程分程形式选择变化时，更新存储的参数值"""
@@ -5458,46 +5478,95 @@ class TubeLayoutEditor(QMainWindow):
         self.main_layout.addWidget(self.footer_frame)
 
     def show_preview(self):
-        """显示参数预览对话框"""
-        # 这里需要获取当前页面的参数表格
+        """显示参数预览对话框，含管程分程形式对应图片"""
+        # 1. 定义需要隐藏的参数列表
+        hidden_params = [
+            "滑道定位", "滑道高度", "滑道厚度", "滑道与竖直中心线夹角",
+            "旁路挡板厚度", "防冲板形式", "防冲板厚度", "防冲板折边角度",
+            "防冲板宽度", "防冲板方位角",
+            "至圆筒内壁距离", "切边长度 L1",
+            "切边高度 h", "中间挡板厚度", "中间挡板宽度", "旁路挡板宽度"
+        ]
+
+        # 2. 获取当前页面的参数表格
         current_page = self.stacked_widget.currentWidget()
         param_table = current_page.findChild(QTableWidget)
 
         if param_table:
             parameters = []
+            # 获取当前管程分程形式标识（核心：用于匹配图片）
+            current_tube_partition = str(self.tube_pass_partition) if hasattr(self, 'tube_pass_partition') else ""
+            # 图片基础路径（完全复用load_tube_pass_images的路径规则）
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            tube_pattern_base_path = os.path.join(current_dir, "static", "TubePattern")
+
             for row in range(param_table.rowCount()):
-                # 获取序号（假设序号在第一列）
-                num_item = param_table.item(row, 0)
-                num = num_item.text() if num_item else str(row + 1)  # 如果没有序号，使用行号
-
+                # 3. 提取参数名，过滤隐藏参数
                 name_item = param_table.item(row, 1)
-                name = name_item.text() if name_item else "N/A"
+                param_name = name_item.text() if name_item else "N/A"
+                if param_name in hidden_params:
+                    continue  # 隐藏参数直接跳过，不加入预览
 
-                # 获取参数值
-                widget = param_table.cellWidget(row, 2)
-                if widget and isinstance(widget, QComboBox):
-                    value = widget.currentText()
+                # 4. 提取序号（第一列）
+                num_item = param_table.item(row, 0)
+                param_num = num_item.text() if num_item else str(row + 1)  # 无序号时用行号
+
+                # 5. 提取参数值+管程分程形式的图片
+                param_value = "N/A"
+                param_image = None  # 存储管程分程形式的图片
+                cell_widget = param_table.cellWidget(row, 2)
+
+                if cell_widget and isinstance(cell_widget, QComboBox):
+                    # 非管程分程形式的下拉框：用显示文本作为值
+                    if param_name != "管程分程形式":
+                        param_value = cell_widget.currentText()
+                    # 管程分程形式：特殊处理（值+图片）
+                    else:
+                        # 参数值：用self.tube_pass_partition（如"4.1"、"6.2"）
+                        param_value = current_tube_partition if current_tube_partition else "未选择"
+                        # 图片：根据current_tube_partition匹配对应文件
+                        if current_tube_partition and os.path.exists(tube_pattern_base_path):
+                            # 文件名映射（完全对齐load_tube_pass_images的命名规则）
+                            tube_img_filename = f"{current_tube_partition}.png"
+                            tube_img_path = os.path.join(tube_pattern_base_path, tube_img_filename)
+
+                            # 校验图片文件是否存在，存在则加载并缩放（保持100*85尺寸，与下拉框一致）
+                            if os.path.exists(tube_img_path):
+                                loaded_pixmap = QPixmap(tube_img_path)
+                                if not loaded_pixmap.isNull():
+                                    # 缩放图片：保持比例+平滑处理，避免拉伸变形
+                                    param_image = loaded_pixmap.scaled(
+                                        100, 85, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                                    )
                 else:
+                    # 非下拉框单元格：直接取文本值
                     value_item = param_table.item(row, 2)
-                    value = value_item.text() if value_item else "N/A"
+                    param_value = value_item.text() if value_item else "N/A"
 
-                # 获取单位
+                # 6. 提取单位（第四列）
                 unit_item = param_table.item(row, 3)
-                unit = unit_item.text() if unit_item else "N/A"
+                param_unit = unit_item.text() if unit_item else "N/A"
 
-                parameters.append({
-                    '序号': num,
-                    '参数名': name,
-                    '参数值': value,
-                    '单位': unit
-                })
+                # 7. 组装参数数据（含图片，仅管程分程形式有）
+                param_data = {
+                    "序号": param_num,
+                    "参数名": param_name,
+                    "参数值": param_value,
+                    "单位": param_unit
+                }
+                # 仅管程分程形式添加图片（确保图片非空）
+                if param_name == "管程分程形式" and param_image and not param_image.isNull():
+                    param_data["image"] = param_image  # 存入图片，供预览对话框使用
 
-            # 检查参数是否正确
+                parameters.append(param_data)
+
+            # 8. 校验参数完整性（避免缺失关键字段）
             for param in parameters:
-                if not all(key in param for key in ['序号', '参数名', '参数值', '单位']):
+                if not all(key in param for key in ["序号", "参数名", "参数值", "单位"]):
                     QMessageBox.warning(self, "警告", f"参数不完整: {param}")
                     return
 
+            # 9. 打开预览对话框（传递含图片的参数数据）
             dialog = PreviewDialog(parameters, self)
             dialog.exec_()
         else:
