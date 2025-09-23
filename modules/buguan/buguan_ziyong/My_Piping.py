@@ -474,6 +474,9 @@ class TubeLayoutEditor(QMainWindow):
         self.del_centers = []
         self.all_params = []
         self.red_dangban = []
+        self.original_param_values = {}  # 存储原始参数值 {(row, col): value}
+        self.modified_rows = set()  # 存储被修改的行索引
+        self.is_loading_data = False  # 防止初始化时误触发
         self.center_dangguan = []
         self.center_dangban = []
         self.side_dangban = []
@@ -2254,7 +2257,7 @@ class TubeLayoutEditor(QMainWindow):
             # 强制刷新场景
             self.graphics_scene.update()
             QApplication.processEvents()
-            tube_pass=self.get_tube_pass_count()
+            tube_pass = self.get_tube_pass_count()
 
             self.update_SN()
             self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
@@ -2646,7 +2649,6 @@ class TubeLayoutEditor(QMainWindow):
         lev_row = -1  # 分程隔板两侧相邻管中心距（水平）行索引
         row_count = self.param_table.rowCount()
 
-
         for row in range(row_count):
             param_name_item = self.param_table.item(row, 1)
             if not param_name_item:
@@ -2733,6 +2735,115 @@ class TubeLayoutEditor(QMainWindow):
         # 5. 分别更新“竖直”和“水平”两行的状态
         update_row_status(sn_row)  # 处理分程隔板两侧相邻管中心距（竖直）
         update_row_status(lev_row)  # 处理分程隔板两侧相邻管中心距（水平）
+
+    def setup_modification_detection(self):
+        """设置参数修改检测机制"""
+        # 连接表格变化信号
+        self.param_table.itemChanged.connect(self.on_param_changed)
+
+    def on_param_changed(self, item):
+        """参数表格单元格内容变化时的处理"""
+        if self.is_loading_data or self._is_validating:
+            return  # 防止初始化或验证过程中误触发
+
+        row = item.row()
+        column = item.column()
+
+        # 只处理参数值列（第2列）的变化
+        if column != 2:
+            return
+
+        # 获取当前值和原始值
+        current_value = item.text()
+        original_value = self.original_param_values.get((row, column), "")
+
+        # 检查值是否真的发生变化
+        if current_value != original_value:
+            # 值发生变化，标记该行为已修改
+            self.modified_rows.add(row)
+            self.highlight_modified_row(row)
+            print(f"行 {row} 被修改: '{original_value}' -> '{current_value}'")
+        else:
+            # 值改回原始值，移除修改标记
+            if row in self.modified_rows:
+                self.modified_rows.remove(row)
+                self.reset_row_background(row)
+                print(f"行 {row} 恢复原始值")
+
+    # def on_combobox_changed(self, row, current_text):
+    #     """下拉框内容变化时的处理"""
+    #     if self.is_loading_data or self._is_validating:
+    #         return
+    #
+    #     original_value = self.original_param_values.get((row, 2), "")
+    #
+    #     if current_text != original_value:
+    #         self.modified_rows.add(row)
+    #         self.highlight_modified_row(row)
+    #         print(f"行 {row} 下拉框被修改: '{original_value}' -> '{current_text}'")
+    #     else:
+    #         if row in self.modified_rows:
+    #             self.modified_rows.remove(row)
+    #             self.reset_row_background(row)
+    #             print(f"行 {row} 下拉框恢复原始值")
+
+    def highlight_modified_row(self, row):
+        """高亮显示被修改的行（浅蓝色背景）"""
+        light_blue = QBrush(QColor(173, 216, 230))  # 浅蓝色
+
+        for col in range(self.param_table.columnCount()):
+            item = self.param_table.item(row, col)
+            if item:
+                item.setBackground(light_blue)
+
+    def reset_row_background(self, row):
+        """重置行的背景色为默认（白色背景）"""
+        default_brush = QBrush(QColor(255, 255, 255))  # 白色
+
+        for col in range(self.param_table.columnCount()):
+            item = self.param_table.item(row, col)
+            if item:
+                item.setBackground(default_brush)
+
+    def update_all_row_backgrounds(self):
+        """更新所有行的背景色（根据修改状态）"""
+        for row in range(self.param_table.rowCount()):
+            if row in self.modified_rows:
+                self.highlight_modified_row(row)
+            else:
+                self.reset_row_background(row)
+
+    def clear_modification_marks(self):
+        """清除所有修改标记（用于保存后重置）"""
+        # 重置背景色
+        for row in range(self.param_table.rowCount()):
+            self.reset_row_background(row)
+
+        # 清空修改记录
+        self.modified_rows.clear()
+
+        # 更新原始值记录为当前值（可选）
+        for row in range(self.param_table.rowCount()):
+            item = self.param_table.item(row, 2)
+            if item:
+                self.original_param_values[(row, 2)] = item.text()
+            else:
+                # 处理下拉框
+                combo = self.param_table.cellWidget(row, 2)
+                if isinstance(combo, QComboBox):
+                    self.original_param_values[(row, 2)] = combo.currentText()
+
+    def setup_combobox_modification_detection(self):
+        """设置下拉框的修改检测"""
+        row_count = self.param_table.rowCount()
+
+        for row in range(row_count):
+            combo_widget = self.param_table.cellWidget(row, 2)
+            if isinstance(combo_widget, QComboBox):
+                # 为每个下拉框连接信号，使用lambda确保正确的row值传递
+                combo_widget.currentTextChanged.connect(
+                    lambda text, r=row: self.on_combobox_changed(r, text)
+                )
 
     def update_lagan(self):
         try:
@@ -3950,71 +4061,113 @@ class TubeLayoutEditor(QMainWindow):
         return ""
 
     def setup_parameter_listeners(self):
-        """设置参数表格的监听器"""
-        # 清空现有的监听器（避免重复）
+        """设置参数表格的监听器（含目标参数监听+普通单元格监听+全局on_combobox_changed绑定）"""
+        # 1. 清空现有的监听器（避免重复连接导致多次触发）
         try:
             self.param_table.itemChanged.disconnect()
-        except:
-            pass  # 如果没有连接，忽略错误
+        except Exception:
+            pass  # 如果没有已连接的信号，忽略断开错误
 
-        # 为需要监听的参数设置监听器
+        # 2. 定义需要重点监听的目标参数列表（关键参数，需联动处理）
         target_params = [
             "非布管区域弦高（0°/180°）", "非布管区域弦高（90°/270°）",
             "壳体内直径 Di", "换热管外径 do",
             "折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)", "管程程数", "拉杆形式"
         ]
 
-        for row in range(self.param_table.rowCount()):
+        # 3. 定义统一的单元格变化总处理器
+        def on_table_item_changed(changed_item):
+            # 仅处理第3列（索引2，参数值列）的单元格变化
+            if changed_item.column() != 2:
+                return
+
+            row = changed_item.row()
+            # 获取当前行的参数名（第2列，索引1）
             param_name_item = self.param_table.item(row, 1)
             if not param_name_item:
-                continue
-
+                return  # 无参数名时，跳过处理
             param_name = param_name_item.text()
+            param_value = changed_item.text()  # 获取修改后的参数值
+
+            # 步骤1：触发on_combobox_changed事件（所有单元格通用处理）
+            self.on_combobox_changed(row, param_value)
+
+            # 步骤2：统一验证输入合法性
+            self.validate_input(changed_item, row)
+
+            # 步骤3：目标参数执行专属联动逻辑
             if param_name in target_params:
-                # 创建参数变更处理函数
-                def create_on_change_handler(row, param_name):
-                    def on_change(changed_item):
-                        if changed_item.row() == row and changed_item.column() == 2:
-                            # 验证输入合法性
-                            self.validate_input(changed_item, row)
+                if param_name in ["壳体内直径 Di", "换热管外径 do", "换热管排列方式"]:
+                    self.update_baffle_diameter()
+                    self.update_tube_center_distance()
+                    self.update_partition_plate_center_distance()
 
-                            # 处理参数联动
-                            if param_name in ["壳体内直径 Di", "换热管外径 do", "换热管排列方式"]:
-                                self.update_baffle_diameter()
-                                self.update_tube_center_distance()
-                                self.update_partition_plate_center_distance()
-                            if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)"]:
-                                self.update_baffle_parameters(param_name)
-                            if param_name in ["拉杆形式", "换热管外径 do"]:
-                                self.update_lagan()
-                                self.update_partition_plate_center_distance()
-                            if param_name == "管程程数":
-                                # 当管程程数变化时，更新管程分程形式的图片
-                                tube_pass = self.get_tube_pass_count()
-                                if tube_pass == "2":
-                                    self.tube_pass_form_value = "2"
-                                elif tube_pass == "4":
-                                    self.tube_pass_form_value = "4.1"
-                                elif tube_pass == "6":
-                                    self.tube_pass_form_value = "6.1"
-                                print(self.tube_pass_form_value)
-                                print("Gordon")
+                if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)"]:
+                    self.update_baffle_parameters(param_name)
 
-                                self.update_SN()
-                                # 获取最新的管程程数值
-                                tube_pass = changed_item.text()
-                                # 更新分程形式下拉框的图片
-                                if self.tube_pass_form_combo:
-                                    self.load_tube_pass_images(self.tube_pass_form_combo, tube_pass)
+                if param_name in ["拉杆形式", "换热管外径 do"]:
+                    self.update_lagan()
+                    self.update_partition_plate_center_distance()
 
-                    return on_change
+                if param_name == "管程程数":
+                    # 管程程数变化：更新管程分程形式值及对应图片
+                    self.tube_pass_form_value = {
+                        "2": "2",
+                        "4": "4.1",
+                        "6": "6.1"
+                    }.get(param_value, self.tube_pass_form_value)  # 默认保留原 value
+                    print(f"当前管程分程形式: {self.tube_pass_form_value}")
+                    print("Gordon")  # 保留原调试打印
 
-                handler = create_on_change_handler(row, param_name)
-                self.param_table.itemChanged.connect(handler)
+                    self.update_SN()
+                    # 更新分程形式下拉框的图片
+                    if hasattr(self, "tube_pass_form_combo") and self.tube_pass_form_combo:
+                        self.load_tube_pass_images(self.tube_pass_form_combo, param_value)
+
+            else:
+                # 普通参数默认处理逻辑
+                print(f"普通参数[{param_name}]已修改为: {param_value}")
+
+        # 4. 为下拉框组件单独绑定on_combobox_changed事件
+        def bind_combobox_listeners():
+            for row in range(self.param_table.rowCount()):
+                # 检查单元格是否为下拉框组件
+                combo_widget = self.param_table.cellWidget(row, 2)
+                if isinstance(combo_widget, QComboBox):
+                    # 移除旧连接避免重复触发
+                    try:
+                        combo_widget.currentIndexChanged.disconnect()
+                    except Exception:
+                        pass
+
+                    # 使用闭包捕获当前行和下拉框实例，避免lambda变量引用问题
+                    def create_combobox_callback(current_combo, current_row):
+                        def callback(index):
+                            # 确保下拉框实例仍然存在
+                            if current_combo and isinstance(current_combo, QComboBox):
+                                self.on_combobox_changed(current_row, current_combo.currentText())
+
+                        return callback
+
+                    # 绑定事件处理函数
+                    combo_widget.currentIndexChanged.connect(
+                        create_combobox_callback(combo_widget, row)
+                    )
+
+        # 执行下拉框绑定
+        bind_combobox_listeners()
+
+        # 5. 连接表格的itemChanged信号到总处理器（处理文本单元格）
+        self.param_table.itemChanged.connect(on_table_item_changed)
 
     def setup_parameters(self, params, setup_listeners=True):
         print(params)
         self.all_params = params
+        self.is_loading_data = True
+
+        # 清空之前的修改记录
+        self.original_param_values.clear()
+        self.modified_rows.clear()
 
         for param in params:
             if param['参数名'] == '管程分程形式':
@@ -4038,7 +4191,6 @@ class TubeLayoutEditor(QMainWindow):
         self.tube_pass_form_value = ""
         self.tube_pass_combo = None
         self.tube_pass_form_column = 2
-        listener_rows = []
 
         for row, param in enumerate(params):
             num_item = QTableWidgetItem(str(row + 1))
@@ -4054,10 +4206,12 @@ class TubeLayoutEditor(QMainWindow):
             if param['参数名'] in self.baffle_params_rows:
                 self.baffle_params_rows[param['参数名']] = row
 
-            special_params = ["是否以外径为基准", "分程布置形式", "换热管排列方式",
-                              "折流板切口方向", "管程分程形式", "防冲板形式", "换热管外径 do", "管程程数",
-                              "换热管布置方式", "换热管公称长度 LN",
-                              "滑道定位", "拉杆形式", "拉杆直径"]
+            special_params = [
+                "是否以外径为基准", "分程布置形式", "换热管排列方式",
+                "折流板切口方向", "管程分程形式", "防冲板形式", "换热管外径 do", "管程程数",
+                "换热管布置方式", "换热管公称长度 LN",
+                "滑道定位", "拉杆形式", "拉杆直径"
+            ]
 
             if param['参数名'] in special_params:
                 if param['参数名'] in ["换热管公称长度 LN", "换热管公称长度 LN"]:
@@ -4100,7 +4254,18 @@ class TubeLayoutEditor(QMainWindow):
 
                     combo.currentTextChanged.connect(lambda text: update_original_value(text, row))
 
+                    # 为下拉框添加变化监听
+                    def on_combo_changed():
+                        current_text = combo.currentText()
+                        self.on_combobox_changed(row, current_text)
+
+                    combo.currentTextChanged.connect(on_combo_changed)
+                    combo.currentIndexChanged.connect(
+                        lambda idx, r=row, p=param['参数名']: self.on_combobox_changed(r, p)
+                    )
                     self.param_table.setCellWidget(row, 2, combo)
+                    current_value = combo.currentText() if isinstance(combo, QComboBox) else ""
+                    self.original_param_values[(row, 2)] = current_value
                 else:
                     combo = NoWheelComboBox()
                     is_diameter_based = (param['参数名'] == "是否以外径为基准")
@@ -4111,9 +4276,6 @@ class TubeLayoutEditor(QMainWindow):
                         combo.addItems(["未选择", "形式1", "形式2", "形式3"])
                     elif param['参数名'] == "换热管排列方式":
                         combo.addItems(["正三角形", "转角正三角形", "正方形", "转角正方形"])
-                        combo.currentIndexChanged.connect(
-                            lambda idx, r=row, p=param['参数名']: self.on_combobox_changed(r, p)
-                        )
                     elif param['参数名'] == "折流板切口方向":
                         combo.addItems(["水平上下", "垂直左右"])
                     elif param['参数名'] == "拉杆形式":
@@ -4128,14 +4290,12 @@ class TubeLayoutEditor(QMainWindow):
                             self.tube_pass_form_value = "4.1"
                         elif tube_pass == "6":
                             self.tube_pass_form_value = "6.1"
-                        print(self.tube_pass_form_value)
-                        print("Gordon")
 
                         current_value = str(param['参数值']) if param['参数值'] is not None else ""
 
                         if self.heat_exchanger in ["AEU", "BEU"]:
                             combo.addItems(["2", "4", "6", "8", "10", "12"])
-                        elif self.heat_exchanger in ["AES", "BES"]:  # 这里将第二个if改为elif
+                        elif self.heat_exchanger in ["AES", "BES"]:
                             combo.addItems(["2", "4", "6", "8", "10", "12"])
                             if current_value == "1":
                                 combo.setCurrentIndex(0)
@@ -4150,10 +4310,6 @@ class TubeLayoutEditor(QMainWindow):
                                 combo.setCurrentText(current_value)
                             else:
                                 combo.setCurrentIndex(0)
-
-                        combo.currentIndexChanged.connect(
-                            lambda index, r=row: self.on_tube_pass_combo_changed(r)
-                        )
                     elif param['参数名'] == "换热管布置方式":
                         combo.addItems(["对中", "跨中", "任意"])
                     elif param['参数名'] == "拉杆直径":
@@ -4196,31 +4352,12 @@ class TubeLayoutEditor(QMainWindow):
                                 if index >= 0:
                                     combo.setCurrentIndex(index)
 
-                            combo.currentIndexChanged.connect(self.on_tube_pass_form_changed)
-
-                        def adjust_icon_size():
-                            if self.tube_pass_form_combo and hasattr(self, 'tube_pass_form_row'):
-                                column_width = self.param_table.columnWidth(self.tube_pass_form_column) - 20
-                                if column_width > 50:
-                                    icon_width = column_width
-                                    icon_height = int(icon_width * 3 / 4)
-                                    list_view.setIconSize(QSize(icon_width, icon_height))
-
-                        adjust_icon_size()
-                        header = self.param_table.horizontalHeader()
-                        header.sectionResized.connect(
-                            lambda logicalIndex, oldSize, newSize: adjust_icon_size()
-                            if logicalIndex == self.tube_pass_form_column else None
-                        )
                     elif param['参数名'] == "防冲板形式":
                         combo.addItems(["平板形", "圆弧形", "焊接式"])
                     elif param['参数名'] == "换热管外径 do":
                         combo.addItems(
                             ["10", "12", "14", "16", "19", "20", "22", "25", "30", "32", "35", "38", "45", "50", "55",
                              "57"])
-                        combo.currentIndexChanged.connect(
-                            lambda idx, r=row, p=param['参数名']: self.on_combobox_changed(r, p)
-                        )
 
                     param_value_str = str(param['参数值']) if param['参数值'] is not None else ""
 
@@ -4243,7 +4380,22 @@ class TubeLayoutEditor(QMainWindow):
                     if is_diameter_based:
                         combo.setEnabled(False)
 
+                    # 为所有下拉框添加变化监听
+                    def on_combo_changed():
+                        current_text = combo.currentText()
+                        self.on_combobox_changed(row, current_text)
+
+                    combo.currentTextChanged.connect(on_combo_changed)
+
+                    # 原有的索引变化监听
+                    combo.currentIndexChanged.connect(
+                        lambda idx, r=row, p=param['参数名']: self.on_combobox_changed(r, p)
+                    )
+
                     self.param_table.setCellWidget(row, 2, combo)
+                    param_value_str = str(param['参数值']) if param['参数值'] is not None else ""
+                    self.original_param_values[(row, 2)] = param_value_str
+
             else:
                 param_value = param['参数值']
                 if param_value is None:
@@ -4253,74 +4405,19 @@ class TubeLayoutEditor(QMainWindow):
 
                 item = QTableWidgetItem(display_value)
                 item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
+                self.original_param_values[(row, 2)] = display_value
 
-                target_params = [
-                    "非布管区域弦高（0°/180°）", "非布管区域弦高（90°/270°）",
-                    "壳体内直径 Di", "换热管外径 do",
-                    "折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)", "管程程数", "拉杆形式"
-                ]
-                if param['参数名'] in target_params:
-                    # 保存原始值（字符串形式）
-                    self._original_values[(row, 2)] = display_value
+                # 为普通文本单元格添加变化监听
+                def on_item_changed(changed_item):
+                    if changed_item.row() == row and changed_item.column() == 2:
+                        param_name_item = self.param_table.item(row, 1)
+                        if param_name_item:
+                            param_name = param_name_item.text()
+                            param_value = changed_item.text()
+                            self.on_combobox_changed(row, param_value)
 
-                    # 只有在需要设置监听器时才创建和处理函数
-                    if setup_listeners:
-                        # 创建参数变更处理函数
-                        def create_on_change_handler(row, param_name):
-                            def on_change(changed_item):
-                                if changed_item.row() == row and changed_item.column() == 2:
-                                    # 验证输入合法性
-                                    self.validate_input(changed_item, row)
-
-                                    # 处理参数联动
-                                    if param_name in ["壳体内直径 Di", "换热管外径 do", "换热管排列方式"]:
-                                        self.update_baffle_diameter()
-                                        self.update_tube_center_distance()
-                                    if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)"]:
-                                        self.update_baffle_parameters(param_name)
-                                    if param_name in ["拉杆形式", "换热管外径 do"]:
-                                        self.update_lagan()
-                                    if param_name == "管程程数":
-                                        # 当管程程数变化时，更新管程分程形式的图片
-                                        tube_pass = self.get_tube_pass_count()
-                                        if tube_pass == "2":
-                                            self.tube_pass_form_value = "2"
-                                        elif tube_pass == "4":
-                                            self.tube_pass_form_value = "4.1"
-                                        elif tube_pass == "6":
-                                            self.tube_pass_form_value = "6.1"
-                                        print(self.tube_pass_form_value)
-                                        print("Gordon")
-                                        self.update_SN()
-                                        self.update_partition_plate_center_distance()
-                                        # 获取最新的管程程数值
-                                        tube_pass = changed_item.text()
-                                        # 更新分程形式下拉框的图片
-                                        if self.tube_pass_form_combo:
-                                            self.load_tube_pass_images(self.tube_pass_form_combo, tube_pass)
-
-                            return on_change
-
-                        # 存储需要设置监听器的行信息
-                        listener_rows.append((row, param['参数名'], create_on_change_handler))
-
-                self.param_table.setItem(row, 2, item)
-
-                unit_value = param['单位']
-                if unit_value is None:
-                    unit_display = ""
-                else:
-                    unit_display = str(unit_value)
-
-                unit_item = QTableWidgetItem(unit_display)
-                unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
-                self.param_table.setItem(row, 3, unit_item)
-
-                # 统一设置监听器（只有在需要时才设置）
-            if setup_listeners:
-                for row, param_name, create_handler in listener_rows:
-                    handler = create_handler(row, param_name)
-                    self.param_table.itemChanged.connect(handler)
+                # 存储原始引用以便后续连接
+                item.textChanged = lambda: on_item_changed(item)
 
                 self.param_table.setItem(row, 2, item)
 
@@ -4333,6 +4430,31 @@ class TubeLayoutEditor(QMainWindow):
             unit_item = QTableWidgetItem(unit_display)
             unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
             self.param_table.setItem(row, 3, unit_item)
+
+        # 为表格添加整体变化监听（处理普通文本单元格）
+        if setup_listeners:
+            self.param_table.itemChanged.connect(self.on_param_table_item_changed)
+
+        self.setup_modification_detection()
+        self.setup_combobox_modification_detection()
+        self.is_loading_data = False
+        self.update_all_row_backgrounds()
+
+    def on_param_table_item_changed(self, item):
+        """处理参数表格中普通文本单元格的变化"""
+        if self.is_loading_data or self._is_validating:
+            return
+
+        # 只处理参数值列（第2列）的变化
+        if item.column() == 2:
+            row = item.row()
+            param_name_item = self.param_table.item(row, 1)
+            if param_name_item:
+                param_name = param_name_item.text()
+                param_value = item.text()
+                self.on_combobox_changed(row, param_value)
+
+
 
     # 新增验证函数
     def validate_tube_length_input(self, combo_box, text, row_idx):
@@ -4469,11 +4591,62 @@ class TubeLayoutEditor(QMainWindow):
                 elif tube_pass == "6":
                     self.tube_pass_form_value = "6.1"
 
-
             self.update_SN()
 
-    def on_combobox_changed(self, row, param_name):
-        """处理下拉框类型参数的变更事件"""
+    # def on_combobox_changed(self, row, param_name):
+    #     """处理下拉框类型参数的变更事件"""
+    #     print(f"下拉框变更: 参数名={param_name}, 行={row}")
+    #
+    #     if param_name == "换热管外径 do":
+    #         # 获取当前选中的值
+    #         do_widget = self.param_table.cellWidget(row, 2)
+    #         if isinstance(do_widget, QComboBox):
+    #             selected_value = do_widget.currentText()
+    #             print(f"选中的换热管外径: {selected_value}")
+    #
+    #         self.update_baffle_diameter()
+    #         self.update_tube_center_distance()
+    #         self.update_lagan()
+    #         self.update_partition_plate_center_distance()
+    #     elif param_name == "换热管排列方式":
+    #         # 获取当前选中的值
+    #         do_widget = self.param_table.cellWidget(row, 2)
+    #         if isinstance(do_widget, QComboBox):
+    #             selected_value = do_widget.currentText()
+    #
+    #         self.update_baffle_diameter()
+    #         self.update_tube_center_distance()
+    #         # self.update_lagan()
+    #         self.update_partition_plate_center_distance()
+    def on_combobox_changed(self, row, value):
+        """处理下拉框类型参数的变更事件及内容变化处理"""
+        # 首先执行原current_text版本的逻辑
+        if self.is_loading_data or self._is_validating:
+            return
+
+        original_value = self.original_param_values.get((row, 2), "")
+
+        if value != original_value:
+            self.modified_rows.add(row)
+            self.highlight_modified_row(row)
+            print(f"行 {row} 下拉框被修改: '{original_value}' -> '{value}'")
+        else:
+            if row in self.modified_rows:
+                self.modified_rows.remove(row)
+                self.reset_row_background(row)
+                print(f"行 {row} 下拉框恢复原始值")
+
+        # 再执行原param_name版本的逻辑
+        param_name = value  # 对于第二种和第三种用法，value就是param_name
+        # 对于第一种用法，需要获取实际的param_name
+        # 尝试从单元格获取参数名（假设第1列是参数名）
+        try:
+            param_item = self.param_table.item(row, 1)
+            if param_item:
+                param_name = param_item.text()
+        except:
+            pass
+
         print(f"下拉框变更: 参数名={param_name}, 行={row}")
 
         if param_name == "换热管外径 do":
@@ -4698,6 +4871,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 根据当前页面设置不同的提示信息
         if current_page_index == 0 and self.has_piped:  # 布管页面
+            self.clear_modification_marks()
             self.line_tip.setText(f"数据保存成功")
             self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
