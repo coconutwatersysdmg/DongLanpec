@@ -30,7 +30,7 @@ from modules.chanpinguanli.chanpinguanli_main import product_manager
 
 # product_id = 'PD2025090422414303'
 
-product_id = '1223453'
+product_id = '1234566'
 
 
 def on_product_id_changed(new_id):
@@ -1148,6 +1148,8 @@ class TubeLayoutEditor(QMainWindow):
 
                                 # 公称直径DN的个性化查询（仅产品库有设计数据表）
                                 if param_name == "公称直径 DN":
+                                    print(param_value)
+                                    print("公称直径原本的值")
                                     try:
                                         # 从产品库的设计数据表查询（符合实际表结构）
                                         design_query = """
@@ -1161,6 +1163,19 @@ class TubeLayoutEditor(QMainWindow):
                                         if isinstance(design_data, dict) and '壳程数值' in design_data and design_data[
                                             '壳程数值']:
                                             final_value = design_data['壳程数值']
+                                            print(final_value)
+                                            print("从设计数据表中读取的新值")
+                                            if param_value != final_value:
+                                                try:
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管元件表 WHERE 产品ID = %s"""
+                                                    cursor.execute(delete_query, (self.productID,))
+
+                                                    product_conn.commit()
+
+                                                    print(f"已删除产品ID为{self.productID}的布管元件表所有数据")
+                                                except Exception as e:
+                                                    print(f"删除布管元件表数据时出错: {str(e)}")
+
                                             print(f"更新公称直径 DN: {param_value} -> {final_value}")
                                     except Exception as e:
                                         print(f"处理公称直径DN时出错: {str(e)}，使用原值: {param_value}")
@@ -1196,6 +1211,16 @@ class TubeLayoutEditor(QMainWindow):
                                         if isinstance(design_data, dict) and '管程数值' in design_data and design_data[
                                             '管程数值']:
                                             final_value = design_data['管程数值']
+                                            if param_value != final_value:
+                                                try:
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管元件表 WHERE 产品ID = %s"""
+                                                    cursor.execute(delete_query, (self.productID,))
+
+                                                    product_conn.commit()
+
+                                                    print(f"已删除产品ID为{self.productID}的布管元件表所有数据")
+                                                except Exception as e:
+                                                    print(f"删除布管元件表数据时出错: {str(e)}")
                                             print(f"更新壳体内直径 Di: {param_value} -> {final_value}")
                                     except Exception as e:
                                         print(f"处理壳体内直径Di时出错: {str(e)}，使用原值: {param_value}")
@@ -1409,6 +1434,7 @@ class TubeLayoutEditor(QMainWindow):
                                             if product_design_conn and self.productID:
                                                 with product_design_conn.cursor() as design_cursor:
                                                     if param_name == "公称直径 DN":
+
                                                         design_query = """
                                                             SELECT 壳程数值 
                                                             FROM 产品设计活动表_设计数据表 
@@ -4870,58 +4896,58 @@ class TubeLayoutEditor(QMainWindow):
         # 根据当前页面设置不同的提示信息
         if current_page_index == 0 and self.has_piped:  # 布管页面
             self.clear_modification_marks()
-            self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            # self.line_tip.setText(f"数据保存成功")
+            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 1:  # 管-板连接页面
-            self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            # self.line_tip.setText(f"数据保存成功")
+            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 0 and not self.has_piped:  # 未点击布管状态
-            self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            # self.line_tip.setText(f"数据保存成功")
+            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         else:  # 管板形式页面
             message = "数据保存成功！"
 
-        # if message is not None:
-        #     # 创建保存成功对话框
-        #     save_dialog = QDialog(self)
-        #     save_dialog.setWindowTitle("保存成功")
-        #     save_dialog.setModal(True)
-        #     save_dialog.resize(300, 150)
-        #
-        #     layout = QVBoxLayout()
-        #     save_dialog.setLayout(layout)
-        #
-        #     message_label = QLabel(message)
-        #     message_label.setAlignment(Qt.AlignCenter)
-        #     message_label.setStyleSheet("font-size: 16px; font-weight: bold;")
-        #
-        #     # 添加确定按钮
-        #     ok_button = QPushButton("确定")
-        #     ok_button.setFixedSize(100, 30)
-        #     ok_button.clicked.connect(save_dialog.accept)
-        #     ok_button.setStyleSheet("""
-        #         QPushButton {
-        #             background-color: #4CAF50;
-        #             color: white;
-        #             border: none;
-        #             border-radius: 4px;
-        #             padding: 5px;
-        #         }
-        #         QPushButton:hover {
-        #             background-color: #45a049;
-        #         }
-        #     """)
-        #
-        #     # 添加到布局
-        #     layout.addWidget(message_label)
-        #     layout.addWidget(ok_button, alignment=Qt.AlignCenter)
-        #
-        #     # 显示对话框
-        #     save_dialog.exec_()
-        self.line_tip.setText(f"数据保存成功")
+        if message is not None:
+            # 创建保存成功对话框
+            save_dialog = QDialog(self)
+            save_dialog.setWindowTitle("保存成功")
+            save_dialog.setModal(True)
+            save_dialog.resize(300, 150)
+
+            layout = QVBoxLayout()
+            save_dialog.setLayout(layout)
+
+            message_label = QLabel(message)
+            message_label.setAlignment(Qt.AlignCenter)
+            message_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+
+            # 添加确定按钮
+            ok_button = QPushButton("确定")
+            ok_button.setFixedSize(100, 30)
+            ok_button.clicked.connect(save_dialog.accept)
+            ok_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #45a049;
+                }
+            """)
+
+            # 添加到布局
+            layout.addWidget(message_label)
+            layout.addWidget(ok_button, alignment=Qt.AlignCenter)
+
+            # 显示对话框
+            save_dialog.exec_()
+        # self.line_tip.setText(f"数据保存成功")
         self.actual_save_operation(current_page_index)  # 先保存后提示
 
     def build_sql_for_coordinate(self):
@@ -5581,6 +5607,7 @@ class TubeLayoutEditor(QMainWindow):
         # 用于后面写设计数据表/元件附加参数表的值暂存
         cross_params = {
             "公称直径 DN": None,
+            "壳体内直径 Di": None,
             "旁路挡板厚度": None,
             "旁路挡板宽度": None,  # 新增旁路挡板宽度的暂存键
             "防冲板形式": None,
@@ -5717,6 +5744,13 @@ class TubeLayoutEditor(QMainWindow):
             safe_dn_value = escape_str(cross_params["公称直径 DN"])
             sql_statements.append(
                 f"UPDATE {design_table} SET `壳程数值` = '{safe_dn_value}' "
+                f"WHERE `产品ID` = '{productID}' AND `参数名称` LIKE '公称直径%'"
+            )
+        if cross_params["壳体内直径 Di"] is not None:
+            design_table = "`产品设计活动表_设计数据表`"
+            safe_dn_value = escape_str(cross_params["壳体内直径 Di"])
+            sql_statements.append(
+                f"UPDATE {design_table} SET `管程数值` = '{safe_dn_value}' "
                 f"WHERE `产品ID` = '{productID}' AND `参数名称` LIKE '公称直径%'"
             )
 
