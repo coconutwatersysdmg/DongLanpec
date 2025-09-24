@@ -4896,58 +4896,58 @@ class TubeLayoutEditor(QMainWindow):
         # 根据当前页面设置不同的提示信息
         if current_page_index == 0 and self.has_piped:  # 布管页面
             self.clear_modification_marks()
-            # self.line_tip.setText(f"数据保存成功")
-            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            self.line_tip.setText(f"数据保存成功")
+            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 1:  # 管-板连接页面
-            # self.line_tip.setText(f"数据保存成功")
-            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            self.line_tip.setText(f"数据保存成功")
+            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 0 and not self.has_piped:  # 未点击布管状态
-            # self.line_tip.setText(f"数据保存成功")
-            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            self.line_tip.setText(f"数据保存成功")
+            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         else:  # 管板形式页面
             message = "数据保存成功！"
 
-        if message is not None:
-            # 创建保存成功对话框
-            save_dialog = QDialog(self)
-            save_dialog.setWindowTitle("保存成功")
-            save_dialog.setModal(True)
-            save_dialog.resize(300, 150)
-
-            layout = QVBoxLayout()
-            save_dialog.setLayout(layout)
-
-            message_label = QLabel(message)
-            message_label.setAlignment(Qt.AlignCenter)
-            message_label.setStyleSheet("font-size: 16px; font-weight: bold;")
-
-            # 添加确定按钮
-            ok_button = QPushButton("确定")
-            ok_button.setFixedSize(100, 30)
-            ok_button.clicked.connect(save_dialog.accept)
-            ok_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #4CAF50;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
-                    padding: 5px;
-                }
-                QPushButton:hover {
-                    background-color: #45a049;
-                }
-            """)
-
-            # 添加到布局
-            layout.addWidget(message_label)
-            layout.addWidget(ok_button, alignment=Qt.AlignCenter)
-
-            # 显示对话框
-            save_dialog.exec_()
-        # self.line_tip.setText(f"数据保存成功")
+        # if message is not None:
+        #     # 创建保存成功对话框
+        #     save_dialog = QDialog(self)
+        #     save_dialog.setWindowTitle("保存成功")
+        #     save_dialog.setModal(True)
+        #     save_dialog.resize(300, 150)
+        #
+        #     layout = QVBoxLayout()
+        #     save_dialog.setLayout(layout)
+        #
+        #     message_label = QLabel(message)
+        #     message_label.setAlignment(Qt.AlignCenter)
+        #     message_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+        #
+        #     # 添加确定按钮
+        #     ok_button = QPushButton("确定")
+        #     ok_button.setFixedSize(100, 30)
+        #     ok_button.clicked.connect(save_dialog.accept)
+        #     ok_button.setStyleSheet("""
+        #         QPushButton {
+        #             background-color: #4CAF50;
+        #             color: white;
+        #             border: none;
+        #             border-radius: 4px;
+        #             padding: 5px;
+        #         }
+        #         QPushButton:hover {
+        #             background-color: #45a049;
+        #         }
+        #     """)
+        #
+        #     # 添加到布局
+        #     layout.addWidget(message_label)
+        #     layout.addWidget(ok_button, alignment=Qt.AlignCenter)
+        #
+        #     # 显示对话框
+        #     save_dialog.exec_()
+        self.line_tip.setText(f"数据保存成功")
         self.actual_save_operation(current_page_index)  # 先保存后提示
 
     def build_sql_for_coordinate(self):
