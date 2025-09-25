@@ -27,6 +27,7 @@ from modules.buguan.buguan_ziyong.json_process import parse_heat_exchanger_json
 from modules.buguan.buguan_ziyong.sheet_form_page import SheetFormPage
 from modules.buguan.buguan_ziyong.tube_sheet_connection import TubeSheetConnectionPage
 from modules.chanpinguanli.chanpinguanli_main import product_manager
+import modules.buguan.buguan_ziyong.qiaotineizhijing as qtzj
 
 # product_id = 'PD2025090422414303'
 
@@ -502,6 +503,7 @@ class TubeLayoutEditor(QMainWindow):
         self.setup_ui()
         self.connection_lines = []  # 用于存储所有绘制的连线
         self.r = 0
+        self.isDi_change = False
         self.center_dangban_length = 0
         self.mouse_x = 0
         self.mouse_y = 0
@@ -1358,7 +1360,12 @@ class TubeLayoutEditor(QMainWindow):
                                 if param['参数名'] == "拉杆直径":
                                     if processed_params[i]['参数值'] == "程序推荐":
                                         processed_params[i]['参数值'] = "16"
+                                    dl_exists = True
 
+                                if param['参数名'] == "壳体内直径 Di":
+                                    update_di = self.cal_di(0)
+                                    if update_di:
+                                        processed_params[i]['参数值'] = update_di
                                     dl_exists = True
 
                             # 没有则新增DL参数
@@ -1589,6 +1596,11 @@ class TubeLayoutEditor(QMainWindow):
                                     if param['参数名'] == "公称直径 DN":
                                         self.DN = processed_params[i]['参数值']
                                         dn_exists = True  # 建议使用不同的变量名区分两种情况
+                                    if param['参数名'] == "壳体内直径 Di":
+                                        update_di = self.cal_di(0)
+                                        if update_di:
+                                            processed_params[i]['参数值'] = update_di
+                                        dl_exists = True
                                     if param['参数名'] == "分程隔板两侧相邻管中心距（竖直）":
                                         if self.heat_exchanger in ["AEU", "BEU"]:
                                             processed_params[i]['参数值'] = "100"
@@ -1834,8 +1846,60 @@ class TubeLayoutEditor(QMainWindow):
         self.update_baffle_diameter()
         self.update_tube_center_distance()
 
+    def cal_di(self, user_Di):
+        # 调用接口获取壳体内直径数据
+        di_result = qtzj.cal_qiaotineizhijing_U(self.productID, self.isDi_change, user_Di)
+
+        import json
+        try:
+            # 处理数据，可能是字符串或已解析的对象
+            data = di_result
+            # 如果是字符串则进行解析
+            if isinstance(data, str):
+                data = json.loads(data)
+
+            # 循环解析直到得到字典类型（处理可能的多层嵌套）
+            while isinstance(data, str):
+                data = json.loads(data)
+
+            # 验证数据结构是否正确
+            if not isinstance(data, dict):
+                raise TypeError("解析后的数据不是字典类型")
+
+            # 查找圆筒内径的值
+            if ("DictOutDatas" in data and
+                    "壳体圆筒" in data["DictOutDatas"] and
+                    "Datas" in data["DictOutDatas"]["壳体圆筒"]):
+
+                for item in data["DictOutDatas"]["壳体圆筒"]["Datas"]:
+                    if item.get("Name") == "圆筒内径":
+                        value = item.get("Value")
+                        # 可以根据需要将字符串转换为数值类型
+                        try:
+                            # 如果值是字符串类型的数字，尝试转换为float
+                            if isinstance(value, str):
+                                return float(value)
+                            return value
+                        except (ValueError, TypeError):
+                            return value  # 返回原始值如果转换失败
+
+            # 如果未找到圆筒内径数据
+            print("未找到圆筒内径数据")
+            return None
+
+        except json.JSONDecodeError as e:
+            print(f"JSON解析错误: {str(e)}")
+            return None
+        except TypeError as e:
+            print(f"数据类型错误: {str(e)}")
+            return None
+        except Exception as e:
+            print(f"处理数据时发生错误: {str(e)}")
+            return None
+
     # TODO 布管函数
     def calculate_piping_layout(self):
+
         self.is_x_line1 = False
         self.is_x_line2 = False
         self.is_x_line3 = False
@@ -1883,7 +1947,7 @@ class TubeLayoutEditor(QMainWindow):
             # 提取关键参数
             if param_name == "壳体内直径 Di":
                 Di = float(param_value) if param_value else None
-                DL = Di  # 先临时用Di的值
+
             elif param_name == "公称直径 DN":
                 DN = float(param_value) if param_value else None
             elif param_name == "换热管外径 do":
@@ -3490,6 +3554,83 @@ class TubeLayoutEditor(QMainWindow):
             print(
                 f"无匹配数据：未找到外径{do_value}mm + {unified_range_type}（对应原始排列方式：{range_type_value}）的中心距配置")
 
+    def user_update_Di(self):
+        """更新壳体内直径 Di（采用与布管限定圆相同的更新方式）"""
+        # 1. 定位壳体内直径 Di 参数行
+        di_row = -1
+        row_count = self.param_table.rowCount()
+        for row in range(row_count):
+            param_name_item = self.param_table.item(row, 1)
+            if param_name_item and param_name_item.text().strip() == "壳体内直径 Di":
+                di_row = row
+                break
+
+        if di_row == -1:
+            print("未找到壳体内直径 Di 参数行，无法更新")
+            return
+
+        # 2. 获取当前壳体内直径值
+        di_item = self.param_table.item(di_row, 2)
+        if not di_item:
+            print("壳体内直径 Di 单元格不存在")
+            return
+
+        di_text = di_item.text().strip()
+        try:
+            di_value = float(di_text)
+            print(f"成功获取当前壳体内直径：{di_value:.1f}mm")
+        except ValueError:
+            print(f"壳体内直径格式错误（输入：{di_text}），需为数字")
+            return
+
+        # 3. 计算目标值
+        current_di = self.cal_di(di_value)
+
+        # 验证计算结果
+        if current_di is None or not isinstance(current_di, (int, float)):
+            print(f"cal_di()返回无效值：{current_di}，无法更新壳体内直径")
+            return
+
+
+        original_handler = None
+        if hasattr(self, 'handle_param_change'):
+            try:
+                self.param_table.itemChanged.disconnect(self.handle_param_change)
+                original_handler = self.handle_param_change
+            except:
+                pass
+
+        # 5. 更新壳体内直径 Di
+        try:
+            # 处理单元格
+            cell_widget = self.param_table.cellWidget(di_row, 2)
+            if isinstance(cell_widget, QComboBox):
+                # 下拉框处理
+                index = cell_widget.findText(f"{current_di:.1f}")
+                if index >= 0:
+                    cell_widget.setCurrentIndex(index)
+                else:
+                    cell_widget.setEditText(f"{current_di:.1f}")
+            else:
+                # 文本单元格处理
+                if di_item:
+                    di_item.setText(f"{current_di:.1f}")
+                else:
+                    self.param_table.setItem(di_row, 2, QTableWidgetItem(f"{current_di:.1f}"))
+
+            print(f"已更新壳体内直径 Di: {current_di:.1f}mm")
+            print(f"壳体内直径 Di 已从 {di_value:.1f}mm 更新为 {current_di:.1f}mm")
+
+        except Exception as e:
+            print(f"更新壳体内直径时发生错误: {e}")
+        finally:
+            # 重新连接信号
+            if original_handler:
+                try:
+                    self.param_table.itemChanged.connect(original_handler)
+                except:
+                    pass
+
     def update_partition_plate_center_distance(self):
         """更新分程隔板两侧相邻管中心距（竖直）和（水平）- 严格匹配附件9文档数据"""
         # 1. 定位关键参数行：换热管外径、排列方式、管程数、竖直中心距、水平中心距
@@ -3745,6 +3886,11 @@ class TubeLayoutEditor(QMainWindow):
 
     def _update_table_cell(self, row, column, value):
         """安全更新表格单元格的辅助方法"""
+        print(f"_update_table_cell 被调用: row={row}, column={column}, value='{value}'")
+
+        if row < 0 or row >= self.param_table.rowCount():
+            print(f"错误: 行索引 {row} 超出范围 [0, {self.param_table.rowCount() - 1}]")
+            return  # 直接返回，避免后续错误
         # 临时断开信号避免循环触发
         original_handler = None
         if hasattr(self, 'handle_param_change'):
@@ -3754,30 +3900,39 @@ class TubeLayoutEditor(QMainWindow):
             except:
                 pass
 
-        # 更新单元格
-        cell_widget = self.param_table.cellWidget(row, column)
-        if isinstance(cell_widget, QComboBox):
-            # 查找并设置下拉框选项
-            index = cell_widget.findText(value)
-            if index >= 0:
-                cell_widget.setCurrentIndex(index)
+        try:
+            # 更新单元格
+            cell_widget = self.param_table.cellWidget(row, column)
+            if isinstance(cell_widget, QComboBox):
+                # 下拉框处理逻辑保持不变...
+                index = cell_widget.findText(value)
+                if index >= 0:
+                    cell_widget.setCurrentIndex(index)
+                else:
+                    cell_widget.setEditText(value)
             else:
-                # 如果找不到匹配项，添加新选项
-                cell_widget.addItem(value)
-                cell_widget.setCurrentText(value)
-        else:
-            item = self.param_table.item(row, column)
-            if item:
-                item.setText(value)
-            else:
-                self.param_table.setItem(row, column, QTableWidgetItem(value))
+                # 文本单元格处理：先检查是否存在，不存在则创建
+                item = self.param_table.item(row, column)
+                if item:
+                    # 直接设置文本，这会触发itemChanged信号，但我们已经断开了连接
+                    item.setText(value)
+                else:
+                    # 创建新项目
+                    new_item = QTableWidgetItem(value)
+                    self.param_table.setItem(row, column, new_item)
 
-        # 重新连接信号
-        if original_handler:
-            try:
-                self.param_table.itemChanged.connect(original_handler)
-            except:
-                pass
+            # 强制刷新该单元格
+            self.param_table.viewport().update()
+
+        except Exception as e:
+            print(f"更新单元格错误: {e}")
+        finally:
+            # 重新连接信号
+            if original_handler:
+                try:
+                    self.param_table.itemChanged.connect(original_handler)
+                except:
+                    pass
 
     def update_baffle_parameters(self, changed_param_name):
         """
@@ -4078,6 +4233,29 @@ class TubeLayoutEditor(QMainWindow):
             # 恢复事件触发
             self._is_validating = False
 
+    def _update_table_cell(self, row, column, value):
+        """统一更新表格单元格的方法"""
+        widget = self.param_table.cellWidget(row, column)
+        if isinstance(widget, QLineEdit):
+            widget.setText(value)
+        elif isinstance(widget, QComboBox):
+            # 尝试在组合框中匹配值
+            for i in range(widget.count()):
+                if widget.itemText(i) == value:
+                    widget.setCurrentIndex(i)
+                    break
+            else:
+                # 如果没有匹配项，设置为当前文本
+                widget.setEditText(value)
+        else:
+            # 如果没有widget，直接设置item
+            item = self.param_table.item(row, column)
+            if item:
+                item.setText(value)
+            else:
+                item = QTableWidgetItem(value)
+                self.param_table.setItem(row, column, item)
+
     def get_selected_tube_pass_form(self):
         """获取当前选中的管程分程形式标识"""
         if self.tube_pass_form_combo:
@@ -4101,7 +4279,7 @@ class TubeLayoutEditor(QMainWindow):
             "折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)", "管程程数", "拉杆形式"
         ]
 
-        # 3. 定义统一的单元格变化总处理器
+        # 3. 定义统一的单元格变化总处理器（处理文本单元格）
         def on_table_item_changed(changed_item):
             # 仅处理第3列（索引2，参数值列）的单元格变化
             if changed_item.column() != 2:
@@ -4123,10 +4301,16 @@ class TubeLayoutEditor(QMainWindow):
 
             # 步骤3：目标参数执行专属联动逻辑
             if param_name in target_params:
+                if param_name == "壳体内直径 Di":
+                    self.isDi_change = True
+                    self.user_update_Di()
+
                 if param_name in ["壳体内直径 Di", "换热管外径 do", "换热管排列方式"]:
                     self.update_baffle_diameter()
                     self.update_tube_center_distance()
                     self.update_partition_plate_center_distance()
+                    self.isDi_change = True
+                    self.user_update_Di()
 
                 if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)"]:
                     self.update_baffle_parameters(param_name)
@@ -5250,6 +5434,8 @@ class TubeLayoutEditor(QMainWindow):
         return sql_statements
 
     def build_sql_for_floating_head_calc(self):
+        import math
+        from collections import defaultdict
 
         if not hasattr(self, 'current_centers') or not isinstance(self.current_centers, (list, set, tuple)):
             QMessageBox.warning(self, "警告", "缺少有效布管坐标数据（self.current_centers异常）！")
@@ -5281,26 +5467,29 @@ class TubeLayoutEditor(QMainWindow):
             "'丁字'交叉沿水平隔板槽不连续侧管排2最两端管孔中心距": "0.0",
             "'丁字'交叉沿水平隔板槽不连续侧管排3最两端管孔中心距": "0.0",
             "沿竖直隔板槽单侧的管排最两端管孔中心距": "0.0",
-            "相邻隔板槽中心距": "0.0"  # 依赖getiao_chicun，需确保后续有赋值逻辑
+            "相邻隔板槽中心距": "0.0",
+            "实际布管区域最大直径": "0.0",  # 新增
+            "实际布管区域最大高度": "0.0"  # 新增
         }
 
-        # 初始化关键参数（从原逻辑提取，需根据实际场景补充赋值，此处先设默认值）
-        product_id = self.productID  # 固定产品ID
-        tube_form = None  # 管程分程形式（如"2","4.1","4.2","6.1","6.2"等）
-        cut_dir = None  # 折流板切口方向（如"水平上下","竖直左右","垂直左右"等）
-        tube_arr = None  # 换热管排列方式（如"正三角形","转角正三角形"等）
-        getiao_chicun = 0.0  # 隔板槽尺寸（需从数据库或其他属性读取，此处先设默认值）
-        deleted_coords = set()  # 已删除管子的坐标（若无需过滤可保持空集）
+        # 初始化关键参数
+        product_id = self.productID
+        tube_form = None
+        cut_dir = None
+        tube_arr = None
+        getiao_chicun = 0.0
+        deleted_coords = set()
+        do_value = 0.0  # 管子外径，需要从数据库读取
 
-        # -------------------------- 2. 从数据库读取关键参数（管程分程形式、折流板切口方向等） --------------------------
+        # -------------------------- 从数据库读取关键参数 --------------------------
         try:
-            conn = create_product_connection()  # 使用现有数据库连接函数
+            conn = create_product_connection()
             if not conn:
                 QMessageBox.critical(self, "数据库错误", "无法建立数据库连接！")
                 return None
 
             with conn.cursor(pymysql.cursors.DictCursor) as cursor:
-                # 2.1 读取管程分程形式
+                # 读取管程分程形式
                 cursor.execute("""
                     SELECT 参数值 
                     FROM 产品设计活动表_布管参数表
@@ -5310,6 +5499,7 @@ class TubeLayoutEditor(QMainWindow):
                 row = cursor.fetchone()
                 tube_form = row["参数值"].strip() if (row and row.get("参数值")) else None
 
+                # 读取折流板切口方向
                 cursor.execute("""
                     SELECT 参数值 
                     FROM 产品设计活动表_布管参数表
@@ -5327,6 +5517,7 @@ class TubeLayoutEditor(QMainWindow):
                 else:
                     cut_dir = mapped_val
 
+                # 读取换热管排列方式
                 cursor.execute("""
                     SELECT 参数值 
                     FROM 产品设计活动表_布管参数表
@@ -5336,10 +5527,11 @@ class TubeLayoutEditor(QMainWindow):
                 row = cursor.fetchone()
                 tube_arr = row["参数值"].strip() if (row and row.get("参数值")) else None
 
+                # 读取隔条位置尺寸 W
                 cursor.execute("""
                     SELECT 参数值 
                     FROM 产品设计活动表_布管参数表
-                    WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸 W'  # 需确认参数名是否正确，若不同需修改
+                    WHERE 产品ID = %s AND 参数名 = '隔条位置尺寸 W'
                     LIMIT 1
                 """, (product_id,))
                 row = cursor.fetchone()
@@ -5349,6 +5541,21 @@ class TubeLayoutEditor(QMainWindow):
                     getiao_chicun = 0.0
                     QMessageBox.warning(self, "警告", "未读取到隔板槽尺寸，使用默认值0.0！")
 
+                # 读取管子外径 do
+                cursor.execute("""
+                    SELECT 参数值 
+                    FROM 产品设计活动表_布管参数表
+                    WHERE 产品ID = %s AND 参数名 = '换热管外径 do'
+                    LIMIT 1
+                """, (product_id,))
+                row = cursor.fetchone()
+                if row and row.get("参数值"):
+                    do_value = float(row["参数值"].strip())
+                else:
+                    do_value = 25.0  # 默认值
+                    QMessageBox.warning(self, "警告", "未读取到换热管外径，使用默认值25.0！")
+
+                # 读取已删除管子的坐标
                 cursor.execute("""
                     SELECT 坐标 
                     FROM 产品设计活动表_布管元件表
@@ -5381,6 +5588,9 @@ class TubeLayoutEditor(QMainWindow):
                     return True
             return False
 
+        # 过滤掉已删除的坐标
+        filtered_coords = [(x, y) for x, y in coords if not is_deleted(x, y)]
+
         # 辅助函数：计算两点间距离
         def calc_distance(x1, y1, x2, y2):
             return ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
@@ -5396,12 +5606,48 @@ class TubeLayoutEditor(QMainWindow):
                         dist = calc_distance(x1, y1, x2, y2)
                         if dist > max_dist:
                             max_dist = dist
-            return round(max_dist, 3)  # 保留3位小数
+            return round(max_dist, 3)
+
+        # ==================== 计算实际布管区域最大直径和最大高度 ====================
+        if filtered_coords:
+            # 计算实际布管区域最大直径
+            max_radius = max(math.hypot(x, y) for x, y in filtered_coords)
+            calc_results["实际布管区域最大直径"] = str(round(max_radius * 2 + do_value, 3))
+
+            # 计算实际布管区域最大高度
+            max_height = 0.0
+            if cut_dir == "竖直左右":
+                # 按 y 分组，算每行宽度
+                y_groups = defaultdict(list)
+                for x, y in filtered_coords:
+                    y_groups[y].append(x)
+                if y_groups:
+                    max_span = max(max(x_list) - min(x_list) for x_list in y_groups.values())
+                    max_height = max_span + do_value
+            elif cut_dir == "水平上下":
+                # 按 x 分组，算每列高度
+                x_groups = defaultdict(list)
+                for x, y in filtered_coords:
+                    x_groups[x].append(y)
+                if x_groups:
+                    max_span = max(max(y_list) - min(y_list) for y_list in x_groups.values())
+                    max_height = max_span + do_value
+            else:
+                # 默认计算方式：y方向最大跨度
+                if filtered_coords:
+                    y_values = [y for x, y in filtered_coords]
+                    max_span = max(y_values) - min(y_values)
+                    max_height = max_span + do_value
+
+            calc_results["实际布管区域最大高度"] = str(round(max_height, 3))
+        else:
+            calc_results["实际布管区域最大直径"] = "0.0"
+            calc_results["实际布管区域最大高度"] = "0.0"
 
         fenchengxingshi = tube_form if tube_form else ""
         if fenchengxingshi == "2":
             fenchengxingshi = "2.1"
-        calc_results["相邻隔板槽中心距"] = str(round(getiao_chicun, 3))  # 赋值隔板槽中心距
+        calc_results["相邻隔板槽中心距"] = str(round(getiao_chicun, 3))
 
         need_two_rows = (
                 (cut_dir == "竖直左右" and tube_arr == "正三角形")
@@ -5413,27 +5659,26 @@ class TubeLayoutEditor(QMainWindow):
             if need_two_rows:
                 # 逻辑1：取前两排非零管孔的坐标（按y坐标分组，取y>0的前两组）
                 y_groups = {}
-                for x, y in coords:
-                    if not is_deleted(x, y):
-                        if y not in y_groups:
-                            y_groups[y] = []
-                        y_groups[y].append((x, y))
+                for x, y in filtered_coords:
+                    if y not in y_groups:
+                        y_groups[y] = []
+                    y_groups[y].append((x, y))
                 # 按y值升序排序（取y>0的前两组）
                 sorted_ys = sorted([y for y in y_groups.keys() if y > 0])[:2]
                 for y in sorted_ys:
                     selected_coords_cross.extend(y_groups.get(y, []))
             else:
                 # 逻辑2：取y>0的最小y对应的一排，无则取所有y的最小值
-                positive_ys = [y for x, y in coords if y > 0 and not is_deleted(x, y)]
+                positive_ys = [y for x, y in filtered_coords if y > 0]
                 if positive_ys:
                     target_y = min(positive_ys)
                 else:
-                    all_ys = [y for x, y in coords if not is_deleted(x, y)]
+                    all_ys = [y for x, y in filtered_coords]
                     target_y = min(all_ys) if all_ys else 0.0
                 # 筛选目标y的坐标
                 selected_coords_cross = [
-                    (x, y) for x, y in coords
-                    if abs(y - target_y) < 1e-6 and not is_deleted(x, y)
+                    (x, y) for x, y in filtered_coords
+                    if abs(y - target_y) < 1e-6
                 ]
             # 赋值排管根数和管排1中心距
             calc_results["'十字'交叉沿水平隔板槽单侧的排管根数"] = str(len(selected_coords_cross))
@@ -5441,21 +5686,20 @@ class TubeLayoutEditor(QMainWindow):
             calc_results["'十字'交叉沿水平隔板槽单侧管排1最两端管孔中心距"] = str(max_dist_cross)
 
         elif fenchengxingshi == "6.2":
-
-            y_above = [y for x, y in coords if y > getiao_chicun and not is_deleted(x, y)]
+            y_above = [y for x, y in filtered_coords if y > getiao_chicun]
             if y_above:
                 min_above_y = min(y_above)
                 selected_coords_cross.extend([
-                    (x, y) for x, y in coords
-                    if abs(y - min_above_y) < 1e-6 and not is_deleted(x, y)
+                    (x, y) for x, y in filtered_coords
+                    if abs(y - min_above_y) < 1e-6
                 ])
             # 下侧：y<-getiao_chicun的最大y
-            y_below = [y for x, y in coords if y < -getiao_chicun and not is_deleted(x, y)]
+            y_below = [y for x, y in filtered_coords if y < -getiao_chicun]
             if y_below:
                 max_below_y = max(y_below)
                 selected_coords_cross.extend([
-                    (x, y) for x, y in coords
-                    if abs(y - max_below_y) < 1e-6 and not is_deleted(x, y)
+                    (x, y) for x, y in filtered_coords
+                    if abs(y - max_below_y) < 1e-6
                 ])
             # 赋值排管根数和管排1中心距
             calc_results["'十字'交叉沿水平隔板槽单侧的排管根数"] = str(len(selected_coords_cross))
@@ -5465,13 +5709,13 @@ class TubeLayoutEditor(QMainWindow):
         selected_coords_vertical = []
         if fenchengxingshi != "2":
             # 取x<0的最大x（默认一列），满足条件时加次大x（第二列）
-            x_negatives = sorted([x for x, y in coords if x < 0 and not is_deleted(x, y)], reverse=True)
+            x_negatives = sorted([x for x, y in filtered_coords if x < 0], reverse=True)
             if x_negatives:
                 # 第一列：最大x
                 max_x = x_negatives[0]
                 selected_coords_vertical.extend([
-                    (x, y) for x, y in coords
-                    if abs(x - max_x) < 1e-6 and not is_deleted(x, y)
+                    (x, y) for x, y in filtered_coords
+                    if abs(x - max_x) < 1e-6
                 ])
                 # 第二列：满足条件时加次大x
                 if ((cut_dir == "竖直左右" and tube_arr == "正三角形")
@@ -5479,8 +5723,8 @@ class TubeLayoutEditor(QMainWindow):
                     if len(x_negatives) > 1:
                         second_x = x_negatives[1]
                         selected_coords_vertical.extend([
-                            (x, y) for x, y in coords
-                            if abs(x - second_x) < 1e-6 and not is_deleted(x, y)
+                            (x, y) for x, y in filtered_coords
+                            if abs(x - second_x) < 1e-6
                         ])
         # 赋值排管根数和中心距
         calc_results["沿竖直隔板槽单侧的排管根数"] = str(len(selected_coords_vertical))
@@ -5491,44 +5735,45 @@ class TubeLayoutEditor(QMainWindow):
             # 连续侧：y>getiao_chicun（上侧最小y）和y<-getiao_chicun（下侧最大y）
             selected_cont = []
             # 上侧
-            y_above_cont = [y for x, y in coords if y > getiao_chicun and not is_deleted(x, y)]
+            y_above_cont = [y for x, y in filtered_coords if y > getiao_chicun]
             if y_above_cont:
                 min_above_cont = min(y_above_cont)
                 selected_cont.extend([
-                    (x, y) for x, y in coords
-                    if abs(y - min_above_cont) < 1e-6 and not is_deleted(x, y)
+                    (x, y) for x, y in filtered_coords
+                    if abs(y - min_above_cont) < 1e-6
                 ])
             # 下侧
-            y_below_cont = [y for x, y in coords if y < -getiao_chicun and not is_deleted(x, y)]
+            y_below_cont = [y for x, y in filtered_coords if y < -getiao_chicun]
             if y_below_cont:
                 max_below_cont = max(y_below_cont)
                 selected_cont.extend([
-                    (x, y) for x, y in coords
-                    if abs(y - max_below_cont) < 1e-6 and not is_deleted(x, y)
+                    (x, y) for x, y in filtered_coords
+                    if abs(y - max_below_cont) < 1e-6
                 ])
             # 不连续侧：y<getiao_chicun（下侧最大y）和y>-getiao_chicun（上侧最小y）
             selected_uncont = []
             # 下侧
-            y_below_uncont = [y for x, y in coords if y < getiao_chicun and not is_deleted(x, y)]
+            y_below_uncont = [y for x, y in filtered_coords if y < getiao_chicun]
             if y_below_uncont:
                 max_below_uncont = max(y_below_uncont)
                 selected_uncont.extend([
-                    (x, y) for x, y in coords
-                    if abs(y - max_below_uncont) < 1e-6 and not is_deleted(x, y)
+                    (x, y) for x, y in filtered_coords
+                    if abs(y - max_below_uncont) < 1e-6
                 ])
             # 上侧
-            y_above_uncont = [y for x, y in coords if y > -getiao_chicun and not is_deleted(x, y)]
+            y_above_uncont = [y for x, y in filtered_coords if y > -getiao_chicun]
             if y_above_uncont:
                 min_above_uncont = min(y_above_uncont)
                 selected_uncont.extend([
-                    (x, y) for x, y in coords
-                    if abs(y - min_above_uncont) < 1e-6 and not is_deleted(x, y)
+                    (x, y) for x, y in filtered_coords
+                    if abs(y - min_above_uncont) < 1e-6
                 ])
             # 赋值丁字交叉相关参数
             calc_results["'丁字'交叉沿水平隔板槽连续侧的排管根数"] = str(len(selected_cont))
             calc_results["'丁字'交叉沿水平隔板槽不连续侧的排管根数"] = str(len(selected_uncont))
             max_dist_uncont = max(get_max_distance(selected_cont), get_max_distance(selected_uncont))
             calc_results["'丁字'交叉沿水平隔板槽不连续侧管排1最两端管孔中心距"] = str(max_dist_uncont)
+
         table_name = "`产品设计活动表_布管计算结果表`"
         sql_statements = []
 
@@ -5537,7 +5782,7 @@ class TubeLayoutEditor(QMainWindow):
                 return value.replace("'", "''")
             return str(value)
 
-        # 4.1 先删除该产品ID的旧计算结果
+        # 先删除该产品ID的旧计算结果
         delete_sql = f"DELETE FROM {table_name} WHERE `产品ID` = '{escape_sql(product_id)}' AND `产品类型` = '1'"
         sql_statements.append(delete_sql)
 
