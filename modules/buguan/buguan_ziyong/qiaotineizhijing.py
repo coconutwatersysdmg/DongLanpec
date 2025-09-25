@@ -68,8 +68,9 @@ def on_product_id_changed(new_id):
 product_manager.product_id_changed.connect(on_product_id_changed)
 
 
-def cal_qiaotineizhijing_U(product_id, isDi_change,user_Di):
+def cal_qiaotineizhijing_U(product_id, isDi_change, isDN_change, user_Di, user_DN):
     import pymysql
+
 
     # 连接数据库
     conn = pymysql.connect(
@@ -237,10 +238,13 @@ def cal_qiaotineizhijing_U(product_id, isDi_change,user_Di):
         param_map = {row["参数名称"].strip(): row for row in rows}
     except Exception as e:
         print(f"❌ 查询失败: {e}")
-
-    # 公称直径（管程）
-    if "公称直径*" in param_map:
-        design_params["公称直径"] = str(param_map["公称直径*"].get("管程数值", ""))
+    # 公称直径分类讨论
+    if isDN_change:
+        design_params["公称直径"] = user_DN
+    else:
+        # 公称直径（管程）
+        if "公称直径*" in param_map:
+            design_params["公称直径"] = str(param_map["公称直径*"].get("管程数值", ""))
 
     # 绝热厚度（管程）
     if "绝热层厚度" in param_map:
@@ -540,6 +544,8 @@ def cal_qiaotineizhijing_U(product_id, isDi_change,user_Di):
         "椭圆形封头直边段高度": "25",
         "覆层材料类型": "",
     }
+    if isDN_change:
+        guangxiang_fengtou["公称直径"] = user_DN
     # ===== 获取预设厚度1~3（来自元件附加参数表）=====
     cursor.execute("""
             SELECT 参数名称, 参数值 FROM 产品设计活动表_元件附加参数表
@@ -589,6 +595,8 @@ def cal_qiaotineizhijing_U(product_id, isDi_change,user_Di):
         "最大允许工作压力": "最高允许工作压力",
         "椭圆形封头内/外径": "公称直径*"
     }
+    if isDN_change:
+        map2["公称直径"] = user_DN
 
     for key, param_name in map2.items():
         value = param_map.get(param_name, {}).get("管程数值", "")
@@ -689,6 +697,8 @@ def cal_qiaotineizhijing_U(product_id, isDi_change,user_Di):
         "椭圆形封头直边段高度": "25",
         "覆层材料类型": ""
     }
+    if isDN_change:
+        keti_fengtou["公称直径"] = user_DN
     # ===== 获取预设厚度1~3（来自元件附加参数表）=====
     cursor.execute("""
             SELECT 参数名称, 参数值 FROM 产品设计活动表_元件附加参数表
@@ -729,6 +739,8 @@ def cal_qiaotineizhijing_U(product_id, isDi_change,user_Di):
         "最大允许工作压力": "最高允许工作压力",
         "椭圆形封头内/外径": "公称直径*"
     }
+    if isDN_change:
+        map2["公称直径"] = user_DN
 
     for key, param_name in map2.items():
         value = param_map.get(param_name, {}).get("壳程数值", "")
@@ -831,22 +843,30 @@ def cal_qiaotineizhijing_U(product_id, isDi_change,user_Di):
         "公称直径": ""
     }
     if isDi_change:
+        print("传入用户输入的值")
+        print(user_Di)
         guanxiang_yuantong["圆筒内/外径"] = user_Di
+    print(guanxiang_yuantong["圆筒内/外径"])
+    print("最终用户传入的值")
     try:
         conn = pymysql.connect(
             host="localhost", user="root", password="123456",
             database="产品设计活动库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
         )
         cursor = conn.cursor()
-        # 查询设计数据表，获取公称直径*
-        cursor.execute("""
-                       SELECT 管程数值
-                       FROM 产品设计活动表_设计数据表
-                       WHERE 产品ID = %s AND 参数名称 = '公称直径*'
-                   """, (product_id,))
-        row = cursor.fetchone()
-        raw_val = row["管程数值"].strip() if row and row.get("管程数值") else None
-        guanxiang_yuantong["公称直径"] = raw_val
+        if isDN_change:
+            design_params["公称直径"] = user_DN
+        else:
+            # 查询设计数据表，获取公称直径*
+            cursor.execute("""
+                                  SELECT 管程数值
+                                  FROM 产品设计活动表_设计数据表
+                                  WHERE 产品ID = %s AND 参数名称 = '公称直径*'
+                              """, (product_id,))
+            row = cursor.fetchone()
+            raw_val = row["管程数值"].strip() if row and row.get("管程数值") else None
+            guanxiang_yuantong["公称直径"] = raw_val
+
         # === 查询换热管公称长度 LN ===
         cursor.execute("""
                 SELECT 参数值
@@ -943,13 +963,16 @@ def cal_qiaotineizhijing_U(product_id, isDi_change,user_Di):
     # if row and "数值" in row:
     #     guanxiang_yuantong["是否按外径计算"] = "1" if row["数值"] == "是" else "0"
     # 查询设计数据表，获取公称直径*
-    cursor.execute("""
-            SELECT 管程数值 FROM 产品设计活动表_设计数据表
-            WHERE 产品ID = %s AND 参数名称 = '公称直径*'
-        """, (product_id,))
-    row = cursor.fetchone()
-    if row and "管程数值" in row:
-        guanxiang_yuantong["圆筒内/外径"] = str(row["管程数值"])
+    if isDN_change:
+        guanxiang_yuantong["圆筒内/外径"] = user_DN
+    else:
+        cursor.execute("""
+                    SELECT 管程数值 FROM 产品设计活动表_设计数据表
+                    WHERE 产品ID = %s AND 参数名称 = '公称直径*'
+                """, (product_id,))
+        row = cursor.fetchone()
+        if row and "管程数值" in row:
+            guanxiang_yuantong["圆筒内/外径"] = str(row["管程数值"])
 
     map3 = {
         "液柱静压力": "液柱静压力",
@@ -1019,15 +1042,19 @@ def cal_qiaotineizhijing_U(product_id, isDi_change,user_Di):
         )
         cursor = conn.cursor()
         # 查询设计数据表，获取公称直径*
-        cursor.execute("""
-                        SELECT 壳程数值
-                        FROM 产品设计活动表_设计数据表
-                        WHERE 产品ID = %s AND 参数名称 = '公称直径*'
-                        LIMIT 1
-                    """, (product_id,))
-        row = cursor.fetchone()
-        raw_val = row["壳程数值"].strip() if row and row.get("壳程数值") else None
-        qiaoti_yuantong["公称直径"] = raw_val
+        if isDN_change:
+            qiaoti_yuantong["公称直径"] = user_DN
+        else:
+            cursor.execute("""
+                                    SELECT 壳程数值
+                                    FROM 产品设计活动表_设计数据表
+                                    WHERE 产品ID = %s AND 参数名称 = '公称直径*'
+                                    LIMIT 1
+                                """, (product_id,))
+            row = cursor.fetchone()
+            raw_val = row["壳程数值"].strip() if row and row.get("壳程数值") else None
+            qiaoti_yuantong["公称直径"] = raw_val
+
         # === 查询换热管公称长度 LN ===
         cursor.execute("""
                 SELECT 参数值
@@ -1125,14 +1152,17 @@ def cal_qiaotineizhijing_U(product_id, isDi_change,user_Di):
     row = cursor.fetchone()
     if row and "数值" in row:
         qiaoti_yuantong["是否按外径计算"] = "1" if row["数值"] == "是" else "0"
-    # 查询设计数据表，获取公称直径*
-    cursor.execute("""
-               SELECT 壳程数值 FROM 产品设计活动表_设计数据表
-               WHERE 产品ID = %s AND 参数名称 = '公称直径*'
-           """, (product_id,))
-    row = cursor.fetchone()
-    if row and "壳程数值" in row:
-        qiaoti_yuantong["圆筒内/外径"] = str(row["壳程数值"])
+    if isDN_change:
+        qiaoti_yuantong["圆筒内/外径"] = user_DN
+    else:
+        # 查询设计数据表，获取公称直径*
+        cursor.execute("""
+                      SELECT 壳程数值 FROM 产品设计活动表_设计数据表
+                      WHERE 产品ID = %s AND 参数名称 = '公称直径*'
+                  """, (product_id,))
+        row = cursor.fetchone()
+        if row and "壳程数值" in row:
+            qiaoti_yuantong["圆筒内/外径"] = str(row["壳程数值"])
 
     map3 = {
         "液柱静压力": "液柱静压力",
@@ -1391,6 +1421,8 @@ def cal_qiaotineizhijing_U(product_id, isDi_change,user_Di):
                 """, (product_id,))
         rows = cursor.fetchall()
         param_map = {row["参数名称"].strip(): row for row in rows}
+        if isDN_change:
+            param_map["公称直径*"]["管程数值"] = user_DN
 
         # 公称直径（管程）
         if "公称直径*" in param_map:
@@ -1660,6 +1692,7 @@ def cal_qiaotineizhijing_U(product_id, isDi_change,user_Di):
     with open("qiaotineizhijing.json", "r", encoding="utf-8") as f:
         data = json.load(f)  # 此时可以正常读取
         print(data)  # 输出到控制台
+        print("输入json")
 
     clr.AddReference("CalCulationInterF")  # 不加 .dll 后缀
     from CalCulationInterF import CalPartInterface
@@ -1673,7 +1706,7 @@ def cal_qiaotineizhijing_U(product_id, isDi_change,user_Di):
     return outputjsonstr
 
 
-def cal_qiaotineizhijing_S(product_id):
+def cal_qiaotineizhijing_S(product_id, isDi_change, isDN_change, user_Di, user_DN):
     import pymysql
     # 连接数据库
     conn = pymysql.connect(
@@ -1812,6 +1845,8 @@ def cal_qiaotineizhijing_S(product_id):
         "绝热厚度": "4",
         "管/壳程布置型式": "2.1"
     }
+    if isDN_change:
+        design_params["公称直径"] = user_DN
     # === 直接从数据库读取参数值 ===
     try:
         conn = pymysql.connect(
@@ -1842,11 +1877,12 @@ def cal_qiaotineizhijing_S(product_id):
         param_map = {row["参数名称"].strip(): row for row in rows}
     except Exception as e:
         print(f"❌ 查询失败: {e}")
-
-    # 公称直径（管程）
-    if "公称直径*" in param_map:
-        design_params["公称直径"] = str(param_map["公称直径*"].get("管程数值", ""))
-
+    if isDN_change:
+        design_params["公称直径"] = user_DN
+    else:
+        # 公称直径（管程）
+        if "公称直径*" in param_map:
+            design_params["公称直径"] = str(param_map["公称直径*"].get("管程数值", ""))
     # 绝热厚度（管程）
     if "绝热层厚度" in param_map:
         design_params["绝热厚度"] = str(param_map["绝热层厚度"].get("管程数值", ""))
@@ -2094,14 +2130,19 @@ def cal_qiaotineizhijing_S(product_id):
     row = cursor.fetchone()
     if row and "数值" in row:
         waitougai_yuantong["是否按外径计算"] = "1" if row["数值"] == "是" else "0"
-    # 查询设计数据表，获取公称直径*
-    cursor.execute("""
-        SELECT 管程数值 FROM 产品设计活动表_设计数据表
-        WHERE 产品ID = %s AND 参数名称 = '公称直径*'
-    """, (product_id,))
-    row = cursor.fetchone()
-    if row and "管程数值" in row:
-        waitougai_yuantong["圆筒内/外径"] = str(row["管程数值"])
+    if isDi_change:
+        waitougai_yuantong["圆筒内/外径"] = user_Di
+    else:
+        if isDN_change:
+            waitougai_yuantong["圆筒内/外径"] = user_DN
+        else:
+            cursor.execute("""
+                    SELECT 管程数值 FROM 产品设计活动表_设计数据表
+                    WHERE 产品ID = %s AND 参数名称 = '公称直径*'
+                """, (product_id,))
+            row = cursor.fetchone()
+            if row and "管程数值" in row:
+                waitougai_yuantong["圆筒内/外径"] = str(row["管程数值"])
 
     map3 = {
         "液柱静压力": "液柱静压力",
@@ -2247,6 +2288,8 @@ def cal_qiaotineizhijing_S(product_id):
         "椭圆形封头直边段高度": "25",
         "覆层材料类型": "",
     }
+    if isDN_change:
+        guangxiang_fengtou["公称直径"]=user_DN
     # ===== 获取预设厚度1~3（来自元件附加参数表）=====
     cursor.execute("""
         SELECT 参数名称, 参数值 FROM 产品设计活动表_元件附加参数表
@@ -2296,6 +2339,7 @@ def cal_qiaotineizhijing_S(product_id):
         "最大允许工作压力": "最高允许工作压力",
         "椭圆形封头内/外径": "公称直径*"
     }
+
 
     for key, param_name in map2.items():
         value = param_map.get(param_name, {}).get("管程数值", "")
@@ -2643,14 +2687,20 @@ def cal_qiaotineizhijing_S(product_id):
     row = cursor.fetchone()
     if row and "数值" in row:
         guanxiang_yuantong["是否按外径计算"] = "1" if row["数值"] == "是" else "0"
-    # 查询设计数据表，获取公称直径*
-    cursor.execute("""
-        SELECT 管程数值 FROM 产品设计活动表_设计数据表
-        WHERE 产品ID = %s AND 参数名称 = '公称直径*'
-    """, (product_id,))
-    row = cursor.fetchone()
-    if row and "管程数值" in row:
-        guanxiang_yuantong["圆筒内/外径"] = str(row["管程数值"])
+    if isDi_change:
+        guanxiang_yuantong["圆筒内/外径"] = user_Di
+    else:
+        if isDN_change:
+            guanxiang_yuantong["圆筒内/外径"] = user_DN
+        else:
+            # 查询设计数据表，获取公称直径*
+            cursor.execute("""
+                    SELECT 管程数值 FROM 产品设计活动表_设计数据表
+                    WHERE 产品ID = %s AND 参数名称 = '公称直径*'
+                """, (product_id,))
+            row = cursor.fetchone()
+            if row and "管程数值" in row:
+                guanxiang_yuantong["圆筒内/外径"] = str(row["管程数值"])
 
     map3 = {
         "液柱静压力": "液柱静压力",
@@ -2827,14 +2877,20 @@ def cal_qiaotineizhijing_S(product_id):
     row = cursor.fetchone()
     if row and "数值" in row:
         qiaoti_yuantong["是否按外径计算"] = "1" if row["数值"] == "是" else "0"
-    # 查询设计数据表，获取公称直径*
-    cursor.execute("""
-           SELECT 壳程数值 FROM 产品设计活动表_设计数据表
-           WHERE 产品ID = %s AND 参数名称 = '公称直径*'
-       """, (product_id,))
-    row = cursor.fetchone()
-    if row and "壳程数值" in row:
-        qiaoti_yuantong["圆筒内/外径"] = str(row["壳程数值"])
+    if isDi_change:
+        qiaoti_yuantong["圆筒内/外径"] = user_Di
+    else:
+        if isDN_change:
+            qiaoti_yuantong["圆筒内/外径"] = user_DN
+        else:
+            # 查询设计数据表，获取公称直径*
+            cursor.execute("""
+                       SELECT 壳程数值 FROM 产品设计活动表_设计数据表
+                       WHERE 产品ID = %s AND 参数名称 = '公称直径*'
+                   """, (product_id,))
+            row = cursor.fetchone()
+            if row and "壳程数值" in row:
+                qiaoti_yuantong["圆筒内/外径"] = str(row["壳程数值"])
 
     map3 = {
         "液柱静压力": "液柱静压力",

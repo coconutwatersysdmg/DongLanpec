@@ -29,9 +29,9 @@ from modules.buguan.buguan_ziyong.tube_sheet_connection import TubeSheetConnecti
 from modules.chanpinguanli.chanpinguanli_main import product_manager
 import modules.buguan.buguan_ziyong.qiaotineizhijing as qtzj
 
-# product_id = 'PD2025090422414303'
+# product_id = 'PD2025092421444001'
 
-product_id = '1234566'
+product_id = 'PD2025092509281701'
 
 
 def on_product_id_changed(new_id):
@@ -504,6 +504,7 @@ class TubeLayoutEditor(QMainWindow):
         self.connection_lines = []  # 用于存储所有绘制的连线
         self.r = 0
         self.isDi_change = False
+        self.isDN_change = False
         self.center_dangban_length = 0
         self.mouse_x = 0
         self.mouse_y = 0
@@ -1284,6 +1285,11 @@ class TubeLayoutEditor(QMainWindow):
                                     do = float(param['参数值'])  # 强制类型转换
                                 except (ValueError, TypeError) as e:
                                     print(f"换热管外径 do 转换失败: {str(e)}")
+                            elif param['参数名'] == "公称直径 DN" and param['参数值']:
+                                try:
+                                    DN = float(param['参数值'])  # 强制类型转换
+                                except (ValueError, TypeError) as e:
+                                    print(f"公称直径 DN转换失败: {str(e)}")
 
                         # 验证关键参数有效性
                         if Di is None or do is None:
@@ -1363,7 +1369,7 @@ class TubeLayoutEditor(QMainWindow):
                                     dl_exists = True
 
                                 if param['参数名'] == "壳体内直径 Di":
-                                    update_di = self.cal_di(0)
+                                    update_di = self.cal_di(0, DN)
                                     if update_di:
                                         processed_params[i]['参数值'] = update_di
                                     dl_exists = True
@@ -1524,6 +1530,11 @@ class TubeLayoutEditor(QMainWindow):
                                         do = float(param['参数值'])  # 强制类型转换
                                     except (ValueError, TypeError) as e:
                                         print(f"换热管外径 do 转换失败: {str(e)}")
+                                elif param['参数名'] == "公称直径 DN" and param['参数值']:
+                                    try:
+                                        DN = float(param['参数值'])  # 强制类型转换
+                                    except (ValueError, TypeError) as e:
+                                        print(f"公称直径 DN 转换失败: {str(e)}")
 
                             # 验证关键参数有效性
                             if Di is None or do is None:
@@ -1597,7 +1608,7 @@ class TubeLayoutEditor(QMainWindow):
                                         self.DN = processed_params[i]['参数值']
                                         dn_exists = True  # 建议使用不同的变量名区分两种情况
                                     if param['参数名'] == "壳体内直径 Di":
-                                        update_di = self.cal_di(0)
+                                        update_di = self.cal_di(0, DN)
                                         if update_di:
                                             processed_params[i]['参数值'] = update_di
                                         dl_exists = True
@@ -1846,9 +1857,20 @@ class TubeLayoutEditor(QMainWindow):
         self.update_baffle_diameter()
         self.update_tube_center_distance()
 
-    def cal_di(self, user_Di):
+    def cal_di(self, user_Di, user_DN):
         # 调用接口获取壳体内直径数据
-        di_result = qtzj.cal_qiaotineizhijing_U(self.productID, self.isDi_change, user_Di)
+        print(user_DN)
+        print("当前获取的公称直径")
+        print(self.isDN_change)
+        print("这是DN更新标志")
+        print(self.isDi_change)
+        print("这是Di更新标志")
+        if self.heat_exchanger in ["AEU", "BEU"]:
+            di_result = qtzj.cal_qiaotineizhijing_U(self.productID, self.isDi_change, self.isDN_change, user_Di,
+                                                    user_DN)
+        elif self.heat_exchanger in ["AES", "BES"]:
+            di_result = qtzj.cal_qiaotineizhijing_S(self.productID, self.isDi_change, self.isDN_change, user_Di,
+                                                    user_DN)
 
         import json
         try:
@@ -3555,21 +3577,24 @@ class TubeLayoutEditor(QMainWindow):
                 f"无匹配数据：未找到外径{do_value}mm + {unified_range_type}（对应原始排列方式：{range_type_value}）的中心距配置")
 
     def user_update_Di(self):
-        """更新壳体内直径 Di（采用与布管限定圆相同的更新方式）"""
-        # 1. 定位壳体内直径 Di 参数行
         di_row = -1
+        dn_row = -1
         row_count = self.param_table.rowCount()
         for row in range(row_count):
             param_name_item = self.param_table.item(row, 1)
             if param_name_item and param_name_item.text().strip() == "壳体内直径 Di":
                 di_row = row
                 break
+        for row in range(row_count):
+            param_name_item = self.param_table.item(row, 1)
+            if param_name_item and param_name_item.text().strip() == "公称直径 DN":
+                dn_row = row
+                break
 
         if di_row == -1:
             print("未找到壳体内直径 Di 参数行，无法更新")
             return
 
-        # 2. 获取当前壳体内直径值
         di_item = self.param_table.item(di_row, 2)
         if not di_item:
             print("壳体内直径 Di 单元格不存在")
@@ -3578,19 +3603,30 @@ class TubeLayoutEditor(QMainWindow):
         di_text = di_item.text().strip()
         try:
             di_value = float(di_text)
-            print(f"成功获取当前壳体内直径：{di_value:.1f}mm")
+            print(f"成功获取当前壳体内直径：{di_value: .1f}mm")
         except ValueError:
             print(f"壳体内直径格式错误（输入：{di_text}），需为数字")
             return
+        dn_item = self.param_table.item(dn_row, 2)
+        if not dn_item:
+            print("公称直径单元格不存在")
+            return
+
+        dn_text = dn_item.text().strip()
+        try:
+            dn_value = float(dn_text)
+            print(f"成功获取当前公称直径：{dn_value: .1f}mm")
+        except ValueError:
+            print(f"公称直径格式错误（输入：{dn_text}），需为数字")
+            return
 
         # 3. 计算目标值
-        current_di = self.cal_di(di_value)
+        current_di = self.cal_di(di_value, dn_value)
 
         # 验证计算结果
         if current_di is None or not isinstance(current_di, (int, float)):
             print(f"cal_di()返回无效值：{current_di}，无法更新壳体内直径")
             return
-
 
         original_handler = None
         if hasattr(self, 'handle_param_change'):
@@ -3618,8 +3654,8 @@ class TubeLayoutEditor(QMainWindow):
                 else:
                     self.param_table.setItem(di_row, 2, QTableWidgetItem(f"{current_di:.1f}"))
 
-            print(f"已更新壳体内直径 Di: {current_di:.1f}mm")
-            print(f"壳体内直径 Di 已从 {di_value:.1f}mm 更新为 {current_di:.1f}mm")
+            print(f"已更新壳体内直径 Di: {current_di: .1f}mm")
+            print(f"壳体内直径 Di 已从 {di_value: .1f}mm 更新为 {current_di:.1f}mm")
 
         except Exception as e:
             print(f"更新壳体内直径时发生错误: {e}")
@@ -4303,6 +4339,10 @@ class TubeLayoutEditor(QMainWindow):
             if param_name in target_params:
                 if param_name == "壳体内直径 Di":
                     self.isDi_change = True
+                    self.isDN_change = True
+                    self.user_update_Di()
+                if param_name == "公称直径 DN":
+                    self.isDN_change = True
                     self.user_update_Di()
 
                 if param_name in ["壳体内直径 Di", "换热管外径 do", "换热管排列方式"]:
