@@ -843,11 +843,7 @@ def cal_qiaotineizhijing_U(product_id, isDi_change, isDN_change, user_Di, user_D
         "公称直径": ""
     }
     if isDi_change:
-        print("传入用户输入的值")
-        print(user_Di)
         guanxiang_yuantong["圆筒内/外径"] = user_Di
-    print(guanxiang_yuantong["圆筒内/外径"])
-    print("最终用户传入的值")
     try:
         conn = pymysql.connect(
             host="localhost", user="root", password="123456",
@@ -1691,8 +1687,6 @@ def cal_qiaotineizhijing_U(product_id, isDi_change, isDN_change, user_Di, user_D
         json.dump(result, f, ensure_ascii=False, indent=4)
     with open("qiaotineizhijing.json", "r", encoding="utf-8") as f:
         data = json.load(f)  # 此时可以正常读取
-        print(data)  # 输出到控制台
-        print("输入json")
 
     clr.AddReference("CalCulationInterF")  # 不加 .dll 后缀
     from CalCulationInterF import CalPartInterface

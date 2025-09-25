@@ -1858,13 +1858,6 @@ class TubeLayoutEditor(QMainWindow):
         self.update_tube_center_distance()
 
     def cal_di(self, user_Di, user_DN):
-        # 调用接口获取壳体内直径数据
-        print(user_DN)
-        print("当前获取的公称直径")
-        print(self.isDN_change)
-        print("这是DN更新标志")
-        print(self.isDi_change)
-        print("这是Di更新标志")
         if self.heat_exchanger in ["AEU", "BEU"]:
             di_result = qtzj.cal_qiaotineizhijing_U(self.productID, self.isDi_change, self.isDN_change, user_Di,
                                                     user_DN)
@@ -1905,8 +1898,6 @@ class TubeLayoutEditor(QMainWindow):
                         except (ValueError, TypeError):
                             return value  # 返回原始值如果转换失败
 
-            # 如果未找到圆筒内径数据
-            print("未找到圆筒内径数据")
             return None
 
         except json.JSONDecodeError as e:
@@ -4918,6 +4909,20 @@ class TubeLayoutEditor(QMainWindow):
             self.update_tube_center_distance()
             # self.update_lagan()
             self.update_partition_plate_center_distance()
+        elif param_name == "管程程数":
+            # 管程程数变化：更新管程分程形式值及对应图片
+            self.tube_pass_form_value = {
+                "2": "2",
+                "4": "4.1",
+                "6": "6.1"
+            }.get(value, self.tube_pass_form_value)  # 默认保留原 value
+            print(f"当前管程分程形式: {self.tube_pass_form_value}")
+            print("Gordon")  # 保留原调试打印
+
+            self.update_SN()
+            # 更新分程形式下拉框的图片
+            if hasattr(self, "tube_pass_form_combo") and self.tube_pass_form_combo:
+                self.load_tube_pass_images(self.tube_pass_form_combo, value)
 
     def none_tube(self, height_0_180, height_90_270, Di, do, centers):
 
