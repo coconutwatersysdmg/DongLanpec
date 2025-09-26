@@ -9333,7 +9333,7 @@ class TubeLayoutEditor(QMainWindow):
         :param selected_centers: 经过对称处理后的选中中心坐标（相对坐标）
         """
         from PyQt5.QtGui import QPen, QBrush, QColor
-        from PyQt5.QtWidgets import QGraphicsEllipseItem
+        from PyQt5.QtWidgets import QGraphicsEllipseItem, QMessageBox
         from PyQt5.QtCore import Qt
 
         # 检查是否有选中的中心（相对坐标）
@@ -9362,7 +9362,7 @@ class TubeLayoutEditor(QMainWindow):
                     if item.brush().color() == target_brush_color:
                         items_to_remove.append(item)
 
-            # 移除筛选出的淡蓝色圆（场景移除后引用自动管理，无需手动del）
+            # 移除筛选出的淡蓝色圆
             for item in items_to_remove:
                 self.graphics_scene.removeItem(item)
 
@@ -9408,6 +9408,19 @@ class TubeLayoutEditor(QMainWindow):
                 if x is None or y is None:
                     continue
 
+                # 关键修改：清除同一位置上已有的任何图形元素（包括可能的红色拉杆）
+                # 遍历场景中所有椭圆项，检查是否与当前坐标位置重合
+                for item in self.graphics_scene.items():
+                    if isinstance(item, QGraphicsEllipseItem):
+                        # 计算现有椭圆的中心坐标
+                        item_rect = item.rect()
+                        item_center_x = item_rect.x() + item_rect.width() / 2
+                        item_center_y = item_rect.y() + item_rect.height() / 2
+
+                        # 检查是否为同一位置（考虑浮点数精度误差）
+                        if abs(item_center_x - x) < 1e-6 and abs(item_center_y - y) < 1e-6:
+                            self.graphics_scene.removeItem(item)
+
                 # 在图形场景中添加椭圆（空心圆，基于绝对坐标计算左上角位置）
                 new_circle = self.graphics_scene.addEllipse(
                     x - self.r,  # 椭圆左上角x坐标（绝对坐标 - 半径 = 左上角位置）
@@ -9440,9 +9453,9 @@ class TubeLayoutEditor(QMainWindow):
                 self.current_centers)
             self.update_tube_nums()
 
-            # # 若未成功添加任何换热管，弹出警告
-            # if added_count == 0:
-            #     QMessageBox.warning(self, "警告", "未成功添加任何换热管，请检查坐标选择")
+            # 若未成功添加任何换热管，弹出警告
+            if added_count == 0:
+                QMessageBox.warning(self, "警告", "未成功添加任何换热管，请检查坐标选择")
 
     # 最左最右拉杆
     def on_small_block_click(self):
