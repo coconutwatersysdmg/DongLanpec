@@ -535,6 +535,7 @@ class TubeLayoutEditor(QMainWindow):
     def current_centers(self, value):
         self._current_centers = value  # 更新私有变量
         self.update_total_holes_count()  # 每次赋值后自动更新标签
+        self.update_tube_nums()
 
     def setup_param_listeners(self):
         """为参数表格添加变化监听，实时更新参数列表"""
@@ -1858,6 +1859,13 @@ class TubeLayoutEditor(QMainWindow):
         self.update_tube_center_distance()
 
     def cal_di(self, user_Di, user_DN):
+        # 调用接口获取壳体内直径数据
+        print(user_DN)
+        print("当前获取的公称直径")
+        print(self.isDN_change)
+        print("这是DN更新标志")
+        print(self.isDi_change)
+        print("这是Di更新标志")
         if self.heat_exchanger in ["AEU", "BEU"]:
             di_result = qtzj.cal_qiaotineizhijing_U(self.productID, self.isDi_change, self.isDN_change, user_Di,
                                                     user_DN)
@@ -1898,6 +1906,8 @@ class TubeLayoutEditor(QMainWindow):
                         except (ValueError, TypeError):
                             return value  # 返回原始值如果转换失败
 
+            # 如果未找到圆筒内径数据
+            print("未找到圆筒内径数据")
             return None
 
         except json.JSONDecodeError as e:
@@ -4909,20 +4919,6 @@ class TubeLayoutEditor(QMainWindow):
             self.update_tube_center_distance()
             # self.update_lagan()
             self.update_partition_plate_center_distance()
-        elif param_name == "管程程数":
-            # 管程程数变化：更新管程分程形式值及对应图片
-            self.tube_pass_form_value = {
-                "2": "2",
-                "4": "4.1",
-                "6": "6.1"
-            }.get(value, self.tube_pass_form_value)  # 默认保留原 value
-            print(f"当前管程分程形式: {self.tube_pass_form_value}")
-            print("Gordon")  # 保留原调试打印
-
-            self.update_SN()
-            # 更新分程形式下拉框的图片
-            if hasattr(self, "tube_pass_form_combo") and self.tube_pass_form_combo:
-                self.load_tube_pass_images(self.tube_pass_form_combo, value)
 
     def none_tube(self, height_0_180, height_90_270, Di, do, centers):
 
@@ -5139,43 +5135,6 @@ class TubeLayoutEditor(QMainWindow):
         else:  # 管板形式页面
             message = "数据保存成功！"
 
-        # if message is not None:
-        #     # 创建保存成功对话框
-        #     save_dialog = QDialog(self)
-        #     save_dialog.setWindowTitle("保存成功")
-        #     save_dialog.setModal(True)
-        #     save_dialog.resize(300, 150)
-        #
-        #     layout = QVBoxLayout()
-        #     save_dialog.setLayout(layout)
-        #
-        #     message_label = QLabel(message)
-        #     message_label.setAlignment(Qt.AlignCenter)
-        #     message_label.setStyleSheet("font-size: 16px; font-weight: bold;")
-        #
-        #     # 添加确定按钮
-        #     ok_button = QPushButton("确定")
-        #     ok_button.setFixedSize(100, 30)
-        #     ok_button.clicked.connect(save_dialog.accept)
-        #     ok_button.setStyleSheet("""
-        #         QPushButton {
-        #             background-color: #4CAF50;
-        #             color: white;
-        #             border: none;
-        #             border-radius: 4px;
-        #             padding: 5px;
-        #         }
-        #         QPushButton:hover {
-        #             background-color: #45a049;
-        #         }
-        #     """)
-        #
-        #     # 添加到布局
-        #     layout.addWidget(message_label)
-        #     layout.addWidget(ok_button, alignment=Qt.AlignCenter)
-        #
-        #     # 显示对话框
-        #     save_dialog.exec_()
         self.line_tip.setText(f"数据保存成功")
         self.actual_save_operation(current_page_index)  # 先保存后提示
 
@@ -6288,6 +6247,7 @@ class TubeLayoutEditor(QMainWindow):
                         self.execute_sql(statement)
 
                 self.build_sql_for_component()
+                print(1111111111111111111111111111111111111111111111)
                 # 当前圆心坐标
                 if self.heat_exchanger in ["AES", "BES"]:
                     sql = self.build_sql_for_floating_head_calc()
@@ -6295,6 +6255,7 @@ class TubeLayoutEditor(QMainWindow):
                         for statement in sql:
                             self.execute_sql(statement)
                 elif self.heat_exchanger in ["AEU", "BEU"]:
+                    self.update_bugan_quantity()
                     sql = self.build_sql_for_u_tube_calc()
                     if sql:
                         for statement in sql:
@@ -6319,6 +6280,58 @@ class TubeLayoutEditor(QMainWindow):
                 for statement in sql_statements:
                     self.execute_sql(statement + ';')  # 确保每条语句以分号结尾
             pass
+
+    def update_bugan_quantity(self):
+        product_id = self.productID  # 固定产品ID
+
+        if not hasattr(self, 'current_centers') or not isinstance(self.current_centers, (list, set, tuple)):
+            QMessageBox.warning(self, "警告", "缺少有效布管坐标数据（self.current_centers异常）！")
+            return None
+
+        # 提取 y > 0 的坐标，并转 float
+        y_values = [float(y) for (x, y) in self.current_centers if float(y) > 0]
+        if not y_values:
+            QMessageBox.information(self, "提示", "没有找到 y > 0 的布管坐标。")
+            return None
+
+        # 去重并升序排序
+        unique_y_sorted = sorted(set(y_values))
+        diameters = [y * 2 for y in unique_y_sorted]
+
+        # 数据库连接
+        conn = pymysql.connect(
+            host="localhost",
+            port=3306,
+            user="root",
+            password="123456",
+            database="产品设计活动库",
+            charset="utf8mb4"
+        )
+        cursor = conn.cursor()
+
+        # 查询行号
+        query = "SELECT 至水平中心线行号 FROM 产品设计活动表_布管数量表 WHERE 产品ID = %s"
+        cursor.execute(query, (product_id,))
+        rows = cursor.fetchall()
+        if not rows:
+            QMessageBox.warning(self, "警告", f"未找到产品 {product_id} 的布管数量表记录！")
+            conn.close()
+            return None
+
+        # 转 float 并升序排序
+        rows_sorted = sorted([float(line_no[0]) for line_no in rows])
+
+        # 更新 R 列
+        for line_no, dia in zip(rows_sorted, diameters):
+            cursor.execute(
+                "UPDATE 产品设计活动表_布管数量表 SET R = %s WHERE 产品ID = %s AND 至水平中心线行号 = %s",
+                (dia, product_id, line_no)
+            )
+
+        conn.commit()
+        conn.close()
+
+        QMessageBox.information(self, "完成", f"已更新产品 {product_id} 的布管数量表 R 列。")
 
     def execute_sql(self, sql):
         """执行SQL语句"""
