@@ -850,11 +850,14 @@ class TubeLayoutEditor(QMainWindow):
         self.action_bar = QHBoxLayout()
         self.action_bar.addStretch()
 
-        actions = ["布管", "交叉布管", "全屏", "操作记录"]
+        actions = ["布管", "交叉布管", "删除交叉布管", "全屏", "操作记录"]
         for action in actions:
             btn = QPushButton(action)
-            btn.setFixedSize(100, 30)
+            btn.setStyleSheet("padding: 5px 10px;")
+            btn.adjustSize()
             self.action_bar.addWidget(btn)
+
+            # 保持原有的连接逻辑不变
             if action == "布管":
                 btn.clicked.connect(self.on_buguan_bt_click)
             elif action == "全屏":
@@ -862,6 +865,8 @@ class TubeLayoutEditor(QMainWindow):
                 btn.clicked.connect(lambda: self.handle_fullscreen_toggle())
             elif action == "操作记录":
                 btn.clicked.connect(self.on_show_operations_click)
+            elif action == "删除交叉布管":
+                btn.clicked.connect(self.on_del_cross_pipes_click)
             elif action == "交叉布管":
                 btn.clicked.connect(self.on_cross_pipes_click)
 
@@ -5805,6 +5810,70 @@ class TubeLayoutEditor(QMainWindow):
 
         return sql_statements
 
+    def build_sql_for_cross_pipes(self):
+        # 1. 基础参数初始化与合法性校验
+        table_name = "`产品设计活动表_布管交叉布管表`"
+        product_id = self.productID
+        sql_statements = []
+
+        # 校验产品ID是否存在（避免无效SQL执行）
+        if not product_id or str(product_id).strip() == "":
+            QMessageBox.warning(self, "警告", "缺少必要的产品ID参数！")
+            return None
+
+        # 2. SQL字符串安全转义函数（防止SQL注入）
+        def escape_str(value):
+            # 处理字符串类型：单引号替换为双单引号；非字符串类型直接返回
+            if isinstance(value, str):
+                return value.replace("'", "''")
+            # 处理布尔值：True转1，False转0；其他类型转字符串
+            elif isinstance(value, bool):
+                return "1" if value else "0"
+            else:
+                return str(value)
+
+        first_row = 1 if (self.is_x_line1 or self.is_y_line1) else 0
+        second_row = 1 if (self.is_x_line2 or self.is_y_line2) else 0
+        third_row = 1 if (self.is_x_line3 or self.is_y_line3) else 0
+
+        # 4. 安全处理所有插入值（避免特殊字符导致SQL语法错误）
+        safe_product_id = escape_str(product_id)
+        safe_first_row = escape_str(first_row)
+        safe_second_row = escape_str(second_row)
+        safe_third_row = escape_str(third_row)
+
+        # 5. 先删除当前产品ID在表中的旧记录（避免数据冗余，保持数据唯一性）
+        delete_sql = f"DELETE FROM {table_name} WHERE `产品ID` = '{safe_product_id}'"
+        sql_statements.append(delete_sql)
+
+        # 6. 插入新的交叉布管数据（基于计算后的状态）
+        insert_sql = (
+            f"INSERT INTO {table_name} (`产品ID`, `第一排`, `第二排`, `第三排`) "
+            f"VALUES ('{safe_product_id}', '{safe_first_row}', '{safe_second_row}', '{safe_third_row}')"
+        )
+        sql_statements.append(insert_sql)
+
+        conn = create_product_connection()
+        if not conn:
+            QMessageBox.critical(self, "数据库错误", "无法建立数据库连接！")
+            return None
+        try:
+            with conn.cursor() as cursor:
+                for sql in sql_statements:
+                    cursor.execute(sql)
+            conn.commit()
+            return sql_statements
+
+        except pymysql.Error as e:
+            # 发生错误时回滚事务，避免数据不一致
+            conn.rollback()
+            return None
+
+        finally:
+            # 无论成功/失败，都关闭数据库连接（释放资源）
+            if conn and conn.open:
+                conn.close()
+
     def build_sql_for_tube(self, tube_data):
         if not tube_data:
             QMessageBox.warning(self, "警告", "缺少必要的管孔参数数据！")
@@ -6247,7 +6316,11 @@ class TubeLayoutEditor(QMainWindow):
                         self.execute_sql(statement)
 
                 self.build_sql_for_component()
-                print(1111111111111111111111111111111111111111111111)
+
+                sql = self.build_sql_for_cross_pipes()
+                if sql:
+                    for statement in sql:
+                        self.execute_sql(statement)
                 # 当前圆心坐标
                 if self.heat_exchanger in ["AES", "BES"]:
                     sql = self.build_sql_for_floating_head_calc()
@@ -8338,6 +8411,9 @@ class TubeLayoutEditor(QMainWindow):
         else:
             distance = 0
         return distance
+
+    def on_del_cross_pipes_click(self):
+        self.calculate_piping_layout()
 
     # 交叉布管
     def on_cross_pipes_click(self):
