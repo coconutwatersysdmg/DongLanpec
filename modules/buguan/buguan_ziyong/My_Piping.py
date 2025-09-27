@@ -475,6 +475,12 @@ class TubeLayoutEditor(QMainWindow):
         self.del_centers = []
         self.all_params = []
         self.red_dangban = []
+        self.coord_x_1 = []
+        self.coord_x_2 = []
+        self.coord_x_3 = []
+        self.coord_y_1 = []
+        self.coord_y_2 = []
+        self.coord_y_3 = []
         self.original_param_values = {}  # 存储原始参数值 {(row, col): value}
         self.modified_rows = set()  # 存储被修改的行索引
         self.is_loading_data = False  # 防止初始化时误触发
@@ -850,7 +856,7 @@ class TubeLayoutEditor(QMainWindow):
         self.action_bar = QHBoxLayout()
         self.action_bar.addStretch()
 
-        actions = ["布管", "交叉布管", "删除交叉布管", "全屏", "操作记录"]
+        actions = ["布管", "交叉布管", "清屏", "全屏", "操作记录"]
         for action in actions:
             btn = QPushButton(action)
             btn.setStyleSheet("padding: 5px 10px;")
@@ -865,7 +871,7 @@ class TubeLayoutEditor(QMainWindow):
                 btn.clicked.connect(lambda: self.handle_fullscreen_toggle())
             elif action == "操作记录":
                 btn.clicked.connect(self.on_show_operations_click)
-            elif action == "删除交叉布管":
+            elif action == "清屏":
                 btn.clicked.connect(self.on_del_cross_pipes_click)
             elif action == "交叉布管":
                 btn.clicked.connect(self.on_cross_pipes_click)
@@ -1927,13 +1933,19 @@ class TubeLayoutEditor(QMainWindow):
 
     # TODO 布管函数
     def calculate_piping_layout(self):
-
         self.is_x_line1 = False
         self.is_x_line2 = False
         self.is_x_line3 = False
         self.is_y_line1 = False
         self.is_y_line2 = False
         self.is_y_line3 = False
+        self.coord_x_1 = []
+        self.coord_x_2 = []
+        self.coord_x_3 = []
+        self.coord_y_1 = []
+        self.coord_y_2 = []
+        self.coord_y_3 = []
+
         if hasattr(self, 'connection_lines'):
             for line in self.connection_lines:
                 if line in self.graphics_scene.items():
@@ -5821,26 +5833,47 @@ class TubeLayoutEditor(QMainWindow):
             QMessageBox.warning(self, "警告", "缺少必要的产品ID参数！")
             return None
 
-        # 2. SQL字符串安全转义函数（防止SQL注入）
-        def escape_str(value):
-            # 处理字符串类型：单引号替换为双单引号；非字符串类型直接返回
-            if isinstance(value, str):
-                return value.replace("'", "''")
-            # 处理布尔值：True转1，False转0；其他类型转字符串
-            elif isinstance(value, bool):
-                return "1" if value else "0"
-            else:
-                return str(value)
+        # 2. 简单转换函数：将值转换为字符串，不进行特殊转义
+        def convert_to_str(value):
+            # 对于列表直接转为字符串形式，其他类型也转为字符串
+            return str(value)
 
-        first_row = 1 if (self.is_x_line1 or self.is_y_line1) else 0
-        second_row = 1 if (self.is_x_line2 or self.is_y_line2) else 0
-        third_row = 1 if (self.is_x_line3 or self.is_y_line3) else 0
+        # 3. 按规则计算第一排、第二排、第三排需存储的数据
+        # 3.1 处理第一排：基于coord_x_1和coord_y_1
+        if not self.coord_x_1 and not self.coord_y_1:  # 两者均为空列表，存0
+            first_row_data = 0
+        elif not self.coord_x_1:  # coord_x_1为空列表，取coord_y_1
+            first_row_data = self.coord_y_1
+        elif not self.coord_y_1:  # coord_y_1为空列表，取coord_x_1
+            first_row_data = self.coord_x_1
+        else:  # 两者均非空，取coord_x_1
+            first_row_data = self.coord_x_1
 
-        # 4. 安全处理所有插入值（避免特殊字符导致SQL语法错误）
-        safe_product_id = escape_str(product_id)
-        safe_first_row = escape_str(first_row)
-        safe_second_row = escape_str(second_row)
-        safe_third_row = escape_str(third_row)
+        # 3.2 处理第二排：基于coord_x_2和coord_y_2
+        if not self.coord_x_2 and not self.coord_y_2:  # 两者均为空列表，存0
+            second_row_data = 0
+        elif not self.coord_x_2:  # coord_x_2为空列表，取coord_y_2
+            second_row_data = self.coord_y_2
+        elif not self.coord_y_2:  # coord_y_2为空列表，取coord_x_2
+            second_row_data = self.coord_x_2
+        else:  # 两者均非空，取coord_x_2
+            second_row_data = self.coord_x_2
+
+        # 3.3 处理第三排：基于coord_x_3和coord_y_3
+        if not self.coord_x_3 and not self.coord_y_3:  # 两者均为空列表，存0
+            third_row_data = 0
+        elif not self.coord_x_3:  # coord_x_3为空列表，取coord_y_3
+            third_row_data = self.coord_y_3
+        elif not self.coord_y_3:  # coord_y_3为空列表，取coord_x_3
+            third_row_data = self.coord_x_3
+        else:  # 两者均非空，取coord_x_3
+            third_row_data = self.coord_x_3
+
+        # 4. 转换所有插入值为字符串
+        safe_product_id = convert_to_str(product_id)
+        safe_first_row = convert_to_str(first_row_data)
+        safe_second_row = convert_to_str(second_row_data)
+        safe_third_row = convert_to_str(third_row_data)
 
         # 5. 先删除当前产品ID在表中的旧记录（避免数据冗余，保持数据唯一性）
         delete_sql = f"DELETE FROM {table_name} WHERE `产品ID` = '{safe_product_id}'"
@@ -5867,6 +5900,7 @@ class TubeLayoutEditor(QMainWindow):
         except pymysql.Error as e:
             # 发生错误时回滚事务，避免数据不一致
             conn.rollback()
+            QMessageBox.critical(self, "SQL执行错误", f"执行SQL时出错：{str(e)}")
             return None
 
         finally:
@@ -6403,8 +6437,6 @@ class TubeLayoutEditor(QMainWindow):
 
         conn.commit()
         conn.close()
-
-        QMessageBox.information(self, "完成", f"已更新产品 {product_id} 的布管数量表 R 列。")
 
     def execute_sql(self, sql):
         """执行SQL语句"""
@@ -8552,17 +8584,21 @@ class TubeLayoutEditor(QMainWindow):
                     # x轴第一排
                     if (coord1_in_up and coord2_in_down) or (coord1_in_down and coord2_in_up):
                         self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line1, self.print_cross_x_down_line1)
+                        self.coord_x_1 = current_coords
+
                         self.is_x_line1 = True
                     # y轴第一排
                     elif (coord3_in_left and coord4_in_right) or (coord3_in_right and coord4_in_left):
                         self.cross_y_2_pipes(current_coords, self.print_cross_y_left_line1,
                                              self.print_cross_y_right_line1)
+                        self.coord_y_1 = current_coords
                         self.is_y_line1 = True
                     # x轴第二排
                     elif (coord5_in_up and coord6_in_down) or (coord5_in_down and coord6_in_up):
                         if self.is_x_line1:
                             self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line2,
                                                  self.print_cross_x_down_line2)
+                            self.coord_x_2 = current_coords
                             self.is_x_line2 = True
                         else:
                             QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
@@ -8573,6 +8609,7 @@ class TubeLayoutEditor(QMainWindow):
                         if self.is_y_line1:
                             self.cross_y_2_pipes(current_coords, self.print_cross_y_left_line2,
                                                  self.print_cross_y_right_line2)
+                            self.coord_y_2 = current_coords
                             self.is_y_line2 = True
                         else:
                             QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
@@ -8583,6 +8620,7 @@ class TubeLayoutEditor(QMainWindow):
                         if self.is_x_line1 and self.is_x_line2:
                             self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line3,
                                                  self.print_cross_x_down_line3)
+                            self.coord_x_3 = current_coords
                             self.is_x_line3 = True
                         else:
                             QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
@@ -8594,6 +8632,7 @@ class TubeLayoutEditor(QMainWindow):
                             self.cross_y_2_pipes(current_coords, self.print_cross_y_left_line3,
                                                  self.print_cross_y_right_line3)
                             self.is_y_line3 = True
+                            self.coord_y_3 = current_coords
                         else:
                             QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
                             self.clear_selection_highlight()
@@ -8603,91 +8642,97 @@ class TubeLayoutEditor(QMainWindow):
                         self.clear_selection_highlight()
                         self.selected_centers.clear()
                     # 管孔数量为4个
-                elif len(self.selected_centers) == 4:
+            elif len(self.selected_centers) == 4:
 
-                    x_up_count_line1 = sum(
-                        1 for coord in current_coords if coord in self.original_print_cross_x_up_line1)
-                    x_down_count_line1 = sum(
-                        1 for coord in current_coords if coord in self.original_print_cross_x_down_line1)
+                x_up_count_line1 = sum(
+                    1 for coord in current_coords if coord in self.original_print_cross_x_up_line1)
+                x_down_count_line1 = sum(
+                    1 for coord in current_coords if coord in self.original_print_cross_x_down_line1)
 
-                    y_left_count_line1 = sum(
-                        1 for coord in current_coords if coord in self.original_print_cross_y_left_line1)
-                    y_right_count_line1 = sum(
-                        1 for coord in current_coords if coord in self.original_print_cross_y_right_line1)
+                y_left_count_line1 = sum(
+                    1 for coord in current_coords if coord in self.original_print_cross_y_left_line1)
+                y_right_count_line1 = sum(
+                    1 for coord in current_coords if coord in self.original_print_cross_y_right_line1)
 
-                    x_up_count_line2 = sum(
-                        1 for coord in current_coords if coord in self.original_print_cross_x_up_line2)
-                    x_down_count_line2 = sum(
-                        1 for coord in current_coords if coord in self.original_print_cross_x_down_line2)
+                x_up_count_line2 = sum(
+                    1 for coord in current_coords if coord in self.original_print_cross_x_up_line2)
+                x_down_count_line2 = sum(
+                    1 for coord in current_coords if coord in self.original_print_cross_x_down_line2)
 
-                    y_left_count_line2 = sum(
-                        1 for coord in current_coords if coord in self.original_print_cross_y_left_line2)
-                    y_right_count_line2 = sum(
-                        1 for coord in current_coords if coord in self.original_print_cross_y_right_line2)
+                y_left_count_line2 = sum(
+                    1 for coord in current_coords if coord in self.original_print_cross_y_left_line2)
+                y_right_count_line2 = sum(
+                    1 for coord in current_coords if coord in self.original_print_cross_y_right_line2)
 
-                    x_up_count_line3 = sum(
-                        1 for coord in current_coords if coord in self.original_print_cross_x_up_line3)
-                    x_down_count_line3 = sum(
-                        1 for coord in current_coords if coord in self.original_print_cross_x_down_line3)
+                x_up_count_line3 = sum(
+                    1 for coord in current_coords if coord in self.original_print_cross_x_up_line3)
+                x_down_count_line3 = sum(
+                    1 for coord in current_coords if coord in self.original_print_cross_x_down_line3)
 
-                    y_left_count_line3 = sum(
-                        1 for coord in current_coords if coord in self.original_print_cross_y_left_line3)
-                    y_right_count_line3 = sum(
-                        1 for coord in current_coords if coord in self.original_print_cross_y_right_line3)
-                    # x轴第一排
-                    if x_up_count_line1 == 2 and x_down_count_line1 == 2:
-                        self.cross_x_4_pipes(current_coords, self.print_cross_x_up_line1, self.print_cross_x_down_line1)
-                        self.is_x_line1 = True
-                    # y轴第一排
-                    elif y_left_count_line1 == 2 and y_right_count_line1 == 2:
-                        self.cross_y_4_pipes(current_coords, self.print_cross_y_left_line1,
-                                             self.print_cross_y_right_line1)
-                        self.is_y_line1 = True
-                    # x轴第二排
-                    elif x_up_count_line2 == 2 and x_down_count_line2 == 2:
-                        if self.is_x_line1:
-                            self.cross_x_4_pipes(current_coords, self.print_cross_x_up_line2,
-                                                 self.print_cross_x_down_line2)
-                            self.is_x_line2 = True
-                        else:
-                            QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
-                            self.clear_selection_highlight()
-                            self.selected_centers.clear()
-                    # y轴第二排
-                    elif y_left_count_line2 == 2 and y_right_count_line2 == 2:
-                        if self.is_y_line1:
-                            self.cross_y_4_pipes(current_coords, self.print_cross_y_left_line2,
-                                                 self.print_cross_y_right_line2)
-                            self.is_y_line2 = True
-                        else:
-                            QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
-                            self.clear_selection_highlight()
-                            self.selected_centers.clear()
-                    # x轴第三排
-                    elif x_up_count_line3 == 2 and x_down_count_line3 == 2:
-                        if self.is_x_line1 and self.is_x_line2:
-                            self.cross_x_4_pipes(current_coords, self.print_cross_x_up_line3,
-                                                 self.print_cross_x_down_line3)
-                            self.is_x_line3 = True
-                        else:
-                            QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
-                            self.clear_selection_highlight()
-                            self.selected_centers.clear()
-                    # y轴第三排
-                    elif y_left_count_line3 == 2 and y_right_count_line3 == 2:
-                        if self.is_y_line1 and self.is_y_line2:
-                            self.cross_y_4_pipes(current_coords, self.print_cross_y_left_line3,
-                                                 self.print_cross_y_right_line3)
-                            self.is_y_line3 = True
-                        else:
-                            QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
-                            self.clear_selection_highlight()
-                            self.selected_centers.clear()
-
+                y_left_count_line3 = sum(
+                    1 for coord in current_coords if coord in self.original_print_cross_y_left_line3)
+                y_right_count_line3 = sum(
+                    1 for coord in current_coords if coord in self.original_print_cross_y_right_line3)
+                # x轴第一排
+                if x_up_count_line1 == 2 and x_down_count_line1 == 2:
+                    self.cross_x_4_pipes(current_coords, self.print_cross_x_up_line1, self.print_cross_x_down_line1)
+                    self.coord_x_1 = [current_coords[0], current_coords[3]]
+                    self.is_x_line1 = True
+                # y轴第一排
+                elif y_left_count_line1 == 2 and y_right_count_line1 == 2:
+                    self.cross_y_4_pipes(current_coords, self.print_cross_y_left_line1,
+                                         self.print_cross_y_right_line1)
+                    self.coord_y_1 = [current_coords[0], current_coords[3]]
+                    self.is_y_line1 = True
+                # x轴第二排
+                elif x_up_count_line2 == 2 and x_down_count_line2 == 2:
+                    if self.is_x_line1:
+                        self.cross_x_4_pipes(current_coords, self.print_cross_x_up_line2,
+                                             self.print_cross_x_down_line2)
+                        self.coord_x_2 = [current_coords[0], current_coords[3]]
+                        self.is_x_line2 = True
                     else:
-                        QMessageBox.warning(self, "选择错误", "参照管孔位置不正确")
+                        QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
+                        self.clear_selection_highlight()
+                        self.selected_centers.clear()
+                # y轴第二排
+                elif y_left_count_line2 == 2 and y_right_count_line2 == 2:
+                    if self.is_y_line1:
+                        self.cross_y_4_pipes(current_coords, self.print_cross_y_left_line2,
+                                             self.print_cross_y_right_line2)
+                        self.coord_y_2 = [current_coords[0], current_coords[3]]
+                        self.is_y_line2 = True
+                    else:
+                        QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
+                        self.clear_selection_highlight()
+                        self.selected_centers.clear()
+                # x轴第三排
+                elif x_up_count_line3 == 2 and x_down_count_line3 == 2:
+                    if self.is_x_line1 and self.is_x_line2:
+                        self.cross_x_4_pipes(current_coords, self.print_cross_x_up_line3,
+                                             self.print_cross_x_down_line3)
+                        self.coord_x_3 = [current_coords[0], current_coords[3]]
+                        self.is_x_line3 = True
+                    else:
+                        QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
+                        self.clear_selection_highlight()
+                        self.selected_centers.clear()
+                # y轴第三排
+                elif y_left_count_line3 == 2 and y_right_count_line3 == 2:
+                    if self.is_y_line1 and self.is_y_line2:
+                        self.cross_y_4_pipes(current_coords, self.print_cross_y_left_line3,
+                                             self.print_cross_y_right_line3)
+                        self.coord_y_3 = [current_coords[0], current_coords[3]]
+                        self.is_y_line3 = True
+                    else:
+                        QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
+                        self.clear_selection_highlight()
+                        self.selected_centers.clear()
+
                 else:
-                    QMessageBox.warning(self, "选择错误", "参照管孔的数量应为2个或4个")
+                    QMessageBox.warning(self, "选择错误", "参照管孔位置不正确")
+            else:
+                QMessageBox.warning(self, "选择错误", "参照管孔的数量应为2个或4个")
 
         #
         #     self.build_x_2_cross_pipes(self.selected_centers)
