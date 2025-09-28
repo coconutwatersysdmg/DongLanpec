@@ -31,7 +31,7 @@ import modules.buguan.buguan_ziyong.qiaotineizhijing as qtzj
 
 # product_id = 'PD2025092421444001'
 
-product_id = 'PD2025092509281701'
+product_id = 'PD2025092421444001'
 
 
 def on_product_id_changed(new_id):
@@ -457,6 +457,8 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
 
 
 # TODO 此处初始化
+
+
 class TubeLayoutEditor(QMainWindow):
     def __init__(self, line_tip=None):
         super().__init__()
@@ -475,12 +477,18 @@ class TubeLayoutEditor(QMainWindow):
         self.del_centers = []
         self.all_params = []
         self.red_dangban = []
-        self.coord_x_1 = []
-        self.coord_x_2 = []
-        self.coord_x_3 = []
-        self.coord_y_1 = []
-        self.coord_y_2 = []
-        self.coord_y_3 = []
+        self.coord_x_line1_2 = []
+        self.coord_x_line2_2 = []
+        self.coord_x_line3_2 = []
+        self.coord_y_line1_2 = []
+        self.coord_y_line2_2 = []
+        self.coord_y_line3_2 = []
+        self.coord_x_line1_4 = []
+        self.coord_x_line2_4 = []
+        self.coord_x_line3_4 = []
+        self.coord_y_line1_4 = []
+        self.coord_y_line2_4 = []
+        self.coord_y_line3_4 = []
         self.original_param_values = {}  # 存储原始参数值 {(row, col): value}
         self.modified_rows = set()  # 存储被修改的行索引
         self.is_loading_data = False  # 防止初始化时误触发
@@ -553,6 +561,31 @@ class TubeLayoutEditor(QMainWindow):
             widget = self.param_table.cellWidget(row, 2)
             if isinstance(widget, QComboBox):
                 widget.currentIndexChanged.connect(self.update_leftpad_params)
+
+    def get_selected_y_center_numbers(self, selected_centers, print_cross_y_left, print_cross_y_right):
+        # 初始化返回的编号
+        left_number = None
+        right_number = None
+
+        for center in selected_centers:
+            for item in print_cross_y_left:
+                # item的格式为(编号, x坐标, y坐标)，center为(x坐标, y坐标)
+                if (item[1], item[2]) == center:
+                    left_number = item[0]
+                    break
+            for item in print_cross_y_right:
+                if (item[1], item[2]) == center:
+                    right_number = item[0]
+                    break
+
+        if left_number is None or right_number is None:
+            raise ValueError(
+                "selected_centers中的坐标未完全匹配到print_cross_y_left或print_cross_y_right")
+
+        return {
+            'left_number': left_number,
+            'right_number': right_number
+        }
 
     def update_leftpad_params(self):
         """实时更新左侧参数为列表形式"""
@@ -1060,6 +1093,119 @@ class TubeLayoutEditor(QMainWindow):
 
         return results
 
+    def find_cross_pipes_info(self):
+        self.coord_x_line1_2 = []
+        self.coord_y_line1_2 = []
+        self.coord_x_line2_2 = []
+        self.coord_y_line2_2 = []
+        self.coord_x_line3_2 = []
+        self.coord_y_line3_2 = []
+        self.coord_x_line1_4 = []
+        self.coord_y_line1_4 = []
+        self.coord_x_line2_4 = []
+        self.coord_y_line2_4 = []
+        self.coord_x_line3_4 = []
+        self.coord_y_line3_4 = []
+
+        cross_pipe_conn = None
+        try:
+
+            if not self.productID:
+                print("查询交叉布管信息失败：产品ID为空")
+                raise ValueError("产品ID为空，无法查询布管交叉布管表")
+
+            cross_pipe_conn = create_product_connection()
+            if not cross_pipe_conn:
+                print("查询交叉布管信息失败：创建产品数据库连接失败")
+                return
+
+            with cross_pipe_conn.cursor() as cursor:
+                query_sql = """
+                    SELECT 第一排, 第二排, 第三排, 第一排交叉类型, 第二排交叉类型, 第三排交叉类型,x轴或y轴
+                    FROM 产品设计活动表_布管交叉布管表 
+                    WHERE 产品ID = %s
+                """
+                cursor.execute(query_sql, (self.productID,))
+                cross_pipe_result = cursor.fetchone()  # 获取单条查询结果
+
+                if cross_pipe_result and isinstance(cross_pipe_result, dict):
+                    first_row = cross_pipe_result.get("第一排", "")
+                    second_row = cross_pipe_result.get("第二排", "")
+                    third_row = cross_pipe_result.get("第三排", "")
+                    first_type = cross_pipe_result.get("第一排交叉类型", "")
+                    second_type = cross_pipe_result.get("第二排交叉类型", "")
+                    third_type = cross_pipe_result.get("第三排交叉类型", "")
+                    is_x_or_y = cross_pipe_result.get("x轴或y轴", "")
+                    if is_x_or_y == "x":
+                        if first_type == "2":
+                            self.coord_x_line1_2 = first_row
+                        elif first_type == "4":
+                            self.coord_x_line1_4 = self.restore_all_coords(first_row)
+                        else:
+                            self.coord_x_line1_2 = []
+                            self.coord_x_line1_4 = []
+                        if second_type == "2":
+                            self.coord_x_line2_2 = second_row
+                        elif second_type == "4":
+                            self.coord_x_line2_4 = self.restore_all_coords(second_row)
+                        else:
+                            self.coord_x_line2_2 = []
+                            self.coord_x_line2_4 = []
+                        if third_type == "2":
+                            self.coord_x_line3_2 = third_row
+                        elif third_type == "4":
+                            self.coord_x_line3_4 = self.restore_all_coords(third_row)
+                        else:
+                            self.coord_x_line3_2 = []
+                            self.coord_x_line3_4 = []
+                    elif is_x_or_y == "y":
+                        if first_type == "2":
+                            self.coord_y_line1_2 = first_row
+                        elif first_type == "4":
+                            self.coord_y_line1_4 = self.restore_all_coords(first_row)
+                        else:
+                            self.coord_y_line1_2 = []
+                            self.coord_y_line1_4 = []
+                        if second_type == "2":
+                            self.coord_y_line2_2 = second_row
+                        elif second_type == "4":
+                            self.coord_y_line2_4 = self.restore_all_coords(second_row)
+                        else:
+                            self.coord_y_line2_2 = []
+                            self.coord_y_line2_4 = []
+                        if third_type == "2":
+                            self.coord_y_line3_2 = third_row
+                        elif third_type == "4":
+                            self.coord_y_line3_4 = self.restore_all_coords(third_row)
+                        else:
+                            self.coord_y_line3_2 = []
+                            self.coord_y_line3_4 = []
+                    else:
+                        self.coord_x_line1_2 = []
+                        self.coord_y_line1_2 = []
+                        self.coord_x_line2_2 = []
+                        self.coord_y_line2_2 = []
+                        self.coord_x_line3_2 = []
+                        self.coord_y_line3_2 = []
+                        self.coord_x_line1_4 = []
+                        self.coord_y_line1_4 = []
+                        self.coord_x_line2_4 = []
+                        self.coord_y_line2_4 = []
+                        self.coord_x_line3_4 = []
+                        self.coord_y_line3_4 = []
+                else:
+                    print(f"产品ID[{self.productID}]：未查询到对应的交叉布管记录，所有坐标保持空列表")
+
+
+        except Exception as e:
+            print(f"查询交叉布管信息时发生异常：{str(e)}")
+        finally:
+            if cross_pipe_conn and hasattr(cross_pipe_conn, 'open') and cross_pipe_conn.open:
+                try:
+                    cross_pipe_conn.close()
+                except Exception as close_e:
+                    print(f"关闭交叉布管查询连接时出错：{str(close_e)}")
+
     def load_initial_data(self):
         print("加载初始数据")
         self.isBlock = False
@@ -1380,11 +1526,11 @@ class TubeLayoutEditor(QMainWindow):
                                         processed_params[i]['参数值'] = "16"
                                     dl_exists = True
 
-                                if param['参数名'] == "壳体内直径 Di":
-                                    update_di = self.cal_di(0, DN)
-                                    if update_di:
-                                        processed_params[i]['参数值'] = update_di
-                                    dl_exists = True
+                                # if param['参数名'] == "壳体内直径 Di":
+                                #     update_di = self.cal_di(0, DN)
+                                #     if update_di:
+                                #         processed_params[i]['参数值'] = update_di
+                                #     dl_exists = True
 
                             # 没有则新增DL参数
                             if not dl_exists:
@@ -1398,7 +1544,6 @@ class TubeLayoutEditor(QMainWindow):
                             print("未计算出有效DL值，不更新参数")
 
                         if processed_params:
-
                             self.setup_parameters(processed_params, setup_listeners=False)
                             self.hide_specific_params(hidden_params)
                             self.update_leftpad_params()
@@ -1619,11 +1764,11 @@ class TubeLayoutEditor(QMainWindow):
                                     if param['参数名'] == "公称直径 DN":
                                         self.DN = processed_params[i]['参数值']
                                         dn_exists = True  # 建议使用不同的变量名区分两种情况
-                                    if param['参数名'] == "壳体内直径 Di":
-                                        update_di = self.cal_di(0, DN)
-                                        if update_di:
-                                            processed_params[i]['参数值'] = update_di
-                                        dl_exists = True
+                                    # if param['参数名'] == "壳体内直径 Di":
+                                    #     update_di = self.cal_di(0, DN)
+                                    #     if update_di:
+                                    #         processed_params[i]['参数值'] = update_di
+                                    #     dl_exists = True
                                     if param['参数名'] == "分程隔板两侧相邻管中心距（竖直）":
                                         if self.heat_exchanger in ["AEU", "BEU"]:
                                             processed_params[i]['参数值'] = "100"
@@ -1868,15 +2013,84 @@ class TubeLayoutEditor(QMainWindow):
         self.update_baffle_parameters("折流板要求切口率 (%)")
         self.update_baffle_diameter()
         self.update_tube_center_distance()
+        self.find_cross_pipes_info()
+        import ast
+
+        # 只转换字符串类型的属性，已为列表的保持不变
+        if isinstance(self.coord_x_line1_2, str):
+            self.coord_x_line1_2 = ast.literal_eval(self.coord_x_line1_2)
+        if isinstance(self.coord_y_line1_2, str):
+            self.coord_y_line1_2 = ast.literal_eval(self.coord_y_line1_2)
+        if isinstance(self.coord_x_line2_2, str):
+            self.coord_x_line2_2 = ast.literal_eval(self.coord_x_line2_2)
+        if isinstance(self.coord_y_line2_2, str):
+            self.coord_y_line2_2 = ast.literal_eval(self.coord_y_line2_2)
+        if isinstance(self.coord_x_line3_2, str):
+            self.coord_x_line3_2 = ast.literal_eval(self.coord_x_line3_2)
+        if isinstance(self.coord_y_line3_2, str):
+            self.coord_y_line3_2 = ast.literal_eval(self.coord_y_line3_2)
+        if isinstance(self.coord_x_line1_4, str):
+            self.coord_x_line1_4 = ast.literal_eval(self.coord_x_line1_4)
+        if isinstance(self.coord_y_line1_4, str):
+            self.coord_y_line1_4 = ast.literal_eval(self.coord_y_line1_4)
+        if isinstance(self.coord_x_line2_4, str):
+            self.coord_x_line2_4 = ast.literal_eval(self.coord_x_line2_4)
+        if isinstance(self.coord_y_line2_4, str):
+            self.coord_y_line2_4 = ast.literal_eval(self.coord_y_line2_4)
+        if isinstance(self.coord_x_line3_4, str):
+            self.coord_x_line3_4 = ast.literal_eval(self.coord_x_line3_4)
+        if isinstance(self.coord_y_line3_4, str):
+            self.coord_y_line3_4 = ast.literal_eval(self.coord_y_line3_4)
+        self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
+            self.global_centers)
+
+        self.find_closest_to_axes()
+        self.update_print_cross_lines()
+        if self.coord_x_line1_2:
+            self.cross_x_2_pipes(self.coord_x_line1_2, self.print_cross_x_up_line1, self.print_cross_x_down_line1)
+            self.is_x_line1 = True
+        if self.coord_x_line2_2:
+            self.cross_x_2_pipes(self.coord_x_line2_2, self.print_cross_x_up_line2, self.print_cross_x_down_line2)
+            self.is_x_line2 = True
+        if self.coord_x_line3_2:
+            self.cross_x_2_pipes(self.coord_x_line3_2, self.print_cross_x_up_line3, self.print_cross_x_down_line3)
+            self.is_x_line3 = True
+        if self.coord_y_line1_2:
+            self.cross_y_2_pipes(self.coord_y_line1_2, self.print_cross_y_left_line1,
+                                 self.print_cross_y_right_line1)
+            self.is_y_line1 = True
+        if self.coord_y_line2_2:
+            self.cross_y_2_pipes(self.coord_y_line2_2, self.print_cross_y_left_line2,
+                                 self.print_cross_y_right_line2)
+            self.is_y_line2 = True
+        if self.coord_y_line3_2:
+            self.cross_y_2_pipes(self.coord_y_line3_2, self.print_cross_y_left_line3,
+                                 self.print_cross_y_right_line3)
+            self.is_y_line3 = True
+        if self.coord_x_line1_4:
+            self.cross_x_4_pipes(self.coord_x_line1_4, self.print_cross_x_up_line1, self.print_cross_x_down_line1)
+            self.is_x_line1 = True
+        if self.coord_x_line2_4:
+            self.cross_x_4_pipes(self.coord_x_line2_4, self.print_cross_x_up_line2, self.print_cross_x_down_line2)
+            self.is_x_line2 = True
+        if self.coord_x_line3_4:
+            self.cross_x_4_pipes(self.coord_x_line3_4, self.print_cross_x_up_line3, self.print_cross_x_down_line3)
+            self.is_x_line3 = True
+        if self.coord_y_line1_4:
+            self.cross_y_4_pipes(self.coord_y_line1_4, self.print_cross_y_left_line1,
+                                 self.print_cross_y_right_line1)
+            self.is_y_line1 = True
+        if self.coord_y_line2_4:
+            self.cross_y_4_pipes(self.coord_y_line2_4, self.print_cross_y_left_line2,
+                                 self.print_cross_y_right_line2)
+            self.is_y_line2 = True
+        if self.coord_y_line3_4:
+            self.cross_y_4_pipes(self.coord_y_line3_4, self.print_cross_y_left_line3,
+                                 self.print_cross_y_right_line3)
+            self.is_y_line3 = True
 
     def cal_di(self, user_Di, user_DN):
         # 调用接口获取壳体内直径数据
-        print(user_DN)
-        print("当前获取的公称直径")
-        print(self.isDN_change)
-        print("这是DN更新标志")
-        print(self.isDi_change)
-        print("这是Di更新标志")
         if self.heat_exchanger in ["AEU", "BEU"]:
             di_result = qtzj.cal_qiaotineizhijing_U(self.productID, self.isDi_change, self.isDN_change, user_Di,
                                                     user_DN)
@@ -1939,12 +2153,18 @@ class TubeLayoutEditor(QMainWindow):
         self.is_y_line1 = False
         self.is_y_line2 = False
         self.is_y_line3 = False
-        self.coord_x_1 = []
-        self.coord_x_2 = []
-        self.coord_x_3 = []
-        self.coord_y_1 = []
-        self.coord_y_2 = []
-        self.coord_y_3 = []
+        self.coord_x_line1_2 = []
+        self.coord_x_line2_2 = []
+        self.coord_x_line3_2 = []
+        self.coord_x_line1_4 = []
+        self.coord_x_line2_4 = []
+        self.coord_x_line3_4 = []
+        self.coord_y_line1_2 = []
+        self.coord_y_line2_2 = []
+        self.coord_y_line3_2 = []
+        self.coord_y_line1_4 = []
+        self.coord_y_line2_4 = []
+        self.coord_y_line3_4 = []
 
         if hasattr(self, 'connection_lines'):
             for line in self.connection_lines:
@@ -1966,7 +2186,7 @@ class TubeLayoutEditor(QMainWindow):
         height_0_180 = None
         height_90_270 = None
         DN = None
-        Di = None  # 新增：壳体内直径
+        Di = None
         table = self.param_table
 
         for row in range(table.rowCount()):
@@ -4368,7 +4588,7 @@ class TubeLayoutEditor(QMainWindow):
                     self.update_tube_center_distance()
                     self.update_partition_plate_center_distance()
                     self.isDi_change = True
-                    self.user_update_Di()
+                    # self.user_update_Di()
 
                 if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)"]:
                     self.update_baffle_parameters(param_name)
@@ -4385,7 +4605,7 @@ class TubeLayoutEditor(QMainWindow):
                         "6": "6.1"
                     }.get(param_value, self.tube_pass_form_value)  # 默认保留原 value
                     print(f"当前管程分程形式: {self.tube_pass_form_value}")
-                    print("Gordon")  # 保留原调试打印
+                    print("Gordon")
 
                     self.update_SN()
                     # 更新分程形式下拉框的图片
@@ -4936,6 +5156,20 @@ class TubeLayoutEditor(QMainWindow):
             self.update_tube_center_distance()
             # self.update_lagan()
             self.update_partition_plate_center_distance()
+        elif param_name == "管程程数":
+            # 管程程数变化：更新管程分程形式值及对应图片
+            self.tube_pass_form_value = {
+                "2": "2",
+                "4": "4.1",
+                "6": "6.1"
+            }.get(value, self.tube_pass_form_value)  # 默认保留原 value
+            print(f"当前管程分程形式: {self.tube_pass_form_value}")
+            print("Gordon")  # 保留原调试打印
+
+            self.update_SN()
+            # 更新分程形式下拉框的图片
+            if hasattr(self, "tube_pass_form_combo") and self.tube_pass_form_combo:
+                self.load_tube_pass_images(self.tube_pass_form_combo, value)
 
     def none_tube(self, height_0_180, height_90_270, Di, do, centers):
 
@@ -5138,21 +5372,21 @@ class TubeLayoutEditor(QMainWindow):
         # 根据当前页面设置不同的提示信息
         if current_page_index == 0 and self.has_piped:  # 布管页面
             self.clear_modification_marks()
-            self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            # self.line_tip.setText(f"数据保存成功")
+            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 1:  # 管-板连接页面
-            self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            # self.line_tip.setText(f"数据保存成功")
+            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 0 and not self.has_piped:  # 未点击布管状态
-            self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            # self.line_tip.setText(f"数据保存成功")
+            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         else:  # 管板形式页面
             message = "数据保存成功！"
 
-        self.line_tip.setText(f"数据保存成功")
+        # self.line_tip.setText(f"数据保存成功")
         self.actual_save_operation(current_page_index)  # 先保存后提示
 
     def build_sql_for_coordinate(self):
@@ -5823,69 +6057,88 @@ class TubeLayoutEditor(QMainWindow):
         return sql_statements
 
     def build_sql_for_cross_pipes(self):
-        # 1. 基础参数初始化与合法性校验
+        import json  # 导入JSON模块用于序列化列表
         table_name = "`产品设计活动表_布管交叉布管表`"
         product_id = self.productID
         sql_statements = []
 
-        # 校验产品ID是否存在（避免无效SQL执行）
+        # 1. 基础参数合法性校验：产品ID不可为空
         if not product_id or str(product_id).strip() == "":
             QMessageBox.warning(self, "警告", "缺少必要的产品ID参数！")
             return None
 
-        # 2. 简单转换函数：将值转换为字符串，不进行特殊转义
-        def convert_to_str(value):
-            # 对于列表直接转为字符串形式，其他类型也转为字符串
-            return str(value)
+        def process_row(x2, y2, x4, y4):
+            """
+            处理单排交叉布管数据，返回三个结果：
+            - 布管数据列表（非空的x/y列表）
+            - 交叉类型（0/2/4）
+            - 轴类型（x/y，若均为空则返回空字符串）
+            """
+            # 检查2管交叉：x2非空则用x2，否则用y2
+            if x2:
+                return x2, 2, "x"
+            elif y2:
+                return y2, 2, "y"
+            # 检查4管交叉：x4非空则用x4，否则用y4
+            elif x4:
+                return x4, 4, "x"
+            elif y4:
+                return y4, 4, "y"
+            # 所有列表均为空：未布置交叉布管
+            else:
+                return [], 0, ""  # 空列表+类型0+空轴标识
 
-        # 3. 按规则计算第一排、第二排、第三排需存储的数据
-        # 3.1 处理第一排：基于coord_x_1和coord_y_1
-        if not self.coord_x_1 and not self.coord_y_1:  # 两者均为空列表，存0
-            first_row_data = 0
-        elif not self.coord_x_1:  # coord_x_1为空列表，取coord_y_1
-            first_row_data = self.coord_y_1
-        elif not self.coord_y_1:  # coord_y_1为空列表，取coord_x_1
-            first_row_data = self.coord_x_1
-        else:  # 两者均非空，取coord_x_1
-            first_row_data = self.coord_x_1
+        # 2. 分别处理第一、二、三排数据（含轴类型判断）
+        # 第一排
+        first_row_data, first_row_type, axis_type = process_row(
+            self.coord_x_line1_2,
+            self.coord_y_line1_2,
+            self.coord_x_line1_4,
+            self.coord_y_line1_4
+        )
+        # 第二排
+        second_row_data, second_row_type, _ = process_row(
+            self.coord_x_line2_2,
+            self.coord_y_line2_2,
+            self.coord_x_line2_4,
+            self.coord_y_line2_4
+        )
+        # 第三排
+        third_row_data, third_row_type, _ = process_row(
+            self.coord_x_line3_2,
+            self.coord_y_line3_2,
+            self.coord_x_line3_4,
+            self.coord_y_line3_4
+        )
 
-        # 3.2 处理第二排：基于coord_x_2和coord_y_2
-        if not self.coord_x_2 and not self.coord_y_2:  # 两者均为空列表，存0
-            second_row_data = 0
-        elif not self.coord_x_2:  # coord_x_2为空列表，取coord_y_2
-            second_row_data = self.coord_y_2
-        elif not self.coord_y_2:  # coord_y_2为空列表，取coord_x_2
-            second_row_data = self.coord_x_2
-        else:  # 两者均非空，取coord_x_2
-            second_row_data = self.coord_x_2
+        # 3. 处理数据格式：保持元组括号，空列表转换为"0"
+        def format_data(data):
+            if not data:  # 空列表处理
+                return "0"
+            # 将列表中的元组转换为字符串形式保持括号
+            return str(data).replace("[", "[").replace("]", "]")
 
-        # 3.3 处理第三排：基于coord_x_3和coord_y_3
-        if not self.coord_x_3 and not self.coord_y_3:  # 两者均为空列表，存0
-            third_row_data = 0
-        elif not self.coord_x_3:  # coord_x_3为空列表，取coord_y_3
-            third_row_data = self.coord_y_3
-        elif not self.coord_y_3:  # coord_y_3为空列表，取coord_x_3
-            third_row_data = self.coord_x_3
-        else:  # 两者均非空，取coord_x_3
-            third_row_data = self.coord_x_3
+        first_row_str = format_data(first_row_data)
+        second_row_str = format_data(second_row_data)
+        third_row_str = format_data(third_row_data)
 
-        # 4. 转换所有插入值为字符串
-        safe_product_id = convert_to_str(product_id)
-        safe_first_row = convert_to_str(first_row_data)
-        safe_second_row = convert_to_str(second_row_data)
-        safe_third_row = convert_to_str(third_row_data)
-
-        # 5. 先删除当前产品ID在表中的旧记录（避免数据冗余，保持数据唯一性）
-        delete_sql = f"DELETE FROM {table_name} WHERE `产品ID` = '{safe_product_id}'"
+        # 4. 构建SQL：先删除当前产品的旧记录（避免数据冗余）
+        delete_sql = f"DELETE FROM {table_name} WHERE `产品ID` = '{product_id}'"
         sql_statements.append(delete_sql)
 
-        # 6. 插入新的交叉布管数据（基于计算后的状态）
+        # 5. 构建插入SQL：新增“x轴或y轴”字段的赋值
         insert_sql = (
-            f"INSERT INTO {table_name} (`产品ID`, `第一排`, `第二排`, `第三排`) "
-            f"VALUES ('{safe_product_id}', '{safe_first_row}', '{safe_second_row}', '{safe_third_row}')"
+            f"INSERT INTO {table_name} ("
+            f"`产品ID`, `第一排`, `第二排`, `第三排`, "
+            f"`第一排交叉类型`, `第二排交叉类型`, `第三排交叉类型`, `x轴或y轴`) "
+            f"VALUES ("
+            f"'{product_id}', '{first_row_str}', '{second_row_str}', '{third_row_str}', "
+            f"{first_row_type}, {second_row_type}, {third_row_type}, "
+            f"'{axis_type}')"  # 赋值轴类型（x/y/空）
         )
         sql_statements.append(insert_sql)
 
+        # 6. 数据库连接与SQL执行（保持原有事务逻辑）
         conn = create_product_connection()
         if not conn:
             QMessageBox.critical(self, "数据库错误", "无法建立数据库连接！")
@@ -5898,13 +6151,13 @@ class TubeLayoutEditor(QMainWindow):
             return sql_statements
 
         except pymysql.Error as e:
-            # 发生错误时回滚事务，避免数据不一致
+            # 错误时回滚，避免数据不一致
             conn.rollback()
             QMessageBox.critical(self, "SQL执行错误", f"执行SQL时出错：{str(e)}")
             return None
 
         finally:
-            # 无论成功/失败，都关闭数据库连接（释放资源）
+            # 无论成功/失败，均关闭连接释放资源
             if conn and conn.open:
                 conn.close()
 
@@ -7486,37 +7739,33 @@ class TubeLayoutEditor(QMainWindow):
         dialog.exec_()
 
     def find_closest_to_axes(self):
-        if self.sorted_current_centers_up and self.sorted_current_centers_down:
-            # 初始化所有需要的全局变量
-            # X轴相关的6个变量（上半部分3行，下半部分3行）
-            self.print_cross_x_up_line1 = []  # 距离X轴最近的第1行（上半部分）
-            self.print_cross_x_up_line2 = []  # 距离X轴第2近的行（上半部分）
-            self.print_cross_x_up_line3 = []  # 距离X轴第3近的行（上半部分）
-            self.print_cross_x_down_line1 = []  # 距离X轴最近的第1行（下半部分）
-            self.print_cross_x_down_line2 = []  # 距离X轴第2近的行（下半部分）
-            self.print_cross_x_down_line3 = []  # 距离X轴第3近的行（下半部分）
+        if self.full_sorted_current_centers_up and self.full_sorted_current_centers_down:
 
-            # Y轴相关的6个变量（左侧3列，右侧3列）
-            self.print_cross_y_left_line1 = []  # 距离Y轴最近的第1列（左侧）
-            self.print_cross_y_left_line2 = []  # 距离Y轴第2近的列（左侧）
-            self.print_cross_y_left_line3 = []  # 距离Y轴第3近的列（左侧）
-            self.print_cross_y_right_line1 = []  # 距离Y轴最近的第1列（右侧）
-            self.print_cross_y_right_line2 = []  # 距离Y轴第2近的列（右侧）
-            self.print_cross_y_right_line3 = []  # 距离Y轴第3近的列（右侧）
+            self.print_cross_x_up_line1 = []
+            self.print_cross_x_up_line2 = []
+            self.print_cross_x_up_line3 = []
+            self.print_cross_x_down_line1 = []
+            self.print_cross_x_down_line2 = []
+            self.print_cross_x_down_line3 = []
 
-            # 1. 处理X轴相关的行（上半部分和下半部分）
-            # 计算每行到X轴的平均距离（使用Y坐标的绝对值）
+            self.print_cross_y_left_line1 = []
+            self.print_cross_y_left_line2 = []
+            self.print_cross_y_left_line3 = []
+            self.print_cross_y_right_line1 = []
+            self.print_cross_y_right_line2 = []
+            self.print_cross_y_right_line3 = []
+
             up_row_distances = []
             down_row_distances = []
 
             # 上半部分行距离计算
-            for row_idx, row in enumerate(self.sorted_current_centers_up):
+            for row_idx, row in enumerate(self.full_sorted_current_centers_up):
                 if row:  # 确保行不为空
                     avg_y = sum(abs(y) for _, y in row) / len(row)
                     up_row_distances.append((row_idx, avg_y, row))
 
             # 下半部分行距离计算
-            for row_idx, row in enumerate(self.sorted_current_centers_down):
+            for row_idx, row in enumerate(self.full_sorted_current_centers_down):
                 if row:  # 确保行不为空
                     avg_y = sum(abs(y) for _, y in row) / len(row)
                     down_row_distances.append((row_idx, avg_y, row))
@@ -7546,7 +7795,7 @@ class TubeLayoutEditor(QMainWindow):
             # 2. 处理Y轴相关的列（左侧和右侧）
             # 收集所有点的X坐标信息
             all_points = []
-            for row in self.sorted_current_centers_up + self.sorted_current_centers_down:
+            for row in self.full_sorted_current_centers_up + self.full_sorted_current_centers_down:
                 all_points.extend(row)
 
             if all_points:
@@ -7700,30 +7949,6 @@ class TubeLayoutEditor(QMainWindow):
         }
 
     # 获取选中的两个换热管的编号，y轴左右编号
-    def get_selected_y_center_numbers(self, selected_centers, print_cross_y_left, print_cross_y_right):
-        # 初始化返回的编号
-        left_number = None
-        right_number = None
-
-        for center in selected_centers:
-            for item in print_cross_y_left:
-                # item的格式为(编号, x坐标, y坐标)，center为(x坐标, y坐标)
-                if (item[1], item[2]) == center:
-                    left_number = item[0]
-                    break
-            for item in print_cross_y_right:
-                if (item[1], item[2]) == center:
-                    right_number = item[0]
-                    break
-
-        if left_number is None or right_number is None:
-            raise ValueError(
-                "selected_centers中的坐标未完全匹配到print_cross_y_left或print_cross_y_right")
-
-        return {
-            'left_number': left_number,
-            'right_number': right_number
-        }
 
     def get_tube_pass_count(self):
         row_count = self.param_table.rowCount()
@@ -8433,10 +8658,17 @@ class TubeLayoutEditor(QMainWindow):
             self.clear_selection_highlight()
             self.selected_centers.clear()
 
+    import math
+
     def calculate_distance(self, selected_centers):
-        if len(selected_centers) != 2:
-            raise ValueError("selected_centers必须包含且仅包含两个坐标点")
-        actual_coords = self.selected_to_current_coords(selected_centers)
+        # 取前两个坐标点进行计算
+        if len(selected_centers) >= 2:
+            target_centers = selected_centers[:2]
+        else:
+            # 如果坐标点不足2个，抛出异常
+            raise ValueError("selected_centers至少需要包含两个坐标点")
+
+        actual_coords = self.selected_to_current_coords(target_centers)
         if actual_coords:
             (x1, y1), (x2, y2) = actual_coords
             distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
@@ -8447,15 +8679,69 @@ class TubeLayoutEditor(QMainWindow):
     def on_del_cross_pipes_click(self):
         self.calculate_piping_layout()
 
-    # 交叉布管
-    def on_cross_pipes_click(self):
+    def extract_key_pair(self, coords):
+        """从四个坐标中提取一对对角线点，能够推导出所有四个坐标"""
+        # 尝试所有可能的点对组合
+        for i in range(4):
+            for j in range(i + 1, 4):
+                p1 = coords[i]
+                p2 = coords[j]
+                x1, y1 = p1
+                x2, y2 = p2
 
-        self.sorted_current_centers_up, self.sorted_current_centers_down = self.group_centers_by_y(
-            self.current_centers
-        )
-        self.find_closest_to_axes()
+                # 检查这两个点是否能构成对角线（x和y都不相同）
+                if x1 != x2 and y1 != y2:
+                    # 计算另外两个点
+                    p3 = (x1, y2)
+                    p4 = (x2, y1)
 
-        # 先保存添加序号前的print_cross_x_up_line1和print_cross_x_down_line1
+                    # 检查这两个点是否在原始坐标中
+                    if p3 in coords and p4 in coords:
+                        return [p1, p2]
+
+        raise ValueError("输入的坐标不符合要求，无法找到对角线点对")
+
+    def restore_all_coords(self, pair_str):
+        """从一对对角线坐标（字符串形式）还原出完整的四个坐标"""
+        try:
+            # 如果输入是字符串，先将其解析为元组
+            if isinstance(pair_str, str):
+                # 去除可能的空白字符
+                pair_str = pair_str.strip()
+                # 使用eval安全地解析字符串为元组（仅在确定字符串来源安全时使用）
+                pair = eval(pair_str)
+            else:
+                pair = pair_str
+
+            # 验证解析结果是否为包含两个元素的序列
+            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                raise ValueError(f"坐标对格式错误，期望包含两个元素，实际为: {pair}")
+
+            # 解包两个点的坐标
+            (x1, y1), (x2, y2) = pair
+
+            # 确保这对坐标是对角线（x和y都不相同）
+            if x1 == x2 or y1 == y2:
+                raise ValueError("输入的坐标对不符合要求，它们不是对角线点对")
+
+            # 计算另外两个点
+            p3 = (x1, y2)
+            p4 = (x2, y1)
+
+            return [(x1, y1), (x2, y2), p3, p4]
+
+        except Exception as e:
+            raise ValueError(f"解析坐标失败: {str(e)}, 原始数据: {pair_str}")
+
+    def update_print_cross_lines(self):
+        """
+        批量更新12个打印坐标列表：保存原始值、排序y轴坐标、为所有列表添加序号
+        涉及变量：print_cross_x_up_line1/2/3、print_cross_x_down_line1/2/3、
+                 print_cross_y_left_line1/2/3、print_cross_y_right_line1/2/3
+        直接更新实例变量，无需返回值
+        """
+        # -------------------------- 第一步：保存所有原始坐标（未添加序号前） --------------------------
+        # X轴相关（上、下各3条线）
         self.original_print_cross_x_up_line1 = self.print_cross_x_up_line1.copy()
         self.original_print_cross_x_down_line1 = self.print_cross_x_down_line1.copy()
         self.original_print_cross_x_up_line2 = self.print_cross_x_up_line2.copy()
@@ -8463,12 +8749,7 @@ class TubeLayoutEditor(QMainWindow):
         self.original_print_cross_x_up_line3 = self.print_cross_x_up_line3.copy()
         self.original_print_cross_x_down_line3 = self.print_cross_x_down_line3.copy()
 
-        self.print_cross_y_left_line1.sort(key=lambda coord: coord[1])
-        self.print_cross_y_right_line1.sort(key=lambda coord: coord[1])
-        self.print_cross_y_left_line2.sort(key=lambda coord: coord[1])
-        self.print_cross_y_right_line2.sort(key=lambda coord: coord[1])
-        self.print_cross_y_left_line3.sort(key=lambda coord: coord[1])
-        self.print_cross_y_right_line3.sort(key=lambda coord: coord[1])
+        # Y轴相关（左、右各3条线）
         self.original_print_cross_y_left_line1 = self.print_cross_y_left_line1.copy()
         self.original_print_cross_y_right_line1 = self.print_cross_y_right_line1.copy()
         self.original_print_cross_y_left_line2 = self.print_cross_y_left_line2.copy()
@@ -8476,45 +8757,52 @@ class TubeLayoutEditor(QMainWindow):
         self.original_print_cross_y_left_line3 = self.print_cross_y_left_line3.copy()
         self.original_print_cross_y_right_line3 = self.print_cross_y_right_line3.copy()
 
-        # 格式化上下部分的打印坐标（添加序号）
-        self.print_cross_x_up_line1 = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_x_up_line1)
-        ]
-        self.print_cross_x_down_line1 = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_x_down_line1)
-        ]
-        self.print_cross_x_up_line2 = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_x_up_line2)
-        ]
-        self.print_cross_x_down_line2 = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_x_down_line2)
-        ]
-        self.print_cross_x_up_line3 = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_x_up_line3)
-        ]
-        self.print_cross_x_down_line3 = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_x_down_line3)
-        ]
-        self.print_cross_y_left_line1 = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_left_line1)
-        ]
-        self.print_cross_y_right_line1 = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_right_line1)
-        ]
-        self.print_cross_y_left_line2 = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_left_line2)
-        ]
-        self.print_cross_y_right_line2 = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_right_line2)
-        ]
-        self.print_cross_y_left_line3 = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_left_line3)
-        ]
-        self.print_cross_y_right_line3 = [
-            (i + 1, point[0], point[1]) for i, point in enumerate(self.print_cross_y_right_line3)
+        # -------------------------- 第二步：对Y轴坐标按y值排序（X轴无需排序，保持原顺序） --------------------------
+        # Y轴左线1-3
+        self.print_cross_y_left_line1.sort(key=lambda coord: coord[1])
+        self.print_cross_y_left_line2.sort(key=lambda coord: coord[1])
+        self.print_cross_y_left_line3.sort(key=lambda coord: coord[1])
+        # Y轴右线1-3
+        self.print_cross_y_right_line1.sort(key=lambda coord: coord[1])
+        self.print_cross_y_right_line2.sort(key=lambda coord: coord[1])
+        self.print_cross_y_right_line3.sort(key=lambda coord: coord[1])
+
+        # -------------------------- 第三步：为12个坐标列表批量添加序号（序号从1开始） --------------------------
+        # 定义“变量名→原始列表”的映射，避免重复代码
+        line_mappings = [
+            # X轴上侧线：变量名 → 待添加序号的列表
+            ("print_cross_x_up_line1", self.print_cross_x_up_line1),
+            ("print_cross_x_up_line2", self.print_cross_x_up_line2),
+            ("print_cross_x_up_line3", self.print_cross_x_up_line3),
+            # X轴下侧线
+            ("print_cross_x_down_line1", self.print_cross_x_down_line1),
+            ("print_cross_x_down_line2", self.print_cross_x_down_line2),
+            ("print_cross_x_down_line3", self.print_cross_x_down_line3),
+            # Y轴左侧线
+            ("print_cross_y_left_line1", self.print_cross_y_left_line1),
+            ("print_cross_y_left_line2", self.print_cross_y_left_line2),
+            ("print_cross_y_left_line3", self.print_cross_y_left_line3),
+            # Y轴右侧线
+            ("print_cross_y_right_line1", self.print_cross_y_right_line1),
+            ("print_cross_y_right_line2", self.print_cross_y_right_line2),
+            ("print_cross_y_right_line3", self.print_cross_y_right_line3),
         ]
 
-        # 检查选中状态：确保已选中两个圆
+        # 遍历映射，为每个列表添加序号（格式：(序号, x, y)），并更新实例变量
+        for var_name, line_list in line_mappings:
+            # 用enumerate生成序号（i从0开始，序号= i+1），重构每个坐标元组
+            updated_line = [(i + 1, point[0], point[1]) for i, point in enumerate(line_list)]
+            # 通过setattr更新实例的对应变量
+            setattr(self, var_name, updated_line)
+
+    # 交叉布管
+    def on_cross_pipes_click(self):
+
+        self.sorted_current_centers_up, self.sorted_current_centers_down = self.group_centers_by_y(
+            self.current_centers
+        )
+        self.find_closest_to_axes()
+        self.update_print_cross_lines()
         if not hasattr(self, 'selected_centers'):
             # 未初始化选中状态，提示用户选择
             QMessageBox.warning(self, "选择错误", "参照管孔的数量应为2个或4个")
@@ -8584,21 +8872,20 @@ class TubeLayoutEditor(QMainWindow):
                     # x轴第一排
                     if (coord1_in_up and coord2_in_down) or (coord1_in_down and coord2_in_up):
                         self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line1, self.print_cross_x_down_line1)
-                        self.coord_x_1 = current_coords
-
+                        self.coord_x_line1_2 = current_coords
                         self.is_x_line1 = True
                     # y轴第一排
                     elif (coord3_in_left and coord4_in_right) or (coord3_in_right and coord4_in_left):
                         self.cross_y_2_pipes(current_coords, self.print_cross_y_left_line1,
                                              self.print_cross_y_right_line1)
-                        self.coord_y_1 = current_coords
+                        self.coord_y_line1_2 = current_coords
                         self.is_y_line1 = True
                     # x轴第二排
                     elif (coord5_in_up and coord6_in_down) or (coord5_in_down and coord6_in_up):
                         if self.is_x_line1:
                             self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line2,
                                                  self.print_cross_x_down_line2)
-                            self.coord_x_2 = current_coords
+                            self.coord_x_line2_2 = current_coords
                             self.is_x_line2 = True
                         else:
                             QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
@@ -8609,7 +8896,7 @@ class TubeLayoutEditor(QMainWindow):
                         if self.is_y_line1:
                             self.cross_y_2_pipes(current_coords, self.print_cross_y_left_line2,
                                                  self.print_cross_y_right_line2)
-                            self.coord_y_2 = current_coords
+                            self.coord_y_line2_2 = current_coords
                             self.is_y_line2 = True
                         else:
                             QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
@@ -8620,7 +8907,7 @@ class TubeLayoutEditor(QMainWindow):
                         if self.is_x_line1 and self.is_x_line2:
                             self.cross_x_2_pipes(current_coords, self.print_cross_x_up_line3,
                                                  self.print_cross_x_down_line3)
-                            self.coord_x_3 = current_coords
+                            self.coord_x_line3_2 = current_coords
                             self.is_x_line3 = True
                         else:
                             QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
@@ -8632,7 +8919,7 @@ class TubeLayoutEditor(QMainWindow):
                             self.cross_y_2_pipes(current_coords, self.print_cross_y_left_line3,
                                                  self.print_cross_y_right_line3)
                             self.is_y_line3 = True
-                            self.coord_y_3 = current_coords
+                            self.coord_y_line3_2 = current_coords
                         else:
                             QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
                             self.clear_selection_highlight()
@@ -8676,20 +8963,20 @@ class TubeLayoutEditor(QMainWindow):
                 # x轴第一排
                 if x_up_count_line1 == 2 and x_down_count_line1 == 2:
                     self.cross_x_4_pipes(current_coords, self.print_cross_x_up_line1, self.print_cross_x_down_line1)
-                    self.coord_x_1 = [current_coords[0], current_coords[3]]
+                    self.coord_x_line1_4 = self.extract_key_pair(current_coords)
                     self.is_x_line1 = True
                 # y轴第一排
                 elif y_left_count_line1 == 2 and y_right_count_line1 == 2:
                     self.cross_y_4_pipes(current_coords, self.print_cross_y_left_line1,
                                          self.print_cross_y_right_line1)
-                    self.coord_y_1 = [current_coords[0], current_coords[3]]
+                    self.coord_y_line1_4 = self.extract_key_pair(current_coords)
                     self.is_y_line1 = True
                 # x轴第二排
                 elif x_up_count_line2 == 2 and x_down_count_line2 == 2:
                     if self.is_x_line1:
                         self.cross_x_4_pipes(current_coords, self.print_cross_x_up_line2,
                                              self.print_cross_x_down_line2)
-                        self.coord_x_2 = [current_coords[0], current_coords[3]]
+                        self.coord_x_line2_4 = self.extract_key_pair(current_coords)
                         self.is_x_line2 = True
                     else:
                         QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
@@ -8700,7 +8987,7 @@ class TubeLayoutEditor(QMainWindow):
                     if self.is_y_line1:
                         self.cross_y_4_pipes(current_coords, self.print_cross_y_left_line2,
                                              self.print_cross_y_right_line2)
-                        self.coord_y_2 = [current_coords[0], current_coords[3]]
+                        self.coord_y_line2_4 = self.extract_key_pair(current_coords)
                         self.is_y_line2 = True
                     else:
                         QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
@@ -8711,7 +8998,7 @@ class TubeLayoutEditor(QMainWindow):
                     if self.is_x_line1 and self.is_x_line2:
                         self.cross_x_4_pipes(current_coords, self.print_cross_x_up_line3,
                                              self.print_cross_x_down_line3)
-                        self.coord_x_3 = [current_coords[0], current_coords[3]]
+                        self.coord_x_line3_4 = self.extract_key_pair(current_coords)
                         self.is_x_line3 = True
                     else:
                         QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
@@ -8722,7 +9009,7 @@ class TubeLayoutEditor(QMainWindow):
                     if self.is_y_line1 and self.is_y_line2:
                         self.cross_y_4_pipes(current_coords, self.print_cross_y_left_line3,
                                              self.print_cross_y_right_line3)
-                        self.coord_y_3 = [current_coords[0], current_coords[3]]
+                        self.coord_y_line3_4 = self.extract_key_pair(current_coords)
                         self.is_y_line3 = True
                     else:
                         QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
@@ -8750,7 +9037,7 @@ class TubeLayoutEditor(QMainWindow):
         for row_label, col_label in selected_centers:
             row_idx = abs(row_label) - 1
             col_idx = abs(col_label) - 1
-            centers_group = self.sorted_current_centers_up if row_label > 0 else self.sorted_current_centers_down
+            centers_group = self.full_sorted_current_centers_up if row_label > 0 else self.full_sorted_current_centers_down
             x, y = centers_group[row_idx][col_idx]
             points.append((x, y))
 
@@ -8908,29 +9195,32 @@ class TubeLayoutEditor(QMainWindow):
 
         # 更新当前中心点
         self.current_centers = updated_centers
+        self.clear_selection_highlight()
+        print(self.selected_centers)
+        print("调用拉杆后的选中圆心数量")
 
-        # 清除选中状态及淡蓝色涂层
-        if hasattr(self, 'selected_centers') and self.selected_centers:
-            for row_label, col_label in self.selected_centers:
-                row_idx = abs(row_label) - 1
-                col_idx = abs(col_label) - 1
-
-                # 选择对应分组的圆心列表
-                if row_label > 0:
-                    centers_group = self.full_sorted_current_centers_up
-                else:
-                    centers_group = self.full_sorted_current_centers_down
-
-                if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
-                    x, y = centers_group[row_idx][col_idx]
-                    # 擦除淡蓝色选中涂层
-                    click_point = QPointF(x, y)
-                    for item in self.graphics_scene.items(click_point):
-                        if isinstance(item, QGraphicsEllipseItem):
-                            self.graphics_scene.removeItem(item)
-                            break
-
-            self.selected_centers.clear()
+        # # 清除选中状态及淡蓝色涂层
+        # if hasattr(self, 'selected_centers') and self.selected_centers:
+        #     for row_label, col_label in self.selected_centers:
+        #         row_idx = abs(row_label) - 1
+        #         col_idx = abs(col_label) - 1
+        #
+        #         # 选择对应分组的圆心列表
+        #         if row_label > 0:
+        #             centers_group = self.full_sorted_current_centers_up
+        #         else:
+        #             centers_group = self.full_sorted_current_centers_down
+        #
+        #         if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
+        #             x, y = centers_group[row_idx][col_idx]
+        #             # 擦除淡蓝色选中涂层
+        #             click_point = QPointF(x, y)
+        #             for item in self.graphics_scene.items(click_point):
+        #                 if isinstance(item, QGraphicsEllipseItem):
+        #                     self.graphics_scene.removeItem(item)
+        #                     break
+        #
+        #     self.selected_centers.clear()
 
     def build_lagan(self, selected_centers):
         if not selected_centers:
@@ -10146,7 +10436,7 @@ class TubeLayoutEditor(QMainWindow):
                 tube_bridge_val = float(tube_bridge)
                 # self.side_dangban_length = distance - block_height_val - tube_bridge_val
                 self.side_dangban_length = distance - tube_bridge_val - do_value
-                print(self.side_dangban_length)
+
                 print("旁路挡板长度")
             except ValueError as e:
                 print(f"数值转换错误: {e}")
@@ -10498,9 +10788,7 @@ class TubeLayoutEditor(QMainWindow):
         return added_count
 
     def delete_selected_side_blocks(self):
-        """删除选中的旁路挡板，并恢复对应的干涉换热管"""
-        print("当前存储的旁路挡板信息:", self.sdangban_selected_centers)
-        print(self.side_dangban)
+
 
         if not hasattr(self, 'selected_side_blocks') or not self.selected_side_blocks:
             return
@@ -12190,6 +12478,8 @@ class TubeLayoutEditor(QMainWindow):
                 break
 
         # 计算中间挡板宽度
+        print("中间挡板接受的选中圆心")
+        print(self.selected_centers)
         distance = self.calculate_distance(self.selected_centers)
         do = self.get_tube_do()
         do_value = float(do)
@@ -12276,13 +12566,13 @@ class TubeLayoutEditor(QMainWindow):
                             self.param_table.setItem(row, 2, QTableWidgetItem(new_value))
                     break
 
-            # 执行中间挡板绘制，同时传入宽度和厚度参数
-            # 注意：这里假设build_center_dangban函数已修改为接收width参数
-            self.build_center_dangban(
-                selected_centers,
-                block_thickness,  # 维持原逻辑的厚度参数
-                self.center_dangban_length  # 新增的宽度参数
-            )
+            for i in range(0, len(selected_centers), 2):
+                coordinate_pair = selected_centers[i:i + 2]
+                self.build_center_dangban(
+                    coordinate_pair,
+                    block_thickness,
+                    self.center_dangban_length
+                )
 
             # 清除选中状态
             self.clear_selection_highlight()
