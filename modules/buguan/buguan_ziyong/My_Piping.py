@@ -31,7 +31,7 @@ import modules.buguan.buguan_ziyong.qiaotineizhijing as qtzj
 
 # product_id = 'PD2025092421444001'
 
-product_id = 'PD2025092421444001'
+product_id = 'PD2025092509281701'
 
 
 def on_product_id_changed(new_id):
@@ -440,7 +440,7 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
         # 存储0或180的非布管小圆圆心坐标
         for center in centers:
             x, y = center
-            if -Chorda - do < x < Chorda + do and ((ha - do < y < Ri) or (-Ri < y < -ha + do)):
+            if -Chorda + do + do < x < Chorda - do - do and ((ha - do < y < Ri) or (-Ri < y < -ha + do)):
                 none_tube_0_180.append(center)
 
     if height_90_270 != 0:
@@ -448,7 +448,7 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
         # 存储90或270的非布管小圆圆心坐标
         for center in centers:
             x, y = center
-            if -Chordb - do < y < Chordb + do and ((hb - do < x < Ri) or (-Ri < x < -hb + do)):
+            if -Chordb + do + do < y < Chordb - do - do and ((hb - do < x < Ri) or (-Ri < x < -hb + do)):
                 none_tube_90_270.append(center)
 
     all_none_tubes = set(none_tube_0_180 + none_tube_90_270)
@@ -1330,13 +1330,16 @@ class TubeLayoutEditor(QMainWindow):
                                                 try:
                                                     delete_query = """DELETE FROM 产品设计活动表_布管元件表 WHERE 产品ID = %s"""
                                                     cursor.execute(delete_query, (self.productID,))
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管交叉布管表 WHERE 产品ID = %s"""
+                                                    cursor.execute(delete_query, (self.productID,))
 
                                                     product_conn.commit()
-
-                                                    print(f"已删除产品ID为{self.productID}的布管元件表所有数据")
+                                                    print(
+                                                        f"已删除产品ID为{self.productID}的布管元件表和交叉布管表所有数据")
                                                 except Exception as e:
-                                                    print(f"删除布管元件表数据时出错: {str(e)}")
-
+                                                    # 发生错误时回滚事务
+                                                    product_conn.rollback()
+                                                    print(f"删除布管相关表数据时出错: {str(e)}")
                                             print(f"更新公称直径 DN: {param_value} -> {final_value}")
                                     except Exception as e:
                                         print(f"处理公称直径DN时出错: {str(e)}，使用原值: {param_value}")
@@ -3138,13 +3141,14 @@ class TubeLayoutEditor(QMainWindow):
     #             print(f"行 {row} 下拉框恢复原始值")
 
     def highlight_modified_row(self, row):
-        """高亮显示被修改的行（浅蓝色背景）"""
+        """高亮显示被修改的行（仅参数名列，浅蓝色背景）"""
         light_blue = QBrush(QColor(173, 216, 230))  # 浅蓝色
 
-        for col in range(self.param_table.columnCount()):
-            item = self.param_table.item(row, col)
-            if item:
-                item.setBackground(light_blue)
+        # 仅处理第二列（索引为1，即"参数名"列）
+        col = 1
+        item = self.param_table.item(row, col)
+        if item:
+            item.setBackground(light_blue)
 
     def reset_row_background(self, row):
         """重置行的背景色为默认（白色背景）"""
@@ -4535,8 +4539,15 @@ class TubeLayoutEditor(QMainWindow):
         if self.tube_pass_form_combo:
             index = self.tube_pass_form_combo.currentIndex()
             if index >= 0:
-                return self.tube_pass_form_combo.itemData(index, Qt.UserRole)
-        return ""
+                identifier = self.tube_pass_form_combo.itemData(index, Qt.UserRole)
+                if identifier:
+                    return identifier
+                else:
+                    # 如果没有存储标识，返回当前显示的文本
+                    return self.tube_pass_form_combo.currentText()
+
+        # 如果下拉框不存在或未选择，返回当前存储的值
+        return self.tube_pass_form_value if hasattr(self, 'tube_pass_form_value') else ""
 
     def setup_parameter_listeners(self):
         """设置参数表格的监听器（含目标参数监听+普通单元格监听+全局on_combobox_changed绑定）"""
@@ -4830,16 +4841,21 @@ class TubeLayoutEditor(QMainWindow):
 
                             self.load_tube_pass_images(combo, tube_pass)
 
+                            # 设置初始值
                             for i in range(combo.count()):
                                 item_data = combo.itemData(i)
                                 if item_data == initial_tube_pattern:
                                     combo.setCurrentIndex(i)
+                                    self.tube_pass_form_value = initial_tube_pattern  # 初始化值
                                     break
                             else:
                                 index = combo.findText(initial_tube_pattern)
                                 if index >= 0:
                                     combo.setCurrentIndex(index)
+                                    self.tube_pass_form_value = initial_tube_pattern  # 初始化值
 
+                        # 添加信号连接：当下拉框选择变化时触发
+                        combo.currentIndexChanged.connect(self.on_tube_pass_form_changed)
                     elif param['参数名'] == "防冲板形式":
                         combo.addItems(["平板形", "圆弧形", "焊接式"])
                     elif param['参数名'] == "换热管外径 do":
@@ -5045,14 +5061,21 @@ class TubeLayoutEditor(QMainWindow):
             # self.add_image_to_combo(combo, base_path, "6.3.png", "6.3")
         elif tube_pass == "1":
             self.add_image_to_combo(combo, base_path, "1.png", "1")
-
         else:
             combo.addItem("未选择")
             combo.setItemData(0, "", Qt.UserRole)
 
-        # 初始化参数值为第一个选项的标识
-        if combo.count() > 0:
-            self.tube_pass_form_value = combo.itemData(0, Qt.UserRole)
+        # 设置初始选择（如果有当前值）
+        if hasattr(self, 'tube_pass_form_value') and self.tube_pass_form_value:
+            for i in range(combo.count()):
+                if combo.itemData(i, Qt.UserRole) == self.tube_pass_form_value:
+                    combo.setCurrentIndex(i)
+                    break
+        else:
+            # 设置默认选择为第一个选项
+            if combo.count() > 0:
+                combo.setCurrentIndex(0)
+                self.tube_pass_form_value = combo.itemData(0, Qt.UserRole)
 
     def on_tube_pass_changed(self, index):
         """当管程程数变化时，更新分程形式下拉框的图片"""
@@ -5064,20 +5087,24 @@ class TubeLayoutEditor(QMainWindow):
 
     def on_tube_pass_form_changed(self, index):
         """管程分程形式选择变化时，更新存储的参数值"""
-        if self.tube_pass_form_combo:
+        if self.tube_pass_form_combo and index >= 0:
             # 获取当前选择项的标识作为参数值
-            self.tube_pass_form_value = self.tube_pass_form_combo.itemData(index, Qt.UserRole)
-            tube_pass = self.get_tube_pass_count()
-            if self.tube_pass_form_value is None:
-                tube_pass = self.get_tube_pass_count()
-                if tube_pass == "2":
-                    self.tube_pass_form_value = "2"
-                elif tube_pass == "4":
-                    self.tube_pass_form_value = "4.1"
-                elif tube_pass == "6":
-                    self.tube_pass_form_value = "6.1"
+            selected_value = self.tube_pass_form_combo.itemData(index, Qt.UserRole)
 
-            self.update_SN()
+            if selected_value:
+                self.tube_pass_form_value = selected_value
+                print(f"管程分程形式已更新为: {self.tube_pass_form_value}")
+
+                # 更新SN参数
+                self.update_SN()
+
+                # 如果需要，可以在这里添加其他需要触发的逻辑
+                # 例如：self.some_other_function()
+            else:
+                # 如果没有获取到标识，尝试从当前文本获取
+                current_text = self.tube_pass_form_combo.currentText()
+                print(f"警告：未获取到管程分程形式标识，使用文本: {current_text}")
+                self.tube_pass_form_value = current_text
 
     # def on_combobox_changed(self, row, param_name):
     #     """处理下拉框类型参数的变更事件"""
@@ -5170,6 +5197,17 @@ class TubeLayoutEditor(QMainWindow):
             # 更新分程形式下拉框的图片
             if hasattr(self, "tube_pass_form_combo") and self.tube_pass_form_combo:
                 self.load_tube_pass_images(self.tube_pass_form_combo, value)
+        elif param_name == "管程分程形式":
+            # 获取当前下拉框的索引
+            tube_pass_widget = self.param_table.cellWidget(row, 2)
+            if isinstance(tube_pass_widget, QComboBox):
+                current_index = tube_pass_widget.currentIndex()
+                # 触发管程分程形式变更处理
+                self.on_tube_pass_form_changed(current_index)
+                # 获取并打印当前选中的管程分程形式
+                current_form = self.get_selected_tube_pass_form()
+                print(f"管程分程形式已更新为: {current_form}")
+                print(f"实时更新的tube_pass_form_value: {self.tube_pass_form_value}")
 
     def none_tube(self, height_0_180, height_90_270, Di, do, centers):
 
@@ -5372,21 +5410,21 @@ class TubeLayoutEditor(QMainWindow):
         # 根据当前页面设置不同的提示信息
         if current_page_index == 0 and self.has_piped:  # 布管页面
             self.clear_modification_marks()
-            # self.line_tip.setText(f"数据保存成功")
-            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            self.line_tip.setText(f"数据保存成功")
+            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 1:  # 管-板连接页面
-            # self.line_tip.setText(f"数据保存成功")
-            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            self.line_tip.setText(f"数据保存成功")
+            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 0 and not self.has_piped:  # 未点击布管状态
-            # self.line_tip.setText(f"数据保存成功")
-            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            self.line_tip.setText(f"数据保存成功")
+            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         else:  # 管板形式页面
             message = "数据保存成功！"
 
-        # self.line_tip.setText(f"数据保存成功")
+        self.line_tip.setText(f"数据保存成功")
         self.actual_save_operation(current_page_index)  # 先保存后提示
 
     def build_sql_for_coordinate(self):
@@ -6214,7 +6252,7 @@ class TubeLayoutEditor(QMainWindow):
             "公称直径 DN": None,
             "壳体内直径 Di": None,
             "旁路挡板厚度": None,
-            "旁路挡板宽度": None,  # 新增旁路挡板宽度的暂存键
+            "旁路挡板宽度": None,
             "防冲板形式": None,
             "防冲板厚度": None,
             "滑道定位": None,
@@ -6226,7 +6264,7 @@ class TubeLayoutEditor(QMainWindow):
             "管程分程形式": None,
             "换热管外径 do": None,
             "中间挡板厚度": None,
-            "中间挡板宽度": None,  # 新增中间挡板宽度的暂存键
+            "中间挡板宽度": None,
             "拉杆形式": None,
             "拉杆直径": None,
         }
@@ -8666,7 +8704,13 @@ class TubeLayoutEditor(QMainWindow):
             target_centers = selected_centers[:2]
         else:
             # 如果坐标点不足2个，抛出异常
-            raise ValueError("selected_centers至少需要包含两个坐标点")
+            QMessageBox.warning(
+                None,
+                "提示",
+                "selected_centers至少需要包含两个坐标点"
+            )
+            self.clear_selection_highlight()
+            return
 
         actual_coords = self.selected_to_current_coords(target_centers)
         if actual_coords:
@@ -10090,7 +10134,7 @@ class TubeLayoutEditor(QMainWindow):
         else:
             selected_centers = self.selected_centers
             self.build_center_dangguan(selected_centers)
-        self.selected_centers.clear()
+        self.clear_selection_highlight()
 
     def build_center_dangguan(self, selected_centers):
         """构建中间挡管，支持选中功能（保持紫色空心圆样式）"""
@@ -10148,21 +10192,6 @@ class TubeLayoutEditor(QMainWindow):
                 print(f"字符串转换失败: {e}")
                 return current_coords
 
-        # 擦除所有淡蓝色填充
-        for row_label, col_label in selected_centers:
-            row_idx = abs(row_label) - 1
-            col_idx = abs(col_label) - 1
-
-            centers_group = self.sorted_current_centers_up if row_label > 0 else self.sorted_current_centers_down
-
-            if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
-                x, y = centers_group[row_idx][col_idx]
-                click_point = QPointF(x, y)
-                for item in self.graphics_scene.items(click_point):
-                    if isinstance(item, QGraphicsEllipseItem):
-                        self.graphics_scene.removeItem(item)
-                        break
-
         points = []
         if selected_centers:
             for row_label, col_label in selected_centers:
@@ -10175,16 +10204,19 @@ class TubeLayoutEditor(QMainWindow):
                     x, y = centers_group[row_idx][col_idx]
                     points.append((x, y))
 
+                    # 问题修复：移除删除换热管图形的代码
+                    # 只移除选中高亮，不删除换热管本身
                     click_point = QPointF(x, y)
                     for item in self.graphics_scene.items(click_point):
-                        if isinstance(item, QGraphicsEllipseItem):
+                        # 只删除临时的高亮图形，不删除换热管
+                        if isinstance(item, QGraphicsEllipseItem) and hasattr(item, 'is_temporary_highlight'):
                             self.graphics_scene.removeItem(item)
                             break
 
         if selected_centers and len(points) == 2:
-            # 计算中点并绘制紫色空心圆（中间挡管）
+            # 计算中点 - 根据实际选中的两个点计算
             x_mid = (points[0][0] + points[1][0]) / 2
-            y_mid = 0  # 沿X轴放置
+            y_mid = (points[0][1] + points[1][1]) / 2  # 根据实际Y坐标计算中点
 
             # 创建中间挡管图形项（使用ClickableRectItem）
             pen = QPen(QColor(128, 0, 128))  # 紫色
@@ -10419,7 +10451,6 @@ class TubeLayoutEditor(QMainWindow):
                 intersection1 = (R_bend, n_y)
                 intersection2 = (-R_bend, n_y)
 
-            # 计算最外层换热管与折流板外缘距离
             distance = abs(abs(intersection2[0]) - abs(n_x))
 
             # 新增判断逻辑：当距离小于等于16mm时提示用户
@@ -10435,7 +10466,7 @@ class TubeLayoutEditor(QMainWindow):
                 block_height_val = float(block_height)
                 tube_bridge_val = float(tube_bridge)
                 # self.side_dangban_length = distance - block_height_val - tube_bridge_val
-                self.side_dangban_length = distance - tube_bridge_val - do_value
+                self.side_dangban_length = abs(distance - tube_bridge_val - do_value)
 
                 print("旁路挡板长度")
             except ValueError as e:
@@ -10498,7 +10529,7 @@ class TubeLayoutEditor(QMainWindow):
         def is_point_in_rect(point, rect_x, rect_y, rect_w, rect_h):
             x, y = point
             rect_min_x = rect_x - 1e-8
-            rect_max_x = rect_x + rect_w + 1e-8
+            rect_max_x = rect_x + float(rect_w) + 1e-8
             rect_min_y = rect_y - 1e-8
             rect_max_y = rect_y + rect_h + 1e-8
             return rect_min_x <= x <= rect_max_x and rect_min_y <= y <= rect_max_y
@@ -10508,9 +10539,9 @@ class TubeLayoutEditor(QMainWindow):
             :return: 最短距离（浮点数）
             """
             x, y = point
-            rect_center_x = rect_x + rect_w / 2
+            rect_center_x = rect_x + float(rect_w) / 2
             rect_center_y = rect_y + rect_h / 2
-            rect_half_w = rect_w / 2
+            rect_half_w = float(rect_w) / 2
             rect_half_h = rect_h / 2
 
             # 计算点到矩形中心的偏移量
@@ -10668,7 +10699,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 左挡板：左上角X = 左侧边界（min_x），确保左边缘与折流板圆左侧对齐
                 left_rect_x = min_x
                 # 右挡板：左上角X = 右侧边界（max_x） - 挡板长度，确保右边缘与折流板圆右侧对齐
-                right_rect_x = max_x - block_length
+                right_rect_x = max_x - float(block_length)
 
                 # 修正2：挡板高度取用户输入与折流板圆当前Y坐标高度的最小值（避免超出圆）
                 max_block_height = 2 * math.sqrt(R_baffle ** 2 - y ** 2)  # 折流板圆当前Y坐标的高度（上下边界距离）
@@ -10682,7 +10713,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # -------------------------- 左侧挡板：绘制 + 干涉检测 --------------------------
                 # 1. 创建左侧挡板（参数：左上角X、Y，长度，高度）
-                left_rect = QRectF(left_rect_x, rect_y, block_length, actual_block_height)
+                left_rect = QRectF(left_rect_x, rect_y, float(block_length), actual_block_height)
                 path = QPainterPath()
                 path.addRect(left_rect)  # 将QRectF添加到路径中
                 left_block = ClickableRectItem(path, is_side_block=True, editor=self)
@@ -10706,7 +10737,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # -------------------------- 右侧挡板：绘制 + 干涉检测 --------------------------
                 # 1. 创建右侧挡板（参数：左上角X、Y，长度，高度）
-                right_rect = QRectF(right_rect_x, rect_y, block_length, actual_block_height)
+                right_rect = QRectF(right_rect_x, rect_y, float(block_length), actual_block_height)
                 right_block = ClickableRectItem(right_rect, is_side_block=True, editor=self)
                 right_block.setPen(pen)
                 right_block.setBrush(brush)
@@ -10788,7 +10819,6 @@ class TubeLayoutEditor(QMainWindow):
         return added_count
 
     def delete_selected_side_blocks(self):
-
 
         if not hasattr(self, 'selected_side_blocks') or not self.selected_side_blocks:
             return
@@ -12129,7 +12159,7 @@ class TubeLayoutEditor(QMainWindow):
                         break
 
             if len(points) != 2:
-                QMessageBox.warning(self, "错误", "无法获取两个有效的圆心坐标")
+                # QMessageBox.warning(self, "错误", "无法获取两个有效的圆心坐标")
                 self.selected_centers.clear()
                 return
 
@@ -12484,7 +12514,8 @@ class TubeLayoutEditor(QMainWindow):
         do = self.get_tube_do()
         do_value = float(do)
         tube_bridge = self.get_nominal_bridge_width(do_value)
-        self.center_dangban_length = distance - do_value - tube_bridge * 2
+        if self.selected_centers:
+            self.center_dangban_length = distance - do_value - tube_bridge * 2
 
         # 1. 创建弹窗实例
         dialog = QDialog(self)
