@@ -466,7 +466,7 @@ class TubeLayoutEditor(QMainWindow):
         super().__init__()
 
         self.productID = product_id  # 产品ID
-        self.isSymmetry = False
+        self.isSymmetry = True
         self.selected_side_blocks = []
         self.interfering_tubes1 = []
         self.interfering_tubes2 = []
@@ -863,7 +863,7 @@ class TubeLayoutEditor(QMainWindow):
         checkbox_layout = QHBoxLayout(self.checkbox_container)
         checkbox_layout.setContentsMargins(5, 5, 5, 5)
         self.symmetric_checkbox = QCheckBox("对称分布")
-        self.symmetric_checkbox.setChecked(False)
+        self.symmetric_checkbox.setChecked(True)
         self.symmetric_checkbox.setStyleSheet("font-size: 20px; color: #333;")
         checkbox_layout.addWidget(self.symmetric_checkbox)
         self.symmetric_checkbox.stateChanged.connect(self.handle_symmetric_layout)
@@ -2490,6 +2490,10 @@ class TubeLayoutEditor(QMainWindow):
         else:
             LB_ClapboardType = '1'
         input_json['LB_ClapboardType'] = LB_ClapboardType
+        if input_json['LB_TubePassCount'] == "2":
+            input_json['LB_SNH'] = '0'
+        if self.tube_pass_form_value == "4.1":
+            input_json['LB_SNH'] = '0'
 
         # ---------------- 新增：如果值为None或空字符串，则从布管默认参数表中取值 ----------------
         param_mapping2 = {
@@ -3148,14 +3152,13 @@ class TubeLayoutEditor(QMainWindow):
     #             print(f"行 {row} 下拉框恢复原始值")
 
     def highlight_modified_row(self, row):
-        """高亮显示被修改的行（浅蓝色背景）"""
-        light_blue = QBrush(QColor(135, 206, 235))  # 浅蓝色
+        """高亮显示被修改的行（仅参数名列，浅蓝色字体）"""
+        light_blue = QColor(70, 130, 180)  # 浅蓝色
 
-        # 仅处理第二列（索引为1，即"参数名"列）
-        col = 1
+        col = 2
         item = self.param_table.item(row, col)
         if item:
-            item.setBackground(light_blue)
+            item.setForeground(light_blue)  # 设置字体颜色为浅蓝色，背景保持不变
 
     def reset_row_background(self, row):
         """重置行的背景色为默认（白色背景）"""
@@ -5139,6 +5142,7 @@ class TubeLayoutEditor(QMainWindow):
     #         self.update_tube_center_distance()
     #         # self.update_lagan()
     #         self.update_partition_plate_center_distance()
+    # TODO 在load_initial函数后触发的监听事件
     def on_combobox_changed(self, row, value):
         """处理下拉框类型参数的变更事件及内容变化处理"""
         # 首先执行原current_text版本的逻辑
@@ -10045,7 +10049,8 @@ class TubeLayoutEditor(QMainWindow):
 
             # 若未成功添加任何换热管，弹出警告
             if added_count == 0:
-                QMessageBox.warning(self, "警告", "未成功添加任何换热管，请检查坐标选择")
+                # QMessageBox.warning(self, "警告", "未成功添加任何换热管，请检查坐标选择")
+                return
 
     # 最左最右拉杆
     def on_small_block_click(self):
@@ -10316,7 +10321,6 @@ class TubeLayoutEditor(QMainWindow):
 
         # 校验选中的圆心数量是否为2
         if not selected_centers:
-            # QMessageBox.warning(self, "选中错误", "请选择恰好两个圆心进行中间挡管绘制")
             return current_coords
 
         if isinstance(selected_centers, str):
@@ -10339,24 +10343,22 @@ class TubeLayoutEditor(QMainWindow):
                     x, y = centers_group[row_idx][col_idx]
                     points.append((x, y))
 
-                    # 问题修复：移除删除换热管图形的代码
-                    # 只移除选中高亮，不删除换热管本身
+                    # 只移除临时的高亮图形，不删除换热管本身
                     click_point = QPointF(x, y)
                     for item in self.graphics_scene.items(click_point):
-                        # 只删除临时的高亮图形，不删除换热管
                         if isinstance(item, QGraphicsEllipseItem) and hasattr(item, 'is_temporary_highlight'):
                             self.graphics_scene.removeItem(item)
                             break
 
         if selected_centers and len(points) == 2:
-            # 计算中点 - 根据实际选中的两个点计算
+            # 计算X轴中点，Y轴固定为0（坐标轴上）
             x_mid = (points[0][0] + points[1][0]) / 2
-            y_mid = (points[0][1] + points[1][1]) / 2  # 根据实际Y坐标计算中点
+            y_mid = 0  # 固定在坐标轴上
 
             # 创建中间挡管图形项（使用ClickableRectItem）
             pen = QPen(QColor(128, 0, 128))  # 紫色
             pen.setWidth(3)
-            brush = QBrush(Qt.NoBrush)  # 空心圆，保持原样式
+            brush = QBrush(Qt.NoBrush)  # 空心圆样式
 
             # 创建圆形路径
             path = QPainterPath()
@@ -10387,8 +10389,6 @@ class TubeLayoutEditor(QMainWindow):
                 "coord": (x_mid, y_mid),
                 "from": points
             })
-        # elif len(points) != 2:
-        #     QMessageBox.warning(self, "选中错误", "请选择恰好两个圆心进行中间挡管绘制")
 
         return current_coords
 
