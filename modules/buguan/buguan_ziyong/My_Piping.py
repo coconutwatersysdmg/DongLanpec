@@ -4296,8 +4296,8 @@ class TubeLayoutEditor(QMainWindow):
                     new_spacing = baffle_radius - cut_size
 
                     if new_spacing < 0 or new_spacing > baffle_radius:
-                        QMessageBox.warning(self, "计算错误",
-                                            f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)")
+                        # QMessageBox.warning(self, "计算错误",
+                        #                     f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)")
                         return
 
                     spacing_item = self.param_table.item(cut_spacing_row, 2)
@@ -4306,8 +4306,8 @@ class TubeLayoutEditor(QMainWindow):
 
                 elif cut_spacing is not None:
                     if not (0 <= cut_spacing <= baffle_radius):
-                        QMessageBox.warning(self, "输入错误",
-                                            f"切口与中心线间距必须在0到{baffle_radius:.1f}mm范围内！")
+                        # QMessageBox.warning(self, "输入错误",
+                        #                     f"切口与中心线间距必须在0到{baffle_radius:.1f}mm范围内！")
                         return
 
                     new_cut_rate = ((baffle_radius - cut_spacing) / shell_inner_diameter) * 100
@@ -5416,21 +5416,21 @@ class TubeLayoutEditor(QMainWindow):
         # 根据当前页面设置不同的提示信息
         if current_page_index == 0 and self.has_piped:  # 布管页面
             self.clear_modification_marks()
-            # self.line_tip.setText(f"数据保存成功")
-            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            self.line_tip.setText(f"数据保存成功")
+            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 1:  # 管-板连接页面
-            # self.line_tip.setText(f"数据保存成功")
-            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            self.line_tip.setText(f"数据保存成功")
+            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 0 and not self.has_piped:  # 未点击布管状态
-            # self.line_tip.setText(f"数据保存成功")
-            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            self.line_tip.setText(f"数据保存成功")
+            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         else:  # 管板形式页面
             message = "数据保存成功！"
 
-        # self.line_tip.setText(f"数据保存成功")
+        self.line_tip.setText(f"数据保存成功")
         self.actual_save_operation(current_page_index)  # 先保存后提示
 
     def build_sql_for_coordinate(self):
