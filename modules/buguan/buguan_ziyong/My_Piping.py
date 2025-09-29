@@ -5415,21 +5415,21 @@ class TubeLayoutEditor(QMainWindow):
         # 根据当前页面设置不同的提示信息
         if current_page_index == 0 and self.has_piped:  # 布管页面
             self.clear_modification_marks()
-            self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            # self.line_tip.setText(f"数据保存成功")
+            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 1:  # 管-板连接页面
-            self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            # self.line_tip.setText(f"数据保存成功")
+            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 0 and not self.has_piped:  # 未点击布管状态
-            self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            # self.line_tip.setText(f"数据保存成功")
+            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         else:  # 管板形式页面
             message = "数据保存成功！"
 
-        self.line_tip.setText(f"数据保存成功")
+        # self.line_tip.setText(f"数据保存成功")
         self.actual_save_operation(current_page_index)  # 先保存后提示
 
     def build_sql_for_coordinate(self):
@@ -6029,26 +6029,28 @@ class TubeLayoutEditor(QMainWindow):
         max_dist_vertical = get_max_distance(selected_coords_vertical)
         calc_results["沿竖直隔板槽单侧的管排最两端管孔中心距"] = str(max_dist_vertical)
 
-        if fenchengxingshi in ("4.3", "6.1"):
-            # 连续侧：y>getiao_chicun（上侧最小y）和y<-getiao_chicun（下侧最大y）
-            selected_cont = []
-            # 上侧
-            y_above_cont = [y for x, y in filtered_coords if y > getiao_chicun]
-            if y_above_cont:
-                min_above_cont = min(y_above_cont)
-                selected_cont.extend([
-                    (x, y) for x, y in filtered_coords
-                    if abs(y - min_above_cont) < 1e-6
-                ])
-            # 下侧
-            y_below_cont = [y for x, y in filtered_coords if y < -getiao_chicun]
-            if y_below_cont:
-                max_below_cont = max(y_below_cont)
-                selected_cont.extend([
-                    (x, y) for x, y in filtered_coords
-                    if abs(y - max_below_cont) < 1e-6
-                ])
-            # 不连续侧：y<getiao_chicun（下侧最大y）和y>-getiao_chicun（上侧最小y）
+        # ==================== 修改部分：使用外部函数计算丁字交叉相关参数 ====================
+        if fenchengxingshi in ("4.1", "4.3", "6.1", "6.2"):
+            # 调用外部函数获取丁字交叉的排管根数
+            try:
+                strange_tube_result = self.calculate_strange_tube()
+                if isinstance(strange_tube_result, (list, tuple)) and len(strange_tube_result) >= 2:
+                    calc_results["'丁字'交叉沿水平隔板槽连续侧的排管根数"] = str(strange_tube_result[1])
+                    calc_results["'丁字'交叉沿水平隔板槽不连续侧的排管根数"] = str(strange_tube_result[0])
+                    calc_results["'丁字'交叉沿水平隔板槽不连续侧管排1最两端管孔中心距"] = str(strange_tube_result[2])
+                else:
+                    # 如果外部函数返回格式不正确，使用默认值
+                    calc_results["'丁字'交叉沿水平隔板槽连续侧的排管根数"] = "0"
+                    calc_results["'丁字'交叉沿水平隔板槽不连续侧的排管根数"] = "0"
+                    calc_results["'丁字'交叉沿水平隔板槽不连续侧管排1最两端管孔中心距"] = "0"
+                    QMessageBox.warning(self, "警告", "calculate_strange_tube函数返回格式不正确，使用默认值0")
+            except Exception as e:
+                calc_results["'丁字'交叉沿水平隔板槽连续侧的排管根数"] = "0"
+                calc_results["'丁字'交叉沿水平隔板槽不连续侧的排管根数"] = "0"
+                calc_results["'丁字'交叉沿水平隔板槽不连续侧管排1最两端管孔中心距"] = "0"
+                QMessageBox.warning(self, "警告", f"调用calculate_strange_tube函数失败：{str(e)}，使用默认值0")
+
+            # 计算不连续侧管排中心距（保留原有的中心距计算逻辑）
             selected_uncont = []
             # 下侧
             y_below_uncont = [y for x, y in filtered_coords if y < getiao_chicun]
@@ -6066,10 +6068,7 @@ class TubeLayoutEditor(QMainWindow):
                     (x, y) for x, y in filtered_coords
                     if abs(y - min_above_uncont) < 1e-6
                 ])
-            # 赋值丁字交叉相关参数
-            calc_results["'丁字'交叉沿水平隔板槽连续侧的排管根数"] = str(len(selected_cont))
-            calc_results["'丁字'交叉沿水平隔板槽不连续侧的排管根数"] = str(len(selected_uncont))
-            max_dist_uncont = max(get_max_distance(selected_cont), get_max_distance(selected_uncont))
+            max_dist_uncont = get_max_distance(selected_uncont)
             calc_results["'丁字'交叉沿水平隔板槽不连续侧管排1最两端管孔中心距"] = str(max_dist_uncont)
 
         table_name = "`产品设计活动表_布管计算结果表`"
@@ -9605,6 +9604,58 @@ class TubeLayoutEditor(QMainWindow):
             up_item.setTextAlignment(Qt.AlignCenter)
             right_table.setItem(i, 2, up_item)
 
+    def calculate_strange_tube(self):
+        """
+        找出self.full_sorted_current_centers_up中两行距离特别远的管子，
+        返回这两行管子的数量以及第一行管子的水平距离（最大与最小横坐标之差的绝对值）
+        """
+        # 确保full_sorted_current_centers_up已计算
+        if not hasattr(self, 'full_sorted_current_centers_up'):
+            # 如果尚未计算，则调用group_centers_by_y方法计算
+            self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
+                self.global_centers)
+
+        # 提取每行第一个管子的y坐标
+        row_ys = []
+        for row in self.full_sorted_current_centers_up:
+            if row:  # 确保行不为空
+                # 取每行第一个管子的y坐标
+                first_tube_y = row[0][1]
+                row_ys.append(first_tube_y)
+
+        # 如果行数不足2行，无法找到两行之间的距离，返回(0, 0, 0)
+        if len(row_ys) < 2:
+            return (0, 0, 0)
+
+        # 计算相邻行之间的y坐标差值
+        diffs = []
+        for i in range(1, len(row_ys)):
+            diff = abs(row_ys[i] - row_ys[i - 1])
+            diffs.append((i - 1, i, diff))  # 存储前一行索引、当前行索引和差值
+
+        # 找到最大的差值（即离得特别远的两行）
+        # 按差值降序排序
+        diffs.sort(key=lambda x: x[2], reverse=True)
+        max_diff_pair = diffs[0]
+        row1_idx, row2_idx, _ = max_diff_pair
+
+        # 获取这两行的管子数量
+        row1_count = len(self.full_sorted_current_centers_up[row1_idx]) * 2
+        row2_count = len(self.full_sorted_current_centers_up[row2_idx]) * 2
+
+        # 计算第一行管子的水平距离（最大x与最小x之差的绝对值）
+        row1_tubes = self.full_sorted_current_centers_up[row1_idx]
+        if len(row1_tubes) >= 2:
+            xs = [tube[0] for tube in row1_tubes]
+            max_x = max(xs)
+            min_x = min(xs)
+            row1_horizontal_distance = abs(max_x - min_x)
+        else:
+            # 如果该行管子数量不足2个，水平距离为0
+            row1_horizontal_distance = 0
+
+        return row1_count, row2_count, row1_horizontal_distance
+
     # 删除换热管
     def on_del_click(self):
         try:
@@ -9948,6 +9999,7 @@ class TubeLayoutEditor(QMainWindow):
             # linkage_centers.extend(center_syms)
 
         return linkage_centers
+
     def judge_linkage_y(self, selected_centers):
         # 关于x轴对称
         linkage_centers = []
@@ -9992,6 +10044,7 @@ class TubeLayoutEditor(QMainWindow):
             # linkage_centers.extend(center_syms)
 
         return linkage_centers
+
     def actual_to_selected_coords(self, actual_coord):
         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
             self.global_centers)
