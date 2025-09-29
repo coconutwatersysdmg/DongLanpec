@@ -1,3 +1,4 @@
+import ast
 import json
 import logging
 import math
@@ -459,6 +460,7 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
 # TODO 此处初始化
 
 
+
 class TubeLayoutEditor(QMainWindow):
     def __init__(self, line_tip=None):
         super().__init__()
@@ -586,7 +588,6 @@ class TubeLayoutEditor(QMainWindow):
             'left_number': left_number,
             'right_number': right_number
         }
-
     def update_leftpad_params(self):
         """实时更新左侧参数为列表形式"""
         self.current_leftpad = []  # 清空现有列表
@@ -689,12 +690,11 @@ class TubeLayoutEditor(QMainWindow):
         self.main_tube_layout.setContentsMargins(5, 5, 5, 5)
         self.main_tube_layout.setSpacing(10)
 
-        # 左侧参数表格
+        # ---------------------- 左侧参数表格（原有代码，无需修改） ----------------------
         self.param_frame = QFrame()
         param_layout = QVBoxLayout(self.param_frame)
         param_layout.setContentsMargins(5, 5, 5, 5)
 
-        # 参数表格
         self.param_table = NoWheelTableWidget()
         self.param_table.setColumnCount(4)
         self.param_table.setHorizontalHeaderLabels(["序号", "参数名", "参数值", "单位"])
@@ -706,14 +706,13 @@ class TubeLayoutEditor(QMainWindow):
         self.param_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Interactive)
         self.param_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Interactive)
         self.param_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Interactive)
-        # TODO 设置左侧参数表每列的初始列宽
         self.param_table.setColumnWidth(0, 50)
         self.param_table.setColumnWidth(1, 320)
         self.param_table.setColumnWidth(2, 120)
         self.param_table.setColumnWidth(3, 50)
         param_layout.addWidget(self.param_table)
 
-        # 中间图形区域
+        # ---------------------- 中间图形区域（原有代码，无需修改） ----------------------
         self.center_frame = QFrame()
         self.center_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         center_layout = QVBoxLayout(self.center_frame)
@@ -731,7 +730,6 @@ class TubeLayoutEditor(QMainWindow):
         image_path = r"modules/buguan/buguan_ziyong/static/tab栏/utils.png"
         toolbar_label = QLabel()
         try:
-            # 尝试加载工具栏图片
             toolbar_pixmap = QPixmap(image_path)
             if not toolbar_pixmap.isNull():
                 scaled_pixmap = toolbar_pixmap.scaled(
@@ -744,7 +742,6 @@ class TubeLayoutEditor(QMainWindow):
                 self.toolbar_layout.addWidget(toolbar_label)
         except Exception as e:
             print(f"加载工具栏图片失败: {e}")
-            # 图片加载失败时使用文字按钮
             tools = ["放大", "缩小", "平移", "测量", "导出"]
             for tool in tools:
                 btn = QPushButton(tool)
@@ -754,7 +751,7 @@ class TubeLayoutEditor(QMainWindow):
         self.toolbar_layout.addStretch()
         center_layout.addLayout(self.toolbar_layout)
 
-        # 图形视图容器 - 用于放置图形视图和浮动的按钮
+        # 图形视图容器
         self.graphics_container = QWidget()
         self.graphics_container.setObjectName("graphicsContainer")
         self.graphics_container.setLayout(QVBoxLayout())
@@ -793,7 +790,7 @@ class TubeLayoutEditor(QMainWindow):
         self.button_container = QWidget(self.graphics_container)
         self.button_container.setFixedSize(200, 150)
         self.button_container.setStyleSheet("background-color: rgba(255, 255, 255, 200); border-radius: 5px;")
-        self.button_container.move(10, 10)  # 固定在左上角
+        self.button_container.move(10, 10)
 
         # 创建按钮网格布局
         button_layout = QGridLayout(self.button_container)
@@ -817,7 +814,6 @@ class TubeLayoutEditor(QMainWindow):
                     border-radius: 5px;
                     background-color: #f0f0f0;
                 }
-                }
                 QPushButton:pressed {
                     background-color: #dadbde;
                     border: 2px solid #5c5c5c;
@@ -833,53 +829,43 @@ class TubeLayoutEditor(QMainWindow):
             elif name == 'button1_3':
                 btn.clicked.connect(self.on_small_block_click)
             elif name == 'button1_4':
-                # self.green_slide_items = self.clear_scene_keep_slides(self.graphics_scene, self.green_slide_items)
                 btn.clicked.connect(self.on_del_click)
             elif name == 'button2_1':
                 btn.clicked.connect(self.on_center_block_click)
-            # 旁路挡管
             elif name == 'button2_2':
                 btn.clicked.connect(self.on_side_block_click)
-            # 滑道
             elif name == 'button2_3':
-                # 保存当前状态到临时变量
                 initial_centers = self.current_centers.copy()
-                # 连接信号时使用lambda捕获初始状态
                 btn.clicked.connect(lambda: self.on_green_slide_click(initial_centers))
-            # 环首螺钉
             elif name == 'button3_1':
                 btn.clicked.connect(self.on_screw_ring_click)
-            # 旁路挡管
             elif name == 'button3_2':
                 btn.clicked.connect(self.on_purple_block_click)
-            # 防冲板
             elif name == 'button3_3':
                 btn.clicked.connect(self.on_dangban_click)
+
+        # 勾选框容器
         self.checkbox_container = QWidget(self.graphics_container)
-        self.checkbox_container.setFixedSize(150, 30)  # 勾选框容器大小
+        self.checkbox_container.setFixedSize(150, 30)
         self.checkbox_container.setStyleSheet("background-color: rgba(255, 255, 255, 200); border-radius: 5px;")
 
-        # 绑定窗口缩放事件，确保勾选框始终在右上角
+        # 绑定窗口缩放事件
         def update_checkbox_position(event):
-            # 计算右上角坐标（容器宽度 - 勾选框宽度 - 右边距10px）
             x = self.graphics_container.width() - self.checkbox_container.width() - 10
-            y = 10  # 上边距10px
+            y = 10
             self.checkbox_container.move(x, y)
-            # 保留原有resize事件的功能（如果有的话）
             if hasattr(super(type(self.graphics_container), self.graphics_container), 'resizeEvent'):
                 super(type(self.graphics_container), self.graphics_container).resizeEvent(event)
 
         self.graphics_container.resizeEvent = update_checkbox_position
 
-        # 添加勾选框到容器
+        # 添加勾选框
         checkbox_layout = QHBoxLayout(self.checkbox_container)
         checkbox_layout.setContentsMargins(5, 5, 5, 5)
         self.symmetric_checkbox = QCheckBox("对称分布")
         self.symmetric_checkbox.setChecked(False)
         self.symmetric_checkbox.setStyleSheet("font-size: 20px; color: #333;")
         checkbox_layout.addWidget(self.symmetric_checkbox)
-
-        # 绑定勾选事件（根据需要实现功能）
         self.symmetric_checkbox.stateChanged.connect(self.handle_symmetric_layout)
 
         # 将图形容器添加到中心布局
@@ -896,7 +882,6 @@ class TubeLayoutEditor(QMainWindow):
             btn.adjustSize()
             self.action_bar.addWidget(btn)
 
-            # 保持原有的连接逻辑不变
             if action == "布管":
                 btn.clicked.connect(self.on_buguan_bt_click)
             elif action == "全屏":
@@ -911,7 +896,7 @@ class TubeLayoutEditor(QMainWindow):
 
         center_layout.addLayout(self.action_bar)
 
-        # 右侧管孔数量显示
+        # ---------------------- 右侧管孔数量显示（原有代码，修改右键绑定） ----------------------
         self.right_frame = QFrame()
         right_layout = QVBoxLayout(self.right_frame)
         right_layout.setContentsMargins(5, 5, 5, 5)
@@ -954,16 +939,38 @@ class TubeLayoutEditor(QMainWindow):
 
         right_layout.addWidget(self.hole_distribution_table, 1)
 
-        # ✅ 添加：选中事件绑定
+        # ✅ 保留：表格左键选中事件（确保左键点击正常选中）
         self.hole_distribution_table.itemSelectionChanged.connect(self.on_row_selection_changed)
 
-        # TODO 布管页面设置布局比例
+        # ❌ 可选删除：表格单独的右键事件（避免与全局右键重复）
+        # 若之前添加过以下代码，建议删除
+        # self.hole_distribution_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        # self.hole_distribution_table.customContextMenuRequested.connect(self.on_table_right_click)
+
+        # ---------------------- 布局比例设置（原有代码，无需修改） ----------------------
         self.main_tube_layout.addWidget(self.param_frame, 3)
         self.main_tube_layout.addWidget(self.center_frame, 4)
         self.main_tube_layout.addWidget(self.right_frame, 2)
         self.stacked_widget.addWidget(page)
 
         self.enable_scene_click_capture()
+
+        # ---------------------- ✅ 新增：给页面根容器（page）绑定全局右键事件 ----------------------
+        # 重写page的mousePressEvent，监听所有右键点击
+        def handle_global_right_click(event):
+            # 判断是否是右键点击
+            if event.button() == Qt.RightButton:
+                # 1. 清除表格所有选中状态
+                self.hole_distribution_table.clearSelection()
+                # 2. 清除图形区的高亮（调用原有清除逻辑）
+                self.on_row_selection_changed()
+            # 保留原有鼠标事件功能（如左键点击其他控件）
+            QWidget.mousePressEvent(page, event)
+
+        # 将自定义事件绑定到page
+        page.mousePressEvent = handle_global_right_click
+
+        return page
 
     def get_current_tube_hole_data(self):
         """TODO 获取布管界面管孔数量分布的当前数据列表"""
@@ -2483,10 +2490,6 @@ class TubeLayoutEditor(QMainWindow):
         else:
             LB_ClapboardType = '1'
         input_json['LB_ClapboardType'] = LB_ClapboardType
-        if input_json['LB_TubePassCount'] == "2":
-            input_json['LB_SNH'] = '0'
-        if self.tube_pass_form_value == "4.1":
-            input_json['LB_SNH'] = '0'
 
         # ---------------- 新增：如果值为None或空字符串，则从布管默认参数表中取值 ----------------
         param_mapping2 = {
@@ -3145,13 +3148,14 @@ class TubeLayoutEditor(QMainWindow):
     #             print(f"行 {row} 下拉框恢复原始值")
 
     def highlight_modified_row(self, row):
-        """高亮显示被修改的行（仅参数名列，浅蓝色字体）"""
-        light_blue = QColor(173, 216, 230)  # 浅蓝色
+        """高亮显示被修改的行（浅蓝色背景）"""
+        light_blue = QBrush(QColor(135, 206, 235))  # 浅蓝色
 
-        col = 2
+        # 仅处理第二列（索引为1，即"参数名"列）
+        col = 1
         item = self.param_table.item(row, col)
         if item:
-            item.setForeground(light_blue)  # 设置字体颜色为浅蓝色，背景保持不变
+            item.setBackground(light_blue)
 
     def reset_row_background(self, row):
         """重置行的背景色为默认（白色背景）"""
@@ -4366,8 +4370,8 @@ class TubeLayoutEditor(QMainWindow):
                     new_spacing = baffle_radius - cut_size
 
                     if new_spacing < 0 or new_spacing > baffle_radius:
-                        QMessageBox.warning(self, "计算错误",
-                                            f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)")
+                        # QMessageBox.warning(self, "计算错误",
+                        #                     f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)")
                         return
 
                     spacing_item = self.param_table.item(cut_spacing_row, 2)
@@ -4844,7 +4848,6 @@ class TubeLayoutEditor(QMainWindow):
 
                             self.load_tube_pass_images(combo, tube_pass)
 
-                            # 设置初始值
                             for i in range(combo.count()):
                                 item_data = combo.itemData(i)
                                 if item_data == initial_tube_pattern:
@@ -5065,6 +5068,7 @@ class TubeLayoutEditor(QMainWindow):
             # self.add_image_to_combo(combo, base_path, "6.3.png", "6.3")
         elif tube_pass == "1":
             self.add_image_to_combo(combo, base_path, "1.png", "1")
+
         else:
             combo.addItem("未选择")
             combo.setItemData(0, "", Qt.UserRole)
@@ -5135,7 +5139,6 @@ class TubeLayoutEditor(QMainWindow):
     #         self.update_tube_center_distance()
     #         # self.update_lagan()
     #         self.update_partition_plate_center_distance()
-    # TODO 在load_initial函数后触发的监听事件
     def on_combobox_changed(self, row, value):
         """处理下拉框类型参数的变更事件及内容变化处理"""
         # 首先执行原current_text版本的逻辑
@@ -6223,7 +6226,7 @@ class TubeLayoutEditor(QMainWindow):
         delete_sql = f"DELETE FROM {table_name} WHERE `产品ID` = '{safe_productID}'"
         sql_statements.append(delete_sql)
 
-        # 管程=2 时把"分程隔板两侧相邻管中心距（水平）"置 0
+        # 管程=2 时把“分程隔板两侧相邻管中心距（水平）”置 0
         is_tube_pass_two = any(
             (data.get("参数名", "").strip() == "管程程数" and str(data.get("参数值", "")).strip() == "2")
             for data in tube_data
@@ -6273,7 +6276,7 @@ class TubeLayoutEditor(QMainWindow):
             "拉杆直径": None,
         }
 
-        # 遍历前端参数，落表到"布管参数表"，并收集 cross_params
+        # 遍历前端参数，落表到“布管参数表”，并收集 cross_params
         for data in tube_data:
             line_num = str(data.get("参数名", ""))
             holes_up = str(data.get("参数值", ""))
@@ -6295,7 +6298,7 @@ class TubeLayoutEditor(QMainWindow):
             )
             sql_statements.append(insert_sql)
 
-        # 处理"中间挡板宽度"参数，包含单位mm
+        # 处理“中间挡板宽度”参数，包含单位mm
         if hasattr(self, 'center_dangban_length') and self.center_dangban_length is not None:
             param_name = "中间挡板宽度"
             param_value = str(self.center_dangban_length)
@@ -6320,7 +6323,7 @@ class TubeLayoutEditor(QMainWindow):
             # 存入cross_params用于跨表同步
             cross_params[param_name] = param_value
 
-        # 处理"旁路挡板宽度"参数，包含单位mm
+        # 处理“旁路挡板宽度”参数，包含单位mm
         if hasattr(self, 'side_dangban_length') and self.side_dangban_length is not None:
             param_name = "旁路挡板宽度"
             param_value = str(self.side_dangban_length)
@@ -6345,7 +6348,7 @@ class TubeLayoutEditor(QMainWindow):
             # 存入cross_params用于跨表同步
             cross_params[param_name] = param_value
 
-        # 处理"管程分程形式"的图标选择值
+        # 处理“管程分程形式”的图标选择值
         if hasattr(self, 'tube_pass_form_value') and self.tube_pass_form_value:
             param_name = "管程分程形式"
             param_value = self.tube_pass_form_value
@@ -6414,7 +6417,7 @@ class TubeLayoutEditor(QMainWindow):
         #         f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
         #     )
 
-        # 公称直径写回"设计数据表"
+        # 公称直径写回“设计数据表”
         if cross_params["公称直径 DN"] is not None:
             design_table = "`产品设计活动表_设计数据表`"
             safe_dn_value = escape_str(cross_params["公称直径 DN"])
@@ -6738,29 +6741,121 @@ class TubeLayoutEditor(QMainWindow):
             database="产品设计活动库",
             charset="utf8mb4"
         )
-        cursor = conn.cursor()
+        try:
+            cursor = conn.cursor()
 
-        # 查询行号
-        query = "SELECT 至水平中心线行号 FROM 产品设计活动表_布管数量表 WHERE 产品ID = %s"
-        cursor.execute(query, (product_id,))
-        rows = cursor.fetchall()
-        if not rows:
-            QMessageBox.warning(self, "警告", f"未找到产品 {product_id} 的布管数量表记录！")
+            # 5. 读取所有行号（保持原表顺序，不强制 order by；但为匹配我们按行号排序处理，先取出并转为 int）
+            cursor.execute("SELECT 至水平中心线行号 FROM 产品设计活动表_布管数量表 WHERE 产品ID = %s", (product_id,))
+            rows = cursor.fetchall()
+            if not rows:
+                QMessageBox.warning(self, "警告", f"未找到产品 {product_id} 的布管数量表记录！")
+                return None
+
+            # 将行号安全转为 int（有可能是字符串或 decimal）
+            rows_sorted = sorted([int(float(r[0])) for r in rows])
+
+            # 6. 读取每行对应的“管口数量(上)”，用于判断是否为0
+            cursor.execute("""
+                SELECT 至水平中心线行号, `管孔数量（上）`
+                FROM 产品设计活动表_布管数量表
+                WHERE 产品ID = %s
+            """, (product_id,))
+            row_records = cursor.fetchall()
+
+            # 转换为 {行号: 数量} 字典
+            row_quantity_map = {}
+            for rn, qty in row_records:
+                try:
+                    rn_int = int(float(rn))
+                    qty_val = int(float(qty)) if qty is not None else None
+                    row_quantity_map[rn_int] = qty_val
+                except Exception:
+                    continue
+
+            # 按顺序填充：数量=0 → R=0，数量≠0 → 用直径
+            updates = {}
+            row_iter = iter(rows_sorted)
+            for dia in diameters:
+                try:
+                    candidate_line = next(row_iter)
+                except StopIteration:
+                    break  # 行用尽
+
+                qty = row_quantity_map.get(candidate_line, None)
+                if qty == 0:
+                    updates[candidate_line] = 0
+                else:
+                    updates[candidate_line] = dia
+
+            # 如果 diameters 用完，但后续还有数量=0 的行，也要置 0
+            for candidate_line in row_iter:
+                qty = row_quantity_map.get(candidate_line, None)
+                if qty == 0:
+                    updates[candidate_line] = 0
+            # 7. 读取布管交叉布管表的前三列（第一/第二/第三排列）
+            cursor.execute("""
+                SELECT 第一排, 第二排, 第三排
+                FROM 产品设计活动表_布管交叉布管表
+                WHERE 产品ID = %s
+                LIMIT 1
+            """, (product_id,))
+            cross_row = cursor.fetchone()
+
+            if cross_row:
+                for idx in (1, 2, 3):
+                    raw_val = cross_row[idx - 1]
+                    if raw_val is None:
+                        continue
+                    # 如果是数字0或字符串'0'，则跳过（保持原有 R）
+                    if raw_val == 0 or (isinstance(raw_val, str) and raw_val.strip() in ("0", "0.0")):
+                        continue
+
+                    # 尝试解析为 python 结构（列表/元组等），安全方式 ast.literal_eval
+                    parsed = None
+                    if isinstance(raw_val, str):
+                        s = raw_val.strip()
+                        try:
+                            parsed = ast.literal_eval(s)
+                        except Exception:
+                            # 解析失败，跳过该项
+                            parsed = None
+                    else:
+                        parsed = raw_val
+
+                    # 支持几种格式：
+                    # 1) [(x1,y1),(x2,y2)] 或 ((x1,y1),(x2,y2))
+                    # 2) [x1,y1,x2,y2] 或 (x1,y1,x2,y2)
+                    # 3) [[x1,y1],[x2,y2]]
+                    if isinstance(parsed, (list, tuple)):
+                        try:
+                            # 格式 A: 两个点，每个点是长度为2的 list/tuple
+                            if len(parsed) == 2 and all(isinstance(p, (list, tuple)) and len(p) == 2 for p in parsed):
+                                x1, y1 = map(float, parsed[0])
+                                x2, y2 = map(float, parsed[1])
+                            # 格式 B: 平展四个数 [x1,y1,x2,y2]
+                            elif len(parsed) == 4 and all(isinstance(n, (int, float, str)) for n in parsed):
+                                x1, y1, x2, y2 = map(float, parsed)
+                            else:
+                                # 其他不支持的结构，跳过
+                                continue
+
+                            # **按你最新要求：R = (x1-x2)**2 + (y1-y2)**2
+                            r_value = math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+
+                            # 将该 r_value 写入对应的行号 idx (1/2/3)
+                            updates[int(idx)] = r_value
+                        except Exception:
+                            # 任意转换/计算错误，跳过该排列
+                            continue
+
+            # 8. 执行更新 —— 只更新 updates 中存在的行
+            update_sql = "UPDATE 产品设计活动表_布管数量表 SET R = %s WHERE 产品ID = %s AND 至水平中心线行号 = %s"
+            for ln, val in updates.items():
+                cursor.execute(update_sql, (val, product_id, ln))
+
+            conn.commit()
+        finally:
             conn.close()
-            return None
-
-        # 转 float 并升序排序
-        rows_sorted = sorted([float(line_no[0]) for line_no in rows])
-
-        # 更新 R 列
-        for line_no, dia in zip(rows_sorted, diameters):
-            cursor.execute(
-                "UPDATE 产品设计活动表_布管数量表 SET R = %s WHERE 产品ID = %s AND 至水平中心线行号 = %s",
-                (dia, product_id, line_no)
-            )
-
-        conn.commit()
-        conn.close()
 
     def execute_sql(self, sql):
         """执行SQL语句"""
@@ -7661,6 +7756,13 @@ class TubeLayoutEditor(QMainWindow):
                 neg_grouped = [neg_grouped[0]] + neg_grouped[1:1 + max_paired_rows]
 
         return pos_grouped, neg_grouped
+
+    def on_table_right_click(self, position):
+        """处理表格右键点击事件，取消选中状态"""
+        # 清除所有选中
+        self.hole_distribution_table.clearSelection()
+        # 触发选择变化事件，更新高亮状态
+        self.on_row_selection_changed()
 
     def on_row_selection_changed(self):
         """响应右侧表格选中事件，高亮对应小圆和表格整行，并同步更新 self.selected_centers"""
