@@ -13,7 +13,7 @@ from PyQt5.QtCore import QPointF, QRectF
 from PyQt5.QtCore import QSize
 from PyQt5.QtGui import QBrush, QIcon
 from PyQt5.QtGui import QColor, QPen, QPolygonF, QPainterPath, QIntValidator
-from PyQt5.QtWidgets import QGraphicsEllipseItem
+from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsLineItem
 from PyQt5.QtWidgets import QGraphicsPolygonItem, QMessageBox, QComboBox
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout,
                              QTabWidget, QPushButton, QGraphicsView,
@@ -32,7 +32,7 @@ import modules.buguan.buguan_ziyong.qiaotineizhijing as qtzj
 
 # product_id = 'PD2025092421444001'
 
-product_id = 'PD2025092914414401'
+product_id = 'PD2025092509281701'
 
 
 def on_product_id_changed(new_id):
@@ -423,6 +423,9 @@ def get_plate_form_params(image_name):
         conn.close()
 
 
+import math
+
+
 def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
     # 计算非布管圆心
     height_0_180 = float(height_0_180)
@@ -438,23 +441,30 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
 
     if height_0_180 != 0:
         Chorda = math.sqrt(Ri ** 2 - ha ** 2)
-        # 存储0或180的非布管小圆圆心坐标
+        # 存储0或180的非布管小圆圆心坐标（使用与参考代码相同的判断逻辑）
         for center in centers:
             x, y = center
-            if -Chorda + do + do < x < Chorda - do - do and ((ha - do < y < Ri) or (-Ri < y < -ha + do)):
+            # 移除了原判断条件中的 do 偏移量，与参考代码保持一致
+            if -Chorda < x < Chorda and ((ha - do < y < Ri) or (-Ri < y < -ha + do)):
                 none_tube_0_180.append(center)
 
     if height_90_270 != 0:
         Chordb = math.sqrt(Ri ** 2 - hb ** 2)
-        # 存储90或270的非布管小圆圆心坐标
+        # 存储90或270的非布管小圆圆心坐标（使用与参考代码相同的判断逻辑）
         for center in centers:
             x, y = center
-            if -Chordb + do + do < y < Chordb - do - do and ((hb - do < x < Ri) or (-Ri < x < -hb + do)):
+            # 移除了原判断条件中的 do 偏移量，与参考代码保持一致
+            if -Chordb < y < Chordb and ((hb - do < x < Ri) or (-Ri < x < -hb + do)):
                 none_tube_90_270.append(center)
 
+    # 合并非布管区域并计算剩余圆心
     all_none_tubes = set(none_tube_0_180 + none_tube_90_270)
     current_centers = [center for center in centers if center not in all_none_tubes]
     return current_centers
+
+
+# 使用示例
+# current_centers = none_tube_centers(height_0_180, height_90_270, Di, do, centers)
 
 
 # TODO 此处初始化
@@ -1784,16 +1794,17 @@ class TubeLayoutEditor(QMainWindow):
                                     #     if update_di:
                                     #         processed_params[i]['参数值'] = update_di
                                     #     dl_exists = True
-                                    if param['参数名'] == "分程隔板两侧相邻管中心距（竖直）":
-                                        if self.heat_exchanger in ["AEU", "BEU"]:
-                                            processed_params[i]['参数值'] = "100"
-                                            dl_exists = True
-                                        continue
-                                    if param['参数名'] == "分程隔板两侧相邻管中心距（水平）":
-                                        if self.heat_exchanger in ["AEU", "BEU"]:
-                                            processed_params[i]['参数值'] = "44"
-                                            dl_exists = True
-                                        continue
+                                    # TODO 这里我忘了为啥要写，但是好像挺重要的
+                                    # if param['参数名'] == "分程隔板两侧相邻管中心距（竖直）":
+                                    #     if self.heat_exchanger in ["AEU", "BEU"]:
+                                    #         processed_params[i]['参数值'] = "100"
+                                    #         dl_exists = True
+                                    #     continue
+                                    # if param['参数名'] == "分程隔板两侧相邻管中心距（水平）":
+                                    #     if self.heat_exchanger in ["AEU", "BEU"]:
+                                    #         processed_params[i]['参数值'] = "44"
+                                    #         dl_exists = True
+                                    #     continue
                                     if param['参数名'] == "折流板要求切口率 (%)":
                                         processed_params[i]['参数值'] = "25"
                                         dl_exists = True
@@ -2027,7 +2038,7 @@ class TubeLayoutEditor(QMainWindow):
         self.setup_parameter_listeners()
         self.update_baffle_parameters("折流板要求切口率 (%)")
         self.update_baffle_diameter()
-        self.update_tube_center_distance()
+        # self.update_tube_center_distance()
         self.find_cross_pipes_info()
         import ast
 
@@ -2181,16 +2192,34 @@ class TubeLayoutEditor(QMainWindow):
         self.coord_y_line2_4 = []
         self.coord_y_line3_4 = []
 
-        if hasattr(self, 'connection_lines'):
-            for line in self.connection_lines:
-                if line in self.graphics_scene.items():
-                    self.graphics_scene.removeItem(line)
-            self.connection_lines.clear()
+        # 方法1：使用blockSignals禁用场景信号
+        was_blocked = self.graphics_scene.blockSignals(True)
 
-        # 清除场景中所有标记圆
-        for item in self.graphics_scene.items():
-            if isinstance(item, QGraphicsEllipseItem) and item.data(0) == "marker":
-                self.graphics_scene.removeItem(item)
+        try:
+            # 使用优化后的清除方法
+            if hasattr(self, 'graphics_scene') and hasattr(self.graphics_scene, 'clear_connection_lines'):
+                self.graphics_scene.clear_connection_lines()
+            if hasattr(self, 'graphics_scene') and hasattr(self.graphics_scene, 'clear_markers'):
+                self.graphics_scene.clear_markers()
+
+            # 备用方案：如果自定义方法不可用，使用批量移除
+            else:
+                items_to_remove = [item for item in self.graphics_scene.items()
+                                   if (isinstance(item, (QGraphicsLineItem, QGraphicsEllipseItem)) and
+                                       (item in getattr(self, 'connection_lines', []) or
+                                        item.data(0) == "marker"))]
+
+                for item in items_to_remove:
+                    self.graphics_scene.removeItem(item)
+
+                if hasattr(self, 'connection_lines'):
+                    self.connection_lines.clear()
+
+        finally:
+            # 恢复场景的信号状态
+            self.graphics_scene.blockSignals(was_blocked)
+            # 强制更新场景
+            self.graphics_scene.update()
 
         self.has_piped = True
         self.left_data_pd = []
@@ -2261,48 +2290,6 @@ class TubeLayoutEditor(QMainWindow):
             finally:
                 if conn and conn.open:
                     conn.close()
-
-        # # 计算布管限定圆 DL
-        # if heat_exchanger_type in ["AEU", "BEU", "BEM", "NEN"]:
-        #     # 计算方式1: DL = Di - 2b₃, b₃ = max(0.25do, 8)
-        #     b3 = max(0.25 * do, 8.0)
-        #     DL = Di - 2 * b3
-        #     print(f"计算布管限定圆 DL ({heat_exchanger_type}): {Di} - 2 * max(0.25 * {do}, 8.0) = {DL:.1f}")
-        #
-        # elif heat_exchanger_type in ["AES", "BES"]:
-        #     # 计算方式2: DL = Di - 2(b₁ + b₂ + b)
-        #     # 确定b的值
-        #     if Di < 1000:
-        #         b = 4.0  # 默认值
-        #     else:  # 1000 ≤ Di ≤ 2600
-        #         b = 5.0  # 默认值
-        #
-        #     # 确定b₁和bₙ的值
-        #     if Di <= 700:
-        #         b_n = 10.0
-        #         b_1 = 3.0
-        #     elif Di <= 1200:
-        #         b_n = 13.0
-        #         b_1 = 5.0
-        #     elif Di <= 2000:
-        #         b_n = 16.0
-        #         b_1 = 6.0
-        #     else:  # Di <= 2600
-        #         b_n = 20.0
-        #         b_1 = 7.0
-        #
-        #     # 计算b₂
-        #     b_2 = b_n + 1.5
-        #
-        #     # 计算DL
-        #     DL = Di - 2 * (b_1 + b_2 + b)
-        #     print(f"计算布管限定圆 DL ({heat_exchanger_type}): {Di} - 2 * ({b_1} + {b_2} + {b}) = {DL:.1f}")
-        #
-        # else:
-        #     print(f"未知的换热器型号: {heat_exchanger_type}，使用默认DL值")
-        #     if DL is None:
-        #         # 如果没有计算出DL且没有用户输入，使用默认值
-        #         DL = Di - 2 * max(0.25 * do, 8.0)
 
         # 更新参数表中的DL值
         dl_row = -1
@@ -2483,9 +2470,9 @@ class TubeLayoutEditor(QMainWindow):
                     conn.close()
 
         input_json['LB_HEType'] = he_type
-        # 4.1 为平行，传“2”
-        # 4.2，6.2为double，传“0”
-        # 4.3,6.1为H，传“1”
+        # 4.1 为平行，传"2"
+        # 4.2，6.2为double，传"0"
+        # 4.3,6.1为H，传"1"
 
         LB_ClapboardType = '0'
         if self.tube_pass_form_value == "4.1":
@@ -4612,7 +4599,7 @@ class TubeLayoutEditor(QMainWindow):
                 if param_name in ["壳体内直径 Di", "换热管外径 do", "换热管排列方式"]:
                     self.update_baffle_diameter()
                     self.update_tube_center_distance()
-                    self.update_partition_plate_center_distance()
+
                     self.isDi_change = True
                     # self.user_update_Di()
 
@@ -4957,7 +4944,7 @@ class TubeLayoutEditor(QMainWindow):
         self.setup_combobox_modification_detection()
         self.is_loading_data = False
         self.update_all_row_backgrounds()
-        self.update_partition_plate_center_distance()
+        # self.update_partition_plate_center_distance()
 
     def on_param_table_item_changed(self, item):
         """处理参数表格中普通文本单元格的变化"""
@@ -9620,27 +9607,53 @@ class TubeLayoutEditor(QMainWindow):
 
     # 删除换热管
     def on_del_click(self):
-        if hasattr(self, 'selected_side_blocks') and self.selected_side_blocks:
-            self.delete_selected_side_blocks()
-        if hasattr(self, 'selected_baffles') and self.selected_baffles:
-            self.delete_selected_baffles()
-        if hasattr(self, 'selected_side_rods') and self.selected_side_rods:
-            self.delete_selected_side_rods()
-        if hasattr(self, 'selected_slides') and self.selected_slides:
-            self.delete_selected_slides()
-        if hasattr(self, 'selected_center_dangguan') and self.selected_center_dangguan:
-            self.delete_selected_center_dangguan()
-        if hasattr(self, 'selected_center_dangban') and self.selected_center_dangban:
-            self.delete_selected_center_dangban()
+        try:
+            # 处理侧边块删除
+            if hasattr(self, 'selected_side_blocks') and self.selected_side_blocks:
+                self.delete_selected_side_blocks()
 
-        if self.selected_centers:
-            if self.isSymmetry:
-                selected_centers = list(self.judge_linkage(self.selected_centers))
-            else:
-                selected_centers = list(self.selected_centers)
-            self.delete_huanreguan(selected_centers)
+            # 处理挡板删除
+            if hasattr(self, 'selected_baffles') and self.selected_baffles:
+                self.delete_selected_baffles()
 
-        self.selected_centers.clear()
+            # 处理侧边杆删除
+            if hasattr(self, 'selected_side_rods') and self.selected_side_rods:
+                self.delete_selected_side_rods()
+
+            # 处理滑块删除
+            if hasattr(self, 'selected_slides') and self.selected_slides:
+                self.delete_selected_slides()
+
+            # 处理中心导管删除
+            if hasattr(self, 'selected_center_dangguan') and self.selected_center_dangguan:
+                self.delete_selected_center_dangguan()
+
+            # 处理中心挡板删除
+            if hasattr(self, 'selected_center_dangban') and self.selected_center_dangban:
+                self.delete_selected_center_dangban()
+
+            # 处理中心部件删除
+            if hasattr(self, 'selected_centers') and self.selected_centers:
+                if self.isSymmetry:
+                    selected_centers = list(self.judge_linkage(self.selected_centers))
+                else:
+                    tubeline_num = self.get_tube_pass_count()
+                    if tubeline_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+                        selected_centers = list(self.judge_linkage_x(self.selected_centers))
+                    elif tubeline_num == "4" and self.heat_exchanger in ["AEU", "BEU"]:
+                        selected_centers = list(self.judge_linkage_y(self.selected_centers))
+                    elif tubeline_num == "6" and self.heat_exchanger in ["AEU", "BEU"]:
+                        selected_centers = list(self.judge_linkage_y(self.selected_centers))
+                    else:
+                        selected_centers = list(self.selected_centers)
+
+                # for center in selected_centers:
+                #     self.delete_huanreguan(center)
+                self.delete_huanreguan(selected_centers)
+                self.selected_centers.clear()
+
+        except Exception:
+            return
 
     def delete_selected_baffles(self):
         """删除选中的防冲板，并恢复对应的干涉换热管"""
@@ -9826,7 +9839,7 @@ class TubeLayoutEditor(QMainWindow):
             ]
 
             if self.create_scene():
-                self.connect_center(self.scene, self.current_centers, self.small_D)
+                # self.connect_center(self.scene, self.current_centers, self.small_D)
                 self.update_tube_nums()
 
             if saved_lines and hasattr(self, 'connection_lines'):
@@ -9891,6 +9904,94 @@ class TubeLayoutEditor(QMainWindow):
 
         return linkage_centers
 
+    def judge_linkage_x(self, selected_centers):
+        # 关于x轴对称
+        linkage_centers = []
+        if not selected_centers:
+            return linkage_centers
+
+        # 处理字符串类型的输入
+        if isinstance(selected_centers, str):
+            try:
+                import ast
+                selected_centers = ast.literal_eval(selected_centers)
+            except (SyntaxError, ValueError) as e:
+                print(f"字符串转换失败: {e}")
+                return linkage_centers
+
+        current_coords = self.selected_to_current_coords(selected_centers)
+        if current_coords:
+            linkage_centers.extend(selected_centers)
+
+            y_axis_syms = []
+            x_axis_syms = []
+            center_syms = []
+
+            for i, (row_label, col_label) in enumerate(selected_centers):
+                x, y = current_coords[i]
+                y_axis_actual = (-x, y)
+                x_axis_actual = (x, -y)
+                center_actual = (-x, -y)
+
+                y_axis_sym = self.actual_to_selected_coords(y_axis_actual)
+                x_axis_sym = self.actual_to_selected_coords(x_axis_actual)
+                center_sym = self.actual_to_selected_coords(center_actual)
+
+                if y_axis_sym:
+                    y_axis_syms.append(y_axis_sym)
+                if x_axis_sym:
+                    x_axis_syms.append(x_axis_sym)
+                if center_sym:
+                    center_syms.append(center_sym)
+            # linkage_centers.extend(y_axis_syms)
+            linkage_centers.extend(x_axis_syms)
+            # linkage_centers.extend(center_syms)
+
+        return linkage_centers
+    def judge_linkage_y(self, selected_centers):
+        # 关于x轴对称
+        linkage_centers = []
+        if not selected_centers:
+            return linkage_centers
+
+        # 处理字符串类型的输入
+        if isinstance(selected_centers, str):
+            try:
+                import ast
+                selected_centers = ast.literal_eval(selected_centers)
+            except (SyntaxError, ValueError) as e:
+                print(f"字符串转换失败: {e}")
+                return linkage_centers
+
+        current_coords = self.selected_to_current_coords(selected_centers)
+        if current_coords:
+            linkage_centers.extend(selected_centers)
+
+            y_axis_syms = []
+            x_axis_syms = []
+            center_syms = []
+
+            for i, (row_label, col_label) in enumerate(selected_centers):
+                x, y = current_coords[i]
+                y_axis_actual = (-x, y)
+                x_axis_actual = (x, -y)
+                center_actual = (-x, -y)
+
+                y_axis_sym = self.actual_to_selected_coords(y_axis_actual)
+                x_axis_sym = self.actual_to_selected_coords(x_axis_actual)
+                center_sym = self.actual_to_selected_coords(center_actual)
+
+                if y_axis_sym:
+                    y_axis_syms.append(y_axis_sym)
+                if x_axis_sym:
+                    x_axis_syms.append(x_axis_sym)
+                if center_sym:
+                    center_syms.append(center_sym)
+            linkage_centers.extend(y_axis_syms)
+            # linkage_centers.extend(x_axis_syms)
+            # linkage_centers.extend(center_syms)
+
+        return linkage_centers
     def actual_to_selected_coords(self, actual_coord):
         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
             self.global_centers)
@@ -10033,7 +10134,8 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 记录当前操作及坐标信息（用于后续回溯、统计等）
                 self.huanreguan.append((row_label, col_label))
-                self.current_centers.append(actual_abs_coord)
+                if actual_abs_coord not in self.current_centers:
+                    self.current_centers.append(actual_abs_coord)
                 self.operations.append({
                     "type": "add_tube",
                     "relative_coord": (row_label, col_label),
@@ -10045,7 +10147,7 @@ class TubeLayoutEditor(QMainWindow):
             # 更新删除列表（移除已选中的相对坐标，避免重复删除）
             self.del_centers = [coord for coord in self.del_centers if coord not in selected_centers]
             # 清空选中状态（避免后续操作重复处理）
-            self.selected_centers = []
+            self.selected_centers.clear()
             # 更新界面相关统计信息和坐标分组
             self.update_total_holes_count()
             self.sorted_current_centers_up, self.sorted_current_centers_down = self.group_centers_by_y(
@@ -10634,7 +10736,7 @@ class TubeLayoutEditor(QMainWindow):
                 block_height_val = float(block_height)
                 tube_bridge_val = float(tube_bridge)
                 # self.side_dangban_length = distance - block_height_val - tube_bridge_val
-                self.side_dangban_length = abs(distance - tube_bridge_val - do_value)
+                self.side_dangban_length = abs(distance + tube_bridge_val - do_value)
 
                 print("旁路挡板长度")
             except ValueError as e:
@@ -10975,7 +11077,7 @@ class TubeLayoutEditor(QMainWindow):
                     dangban_entry = [selected_center] + dangban_interfering_tubes
                     self.sdangban_selected_centers.append(dangban_entry)
 
-            self.update_tube_nums()  # 更新换热管数量显示
+            self.update_tube_nums()
 
         else:
             # 无干涉管：仅存储绘制坐标
@@ -13113,7 +13215,6 @@ class TubeLayoutEditor(QMainWindow):
         # 8. 强制刷新视图（确保删除后界面立即更新）
         self.graphics_scene.update()
         self.graphics_view.viewport().update()
-
 
     def enable_scene_click_capture(self):
         """启用图形视图的点击事件捕获"""
