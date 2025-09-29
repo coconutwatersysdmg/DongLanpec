@@ -32,7 +32,7 @@ import modules.buguan.buguan_ziyong.qiaotineizhijing as qtzj
 
 # product_id = 'PD2025092421444001'
 
-product_id = 'PD2025092509281701'
+product_id = 'PD2025092914414401'
 
 
 def on_product_id_changed(new_id):
@@ -460,7 +460,6 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
 # TODO 此处初始化
 
 
-
 class TubeLayoutEditor(QMainWindow):
     def __init__(self, line_tip=None):
         super().__init__()
@@ -588,6 +587,7 @@ class TubeLayoutEditor(QMainWindow):
             'left_number': left_number,
             'right_number': right_number
         }
+
     def update_leftpad_params(self):
         """实时更新左侧参数为列表形式"""
         self.current_leftpad = []  # 清空现有列表
@@ -1378,6 +1378,8 @@ class TubeLayoutEditor(QMainWindow):
                                         """
                                         cursor.execute(design_query, (self.productID, "公称直径*"))
                                         design_data = cursor.fetchone()
+                                        print(design_data)
+                                        print("壳体内直径读了个寂寞读的是哪个？")
 
                                         if isinstance(design_data, dict) and '管程数值' in design_data and design_data[
                                             '管程数值']:
@@ -1629,7 +1631,24 @@ class TubeLayoutEditor(QMainWindow):
                                                                 design_data['壳程数值']:
                                                             final_value = design_data['壳程数值']
                                                             print(f"更新公称直径 DN: {param_value} -> {final_value}")
+                                                    elif param_name == "壳体内直径 Di":
+                                                        # TODO 真是见鬼了，为啥总是第二次才能读正确
+                                                        design_query = """
+                                                            SELECT 壳程数值 
+                                                            FROM 产品设计活动表_设计数据表 
+                                                            WHERE 产品ID = %s AND 参数名称 = %s
+                                                        """
+                                                        design_cursor.execute(design_query,
+                                                                              (self.productID, "公称直径*"))
+                                                        design_data = design_cursor.fetchone()
+                                                        print(design_data)
+                                                        print("壳体内直径读了个寂寞")
 
+                                                        if isinstance(design_data,
+                                                                      dict) and '壳程数值' in design_data and \
+                                                                design_data['壳程数值']:
+                                                            final_value = design_data['壳程数值']
+                                                            print(f"更新壳体内直径 Di: {param_value} -> {final_value}")
                                                     elif param_name == "是否以外径为基准":
                                                         design_query = """
                                                             SELECT 数值 
@@ -1647,21 +1666,7 @@ class TubeLayoutEditor(QMainWindow):
                                                             print(
                                                                 f"更新是否以外径为基准: {param_value} -> {final_value}")
 
-                                                    elif param_name == "壳体内直径 Di":
-                                                        design_query = """
-                                                            SELECT 管程数值 
-                                                            FROM 产品设计活动表_设计数据表 
-                                                            WHERE 产品ID = %s AND 参数名称 = %s
-                                                        """
-                                                        design_cursor.execute(design_query,
-                                                                              (self.productID, "公称直径*"))
-                                                        design_data = design_cursor.fetchone()
 
-                                                        if isinstance(design_data,
-                                                                      dict) and '管程数值' in design_data and \
-                                                                design_data['管程数值']:
-                                                            final_value = design_data['管程数值']
-                                                            print(f"更新壳体内直径 Di: {param_value} -> {final_value}")
                                         except Exception as e:
                                             print(f"处理{param_name}时出错: {str(e)}，使用原值: {param_value}")
                                         finally:
@@ -1953,7 +1958,7 @@ class TubeLayoutEditor(QMainWindow):
                         pair = [centers_list[i], centers_list[i + 1]]
                         if isinstance(pair, list) and len(pair) == 2:
                             thickness = float(self.block_thickness)
-                            self.build_center_dangban(pair, thickness)
+                            self.build_center_dangban(pair, thickness, self.center_dangban_length)
                         else:
                             print(f"无效的中间挡板坐标对: {pair}")
                     else:
@@ -10277,7 +10282,7 @@ class TubeLayoutEditor(QMainWindow):
         self.clear_selection_highlight()
 
     def build_center_dangguan(self, selected_centers):
-        """构建中间挡管，支持选中功能（保持紫色空心圆样式）"""
+        """构建中间挡管，支持选中功能（修复对称模式下多选删除问题）"""
         if not selected_centers:
             return []
 
@@ -10381,6 +10386,11 @@ class TubeLayoutEditor(QMainWindow):
             if not hasattr(self, 'selected_center_dangguan'):
                 self.selected_center_dangguan = []
 
+            # 关键修复：将新创建的挡管添加到选中列表
+            # 确保不会重复添加同一挡管
+            if center_dangguan_item not in self.selected_center_dangguan:
+                self.selected_center_dangguan.append(center_dangguan_item)
+
             # 记录操作
             if not hasattr(self, 'operations'):
                 self.operations = []
@@ -10393,29 +10403,52 @@ class TubeLayoutEditor(QMainWindow):
         return current_coords
 
     def delete_selected_center_dangguan(self):
-        """删除选中的中间挡管"""
-        if not hasattr(self, 'selected_center_dangguan') or not self.selected_center_dangguan:
+        """删除选中的中间挡管（修复多选删除问题）"""
+        if not hasattr(self, 'selected_center_dangguan'):
+            self.selected_center_dangguan = []
             return
 
-        # 复制选中列表避免迭代中修改
+        # 立即创建要删除的挡管列表副本（避免实时修改导致的问题）
         dangguan_to_remove = list(self.selected_center_dangguan)
+        if not dangguan_to_remove:
+            return
 
+        # 收集要删除的挡管信息并去重
+        dangguan_info_to_remove = []
         for dangguan in dangguan_to_remove:
-            # 从场景中移除中间挡管
-            if dangguan.scene() == self.graphics_scene:
-                self.graphics_scene.removeItem(dangguan)
-
-            # 从存储列表中移除
-            if dangguan in self.selected_center_dangguan:
-                self.selected_center_dangguan.remove(dangguan)
-
-            # 从center_dangguan列表中移除对应的坐标
             if hasattr(dangguan, 'original_selected_center') and dangguan.original_selected_center:
-                if dangguan.original_selected_center in self.center_dangguan:
-                    self.center_dangguan.remove(dangguan.original_selected_center)
+                dangguan_info_to_remove.append(dangguan.original_selected_center)
+        dangguan_info_to_remove = list(set(dangguan_info_to_remove))
 
-        # 清空选中列表
-        self.selected_center_dangguan.clear()
+        # 从数据结构中移除对应的坐标信息
+        if hasattr(self, 'center_dangguan'):
+            self.center_dangguan = [
+                coord for coord in self.center_dangguan
+                if coord not in dangguan_info_to_remove
+            ]
+
+        # 先清空选中列表，避免二次引用
+        self.selected_center_dangguan = []
+
+        # 执行实际删除操作
+        removed_dangguan = set()
+        for dangguan in dangguan_to_remove:
+            if dangguan in removed_dangguan:
+                continue
+
+            # 直接移除，不依赖场景判断
+            self.graphics_scene.removeItem(dangguan)
+            removed_dangguan.add(dangguan)
+
+            # 处理配对挡管
+            if hasattr(dangguan, 'paired_dangguan') and dangguan.paired_dangguan:
+                paired = dangguan.paired_dangguan
+                if paired not in removed_dangguan:
+                    self.graphics_scene.removeItem(paired)
+                    removed_dangguan.add(paired)
+
+        # 强制刷新场景
+        self.graphics_scene.update()
 
     def is_outside_baffle_cut(self):
         """
@@ -12809,20 +12842,31 @@ class TubeLayoutEditor(QMainWindow):
             return "未找到该换热管外径对应的名义管桥宽度"
 
     def build_center_dangban(self, selected_centers, block_thickness, block_width):
-        """构建紫色中间挡板（接收厚度和宽度参数，执行绘制逻辑）"""
+        """构建紫色中间挡板（修复对称模式批量创建&删除问题）"""
         from PyQt5.QtGui import QPen, QBrush, QColor, QPainterPath
         from PyQt5.QtWidgets import QMessageBox
         import ast
 
-        # 1. 解析并校验选中的圆心坐标
+        # 初始化挡板选中列表（确保全局存在，避免批量创建丢失）
+        if not hasattr(self, 'selected_center_dangban'):
+            self.selected_center_dangban = []
+
+        # 1. 基础校验与参数解析
         if not selected_centers:
             return []
+
+        # 计算挡板长度（保留原有逻辑，无需修改）
         distance = self.calculate_distance(selected_centers)
         do = self.get_tube_do()
-        do_value = float(do)
+        try:
+            do_value = float(do)
+        except (ValueError, TypeError):
+            QMessageBox.warning(self, "错误", "换热管外径格式错误")
+            return []
         tube_bridge = self.get_nominal_bridge_width(do_value)
         self.center_dangban_length = distance - do_value - tube_bridge * 2
 
+        # 解析选中的圆心坐标（过滤无效格式）
         selected_centers_list = []
         if isinstance(selected_centers, list):
             selected_centers_list = [
@@ -12841,11 +12885,13 @@ class TubeLayoutEditor(QMainWindow):
                     ]
             except (SyntaxError, ValueError, TypeError) as e:
                 print("字符串解析错误:", e)
-                selected_centers_list = []
+                QMessageBox.warning(self, "错误", f"坐标解析失败：{str(e)}")
+                return []
         else:
-            selected_centers_list = []
+            QMessageBox.warning(self, "错误", "选中坐标格式不支持")
+            return []
 
-        # 2. 合并圆心列表并去重
+        # 2. 合并圆心列表并去重（避免重复记录）
         combined = []
         seen = set()
         for coord in self.center_dangban:
@@ -12858,201 +12904,216 @@ class TubeLayoutEditor(QMainWindow):
                 combined.append(coord)
         self.center_dangban = combined
 
-        # 坐标转换
+        # 3. 坐标转换（标签坐标→画布实际坐标）
         current_coords = self.selected_to_current_coords(selected_centers)
         if not current_coords:
-            return
+            QMessageBox.warning(self, "错误", "坐标转换失败")
+            return []
 
-        # 3. 二次处理字符串类型的选中坐标
+        # 4. 二次处理字符串类型选中坐标
         if isinstance(selected_centers, str):
             try:
                 selected_centers = ast.literal_eval(selected_centers)
             except (SyntaxError, ValueError) as e:
                 print(f"字符串转换失败: {e}")
+                QMessageBox.warning(self, "错误", f"坐标转换失败：{str(e)}")
                 return current_coords
 
-        # 4. 提取选中圆的实际绘制坐标
+        # 5. 提取画布实际坐标（从标签映射到绘图坐标）
         points = []
         if selected_centers:
             for row_label, col_label in selected_centers:
                 row_idx = abs(row_label) - 1
                 col_idx = abs(col_label) - 1
+                # 根据标签正负选择上/下半部分中心点组
                 centers_group = self.sorted_current_centers_up if row_label > 0 else self.sorted_current_centers_down
-                if row_idx < len(centers_group) and col_idx < len(centers_group[row_idx]):
-                    x, y = centers_group[row_idx][col_idx]
-                    points.append((x, y))
 
-            # 校验坐标数量
+                # 边界校验（避免索引越界）
+                if row_idx < 0 or row_idx >= len(centers_group):
+                    continue
+                if col_idx < 0 or col_idx >= len(centers_group[row_idx]):
+                    continue
+
+                x, y = centers_group[row_idx][col_idx]
+                points.append((x, y))
+
+            # 校验：必须选中2个有效圆心
             if len(points) != 2:
-                QMessageBox.warning(self, "错误", "选中的小圆坐标获取失败")
-                # 回滚圆心列表
-                for center in selected_centers:
+                QMessageBox.warning(self, "错误", "需选中2个有效且对称的圆心")
+                # 回滚：移除本次无效的圆心记录
+                for center in selected_centers_list:
                     if center in self.center_dangban:
                         self.center_dangban.remove(center)
-                return
+                return []
 
-            # 5. 判断对称性（x轴/y轴）
+            # 6. 判断对称性（仅支持x轴/y轴对称）
             (x1, y1), (x2, y2) = points
-            is_horizontal = (abs(y1 - y2) < 1e-2 and abs(x1 + x2) < 1e-2)  # 关于y轴对称
-            is_vertical = (abs(x1 - x2) < 1e-2 and abs(y1 + y2) < 1e-2)  # 关于x轴对称
+            # 水平对称：y坐标接近相等，x坐标关于y轴对称（x1 + x2 ≈ 0）
+            is_horizontal = (abs(y1 - y2) < 1e-2) and (abs(x1 + x2) < 1e-2)
+            # 竖直对称：x坐标接近相等，y坐标关于x轴对称（y1 + y2 ≈ 0）
+            is_vertical = (abs(x1 - x2) < 1e-2) and (abs(y1 + y2) < 1e-2)
 
             if not (is_horizontal or is_vertical):
-                QMessageBox.warning(self, "错误", "两个小圆必须关于x轴或y轴对称，且连线为水平或竖直")
-                # 回滚圆心列表
-                for center in selected_centers:
+                QMessageBox.warning(self, "错误", "两个圆心必须关于x轴或y轴对称")
+                # 回滚：移除无效圆心记录
+                for center in selected_centers_list:
                     if center in self.center_dangban:
                         self.center_dangban.remove(center)
-                return
+                return []
 
-            # 6. 绘制紫色挡板（使用用户设置的厚度和计算的宽度）
-            pen = QPen(QColor(128, 0, 128))
-            pen.setWidth(1)  # 边框宽度
-            brush = QBrush(QColor(128, 0, 128))  # 填充颜色
+            # 7. 绘制紫色挡板（核心逻辑：创建可选中项+关联属性）
+            pen = QPen(QColor(128, 0, 128))  # 紫色边框
+            pen.setWidth(1)
+            brush = QBrush(QColor(128, 0, 128))  # 紫色实心填充
+            dangban_item1 = None  # 初始化挡板项
 
             if is_horizontal:
-                # 水平对称：绘制两个水平矩形（宽度为block_width，厚度为block_thickness）
-                # 计算矩形位置（居中放置）
+                # 水平挡板：宽度=block_width，厚度=block_thickness
                 mid_x = (x1 + x2) / 2
                 half_width = block_width / 2
                 half_thickness = block_thickness / 2
 
-                # 第一个矩形
+                # 计算矩形区域
                 rect1_x = mid_x - half_width
                 rect1_y = y1 - half_thickness
-                rect1 = self.graphics_scene.addRect(rect1_x, rect1_y, block_width, block_thickness, pen, brush)
+                # 创建临时矩形（用于视觉呈现，后续需同步删除）
+                temp_rect1 = self.graphics_scene.addRect(
+                    rect1_x, rect1_y, block_width, block_thickness, pen, brush
+                )
 
-                # 第二个矩形（对称位置）
-                rect2_x = mid_x - half_width
-                rect2_y = -y1 - half_thickness
-                rect2 = self.graphics_scene.addRect(rect2_x, rect2_y, block_width, block_thickness, pen, brush)
-
-                # 创建可选中图形项
+                # 创建可选中的挡板项（ClickableRectItem）
                 path1 = QPainterPath()
                 path1.addRect(rect1_x, rect1_y, block_width, block_thickness)
-                item1 = ClickableRectItem(path1, is_center_dangban=True, editor=self)
-                item1.setPen(pen)
-                item1.setBrush(brush)
-                item1.original_coords = selected_centers
-                item1.related_line_items = [rect1]
-                self.graphics_scene.addItem(item1)
-
-                path2 = QPainterPath()
-                path2.addRect(rect2_x, rect2_y, block_width, block_thickness)
-                item2 = ClickableRectItem(path2, is_center_dangban=True, editor=self)
-                item2.setPen(pen)
-                item2.setBrush(brush)
-                item2.original_coords = selected_centers
-                item2.related_line_items = [rect2]
-                self.graphics_scene.addItem(item2)
-
-                # 绑定配对关系
-                item1.set_paired_block(item2)
-                item2.set_paired_block(item1)
+                dangban_item1 = ClickableRectItem(
+                    path=path1,
+                    is_center_dangban=True,
+                    editor=self
+                )
+                # 配置挡板属性（与delete函数保持属性名一致）
+                dangban_item1.setPen(pen)
+                dangban_item1.setBrush(brush)
+                dangban_item1.original_coords = selected_centers_list  # 存储元组列表（便于删除匹配）
+                dangban_item1.related_temp_items = [temp_rect1]  # 统一属性名：关联临时矩形
+                dangban_item1.paired_block = None  # 初始化配对挡板（对称模式可能用到）
+                dangban_item1.setZValue(10)  # 提高层级，确保显示在顶层
+                self.graphics_scene.addItem(dangban_item1)
 
             else:
-                # 竖直对称：绘制两个竖直矩形（宽度为block_thickness，长度为block_width）
-                # 计算矩形位置（居中放置）
+                # 竖直挡板：宽度=block_thickness，长度=block_width
                 mid_y = (y1 + y2) / 2
-                half_width = block_thickness / 2  # 竖直方向宽度为厚度
-                half_length = block_width / 2  # 长度为block_width
+                half_width = block_thickness / 2
+                half_length = block_width / 2
 
-                # 第一个矩形
+                # 计算矩形区域
                 rect1_x = x1 - half_width
                 rect1_y = mid_y - half_length
-                rect1 = self.graphics_scene.addRect(rect1_x, rect1_y, block_thickness, block_width, pen, brush)
+                # 创建临时矩形
+                temp_rect1 = self.graphics_scene.addRect(
+                    rect1_x, rect1_y, block_thickness, block_width, pen, brush
+                )
 
-                # 第二个矩形（对称位置）
-                rect2_x = -x1 - half_width
-                rect2_y = mid_y - half_length
-                rect2 = self.graphics_scene.addRect(rect2_x, rect2_y, block_thickness, block_width, pen, brush)
-
-                # 创建可选中图形项
+                # 创建可选中的挡板项
                 path1 = QPainterPath()
                 path1.addRect(rect1_x, rect1_y, block_thickness, block_width)
-                item1 = ClickableRectItem(path1, is_center_dangban=True, editor=self)
-                item1.setPen(pen)
-                item1.setBrush(brush)
-                item1.original_coords = selected_centers
-                item1.related_line_items = [rect1]
-                self.graphics_scene.addItem(item1)
+                dangban_item1 = ClickableRectItem(
+                    path=path1,
+                    is_center_dangban=True,
+                    editor=self
+                )
+                # 配置挡板属性
+                dangban_item1.setPen(pen)
+                dangban_item1.setBrush(brush)
+                dangban_item1.original_coords = selected_centers_list  # 存储元组列表
+                dangban_item1.related_temp_items = [temp_rect1]  # 统一属性名
+                dangban_item1.paired_block = None  # 初始化配对挡板
+                dangban_item1.setZValue(10)
+                self.graphics_scene.addItem(dangban_item1)
 
-                path2 = QPainterPath()
-                path2.addRect(rect2_x, rect2_y, block_thickness, block_width)
-                item2 = ClickableRectItem(path2, is_center_dangban=True, editor=self)
-                item2.setPen(pen)
-                item2.setBrush(brush)
-                item2.original_coords = selected_centers
-                item2.related_line_items = [rect2]
-                self.graphics_scene.addItem(item2)
+            # 关键：将新建挡板加入选中列表（避免批量创建丢失）
+            if dangban_item1 and dangban_item1 not in self.selected_center_dangban:
+                self.selected_center_dangban.append(dangban_item1)
 
-                # 绑定配对关系
-                item1.set_paired_block(item2)
-                item2.set_paired_block(item1)
-
-            # 7. 记录操作日志（增加宽度信息）
+            # 8. 记录操作日志（便于撤销/重做）
             if not hasattr(self, 'operations'):
                 self.operations = []
             self.operations.append({
                 "type": "purple_block",
-                "from": [(x1, y1), (x2, y2)],
+                "from": points,  # 画布实际坐标
                 "mode": "horizontal" if is_horizontal else "vertical",
                 "thickness": block_thickness,
-                "width": block_width  # 记录宽度参数
+                "width": block_width,
+                "dangban_item": dangban_item1,
+                "original_coords": selected_centers_list
             })
-        self.clear_selection_highlight()
-        self.selected_centers.clear()
 
-        # 清除选中状态（最终保障）
+        # 9. 清理临时状态（避免干扰下次操作）
+        self.clear_selection_highlight()
         if hasattr(self, 'selected_centers'):
             self.selected_centers.clear()
 
+        return current_coords
+
     # 删除中间挡板的函数
     def delete_selected_center_dangban(self):
-        """删除选中的中间挡板"""
+        """删除选中的中间挡板（支持批量删除，修复对称模式残留问题）"""
+        from PyQt5.QtWidgets import QMessageBox
+
+        # 基础校验：选中列表存在且非空
         if not hasattr(self, 'selected_center_dangban') or not self.selected_center_dangban:
             QMessageBox.information(self, "提示", "没有选中的中间挡板")
             return
 
         removed_count = 0
+        # 1. 复制选中列表（避免遍历中修改原列表导致索引异常）
+        dangban_to_remove = list(self.selected_center_dangban)
+        # 2. 初始化已删除集合（避免重复删除配对挡板）
+        removed_items = set()
 
-        for item in self.selected_center_dangban[:]:  # 使用副本遍历
-            # 移除相关的线段
-            if hasattr(item, 'related_line_items'):
-                for line_item in item.related_line_items:
-                    if line_item.scene() is not None:
-                        self.graphics_scene.removeItem(line_item)
+        for item in dangban_to_remove:
+            if item in removed_items:
+                continue  # 跳过已删除项
+
+            # 3. 删除关联的临时矩形（解决属性名不匹配问题）
+            if hasattr(item, 'related_temp_items') and isinstance(item.related_temp_items, list):
+                for temp_item in item.related_temp_items:
+                    if temp_item and temp_item.scene() == self.graphics_scene:
+                        self.graphics_scene.removeItem(temp_item)
                         removed_count += 1
 
-            # 移除自身
-            if item.scene() is not None:
+            # 4. 删除挡板本身
+            if item.scene() == self.graphics_scene:
                 self.graphics_scene.removeItem(item)
                 removed_count += 1
+            removed_items.add(item)  # 标记为已删除
 
-            # 移除配对挡板
-            if hasattr(item, 'paired_block') and item.paired_block:
-                paired = item.paired_block
-                if paired.scene() is not None:
-                    # 移除配对挡板的相关线段
-                    if hasattr(paired, 'related_line_items'):
-                        for line_item in paired.related_line_items:
-                            if line_item.scene() is not None:
-                                self.graphics_scene.removeItem(line_item)
-                                removed_count += 1
-                    # 移除配对挡板本身
-                    self.graphics_scene.removeItem(paired)
+            # 5. 删除配对挡板（对称模式下双向清理）
+            if hasattr(item, 'paired_block') and item.paired_block and item.paired_block not in removed_items:
+                paired_item = item.paired_block
+                # 删除配对挡板的关联临时矩形
+                if hasattr(paired_item, 'related_temp_items') and isinstance(paired_item.related_temp_items, list):
+                    for temp_item in paired_item.related_temp_items:
+                        if temp_item and temp_item.scene() == self.graphics_scene:
+                            self.graphics_scene.removeItem(temp_item)
+                            removed_count += 1
+                # 删除配对挡板本身
+                if paired_item.scene() == self.graphics_scene:
+                    self.graphics_scene.removeItem(paired_item)
                     removed_count += 1
-                    # 从选中列表中移除
-                    if paired in self.selected_center_dangban:
-                        self.selected_center_dangban.remove(paired)
+                removed_items.add(paired_item)  # 标记配对项为已删除
 
-            # 从center_dangban列表中移除坐标
-            if hasattr(item, 'original_coords') and item.original_coords in self.center_dangban:
-                self.center_dangban.remove(item.original_coords)
+            # 6. 从center_dangban列表中删除坐标（修复匹配逻辑）
+            if hasattr(item, 'original_coords') and isinstance(item.original_coords, list):
+                for coord in item.original_coords:
+                    if coord in self.center_dangban:
+                        self.center_dangban.remove(coord)
 
-            # 从选中列表中移除
-            self.selected_center_dangban.remove(item)
-        # 刷新视图
+        # 7. 清空选中列表（彻底清理，避免残留）
+        self.selected_center_dangban.clear()
+
+        # 8. 强制刷新视图（确保删除后界面立即更新）
+        self.graphics_scene.update()
         self.graphics_view.viewport().update()
+
 
     def enable_scene_click_capture(self):
         """启用图形视图的点击事件捕获"""
