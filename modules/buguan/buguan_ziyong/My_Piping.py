@@ -2483,6 +2483,10 @@ class TubeLayoutEditor(QMainWindow):
         else:
             LB_ClapboardType = '1'
         input_json['LB_ClapboardType'] = LB_ClapboardType
+        if input_json['LB_TubePassCount'] == "2":
+            input_json['LB_SNH'] = '0'
+        if self.tube_pass_form_value == "4.1":
+            input_json['LB_SNH'] = '0'
 
         # ---------------- 新增：如果值为None或空字符串，则从布管默认参数表中取值 ----------------
         param_mapping2 = {
@@ -3141,14 +3145,13 @@ class TubeLayoutEditor(QMainWindow):
     #             print(f"行 {row} 下拉框恢复原始值")
 
     def highlight_modified_row(self, row):
-        """高亮显示被修改的行（仅参数名列，浅蓝色背景）"""
-        light_blue = QBrush(QColor(173, 216, 230))  # 浅蓝色
+        """高亮显示被修改的行（仅参数名列，浅蓝色字体）"""
+        light_blue = QColor(173, 216, 230)  # 浅蓝色
 
-        # 仅处理第二列（索引为1，即"参数名"列）
-        col = 1
+        col = 2
         item = self.param_table.item(row, col)
         if item:
-            item.setBackground(light_blue)
+            item.setForeground(light_blue)  # 设置字体颜色为浅蓝色，背景保持不变
 
     def reset_row_background(self, row):
         """重置行的背景色为默认（白色背景）"""
@@ -4943,6 +4946,7 @@ class TubeLayoutEditor(QMainWindow):
         self.setup_combobox_modification_detection()
         self.is_loading_data = False
         self.update_all_row_backgrounds()
+        self.update_partition_plate_center_distance()
 
     def on_param_table_item_changed(self, item):
         """处理参数表格中普通文本单元格的变化"""
@@ -5131,6 +5135,7 @@ class TubeLayoutEditor(QMainWindow):
     #         self.update_tube_center_distance()
     #         # self.update_lagan()
     #         self.update_partition_plate_center_distance()
+    # TODO 在load_initial函数后触发的监听事件
     def on_combobox_changed(self, row, value):
         """处理下拉框类型参数的变更事件及内容变化处理"""
         # 首先执行原current_text版本的逻辑
@@ -5194,6 +5199,7 @@ class TubeLayoutEditor(QMainWindow):
             print("Gordon")  # 保留原调试打印
 
             self.update_SN()
+            self.update_partition_plate_center_distance()
             # 更新分程形式下拉框的图片
             if hasattr(self, "tube_pass_form_combo") and self.tube_pass_form_combo:
                 self.load_tube_pass_images(self.tube_pass_form_combo, value)
@@ -5410,21 +5416,21 @@ class TubeLayoutEditor(QMainWindow):
         # 根据当前页面设置不同的提示信息
         if current_page_index == 0 and self.has_piped:  # 布管页面
             self.clear_modification_marks()
-            self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            # self.line_tip.setText(f"数据保存成功")
+            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 1:  # 管-板连接页面
-            self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            # self.line_tip.setText(f"数据保存成功")
+            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 0 and not self.has_piped:  # 未点击布管状态
-            self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            # self.line_tip.setText(f"数据保存成功")
+            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         else:  # 管板形式页面
             message = "数据保存成功！"
 
-        self.line_tip.setText(f"数据保存成功")
+        # self.line_tip.setText(f"数据保存成功")
         self.actual_save_operation(current_page_index)  # 先保存后提示
 
     def build_sql_for_coordinate(self):
@@ -6217,16 +6223,14 @@ class TubeLayoutEditor(QMainWindow):
         delete_sql = f"DELETE FROM {table_name} WHERE `产品ID` = '{safe_productID}'"
         sql_statements.append(delete_sql)
 
-        # 管程=2 时把“分程隔板两侧相邻管中心距（水平）”置 0
+        # 管程=2 时把"分程隔板两侧相邻管中心距（水平）"置 0
         is_tube_pass_two = any(
             (data.get("参数名", "").strip() == "管程程数" and str(data.get("参数值", "")).strip() == "2")
             for data in tube_data
         )
-        if is_tube_pass_two:
-            for data in tube_data:
-                if data.get("参数名", "").strip() == "分程隔板两侧相邻管中心距（水平）":
-                    data["参数值"] = "0"
-                    break
+
+        # 初始化管程分程形式是否为4.1的标志
+        is_tube_pass_form_4_1 = False
 
         # 需要跨表同步的参数（从布管参数表 -> 元件附加参数表 的映射）
         cross_map = {
@@ -6269,7 +6273,7 @@ class TubeLayoutEditor(QMainWindow):
             "拉杆直径": None,
         }
 
-        # 遍历前端参数，落表到“布管参数表”，并收集 cross_params
+        # 遍历前端参数，落表到"布管参数表"，并收集 cross_params
         for data in tube_data:
             line_num = str(data.get("参数名", ""))
             holes_up = str(data.get("参数值", ""))
@@ -6291,7 +6295,7 @@ class TubeLayoutEditor(QMainWindow):
             )
             sql_statements.append(insert_sql)
 
-        # 处理“中间挡板宽度”参数，包含单位mm
+        # 处理"中间挡板宽度"参数，包含单位mm
         if hasattr(self, 'center_dangban_length') and self.center_dangban_length is not None:
             param_name = "中间挡板宽度"
             param_value = str(self.center_dangban_length)
@@ -6316,7 +6320,7 @@ class TubeLayoutEditor(QMainWindow):
             # 存入cross_params用于跨表同步
             cross_params[param_name] = param_value
 
-        # 处理“旁路挡板宽度”参数，包含单位mm
+        # 处理"旁路挡板宽度"参数，包含单位mm
         if hasattr(self, 'side_dangban_length') and self.side_dangban_length is not None:
             param_name = "旁路挡板宽度"
             param_value = str(self.side_dangban_length)
@@ -6341,7 +6345,7 @@ class TubeLayoutEditor(QMainWindow):
             # 存入cross_params用于跨表同步
             cross_params[param_name] = param_value
 
-        # 处理“管程分程形式”的图标选择值
+        # 处理"管程分程形式"的图标选择值
         if hasattr(self, 'tube_pass_form_value') and self.tube_pass_form_value:
             param_name = "管程分程形式"
             param_value = self.tube_pass_form_value
@@ -6349,6 +6353,10 @@ class TubeLayoutEditor(QMainWindow):
             safe_param_name = escape_str(param_name)
             safe_param_value = escape_str(param_value)
             safe_unit = "NULL" if unit.strip() == "" else f"'{escape_str(unit)}'"
+
+            # 检查管程分程形式是否为4.1
+            if param_value == "4.1":
+                is_tube_pass_form_4_1 = True
 
             # upsert 到布管参数表
             sql_statements.append(
@@ -6362,7 +6370,32 @@ class TubeLayoutEditor(QMainWindow):
                 f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
             )
 
-        # # 把 self.output_data['TieRodD'] 写到“拉杆直径”
+            # 存入cross_params用于跨表同步
+            cross_params[param_name] = param_value
+
+        # 如果管程=2 或者管程分程形式=4.1，把"分程隔板两侧相邻管中心距（水平）"置 0
+        if is_tube_pass_two or is_tube_pass_form_4_1:
+            param_name = "分程隔板两侧相邻管中心距（水平）"
+            param_value = "0"
+            unit = ""
+            safe_param_name = escape_str(param_name)
+            safe_param_value = escape_str(param_value)
+            safe_unit = "NULL" if unit.strip() == "" else f"'{escape_str(unit)}'"
+
+            # 更新布管参数表中的该参数
+            sql_statements.append(
+                f"UPDATE {table_name} SET `参数值` = '{safe_param_value}', `单位` = {safe_unit} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}'"
+            )
+            # 如果不存在则插入
+            sql_statements.append(
+                f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
+                f"SELECT '{productID}', '{safe_param_name}', '{safe_param_value}', {safe_unit} "
+                f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
+            )
+
+        # # 把 self.output_data['TieRodD'] 写到"拉杆直径"
         # tie_rod_d = self.output_data.get('TieRodD')
         # if tie_rod_d is not None:
         #     cross_params["拉杆直径"] = str(tie_rod_d)
@@ -6381,7 +6414,7 @@ class TubeLayoutEditor(QMainWindow):
         #         f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
         #     )
 
-        # 公称直径写回“设计数据表”
+        # 公称直径写回"设计数据表"
         if cross_params["公称直径 DN"] is not None:
             design_table = "`产品设计活动表_设计数据表`"
             safe_dn_value = escape_str(cross_params["公称直径 DN"])
