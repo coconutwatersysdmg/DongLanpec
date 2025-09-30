@@ -1945,7 +1945,11 @@ class TubeLayoutEditor(QMainWindow):
 
         self.build_lagan(lagan_centers)
         self.build_side_lagan(side_centers)
-        self.build_center_dangguan(center_dangguan_centers)
+        coords_list = eval(center_dangguan_centers)
+        for i in range(0, len(coords_list), 2):
+            pair = [coords_list[i], coords_list[i + 1]]
+            self.build_center_dangguan(pair)
+
         self.build_side_dangban(side_dangban_centers, self.side_dangban_length, side_dangban_thick)
         try:
             if is_arranged_huadao == 1:
@@ -9404,13 +9408,13 @@ class TubeLayoutEditor(QMainWindow):
         combined = []
         seen = set()
         for coord in self.lagan_info:
-            if coord not in seen:
-                seen.add(coord)
-                combined.append(coord)
+            # if coord not in seen:
+            seen.add(coord)
+            combined.append(coord)
         for coord in selected_centers_list:
-            if coord not in seen:
-                seen.add(coord)
-                combined.append(coord)
+            # if coord not in seen:
+            seen.add(coord)
+            combined.append(coord)
         self.lagan_info = combined
         current_coords = self.selected_to_current_coords(selected_centers)
         if current_coords:
@@ -9793,13 +9797,13 @@ class TubeLayoutEditor(QMainWindow):
         combined = []
         seen = set()
         for coord in self.del_centers:
-            if coord not in seen:
-                seen.add(coord)
-                combined.append(coord)
+            # if coord not in seen:
+            seen.add(coord)
+            combined.append(coord)
         for coord in selected_centers_list:
-            if coord not in seen:
-                seen.add(coord)
-                combined.append(coord)
+            # if coord not in seen:
+            seen.add(coord)
+            combined.append(coord)
         self.del_centers = combined
 
         # 使用绝对坐标来处理删除
@@ -10299,13 +10303,13 @@ class TubeLayoutEditor(QMainWindow):
         combined = []
         seen = set()
         for coord in self.red_dangban:
-            if coord not in seen:
-                seen.add(coord)
-                combined.append(coord)
+            # if coord not in seen:
+            seen.add(coord)
+            combined.append(coord)
         for coord in selected_centers_list:
-            if coord not in seen:
-                seen.add(coord)
-                combined.append(coord)
+            # if coord not in seen:
+            seen.add(coord)
+            combined.append(coord)
         self.red_dangban = combined
 
         current_coords = self.selected_to_current_coords(selected_centers)
@@ -10413,8 +10417,9 @@ class TubeLayoutEditor(QMainWindow):
                 pair = [selected_centers[i], selected_centers[i + 1]]
                 self.build_center_dangguan(pair)
         else:
-            selected_centers = self.selected_centers
-            self.build_center_dangguan(selected_centers)
+            for i in range(0, len(self.selected_centers), 2):
+                pair = [self.selected_centers[i], self.selected_centers[i + 1]]
+                self.build_center_dangguan(pair)
         self.clear_selection_highlight()
 
     def build_center_dangguan(self, selected_centers):
@@ -10918,13 +10923,13 @@ class TubeLayoutEditor(QMainWindow):
         combined = []
         seen = set()
         for coord in self.side_dangban:
-            if coord not in seen:
-                seen.add(coord)
-                combined.append(coord)
+            # if coord not in seen:
+            seen.add(coord)
+            combined.append(coord)
         for coord in selected_centers_list:
-            if coord not in seen:
-                seen.add(coord)
-                combined.append(coord)
+            # if coord not in seen:
+            seen.add(coord)
+            combined.append(coord)
         self.side_dangban = combined
 
         current_coords = self.selected_to_current_coords(selected_centers)  # 坐标转换
@@ -11675,7 +11680,12 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 执行删除
                 if centers:
-                    self.delete_huanreguan(centers)
+                    tube_num = self.get_tube_pass_count()
+                    if tube_num == "2":
+                        all_centers = self.judge_linkage_x(centers)
+                        self.delete_huanreguan(all_centers)
+                    else:
+                        self.delete_huanreguan(centers)
 
                 self.update_tube_nums()
 
