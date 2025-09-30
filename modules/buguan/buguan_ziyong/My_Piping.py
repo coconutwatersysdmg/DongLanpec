@@ -32,7 +32,7 @@ import modules.buguan.buguan_ziyong.qiaotineizhijing as qtzj
 
 # product_id = 'PD2025092421444001'
 
-product_id = 'PD2025092509281701'
+product_id = 'PD2025092910572701'
 
 
 def on_product_id_changed(new_id):
@@ -1945,10 +1945,12 @@ class TubeLayoutEditor(QMainWindow):
 
         self.build_lagan(lagan_centers)
         self.build_side_lagan(side_centers)
-        coords_list = eval(center_dangguan_centers)
-        for i in range(0, len(coords_list), 2):
-            pair = [coords_list[i], coords_list[i + 1]]
-            self.build_center_dangguan(pair)
+        if center_dangguan_centers:
+            coords_list = eval(center_dangguan_centers)
+
+            for i in range(0, len(coords_list), 2):
+                pair = [coords_list[i], coords_list[i + 1]]
+                self.build_center_dangguan(pair)
 
         self.build_side_dangban(side_dangban_centers, self.side_dangban_length, side_dangban_thick)
         try:
@@ -5950,7 +5952,6 @@ class TubeLayoutEditor(QMainWindow):
         fenchengxingshi = tube_form if tube_form else ""
         if fenchengxingshi == "2":
             fenchengxingshi = "2.1"
-        calc_results["相邻隔板槽中心距"] = str(round(getiao_chicun, 3))
 
         need_two_rows = (
                 (cut_dir == "竖直左右" and tube_arr == "正三角形")
@@ -6039,21 +6040,27 @@ class TubeLayoutEditor(QMainWindow):
             # 调用外部函数获取丁字交叉的排管根数
             try:
                 strange_tube_result = self.calculate_strange_tube()
-                if isinstance(strange_tube_result, (list, tuple)) and len(strange_tube_result) >= 2:
+                if isinstance(strange_tube_result, (list, tuple)) and len(strange_tube_result) >= 4:
                     calc_results["'丁字'交叉沿水平隔板槽连续侧的排管根数"] = str(strange_tube_result[1])
                     calc_results["'丁字'交叉沿水平隔板槽不连续侧的排管根数"] = str(strange_tube_result[0])
                     calc_results["'丁字'交叉沿水平隔板槽不连续侧管排1最两端管孔中心距"] = str(strange_tube_result[2])
+                    calc_results["相邻隔板槽中心距"] = str(strange_tube_result[3])
                 else:
                     # 如果外部函数返回格式不正确，使用默认值
                     calc_results["'丁字'交叉沿水平隔板槽连续侧的排管根数"] = "0"
                     calc_results["'丁字'交叉沿水平隔板槽不连续侧的排管根数"] = "0"
                     calc_results["'丁字'交叉沿水平隔板槽不连续侧管排1最两端管孔中心距"] = "0"
+                    calc_results["相邻隔板槽中心距"] = "0.0"
                     QMessageBox.warning(self, "警告", "calculate_strange_tube函数返回格式不正确，使用默认值0")
             except Exception as e:
                 calc_results["'丁字'交叉沿水平隔板槽连续侧的排管根数"] = "0"
                 calc_results["'丁字'交叉沿水平隔板槽不连续侧的排管根数"] = "0"
                 calc_results["'丁字'交叉沿水平隔板槽不连续侧管排1最两端管孔中心距"] = "0"
+                calc_results["相邻隔板槽中心距"] = "0.0"
                 QMessageBox.warning(self, "警告", f"调用calculate_strange_tube函数失败：{str(e)}，使用默认值0")
+        else:
+            # 对于非丁字交叉的情况，使用数据库读取的隔板槽尺寸
+            calc_results["相邻隔板槽中心距"] = str(round(getiao_chicun, 3))
 
         table_name = "`产品设计活动表_布管计算结果表`"
         sql_statements = []
@@ -6887,9 +6894,10 @@ class TubeLayoutEditor(QMainWindow):
 
         if param_table:
             parameters = []
-            # 获取当前管程分程形式标识（核心：用于匹配图片）
-            current_tube_partition = str(self.tube_pass_partition) if hasattr(self, 'tube_pass_partition') else ""
-            # 图片基础路径（完全复用load_tube_pass_images的路径规则）
+            # 获取当前管程分程形式标识（核心：使用当前实际选中的值）
+            current_tube_partition = getattr(self, 'tube_pass_form_value', "")
+
+            # 图片基础路径
             current_dir = os.path.dirname(os.path.abspath(__file__))
             tube_pattern_base_path = os.path.join(current_dir, "static", "TubePattern")
 
@@ -6902,7 +6910,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 4. 提取序号（第一列）
                 num_item = param_table.item(row, 0)
-                param_num = num_item.text() if num_item else str(row + 1)  # 无序号时用行号
+                param_num = num_item.text() if num_item else str(row + 1)
 
                 # 5. 提取参数值+管程分程形式的图片
                 param_value = "N/A"
@@ -6915,19 +6923,39 @@ class TubeLayoutEditor(QMainWindow):
                         param_value = cell_widget.currentText()
                     # 管程分程形式：特殊处理（值+图片）
                     else:
-                        # 参数值：用self.tube_pass_partition（如"4.1"、"6.2"）
+                        # 参数值：使用当前选中的管程分程形式标识
                         param_value = current_tube_partition if current_tube_partition else "未选择"
+
                         # 图片：根据current_tube_partition匹配对应文件
                         if current_tube_partition and os.path.exists(tube_pattern_base_path):
-                            # 文件名映射（完全对齐load_tube_pass_images的命名规则）
-                            tube_img_filename = f"{current_tube_partition}.png"
-                            tube_img_path = os.path.join(tube_pattern_base_path, tube_img_filename)
+                            # 定义图片文件名的映射关系（与load_tube_pass_images保持一致）
+                            image_file_map = {
+                                "2": "2.png",
+                                "4.1": "4.1.png",
+                                "4.2": "4.2.1.png",  # 使用第一个图片作为代表
+                                "4.3": "4.3.1.png",  # 使用第一个图片作为代表
+                                "6.1": "6.1.1.png",  # 使用第一个图片作为代表
+                                "6.2": "6.2.1.png",  # 使用第一个图片作为代表
+                                "1": "1.png"
+                            }
 
-                            # 校验图片文件是否存在，存在则加载并缩放（保持100*85尺寸，与下拉框一致）
-                            if os.path.exists(tube_img_path):
-                                loaded_pixmap = QPixmap(tube_img_path)
+                            # 获取对应的图片文件名
+                            image_filename = image_file_map.get(current_tube_partition, f"{current_tube_partition}.png")
+                            image_path = os.path.join(tube_pattern_base_path, image_filename)
+
+                            # 如果首选图片不存在，尝试其他可能的文件名
+                            if not os.path.exists(image_path):
+                                # 尝试不带后缀的版本
+                                alt_filename = f"{current_tube_partition}.png"
+                                alt_path = os.path.join(tube_pattern_base_path, alt_filename)
+                                if os.path.exists(alt_path):
+                                    image_path = alt_path
+
+                            # 加载并处理图片
+                            if os.path.exists(image_path):
+                                loaded_pixmap = QPixmap(image_path)
                                 if not loaded_pixmap.isNull():
-                                    # 缩放图片：保持比例+平滑处理，避免拉伸变形
+                                    # 缩放图片：保持比例+平滑处理
                                     param_image = loaded_pixmap.scaled(
                                         100, 85, Qt.KeepAspectRatio, Qt.SmoothTransformation
                                     )
@@ -6949,17 +6977,11 @@ class TubeLayoutEditor(QMainWindow):
                 }
                 # 仅管程分程形式添加图片（确保图片非空）
                 if param_name == "管程分程形式" and param_image and not param_image.isNull():
-                    param_data["image"] = param_image  # 存入图片，供预览对话框使用
+                    param_data["image"] = param_image
 
                 parameters.append(param_data)
 
-            # 8. 校验参数完整性（避免缺失关键字段）
-            for param in parameters:
-                if not all(key in param for key in ["序号", "参数名", "参数值", "单位"]):
-                    QMessageBox.warning(self, "警告", f"参数不完整: {param}")
-                    return
-
-            # 9. 打开预览对话框（传递含图片的参数数据）
+            # 8. 打开预览对话框
             dialog = PreviewDialog(parameters, self)
             dialog.exec_()
         else:
@@ -8664,10 +8686,17 @@ class TubeLayoutEditor(QMainWindow):
         return pair_x_info_up, pair_x_info_down
 
     def get_y_4_number_sequences(self, result, print_cross_y_left):
+        # 只看上半轴，row1在下，row2在上
+        row1, row2 = self.find_strange_tube_row_numbers()
+        print("看看行号")
+        print(row1)
+        print(row2)
         pair_x_info_up = []
         pair_x_info_down = []
         tubeline_num = self.get_tube_pass_count()
         total_count = len(print_cross_y_left)
+        print(total_count)
+        print("看看总数对不对")
 
         if tubeline_num == '4':
             # 获取用户选择的两个管子
@@ -9588,16 +9617,19 @@ class TubeLayoutEditor(QMainWindow):
             up_item.setTextAlignment(Qt.AlignCenter)
             right_table.setItem(i, 2, up_item)
 
-    def calculate_strange_tube(self):
+    def find_strange_tube_row_numbers(self):
         """
-        找出self.full_sorted_current_centers_up中两行距离特别远的管子，
-        返回这两行管子的数量以及第一行管子的水平距离（最大与最小横坐标之差的绝对值）
+        确定self.full_sorted_current_centers_up中所有管子的行数，
+        从1开始为每行编号，找出y坐标距离差异最大的相邻两行（跃迁行），
+        返回这两行的行号（基于1开始的编号）
         """
         # 确保full_sorted_current_centers_up已计算
         if not hasattr(self, 'full_sorted_current_centers_up'):
             # 如果尚未计算，则调用group_centers_by_y方法计算
             self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
                 self.global_centers)
+            self.sorted_current_centers_up, self.sorted_current_centers_down = self.group_centers_by_y(
+                self.current_centers)
 
         # 提取每行第一个管子的y坐标
         row_ys = []
@@ -9607,9 +9639,52 @@ class TubeLayoutEditor(QMainWindow):
                 first_tube_y = row[0][1]
                 row_ys.append(first_tube_y)
 
-        # 如果行数不足2行，无法找到两行之间的距离，返回(0, 0, 0)
+        # 如果行数不足2行，无法找到两行之间的距离，返回(0, 0)
         if len(row_ys) < 2:
-            return (0, 0, 0)
+            return (0, 0)
+
+        # 计算相邻行之间的y坐标差值
+        diffs = []
+        for i in range(1, len(row_ys)):
+            diff = abs(row_ys[i] - row_ys[i - 1])
+            diffs.append((i - 1, i, diff))  # 存储前一行索引、当前行索引和差值
+
+        # 找到最大的差值（即离得特别远的两行）
+        # 按差值降序排序
+        diffs.sort(key=lambda x: x[2], reverse=True)
+        max_diff_pair = diffs[0]
+        row1_idx, row2_idx, _ = max_diff_pair
+
+        # 转换为基于1的行号
+        row1_number = row1_idx + 1
+        row2_number = row2_idx + 1
+
+        return (row1_number, row2_number)
+
+    def calculate_strange_tube(self):
+        """
+        找出self.full_sorted_current_centers_up中两行距离特别远的管子，
+        返回这两行管子的数量、第一行管子的水平距离以及两行y坐标和的绝对值
+        """
+        # 确保full_sorted_current_centers_up已计算
+        if not hasattr(self, 'full_sorted_current_centers_up'):
+            # 如果尚未计算，则调用group_centers_by_y方法计算
+            self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
+                self.global_centers)
+            self.sorted_current_centers_up, self.sorted_current_centers_down = self.group_centers_by_y(
+                self.current_centers)
+
+        # 提取每行第一个管子的y坐标
+        row_ys = []
+        for row in self.sorted_current_centers_up:
+            if row:  # 确保行不为空
+                # 取每行第一个管子的y坐标
+                first_tube_y = row[0][1]
+                row_ys.append(first_tube_y)
+
+        # 如果行数不足2行，无法找到两行之间的距离，返回(0, 0, 0, 0)
+        if len(row_ys) < 2:
+            return (0, 0, 0, 0)
 
         # 计算相邻行之间的y坐标差值
         diffs = []
@@ -9624,11 +9699,11 @@ class TubeLayoutEditor(QMainWindow):
         row1_idx, row2_idx, _ = max_diff_pair
 
         # 获取这两行的管子数量
-        row1_count = len(self.full_sorted_current_centers_up[row1_idx]) * 2
-        row2_count = len(self.full_sorted_current_centers_up[row2_idx]) * 2
+        row1_count = len(self.sorted_current_centers_up[row1_idx]) * 2
+        row2_count = len(self.sorted_current_centers_up[row2_idx]) * 2
 
         # 计算第一行管子的水平距离（最大x与最小x之差的绝对值）
-        row1_tubes = self.full_sorted_current_centers_up[row1_idx]
+        row1_tubes = self.sorted_current_centers_up[row1_idx]
         if len(row1_tubes) >= 2:
             xs = [tube[0] for tube in row1_tubes]
             max_x = max(xs)
@@ -9639,7 +9714,12 @@ class TubeLayoutEditor(QMainWindow):
             # 如果该行管子数量不足2个，水平距离为0
             row1_horizontal_distance = 0
 
-        return row1_count, row2_count, row1_horizontal_distance
+        # 计算row1和row2的y坐标的和的绝对值
+        row1_y = row_ys[row1_idx]
+        row2_y = row_ys[row2_idx]
+        y_sum_abs = abs(row1_y + row2_y)
+
+        return row1_count, row2_count, row1_horizontal_distance, y_sum_abs
 
     # 删除换热管
     def on_del_click(self):
@@ -11681,7 +11761,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 执行删除
                 if centers:
                     tube_num = self.get_tube_pass_count()
-                    if tube_num == "2":
+                    if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
                         all_centers = self.judge_linkage_x(centers)
                         self.delete_huanreguan(all_centers)
                     else:
