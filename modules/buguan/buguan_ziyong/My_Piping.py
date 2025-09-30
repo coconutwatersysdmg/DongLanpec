@@ -5422,21 +5422,21 @@ class TubeLayoutEditor(QMainWindow):
         # 根据当前页面设置不同的提示信息
         if current_page_index == 0 and self.has_piped:  # 布管页面
             self.clear_modification_marks()
-            # self.line_tip.setText(f"数据保存成功")
-            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            self.line_tip.setText(f"数据保存成功")
+            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 1:  # 管-板连接页面
-            # self.line_tip.setText(f"数据保存成功")
-            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            self.line_tip.setText(f"数据保存成功")
+            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         elif current_page_index == 0 and not self.has_piped:  # 未点击布管状态
-            # self.line_tip.setText(f"数据保存成功")
-            # self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            self.line_tip.setText(f"数据保存成功")
+            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
             message = "数据保存成功！"
         else:  # 管板形式页面
             message = "数据保存成功！"
 
-        # self.line_tip.setText(f"数据保存成功")
+        self.line_tip.setText(f"数据保存成功")
         self.actual_save_operation(current_page_index)  # 先保存后提示
 
     def build_sql_for_coordinate(self):
@@ -8687,16 +8687,38 @@ class TubeLayoutEditor(QMainWindow):
 
     def get_y_4_number_sequences(self, result, print_cross_y_left):
         # 只看上半轴，row1在下，row2在上
-        row1, row2 = self.find_strange_tube_row_numbers()
-        print("看看行号")
-        print(row1)
-        print(row2)
+        row2, row1 = self.find_strange_tube_row_numbers()
+        row2 = row2 - 1
+
         pair_x_info_up = []
         pair_x_info_down = []
         tubeline_num = self.get_tube_pass_count()
         total_count = len(print_cross_y_left)
-        print(total_count)
-        print("看看总数对不对")
+        # 向下取整
+        actual_gap_line1 = (total_count - (row1 - 1)) // 2
+        actual_gap_line2 = (total_count - (row2 - 1)) // 2
+        actual_gap_line3 = total_count - actual_gap_line1
+        actual_gap_line4 = total_count - actual_gap_line2
+
+        # 4管程的间隔边界（单一间隔）
+        if tubeline_num == '4':
+            # 计算4管程的间隔：total_count/2 和 total_count/2 + 1（处理整数除法）
+            gap_left_4 = total_count // 2
+            gap_right_4 = (total_count // 2) + 1
+
+        # 定义通用的跨间隔判定函数
+        def is_cross_gap_4(x1, x2):
+            # 4管程：判断是否跨越单一间隔 [gap_left_4, gap_right_4]
+            return (x1 <= gap_left_4 and x2 >= gap_right_4) or \
+                (x1 >= gap_right_4 and x2 <= gap_left_4)
+
+        def is_cross_gap_6(x1, x2):
+            # 6管程：判断是否跨越两个间隔 [actual_gap_line1, actual_gap_line2] 或 [actual_gap_line3, actual_gap_line4]
+            cross_gap1 = (x1 < actual_gap_line1 and x2 > actual_gap_line2) or \
+                         (x1 > actual_gap_line2 and x2 < actual_gap_line1)
+            cross_gap2 = (x1 < actual_gap_line3 and x2 > actual_gap_line4) or \
+                         (x1 > actual_gap_line4 and x2 < actual_gap_line3)
+            return cross_gap1 or cross_gap2
 
         if tubeline_num == '4':
             # 获取用户选择的两个管子
@@ -8728,10 +8750,14 @@ class TubeLayoutEditor(QMainWindow):
             # 合并所有配对（用户选择的配对 + 其他配对）
             all_pairs = user_pairs + other_pairs
 
+            # 过滤跨间隔的配对（4管程单一间隔）
+            filtered_pairs = [pair for pair in all_pairs if not is_cross_gap_4(pair[0], pair[1])]
+
             # 生成最终序列
-            for up_tube, down_tube in all_pairs:
+            for up_tube, down_tube in filtered_pairs:
                 pair_x_info_up.append(up_tube)
                 pair_x_info_down.append(down_tube)
+
         elif tubeline_num == '6':
             # 获取用户选择的两个管子
             up_num1, up_num2 = result['up_numbers']
@@ -8740,7 +8766,7 @@ class TubeLayoutEditor(QMainWindow):
 
             # 所有管子按从小到大排序
             all_tubes = sorted(range(1, total_count + 1))
-            valid_tubes = all_tubes  # 保留所有管子，根据实际需求调整
+            valid_tubes = all_tubes
             used_tubes = set()
 
             # 核心配对：确保用户选择的配对优先且必须包含
@@ -8762,8 +8788,11 @@ class TubeLayoutEditor(QMainWindow):
             # 合并所有配对（用户选择的配对 + 其他配对）
             all_pairs = user_pairs + other_pairs
 
+            # 过滤跨间隔的配对（6管程两个间隔）
+            filtered_pairs = [pair for pair in all_pairs if not is_cross_gap_6(pair[0], pair[1])]
+
             # 生成最终序列
-            for up_tube, down_tube in all_pairs:
+            for up_tube, down_tube in filtered_pairs:
                 pair_x_info_up.append(up_tube)
                 pair_x_info_down.append(down_tube)
 
@@ -8777,6 +8806,8 @@ class TubeLayoutEditor(QMainWindow):
     def cross_y_4_pipes(self, current_coords, print_cross_y_left, print_cross_y_right):
         global valid_distance
         result = self.get_selected_y_4_center_numbers(current_coords, print_cross_y_left, print_cross_y_right)
+        print(result['up_numbers'])
+        print(result['down_numbers'])
         if set(result['up_numbers']) == set(result['down_numbers']):
             if abs(result['up_numbers'][0] - result['up_numbers'][1]) > 3:
                 QMessageBox.warning(self, "选择错误", "参照管孔间隔不能大于3个换热管孔")
