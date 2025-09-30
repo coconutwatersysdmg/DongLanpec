@@ -5408,6 +5408,7 @@ class TubeLayoutEditor(QMainWindow):
             save_btn.clicked.connect(self.save_data)  # 添加保存按钮点击事件
             self.footer_layout.addWidget(save_btn)
 
+    # TODO 吾日三省吾身
     def save_data(self):
         """TODO 保存数据，根据当前页面显示不同的保存成功提示"""
         current_page_index = self.header.currentIndex()
@@ -6049,27 +6050,6 @@ class TubeLayoutEditor(QMainWindow):
                 calc_results["'丁字'交叉沿水平隔板槽不连续侧的排管根数"] = "0"
                 calc_results["'丁字'交叉沿水平隔板槽不连续侧管排1最两端管孔中心距"] = "0"
                 QMessageBox.warning(self, "警告", f"调用calculate_strange_tube函数失败：{str(e)}，使用默认值0")
-
-            # 计算不连续侧管排中心距（保留原有的中心距计算逻辑）
-            selected_uncont = []
-            # 下侧
-            y_below_uncont = [y for x, y in filtered_coords if y < getiao_chicun]
-            if y_below_uncont:
-                max_below_uncont = max(y_below_uncont)
-                selected_uncont.extend([
-                    (x, y) for x, y in filtered_coords
-                    if abs(y - max_below_uncont) < 1e-6
-                ])
-            # 上侧
-            y_above_uncont = [y for x, y in filtered_coords if y > -getiao_chicun]
-            if y_above_uncont:
-                min_above_uncont = min(y_above_uncont)
-                selected_uncont.extend([
-                    (x, y) for x, y in filtered_coords
-                    if abs(y - min_above_uncont) < 1e-6
-                ])
-            max_dist_uncont = get_max_distance(selected_uncont)
-            calc_results["'丁字'交叉沿水平隔板槽不连续侧管排1最两端管孔中心距"] = str(max_dist_uncont)
 
         table_name = "`产品设计活动表_布管计算结果表`"
         sql_statements = []
@@ -9649,6 +9629,7 @@ class TubeLayoutEditor(QMainWindow):
             xs = [tube[0] for tube in row1_tubes]
             max_x = max(xs)
             min_x = min(xs)
+
             row1_horizontal_distance = abs(max_x - min_x)
         else:
             # 如果该行管子数量不足2个，水平距离为0
@@ -13050,13 +13031,13 @@ class TubeLayoutEditor(QMainWindow):
         combined = []
         seen = set()
         for coord in self.center_dangban:
-            if coord not in seen:
-                seen.add(coord)
-                combined.append(coord)
+            # if coord not in seen:
+            seen.add(coord)
+            combined.append(coord)
         for coord in selected_centers_list:
-            if coord not in seen:
-                seen.add(coord)
-                combined.append(coord)
+            # if coord not in seen:
+            seen.add(coord)
+            combined.append(coord)
         self.center_dangban = combined
 
         # 3. 坐标转换（标签坐标→画布实际坐标）
@@ -13108,13 +13089,13 @@ class TubeLayoutEditor(QMainWindow):
             # 竖直对称：x坐标接近相等，y坐标关于x轴对称（y1 + y2 ≈ 0）
             is_vertical = (abs(x1 - x2) < 1e-2) and (abs(y1 + y2) < 1e-2)
 
-            if not (is_horizontal or is_vertical):
-                QMessageBox.warning(self, "错误", "两个圆心必须关于x轴或y轴对称")
-                # 回滚：移除无效圆心记录
-                for center in selected_centers_list:
-                    if center in self.center_dangban:
-                        self.center_dangban.remove(center)
-                return []
+            # if not (is_horizontal or is_vertical):
+            #     QMessageBox.warning(self, "错误", "两个圆心必须关于x轴或y轴对称")
+            #     # 回滚：移除无效圆心记录
+            #     for center in selected_centers_list:
+            #         if center in self.center_dangban:
+            #             self.center_dangban.remove(center)
+            #     return []
 
             # 7. 绘制紫色挡板（核心逻辑：创建可选中项+关联属性）
             pen = QPen(QColor(128, 0, 128))  # 紫色边框
