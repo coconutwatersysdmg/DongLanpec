@@ -28,8 +28,12 @@ from modules.cailiaodingyi.funcs.funcs_pdf_input import (
 def handle_template_change(viewer_instance, index):
     print("handle_template_change called with index:", index)
     selected_template = viewer_instance.comboBox_template.itemText(index).strip()
+    # 特殊处理：如果模板名称为空字符串，则设置为"None"
     if not selected_template:
-        return
+        selected_template = "None"
+        print(f"[调试] 模板名称为空，设置为: '{selected_template}'")
+
+
 
     pid = getattr(viewer_instance, "product_id", None)
     if not pid:

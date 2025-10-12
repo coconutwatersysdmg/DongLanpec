@@ -18,6 +18,7 @@ from modules.cailiaodingyi.funcs.funcs_pdf_input import load_guankou_param_struc
     query_unassigned_codes, query_codes_for_tab_raw
 
 
+
 class _CopyPasteEventFilter(QtCore.QObject):
     def __init__(self, table, groups, row2field, row2group):
         super().__init__(table)
@@ -416,6 +417,111 @@ def _set_text_center(table: QTableWidget, r: int, c: int, text: str):
         table.setItem(r, c, it)
     it.setText(text or "")
     it.setTextAlignment(Qt.AlignCenter)
+
+
+def install_reinforcement_group_toggle(
+        table,
+        *,
+        param_col=0,
+        value_cols=(1, 2, 3),
+):
+    """
+    安装补强圈字段组的显示/隐藏切换功能
+
+    当"是否使用补强圈"选择"是"时，显示所有补强圈相关字段
+    当选择"否"时，隐藏所有补强圈相关字段
+    """
+    if not table or table.rowCount() == 0:
+        return
+
+    def _get_text(r, c):
+        w = table.cellWidget(r, c)
+        if isinstance(w, QComboBox):
+            return w.currentText().strip()
+        if isinstance(w, QLineEdit):
+            return w.text().strip()
+        it = table.item(r, c)
+        return (it.text().strip() if it else "")
+
+    # 参数名 -> 行号
+    name2row = {}
+    for r in range(table.rowCount()):
+        it = table.item(r, param_col)
+        if it:
+            name2row[it.text().strip()] = r
+
+    # 查找补强圈相关字段
+    toggle_row = name2row.get("是否使用补强圈", -1)
+    reinforcement_rows = []
+
+    # 查找所有以"补强圈"开头的字段
+    for r in range(table.rowCount()):
+        it = table.item(r, param_col)
+        if it and it.text().strip().startswith("补强圈"):
+            reinforcement_rows.append(r)
+
+    if toggle_row < 0 or not reinforcement_rows:
+        print("[补强圈切换] 未找到补强圈相关字段，跳过安装")
+        return
+
+    def _refresh():
+        """刷新补强圈字段的显示状态"""
+        # 检查是否使用补强圈
+        has_reinforcement = True
+        if toggle_row >= 0:
+            toggle_value = _get_text(toggle_row, min(value_cols))
+            # 只有当明确选择"否"时才隐藏，其他情况（"是"或程序推荐/空值）都显示
+            has_reinforcement = (toggle_value != "否")
+
+        # 控制补强圈相关字段的显示/隐藏
+        for rr in reinforcement_rows:
+            table.setRowHidden(rr, not has_reinforcement)
+            # 注意：不清空数据，只是隐藏/显示
+
+        table.viewport().update()
+
+    # 初始化
+    _refresh()
+
+    # 连接开关字段的变化事件
+    if toggle_row >= 0:
+        wdg = table.cellWidget(toggle_row, min(value_cols))
+        if isinstance(wdg, QComboBox):
+            def _on_toggle_changed():
+                _refresh()
+
+            try:
+                wdg.currentTextChanged.disconnect()
+            except Exception:
+                pass
+            try:
+                wdg.currentIndexChanged.disconnect()
+            except Exception:
+                pass
+            wdg.currentTextChanged.connect(lambda _t: _on_toggle_changed())
+            wdg.currentIndexChanged.connect(lambda _i: _on_toggle_changed())
+
+    # 监听模型数据变化
+    model = table.model()
+    old = getattr(table, "_reinforcement_toggle_conn", None)
+    if old:
+        try:
+            model.dataChanged.disconnect(old)
+        except Exception:
+            pass
+
+    def _on_data_changed(topLeft, bottomRight, roles=None):
+        for r in range(topLeft.row(), bottomRight.row() + 1):
+            if r == toggle_row:
+                for c in range(topLeft.column(), bottomRight.column() + 1):
+                    if c in value_cols:
+                        _refresh()
+                        return
+
+    model.dataChanged.connect(_on_data_changed)
+    table._reinforcement_toggle_conn = _on_data_changed
+
+    print(f"[补强圈切换] 已安装，开关行={toggle_row}，受控行={reinforcement_rows}")
 
 
 from PyQt5.QtCore import Qt
@@ -1086,6 +1192,14 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
 
     install_copy_paste_shortcuts(table, groups, row2field, row2group)
 
+
+    # 安装补强圈字段的显示/隐藏切换功能
+    install_reinforcement_group_toggle(
+        table=table,
+        param_col=0,
+        value_cols=(1, 2, 3),
+    )
+
     install_overlay_group_toggle(
         table=viewer_instance.tableWidget_guankou,
         groups=[
@@ -1185,10 +1299,98 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
         pass
     table.cellClicked.connect(_edit_on_click)
 
+    # 为整个表格设置悬停提示
+    _set_table_tooltips(table)
+
+    # 添加动态更新悬停提示的机制
+    _install_tooltip_updater(table)
+
     print(f"[DBG][render] 完成渲染 tab={repr(cur_tab)}  最终行数={table.rowCount()}")
 
 
 
+def _set_table_tooltips(table):
+    """
+    为管口参数表的所有单元格设置悬停提示
+    包括普通单元格和下拉框单元格
+    """
+    for row in range(table.rowCount()):
+        for col in range(table.columnCount()):
+            # 检查是否是下拉框单元格
+            cell_widget = table.cellWidget(row, col)
+            if isinstance(cell_widget, QComboBox):
+                # 为下拉框设置悬停提示
+                current_text = cell_widget.currentText()
+                if current_text and current_text.strip():
+                    cell_widget.setToolTip(f"当前选择: {current_text}")
+                else:
+                    cell_widget.setToolTip("请选择选项")
+            else:
+                # 为普通单元格设置悬停提示
+                item = table.item(row, col)
+                if item and item.text().strip():
+                    item.setToolTip(item.text())
+                else:
+                    # 为空单元格设置默认提示
+                    if col == 0:  # 参数名列
+                        item = table.item(row, col)
+                        if item:
+                            param_name = item.text().strip()
+                            if param_name:
+                                item.setToolTip(f"参数名: {param_name}")
+                    else:  # 值列
+                        item = table.item(row, col)
+                        if item:
+                            item.setToolTip("点击编辑")
+
+
+def _install_tooltip_updater(table):
+    """
+    安装动态更新悬停提示的机制
+    当表格内容变化时，自动更新悬停提示
+    """
+
+    def update_tooltips():
+        """更新所有单元格的悬停提示"""
+        for row in range(table.rowCount()):
+            for col in range(table.columnCount()):
+                # 检查是否是下拉框单元格
+                cell_widget = table.cellWidget(row, col)
+                if isinstance(cell_widget, QComboBox):
+                    # 为下拉框设置悬停提示
+                    current_text = cell_widget.currentText()
+                    if current_text and current_text.strip():
+                        cell_widget.setToolTip(f"当前选择: {current_text}")
+                    else:
+                        cell_widget.setToolTip("请选择选项")
+                else:
+                    # 为普通单元格设置悬停提示
+                    item = table.item(row, col)
+                    if item and item.text().strip():
+                        item.setToolTip(item.text())
+                    else:
+                        if col == 0:  # 参数名列
+                            item = table.item(row, col)
+                            if item:
+                                param_name = item.text().strip()
+                                if param_name:
+                                    item.setToolTip(f"参数名: {param_name}")
+                        else:  # 值列
+                            item = table.item(row, col)
+                            if item:
+                                item.setToolTip("点击编辑")
+
+    # 监听表格数据变化
+    model = table.model()
+    if model:
+        model.dataChanged.connect(lambda *args: update_tooltips())
+
+    # 监听下拉框变化
+    for row in range(table.rowCount()):
+        for col in range(table.columnCount()):
+            cell_widget = table.cellWidget(row, col)
+            if isinstance(cell_widget, QComboBox):
+                cell_widget.currentTextChanged.connect(lambda *args: update_tooltips())
 
 
 

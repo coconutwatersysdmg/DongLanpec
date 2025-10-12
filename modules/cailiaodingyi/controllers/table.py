@@ -1,7 +1,6 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
 
 
-
 class CustomHeaderView(QtWidgets.QHeaderView):
     def __init__(self, orientation, parent=None):
         super().__init__(orientation, parent)
@@ -16,6 +15,12 @@ class CustomHeaderView(QtWidgets.QHeaderView):
         # 绘制文字
         text = self.model().headerData(logicalIndex, self.orientation(), QtCore.Qt.DisplayRole)
         painter.setPen(QtGui.QPen(QtCore.Qt.black))
+
+        # 设置字体为加粗← 新增的代码(统一界面需求用)
+        font = painter.font()
+        font.setBold(True)
+        painter.setFont(font)
+
         painter.drawText(rect, QtCore.Qt.AlignCenter, str(text))
 
         # 底部分隔线
@@ -29,5 +34,3 @@ class CustomHeaderView(QtWidgets.QHeaderView):
             painter.drawLine(rect.topRight(), rect.bottomRight())
 
         painter.restore()
-
-
