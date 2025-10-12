@@ -2705,7 +2705,7 @@ class TubeLayoutEditor(QMainWindow):
                 self.graphics_scene.update()
                 QApplication.processEvents()
 
-                # 更新其他状态
+
                 self.update_SN()
                 if hasattr(self, 'global_centers') and self.global_centers:
                     self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
@@ -7298,9 +7298,10 @@ class TubeLayoutEditor(QMainWindow):
             self.clear_baffle_plates()
 
             # 获取折流板相关参数
-            cut_direction = None
-            cut_rate = None
-            shell_inner_diameter = None
+            cut_direction = None  # 折流板切口方向
+            cut_rate = None  # 折流板要求切口率 (%)
+            baffle_outer_diameter = None  # 折流板外径
+            shell_inner_diameter = None  # 壳体内直径（用于计算切口高度）
 
             # 安全地遍历参数表格
             for row in range(self.param_table.rowCount()):
@@ -7332,6 +7333,12 @@ class TubeLayoutEditor(QMainWindow):
                                 cut_rate = float(param_value)
                         except (ValueError, TypeError):
                             cut_rate = None
+                    elif param_name == "折流板外径":
+                        try:
+                            if param_value:
+                                baffle_outer_diameter = float(param_value)
+                        except (ValueError, TypeError):
+                            baffle_outer_diameter = None
                     elif param_name == "壳体内直径 Di":
                         try:
                             if param_value:
@@ -7351,39 +7358,50 @@ class TubeLayoutEditor(QMainWindow):
                 print("折流板要求切口率参数缺失或无效")
                 return
 
+            if baffle_outer_diameter is None or baffle_outer_diameter <= 0:
+                print("折流板外径参数缺失或无效")
+                return
+
             if shell_inner_diameter is None or shell_inner_diameter <= 0:
                 print("壳体内直径参数缺失或无效")
                 return
 
-            # 验证切口率范围
+            # 验证切口率范围 (0-50%)
             if not (0 <= cut_rate <= 50):
                 print(f"折流板要求切口率超出范围: {cut_rate}")
                 return
 
-            # 计算壳体半径
-            shell_radius = shell_inner_diameter / 2  # 修正：应该是直径的一半
-
-            # 根据公式计算折流板到圆心的距离
-            distance_from_center = shell_radius * (0.5 - cut_rate / 100)
+            cut_height = shell_inner_diameter * (cut_rate / 100.0)*2
+            baffle_radius = baffle_outer_diameter / 2.0
+            distance_from_center = (shell_inner_diameter / 2.0) - (cut_height / 2.0)
 
             # 验证计算结果是否合理
-            if distance_from_center < 0 or distance_from_center > shell_radius:
-                print(f"折流板位置计算不合理: {distance_from_center}")
-                return
+            if distance_from_center < 0 or distance_from_center > baffle_radius:
+                print(
+                    f"折流板位置计算不合理: distance_from_center={distance_from_center}, baffle_radius={baffle_radius}")
+                # 使用折流板半径作为限制
+                distance_from_center = min(max(distance_from_center, 0), baffle_radius)
 
             # 绘制黄色线段（折流板）
             pen = QPen(QColor(204, 204, 0))  # 黄色
             pen.setWidth(3)
 
             if cut_direction == "水平上下":
-                # 计算弦长的一半
+                # 计算弦长的一半（基于折流板外径）
                 try:
-                    chord_half_length = math.sqrt(shell_radius ** 2 - distance_from_center ** 2)
-                except ValueError:
-                    print("弦长计算错误")
+                    # 弦长的一半 = sqrt(折流板半径² - 距离²)
+                    chord_half_length = math.sqrt(baffle_radius ** 2 - distance_from_center ** 2)
+
+                    # 验证弦长计算是否有效
+                    if math.isnan(chord_half_length) or chord_half_length <= 0:
+                        print("弦长计算无效")
+                        return
+
+                except ValueError as e:
+                    print(f"弦长计算错误: {e}")
                     return
 
-                # 上侧线段
+                # 上侧线段（y = distance_from_center）
                 try:
                     upper_line = self.graphics_scene.addLine(
                         -chord_half_length, distance_from_center,
@@ -7395,12 +7413,15 @@ class TubeLayoutEditor(QMainWindow):
                             'type': 'horizontal',
                             'y_level': distance_from_center,
                             'x_range': (-chord_half_length, chord_half_length),
-                            'line_item': upper_line
+                            'line_item': upper_line,
+                            'cut_rate': cut_rate,
+                            'cut_height': cut_height
                         })
+                        print(f"添加上侧折流板: y={distance_from_center:.2f}, 长度={chord_half_length * 2:.2f}")
                 except Exception as e:
                     print(f"添加上侧折流板线段失败: {e}")
 
-                # 下侧线段
+                # 下侧线段（y = -distance_from_center）
                 try:
                     lower_line = self.graphics_scene.addLine(
                         -chord_half_length, -distance_from_center,
@@ -7412,20 +7433,30 @@ class TubeLayoutEditor(QMainWindow):
                             'type': 'horizontal',
                             'y_level': -distance_from_center,
                             'x_range': (-chord_half_length, chord_half_length),
-                            'line_item': lower_line
+                            'line_item': lower_line,
+                            'cut_rate': cut_rate,
+                            'cut_height': cut_height
                         })
+                        print(f"添加下侧折流板: y={-distance_from_center:.2f}, 长度={chord_half_length * 2:.2f}")
                 except Exception as e:
                     print(f"添加下侧折流板线段失败: {e}")
 
             elif cut_direction == "垂直左右":
-                # 计算弦长的一半
+                # 计算弦长的一半（基于折流板外径）
                 try:
-                    chord_half_length = math.sqrt(shell_radius ** 2 - distance_from_center ** 2)
-                except ValueError:
-                    print("弦长计算错误")
+                    # 弦长的一半 = sqrt(折流板半径² - 距离²)
+                    chord_half_length = math.sqrt(baffle_radius ** 2 - distance_from_center ** 2)
+
+                    # 验证弦长计算是否有效
+                    if math.isnan(chord_half_length) or chord_half_length <= 0:
+                        print("弦长计算无效")
+                        return
+
+                except ValueError as e:
+                    print(f"弦长计算错误: {e}")
                     return
 
-                # 右侧线段
+                # 右侧线段（x = distance_from_center）
                 try:
                     right_line = self.graphics_scene.addLine(
                         distance_from_center, -chord_half_length,
@@ -7437,12 +7468,15 @@ class TubeLayoutEditor(QMainWindow):
                             'type': 'vertical',
                             'x_level': distance_from_center,
                             'y_range': (-chord_half_length, chord_half_length),
-                            'line_item': right_line
+                            'line_item': right_line,
+                            'cut_rate': cut_rate,
+                            'cut_height': cut_height
                         })
+                        print(f"添加右侧折流板: x={distance_from_center:.2f}, 长度={chord_half_length * 2:.2f}")
                 except Exception as e:
                     print(f"添加右侧折流板线段失败: {e}")
 
-                # 左侧线段
+                # 左侧线段（x = -distance_from_center）
                 try:
                     left_line = self.graphics_scene.addLine(
                         -distance_from_center, -chord_half_length,
@@ -7454,14 +7488,29 @@ class TubeLayoutEditor(QMainWindow):
                             'type': 'vertical',
                             'x_level': -distance_from_center,
                             'y_range': (-chord_half_length, chord_half_length),
-                            'line_item': left_line
+                            'line_item': left_line,
+                            'cut_rate': cut_rate,
+                            'cut_height': cut_height
                         })
+                        print(f"添加左侧折流板: x={-distance_from_center:.2f}, 长度={chord_half_length * 2:.2f}")
                 except Exception as e:
                     print(f"添加左侧折流板线段失败: {e}")
 
             else:
                 print(f"未知的折流板切口方向: {cut_direction}")
                 return
+
+            # 记录操作
+            self.operations.append({
+                "type": "baffle_plate",
+                "direction": cut_direction,
+                "cut_rate": cut_rate,
+                "cut_height": cut_height,
+                "distance_from_center": distance_from_center,
+                "baffle_diameter": baffle_outer_diameter
+            })
+
+            print(f"折流板绘制完成: 方向={cut_direction}, 切口率={cut_rate}%, 切口高度={cut_height:.2f}")
 
         except Exception as e:
             print(f"draw_baffle_plates 发生未预期错误: {e}")
