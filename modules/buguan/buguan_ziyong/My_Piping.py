@@ -522,6 +522,8 @@ class TubeLayoutEditor(QMainWindow):
         self.sheet_form_param_layout = QVBoxLayout()
         self.sheet_form_image_labels = []
         self._current_centers = []
+        self._selected_centers = []
+        self.selected_centers_changed_callbacks = []
         self.global_centers = []
         self.DN = None
         self.slipway_centers = []  # 滑道干涉的坐标
@@ -538,7 +540,7 @@ class TubeLayoutEditor(QMainWindow):
         self.center_dangban_length = 0
         self.mouse_x = 0
         self.mouse_y = 0
-        self.selected_centers = []
+        # self.selected_centers = []
         self.operations = []
         self.lagan = False
         self.tube_hole_data = []
@@ -559,13 +561,47 @@ class TubeLayoutEditor(QMainWindow):
 
     @property
     def current_centers(self):
-        return self._current_centers  # 返回私有变量
+        return self._current_centers
 
     @current_centers.setter
     def current_centers(self, value):
-        self._current_centers = value  # 更新私有变量
-        self.update_total_holes_count()  # 每次赋值后自动更新标签
+        self._current_centers = value
+        self.update_total_holes_count()
         self.update_tube_nums()
+
+    @property
+    def selected_centers(self):
+        return self._selected_centers
+
+    @selected_centers.setter
+    def selected_centers(self, value):
+        if self._selected_centers != value:
+            self._selected_centers = value
+            self.show_distance()
+            for callback in self.selected_centers_changed_callbacks:
+                callback(value)
+
+    def register_selected_centers_callback(self, callback):
+        """注册 selected_centers 变化的回调函数"""
+        if callback not in self.selected_centers_changed_callbacks:
+            self.selected_centers_changed_callbacks.append(callback)
+
+    def unregister_selected_centers_callback(self, callback):
+        """取消注册回调函数"""
+        if callback in self.selected_centers_changed_callbacks:
+            self.selected_centers_changed_callbacks.remove(callback)
+
+    def show_distance(self):
+        if len(self.selected_centers) == 2:
+            distance = self.calculate_distance(self.selected_centers)
+            # TODO 吾日三省吾身，交之前把这注释取消
+            # self.line_tip.setText(f"您选中的两个换热管孔的间距为 {distance} mm。")
+            # self.line_tip.setVisible(True)
+            # from PyQt5.QtCore import QTimer
+            # QTimer.singleShot(3000, self.line_tip.hide)
+            print(f"您选中的两个换热管孔的间距为 {distance} mm。")
+        else:
+            print("选中的圆心不是两个")
 
     def setup_param_listeners(self):
         """为参数表格添加变化监听，实时更新参数列表"""
@@ -7831,6 +7867,9 @@ class TubeLayoutEditor(QMainWindow):
                         self.selected_centers.append(((row + 1), col_num))
 
     def clear_selection_highlight(self):
+        from PyQt5.QtCore import QPointF
+        from PyQt5.QtWidgets import QGraphicsEllipseItem
+
         if not hasattr(self, 'selected_centers') or not self.selected_centers:
             return
 
@@ -7859,8 +7898,8 @@ class TubeLayoutEditor(QMainWindow):
                     self.graphics_scene.removeItem(item)
                     break
 
-        # 清空选中记录
-        self.selected_centers.clear()
+        # 清空选中记录（使用属性赋值方式）
+        self.selected_centers = []
 
     def on_show_operations_click(self):
         if not hasattr(self, 'operations') or not self.operations:
@@ -8271,7 +8310,7 @@ class TubeLayoutEditor(QMainWindow):
         else:
             # QMessageBox.warning(self, "选择错误", "该管程程数交叉布管尚未开发")
             self.clear_selection_highlight()
-            self.selected_centers.clear()
+            self.selected_centers = []
         # 返回计算得到的两个序列
         return pair_x_info_up, pair_x_info_down
 
@@ -8400,7 +8439,7 @@ class TubeLayoutEditor(QMainWindow):
         else:
             # QMessageBox.warning(self, "选择错误", "该管程程数交叉布管尚未开发")
             self.clear_selection_highlight()
-            self.selected_centers.clear()
+            self.selected_centers = []
 
         # 返回计算得到的两个序列
         return pair_y_info_left, pair_y_info_right
@@ -8412,14 +8451,14 @@ class TubeLayoutEditor(QMainWindow):
             # 参照管孔不能为同一位置
             QMessageBox.warning(self, "选择错误", "参照管孔之间的连线应为倾斜线")
             self.clear_selection_highlight()
-            self.selected_centers.clear()
+            self.selected_centers = []
             return
 
         elif abs(result['up_number'] - result['down_number']) > 3:
             # 参照管孔间隔不能大于3个
             QMessageBox.warning(self, "选择错误", "参照管孔间隔不能大于3个换热管孔")
             self.clear_selection_highlight()
-            self.selected_centers.clear()
+            self.selected_centers = []
         else:
             self.get_x_2_number_sequences(result, print_cross_x_up)
             up_seq, down_seq = self.get_x_2_number_sequences(result, print_cross_x_up)
@@ -8476,14 +8515,14 @@ class TubeLayoutEditor(QMainWindow):
         if result['left_number'] == result['right_number']:
             QMessageBox.warning(self, "选择错误", "参照管孔之间的连线应为倾斜线")
             self.clear_selection_highlight()
-            self.selected_centers.clear()
+            self.selected_centers = []
             return
 
         # 校验2：参照管孔间隔不能大于3个换热管孔
         elif abs(result['left_number'] - result['right_number']) > 3:
             QMessageBox.warning(self, "选择错误", "参照管孔间隔不能大于3个换热管孔")
             self.clear_selection_highlight()
-            self.selected_centers.clear()
+            self.selected_centers = []
 
         # 校验通过：生成序列并构建交叉管道
         else:
@@ -8562,7 +8601,7 @@ class TubeLayoutEditor(QMainWindow):
             if abs(result['up_numbers'][0] - result['up_numbers'][1]) > 3:
                 QMessageBox.warning(self, "选择错误", "参照管孔间隔不能大于3个换热管孔")
                 self.clear_selection_highlight()
-                self.selected_centers.clear()
+                self.selected_centers = []
             else:
                 # self.get_x_4_number_sequences(result, print_cross_x_up)
                 tube_num = self.get_tube_pass_count()
@@ -8613,11 +8652,11 @@ class TubeLayoutEditor(QMainWindow):
                 else:
                     QMessageBox.warning(self, "功能提示", "该管程程数交叉布管尚未开发")
                     self.clear_selection_highlight()
-                    self.selected_centers.clear()
+                    self.selected_centers = []
 
         else:
             self.clear_selection_highlight()
-            self.selected_centers.clear()
+            self.selected_centers = []
 
     def get_x_4_number_sequences(self, result, print_cross_x_up):
         pair_x_info_up = []
@@ -8663,7 +8702,7 @@ class TubeLayoutEditor(QMainWindow):
         else:
             QMessageBox.warning(self, "功能提示", "该管程程数交叉布管尚未开发")
             self.clear_selection_highlight()
-            self.selected_centers.clear()
+            self.selected_centers = []
 
         return pair_x_info_up, pair_x_info_down
 
@@ -8781,7 +8820,7 @@ class TubeLayoutEditor(QMainWindow):
         else:
             QMessageBox.warning(self, "功能提示", "该管程程数交叉布管尚未开发")
             self.clear_selection_highlight()
-            self.selected_centers.clear()
+            self.selected_centers = []
 
         return pair_x_info_up, pair_x_info_down
 
@@ -8794,7 +8833,7 @@ class TubeLayoutEditor(QMainWindow):
             if abs(result['up_numbers'][0] - result['up_numbers'][1]) > 3:
                 QMessageBox.warning(self, "选择错误", "参照管孔间隔不能大于3个换热管孔")
                 self.clear_selection_highlight()
-                self.selected_centers.clear()
+                self.selected_centers = []
             else:
                 # self.get_x_4_number_sequences(result, print_cross_x_up)
                 up_seq, down_seq = self.get_y_4_number_sequences(result, print_cross_y_left)
@@ -8849,7 +8888,7 @@ class TubeLayoutEditor(QMainWindow):
 
         else:
             self.clear_selection_highlight()
-            self.selected_centers.clear()
+            self.selected_centers = []
 
     import math
 
@@ -9044,7 +9083,7 @@ class TubeLayoutEditor(QMainWindow):
                     if distance < required_rmin:
                         QMessageBox.warning(self, "距离不足", "参照管孔之间倾斜线的距离不满足U形换热管的最小弯曲半径。")
                         self.clear_selection_highlight()
-                        self.selected_centers.clear()
+                        self.selected_centers = []
                         # 不继续执行后续逻辑
                         return
 
@@ -9103,7 +9142,7 @@ class TubeLayoutEditor(QMainWindow):
                         else:
                             QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
                             self.clear_selection_highlight()
-                            self.selected_centers.clear()
+                            self.selected_centers = []
                     # y轴第二排
                     elif (coord7_in_left and coord8_in_right) or (coord7_in_right and coord8_in_left):
                         if self.is_y_line1:
@@ -9114,7 +9153,7 @@ class TubeLayoutEditor(QMainWindow):
                         else:
                             QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
                             self.clear_selection_highlight()
-                            self.selected_centers.clear()
+                            self.selected_centers = []
                     # x轴第三排
                     elif (coord9_in_up and coord10_in_down) or (coord9_in_down and coord10_in_up):
                         if self.is_x_line1 and self.is_x_line2:
@@ -9125,7 +9164,7 @@ class TubeLayoutEditor(QMainWindow):
                         else:
                             QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
                             self.clear_selection_highlight()
-                            self.selected_centers.clear()
+                            self.selected_centers = []
                     # y轴第三排
                     elif (coord11_in_left and coord12_in_right) or (coord11_in_right and coord12_in_left):
                         if self.is_y_line1 and self.is_y_line2:
@@ -9136,10 +9175,10 @@ class TubeLayoutEditor(QMainWindow):
                         else:
                             QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
                             self.clear_selection_highlight()
-                            self.selected_centers.clear()
+                            self.selected_centers = []
                     else:
                         self.clear_selection_highlight()
-                        self.selected_centers.clear()
+                        self.selected_centers = []
                     # 管孔数量为4个
             elif len(self.selected_centers) == 4:
 
@@ -9193,7 +9232,7 @@ class TubeLayoutEditor(QMainWindow):
                     else:
                         QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
                         self.clear_selection_highlight()
-                        self.selected_centers.clear()
+                        self.selected_centers = []
                 # y轴第二排
                 elif y_left_count_line2 == 2 and y_right_count_line2 == 2:
                     if self.is_y_line1:
@@ -9204,7 +9243,7 @@ class TubeLayoutEditor(QMainWindow):
                     else:
                         QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
                         self.clear_selection_highlight()
-                        self.selected_centers.clear()
+                        self.selected_centers = []
                 # x轴第三排
                 elif x_up_count_line3 == 2 and x_down_count_line3 == 2:
                     if self.is_x_line1 and self.is_x_line2:
@@ -9215,7 +9254,7 @@ class TubeLayoutEditor(QMainWindow):
                     else:
                         QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
                         self.clear_selection_highlight()
-                        self.selected_centers.clear()
+                        self.selected_centers = []
                 # y轴第三排
                 elif y_left_count_line3 == 2 and y_right_count_line3 == 2:
                     if self.is_y_line1 and self.is_y_line2:
@@ -9226,7 +9265,7 @@ class TubeLayoutEditor(QMainWindow):
                     else:
                         QMessageBox.warning(self, "选择错误", "请从第1排（行）依次完成交叉布管")
                         self.clear_selection_highlight()
-                        self.selected_centers.clear()
+                        self.selected_centers = []
 
                 else:
                     QMessageBox.warning(self, "选择错误", "参照管孔位置不正确")
@@ -9310,7 +9349,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 清空选择
         if hasattr(self, 'selected_centers'):
-            self.selected_centers.clear()
+            self.selected_centers = []
 
         self.graphics_scene.update()
         QApplication.processEvents()
@@ -9432,7 +9471,7 @@ class TubeLayoutEditor(QMainWindow):
         #                     self.graphics_scene.removeItem(item)
         #                     break
         #
-        #     self.selected_centers.clear()
+        #     self.selected_centers = []
 
     def build_lagan(self, selected_centers):
         if not selected_centers:
@@ -9518,7 +9557,7 @@ class TubeLayoutEditor(QMainWindow):
             # # 显示绘制结果
             # QMessageBox.information(self, "已绘制", "绘制圆心:\n" + "\n".join(msg_lines))
             self.clear_selection_highlight()
-            self.selected_centers.clear()
+            self.selected_centers = []
 
         # 返回移除已绘制拉杆后的中心坐标列表
         return [
@@ -9748,7 +9787,6 @@ class TubeLayoutEditor(QMainWindow):
 
     # 删除换热管
     def on_del_click(self):
-        print("开始了吗")
         try:
             # 处理侧边块删除
             if hasattr(self, 'selected_side_blocks') and self.selected_side_blocks:
@@ -9792,7 +9830,7 @@ class TubeLayoutEditor(QMainWindow):
                 # for center in selected_centers:
                 #     self.delete_huanreguan(center)
                 self.delete_huanreguan(selected_centers)
-                self.selected_centers.clear()
+                self.selected_centers = []
 
         except Exception:
             return
@@ -10013,6 +10051,7 @@ class TubeLayoutEditor(QMainWindow):
                 "type": "del",
                 "coord": coord
             })
+        self.clear_selection_highlight()
 
         return centers_to_remove
 
@@ -10325,7 +10364,7 @@ class TubeLayoutEditor(QMainWindow):
         # 更新删除列表（移除已选中的相对坐标，避免重复删除）
         self.del_centers = [coord for coord in self.del_centers if coord not in selected_centers]
         # 清空选中状态（避免后续操作重复处理）
-        self.selected_centers.clear()
+        self.selected_centers = []
         # 更新界面相关统计信息和坐标分组
         self.update_total_holes_count()
         self.sorted_current_centers_up, self.sorted_current_centers_down = self.group_centers_by_y(
@@ -10336,6 +10375,7 @@ class TubeLayoutEditor(QMainWindow):
         if added_count == 0:
             # QMessageBox.warning(self, "警告", "未成功添加任何换热管，请检查坐标选择")
             return
+        self.clear_selection_highlight()
 
     # 最左最右拉杆
     def on_small_block_click(self):
@@ -10379,7 +10419,7 @@ class TubeLayoutEditor(QMainWindow):
                 print(f"擦除淡蓝色圆心失败: {e}，坐标: ({row_label}, {col_label})")
                 continue
 
-        self.selected_centers.clear()
+        self.selected_centers = []
 
     def delete_selected_side_rods(self):
         """删除选中的最左最右拉杆"""
@@ -10943,7 +10983,7 @@ class TubeLayoutEditor(QMainWindow):
                                 self.graphics_scene.removeItem(item)
                                 break
 
-                self.selected_centers.clear()
+                self.selected_centers = []
                 dialog.close()
 
         def on_close():
@@ -12456,7 +12496,7 @@ class TubeLayoutEditor(QMainWindow):
                             if isinstance(item, QGraphicsEllipseItem):
                                 self.graphics_scene.removeItem(item)
                                 break
-                self.selected_centers.clear()
+                self.selected_centers = []
                 return
 
             # 转换字符串类型的选中中心
@@ -12487,7 +12527,7 @@ class TubeLayoutEditor(QMainWindow):
 
             if len(points) != 2:
                 # QMessageBox.warning(self, "错误", "无法获取两个圆心坐标")
-                self.selected_centers.clear()
+                self.selected_centers = []
                 return
 
             # 绘制平板式防冲板（保持与原始代码相同的单线效果）
@@ -12533,7 +12573,7 @@ class TubeLayoutEditor(QMainWindow):
                 "interfering_tubes": self.interfering_centers if hasattr(self, 'interfering_centers') else []
             })
 
-            self.selected_centers.clear()
+            self.selected_centers = []
 
         elif baffle_type == "圆弧形":
             # 解析选中的中心点
@@ -12596,7 +12636,7 @@ class TubeLayoutEditor(QMainWindow):
                             if isinstance(item, QGraphicsEllipseItem):
                                 self.graphics_scene.removeItem(item)
                                 break
-                self.selected_centers.clear()
+                self.selected_centers = []
                 return
 
             # 获取并清除选中标记
@@ -12618,7 +12658,7 @@ class TubeLayoutEditor(QMainWindow):
 
             if len(points) != 2:
                 # QMessageBox.warning(self, "错误", "无法获取两个有效的圆心坐标")
-                self.selected_centers.clear()
+                self.selected_centers = []
                 return
 
             # 计算折边式防冲板的坐标点
@@ -12650,7 +12690,7 @@ class TubeLayoutEditor(QMainWindow):
                 #     f"计算得到的顶部长度为负值({top_length:.2f})，\n"
                 #     f"请检查折边角度({baffle_angle}°)和选中的管间距({AB_length:.2f})"
                 # )
-                self.selected_centers.clear()
+                self.selected_centers = []
                 return
 
             # 计算折边顶点坐标（保持与原始代码相同的计算方式）
@@ -12708,11 +12748,11 @@ class TubeLayoutEditor(QMainWindow):
                 }
             })
 
-            self.selected_centers.clear()
+            self.selected_centers = []
 
         elif baffle_type == "焊接式":
             print("待开发")
-            self.selected_centers.clear()
+            self.selected_centers = []
 
     def on_screw_ring_click(self):
         """创建环首螺钉参数设置弹窗，从参数表获取初始值并关联更新"""
@@ -13065,7 +13105,7 @@ class TubeLayoutEditor(QMainWindow):
 
             # 清除选中状态
             self.clear_selection_highlight()
-            self.selected_centers.clear()
+            self.selected_centers = []
 
             # 关闭弹窗
             dialog.accept()
@@ -13339,7 +13379,7 @@ class TubeLayoutEditor(QMainWindow):
         # 9. 清理临时状态（避免干扰下次操作）
         self.clear_selection_highlight()
         if hasattr(self, 'selected_centers'):
-            self.selected_centers.clear()
+            self.selected_centers = []
 
         return current_coords
 
@@ -13480,16 +13520,18 @@ class TubeLayoutEditor(QMainWindow):
                     self.selected_centers = []
 
                 if label in self.selected_centers:
-                    # 取消选中 → 删除 marker
-                    self.selected_centers.remove(label)
+                    # 取消选中 → 删除 marker，使用列表推导式创建新列表
+                    new_selected = [c for c in self.selected_centers if c != label]
+                    self.selected_centers = new_selected
                     click_point = QPointF(x, y)
                     for item in self.graphics_scene.items(click_point):
                         if isinstance(item, QGraphicsEllipseItem) and item.data(0) == "marker":
                             self.graphics_scene.removeItem(item)
                             break
                 else:
-                    # 添加选中 → 画 marker
-                    self.selected_centers.append(label)
+                    # 添加选中 → 画 marker，通过新列表赋值方式添加
+                    new_selected = self.selected_centers + [label]
+                    self.selected_centers = new_selected
                     pen = QPen(Qt.NoPen)
                     brush = QBrush(QColor(173, 216, 230))
                     marker = self.graphics_scene.addEllipse(

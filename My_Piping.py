@@ -3921,7 +3921,7 @@ class TubeLayoutEditor(QMainWindow):
         # 清除旧高亮，恢复为标准小圆
         self.clear_selection_highlight()
 
-        self.selected_centers.clear()
+        self.selected_centers = []
 
         # 获取当前选中的行（去重）
         selected_rows = set()
@@ -4507,7 +4507,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 清空选择
         if hasattr(self, 'selected_centers'):
-            self.selected_centers.clear()
+            self.selected_centers = []
 
         self.graphics_scene.update()
         QApplication.processEvents()
@@ -4662,7 +4662,7 @@ class TubeLayoutEditor(QMainWindow):
             updated_centers = self.build_lagan(selected_centers)
             self.current_centers = updated_centers
             # 清空选中列表
-            self.selected_centers.clear()
+            self.selected_centers = []
         else:
             QMessageBox.warning(self, "未选中", "请先点击图形区域中的一个或多个小圆以选中圆心")
 
@@ -4796,7 +4796,7 @@ class TubeLayoutEditor(QMainWindow):
             self.delete_huanreguan(selected_centers)
         # self.connect_center(self.scene, self.current_centers, self.small_D)
 
-        self.selected_centers.clear()
+        self.selected_centers = []
 
     def delete_selected_baffles(self):
         """删除选中的防冲板，并恢复对应的干涉换热管"""
@@ -5229,7 +5229,7 @@ class TubeLayoutEditor(QMainWindow):
                 print(f"擦除淡蓝色圆心失败: {e}，坐标: ({row_label}, {col_label})")
                 continue
 
-        self.selected_centers.clear()
+        self.selected_centers = []
 
     def delete_selected_side_rods(self):
         """删除选中的最左最右拉杆"""
@@ -5409,7 +5409,7 @@ class TubeLayoutEditor(QMainWindow):
         else:
             selected_centers = self.selected_centers
             self.build_center_dangguan(selected_centers)
-        self.selected_centers.clear()
+        self.selected_centers = []
 
     def build_center_dangguan(self, selected_centers):
         if not selected_centers:
@@ -5624,7 +5624,7 @@ class TubeLayoutEditor(QMainWindow):
                                 self.graphics_scene.removeItem(item)
                                 break
 
-                self.selected_centers.clear()
+                self.selected_centers = []
                 dialog.close()
 
             # QMessageBox.information(self, "添加完成", f"共添加 {added_count} 个小挡板")
@@ -6981,7 +6981,7 @@ class TubeLayoutEditor(QMainWindow):
                             if isinstance(item, QGraphicsEllipseItem):
                                 self.graphics_scene.removeItem(item)
                                 break
-                self.selected_centers.clear()
+                self.selected_centers = []
                 return
 
             # 转换字符串类型的选中中心
@@ -7011,7 +7011,7 @@ class TubeLayoutEditor(QMainWindow):
 
             if len(points) != 2:
                 QMessageBox.warning(self, "错误", "无法获取两个圆心坐标")
-                self.selected_centers.clear()
+                self.selected_centers = []
                 return
 
             # 绘制平板式防冲板（保持与原始代码相同的单线效果）
@@ -7057,7 +7057,7 @@ class TubeLayoutEditor(QMainWindow):
                 "interfering_tubes": self.interfering_centers if hasattr(self, 'interfering_centers') else []
             })
 
-            self.selected_centers.clear()
+            self.selected_centers = []
 
         elif baffle_type == "圆弧形":
             # 解析选中的中心点
@@ -7119,7 +7119,7 @@ class TubeLayoutEditor(QMainWindow):
                             if isinstance(item, QGraphicsEllipseItem):
                                 self.graphics_scene.removeItem(item)
                                 break
-                self.selected_centers.clear()
+                self.selected_centers = []
                 return
 
             # 获取并清除选中标记
@@ -7140,7 +7140,7 @@ class TubeLayoutEditor(QMainWindow):
 
             if len(points) != 2:
                 QMessageBox.warning(self, "错误", "无法获取两个有效的圆心坐标")
-                self.selected_centers.clear()
+                self.selected_centers = []
                 return
 
             # 计算折边式防冲板的坐标点
@@ -7172,7 +7172,7 @@ class TubeLayoutEditor(QMainWindow):
                     f"计算得到的顶部长度为负值({top_length:.2f})，\n"
                     f"请检查折边角度({baffle_angle}°)和选中的管间距({AB_length:.2f})"
                 )
-                self.selected_centers.clear()
+                self.selected_centers = []
                 return
 
             # 计算折边顶点坐标（保持与原始代码相同的计算方式）
@@ -7230,11 +7230,11 @@ class TubeLayoutEditor(QMainWindow):
                 }
             })
 
-            self.selected_centers.clear()
+            self.selected_centers = []
 
         elif baffle_type == "焊接式":
             print("待开发")
-            self.selected_centers.clear()
+            self.selected_centers = []
 
     def on_screw_ring_click(self):
         """创建环首螺钉参数设置弹窗，从参数表获取初始值并关联更新"""
@@ -7556,7 +7556,7 @@ class TubeLayoutEditor(QMainWindow):
                 "mode": "horizontal" if is_horizontal else "vertical"
             })
             # 清除选中状态
-        self.selected_centers.clear()
+        self.selected_centers = []
 
     def enable_scene_click_capture(self):
         """启用图形视图的点击事件捕获"""
