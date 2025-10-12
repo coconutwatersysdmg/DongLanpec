@@ -6,6 +6,8 @@ product_info_group = None
 product_definition_group = None
 work_information_group = None
 
+current_username = None
+
 # 项目信息控件
 owner_input = None
 project_number_input = None

@@ -12,10 +12,13 @@ from collections import defaultdict
 
 from modules.wenbenshengcheng import cunguige
 from modules.wenbenshengcheng.CalculateReport import generate_calReport
+from modules.wenbenshengcheng.cunguige import add_template_sheet, fill_template_values, \
+    copy_u_tube_value_live
 from modules.wenbenshengcheng.generate_material_list import generate_material_list  # 材料清单
 
 
 from modules.chanpinguanli.chanpinguanli_main import product_manager
+from modules.wenbenshengcheng.jiegoucanshu_shuchu import fill_all_components
 from modules.wenbenshengcheng.jisuanjiance import fill_calculation_report, fill_final_excel_from_intermediate
 
 product_id = None
@@ -38,8 +41,8 @@ class DocumentGenerationDialog(QDialog):
 
         self.doc_types = [
             {"name": "计算报告", "ext": ".xlsx", "filter": "Excel文件 (*.xlsx)"},
-            {"name": "风险告知书", "ext": ".docx", "filter": "Word文档 (*.docx)"},
-            {"name": "设计说明", "ext": ".docx", "filter": "Word文档 (*.docx)"},
+            {"name": "结构参数表", "ext": ".xlsx", "filter": "Excel文件 (*.xlsx)"},
+            # {"name": "设计说明", "ext": ".docx", "filter": "Word文档 (*.docx)"},
             {"name": "材料清单", "ext": ".xlsx", "filter": "Excel文件 (*.xlsx)"}
         ]
 
@@ -83,6 +86,7 @@ class DocumentGenerationDialog(QDialog):
             return
 
         try:
+            any_error = False
             conn = pymysql.connect(
                 host='localhost',
                 user='root',
@@ -121,26 +125,39 @@ class DocumentGenerationDialog(QDialog):
                             elif exchanger_type == "AES":
                                 excel_template = "强度计算元件输出参数表_AES.xlsx"
                                 target_path = "计算报告（AES）.xlsx"
-                            output_path = os.path.join(save_dir, "计数输出参数总览表.xlsx")
+                            output_path = os.path.join(save_dir, "计算输出参数总览表.xlsx")
                             fill_calculation_report(json_path, excel_template, output_path)
 
                             final_path = os.path.join(save_dir, "计算报告_标准版.xlsx")
                             fill_final_excel_from_intermediate(output_path, target_path, final_path,json_path)
                         elif doc["name"] == "材料清单":
-                            output_path = os.path.join(save_dir, "材料清单.xlsx")
+                            output_path = os.path.join(save_dir, "材料清单-生成.xlsx")
+                            template_file_path = os.path.join("modules\wenbenshengcheng",'U型管计算2.xlsx')
                             generate_material_list(product_id, output_path)  # ✅ 此函数现在负责基本信息 + G列 + H列
-                            cunguige.main(json_path, output_path, 'Sheet1', product_id)  # ✅ 此函数负责输入规格（E列）
+                            cunguige.main(json_path, output_path, 'Sheet1', product_id)  # ✅ 此函数负责填写规格（E列）
+                            if exchanger_type == "AEU" or exchanger_type == "BEU":
+                                add_template_sheet(output_path, template_file_path)
+                                fill_template_values(output_path, product_id)
+                                copy_u_tube_value_live(output_path)
+                        elif doc["name"] == "结构参数表":
+                            excel_template = "结构数据关联.xlsx"
+
+                            output_path = os.path.join(save_dir, "结构参数表-生成.xlsx")
+                            fill_all_components(product_id,excel_template,output_path,conn)
                         else:
                             self.copy_template_document(doc["name"], doc["ext"], doc["filter"], save_dir)
 
                     except Exception as e:
-                            print("❌ 整体写入过程中发生异常：")
-                            traceback.print_exc()
-                            # 写入错误信息到日志文件
-                            with open("错误.txt", "a", encoding="utf-8") as f:
-                                f.write("❌ 整体写入过程中发生异常：\n")
-                                traceback.print_exc(file=f)
-            QMessageBox.information(self, "成功", f"文档生成完成！\n保存路径: {save_dir}")
+                        any_error = True  # 记录有错误
+                        print("❌ 整体写入过程中发生异常：")
+                        traceback.print_exc()
+                        # 写入错误信息到日志文件
+                        with open("错误.txt", "a", encoding="utf-8") as f:
+                            f.write("❌ 整体写入过程中发生异常：\n")
+                            traceback.print_exc(file=f)
+                        QMessageBox.critical(self, "错误", f"生成文档时出错:\n{str(e)}")
+            if not any_error:
+                QMessageBox.information(self, "成功", f"文档生成完成！\n保存路径: {save_dir}")
 
         except Exception as e:
             QMessageBox.critical(self, "错误", f"生成文档时出错:\n{str(e)}")
@@ -246,7 +263,7 @@ from openpyxl.cell.cell import MergedCell
 #     # json_path="../qiangdujisuan/jiekou_python/jisuan_output_new.json",
 #     json_path="jisuan_output_new.json",
 #
-#     output_path="输入完成_圆筒映射.xlsx",
+#     output_path="填写完成_圆筒映射.xlsx",
 #     module_name="管箱圆筒",
 #     sheet_name="管箱圆筒"
 #

@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>软件使用帮助文档</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+<!--    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">-->
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .section-active {
+                @apply bg-primary/10 text-primary border-l-4 border-primary;
+            }
+            .custom-icon {
+                width: 20px;
+                height: 20px;
+                object-fit: contain;
+            }
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#36CFC9',
+                        neutral: '#F5F7FA',
+                        dark: '#1D2129',
+                        light: '#F2F3F5'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 font-sans text-dark">
+    <!-- 顶部导航栏 -->
+    <header class="bg-white shadow-sm fixed top-0 left-0 right-0 z-30">
+        <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-book text-primary text-2xl"></i>
+                <h1 class="text-xl font-semibold text-dark">软件使用帮助文档</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button class="text-gray-500 hover:text-primary transition-colors">
+                    <i class="fa fa-search text-lg"></i>
+                </button>
+                <button class="text-gray-500 hover:text-primary transition-colors">
+                    <i class="fa fa-print text-lg"></i>
+                </button>
+                <button class="text-gray-500 hover:text-primary transition-colors">
+                    <i class="fa fa-download text-lg"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex pt-16 min-h-screen">
+        <!-- 左侧索引栏 -->
+        <aside class="w-64 bg-white shadow-sm fixed h-full left-0 top-16 overflow-y-auto scrollbar-hide border-r border-gray-200 transition-all duration-300" id="sidebar">
+            <nav class="py-4">
+                <ul class="space-y-1 px-2">
+                    <li>
+                        <a href="#overview" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors">
+                            <i class="fa fa-info-circle w-5 text-center mr-2 text-gray-500"></i>
+                            软件概述
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#login" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors">
+<!--                            <i class="fa fa-sign-in w-5 text-center mr-2 text-gray-500"></i>-->
+                            <img src="icons/用户%20(1).png" alt="登录与注册" class="custom-icon mr-2">
+                            登录与注册
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#project" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors">
+<!--                            <i class="fa fa-folder-open w-5 text-center mr-2 text-gray-500"></i>-->
+                            <img src="icons/项目管理.png" alt="项目管理" class="custom-icon mr-2">
+                            项目管理
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#conditions" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors">
+<!--                            <i class="fa fa-sliders w-5 text-center mr-2 text-gray-500"></i>-->
+                            <img src="icons/表单组件-输入框.png" alt="条件输入" class="custom-icon mr-2">
+                            条件输入
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#materials" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors">
+<!--                            <i class="fa fa-cubes w-5 text-center mr-2 text-gray-500"></i>-->
+                            <img src="icons/元件定义.png" alt="元件材料定义" class="custom-icon mr-2">
+                            元件材料定义
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#nozzles" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors">
+<!--                            <i class="fa fa-plug w-5 text-center mr-2 text-gray-500"></i>-->
+                            <img src="icons/管口.png" alt="管口及附件设计" class="custom-icon mr-2">
+                            管口及附件设计
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#tubes" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors">
+<!--                            <i class="fa fa-th-large w-5 text-center mr-2 text-gray-500"></i>-->
+                            <img src="icons/建筑-管子.png" alt="管束设计" class="custom-icon mr-2">
+                            管束设计
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#calculation" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors">
+<!--                            <i class="fa fa-calculator w-5 text-center mr-2 text-gray-500"></i>-->
+                            <img src="icons/计算.png" alt="设计运算" class="custom-icon mr-2">
+                            设计运算
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#drawing" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors">
+<!--                            <i class="fa fa-paint-brush w-5 text-center mr-2 text-gray-500"></i>-->
+                            <img src="icons/图纸%20(2).png" alt="图纸绘制" class="custom-icon mr-2">
+                            图纸绘制
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#text" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors">
+<!--                            <i class="fa fa-file-text w-5 text-center mr-2 text-gray-500"></i>-->
+                            <img src="icons/三维建模.png" alt="文本说明生成" class="custom-icon mr-2">
+                            文本说明生成
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#model" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors">
+<!--                            <i class="fa fa-cube w-5 text-center mr-2 text-gray-500"></i>-->
+                            <img src="icons/3D建模.png" alt="模型创建" class="custom-icon mr-2">
+                            模型创建
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#faq" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors">
+                            <i class="fa fa-question-circle w-5 text-center mr-2 text-gray-500"></i>
+                            常见问题与支持
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#appendix" class="flex items-center px-3 py-2 text-sm rounded-md hover:bg-gray-100 transition-colors">
+                            <i class="fa fa-list-alt w-5 text-center mr-2 text-gray-500"></i>
+                            附录
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- 移动端菜单按钮 -->
+        <button id="menu-toggle" class="fixed bottom-4 right-4 bg-primary text-white p-3 rounded-full shadow-lg z-40 lg:hidden">
+            <i class="fa fa-bars"></i>
+        </button>
+
+        <!-- 主要内容区 -->
+        <main class="flex-1 ml-64 p-6 lg:p-10">
+            <div class="max-w-4xl mx-auto">
+                <!-- 软件概述 -->
+                <section id="overview" class="mb-12 scroll-mt-20">
+                    <div class="flex items-center mb-6">
+                        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+                            <i class="fa fa-info-circle text-primary"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-dark">第一章 软件概述</h2>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                        <h3 class="text-lg font-semibold mb-3 text-dark">1.1 软件简介</h3>
+                        <p class="text-gray-700 mb-4">本软件是一款专业的工程开发设计工具，主要用于化工设备、压力容器等领域的设计与计算。软件集成了从项目创建、参数输入到最终图纸生成的全流程功能，能够显著提高工程设计效率，确保设计符合相关行业标准。</p>
+
+                        <h3 class="text-lg font-semibold mb-3 mt-6 text-dark">1.2 运行环境</h3>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead>
+                                    <tr>
+                                        <th class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">项目</th>
+                                        <th class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">最低配置</th>
+                                        <th class="px-4 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">推荐配置</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm text-gray-900">操作系统</td>
+                                        <td class="px-4 py-3 text-sm text-gray-500">Windows 10 64位</td>
+                                        <td class="px-4 py-3 text-sm text-gray-500">Windows 11 64位</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm text-gray-900">处理器</td>
+                                        <td class="px-4 py-3 text-sm text-gray-500">Intel i5 或同等处理器</td>
+                                        <td class="px-4 py-3 text-sm text-gray-500">Intel i7 或同等处理器</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm text-gray-900">内存</td>
+                                        <td class="px-4 py-3 text-sm text-gray-500">8GB RAM</td>
+                                        <td class="px-4 py-3 text-sm text-gray-500">16GB RAM 或更高</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-sm text-gray-900">硬盘空间</td>
+                                        <td class="px-4 py-3 text-sm text-gray-500">至少10GB可用空间</td>
+                                        <td class="px-4 py-3 text-sm text-gray-500">20GB SSD可用空间</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h3 class="text-lg font-semibold mb-3 mt-6 text-dark">1.3 手册使用说明</h3>
+                        <p class="text-gray-700 mb-4">本手册按照软件功能模块组织，您可以通过左侧导航快速跳转到相应章节。手册中使用以下符号表示特殊信息：</p>
+                        <div class="flex flex-wrap gap-4 mt-2">
+                            <div class="flex items-start">
+                                <div class="bg-yellow-100 p-1 rounded-full mr-2 mt-0.5">
+                                    <i class="fa fa-exclamation-triangle text-yellow-600"></i>
+                                </div>
+                                <p class="text-sm text-gray-700">警告：表示可能导致数据丢失或错误的操作</p>
+                            </div>
+                            <div class="flex items-start">
+                                <div class="bg-blue-100 p-1 rounded-full mr-2 mt-0.5">
+                                    <i class="fa fa-lightbulb-o text-blue-600"></i>
+                                </div>
+                                <p class="text-sm text-gray-700">提示：提供有用的操作技巧和建议</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 登录与注册 -->
+                <section id="login" class="mb-12 scroll-mt-20">
+                    <div class="flex items-center mb-6">
+                        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+<!--                            <i class="fa fa-sign-in text-primary"></i>-->
+                            <img src="icons/用户%20(1).png" alt="登录与注册" class="custom-icon">
+                        </div>
+                        <h2 class="text-2xl font-bold text-dark">第二章 登录与注册</h2>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                        <h3 class="text-lg font-semibold mb-3 text-dark">2.1 账号注册</h3>
+                        <p class="text-gray-700 mb-4">首次使用软件需要注册账号，步骤如下：</p>
+                        <ol class="list-decimal pl-5 mb-4 space-y-2 text-gray-700">
+                            <li>打开软件，在登录界面点击"注册"按钮</li>
+                            <li>填写注册信息，包括用户名、密码、单位和联系方式等</li>
+                            <li>输入收到的验证码（通过邮箱或手机）</li>
+                            <li>点击"完成注册"按钮，系统提示注册成功</li>
+                        </ol>
+                        <div class="bg-blue-50 border-l-4 border-primary p-4 mb-4">
+                            <p class="text-sm text-gray-700"><i class="fa fa-info-circle text-primary mr-2"></i> 密码需包含大小写字母、数字，且长度不小于8位。单位信息需与企业认证信息一致，以便获取相应权限。</p>
+                        </div>
+
+                        <h3 class="text-lg font-semibold mb-3 mt-6 text-dark">2.2 登录系统</h3>
+                        <p class="text-gray-700 mb-4">注册成功后，您可以通过以下方式登录系统：</p>
+                        <ul class="list-disc pl-5 mb-4 space-y-2 text-gray-700">
+                            <li><strong>常规登录</strong>：输入用户名和密码，点击"登录"按钮</li>
+                            <li><strong>快捷登录</strong>：勾选"记住密码"选项（仅在个人设备上使用）可简化后续登录；管理员可开启"自动登录"功能</li>
+                            <li><strong>权限说明</strong>：不同角色（设计师、审核员、管理员）登录后可见的功能有所不同</li>
+                        </ul>
+
+                        <h3 class="text-lg font-semibold mb-3 mt-6 text-dark">2.3 账号管理</h3>
+                        <p class="text-gray-700 mb-4">您可以在个人中心进行账号相关设置：</p>
+                        <ul class="list-disc pl-5 mb-4 space-y-2 text-gray-700">
+                            <li><strong>密码修改</strong>：进入"个人中心"→"安全设置"，输入原密码和新密码完成修改</li>
+                            <li><strong>账号注销</strong>：需要联系管理员提交申请，注销前请确保已备份所有项目数据</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- 项目管理 -->
+                <section id="project" class="mb-12 scroll-mt-20">
+                    <div class="flex items-center mb-6">
+                        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+<!--                            <i class="fa fa-folder-open text-primary"></i>-->
+                            <img src="icons/项目管理.png" alt="项目管理" class="custom-icon">
+                        </div>
+                        <h2 class="text-2xl font-bold text-dark">第三章 项目管理</h2>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                        <h3 class="text-lg font-semibold mb-3 text-dark">3.1 项目创建</h3>
+                        <p class="text-gray-700 mb-4">创建新项目的步骤如下：</p>
+                        <ol class="list-decimal pl-5 mb-4 space-y-2 text-gray-700">
+                            <li>点击主界面的"新建项目"按钮</li>
+                            <li>在弹出的对话框中填写项目信息，包括：
+                                <ul class="list-disc pl-5 mt-1">
+                                    <li>项目名称和编号</li>
+                                    <li>项目类型（如"换热器设计"、"储罐设计"等）</li>
+                                    <li>设计标准（如GB、ASME等）</li>
+                                    <li>项目负责人和参与人员</li>
+                                </ul>
+                            </li>
+                            <li>选择项目保存路径</li>
+                            <li>点击"确认"按钮完成创建</li>
+                        </ol>
+
+                        <h3 class="text-lg font-semibold mb-3 mt-6 text-dark">3.2 项目编辑与查询</h3>
+                        <p class="text-gray-700 mb-4">对已有项目进行管理：</p>
+                        <ul class="list-disc pl-5 mb-4 space-y-2 text-gray-700">
+                            <li><strong>编辑项目</strong>：在项目列表中双击项目，或右键点击选择"属性"，可修改项目基本信息</li>
+                            <li><strong>查询项目</strong>：系统提供多条件筛选功能，可按名称、编号、创建时间或状态（草稿/进行中/已归档）查找项目</li>
+                        </ul>
+
+                        <h3 class="text-lg font-semibold mb-3 mt-6 text-dark">3.3 项目协作与版本控制</h3>
+                        <p class="text-gray-700 mb-4">支持多人协作和版本管理：</p>
+                        <ul class="list-disc pl-5 mb-4 space-y-2 text-gray-700">
+                            <li><strong>项目共享</strong>：通过"共享项目"功能添加成员，并可设置"只读"或"可编辑"权限</li>
+                            <li><strong>版本控制</strong>：系统每30分钟自动保存一次项目历史版本，可通过"版本回溯"功能恢复到指定时间点的状态</li>
+                        </ul>
+
+                        <h3 class="text-lg font-semibold mb-3 mt-6 text-dark">3.4 项目归档与删除</h3>
+                        <p class="text-gray-700 mb-4">项目完成后的管理操作：</p>
+                        <ul class="list-disc pl-5 mb-4 space-y-2 text-gray-700">
+                            <li><strong>项目归档</strong>：设计完成后点击"归档"按钮，系统生成唯一归档编号，并可关联企业文档管理系统</li>
+                            <li><strong>项目删除</strong>：未归档项目可直接删除（需二次确认），已归档项目删除需要管理员权限</li>
+                        </ul>
+                        <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                            <p class="text-sm text-gray-700"><i class="fa fa-exclamation-triangle text-yellow-600 mr-2"></i> 警告：删除项目前请确保已做好备份，删除后的数据无法恢复。</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 条件输入 -->
+                <section id="conditions" class="mb-12 scroll-mt-20">
+                    <div class="flex items-center mb-6">
+                        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+                            <img src="icons/表单组件-输入框.png" alt="条件输入" class="custom-icon">
+<!--                            <i class="fa fa-sliders text-primary"></i>-->
+                        </div>
+                        <h2 class="text-2xl font-bold text-dark">第四章 条件输入</h2>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                        <h3 class="text-lg font-semibold mb-3 text-dark">4.1 基础条件输入</h3>
+                        <p class="text-gray-700 mb-4">条件输入是设计的基础，用于定义设计的核心约束条件：</p>
+                        <ul class="list-disc pl-5 mb-4 space-y-2 text-gray-700">
+                            <li>设备用途和类型</li>
+                            <li>工作压力和温度范围</li>
+                            <li>介质特性（名称、密度、黏度等）</li>
+                            <li>设计寿命和安全系数</li>
+                        </ul>
+                        <p class="text-gray-700 mb-4">在"条件输入"界面中，带*号的为必填项。介质特性可从系统数据库中选择常用介质，也可手动输入自定义介质参数。</p>
+
+                        <h3 class="text-lg font-semibold mb-3 mt-6 text-dark">4.2 工况设置</h3>
+                        <p class="text-gray-700 mb-4">软件支持多工况设计，可针对不同运行条件进行参数设置：</p>
+                        <ol class="list-decimal pl-5 mb-4 space-y-2 text-gray-700">
+                            <li>在条件输入界面点击"添加工况"按钮</li>
+                            <li>为新工况命名（如"正常工况"、"最大负荷工况"）</li>
+                            <li>分别设置各工况下的参数</li>
+                            <li>可通过"复制工况"快速创建相似工况，减少重复输入</li>
+                        </ol>
+
+                        <h3 class="text-lg font-semibold mb-3 mt-6 text-dark">4.3 数据校验与导入</h3>
+                        <p class="text-gray-700 mb-4">为确保输入数据的准确性，系统提供数据校验和导入功能：</p>
+                        <ul class="list-disc pl-5 mb-4 space-y-2 text-gray-700">
+                            <li><strong>数据校验</strong>：输入完成后点击"校验"按钮，系统自动检查参数合理性，异常项会标红提示并给出修改建议</li>
+                            <li><strong>数据导入</strong>：支持从Excel文件导入预设条件，可在"下载中心"获取标准导入模板</li>
+                        </ul>
+                        <div class="bg-blue-50 border-l-4 border-primary p-4">
+                            <p class="text-sm text-gray-700"><i class="fa fa-lightbulb-o text-primary mr-2"></i> 提示：建议先完成基础条件输入并通过校验后，再进行后续设计步骤，以确保计算结果的准确性。</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 剩余章节内容省略，结构与前面类似 -->
+                <section id="materials" class="mb-12 scroll-mt-20">
+                    <div class="flex items-center mb-6">
+                        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+<!--                            <i class="fa fa-cubes text-primary"></i>-->
+                            <img src="icons/配置-系统配置.png" alt="元件材料定义" class="custom-icon">
+                        </div>
+                        <h2 class="text-2xl font-bold text-dark">第五章 元件材料定义</h2>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                        <h3 class="text-lg font-semibold mb-3 text-dark">5.1 材料库管理</h3>
+                        <p class="text-gray-700 mb-4">系统内置了丰富的工程材料库，包括各种钢材、合金、非金属材料等，每种材料都包含完整的属性参数：</p>
+                        <ul class="list-disc pl-5 mb-4 space-y-2 text-gray-700">
+                            <li>材料牌号和标准编号</li>
+                            <li>力学性能（抗拉强度、屈服强度等）</li>
+                            <li>许用应力（不同温度下）</li>
+                            <li>耐腐蚀等级和适用介质</li>
+                            <li>物理性能（密度、导热系数等）</li>
+                        </ul>
+                        <p class="text-gray-700 mb-4">您也可以创建自定义材料：点击"新增材料"，填写材料属性参数，保存至个人材料库中以便重复使用。</p>
+
+                        <h3 class="text-lg font-semibold mb-3 mt-6 text-dark">5.2 元件材料关联</h3>
+                        <p class="text-gray-700 mb-4">为设备各元件指定材料：</p>
+                        <ol class="list-decimal pl-5 mb-4 space-y-2 text-gray-700">
+                            <li>在材料定义界面，选择需要指定材料的元件（如壳体、法兰、封头）</li>
+                            <li>从材料库中选择合适的材料</li>
+                            <li>系统会自动关联该材料的所有性能参数，用于后续的强度计算和校核</li>
+                            <li>可通过"应用到相似元件"功能快速为同类元件分配相同材料</li>
+                        </ol>
+
+                        <h3 class="text-lg font-semibold mb-3 mt-6 text-dark">5.3 材料替换与校验</h3>
+                        <p class="text-gray-700 mb-4">材料的替换和校验功能确保所选材料满足设计要求：</p>
+                        <ul class="list-disc pl-5 mb-4 space-y-2 text-gray-700">
+                            <li><strong>材料替换</strong>：右键点击已选材料，选择"更换材料"，系统会提示替换后对设计的影响，如成本变化、是否仍满足工况要求等</li>
+                            <li><strong>材料校验</strong>：点击"材料校验"按钮，系统会检查所选材料是否符合设计温度、压力和介质腐蚀性要求，并给出相应建议</li>
+                        </ul>
+                    </div>
+                </section>
+
+                <!-- 管口及附件设计 -->
+                <section id="nozzles" class="mb-12 scroll-mt-20">
+                    <div class="flex items-center mb-6">
+                        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+<!--                            <i class="fa fa-plug text-primary"></i>-->
+                            <img src="icons/管口.png" alt="管口及附件设计" class="custom-icon">
+                        </div>
+                        <h2 class="text-2xl font-bold text-dark">第六章 管口及附件设计</h2>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                        <!-- 内容省略，与前面章节结构类似 -->
+                        <p class="text-gray-700">本章详细介绍管口及附件的设计方法，包括管口类型选择、位置布置、规格参数设置，以及各类附件的选型与参数配置等内容。</p>
+                    </div>
+                </section>
+
+                <!-- 管束设计 -->
+                <section id="tubes" class="mb-12 scroll-mt-20">
+                    <div class="flex items-center mb-6">
+                        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+<!--                            <i class="fa fa-th-large text-primary"></i>-->
+                            <img src="icons/建筑-管子.png" alt="管束设计" class="custom-icon">
+                        </div>
+                        <h2 class="text-2xl font-bold text-dark">第七章 管束设计</h2>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                        <!-- 内容省略 -->
+                        <p class="text-gray-700">本章以换热器为例，介绍管束的参数设置、布管设计以及强度与工艺校验等内容，其他类型设备的管束设计可参考本章进行。</p>
+                    </div>
+                </section>
+
+                <!-- 设计运算 -->
+                <section id="calculation" class="mb-12 scroll-mt-20">
+                    <div class="flex items-center mb-6">
+                        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+<!--                            <i class="fa fa-calculator text-primary"></i>-->
+                            <img src="icons/计算.png" alt="设计运算" class="custom-icon">
+                        </div>
+                        <h2 class="text-2xl font-bold text-dark">第八章 设计运算</h2>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                        <!-- 内容省略 -->
+                        <p class="text-gray-700">本章介绍设计运算的参数确认、自动运算流程以及运算结果的查看与导出方法，包括强度、刚度、稳定性等多维度计算内容。</p>
+                    </div>
+                </section>
+
+                <!-- 图纸绘制 -->
+                <section id="drawing" class="mb-12 scroll-mt-20">
+                    <div class="flex items-center mb-6">
+                        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+<!--                            <i class="fa fa-paint-brush text-primary"></i>-->
+                            <img src="icons/图纸%20(2).png" alt="图纸绘制" class="custom-icon">
+                        </div>
+                        <h2 class="text-2xl font-bold text-dark">第九章 图纸绘制</h2>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                        <!-- 内容省略 -->
+                        <p class="text-gray-700">本章介绍如何基于设计数据自动生成标准图纸，包括主视图、俯视图、部件详图的生成，以及图纸的编辑、标准选择和导出等功能。</p>
+                    </div>
+                </section>
+
+                <!-- 文本说明生成 -->
+                <section id="text" class="mb-12 scroll-mt-20">
+                    <div class="flex items-center mb-6">
+                        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+<!--                            <i class="fa fa-file-text text-primary"></i>-->
+                            <img src="icons/三维建模.png" alt="文本说明生成" class="custom-icon">
+                        </div>
+                        <h2 class="text-2xl font-bold text-dark">第十章 文本说明生成</h2>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                        <!-- 内容省略 -->
+                        <p class="text-gray-700">本章介绍系统如何基于设计数据自动生成标准化文本说明，包括技术参数表、设计依据、操作注意事项等内容的生成、编辑与导出。</p>
+                    </div>
+                </section>
+
+                <!-- 模型创建 -->
+                <section id="model" class="mb-12 scroll-mt-20">
+                    <div class="flex items-center mb-6">
+                        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+<!--                            <i class="fa fa-cube text-primary"></i>-->
+                            <img src="icons/3D建模.png" alt="模型创建" class="custom-icon">
+                        </div>
+                        <h2 class="text-2xl font-bold text-dark">第十一章 模型创建</h2>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                        <!-- 内容省略 -->
+                        <p class="text-gray-700">本章介绍3D模型的生成方法，包括模型的多角度查看、细节调整，以及模型在干涉检查、导出与共享等方面的应用。</p>
+                    </div>
+                </section>
+
+                <!-- 常见问题与支持 -->
+                <section id="faq" class="mb-12 scroll-mt-20">
+                    <div class="flex items-center mb-6">
+                        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+                            <i class="fa fa-question-circle text-primary"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-dark">第十二章 常见问题与支持</h2>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                        <!-- 内容省略 -->
+                        <p class="text-gray-700">本章提供常见问题的解决方案，包括登录失败、运算报错、图纸生成异常等问题的排查方法，以及技术支持的联系方式。</p>
+                    </div>
+                </section>
+
+                <!-- 附录 -->
+                <section id="appendix" class="mb-12 scroll-mt-20">
+                    <div class="flex items-center mb-6">
+                        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mr-3">
+                            <i class="fa fa-list-alt text-primary"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold text-dark">附录</h2>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+                        <!-- 内容省略 -->
+                        <p class="text-gray-700">附录包含专业术语表、常用快捷键列表以及软件支持的设计标准规范对照表等参考信息。</p>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // 处理导航栏激活状态
+        document.addEventListener('DOMContentLoaded', function() {
+            const sections = document.querySelectorAll('section');
+            const navLinks = document.querySelectorAll('aside nav a');
+            const menuToggle = document.getElementById('menu-toggle');
+            const sidebar = document.getElementById('sidebar');
+
+            // 移动端菜单切换
+            menuToggle.addEventListener('click', function() {
+                sidebar.classList.toggle('-translate-x-full');
+                sidebar.classList.toggle('translate-x-0');
+            });
+
+            // 初始状态设置第一个导航项为激活
+            navLinks[0].classList.add('section-active');
+
+            // 滚动时更新激活的导航项
+            window.addEventListener('scroll', function() {
+                let current = '';
+
+                sections.forEach(section => {
+                    const sectionTop = section.offsetTop;
+                    const sectionHeight = section.clientHeight;
+                    if (pageYOffset >= (sectionTop - 300)) {
+                        current = section.getAttribute('id');
+                    }
+                });
+
+                navLinks.forEach(link => {
+                    link.classList.remove('section-active');
+                    if (link.getAttribute('href').substring(1) === current) {
+                        link.classList.add('section-active');
+                    }
+                });
+            });
+
+            // 平滑滚动
+            navLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const targetId = this.getAttribute('href');
+                    const targetElement = document.querySelector(targetId);
+
+                    window.scrollTo({
+                        top: targetElement.offsetTop - 20,
+                        behavior: 'smooth'
+                    });
+
+                    // 在移动设备上点击导航后关闭侧边栏
+                    if (window.innerWidth < 1024) {
+                        sidebar.classList.add('-translate-x-full');
+                    }
+                });
+            });
+
+            // 初始检查屏幕宽度设置侧边栏状态
+            if (window.innerWidth < 1024) {
+                sidebar.classList.add('-translate-x-full');
+            }
+
+            // 响应式处理
+            window.addEventListener('resize', function() {
+                if (window.innerWidth >= 1024) {
+                    sidebar.classList.remove('-translate-x-full');
+                } else {
+                    sidebar.classList.add('-translate-x-full');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

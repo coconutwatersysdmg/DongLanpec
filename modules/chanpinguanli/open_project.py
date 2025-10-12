@@ -147,7 +147,10 @@ def open_project():
         csv_file_path = os.path.join(folder_path, "id.csv")
         if not os.path.exists(csv_file_path):
             print(f"未找到 id.csv 文件，路径：{csv_file_path}")  # 调试信息
-            QMessageBox.critical(bianl.main_window, "错误", "未找到 id.csv 文件")
+            bianl.main_window.line_tip.setText("未找到 id.csv 文件")
+            bianl.main_window.line_tip.setToolTip("未找到 id.csv 文件")
+            bianl.main_window.line_tip.setStyleSheet("color: black;")
+            # QMessageBox.critical(bianl.main_window, "错误", "未找到 id.csv 文件")
             return
 
         with open(csv_file_path, "r", encoding="utf-8") as f:
@@ -155,7 +158,10 @@ def open_project():
 
         if not project_id:
             print("id.csv 文件为空，无法获取项目ID")  # 调试信息
-            QMessageBox.critical(bianl.main_window, "错误", "id.csv 为空，无法打开项目")
+            bianl.main_window.line_tip.setText("未找到 id.csv 文件")
+            bianl.main_window.line_tip.setToolTip("未找到 id.csv 文件")
+            bianl.main_window.line_tip.setStyleSheet("color: black;")
+            # QMessageBox.critical(bianl.main_window, "错误", "id.csv 为空，无法打开项目")
             return
 
         bianl.current_project_id = project_id
@@ -171,7 +177,10 @@ def open_project():
 
         if not project_info:
             print(f"未找到对应的项目信息，项目ID: {project_id}")  # 调试信息
-            QMessageBox.warning(bianl.main_window, "提示", "未找到对应的项目信息！")
+            bianl.main_window.line_tip.setText("未找到对应的项目信息！")
+            bianl.main_window.line_tip.setToolTip("未找到对应的项目信息！")
+            bianl.main_window.line_tip.setStyleSheet("color: black;")
+            # QMessageBox.warning(bianl.main_window, "提示", "未找到对应的项目信息！")
             return
 
         # 填充项目信息到UI
@@ -327,35 +336,64 @@ def open_project():
             # # 将 item 设置到 product_table 的第 row 行第 0 列
             # bianl.product_table.setItem(row, 0, item)
 
-        #     产品定义处 针对第一行产品 加载入产品定义处
+        # === 默认加载第 1 行到“产品定义 + 工作信息”区域（合并 & 修复）===
         if product_count > 0:
-            # 检查是否已经定义了必填项
             first_product = products[0]
-            row0_status = bianl.product_table_row_status[0].get("definition_status", None)
+            first_product_id = first_product.get("产品ID")
 
+            # 保存当前产品ID
+            bianl.product_id = first_product_id
+            bianl.current_product_id = first_product_id
 
+            # 1) 产品定义区：来自 产品需求表
             bianl.product_type_combo.setCurrentText(first_product.get("产品类型", "") or "")
             bianl.product_form_combo.setCurrentText(first_product.get("产品型式", "") or "")
             bianl.product_model_input.setText(first_product.get("产品型号", "") or "")
             bianl.drawing_prefix_input.setText(first_product.get("图号前缀", "") or "")
 
-            bianl.design_input.setText(first_product.get("设计", "") or "")
-            bianl.proofread_input.setText(first_product.get("校对", "") or "")
-            bianl.review_input.setText(first_product.get("审核", "") or "")
-            bianl.standardization_input.setText(first_product.get("标准化", "") or "")
-            bianl.approval_input.setText(first_product.get("批准", "") or "")
-            bianl.co_signature_input.setText(first_product.get("会签", "") or "")
+            # 2) 工作信息区：来自  产品设计活动库 产品设计活动表
+            act_row = None
+            try:
+                conn = common_usage.get_mysql_connection_active()
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT 设计, 校对, 审核, 标准化, 批准, 会签 FROM 产品设计活动表 WHERE 产品ID = %s",
+                    (first_product_id,)
+                )
+                act_row = cur.fetchone()
+                cur.close()
+                conn.close()
+            except Exception as e:
+                print(f"[open_project] 查询产品设计活动表失败: {e}")
+                act_row = None
 
+            # 兼容字典/元组两种返回
+            d = {}
+            if act_row:
+                if isinstance(act_row, dict):
+                    d = act_row
+                else:
+                    keys = ["设计", "校对", "审核", "标准化", "批准", "会签"]
+                    d = dict(zip(keys, act_row))
+
+            bianl.design_input.setText(d.get("设计", "") or "")
+            bianl.proofread_input.setText(d.get("校对", "") or "")
+            bianl.review_input.setText(d.get("审核", "") or "")
+            bianl.standardization_input.setText(d.get("标准化", "") or "")
+            bianl.approval_input.setText(d.get("批准", "") or "")
+            bianl.co_signature_input.setText(d.get("会签", "") or "")
+
+            # 3) 锁/解锁：避免 NameError，给默认值 'view'
+            row0_status = bianl.product_table_row_status.get(0, {}).get("definition_status", "view")
 
             if row0_status == "view":
-                bianl.product_table_row_status[0]["definition_status"] = "view"
-                print(f"第 {0 + 1} 行产品已定义，不可编辑 设计为不可编辑")  # 调试信息
-                # 在禁用时设置为不可编辑
+                # 已定义：类型/形式锁定；其余可按你业务决定（这里延续你原有逻辑）
                 lock_combo(bianl.product_type_combo)
                 lock_combo(bianl.product_form_combo)
+
+                # 维持其它输入框可编辑（如需全部锁定，可改为 lock_line_edit）
                 unlock_line_edit(bianl.product_model_input)
                 unlock_line_edit(bianl.drawing_prefix_input)
-
                 unlock_line_edit(bianl.design_input)
                 unlock_line_edit(bianl.proofread_input)
                 unlock_line_edit(bianl.review_input)
@@ -363,29 +401,13 @@ def open_project():
                 unlock_line_edit(bianl.approval_input)
                 unlock_line_edit(bianl.co_signature_input)
 
-                print("锁定后状态:")
-                print("产品类型 - isEnabled:", bianl.product_type_combo.isEnabled(),
-                      "isEditable:", bianl.product_type_combo.isEditable(),
-                      "FocusPolicy:", bianl.product_type_combo.focusPolicy())
-
-                print("产品形式 - isEnabled:", bianl.product_form_combo.isEnabled(),
-                      "isEditable:", bianl.product_form_combo.isEditable(),
-                      "FocusPolicy:", bianl.product_form_combo.focusPolicy())
-
-                # print("设计阶段 - isEnabled:", bianl.design_stage_combo.isEnabled(),
-                #       "isEditable:", bianl.design_stage_combo.isEditable(),
-                #       "FocusPolicy:", bianl.design_stage_combo.focusPolicy())
+                print("第 1 行产品已定义，类型/形式不可编辑")
             else:
-                # 如果没有定义，必填项可编辑
-                print(f"第 {0 + 1} 行产品未定义，允许编辑")  # 调试信息
-                bianl.product_table_row_status[0]["definition_status"] = "edit"
-
-                # 第三步：调用 unlock_combo 确保程序能设置值
+                # 未定义：可编辑
                 unlock_combo(bianl.product_type_combo)
                 unlock_combo(bianl.product_form_combo)
                 unlock_line_edit(bianl.product_model_input)
                 unlock_line_edit(bianl.drawing_prefix_input)
-
                 unlock_line_edit(bianl.design_input)
                 unlock_line_edit(bianl.proofread_input)
                 unlock_line_edit(bianl.review_input)
@@ -393,22 +415,12 @@ def open_project():
                 unlock_line_edit(bianl.approval_input)
                 unlock_line_edit(bianl.co_signature_input)
 
-                print("锁定后状态:")
-                print("产品类型 - isEnabled:", bianl.product_type_combo.isEnabled(),
-                      "isEditable:", bianl.product_type_combo.isEditable(),
-                      "FocusPolicy:", bianl.product_type_combo.focusPolicy())
+                print("第 1 行产品未定义，可编辑")
 
-                print("产品形式 - isEnabled:", bianl.product_form_combo.isEnabled(),
-                      "isEditable:", bianl.product_form_combo.isEditable(),
-                      "FocusPolicy:", bianl.product_form_combo.focusPolicy())
-
-                # print("设计阶段 - isEnabled:", bianl.design_stage_combo.isEnabled(),
-                #       "isEditable:", bianl.design_stage_combo.isEditable(),
-                #       "FocusPolicy:", bianl.design_stage_combo.focusPolicy())
-
-            print(f"自动显示第一行产品信息：{first_product}")  # 调试信息
+            print(f"[open_project] 自动显示第 1 行（含工作信息）完成：产品ID={first_product_id}")
 
         bianl.product_info_group.show()
+
         print("项目和产品数据加载成功！")  # 调试信息
         # 修改残留
         # ✅ 清除旧点击状态，防止高亮残留
@@ -432,8 +444,10 @@ def open_project():
             bianl.product_table.setItem(r, 0, item)
 
         print("[✅刷新] 清除旧项目点击行序号列高亮")
-
-        QMessageBox.information(bianl.main_window, "成功", "项目和产品数据加载成功！")
+        bianl.main_window.line_tip.setText("项目和产品数据加载成功！")
+        bianl.main_window.line_tip.setToolTip("项目和产品数据加载成功！")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.information(bianl.main_window, "成功", "项目和产品数据加载成功！")
         # 存最近打开的项目文件夹
         # parent_folder = os.path.dirname(folder_path)
         # save_last_used_path(parent_folder)
@@ -446,4 +460,7 @@ def open_project():
         with open("error_log.txt", "a", encoding="utf-8") as log_file:
             log_file.write(traceback.format_exc())
             log_file.write("\n\n")
-        QMessageBox.critical(bianl.main_window, "程序错误", f"打开项目失败，请检查 error_log.txt\n\n错误信息:\n{e}")
+        bianl.main_window.line_tip.setText( f"打开项目失败，请检查 error_log.txt\n\n错误信息:\n{e}")
+        bianl.main_window.line_tip.setToolTip( f"打开项目失败，请检查 error_log.txt\n\n错误信息:\n{e}")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.critical(bianl.main_window, "程序错误", f"打开项目失败，请检查 error_log.txt\n\n错误信息:\n{e}")

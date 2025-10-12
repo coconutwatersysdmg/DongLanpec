@@ -6,6 +6,7 @@ import os
 import configparser
 
 import chardet
+import pandas as pd
 import pymysql
 import openpyxl
 from openpyxl.reader.excel import load_workbook
@@ -30,7 +31,7 @@ product_manager.product_id_changed.connect(on_product_id_changed)
 
 
 
-# === 数量 & 单重输入逻辑 ===
+# === 数量 & 单重填写逻辑 ===
 import os
 import json
 import openpyxl
@@ -38,12 +39,49 @@ import chardet
 import configparser
 import pymysql
 
+import ast  # 比 eval 安全，用来解析字符串形式的 list/tuple
+
+import ast
+
+
+def get_tie_rods_length(product_id, conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT 坐标
+        FROM 产品设计活动表_布管元件表
+        WHERE 产品ID = %s AND 元件类型 = %s
+    """, (product_id, 0))
+
+    rows = cursor.fetchall() or []
+    coords = []
+
+    for row in rows:
+        # 兼容 tuple 和 dict
+        val = row[0] if isinstance(row, (tuple, list)) else row["坐标"]
+
+        if val is None:
+            continue
+        if isinstance(val, list):
+            coords.extend(val)
+        elif isinstance(val, str):
+            try:
+                arr = ast.literal_eval(val)  # 解析 "[(-10,-1),(-11,-1)]"
+                if isinstance(arr, list):
+                    coords.extend(arr)
+            except Exception:
+                pass
+
+    return len(coords)
+
+
 # === 精准映射：元件名称 → List[(section, 字段名, 类型)]
 mapping_dict = {
     "管箱封头": [("管箱封头", "椭圆形封头质量 kg", "质量")],
     "管箱圆筒": [("管箱圆筒", "圆筒重量kg", "质量")],
     "外头盖圆筒": [("外头盖圆筒", "圆筒重量kg", "质量")],
     "外头盖封头": [("外头盖封头", "椭圆形封头质量 kg", "质量")],
+    "浮头法兰": [("浮头法兰", "腐蚀前管程浮头法兰重量", "质量")],
+    "浮动管板": [("固定管板", "管板重量-毛坯", "质量")],
 
     "管箱法兰": [("管箱法兰", "法兰毛坯质量", "质量")],
     "固定管板": [("固定管板", "管板重量-毛坯", "质量")],
@@ -59,11 +97,25 @@ mapping_dict = {
     "螺柱（管箱法兰）": [("管箱法兰", "螺栓数量", "数量")],
     "尾部支撑": [("管束", "尾部支撑数量", "数量")],
     "折流板": [("管束", "折流板数量", "数量")],
-    "分程隔板": [("管箱分程隔板", "水平隔板数量", "数量"),("管箱分程隔板", "管箱分程隔板重量", "质量")],
+    "分程隔板": [("管箱分程隔板", "管箱分程隔板重量", "质量")],
     "螺柱（壳体法兰）": [("壳体法兰", "螺栓数量", "数量")],
     "螺柱（浮头法兰）": [("浮头法兰", "螺栓数量", "数量")],
     "换热管": [("固定管板", "换热管根数", "数量")],
+    "异形折流板": [("浮头管束", "异形折流板重量", "质量")],
+    "弓形折流板": [("浮头管束", "弓形折流板重量", "质量")],
+    "支撑板": [("浮头管束", "固定侧支撑板重量", "质量")],
+    "支持板": [("浮头管束", "支持板重量", "质量")],
+    "内导流筒": [("浮头管束", "固定侧导流筒重量", "质量")],
+    "滑道": [("浮头管束", "滑道重量", "质量")],
+    "中间挡管": [("浮头管束", "中间挡管重量", "质量")],
+    "防冲挡板重量": [("浮头管束", "防冲挡板重量", "质量")],
+    "堵板": [("浮头管束", "堵板重量", "质量")],
+    "拉杆": [("浮头管束", "拉杆重量", "质量")],
+    "定距管": [("浮头管束", "定距管重量", "质量")],
+    "隔板": [("管箱分程隔板", "水平隔板数量", "数量"),("管箱分程隔板", "管箱分程隔板重量", "质量")],
     "钩圈": [("浮头法兰", "钩圈重量", "质量")],
+    "内折流板": [("浮头管束", "内折流板重量", "质量")],
+    "球冠形封头": [("浮头法兰", "球冠形封头重量", "质量")],
 
 }
 
@@ -88,8 +140,14 @@ def fill_quantity_weight(json_data, sheet):
         if item_name not in mapping_dict:
             continue
 
+
+
         for section, field_name, data_type in mapping_dict[item_name]:
-            datas = json_data.get("DictOutDatas", {}).get(section, {}).get("Datas", [])
+            datas = json_data.get("DictOutDatas", {}).get(section, {}).get("Datas")
+            if not isinstance(datas, list):
+                print(f"⚠️ {section} -> Datas 为空或不是列表，已跳过")
+                continue
+
             for item in datas:
                 if item.get("Name") == field_name:
                     val = item.get("Value", "")
@@ -104,7 +162,6 @@ def fill_quantity_weight(json_data, sheet):
                         wt_cell.value = val
                     updated += 1
                     break
-
         h_val = wt_cell.value
         g_val = qty_cell.value
         if (h_val is not None and h_val != "") and (g_val is None or g_val == ""):
@@ -223,31 +280,82 @@ def fill_special_items(sheet, jisuan_data, product_id):
     def count_valid_items(data, key):
         return len(data.get(key, [])) if isinstance(data.get(key, []), list) else 0
 
-    # === 滑道质量计算 ===
-    def calc_slipway_mass(pipe_input_data, jisuan_output_data, density):
-        # === 从布管输入参数.json 中获取高度和厚度 ===
 
+    def calc_slipway_mass(product_id, jisuan_output_data, density):
+        # === 建立数据库连接 ===
         try:
-            slipway_height = float(pipe_input_data.get("LB_SlipWayHeight", 0)) / 1000.0
-        except (TypeError, ValueError):
-            slipway_height = 0.0
-
-        try:
-            slipway_thick = float(pipe_input_data.get("LB_SlipWayThick", 0)) / 1000.0
-        except (TypeError, ValueError):
-            slipway_thick = 0.0
-
-        if not slipway_height or not slipway_thick:
-            print("❌ 未找到滑道高度或厚度")
+            conn = pymysql.connect(
+                host="localhost",
+                user="root",
+                password="123456",
+                database="产品设计活动库",
+                charset="utf8mb4"
+            )
+        except Exception as e:
+            print(f"❌ 数据库连接失败: {e}")
             return None
 
-        # === 从 jisuan_output_new.json 中获取滑道长度 ===
+        cursor = conn.cursor()
+
+        # === 查询是否布置滑道（元件表） ===
+        cursor.execute("""
+            SELECT 是否布置滑道
+            FROM 产品设计活动表_布管元件表
+            WHERE 产品ID = %s
+            LIMIT 1
+        """, (product_id,))
+        row = cursor.fetchone()
+        if not row:
+            print("❌ 未找到是否布置滑道信息")
+            return None
+
+        is_slipway = row[0] if isinstance(row, (tuple, list)) else row.get("是否布置滑道")
+        if not is_slipway or str(is_slipway) == "0":
+            print("✅ 是否布置滑道 = 0，跳过计算")
+            return None
+
+        # === 滑道数量（1 → 2 个滑道） ===
+        slipway_count = 1
+
+        # === 查询滑道高度、厚度（参数表，按参数名） ===
+        cursor.execute("""
+            SELECT 参数名, 参数值
+            FROM 产品设计活动表_布管参数表
+            WHERE 产品ID = %s AND 参数名 IN ('滑道高度', '滑道厚度')
+        """, (product_id,))
+        rows = cursor.fetchall()
+
+        slipway_height, slipway_thick = None, None
+        for r in rows:
+            name, value = r if isinstance(r, (tuple, list)) else (r["参数名"], r["参数值"])
+            if name == "滑道高度":
+                slipway_height = value
+            elif name == "滑道厚度":
+                slipway_thick = value
+
+        # === 转换数值，单位 mm → m ===
+        try:
+            slipway_height = float(slipway_height) / 1000.0
+            slipway_thick = float(slipway_thick) / 1000.0
+        except (TypeError, ValueError):
+            print("❌ 滑道高度/厚度无效")
+            return None
+
+        if not slipway_height or not slipway_thick:
+            print("❌ 滑道高度或厚度为 0")
+            return None
+
+        # === 从 jisuan_output_data 获取滑道长度 ===
         slipway_length = None
         try:
-            datas = jisuan_output_data.get("DictOutDatas", {}).get("管束", {}).get("Datas", [])
-            for item in datas:
-                if item.get("Name") == "滑道长度":
-                    slipway_length = float(item.get("Value", 0)) / 1000
+            dict_out = jisuan_output_data.get("DictOutDatas", {})
+            for key in ["管束", "浮头管束"]:
+                datas = dict_out.get(key, {}).get("Datas", [])
+                for item in datas:
+                    if item.get("Name") == "滑道长度":
+                        slipway_length = float(item.get("Value", 0)) / 1000
+                        break
+                if slipway_length:
                     break
         except Exception as e:
             print(f"❌ 获取滑道长度失败: {e}")
@@ -259,37 +367,56 @@ def fill_special_items(sheet, jisuan_data, product_id):
 
         # === 计算质量 ===
         try:
-            volume = slipway_length * slipway_height * slipway_thick  # m³
-            mass = volume * density
+            volume = slipway_length * slipway_height * slipway_thick  # 单个滑道体积
+            mass = volume * density * slipway_count  # 总质量
             return round(mass, 2)
         except Exception as e:
             print(f"❌ 质量计算失败: {e}")
             return None
+        finally:
+            cursor.close()
+            conn.close()
 
-    denisty_huadao = get_material_density("滑道", product_id) *1000
+    denisty_huadao = get_material_density("滑道", product_id)
     print("denisty_huadao",denisty_huadao)
-    slipway_mass = calc_slipway_mass(pipe_input_data, jisuan_data, denisty_huadao)
+    slipway_mass = calc_slipway_mass(product_id, jisuan_data, denisty_huadao)
     print("slipway_mass",slipway_mass)
     def calc_weight(R_mm, thickness_mm, density):
         try:
             R_m = float(R_mm) / 2000  # 直径/2并转米
             t_m = float(thickness_mm) / 1000
-            return round(math.pi * R_m ** 2 * t_m * density*1000, 2)
+            return round(math.pi * R_m ** 2 * t_m * density, 2)
         except Exception as e:
             print(f"❌ 计算质量失败: {e}")
             return None
 
-    def get_param(datas, name):
-        for item in datas:
-            if item.get("Name") == name:
-                return item.get("Value")
-        return None
+    def get_param(datas, name, default=0):
+        """
+        最小修复：当 datas 为 None 或不可迭代时返回 default（默认 "0"）
+        """
+        if datas is None:
+            return default
+
+        try:
+            for item in datas:
+                if isinstance(item, dict) and item.get("Name") == name:
+                    return item.get("Value", default)
+        except TypeError:
+            # datas 不是可迭代对象
+            return default
+
+        return default
 
     # === 基础数据获取 ===
     datas = jisuan_data.get("DictOutDatas", {}).get("管箱法兰", {}).get("Datas", [])
     luozhu_qty = next((int(float(item.get("Value", "0"))) for item in datas if item.get("Name") == "螺栓数量"), None)
     datas2 = jisuan_data.get("DictOutDatas", {}).get("管箱平盖", {}).get("Datas", [])
-    luozhu_qty2 = next((int(float(item.get("Value", "0"))) for item in datas if item.get("Name") == "螺栓数量"), None)
+    luozhu_qty2 = next((int(float(item.get("Value", "0"))) for item in datas2 if item.get("Name") == "螺栓数量"), None)
+    datas3 = jisuan_data.get("DictOutDatas", {}).get("浮头法兰", {}).get("Datas", [])
+    luozhu_qty3 = next((int(float(item.get("Value", "0"))) for item in datas3 if item.get("Name") == "螺栓数量"), None)
+    datas4 = jisuan_data.get("DictOutDatas", {}).get("外头盖法兰", {}).get("Datas", [])
+    luozhu_qty4 = next((int(float(item.get("Value", "0"))) for item in datas3 if item.get("Name") == "螺栓数量"), None)
+
     guanshu_datas = jisuan_data.get("DictOutDatas", {}).get("管束", {}).get("Datas", [])
     baffle_R = get_param(guanshu_datas, "折流板/支持板外直径")
     baffle_t = get_param(guanshu_datas, "折流板厚度")
@@ -298,27 +425,20 @@ def fill_special_items(sheet, jisuan_data, product_id):
 
     saddle_data = jisuan_data.get("DictOutDatas", {}).get("鞍座", {}).get("Datas", [])
     saddle_mass = get_param(saddle_data, "鞍式支座质量")
+    print("saddle_mass",saddle_mass)
     saddle_mass = float(saddle_mass) if saddle_mass not in (None, "", "None") else None
 
     uhx_data = jisuan_data.get("DictOutDatas", {}).get("固定管板", {}).get("Datas", [])
     uhx_mass = get_param(uhx_data, "单根换热管重量kg")
     uhx_mass = float(uhx_mass) if uhx_mass not in (None, "", "None") else None
 
-    tie_rods = pipe_data.get("TieRodsParam", [])
-    # 确保 bpb_list 是 list
-    if isinstance(tie_rods, str):
-        try:
-            # 先尝试 JSON
-            tie_rods = json.loads(tie_rods)
-        except json.JSONDecodeError:
-            # 如果不是 JSON，就尝试 eval 成 Python list
-            tie_rods = ast.literal_eval(tie_rods)
 
-    if not isinstance(tie_rods, list):
-        tie_rods = []
-    tie_list = len(tie_rods)
+    # 使用时
+    tie_list = get_tie_rods_length(product_id, conn)
+    print("tie_list",tie_list)
     # === 公称直径 DN ===
     dn_value = None
+
     try:
         conn1 = pymysql.connect(
             host="localhost", user="root", password="123456",
@@ -360,439 +480,1162 @@ def fill_special_items(sheet, jisuan_data, product_id):
         except:
             pass
 
-    # === 默认配置 ===
-    fixed_info_map = {
-        "铭牌支架": (1, 10),
-        "铭牌板": (1, 0.5),
-        "铆钉": (8, 0.02)
-    }
 
+
+    def get_slipway_count(product_id):
+        conn = None
+        cursor = None
+        try:
+            conn = pymysql.connect(
+                host="localhost",
+                user="root",
+                password="123456",
+                database="产品设计活动库",
+                charset="utf8mb4"
+            )
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT 是否布置滑道
+                FROM 产品设计活动表_布管元件表
+                WHERE 产品ID = %s
+                LIMIT 1
+            """, (product_id,))
+            row = cursor.fetchone()
+            if not row:
+                return 0  # 未找到数据就认为没有滑道
+
+            is_slipway = row[0]
+            if not is_slipway or str(is_slipway) == "0":
+                return 0
+            elif str(is_slipway) == "1":
+                return 2  # 1代表布置，数量为2
+            else:
+                return 2  # 其他情况默认1个滑道
+
+        except Exception as e:
+            print(f"❌ 查询滑道数量失败: {e}")
+            return 0
+        finally:
+            cursor.close()
+            conn.close()
     quantity_map = {
         # "旁路挡板": count_valid_items(pipe_data, "BPBs"),
         "拉杆": tie_list,
         # "中间挡板": count_valid_items(pipe_data, "VerticalBaffle"),
-        "滑道": count_valid_items(pipe_data, "SlipWays"),
+        "滑道": get_slipway_count(product_id),
         "防冲板": 1 if isinstance(pipe_data.get("ImpingementPlate"), dict) else 0,
         "定距管": tie_list,
         "螺母（拉杆）": tie_list,
         "管箱侧垫片": 1,
-        "管箱垫片": 1,
-    }
+        "外头盖垫片": 1,
+        "平盖垫片": 1,
 
+        "管箱垫片": 1,
+        "浮头法兰":1,
+        "浮头垫片":1,
+        "球冠形封头":1,
+        "浮动管板":1,
+        "支持板":1,
+        '铭牌板': 1,
+        "铭牌支架": 1,
+        "顶板": 1,
+
+    }
+    mass_map = {
+        "铭牌板": 0.8,
+        "铭牌支架": 1,
+        "管箱吊耳": "/",
+        "吊耳": "/",
+        "管箱垫片": "/",
+        "管箱侧垫片": "/",
+        "外头盖侧垫片": "/",
+        "外头盖垫片": "/",
+        "浮头垫片": '/',
+        "防松支耳": 0.5,
+        "铆钉": 0.02,
+    }
+    mass_luozhu = None
     # === 遍历写入 Excel sheet ===
     for row in sheet.iter_rows(min_row=2):
         name = str(row[3].value).strip()
+        print("name:", name)
 
+        # === 1. 数量 ===
         if name in quantity_map:
             row[6].value = quantity_map[name]
-            if name == "滑道" and slipway_mass:
+
+        # === 2. 特殊件质量计算 ===
+        if name == "滑道":
+            if slipway_mass:
                 row[7].value = slipway_mass
-            if name == "拉杆":
-                print(123123123123)
-                row[6].value = tie_list
+        elif name == "支撑板":
+            row[6].value = 2
+        elif name == "拉杆":
+            # 数量
+            row[6].value = tie_list
+            # === 查询滑道高度、厚度（参数表，按参数名） ===
+            conn = None
+            cursor = None
 
-                dh_str = get_value(jisuan_data, "管箱法兰", "螺栓公称直径")
+            conn = pymysql.connect(
+                host="localhost",
+                user="root",
+                password="123456",
+                database="产品设计活动库",
+                charset="utf8mb4"
+            )
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT 参数名, 参数值
+                FROM 产品设计活动表_布管参数表
+                WHERE 产品ID = %s AND 参数名 = %s
+            """, (product_id, "拉杆直径"))
+            rows = cursor.fetchall()
+
+            dh_str=None
+            for r in rows:
+                name, value = r if isinstance(r, (tuple, list)) else (r["参数名"], r["参数值"])
+                if name == "拉杆直径":
+                    dh_str = value
+            print("直径：",dh_str)
+            # 直径
+            dh_val = None
+            if dh_str:
                 try:
+                    dh_val = int(str(dh_str).strip())
+                except ValueError:
+                    # 如果不是纯数字，再用正则匹配
                     match = re.search(r"M(\d+)", str(dh_str))
-                    dh_val = int(match.group(1)) if match else None
-                except:
-                    dh_val = None
-                print(dh_val)
-                R = dh_val / 2 if dh_val else None
-                # 先取 DictOutDatas
-                dict_out = jisuan_data.get("DictOutDatas", {})
+                    if match:
+                        dh_val = int(match.group(1))
 
-                # 优先取 "管束"，如果没有就取 "浮头管束"
-                if "管束" in dict_out:
-                    datas = dict_out["管束"].get("Datas", [])
-                elif "浮头管束" in dict_out:
-                    datas = dict_out["浮头管束"].get("Datas", [])
-                else:
-                    datas = []
+            R = dh_val
 
-                # 然后取参数
-                H1 = get_param(datas, "拉杆长度1")
-                H2 = get_param(datas, "拉杆长度2")
-                H = max(H1,H2)
-                print(H)
-                density = get_material_density("拉杆", product_id)
-                print(density)
-                row[6].value = tie_list
+            # 长度
+            dict_out = jisuan_data.get("DictOutDatas", {})
+            datas = dict_out.get("管束", {}).get("Datas", []) \
+                    or dict_out.get("浮头管束", {}).get("Datas", [])
+            H1 = get_param(datas, "拉杆长度1")
+            H2 = get_param(datas, "拉杆长度2")
+            H = max(H1, H2)
 
-                if R and H and density:
-                    try:
-                        R_m = R / 1000
-                        H_m = float(H) / 1000
-                        mass = round((math.pi * R_m ** 2 / 4) * H_m * density * 1000, 2)
-                        row[7].value = mass
-                    except:
-                        pass
-            if name == "螺母（拉杆）":
-                row[6].value = quantity_map.get("螺母（拉杆）", 0)
+            # 密度
+            density = get_material_density("拉杆", product_id)
+            print("R:",R)
+            print("H:",H)
+            print("density:",density)
 
-                # === 获取公称直径，查找质量 ===
-                dia = get_value(jisuan_data, "管箱法兰", "螺栓公称直径")
-                if dia:
-                    try:
-                        conn3 = pymysql.connect(
-                            host="localhost", user="root", password="123456",
-                            database="材料库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
-                        )
-                        with conn3.cursor() as cursor:
-                            cursor.execute("""
-                                SELECT `管法兰专用螺母` 
-                                FROM `螺母近似质量表`
-                                WHERE 规格 = %s
-                                LIMIT 1
-                            """, (str(dia),))
-                            row_m = cursor.fetchone()
-                            if row_m and row_m.get("管法兰专用螺母"):
-                                mass_per_unit = float(row_m["管法兰专用螺母"])
-                                row[7].value = mass_per_unit
-                        conn3.close()
-                    except Exception as e:
-                        print(f"❌ 查询螺母质量失败: {e}")
-            elif name == "定距管":
-                uhx_data = jisuan_data.get("DictOutDatas", {}).get("固定管板", {}).get("Datas", [])
-                uhx_mass = get_param(uhx_data, "单根换热管重量kg")
-                uhx_mass = float(uhx_mass) if uhx_mass not in (None, "", "None") else None
-                row[7].value = uhx_mass
-            # if name == "拉杆" and uhx_mass:
-            #     row[7].value = round(tie_list * uhx_mass, 2)
-        # 替换原来 mapping_dict 的 "U形换热管" 项：
-        elif name == "U形换热管":
-            # 获取管程数
-            tube_pass = None
-            for p in pipe_input_data:
-                if p.get("paramId") == "LB_TubePassCount":
-                    tube_pass = int(p.get("paramValue", 0))
-                    break
-            print("tube_pass",tube_pass)
-            # 获取换热管长度
-            tube_length = None
-            for p in pipe_input_data:
-                if p.get("paramId") == "LB_TubeLong":
-                    tube_length = float(p.get("paramValue", 0))
-                    break
-            print("tube_length",tube_length)
-            # 获取换热管外径、壁厚
-            outer_dia = None
-            wall_thick = None
-            for d in jisuan_data.get("DictOutDatas", {}).get("固定管板", {}).get("Datas", []):
-                print()
-                if d.get("Name") == "换热管外径":
-                    outer_dia = float(d.get("Value", 0))
-                elif d.get("Name") == "换热管壁厚":
-                    wall_thick = float(d.get("Value", 0))
-            print("outer_dia",outer_dia)
-            print("wall_thick",wall_thick)
-            if tube_pass and tube_length and outer_dia and wall_thick:
-                # 计算内径
-                inner_dia = outer_dia - wall_thick
-                area = math.pi * ((outer_dia / 1000) ** 2 - (inner_dia / 1000) ** 2) / 4  # m²
-                print("area",area)
-                # 获取TubesParam
-                tubes_param = pipe_data.get("TubesParam", [])
-                print("tubes_param",tubes_param)
-                total_mass = 0.0
-                for group in tubes_param:
-                    script_items = group.get("ScriptItem", [])
-                    print(script_items)
-                    for item in script_items:
-                        x = item.get("CenterPt", {}).get("X", 0.0)
-                        y = item.get("CenterPt", {}).get("Y", 0.0)
 
-                        if tube_pass == 2:
-                            u_radius = abs(y) / 1000  # m
-                            print(u_radius)
-                        elif tube_pass in [4, 6]:
-                            u_radius = abs(x) / 1000  # m
-                        else:
-                            continue
+            # 质量
+            if R and H and density:
+                R_m = R / 1000
+                H_m = float(H) / 1000
+                mass = round((math.pi * R_m ** 2 / 4) * H_m * density, 2)
+                row[7].value = mass
 
-                        expand_len = u_radius * math.pi + (tube_length / 1000) * 2  # m
-                        print("expand_len",expand_len)
-                        single_mass = area * expand_len * 7850  # kg
-                        print("single_mass", single_mass)
-                        total_mass += single_mass
-                row[7].value = '/'
-                row[8].value = round(total_mass, 3)
+        elif name == "螺母（拉杆）":
+            row[6].value = quantity_map.get("螺母（拉杆）", 0)
+            # === 查询滑道高度、厚度（参数表，按参数名） ===
+            cursor.execute("""
+                SELECT 参数名, 参数值
+                FROM 产品设计活动表_布管参数表
+                WHERE 产品ID = %s AND 参数名 = %s
+            """, (product_id, "拉杆直径"))
+            rows = cursor.fetchall()
 
-        elif name == "旁路挡板":
-            bpb_list = pipe_data.get("BPBs", [])
-            heights = pipe_data.get("BPBThick", [])
-
-            # 确保 bpb_list 是 list
-            if isinstance(bpb_list, str):
+            dh_str = None
+            for r in rows:
+                name, value = r if isinstance(r, (tuple, list)) else (r["参数名"], r["参数值"])
+                if name == "拉杆直径":
+                    dh_str = value
+            dia = str("M"+str(int(dh_str)))
+            if dia:
                 try:
-                    # 先尝试 JSON
-                    bpb_list = json.loads(bpb_list)
-                except json.JSONDecodeError:
-                    # 如果不是 JSON，就尝试 eval 成 Python list
-                    bpb_list = ast.literal_eval(bpb_list)
+                    conn3 = pymysql.connect(
+                        host="localhost", user="root", password="123456",
+                        database="材料库", charset="utf8mb4",
+                        cursorclass=pymysql.cursors.DictCursor
+                    )
+                    with conn3.cursor() as cursor:
+                        cursor.execute("""
+                            SELECT `管法兰专用螺母`
+                            FROM `螺母近似质量表`
+                            WHERE 规格 = %s
+                            LIMIT 1
+                        """, (str(dia),))
+                        row_m = cursor.fetchone()
+                        if row_m and row_m.get("管法兰专用螺母"):
+                            row[7].value = float(row_m["管法兰专用螺母"])
+                    conn3.close()
+                except Exception as e:
+                    print("❌ 查询螺母质量失败:", e)
 
-            if not isinstance(bpb_list, list):
-                bpb_list = []
+        elif name == "定距管":
+            uhx_data = jisuan_data.get("DictOutDatas", {}).get("固定管板", {}).get("Datas", [])
+            uhx_mass = get_param(uhx_data, "单根换热管重量kg")
+            row[7].value = float(uhx_mass) if uhx_mass not in (None, "", "None") else None
+        elif name == "分程隔板":
+            fencheng = None
 
-            row[6].value = len(bpb_list)
+            conn1 = pymysql.connect(
+                host="localhost",
+                port=3306,
+                user="root",
+                password="123456",
+                database="产品设计活动库",
+                charset="utf8mb4"
+            )
+            cursor3 = conn1.cursor()
+            cursor3.execute("""
+                            SELECT 参数名, 参数值
+                            FROM 产品设计活动表_布管参数表
+                            WHERE 产品ID = %s AND 参数名 = %s
+                        """, (product_id, "管程程数"))
+            rows = cursor3.fetchall()
 
+            for r in rows:
+                name, value = r if isinstance(r, (tuple, list)) else (r["参数名"], r["参数值"])
+                print(name)
+                print(value)
+                if name == "管程程数":
+                    fencheng = str(value).strip()  # 🔹 转成字符串，避免数字/字符串不一致
+            print("管程程数：",fencheng)
+            # ✅ 判断逻辑
+            if fencheng == "1":
+                row[6].value = 0
+                # TODO: 这里写 1 管程逻辑
+            elif fencheng == "2":
+                row[6].value = 1
+
+                # TODO: 这里写 2 管程逻辑
+            elif fencheng == "4":
+                row[6].value = 2
+
+                # TODO: 这里写 4 管程逻辑
+            elif fencheng == "6":
+                row[6].value = 3
+
+        elif name == "铭牌板":
+            row[7].value = 0.8
+
+        elif name == "铭牌支架":
+            row[7].value = 1
+
+        elif name in {"管箱吊耳", "吊耳", "管箱垫片", "管箱侧垫片", "外头盖侧垫片", "外头盖垫片","平盖垫片"}:
+            row[7].value = "/"
+
+        elif name == "U形换热管":
+            # uhx_data = jisuan_data.get("DictOutDatas", {}).get("固定管板", {}).get("Datas", [])
+            # uhx_mass = get_param(uhx_data, "单根换热管重量kg")
+            # row[7].value = float(uhx_mass) if uhx_mass not in (None, "", "None") else None
+            row[7].value = "见U型管明细工作表"
+        elif name == "旁路挡板":
+            print("➡ 进入旁路挡板计算分支")  # 🔹 打印进入分支
+            # --- 从 产品设计活动表_布管元件表 中读取 元件类型=3 的 坐标 字段 ---
+            bpb_coords = []
             try:
-                # 获取长度
-                H1 = get_param(jisuan_data.get("DictOutDatas", {}).get("管束", {}).get("Datas", []), "拉杆长度1")
-                H2 = get_param(jisuan_data.get("DictOutDatas", {}).get("管束", {}).get("Datas", []), "拉杆长度2")
-                length_m = max(float(H1 or 0), float(H2 or 0)) / 1000  # 转换成 float 后再除1000
+                conn_tmp = pymysql.connect(
+                    host="localhost",
+                    port=3306,
+                    user="root",
+                    password="123456",
+                    database="产品设计活动库",
+                    charset="utf8mb4"
+                )
+                cur_tmp = conn_tmp.cursor()
+                cur_tmp.execute(
+                    "SELECT 坐标 FROM 产品设计活动表_布管元件表 WHERE 产品ID = %s AND 元件类型 = 3",
+                    (product_id,)
+                )
+                rows_coords = cur_tmp.fetchall()
+                for r in rows_coords:
+                    coord_raw = r[0]
+                    if coord_raw is None:
+                        continue
+                    parsed = None
+                    # 尝试 json -> ast.literal_eval -> 直接使用
+                    if isinstance(coord_raw, str):
+                        s = coord_raw.strip()
+                        try:
+                            parsed = json.loads(s)
+                        except Exception:
+                            try:
+                                parsed = ast.literal_eval(s)
+                            except Exception:
+                                parsed = None
+                    else:
+                        parsed = coord_raw
 
-                # 获取密度
+                    if parsed is None:
+                        continue
+                    # 期望 parsed 为 list/tuple（数组），否则将其包装为单元素数组
+                    if isinstance(parsed, (list, tuple)):
+                        bpb_coords.append(parsed)
+                    else:
+                        bpb_coords.append([parsed])
+            except Exception as e:
+                print(f"❌ 从布管元件表获取旁路挡板坐标失败: {e}")
+            finally:
+                try:
+                    conn_tmp.close()
+                except Exception:
+                    pass
+
+            # 每个数组元素数 n 对应挡板数量 2*n（1->2, 2->4）
+            bpb_count = sum(2 * len(arr) for arr in bpb_coords)
+            row[6].value = bpb_count
+
+            # --- 获取旁路挡板厚度和宽度 ---
+            thickness_mm = 0.0
+            width_mm_val = 0.0
+            try:
+                conn = pymysql.connect(
+                    host="localhost",
+                    port=3306,
+                    user="root",
+                    password="123456",
+                    database="产品设计活动库",
+                    charset="utf8mb4"
+                )
+                cur = conn.cursor()
+
+                # 厚度
+                cur.execute(
+                    "SELECT 参数值 FROM 产品设计活动表_布管参数表 "
+                    "WHERE 产品ID=%s AND 参数名=%s LIMIT 1",
+                    (product_id, "旁路挡板厚度")
+                )
+                row_param = cur.fetchone()
+                print(f"数据库查询旁路挡板厚度: {row_param}")
+                if row_param and row_param[0] is not None:
+                    try:
+                        thickness_mm = float(row_param[0])
+                    except Exception:
+                        try:
+                            thickness_mm = float(ast.literal_eval(str(row_param[0])))
+                        except Exception:
+                            thickness_mm = 0.0
+                print(f"厚度 thickness_mm = {thickness_mm}")
+
+                # 宽度
+                cur.execute(
+                    "SELECT 参数值 FROM 产品设计活动表_布管参数表 "
+                    "WHERE 产品ID=%s AND 参数名=%s LIMIT 1",
+                    (product_id, "旁路挡板宽度")
+                )
+                row_param = cur.fetchone()
+                print(f"数据库查询旁路挡板宽度: {row_param}")
+                if row_param and row_param[0] is not None:
+                    try:
+                        raw_float = float(row_param[0])
+                        print(f"原始宽度参数值: {raw_float}")
+                        width_mm_val = abs(raw_float)
+                        print(f"取绝对值后: {width_mm_val}")
+                    except Exception as e:
+                        print(f"转换旁路挡板宽度失败: {e}")
+                        width_mm_val = 0.0
+                else:
+                    width_mm_val = 0.0
+                    print("旁路挡板宽度为空或None")
+                print(f"宽度 width_mm_val = {width_mm_val}")
+
+            except Exception as e:
+                print(f"❌ 读取旁路挡板参数失败: {e}")
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+            # --- 获取拉杆长度 ---
+            pipe_datas = jisuan_data.get("DictOutDatas", {}).get("管束", {}).get("Datas", [])
+            if not pipe_datas:
+                pipe_datas = jisuan_data.get("DictOutDatas", {}).get("浮头管束", {}).get("Datas", [])
+            print(f"管束数据: {pipe_datas}")
+
+            H1 = get_param(pipe_datas, "拉杆长度1")
+            H2 = get_param(pipe_datas, "拉杆长度2")
+            print(f"H1={H1}, H2={H2}")
+            try:
+                length_m = max(float(H1 or 0), float(H2 or 0)) / 1000.0
+            except Exception:
+                length_m = 0.0
+            print(f"拉杆长度 length_m = {length_m} m")
+
+            # --- 获取密度 ---
+            try:
                 density = get_material_density("旁路挡板", product_id)  # kg/m³
+            except Exception:
+                density = 0.0
+            print(f"旁路挡板密度 density = {density}")
 
-                # 显示第一个挡板质量
-                if bpb_list and heights:
-                    thickness_mm = float(heights[0])
-                    width_mm = float(width_mm)
-                    volume = (thickness_mm / 1000) * (width_mm / 1000) * length_m
+            # --- 计算第一个挡板质量 ---
+            if bpb_count > 0 and thickness_mm > 0 and width_mm_val > 0 and length_m > 0:
+                try:
+                    volume = (thickness_mm/1000) * (width_mm_val/1000) * length_m
                     mass = volume * density
                     row[7].value = round(mass, 2)
-            except Exception as e:
-                print(f"❌ 计算旁路挡板质量失败: {e}")
+                    print(f"计算旁路挡板质量 mass = {row[7].value} kg")
+                except Exception as e:
+                    print(f"❌ 计算旁路挡板质量失败: {e}")
+            else:
+                row[7].value = 0.0
+                print("条件不满足，旁路挡板质量置 0")
+
+
         elif name == "内折流板":
+
             try:
+
                 datas = jisuan_data.get("DictOutDatas", {}).get("浮头管束", {}).get("Datas", [])
+
                 n_fixed = get_param(datas, "固定管板侧内折流板数量") or 0
+
                 n_float = get_param(datas, "浮动管板侧内折流板数量") or 0
 
                 row[6].value = int(n_fixed) + int(n_float)
+
             except Exception as e:
+
                 print(f"❌ 计算内折流板数量失败: {e}")
+
         elif name == "弓形折流板":
+
             try:
+
                 datas = jisuan_data.get("DictOutDatas", {}).get("浮头管束", {}).get("Datas", [])
-                n_fixed = get_param(datas, "弓形/异形折流板实际数量") or 0
+
+                n_fixed = get_param(datas, "弓形折流板数量") or 0
 
                 row[6].value = int(n_fixed)
+
             except Exception as e:
+
                 print(f"❌ 计算弓形折流板数量失败: {e}")
+
         elif name == "异形折流板":
+
             try:
+
                 datas = jisuan_data.get("DictOutDatas", {}).get("浮头管束", {}).get("Datas", [])
-                n_fixed = get_param(datas, "弓形/异形折流板实际数量") or 0
+
+                n_fixed = get_param(datas, "异形折流板数量") or 0
 
                 row[6].value = int(n_fixed)
+
             except Exception as e:
+
                 print(f"❌ 计算异形折流板数量失败: {e}")
 
+        elif name == "内导流筒":
+
+            try:
+
+                datas = jisuan_data.get("DictOutDatas", {}).get("浮头管束", {}).get("Datas", [])
+
+                n_fixed = get_param(datas, "导流筒数量") or 0
+
+                row[6].value = int(n_fixed)
+
+            except Exception as e:
+
+                print(f"❌ 计算导流筒数量失败: {e}")
+
         elif name == "中间挡板":
+
             vbaffles = pipe_data.get("VerticalBaffle", [])
+
             qty = len(vbaffles)
+
             row[6].value = qty
 
             try:
+
                 # === 获取厚度和宽度（取第一个挡板）
+
                 if vbaffles:
+
                     thickness_mm = float(vbaffles[0].get("Width", 0))  # mm
+
                     width_mm = float(vbaffles[0].get("Height", 0))  # mm
+
                 else:
+
                     thickness_mm = width_mm = 0
 
                 # === 获取长度（来自 jisuan_data）
+
                 mid_baffle_length = get_param(
+
                     jisuan_data.get("DictOutDatas", {}).get("管束", {}).get("Datas", []),
+
                     "中间挡管/挡板长度"
+
                 )
+
                 length_m = float(mid_baffle_length) / 1000 if mid_baffle_length else 0
 
                 # === 获取密度
+
                 density = get_material_density("中间挡板", product_id)  # kg/m³
 
                 # === 计算质量
+
                 volume = (thickness_mm / 1000) * (width_mm / 1000) * length_m  # m³
-                total_mass = volume * density * qty *1000
+
+                total_mass = volume * density * qty
+
                 row[7].value = round(total_mass, 2)
+
             except Exception as e:
+
                 print(f"❌ 计算中间挡板质量失败: {e}")
+        elif name == "螺柱（外头盖法兰）" and luozhu_qty4:
+
+            row[6].value = luozhu_qty
+
+            dh = get_value(jisuan_data, "外头盖法兰", "螺栓公称直径")
+
+            R = get_actual_diameter(dh)
+
+            H = get_luozhu_length(jisuan_data, product_id)
+
+            density = get_material_density("螺柱（外头盖法兰）", product_id) * 1000
+
+            print("R", R)
+
+            print("H", H)
+
+            print("density", density)
+
+            if R and H and density:
+                mass_luozhu = round((math.pi * (R / 1000) ** 2 / 4) * (H / 1000) * density, 2)
+
+                row[7].value = mass_luozhu
+        elif name == "螺母（外头盖法兰）" and luozhu_qty4:
+
+            row[6].value = luozhu_qty * 2
+
+            # === 获取公称直径，查找质量 ===
+
+            dia = get_value(jisuan_data, "外头盖法兰", "螺栓公称直径")
+
+            if dia:
+
+                try:
+
+                    conn3 = pymysql.connect(
+
+                        host="localhost", user="root", password="123456",
+
+                        database="材料库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+
+                    )
+
+                    with conn3.cursor() as cursor:
+
+                        cursor.execute("""
+
+                            SELECT `管法兰专用螺母` 
+
+                            FROM `螺母近似质量表`
+
+                            WHERE 规格 = %s
+
+                            LIMIT 1
+
+                        """, (str(dia),))
+
+                        row_m = cursor.fetchone()
+
+                        if row_m and row_m.get("管法兰专用螺母"):
+                            mass_per_unit = float(row_m["管法兰专用螺母"])
+
+                            row[7].value = mass_per_unit
+
+                    conn3.close()
+
+                except Exception as e:
+
+                    print(f"❌ 查询螺母质量失败: {e}")
 
 
 
 
         elif name == "螺柱（管箱法兰）" and luozhu_qty:
-            row[6].value = luozhu_qty
-            dh = get_value(jisuan_data, "管箱法兰", "螺栓公称直径")
-            R = get_actual_diameter(dh)
-            H = get_luozhu_length(jisuan_data, product_id)
-            density = get_material_density("螺柱（管箱法兰）", product_id)
-            print("R",R)
-            print("H",H)
-            print("density",density)
-            if R and H and density:
-                mass_luozhu = round((math.pi * (R / 1000) ** 2 / 4) * (H / 1000) * density*1000, 2)
-                row[7].value = mass_luozhu
+            qty = None
+            dn_value = None
 
-        elif name == "螺柱（浮头法兰）" :
-            dh = get_value(jisuan_data, "管箱法兰", "螺栓公称直径")
-            R = get_actual_diameter(dh)
-            H = get_luozhu_length(jisuan_data, product_id)
-            density = get_material_density("螺柱（浮头法兰）", product_id)
-            print("R",R)
-            print("H",H)
-            print("density",density)
-            if R and H and density:
-                mass_luozhu = round((math.pi * (R / 1000) ** 2 / 4) * (H / 1000) * density*1000, 2)
-                row[7].value = mass_luozhu
+            conn1 = pymysql.connect(
 
-        elif name == "螺母（管箱法兰）" and luozhu_qty:
-            row[6].value = luozhu_qty * 2
-            # === 获取公称直径，查找质量 ===
-            dia = get_value(jisuan_data, "管箱法兰", "螺栓公称直径")
-            if dia:
+                host="localhost", user="root", password="123456",
+
+                database="产品设计活动库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+
+            )
+
+            with conn1.cursor() as cursor:
+
+                cursor.execute("""
+
+                                                               SELECT 管程数值 FROM 产品设计活动表_设计数据表
+
+                                                               WHERE 产品ID = %s AND 参数名称 = '公称直径*' LIMIT 1
+
+                                                           """, (product_id,))
+
+                roww = cursor.fetchone()
+
+                if roww and roww.get("管程数值"):
+                    dn_value = float(roww["管程数值"])
+            if dn_value:
+
                 try:
-                    conn3 = pymysql.connect(
+
+                    conn2 = pymysql.connect(
+
                         host="localhost", user="root", password="123456",
-                        database="材料库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+
+                        database="配置库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+
                     )
+
+                    with conn2.cursor() as cursor:
+
+                        cursor.execute("SELECT value FROM user_config WHERE id = 2.16")
+
+                        roww = cursor.fetchone()
+
+                        if roww:
+
+                            config = eval(roww["value"])
+
+                            values = config[1][1:]
+
+                            if dn_value < 800:
+
+                                qty = values[0]
+
+                            elif 800 <= dn_value <= 2000:
+
+                                qty = values[1]
+
+                            else:
+
+                                qty = values[2]
+
+                    conn2.close()
+
+                except:
+
+                    pass
+
+            row[6].value = int(luozhu_qty) - int(qty)
+
+            dh = get_value(jisuan_data, "管箱法兰", "螺栓公称直径")
+
+            R = get_actual_diameter(dh)
+
+            H = get_luozhu_length(jisuan_data, product_id)
+
+            density = get_material_density("螺柱（管箱法兰）", product_id) * 1000
+
+            print("R", R)
+
+            print("H", H)
+
+            print("density", density)
+
+            if R and H and density:
+                mass_luozhu = round((math.pi * (R / 1000) ** 2 / 4) * (H / 1000) * density, 2)
+
+                row[7].value = mass_luozhu
+
+
+        elif name == "螺柱（浮头法兰）":
+
+            dh = get_value(jisuan_data, "浮头法兰", "螺栓公称直径")
+
+            R = get_actual_diameter(dh)
+
+            H = get_luozhu_length(jisuan_data, product_id)
+
+            density = get_material_density("螺柱（浮头法兰）", product_id)
+
+            print("R", R)
+
+            print("H", H)
+
+            print("density", density)
+
+            if R and H and density:
+                mass_luozhu = round((math.pi * (R / 1000) ** 2 / 4) * (H / 1000) * density, 2) * 1000
+
+                row[7].value = mass_luozhu
+
+        elif name == "螺母（浮头法兰）" and luozhu_qty3:
+
+            row[6].value = luozhu_qty3 * 2
+
+            # === 获取公称直径，查找质量 ===
+
+            dia = get_value(jisuan_data, "浮头法兰", "螺栓公称直径")
+
+            if dia:
+
+                try:
+
+                    conn3 = pymysql.connect(
+
+                        host="localhost", user="root", password="123456",
+
+                        database="材料库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+
+                    )
+
                     with conn3.cursor() as cursor:
+
                         cursor.execute("""
+
                             SELECT `管法兰专用螺母` 
+
                             FROM `螺母近似质量表`
+
                             WHERE 规格 = %s
+
                             LIMIT 1
+
                         """, (str(dia),))
+
                         row_m = cursor.fetchone()
+
                         if row_m and row_m.get("管法兰专用螺母"):
                             mass_per_unit = float(row_m["管法兰专用螺母"])
+
                             row[7].value = mass_per_unit
+
                     conn3.close()
+
                 except Exception as e:
+
                     print(f"❌ 查询螺母质量失败: {e}")
+
+        elif name == "螺母（管箱法兰）" and luozhu_qty:
+
+            row[6].value = luozhu_qty * 2
+
+            # === 获取公称直径，查找质量 ===
+
+            dia = get_value(jisuan_data, "管箱法兰", "螺栓公称直径")
+
+            if dia:
+
+                try:
+
+                    conn3 = pymysql.connect(
+
+                        host="localhost", user="root", password="123456",
+
+                        database="材料库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+
+                    )
+
+                    with conn3.cursor() as cursor:
+
+                        cursor.execute("""
+
+                            SELECT `管法兰专用螺母` 
+
+                            FROM `螺母近似质量表`
+
+                            WHERE 规格 = %s
+
+                            LIMIT 1
+
+                        """, (str(dia),))
+
+                        row_m = cursor.fetchone()
+
+                        if row_m and row_m.get("管法兰专用螺母"):
+                            mass_per_unit = float(row_m["管法兰专用螺母"])
+
+                            row[7].value = mass_per_unit
+
+                    conn3.close()
+
+                except Exception as e:
+
+                    print(f"❌ 查询螺母质量失败: {e}")
+
+
         elif name == "螺柱（管箱平盖）" and luozhu_qty2:
+
             row[6].value = luozhu_qty2
-            dh = get_value(jisuan_data, "管箱法兰", "螺栓公称直径")
+
+            dh = get_value(jisuan_data, "管箱平盖", "螺栓公称直径")
+
             R = get_actual_diameter(dh)
+
             H = get_luozhu_length(jisuan_data, product_id)
+
             density = get_material_density("螺柱（管箱平盖）", product_id)
-            print("R",R)
-            print("H",H)
-            print("density",density)
+
+            print("R", R)
+
+            print("H", H)
+
+            print("density", density)
+
             if R and H and density:
-                mass_luozhu = round((math.pi * (R / 1000) ** 2 / 4) * (H / 1000) * density*1000, 2)
+                mass_luozhu = round((math.pi * (R / 1000) ** 2 / 4) * (H / 1000) * density, 2) * 1000
+
                 row[7].value = mass_luozhu
+
 
 
 
         elif name == "螺母（管箱平盖）" and luozhu_qty2:
+
             row[6].value = luozhu_qty2 * 2
+
             # === 获取公称直径，查找质量 ===
+
             dia = get_value(jisuan_data, "管箱法兰", "螺栓公称直径")
+
             if dia:
+
                 try:
+
                     conn3 = pymysql.connect(
+
                         host="localhost", user="root", password="123456",
+
                         database="材料库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+
                     )
+
                     with conn3.cursor() as cursor:
+
                         cursor.execute("""
+
                             SELECT `管法兰专用螺母` 
+
                             FROM `螺母近似质量表`
+
                             WHERE 规格 = %s
+
                             LIMIT 1
+
                         """, (str(dia),))
+
                         row_m = cursor.fetchone()
+
                         if row_m and row_m.get("管法兰专用螺母"):
                             mass_per_unit = float(row_m["管法兰专用螺母"])
+
                             row[7].value = mass_per_unit
+
                     conn3.close()
+
                 except Exception as e:
+
                     print(f"❌ 查询螺母质量失败: {e}")
+
         elif name == "折流板" and baffle_R and baffle_t:
+
             density_zheliuban = get_material_density("折流板", product_id)
 
             row[7].value = calc_weight(baffle_R, baffle_t, density_zheliuban)
+
         # elif name == "防冲板":
 
         elif name == "支持板":
+
             if not row[6].value:
                 row[6].value = 1
+
             if support_R and support_t:
                 density_zhichiban = get_material_density("支持板", product_id)
 
                 row[7].value = calc_weight(support_R, support_t, density_zhichiban)
+
         elif name == "挡管":
+
             # 获取挡管数量
+
             dummy_tubes = pipe_data.get("dummy_tubes", [])
+
             if isinstance(dummy_tubes, str):
                 dummy_tubes = ast.literal_eval(dummy_tubes)
 
             dummy_count = len(dummy_tubes)
+
             print(dummy_tubes)
+
             print(dummy_count)
+
             row[6].value = dummy_count
-            # 获取换热管质量
+
             uhx_data = jisuan_data.get("DictOutDatas", {}).get("固定管板", {}).get("Datas", [])
+
             uhx_mass = get_param(uhx_data, "单根换热管重量kg")
+
             uhx_mass = float(uhx_mass) if uhx_mass not in (None, "", "None") else None
+
             row[7].value = uhx_mass
+
         elif name == "换热管":
-            # 获取换热管质量
+
             uhx_data = jisuan_data.get("DictOutDatas", {}).get("固定管板", {}).get("Datas", [])
+
             uhx_mass = get_param(uhx_data, "单根换热管重量kg")
+
             uhx_mass = float(uhx_mass) if uhx_mass not in (None, "", "None") else None
+
             row[7].value = uhx_mass
+
+        elif name == "浮动管板":
+
+            uhx_data = jisuan_data.get("DictOutDatas", {}).get("固定管板", {}).get("Datas", [])
+
+            uhx_mass = get_param(uhx_data, "单根换热管重量kg")
+
+            uhx_mass = float(uhx_mass) if uhx_mass not in (None, "", "None") else None
+
+            row[7].value = uhx_mass
+
+        elif name == "铭牌板":
+
+            uhx_mass = 0.8
+
+            row[7].value = uhx_mass
+
+        elif name == "铭牌支架":
+
+            uhx_mass = 1
+
+            row[7].value = uhx_mass
+
+        elif name == "管箱吊耳":
+
+            uhx_mass = "/"
+
+            row[7].value = uhx_mass
+
+        elif name == "吊耳":
+
+            uhx_mass = "/"
+
+            row[7].value = uhx_mass
+
+        elif name == "管箱垫片":
+
+            uhx_mass = "/"
+
+            row[7].value = uhx_mass
+
+        elif name == "管箱侧垫片":
+
+            uhx_mass = "/"
+
+            row[7].value = uhx_mass
+
+        elif name == "外头盖侧垫片":
+
+            uhx_mass = "/"
+
+            row[7].value = uhx_mass
+
+        elif name == "外头盖垫片":
+
+            uhx_mass = "/"
+
+            row[7].value = uhx_mass
+
+        elif name == "防松支耳":
+
+
+            # === 获取防松支耳数量配置 ===
+
+            qty = None
+
+            dn_value = None
+
+            conn1 = pymysql.connect(
+
+                host="localhost", user="root", password="123456",
+
+                database="产品设计活动库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+
+            )
+
+            with conn1.cursor() as cursor:
+
+                cursor.execute("""
+
+                                                   SELECT 管程数值 FROM 产品设计活动表_设计数据表
+
+                                                   WHERE 产品ID = %s AND 参数名称 = '公称直径*' LIMIT 1
+
+                                               """, (product_id,))
+
+                roww = cursor.fetchone()
+
+                if roww and roww.get("管程数值"):
+                    dn_value = float(roww["管程数值"])
+
+            if dn_value:
+
+                try:
+
+                    conn2 = pymysql.connect(
+
+                        host="localhost", user="root", password="123456",
+
+                        database="配置库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+
+                    )
+
+                    with conn2.cursor() as cursor:
+
+                        cursor.execute("SELECT value FROM user_config WHERE id = 2.16")
+
+                        roww = cursor.fetchone()
+
+                        print(dn_value, "dn_value")
+
+                        if roww:
+
+                            config = eval(roww["value"])
+
+                            values = config[1][1:]
+
+                            if dn_value < 800:
+
+                                qty = values[0]
+
+                            elif 800 <= dn_value <= 2000:
+
+                                qty = values[1]
+
+                            else:
+
+                                qty = values[2]
+
+                    conn2.close()
+
+                except:
+
+                    pass
+
+            row[6].value = qty
+
+            uhx_mass = 0.5
+
+            row[7].value = uhx_mass
+
+        elif name == "顶板":
+
+            uhx_mass = 0.5
+
+            row[7].value = uhx_mass
+
         elif name in {"固定鞍座", "滑动鞍座"}:
+
             if not row[6].value:
                 row[6].value = 1
+
             if saddle_mass:
                 row[7].value = saddle_mass
-        elif name in fixed_info_map:
-            row[6].value, row[7].value = fixed_info_map[name]
-        elif name == "防松支耳":
-            # === 获取防松支耳数量配置 ===
-            qty = None
-            if dn_value:
-                try:
-                    conn2 = pymysql.connect(
-                        host="localhost", user="root", password="123456",
-                        database="配置库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
-                    )
-                    with conn2.cursor() as cursor:
-                        cursor.execute("SELECT value FROM user_config WHERE id = 2.16")
-                        roww = cursor.fetchone()
-                        if roww:
-                            config = eval(roww["value"])
-                            values = config[1][1:]
-                            if dn_value < 800:
-                                qty = values[0]
-                            elif 800 <= dn_value <= 2000:
-                                qty = values[1]
-                            else:
-                                qty = values[2]
-                    conn2.close()
-                except:
-                    pass
-            row[6].value = qty
+
+
+
         elif name == "带肩螺柱":
+
+            dn_value = None
+
+            conn1 = pymysql.connect(
+
+                host="localhost", user="root", password="123456",
+
+                database="产品设计活动库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+
+            )
+
+            with conn1.cursor() as cursor:
+
+                cursor.execute("""
+
+                            SELECT 管程数值 FROM 产品设计活动表_设计数据表
+
+                            WHERE 产品ID = %s AND 参数名称 = '公称直径*' LIMIT 1
+
+                        """, (product_id,))
+
+                roww = cursor.fetchone()
+
+                if roww and roww.get("管程数值"):
+                    dn_value = float(roww["管程数值"])
+
             # === 获取防松支耳数量配置 ===
+
             qty = None
+
             if dn_value:
+
                 try:
+
                     conn2 = pymysql.connect(
+
                         host="localhost", user="root", password="123456",
+
                         database="配置库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+
                     )
+
                     with conn2.cursor() as cursor:
+
                         cursor.execute("SELECT value FROM user_config WHERE id = 2.16")
+
                         roww = cursor.fetchone()
+
                         if roww:
+
                             config = eval(roww["value"])
+
                             values = config[1][1:]
+
                             if dn_value < 800:
+
                                 qty = values[0]
+
                             elif 800 <= dn_value <= 2000:
+
                                 qty = values[1]
+
                             else:
+
                                 qty = values[2]
+
                     conn2.close()
+
                 except:
+
                     pass
+
             row[6].value = qty
+
             row[7].value = mass_luozhu
+        elif name == "铆钉":
+            row[6].value = 4
+            row[7].value = 0.02
+
+        # === 3. 固定映射兜底 ===
+        elif name in mass_map:
+            row[7].value = mass_map[name]
+            if name in quantity_map:
+                row[6].value = quantity_map[name]
+
 
 
 def generate_material_list(product_id: str, output_path: str):
@@ -812,19 +1655,46 @@ def generate_material_list(product_id: str, output_path: str):
 
     try:
         with connection.cursor() as cursor:
+            # 先取元件材料表
             sql = """
-            SELECT 元件名称, 材料类型, 材料牌号, 材料标准, 供货状态
-            FROM 产品设计活动表_元件材料表
-            WHERE 产品ID = %s
-            """
+                SELECT 元件名称, 材料类型, 材料牌号, 材料标准, 供货状态
+                FROM 产品设计活动表_元件材料表
+                WHERE 产品ID = %s
+                """
             cursor.execute(sql, (product_id,))
             rows = cursor.fetchall()
+
+            if not rows:
+                print(f"⚠️ 未找到产品ID {product_id} 的材料数据")
+                return
+
+            # 再取锻件级别信息
+            sql_param = """
+                SELECT 元件名称, 参数名称, 参数值
+                FROM 产品设计活动表_元件附加参数表
+                WHERE 产品ID = %s 
+                  AND 参数名称 IN ('锻件级别','材料类型')
+                  AND 参数值 IS NOT NULL AND 参数值 <> ''
+                """
+            cursor.execute(sql_param, (product_id,))
+            param_rows = cursor.fetchall()
+
+            # 整理出 {元件名称: {"材料类型": "xxx", "锻件级别": "yyy"}}
+            param_map = {}
+            for r in param_rows:
+                comp = r["元件名称"]
+                if comp not in param_map:
+                    param_map[comp] = {}
+                param_map[comp][r["参数名称"]] = r["参数值"]
+
+            # 过滤出 材料类型=钢锻件 的才保留锻件级别
+            forging_level_map = {}
+            for comp, p in param_map.items():
+                if p.get("材料类型") == "钢锻件" and "锻件级别" in p:
+                    forging_level_map[comp] = p["锻件级别"]
+
     finally:
         connection.close()
-
-    if not rows:
-        print(f"⚠️ 未找到产品ID {product_id} 的材料数据")
-        return
 
     wb = openpyxl.load_workbook(template_path)
     sheet = wb.active
@@ -833,13 +1703,19 @@ def generate_material_list(product_id: str, output_path: str):
         row_idx = 8 + idx
         sheet[f"A{row_idx}"] = idx + 1
         sheet[f"D{row_idx}"] = row["元件名称"]
-        sheet[f"F{row_idx}"] = "/" if row["材料牌号"] == "见参数定义" else row["材料牌号"]
+
+        # 判断是否需要拼接锻件级别
+        material = "/" if row["材料牌号"] == "见参数定义" else row["材料牌号"]
+        if row["元件名称"] in forging_level_map:
+            material = f"{material} {forging_level_map[row['元件名称']]}"
+
+        sheet[f"F{row_idx}"] = material
         sheet[f"K{row_idx}"] = "/" if row["材料类型"] == "见参数定义" else row["材料类型"]
         sheet[f"J{row_idx}"] = "/" if row["供货状态"] == "见参数定义" else row["供货状态"]
 
     # 加载 JSON
     json_jisuan = load_json_file(os.path.join(os.getcwd(), "jisuan_output_new.json"))
-    # 输入信息
+    # 填写信息
     fill_quantity_weight(json_jisuan, sheet)
     fill_special_items(sheet, json_jisuan,product_id)
 
@@ -849,7 +1725,7 @@ def generate_material_list(product_id: str, output_path: str):
 
 def fill_quantity_by_relation(sheet):
     """
-    根据其他元件的数量或默认规则，补充输入G列数量。
+    根据其他元件的数量或默认规则，补充填写G列数量。
     """
     # 收集所有结构件 → 数量映射（G列）
     name_to_qty = {}
@@ -897,44 +1773,51 @@ def fill_quantity_by_relation(sheet):
         }:
             qty_cell.value = 8
 
-    print("✅ 已输入依赖关系数量（如与拉杆相同、固定为1等）")
+    print("✅ 已填写依赖关系数量（如与拉杆相同、固定为1等）")
 
 
-def fill_additional_quantities(sheet, path_to_json):
-    try:
-        with open(path_to_json, "r", encoding="utf-8") as f:
-            pipe_data = json.load(f)
-    except Exception as e:
-        print(f"❌ 无法读取布管输出参数文件: {e}")
-        return
-
-    # 计数函数：获取含特征字段的数组元素数量
-    def count_valid_items(array_key, required_field):
-        items = pipe_data.get(array_key, [])
-        if not isinstance(items, list):
-            return 0
-        return sum(1 for item in items if isinstance(item, dict) and required_field in item)
-
-    quantity_map = {
-        "旁路挡板": count_valid_items("BPBs", "BPBHeight"),
-        "拉杆": count_valid_items("TieRodsParam", "Postion"),
-        "滑道": count_valid_items("SlipWays", "P1"),
-        "中间挡板": count_valid_items("DummyTubesParam", "CenterPt"),
-        "防冲板": 1 if isinstance(pipe_data.get("ImpingementPlate"), dict) else 0
-    }
-
-    for row in sheet.iter_rows(min_row=8):
-        name_cell = row[3]  # D列：元件名称
-        qty_cell = row[6]   # G列：数量
-
-        if not name_cell.value:
-            continue
-
-        item_name = str(name_cell.value).strip()
-        if item_name in quantity_map:
-            if qty_cell.value in [None, ""]:
-                qty_cell.value = quantity_map[item_name]
-
-    print("✅ 已从布管输出参数中输入附加数量（修正字段匹配）")
+# def fill_additional_quantities(sheet, path_to_json):
+#     try:
+#         with open(path_to_json, "r", encoding="utf-8") as f:
+#             pipe_data = json.load(f)
+#     except Exception as e:
+#         print(f"❌ 无法读取布管输出参数文件: {e}")
+#         return
+#
+#     # 计数函数：获取含特征字段的数组元素数量
+#     def count_valid_items(array_key, required_field):
+#         items = pipe_data.get(array_key, [])
+#         if not isinstance(items, list):
+#             return 0
+#         return sum(1 for item in items if isinstance(item, dict) and required_field in item)
+#
+#     quantity_map = {
+#         "旁路挡板": count_valid_items("BPBs", "BPBHeight"),
+#         "拉杆": count_valid_items("TieRodsParam", "Postion"),
+#         "滑道": count_valid_items("SlipWays", "P1"),
+#         "中间挡板": count_valid_items("DummyTubesParam", "CenterPt"),
+#         "防冲板": 1 if isinstance(pipe_data.get("ImpingementPlate"), dict) else 0,
+#         "浮动管板": 1,
+#         "浮头法兰":1,
+#         "浮头垫片": 1,
+#         "球冠形封头": 1,
+#         '铭牌板':1,
+#         "铭牌支架":1,
+#         "顶板":1,
+#     }
+#
+#     for row in sheet.iter_rows(min_row=8):
+#         name_cell = row[3]  # D列：元件名称
+#         qty_cell = row[6]   # G列：数量
+#
+#         if not name_cell.value:
+#             continue
+#
+#         item_name = str(name_cell.value).strip()
+#         if item_name in quantity_map:
+#             if qty_cell.value in [None, ""]:
+#                 qty_cell.value = quantity_map[item_name]
+#
+#     print("✅ 已从布管输出参数中填写附加数量（修正字段匹配）")
 
 

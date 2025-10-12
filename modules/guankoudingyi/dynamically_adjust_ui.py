@@ -9,6 +9,7 @@ from PyQt5.QtGui import QColor
 from pandas.core.interchange import column
 
 from modules.chanpinguanli.chanpinguanli_main import product_manager
+from modules.condition_input.view import check_project_and_product
 from modules.guankoudingyi.funcs.funcs_pipe_data_output import export_nozzle_listing
 #导入函数功能
 from modules.guankoudingyi.obtain_product_type_version import get_product_type_and_version
@@ -171,6 +172,15 @@ class CustomSelectionModel(QItemSelectionModel):
 class Stats(QtWidgets.QWidget):
     def __init__(self, line_tip=None):
         super().__init__()
+
+        # # 0903会议纪要 首先进行项目和产品检查
+        # print("准备检查项目和产品状态...")
+        # can_open, msg = check_project_and_product()
+        # if not can_open:
+        #     QMessageBox.information(self, "提示", msg)
+        #     self.deleteLater()  # 不打开界面
+        #     return  # 立即返回
+
         self.line_tip = line_tip
         uic.loadUi("modules/guankoudingyi/ui/pipe_attachment_define.ui", self)
 
@@ -179,9 +189,9 @@ class Stats(QtWidgets.QWidget):
         print('product_id1111111111',self.product_id)
 
         # === ✅检查产品ID是否存在 ===
-        if not self.product_id:
-            QMessageBox.warning(self, "提示", "请先至项目管理处选择产品！")
-            return  # 中止初始化，避免后续出错
+        # if not self.product_id:
+        #     QMessageBox.warning(self, "提示", "请先至项目管理处选择产品！")
+        #     return  # 中止初始化，避免后续出错
 
         # 保存旧的管口代号
         self.old_port_code = None
@@ -591,7 +601,7 @@ class Stats(QtWidgets.QWidget):
         if column == 1 and not hasattr(self, 'old_port_code'):
             self.old_port_code = ''
 
-        # # ✅ 如果是最后一行的管口代号被输入，自动添加新行
+        # # ✅ 如果是最后一行的管口代号被填写，自动添加新行
         # if column == 1 and row == self.tableWidget_pipe.rowCount() - 1:
         #     item = self.tableWidget_pipe.item(row, column)
         #     if item and item.text().strip():

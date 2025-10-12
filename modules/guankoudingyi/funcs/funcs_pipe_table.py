@@ -360,10 +360,10 @@ def move_selected_pipe_rows_down(stats_widget):
         swap_hidden_id(stats_widget, row, row + 1)
 
 
-"""检查最后一行的管口代号是否已输入，如果已输入则添加新行"""
+"""检查最后一行的管口代号是否已填写，如果已填写则添加新行"""
 def check_last_row_and_add_new(stats_widget):
     """
-    检查最后一行的管口代号是否已输入，如果已输入则添加新行
+    检查最后一行的管口代号是否已填写，如果已填写则添加新行
     :param stats_widget: 主窗口实例
     """
     table = stats_widget.tableWidget_pipe
@@ -422,7 +422,7 @@ def control_last_row_editable_state(stats_widget, enable_editing=True):
     if last_row < 0:
         return
     
-    # 检查是否确实是最后一行且管口代号已输入
+    # 检查是否确实是最后一行且管口代号已填写
     last_port_code_item = table.item(last_row, 1)
     if not last_port_code_item:
         return

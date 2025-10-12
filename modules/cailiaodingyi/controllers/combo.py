@@ -1,4 +1,4 @@
-from PyQt5 import QtCore
+from PyQt5 import QtCore, sip
 from PyQt5.QtGui import QColor, QStandardItem
 from PyQt5.QtWidgets import QTableWidgetItem, QComboBox, QStyledItemDelegate, QAbstractItemView
 from PyQt5.QtCore import Qt, QObject, QTimer, QItemSelectionModel
@@ -262,6 +262,10 @@ class ComboPopupEventFilter(QObject):
         self.table = table
 
     def eventFilter(self, obj, event):
+        if not hasattr(self, "table") or self.table is None:
+            return False
+        if sip.isdeleted(self.table):  # 需要 import sip
+            return False
         # 只拦截 viewport 上的点击，避免影响别处
         if obj is self.table.viewport() and event.type() in (QEvent.MouseButtonPress, QEvent.MouseButtonDblClick):
             idx = self.table.indexAt(event.pos())
@@ -306,85 +310,122 @@ def _write_cell(table, row: int, col: int, text: str):
 
 
 def on_material_field_changed_col(table, col: int, rows_map: dict, sender_field: str, prev_value: str = None):
-    def _get(r):
-        it = table.item(r, col)
-        return (it.text().strip() if it else "")
+    # 添加防重复执行标志
+    if not hasattr(table, '_material_changing'):
+        table._material_changing = False
 
-    def _set(r, val):
-        it = table.item(r, col)
-        if it is None:
-            it = QTableWidgetItem()
-            it.setTextAlignment(Qt.AlignCenter)
-            table.setItem(r, col, it)
-        it.setText(val or "")
+    if table._material_changing:
+        return  # 正在处理中，跳过
 
-    # 读取当前列四字段（此时模型里已经可能是新值）
-    cur = {
-        '材料类型':   _get(rows_map.get('材料类型')),
-        '材料牌号':   _get(rows_map.get('材料牌号')),
-        '材料标准':   _get(rows_map.get('材料标准')),
-        '供货状态':   _get(rows_map.get('供货状态')),
-    }
+    table._material_changing = True
 
-    # —— 仅当“材料类型”真的发生变化时才清空后三项 —— #
-    if sender_field == '材料类型':
-        new_val = cur.get('材料类型', "")
-        # prev_value 只有在 delegate 里会传；为 None 时视为“已变化”（用于批量写入）
-        if prev_value is not None and (new_val or "") == (prev_value or ""):
-            return
-
-        table.blockSignals(True)
-        try:
-            for k in ('材料牌号', '材料标准', '供货状态'):
-                r = rows_map.get(k)
-                if r is not None:
-                    _set(r, "")
-        finally:
-            table.blockSignals(False)
-        return
-
-    # —— 下面保持你原来的校验 + 自动带入逻辑 —— #
-    from modules.cailiaodingyi.funcs.funcs_pdf_change import get_filtered_material_options
-    filtered = get_filtered_material_options(cur) or {}
-
-    def _opts_of(k):
-        opts = filtered.get(k, []) or []
-        if not opts or opts[0] != "":
-            opts = [""] + list(dict.fromkeys(opts))
-        return opts
-
-    table.blockSignals(True)
     try:
-        for k in ('材料类型', '材料牌号', '材料标准', '供货状态'):
-            r = rows_map.get(k)
-            if r is None:
-                continue
-            val = cur.get(k, "")
-            if val and (val not in _opts_of(k)):
-                _set(r, "")
-                cur[k] = ""
-    finally:
-        table.blockSignals(False)
+        def _get(r):
+            it = table.item(r, col)
+            return (it.text().strip() if it else "")
 
-    if cur.get('材料类型') and cur.get('材料牌号'):
-        filtered2 = get_filtered_material_options({
-            '材料类型': cur['材料类型'],
-            '材料牌号': cur['材料牌号'],
-        }) or {}
-        def _autofill_one(key):
-            r = rows_map.get(key)
-            if r is None or cur.get(key):
+        def _set(r, val):
+            it = table.item(r, col)
+            if it is None:
+                it = QTableWidgetItem()
+                it.setTextAlignment(Qt.AlignCenter)
+                table.setItem(r, col, it)
+            it.setText(val or "")
+
+        # 获取行号
+        r_type = rows_map.get('材料类型')
+        r_brand = rows_map.get('材料牌号')
+        r_std = rows_map.get('材料标准')
+        r_status = rows_map.get('供货状态')
+
+        # 读取当前值
+        cur_type = _get(r_type)
+        cur_brand = _get(r_brand)
+        cur_std = _get(r_std)
+        cur_status = _get(r_status)
+
+        # 完全模仿普通元件的 on_pick 逻辑
+        from modules.cailiaodingyi.funcs.funcs_pdf_change import get_filtered_material_options
+
+        if sender_field == '材料类型':
+            # 材料类型变化：清空后续字段，重新安装 delegate
+            new_val = cur_type
+            # prev_value 只有在 delegate 里会传；为 None 时视为"已变化"（用于批量写入）
+            if prev_value is not None and (new_val or "") == (prev_value or ""):
                 return
-            cand = [x for x in (filtered2.get(key, []) or []) if x]
-            if len(cand) == 1:
+
+            # 清空后续字段
+            table.blockSignals(True)
+            try:
+                for rr in (r_brand, r_std, r_status):
+                    if rr is not None:
+                        _set(rr, "")
+            finally:
+                table.blockSignals(False)
+
+            # 重新安装 delegate（模仿普通元件的逻辑）
+            _reinstall_material_delegates(table, col, rows_map, cur_type, cur_brand, cur_std)
+
+        elif sender_field == '材料牌号':
+            # 材料牌号变化：清空材料标准和供货状态，重新获取选项，自动选择唯一值
+            table.blockSignals(True)
+            try:
+                # 先清空材料标准和供货状态
+                if r_std is not None:
+                    _set(r_std, "")
+                if r_status is not None:
+                    _set(r_status, "")
+            finally:
+                table.blockSignals(False)
+
+            # 重新获取选项
+            f = get_filtered_material_options({"材料类型": cur_type, "材料牌号": cur_brand}) or {}
+            std_opts = f.get("材料标准", []) or []
+            stat_opts = f.get("供货状态", []) or []
+
+            # 自动选择唯一选项
+            table.blockSignals(True)
+            try:
+                if len(std_opts) == 1:
+                    _set(r_std, std_opts[0])
+                if len(stat_opts) == 1:
+                    _set(r_status, stat_opts[0])
+            finally:
+                table.blockSignals(False)
+
+            # 重新安装 delegate
+            _reinstall_material_delegates(table, col, rows_map, cur_type, cur_brand, cur_std)
+
+        elif sender_field == '材料标准':
+            # 材料标准变化：更新供货状态选项，自动选择唯一选项
+            f = get_filtered_material_options({"材料类型": cur_type, "材料牌号": cur_brand, "材料标准": cur_std}) or {}
+            stat_opts = f.get("供货状态", []) or []
+
+            # 自动选择唯一选项
+            if (not cur_status) and len(stat_opts) == 1:
                 table.blockSignals(True)
                 try:
-                    _set(r, cand[0])
-                    cur[key] = cand[0]
+                    _set(r_status, stat_opts[0])
                 finally:
                     table.blockSignals(False)
-        _autofill_one('材料标准')
-        _autofill_one('供货状态')
+
+            # 重新安装 delegate
+            _reinstall_material_delegates(table, col, rows_map, cur_type, cur_brand, cur_std)
+
+        # 供货状态变化：不做任何处理（最后一个字段）
+
+    finally:
+        table._material_changing = False
+
+
+def _reinstall_material_delegates(table, col: int, rows_map: dict, cur_type: str, cur_brand: str, cur_std: str):
+    """重新安装材料字段的 delegate，模仿普通元件的逻辑"""
+    # 由于 DynamicOptionsDelegate 的 createEditor 方法每次都会重新计算选项，
+    # 我们不需要强制重新安装 delegate，只需要确保数据已经正确更新
+    # 让用户下次点击时自然触发 createEditor 重新计算选项
+
+    # 简单触发视图更新，让用户知道数据已变化
+    table.viewport().update()
 
 
 
@@ -680,6 +721,18 @@ class MultiSelectDynamicOptionsDelegate(DynamicOptionsDelegate):
             cb = QComboBox(parent)
             cb.setEditable(False)
             cb.addItems(brand_opts)
+
+            # 添加自动提交机制，模仿 MaterialInstantDelegate
+            def _commit_and_close():
+                # 1) 写回
+                self.commitData.emit(cb)
+                # 2) 关闭编辑器（确保视觉与取值立刻更新）
+                self.closeEditor.emit(cb, QStyledItemDelegate.NoHint)
+
+            # 连接选择变化事件，立即提交
+            cb.activated.connect(lambda _=None: _commit_and_close())
+            cb.currentIndexChanged.connect(lambda _=None: _commit_and_close())
+
             # 进入即弹出，体验一致
             QTimer.singleShot(0, cb.showPopup)
             return cb

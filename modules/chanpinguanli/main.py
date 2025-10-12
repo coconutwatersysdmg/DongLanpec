@@ -32,7 +32,7 @@ from PyQt5.QtCore import QObject, QEvent
 
 # 表格
 # 放在文件中合适位置，例如文件最后或开头工具函数区 禁止系统表格自带的搜索功能
-# 避免输入的时候跳转
+# 避免填写的时候跳转
 def disable_keyboard_search(table: QTableWidget):
     """
     禁用 QTableWidget 自带的键盘快速搜索跳转功能，防止输入字母时跳行。
@@ -100,7 +100,7 @@ def check_if_all_saved():
         for label, value in project_fields.items():
             print(f"【调试】{label} = '{value}'")
         if any(project_fields.values()):
-            print("【调试】项目信息已输入但未保存")
+            print("【调试】项目信息已填写但未保存")
             return False
         else:
             print("【调试】项目信息为空")
@@ -140,7 +140,7 @@ def check_if_all_saved():
             for label, value in definition_fields.items():
                 print(f"【调试】{label} = '{value}'")
             if any(definition_fields.values()):
-                print(f"【调试】第{row+1}行产品定义字段有输入，未保存")
+                print(f"【调试】第{row+1}行产品定义字段有填写，未保存")
                 return False
 
     print("【调试】所有检查通过，无需提示未保存")
@@ -608,8 +608,8 @@ def confirm_product_definition():
         if is_locked == "edit":
             # 第一次保存，检查必填项
             if not product_type or not product_form :
-                print("必填项未完整输入。")  # 调试信息
-                QMessageBox.warning(bianl.main_window, "输入不完整", "请输入 产品类型、产品形式 和 设计阶段 三个必填项！")
+                print("必填项未完整填写。")  # 调试信息
+                QMessageBox.warning(bianl.main_window, "填写不完整", "请填写 产品类型、产品形式 和 设计阶段 三个必填项！")
                 return
 
             # 确认是否保存并锁定

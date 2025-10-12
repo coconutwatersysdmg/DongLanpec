@@ -243,7 +243,7 @@ def get_filtered_pipe_options(field, filters, unit_map, pressure_type = None):
     查询管口关系对应表，根据其他字段值过滤出指定字段候选值
     注意：不支持"公称尺寸"字段的筛选，公称尺寸独立于其他字段
     :param field: 当前目标字段（如"压力等级"、"法兰型式"等，不包括"公称尺寸"）
-    :param filters: 其他字段的已输入值，如 {"密封面型式": "RF", "法兰型式": "SO"}
+    :param filters: 其他字段的已填写值，如 {"密封面型式": "RF", "法兰型式": "SO"}
     :param unit_map: 单位映射，如 {"压力等级": "Class"}
     :return: 候选值列表
     """
@@ -471,7 +471,7 @@ def get_axial_position_base_options(product_id, pipe_belong=None):
         """
         params = [product_type, product_version]
 
-        #只有在用户已输入“管口所属元件”时，才把它作为额外的查询条件加到 SQL 语句中
+        #只有在用户已填写“管口所属元件”时，才把它作为额外的查询条件加到 SQL 语句中
         if pipe_belong:
             sql += " AND 管口所属元件 = %s"
             params.append(pipe_belong)
@@ -1073,7 +1073,7 @@ def validate_eccentricity(eccentricity_text, product_id, pipe_belong, emit_error
 
         eccentricity = float(eccentricity_text)
 
-        # 管口所属元件未输入，显示最大值为 0.0
+        # 管口所属元件未填写，显示最大值为 0.0
         if not pipe_belong:
             if eccentricity == 0.0:
                 return True, 0.0
@@ -1127,6 +1127,98 @@ def validate_extension_height(height_text, product_id, pipe_belong, emit_error=T
     except ValueError:
         return False, "请输入有效数字或\"程序推荐\""
 
+"""补丁：用于清空下方的提示条"""
+def _set_tip(stats_widget, text="", color=None):
+    """统一设置/清空底部提示条"""
+    if not hasattr(stats_widget, "line_tip"):
+        return
+    stats_widget.line_tip.setText(text or "")
+    stats_widget.line_tip.setToolTip(text or "")
+    stats_widget.line_tip.setStatusTip(text or "")
+    stats_widget.line_tip.setStyleSheet(f"color: {color};" if color else "")
+
+"""补丁：以下两个方法用于判断“零/非零”和“是否刚从零变为非零”"""
+def _is_zero_like(text: str) -> bool:
+    """把 '', '0', '0.0', '0.00' 等都视为 0；非法数字也按非零处理"""
+    t = (text or "").strip()
+    if t in {"", "0", "0.0", "0.00"}:
+        return True
+    try:
+        return abs(float(t)) < 1e-9
+    except Exception:
+        return False  # 非法数字当作非零，交给各自验证去拦
+
+def _just_turned_from_zero_to_nonzero(stats_widget, new_text: str) -> bool:
+    """
+    仅当“本次编辑”的原值为零样式、且新值为非零样式时返回 True。
+    - 依赖 handle_pipe_cell_click() 里记录的 stats_widget.original_cell_value
+    """
+    old_text = getattr(stats_widget, "original_cell_value", "")
+    return _is_zero_like(old_text) and (not _is_zero_like(new_text))
+
+"""轴向定位基准互斥选择"""
+def enforce_shell_inout_axial_base_mutex(stats_widget, changed_row: int):
+    """
+    在六种型式下，使“壳程入口”和“壳程出口”的【轴向定位基准】互斥：
+      - 任一方选为“右基准线”，另一方自动置为“左基准线”
+      - 任一方改为“左基准线”，另一方自动置为“右基准线”
+    只对 壳程入口/壳程出口 生效，且仅在产品型式 ∈ MUTEX_PRODUCT_VERSIONS 时启用
+    """
+    table = stats_widget.tableWidget_pipe
+    product_version = getattr(stats_widget, "current_product_version", "") or ""
+    if product_version not in ["AEU", "BEU", "AES", "BES", "NEN", "BEM"]:
+        return
+
+    func_col = 2      # 管口功能
+    base_col = 11     # 轴向定位基准
+
+    func_item = table.item(changed_row, func_col)
+    base_item = table.item(changed_row, base_col)
+    if not func_item or not base_item:
+        return
+
+    func_text = (func_item.text() or "").strip()
+    base_text = (base_item.text() or "").strip()
+
+    # 仅当修改的是壳程入口/壳程出口，且值为“左/右基准线”之一时才处理
+    if func_text not in {"壳程入口", "壳程出口"} or base_text not in ["左基准线", "右基准线"]:
+        return
+
+    # 找到“另一方”行
+    target_func = "壳程出口" if func_text == "壳程入口" else "壳程入口"
+    other_row = None
+    last = table.rowCount() - 1
+    for r in range(0, last):  # 排除最后一行新增行
+        it = table.item(r, func_col)
+        if it and (it.text() or "").strip() == target_func:
+            other_row = r
+            break
+
+    if other_row is None:
+        return
+
+    # 期望另一方取反
+    desired_other = "左基准线" if base_text == "右基准线" else "右基准线"
+
+    other_item = table.item(other_row, base_col)
+    if other_item is None:
+        from PyQt5.QtWidgets import QTableWidgetItem
+        other_item = QTableWidgetItem("")
+        other_item.setTextAlignment(Qt.AlignCenter)
+        table.setItem(other_row, base_col, other_item)
+
+    # 若当前另一方已经是反向，就不必写回；否则写回并抑制回调重入
+    if (other_item.text() or "").strip() != desired_other:
+        try:
+            # 利用项目中已有的抑制标志，避免递归触发 handle_pipe_cell_changed
+            if hasattr(stats_widget, "suppress_cell_change"):
+                stats_widget.suppress_cell_change = True
+            other_item.setText(desired_other)
+            other_item.setTextAlignment(Qt.AlignCenter)
+        finally:
+            if hasattr(stats_widget, "suppress_cell_change"):
+                stats_widget.suppress_cell_change = False
+
 """处理单元格内容改变时触发的验证"""
 def handle_pipe_cell_changed(stats_widget, row, column, product_id):
     """
@@ -1173,7 +1265,7 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
     pipe_code_item = table.item(row, 1)
     has_pipe_code = pipe_code_item.text().strip() != ""
     
-    # ✅ 优先处理：如果是最后一行的管口代号列且刚输入完成，解冻其他列
+    # ✅ 优先处理：如果是最后一行的管口代号列且刚填写完成，解冻其他列
     if is_last_row and column == 1 and has_pipe_code:
         # 导入解冻函数
         from modules.guankoudingyi.funcs.funcs_pipe_table import control_last_row_editable_state
@@ -1195,9 +1287,18 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
         check_last_row_and_add_new(stats_widget)
         return
     
-    # ✅ 对于其他列，仅处理当前点击编辑的单元格
-    if column != 1 and getattr(stats_widget, 'current_editing_cell', None) != (row, column):
-        return
+    # ✅ 对于其他列，检查是否需要验证的列
+    # 需要验证的列：轴向夹角(13)、周向方位(14)、偏心距(15)、外伸高度(16)、轴向定位距离(12)
+    validation_columns = {12, 13, 14, 15, 16}
+    if column != 1 and column not in validation_columns:
+        # 对于非验证列，仍然只处理当前点击编辑的单元格
+        if getattr(stats_widget, 'current_editing_cell', None) != (row, column):
+            return
+    
+    # ✅ 对于验证列，无论是点击还是键盘输入都进行验证
+    # 清除编辑状态标记（无论是否通过点击进入）
+    if column in validation_columns:
+        stats_widget.current_editing_cell = None
     
     # 如果是最后一行且没有管口代号，不设置默认值
     if is_last_row and not has_pipe_code:
@@ -1205,23 +1306,39 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
     ##########################
     # 验证轴向夹角
     if column == 13:  # 轴向夹角列
-        # 清除编辑状态标记
-        stats_widget.current_editing_cell = None
         valid, result = validate_axial_angle(item.text())
         if not valid:
-            stats_widget.line_tip.setText(result)
-            stats_widget.line_tip.setStyleSheet("color: red;")
+            # stats_widget.line_tip.setText(result)
+            # stats_widget.line_tip.setStyleSheet("color: red;")
+            _set_tip(stats_widget, result, "red")
             # 获取默认值
             _, default_value = validate_axial_angle("")
-            item.setText(str(default_value))
+            # item.setText(str(default_value))
+            # 🔧 关键：防止二次触发把红色提示清掉
+            try:
+                stats_widget.suppress_cell_change = True
+                item.setText(str(default_value))
+            finally:
+                stats_widget.suppress_cell_change = False
+            return  # ❗非法时直接返回，保留红色提示
         else:
+            # 验证通过时清空警告
+            _set_tip(stats_widget, "")
+            # 写回规范化值也用 blockSignals，避免多余触发
+            table.blockSignals(True)
             item.setText(str(result))
+            table.blockSignals(False)
+
             # 🚩 新增逻辑：若偏心距 ≠ 0，则清空偏心距并弹窗
             ecc_item = table.item(row, 15)
-            if ecc_item and ecc_item.text().strip() not in ["", "0", "0.0"]:
+            # if ecc_item and ecc_item.text().strip() not in ["", "0", "0.0"]:
+            if (
+                ecc_item
+                and not _is_zero_like(ecc_item.text())
+                and _just_turned_from_zero_to_nonzero(stats_widget, str(result))
+            ):
                 stats_widget.suppress_cell_change = True
                 ecc_item.setText("0.0")
-                # save_cell_change_to_db(stats_widget, row, 15, product_id)
                 stats_widget.suppress_cell_change = False
                 QMessageBox.warning(
                     stats_widget,
@@ -1235,8 +1352,6 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
     
     # 验证周向方位
     elif column == 14:  # 周向方位列
-        # 清除编辑状态标记
-        stats_widget.current_editing_cell = None
         # 获取管口功能
         function_column = 2  # "管口功能"列的索引为2
         function_item = table.item(row, function_column)
@@ -1246,14 +1361,25 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
         
         valid, result = validate_circumferential_position(item.text(), pipe_function)
         if not valid:
-            stats_widget.line_tip.setText(result)
-            stats_widget.line_tip.setStyleSheet("color: red;")
+            # stats_widget.line_tip.setText(result)
+            # stats_widget.line_tip.setStyleSheet("color: red;")
+            _set_tip(stats_widget, result, "red")
             # 获取默认值
             _, default_value = validate_circumferential_position("", pipe_function)
-            item.setText(str(default_value))
+            # 🔧 关键：防止二次触发把红色提示清掉
+            try:
+                stats_widget.suppress_cell_change = True
+                item.setText(str(default_value))
+            finally:
+                stats_widget.suppress_cell_change = False
+
+            return  # ❗非法时直接返回，保留红色提示
         else:
+            # 验证通过时清空警告
+            _set_tip(stats_widget, "")
+            table.blockSignals(True)
             item.setText(str(result))
-            
+            table.blockSignals(False)
         # ✅ 周向方位改变后刷新绘图
         if hasattr(stats_widget, 'view') and stats_widget.view:
             stats_widget.view.set_pipe_data(stats_widget.get_all_pipe_data())
@@ -1261,31 +1387,34 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
     # 验证偏心距
     # 偏心距验证（第15列）
     elif column == 15:
-        # 清除编辑状态标记
-        stats_widget.current_editing_cell = None
         belong_item = table.item(row, 10)
         pipe_belong = belong_item.text().strip() if belong_item else ""
         valid, result = validate_eccentricity(item.text(), product_id, pipe_belong, emit_error=False)
 
         if not valid:
-            stats_widget.line_tip.setStyleSheet("color: red;")
-            stats_widget.line_tip.setText(f"{result}")
+            # stats_widget.line_tip.setStyleSheet("color: red;")
+            # stats_widget.line_tip.setText(f"{result}")
+            _set_tip(stats_widget, result, "red")
             _, default_value = validate_eccentricity("", product_id, pipe_belong, emit_error=False)
-            # table.blockSignals(True)
             stats_widget.suppress_cell_change = True
             item.setText(str(default_value))
             stats_widget.suppress_cell_change = False
-            # table.blockSignals(False)
         else:
+            # 验证通过时清空警告
+            _set_tip(stats_widget, "")
             table.blockSignals(True)
             item.setText(str(result))
             table.blockSignals(False)
             # 🚩 新增逻辑：若轴向夹角 ≠ 0，则清空轴向夹角并弹窗
             angle_item = table.item(row, 13)
-            if angle_item and angle_item.text().strip() not in ["", "0", "0.0"]:
+            # if angle_item and angle_item.text().strip() not in ["", "0", "0.0"]:
+            if (
+                angle_item
+                and not _is_zero_like(angle_item.text())
+                and _just_turned_from_zero_to_nonzero(stats_widget, str(result))
+            ):
                 stats_widget.suppress_cell_change = True
                 angle_item.setText("0.0")
-                # save_cell_change_to_db(stats_widget, row, 13, product_id)
                 stats_widget.suppress_cell_change = False
                 QMessageBox.warning(
                     stats_widget,
@@ -1300,8 +1429,6 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
 
     # 外伸高度验证（第16列）
     elif column == 16:
-        # 清除编辑状态标记
-        stats_widget.current_editing_cell = None
         belong_item = table.item(row, 10)
         pipe_belong = belong_item.text().strip() if belong_item else ""
 
@@ -1310,13 +1437,16 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
 
         valid, result = validate_extension_height(item.text(), product_id, pipe_belong, emit_error=False)
         if not valid:
-            stats_widget.line_tip.setStyleSheet("color: red;")
-            stats_widget.line_tip.setText(f"{result}")
+            # stats_widget.line_tip.setStyleSheet("color: red;")
+            # stats_widget.line_tip.setText(f"{result}")
+            _set_tip(stats_widget, result, "red")
             _, default_value = validate_extension_height("", product_id, pipe_belong, emit_error=False)
             table.blockSignals(True)
             item.setText(str(default_value))
             table.blockSignals(False)
         else:
+            # 验证通过时清空警告
+            _set_tip(stats_widget, "")
             table.blockSignals(True)
             item.setText(str(result))
             table.blockSignals(False)
@@ -1328,8 +1458,6 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
 
     # 验证轴向定位距离
     elif column == 12:  # 轴向定位距离列
-        # 清除编辑状态标记
-        stats_widget.current_editing_cell = None
         # 获取管口功能
         function_item = table.item(row, 2)  # 2是管口功能列的索引
         pipe_function = function_item.text().strip() if function_item else ""
@@ -1360,8 +1488,6 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
 
     # "管口所属元件"列
     elif column == 10:
-        # 清除编辑状态标记
-        stats_widget.current_editing_cell = None
         new_value = item.text().strip() if item else ""
         old_value = stats_widget.pipe_belong_old_values.get(row, "") if hasattr(stats_widget, 'pipe_belong_old_values') else ""
 
@@ -1391,9 +1517,9 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
 
     # ✅ 新增：轴向定位基准列改变时触发绘图更新
     elif column == 11:  # 轴向定位基准列
-        # 清除编辑状态标记
-        stats_widget.current_editing_cell = None
-        
+        # === 壳程入口/出口互斥处理 ===
+        enforce_shell_inout_axial_base_mutex(stats_widget, row)
+
         # 检查当前行是否已有足够的基本信息来触发绘图
         pipe_code_item = table.item(row, 1)
         nominal_size_item = table.item(row, 4)
@@ -1663,16 +1789,16 @@ def get_working_pressure_by_belong(product_id, pipe_belong):
 def get_minimum_pressure_level_for_flanges(product_id, pipe_belong, pressure_type, pipe_id=None, pipe_code=None):
     """
     允许“部分成功”；识别出>=1组材料即进行计算推荐
-    未输入/未匹配到类别号，则作为警告返回，不吞掉成功的结果，即对三组均有反馈
+    未填写/未匹配到类别号，则作为警告返回，不吞掉成功的结果，即对三组均有反馈
     """
     try:
         # Step 1: 获取所有接管法兰材料信息
         flange_materials, error = get_material_category_number_by_product(product_id, pressure_type, pipe_id)
-        # 没有输入接管法兰的材料信息
+        # 没有填写接管法兰的材料信息
         if error or not flange_materials:
             return None, error or "请完善接管法兰材料信息"
 
-        # 把经过Step 1后的情况分为三种：未输入、无类别号、可计算
+        # 把经过Step 1后的情况分为三种：未填写、无类别号、可计算
         missing_nums = []        # 有该组但材料类型/牌号缺失
         no_category_list = []    # 材料类型和牌号齐全但是没有找到对应的类别号（去温压值表失败）
         computable = []          # 可以计算的组，即能够识别出类别号

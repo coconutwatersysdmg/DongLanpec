@@ -78,6 +78,15 @@ def on_product_cell_changed_router(row: int, col: int):
     finally:
         table._routing = False
 
+# —— lxy新增表格内下拉编辑器的滚轮过滤器（仅拦截 Wheel，点击选择不受影响）——
+from PyQt5.QtCore import QObject, QEvent
+
+class _TableComboNoWheel(QObject):
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Wheel:
+            print("捕捉到滚轮事件并已阻止。")  # 用来确认过滤器是否触发
+            return True  # 吞掉滚轮
+        return QObject.eventFilter(self, obj, event)
 
 
 # 下拉框
@@ -147,6 +156,18 @@ class EditOnlyComboDelegate(QStyledItemDelegate):
             }
         """)
         combo.setView(view)
+        # ——lxy新增禁用滚轮：本体 + 弹出列表 + viewport（仅限这个编辑器实例）——
+        wheel_filter = _TableComboNoWheel(combo)  # 以 combo 为父对象，生命周期随之
+        combo.installEventFilter(wheel_filter)
+        try:
+            view.installEventFilter(wheel_filter)
+            if hasattr(view, "viewport") and view.viewport():
+                view.viewport().installEventFilter(wheel_filter)
+        except Exception as e:
+            print("[NoWheel][Delegate] 安装失败：", e)
+        # 防止被 GC 回收，保留一个引用
+        combo._wheel_filter = wheel_filter
+
 
         # —— ③ 组合框本体样式（圆角、边框、箭头区）——
         # 获取图片路径（使用主程序目录 + 相对路径）
@@ -387,94 +408,7 @@ class ReturnKeyJumpFilter(QObject):
         # 其他键 交给父类的默认处理 父类的默认处理是什么？
         return super().eventFilter(obj, event)
 
-# 新建类 窗口关闭 检查内容是否已经保存
-class CustomMainWindow(QMainWindow):
-    def closeEvent(self, event):
-        # 检查有没有保存
-        if not check_if_all_saved():
-            # 自定义按钮文本
-            msg_box = QMessageBox(self)
-            msg_box.setWindowTitle("未保存的更改")
-            msg_box.setText("存在未保存的信息，是否仍要退出？")
-            msg_box.setIcon(QMessageBox.Warning)
 
-            # 自定义按钮
-            yes_button = QPushButton("是")
-            no_button = QPushButton("否")
-
-            msg_box.addButton(yes_button, QMessageBox.YesRole)
-            msg_box.addButton(no_button, QMessageBox.NoRole)
-
-            # 显示对话框并获取结果
-            result = msg_box.exec_()
-
-            if msg_box.clickedButton() == no_button:
-                event.ignore()  # 如果点击的是“否”，忽略退出操作
-                return
-        event.accept()
-
-# 检查是否进行保存
-def check_if_all_saved():
-    print("【调试】开始检查是否有未保存数据...")
-
-    # ---------------- 项目信息 ----------------
-    print(f"【调试】当前 project_mode = {bianl.project_mode}")
-    if bianl.project_mode in ("new", "edit"):
-        project_fields = {
-            "业主": bianl.owner_input.text().strip(),
-            "项目名称": bianl.project_name_input.text().strip(),
-            "项目路径": bianl.project_path_input.text().strip(),
-            "项目编号": bianl.project_number_input.text().strip(),
-            "所属部门": bianl.department_input.text().strip(),
-            "工程总包方": bianl.contractor_input.text().strip(),
-        }
-        for label, value in project_fields.items():
-            print(f"【调试】{label} = '{value}'")
-        if any(project_fields.values()):
-            print("【调试】项目信息已输入但未保存")
-            return False
-        else:
-            print("【调试】项目信息为空")
-
-    # ---------------- 产品信息 ----------------
-    for row, status_dict in bianl.product_table_row_status.items():
-        if not isinstance(status_dict, dict):
-            continue
-        status = status_dict.get("status", "view")
-        print(f"【调试】[产品信息] 第{row+1}行 status = {status}")
-        if status == "view":
-            continue
-
-        for col in range(1, bianl.product_table.columnCount()):
-            item = bianl.product_table.item(row, col)
-            if item and item.text().strip():
-                print(f"【调试】第{row+1}行产品信息有输入，未保存")
-                return False
-
-    print("【调试】产品信息部分全部为空或为 view 状态")
-
-    # ---------------- 产品定义 ----------------改66definition_status
-    for row, status_dict in bianl.product_table_row_status.items():
-        if not isinstance(status_dict, dict):
-            continue
-        def_status = status_dict.get("", "view")
-        print(f"【调试】[产品定义] 第{row+1}行 definition_status = {def_status}")
-
-        if def_status == "edit":
-            definition_fields = {#改77
-                "产品类型": bianl.product_type_combo.currentText().strip(),
-                "产品形式": bianl.product_form_combo.currentText().strip(),
-                "产品型号": bianl.product_model_input.text().strip(),
-                "图号前缀": bianl.drawing_prefix_input.text().strip(),
-            }
-            for label, value in definition_fields.items():
-                print(f"【调试】{label} = '{value}'")
-            if any(definition_fields.values()):
-                print(f"【调试】第{row+1}行产品定义字段有输入，未保存")
-                return False
-
-    print("【调试】所有检查通过，无需提示未保存")
-    return True
 
 
 # 第7行后添加 产品定义不可编辑
@@ -501,6 +435,7 @@ def lock_combo(combo: QComboBox):
             height: 0px;
         }
     """)
+    _install_no_wheel_on_combo(combo)
 
 
 # 产品定义部分的下拉框
@@ -511,7 +446,6 @@ def unlock_combo(combo: QComboBox):
     # 获取图片路径（使用主程序目录 + 相对路径）
     base_dir = os.getcwd()  # main.py 的位置
     image_path = os.path.join(base_dir, "modules", "chanpinguanli", "icons", "下箭头.png").replace("\\", "/")
-
     combo.setStyleSheet(f"""
         QComboBox {{
             background-color: 000000;  /* 更浅的，更贴近你的图片 */
@@ -542,49 +476,7 @@ def unlock_combo(combo: QComboBox):
             height: 20px;
         }}
     """)
-
-
-    # combo.setStyleSheet("""
-    #     QComboBox {
-    #         background-color: rgb(245, 245, 245);     /* 默认淡灰白背景 */
-    #         color: rgb(33, 33, 33);                   /* 深灰文字 */
-    #         border: 1px solid rgb(200, 200, 200);     /* 淡灰边框 */
-    #         border-radius: 4px;
-    #         padding: 4px 8px;
-    #         font: 11pt "Microsoft YaHei";
-    #     }
-    #
-    #     QComboBox:hover {
-    #         background-color: rgb(232, 244, 253);     /* 悬浮时浅蓝白背景 */
-    #         border: 1px solid rgb(51, 153, 255);      /* 蓝色边框 */
-    #     }
-    #
-    #     QComboBox:focus {
-    #         background-color: rgb(232, 244, 253);     /* 聚焦时保持一样 */
-    #         border: 1px solid rgb(51, 153, 255);
-    #     }
-    #
-    #     QComboBox::drop-down {
-    #         subcontrol-origin: padding;
-    #         subcontrol-position: top right;
-    #         width: 20px;
-    #         border-left: 1px solid rgb(200, 200, 200);
-    #     }
-    #
-    #     QComboBox::down-arrow {
-    #         image: url(:/qt-project.org/styles/commonstyle/images/arrowdown-16.png);
-    #         width: 12px;
-    #         height: 12px;
-    #     }
-    #
-    #     QComboBox QAbstractItemView {
-    #         background-color: rgb(255, 255, 255);         /* 下拉背景白 */
-    #         selection-background-color: rgb(51, 153, 255);/* 选中亮蓝色 */
-    #         selection-color: rgb(255, 255, 255);          /* 白色文字 */
-    #         border: 1px solid rgb(180, 180, 180);
-    #         outline: none;
-    #     }
-    # """)
+    _install_no_wheel_on_combo(combo)
 
 
 # --- QLineEdit 控件状态管理 ---
@@ -620,6 +512,72 @@ def reset_product_definition_controls():
     unlock_line_edit(bianl.standardization_input)
     unlock_line_edit(bianl.approval_input)
     unlock_line_edit(bianl.co_signature_input)
+
+# === 仅禁用“类型* / 形式*”两个下拉框的滚轮（保留点击选择）BEGIN ===
+from PyQt5.QtCore import QObject, QEvent, QTimer
+
+class _NoWheelForProductCombos(QObject):
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Wheel:
+            return True  # 吞掉滚轮（不改变当前选项）
+        return QObject.eventFilter(self, obj, event)
+
+_NO_WHEEL_FOR_PD = _NoWheelForProductCombos()
+_PD_NO_WHEEL_RETRIES = {"n": 0}
+
+def _install_no_wheel_on_combo(combo):
+    """给单个 QComboBox 以及其弹出视图安装滚轮屏蔽器（幂等）"""
+    from PyQt5.QtWidgets import QComboBox
+    if not combo or not isinstance(combo, QComboBox):
+        return False
+    if not combo.property("_no_wheel_installed"):
+        combo.installEventFilter(_NO_WHEEL_FOR_PD)
+        combo.setProperty("_no_wheel_installed", True)
+        try:
+            view = combo.view()
+            if view:
+                view.installEventFilter(_NO_WHEEL_FOR_PD)
+                if hasattr(view, "viewport") and view.viewport():
+                    view.viewport().installEventFilter(_NO_WHEEL_FOR_PD)
+        except Exception as e:
+            print("[NoWheel][ProductCombos] 安装到 view 失败：", e)
+    return True
+
+def init_disable_wheel_for_product_definition_combos():
+    """对 产品定义区 的 类型* / 形式* 两个下拉框禁用滚轮（如果控件未就绪则重试）"""
+    try:
+        import modules.chanpinguanli.bianl as bianl
+        ok1 = _install_no_wheel_on_combo(getattr(bianl, "product_type_combo", None))  # 类型*
+        ok2 = _install_no_wheel_on_combo(getattr(bianl, "product_form_combo", None))  # 形式*
+        # 调试输出
+        print(f"过滤器安装成功：product_type_combo={ok1}, product_form_combo={ok2}")
+        if ok1 and ok2:
+            print("[NoWheel][ProductCombos] 类型*/形式* 滚轮禁用已生效")
+            try:
+                bianl.product_type_combo.destroyed.connect(
+                    lambda *_: QTimer.singleShot(0, init_disable_wheel_for_product_definition_combos)
+                )
+                bianl.product_form_combo.destroyed.connect(
+                    lambda *_: QTimer.singleShot(0, init_disable_wheel_for_product_definition_combos)
+                )
+            except Exception as _e:
+                print("[NoWheel][ProductCombos] 绑定 destroyed 信号失败：", _e)
+
+            return
+    except Exception as e:
+        print("[NoWheel][ProductCombos] 初始化失败：", e)
+
+    # 控件尚未就绪：稍后重试（最多 50 次，每次 120ms）
+    if _PD_NO_WHEEL_RETRIES["n"] < 50:
+        _PD_NO_WHEEL_RETRIES["n"] += 1
+        QTimer.singleShot(120, init_disable_wheel_for_product_definition_combos)
+    else:
+        print("[NoWheel][ProductCombos] 超过重试次数，放弃安装")
+
+# 让它在事件循环开始后自动尝试安装
+# QTimer.singleShot(0, init_disable_wheel_for_product_definition_combos)
+# === 仅禁用“类型* / 形式*”两个下拉框的滚轮（保留点击选择）END ===
+
 
 # 加载默认图片
 # === 新增工具函数 ===
@@ -767,7 +725,10 @@ def center_window(interface):  # 新增函数，使窗口打开时位于屏幕�
 # 点击行获取产品id
 def on_product_row_clicked(row, column):
     if bianl.current_project_id == None:
-        QMessageBox.information(bianl.main_window, "提示", "请先新建项目，点击项目信息部分的确认按钮。")
+        bianl.main_window.line_tip.setText("请先新建项目，点击项目信息部分的确认按钮。")
+        bianl.main_window.line_tip.setToolTip("请先新建项目，点击项目信息部分的确认按钮。")
+        bianl.main_window.line_tip.setStyleSheet("请先新建项目，点击项目信息部分的确认按钮。")
+        # QMessageBox.information(bianl.main_window, "提示", "请先新建项目，点击项目信息部分的确认按钮。")
         return
 
     # 防御非法列
@@ -1035,7 +996,10 @@ def fetch_and_update_product_definition_by_id(product_id):
 
     except Exception as e:
         print(f"查询产品定义信息失败: {e}")
-        QMessageBox.critical(bianl.main_window, "数据库错误", f"查询产品定义信息失败：{e}")
+        bianl.main_window.line_tip.setText(f"查询产品定义信息失败：{e}")
+        bianl.main_window.line_tip.setToolTip(f"查询产品定义信息失败：{e}")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.critical(bianl.main_window, "数据库错误", f"查询产品定义信息失败：{e}")
     finally:
         cursor.close()
         conn.close()
@@ -1106,184 +1070,358 @@ def load_product_forms():
     bianl.product_form_combo.setCurrentIndex(-1)
     bianl.product_form_combo.blockSignals(False)
 
-
+# lxy修改
+# def confirm_product_definition():
+#     """产品定义区域 - 确认保存（最终版：产品库只写‘产品需求表’，活动库一次 UPSERT 写‘产品设计活动表’）"""
+#     # 1) 基本校验
+#     row = bianl.product_table.currentRow()
+#     print(f"当前选中行: {row}")
+#     if not bianl.product_id:
+#         print("当前产品未保存，无法进行定义操作。")
+#         QMessageBox.critical(bianl.main_window, "错误", "当前产品未保存，无法进行定义操作。")
+#         return False
+#
+#     # 2) 读取 UI 字段
+#     product_type   = bianl.product_type_combo.currentText().strip()
+#     product_form   = bianl.product_form_combo.currentText().strip()
+#     product_model  = bianl.product_model_input.text().strip()
+#     drawing_prefix = bianl.drawing_prefix_input.text().strip()
+#
+#     design          = bianl.design_input.text().strip()
+#     proofread       = bianl.proofread_input.text().strip()
+#     review          = bianl.review_input.text().strip()
+#     standardization = bianl.standardization_input.text().strip()
+#     approval        = bianl.approval_input.text().strip()
+#     co_signature    = bianl.co_signature_input.text().strip()
+#
+#     print(f"读取的产品信息：产品类型: {product_type}, 产品形式: {product_form},  产品型号: {product_model}, 图号前缀: {drawing_prefix}")
+#
+#     is_locked = bianl.product_table_row_status.get(row, {}).get("definition_status", None)
+#     print(f"当前行的定义状态: {is_locked}")
+#
+#     # 3) 首次保存需要确认
+#     if is_locked == "edit":
+#         if not product_type or not product_form:
+#             print("必填项未完整输入。")
+#             QMessageBox.warning(bianl.main_window, "输入不完整", "请输入 产品类型、产品形式 两个必填项！")
+#             return False
+#         reply = QMessageBox.question(
+#             bianl.main_window, "确认保存",
+#             "保存后必填项将不可修改，是否确认？",
+#             QMessageBox.Yes | QMessageBox.No
+#         )
+#         if reply != QMessageBox.Yes:
+#             print("用户取消保存操作")
+#             return False
+#
+#     conn = cursor = None          # 产品库（只写 产品需求表）
+#     conn2 = cursor2 = None        # 活动库（只写 产品设计活动表）
+#     try:
+#         # =========================
+#         # A) 产品库：只写“产品需求表”
+#         # =========================
+#         conn = common_usage.get_mysql_connection_product()
+#         cursor = conn.cursor()
+#
+#         if is_locked == "edit":
+#             # 首次：需求表写全部
+#             sql_need = """
+#                 UPDATE 产品需求表
+#                 SET 产品类型=%s, 产品型式=%s,
+#                     产品型号=%s, 图号前缀=%s, 产品示意图=%s
+#                 WHERE 产品ID=%s
+#             """
+#             val_need = (product_type, product_form, product_model, drawing_prefix,
+#                         bianl.confirm_curr_image_relative_path, bianl.product_id)
+#         else:
+#             # 非首次：需求表仅写可改字段
+#             sql_need = """
+#                 UPDATE 产品需求表
+#                 SET 产品型号=%s, 图号前缀=%s
+#                 WHERE 产品ID=%s
+#             """
+#             val_need = (product_model, drawing_prefix, bianl.product_id)
+#
+#         print(f"执行的 SQL 语句: {sql_need}, 参数: {val_need}")
+#         cursor.execute(sql_need, val_need)
+#         conn.commit()
+#
+#         # =========================
+#         # B) 活动库：一次 UPSERT 写“产品设计活动表”（含基础 + 工作信息）
+#         # =========================
+#         conn2 = common_usage.get_mysql_connection_active()
+#         cursor2 = conn2.cursor()
+#
+#         upsert_sql = """
+#             INSERT INTO 产品设计活动表
+#               (产品ID, 项目ID, 产品类型, 产品型式,
+#                设计, 校对, 审核, 标准化, 批准, 会签)
+#             VALUES
+#               (%s, %s, %s, %s,
+#                %s, %s, %s, %s, %s, %s)
+#             ON DUPLICATE KEY UPDATE
+#               项目ID = VALUES(项目ID),
+#               产品类型 = VALUES(产品类型),
+#               产品型式 = VALUES(产品型式),
+#               设计 = VALUES(设计),
+#               校对 = VALUES(校对),
+#               审核 = VALUES(审核),
+#               标准化 = VALUES(标准化),
+#               批准 = VALUES(批准),
+#               会签 = VALUES(会签)
+#         """
+#         upsert_vals = (
+#             bianl.product_id, bianl.current_project_id, product_type, product_form,
+#             design, proofread, review, standardization, approval, co_signature
+#         )
+#         print(f"执行的 SQL 语句: {upsert_sql}, 参数: {upsert_vals}")
+#         cursor2.execute(upsert_sql, upsert_vals)
+#         conn2.commit()
+#
+#         # =========================
+#         # C) 全部成功后：锁 UI + 复位状态
+#         # =========================
+#         if row not in bianl.product_table_row_status or not isinstance(bianl.product_table_row_status[row], dict):
+#             bianl.product_table_row_status[row] = {}
+#         bianl.product_table_row_status[row]["definition_status"] = "view"
+#         print(f"第 {row} 行定义状态已更新: view（保存成功）")
+#
+#         if is_locked == "edit":
+#             # 只有首次需要把必填项锁死
+#             lock_combo(bianl.product_type_combo)
+#             lock_combo(bianl.product_form_combo)
+#             print("产品定义后的确认锁定后状态:")
+#             print("产品类型 - isEnabled:", bianl.product_type_combo.isEnabled(),
+#                   "isEditable:", bianl.product_type_combo.isEditable(),
+#                   "FocusPolicy:", bianl.product_type_combo.focusPolicy())
+#             print("产品形式 - isEnabled:", bianl.product_form_combo.isEnabled(),
+#                   "isEditable:", bianl.product_form_combo.isEditable(),
+#                   "FocusPolicy:", bianl.product_form_combo.focusPolicy())
+#
+#         bianl.main_window.line_tip.setText("产品定义信息已成功保存至数据库。")
+#         bianl.main_window.line_tip.setToolTip("产品定义信息已成功保存至数据库。")
+#         bianl.main_window.line_tip.setStyleSheet("color: black;")
+#         # QMessageBox.information(bianl.main_window, "成功", "产品定义信息已保存到数据库。")
+#         return True
+#
+#     except Exception as e:
+#         # 失败：回滚并保持编辑态、恢复控件可编辑
+#         try:
+#             if conn: conn.rollback()
+#         except: pass
+#         try:
+#             if conn2: conn2.rollback()
+#         except: pass
+#
+#         try:
+#             st = bianl.product_table_row_status.get(row, {})
+#             if isinstance(st, dict):
+#                 st["definition_status"] = "edit"
+#             print(f"【调试】第{row+1}行保存失败，保持 definition_status=edit")
+#         except: pass
+#         try:
+#             for w in (bianl.product_type_combo, bianl.product_form_combo):
+#                 if w: w.setEnabled(True)
+#         except: pass
+#
+#         import traceback
+#         with open("error_log.txt", "a", encoding="utf-8") as f:
+#             f.write(traceback.format_exc())
+#         print(f"保存产品定义信息时出错: {e}")
+#         QMessageBox.critical(bianl.main_window, "数据库错误", f"保存产品定义信息时出错：{e}")
+#         return False
+#
+#     finally:
+#         try:
+#             if cursor: cursor.close()
+#             if conn: conn.close()
+#         except: pass
+#         try:
+#             if cursor2: cursor2.close()
+#             if conn2: conn2.close()
+#         except: pass
 def confirm_product_definition():
-    # 获取当前行和产品ID
+    """产品定义区域 - 确认保存（仅首次保存弹窗并锁死 类型/形式；之后保存不再弹窗）"""
+    # 1) 基本校验
     row = bianl.product_table.currentRow()
-    print(f"当前选中行: {row}")  # 调试信息
+    print(f"当前选中行: {row}")
     if not bianl.product_id:
-        print("当前产品未保存，无法进行定义操作。")  # 调试信息
+        print("当前产品未保存，无法进行定义操作。")
         QMessageBox.critical(bianl.main_window, "错误", "当前产品未保存，无法进行定义操作。")
-        return
+        return False
 
-    # 读取所有字段值 改77
-    product_type = bianl.product_type_combo.currentText().strip()
-    product_form = bianl.product_form_combo.currentText().strip()
-    product_model = bianl.product_model_input.text().strip()
+    # 2) 读取 UI 字段
+    product_type   = bianl.product_type_combo.currentText().strip()
+    product_form   = bianl.product_form_combo.currentText().strip()
+    product_model  = bianl.product_model_input.text().strip()
     drawing_prefix = bianl.drawing_prefix_input.text().strip()
 
-    design = bianl.design_input.text().strip()
-    proofread = bianl.proofread_input.text().strip()
-    review = bianl.review_input.text().strip()
+    design          = bianl.design_input.text().strip()
+    proofread       = bianl.proofread_input.text().strip()
+    review          = bianl.review_input.text().strip()
     standardization = bianl.standardization_input.text().strip()
-    approval = bianl.approval_input.text().strip()
-    co_signature = bianl.co_signature_input.text().strip()
+    approval        = bianl.approval_input.text().strip()
+    co_signature    = bianl.co_signature_input.text().strip()
 
-    print(f"读取的产品信息：产品类型: {product_type}, 产品形式: {product_form}, 产品型号: {product_model}, 图号前缀: {drawing_prefix}")  # 调试信息
+    print(f"读取的产品信息：产品类型: {product_type}, 产品形式: {product_form},  产品型号: {product_model}, 图号前缀: {drawing_prefix}")
 
-    # 获取该行是否已经锁定定义字段
-    is_locked = bianl.product_table_row_status.get(row, {}).get("definition_status", None)
-    print(f"当前行的定义状态: {is_locked}")  # 调试信息
-
+    # 3) 以数据库为准判定是否“首次保存”
+    is_first_time = False
     try:
+        _conn0 = common_usage.get_mysql_connection_product()
+        _cur0  = _conn0.cursor()
+        _cur0.execute("SELECT 产品类型, 产品型式 FROM 产品需求表 WHERE 产品ID=%s", (bianl.product_id,))
+        _row0 = _cur0.fetchone() or {}
+        _cur0.close(); _conn0.close()
+        already_defined = bool(((_row0.get("产品类型") or "").strip()) and ((_row0.get("产品型式") or "").strip()))
+        is_first_time = not already_defined
+    except Exception as _e0:
+        print(f"[confirm] 判定首存失败，默认按首次处理：{_e0}")
+        is_first_time = True  # 兜底
+
+    # 4) 首次保存需要必填校验 + 确认
+    if is_first_time:
+        if not product_type or not product_form:
+            print("必填项未完整输入。")
+            QMessageBox.warning(bianl.main_window, "输入不完整", "请输入 产品类型、产品形式 两个必填项！")
+            return False
+        reply = QMessageBox.question(
+            bianl.main_window, "确认保存",
+            "保存后必填项将不可修改，是否确认？",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            print("用户取消保存操作")
+            return False
+
+    conn = cursor = None          # 产品库（写 产品需求表）
+    conn2 = cursor2 = None        # 活动库（写 产品设计活动表）
+    try:
+        # =========================
+        # A) 产品库：写“产品需求表”
+        # =========================
         conn = common_usage.get_mysql_connection_product()
         cursor = conn.cursor()
+
+        if is_first_time:
+            # 首次：需求表写全部字段（含类型/形式/示意图）
+            sql_need = """
+                UPDATE 产品需求表
+                SET 产品类型=%s, 产品型式=%s,
+                    产品型号=%s, 图号前缀=%s, 产品示意图=%s
+                WHERE 产品ID=%s
+            """
+            val_need = (product_type, product_form, product_model, drawing_prefix,
+                        bianl.confirm_curr_image_relative_path, bianl.product_id)
+        else:
+            # 非首次：需求表仅写可改字段（型号、图号前缀）
+            sql_need = """
+                UPDATE 产品需求表
+                SET 产品型号=%s, 图号前缀=%s
+                WHERE 产品ID=%s
+            """
+            val_need = (product_model, drawing_prefix, bianl.product_id)
+
+        print(f"执行的 SQL 语句: {sql_need}, 参数: {val_need}")
+        cursor.execute(sql_need, val_need)
+        conn.commit()
+
+        # =========================
+        # B) 活动库：UPSERT 写“产品设计活动表”（允许多次更新工作信息）
+        # =========================
         conn2 = common_usage.get_mysql_connection_active()
         cursor2 = conn2.cursor()
-        if is_locked == "edit":
-            # 第一次保存，检查必填项 改88
-            if not product_type or not product_form :
-                print("必填项未完整输入。")  # 调试信息
-                QMessageBox.warning(bianl.main_window, "输入不完整", "请输入产品类型、产品形式 两个必填项！")
-                return
-            #改4
-            if product_type == "卧式容器" or product_type == "立式容器":
-                QMessageBox.warning(bianl.main_window, "提示", "该容器正在开发中，敬请期待")
-                return
 
-            # 确认是否保存并锁定
-            # 确认是否保存并锁定
-            msg_box = QMessageBox(bianl.main_window)
-            msg_box.setWindowTitle("确认保存")
-            msg_box.setText("保存后必填项将不可修改，是否确认？")
-            msg_box.setIcon(QMessageBox.Question)
+        upsert_sql = """
+            INSERT INTO 产品设计活动表
+              (产品ID, 项目ID, 产品类型, 产品型式,
+               设计, 校对, 审核, 标准化, 批准, 会签)
+            VALUES
+              (%s, %s, %s, %s,
+               %s, %s, %s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+              项目ID = VALUES(项目ID),
+              产品类型 = VALUES(产品类型),
+              产品型式 = VALUES(产品型式),
+              设计 = VALUES(设计),
+              校对 = VALUES(校对),
+              审核 = VALUES(审核),
+              标准化 = VALUES(标准化),
+              批准 = VALUES(批准),
+              会签 = VALUES(会签)
+        """
+        upsert_vals = (
+            bianl.product_id, bianl.current_project_id, product_type, product_form,
+            design, proofread, review, standardization, approval, co_signature
+        )
+        print(f"执行的 SQL 语句: {upsert_sql}, 参数: {upsert_vals}")
+        cursor2.execute(upsert_sql, upsert_vals)
+        conn2.commit()
 
-            # 自定义按钮
-            yes_button = QPushButton("是")
-            no_button = QPushButton("否")
+        # =========================
+        # C) 成功后：更新行状态并锁控件（仅首次）
+        # =========================
+        if row not in bianl.product_table_row_status or not isinstance(bianl.product_table_row_status[row], dict):
+            bianl.product_table_row_status[row] = {}
+        bianl.product_table_row_status[row]["definition_status"] = "view"
+        print(f"第 {row} 行定义状态已更新: view（保存成功）")
 
-            msg_box.addButton(yes_button, QMessageBox.YesRole)
-            msg_box.addButton(no_button, QMessageBox.NoRole)
-
-            # 显示对话框并获取结果
-            result = msg_box.exec_()
-
-            if msg_box.clickedButton() == yes_button:
-                print("用户确认保存操作")  # 调试信息
-                # 执行保存逻辑
-            else:
-                print("用户取消保存操作")  # 调试信息
-                return
-
-            # 更新锁定状态
-            if row not in bianl.product_table_row_status or not isinstance(bianl.product_table_row_status[row], dict):
-                bianl.product_table_row_status[row] = {}
-            bianl.product_table_row_status[row]["definition_status"] = "view"
-
-            # 设置成不可编辑状态 改77
+        if is_first_time:
+            # 只有首次需要把必填项锁死（类型/形式）
             lock_combo(bianl.product_type_combo)
             lock_combo(bianl.product_form_combo)
-            # lock_combo(bianl.design_stage_combo)
             print("产品定义后的确认锁定后状态:")
             print("产品类型 - isEnabled:", bianl.product_type_combo.isEnabled(),
                   "isEditable:", bianl.product_type_combo.isEditable(),
                   "FocusPolicy:", bianl.product_type_combo.focusPolicy())
-
             print("产品形式 - isEnabled:", bianl.product_form_combo.isEnabled(),
                   "isEditable:", bianl.product_form_combo.isEditable(),
                   "FocusPolicy:", bianl.product_form_combo.focusPolicy())
 
-            # print("设计阶段 - isEnabled:", bianl.design_stage_combo.isEnabled(),
-            #       "isEditable:", bianl.design_stage_combo.isEditable(),
-            #       "FocusPolicy:", bianl.design_stage_combo.focusPolicy())
-            print(f"第 {row} 行定义状态已更新: True")  # 调试信息
+        bianl.main_window.line_tip.setText("产品定义信息已成功保存至数据库。")
+        bianl.main_window.line_tip.setToolTip("产品定义信息已成功保存至数据库。")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        return True
 
-            # 更新所有字段 改77
-            sql = """
-                UPDATE 产品需求表
-                SET 产品类型 = %s, 产品型式 = %s,
-                    产品型号 = %s, 图号前缀 = %s, 产品示意图 = %s
-                WHERE 产品ID = %s
-            """
-            values = (
-                product_type, product_form,
-                product_model, drawing_prefix, bianl.confirm_curr_image_relative_path, bianl.product_id
-            )
-            print(f"执行的 SQL 语句: {sql}, 参数: {values}")  # 调试信息
-
-
-
-            QMessageBox.information(bianl.main_window, "成功", "产品定义信息已保存到数据库。")
-
-            # 更新所有字段改77
-            huod_sql = """
-                            INSERT INTO 产品设计活动表
-                            SET 产品类型 = %s, 产品型式 = %s,项目ID = %s, 产品ID = %s      
-                        """
-            huod_values = (
-                product_type, product_form, bianl.current_project_id, bianl.product_id
-
-            )
-
-            sql1 = """
-                                      UPDATE 产品设计活动表
-                                      SET 设计 = %s, 校对 = %s,
-                                          审核 = %s, 标准化 = %s, 批准 = %s, 会签 = %s
-                                      WHERE 产品ID = %s
-                                  """
-            values1 = (
-                design, proofread,
-                review, standardization, approval, co_signature, bianl.product_id
-            )
-            print(f"执行的 SQL 语句: {sql1}, 参数: {values1}")  # 调试信息
-
-            cursor2.execute(huod_sql, huod_values)
-            cursor2.execute(sql1, values1)
-            conn2.commit()
-
-
-        else:
-            # 非首次保存，仅更新非锁定字段
-            sql = """
-                UPDATE 产品需求表
-                SET 产品型号 = %s, 图号前缀 = %s
-                WHERE 产品ID = %s
-            """
-            values = (product_model, drawing_prefix, bianl.product_id)
-            print(f"执行的 SQL 语句: {sql}, 参数: {values}")  # 调试信息
-
-            sql1 = """
-                                       UPDATE 产品设计活动表
-                                       SET 设计 = %s, 校对 = %s,
-                                           审核 = %s, 标准化 = %s, 批准 = %s, 会签 = %s
-                                       WHERE 产品ID = %s
-                                   """
-            values1 = (
-                design, proofread,
-                review, standardization, approval, co_signature, bianl.product_id
-            )
-            print(f"执行的 SQL 语句: {sql1}, 参数: {values1}")  # 调试信息
-
-            QMessageBox.information(bianl.main_window, "成功", "产品定义信息已更新到数据库。")
-
-        # 执行更新
-        cursor.execute(sql, values)
-        conn.commit()
-        cursor.close()
-        conn.close()
-
-        cursor2.execute(sql1, values1)
-        conn2.commit()
-        cursor2.close()
-        conn2.close()
     except Exception as e:
+        try:
+            if conn: conn.rollback()
+        except: pass
+        try:
+            if conn2: conn2.rollback()
+        except: pass
+
+        # 保持编辑态
+        try:
+            st = bianl.product_table_row_status.get(row, {})
+            if isinstance(st, dict):
+                st["definition_status"] = "edit"
+            print(f"【调试】第{row+1}行保存失败，保持 definition_status=edit")
+        except: pass
+        try:
+            for w in (bianl.product_type_combo, bianl.product_form_combo):
+                if w: w.setEnabled(True)
+        except: pass
+
         import traceback
         with open("error_log.txt", "a", encoding="utf-8") as f:
             f.write(traceback.format_exc())
-        print(f"保存产品定义信息时出错: {e}")  # 调试信息
+        print(f"保存产品定义信息时出错: {e}")
         QMessageBox.critical(bianl.main_window, "数据库错误", f"保存产品定义信息时出错：{e}")
+        return False
 
-#         示意图展示 调用的
+    finally:
+        try:
+            if cursor: cursor.close()
+            if conn: conn.close()
+        except: pass
+        try:
+            if cursor2: cursor2.close()
+            if conn2: conn2.close()
+        except: pass
+
+
+#示意图展示 调用的
 def try_show_image():
     """若两个下拉框都已选中，尝试加载示意图；否则清空并提示"""
     product_type = bianl.product_type_combo.currentText().strip()
@@ -1451,7 +1589,10 @@ def delete_selected_product():
                 print(f"第{row}行进入编辑状态，原始值：{old_number}, {old_name}, {old_position}")  # 调试信息
         except Exception as e:
             print("更新产品所在行的状态时出错")  # 调试信息
-            QMessageBox.critical(bianl.main_window, "错误", f"更新产品信息时发生错误: {e}")
+            bianl.main_window.line_tip.setText(f"更新产品信息时发生错误: {e}")
+            bianl.main_window.line_tip.setToolTip(f"更新产品信息时发生错误: {e}")
+            bianl.main_window.line_tip.setStyleSheet("color: black;")
+            # QMessageBox.critical(bianl.main_window, "错误", f"更新产品信息时发生错误: {e}")
             return
 
 
@@ -1467,7 +1608,10 @@ def delete_selected_product():
 
     if row < 0 or not product_id:
         print("[删除操作] 错误：未选中有效行或产品ID为空")
-        QMessageBox.warning(bianl.main_window, "提示", "当前产品未新建，无需删除")
+        bianl.main_window.line_tip.setText("当前产品未新建，无需删除")
+        bianl.main_window.line_tip.setToolTip("当前产品未新建，无需删除")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.warning(bianl.main_window, "提示", "当前产品未新建，无需删除")
         return
     # 删除弹窗提示
     # 自定义按钮文本
@@ -1615,8 +1759,10 @@ def delete_selected_product():
         # ★修改：删除成功后，重命名剩余文件夹
         if result:
             rename_remaining_product_folders(folder_root)
-
-        QMessageBox.information(bianl.main_window, "成功", f"此产品删除成功！")
+        bianl.main_window.line_tip.setText(f"此产品删除成功！")
+        bianl.main_window.line_tip.setToolTip(f"此产品删除成功！")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.information(bianl.main_window, "成功", f"此产品删除成功！")
         print("[删除操作] 所有删除操作完成")
         print("=" * 50)
 
@@ -1629,7 +1775,10 @@ def delete_selected_product():
         import traceback
         print("[删除操作] 删除过程中发生异常")
         print(traceback.format_exc())
-        QMessageBox.critical(bianl.main_window, "错误", f"删除失败：{e}")
+        bianl.main_window.line_tip.setText(f"删除失败：{e}")
+        bianl.main_window.line_tip.setToolTip(f"删除失败：{e}")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.critical(bianl.main_window, "错误", f"删除失败：{e}")
 
 # 删除产品设计活动库
 def delete_product_from_activity_db(product_id: str):
@@ -1672,7 +1821,10 @@ def delete_product_from_activity_db(product_id: str):
         import traceback
         print("[活动库清理] 删除过程中发生异常")
         print(traceback.format_exc())
-        QMessageBox.critical(bianl.main_window, "数据库错误", f"活动库删除失败：{e}")
+        bianl.main_window.line_tip.setText(f"活动库删除失败：{e}")
+        bianl.main_window.line_tip.setToolTip(f"活动库删除失败：{e}")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.critical(bianl.main_window, "数据库错误", f"活动库删除失败：{e}")
 
 
 def refresh_product_table_row_status():
@@ -1776,7 +1928,10 @@ def paste_cells_to_table():
     table = bianl.product_table
     copied = bianl.copied_cells_data
     if not copied:
-        QMessageBox.warning(bianl.main_window, "提示", "当前无复制内容")
+        bianl.main_window.line_tip.setText("当前无复制内容")
+        bianl.main_window.line_tip.setToolTip("当前无复制内容")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.warning(bianl.main_window, "提示", "当前无复制内容")
         return
 
     start_row = table.currentRow()
@@ -1786,7 +1941,10 @@ def paste_cells_to_table():
 
     # 检查粘贴区域是否越界
     if start_row + row_count > table.rowCount() or start_col + col_count > table.columnCount():
-        QMessageBox.warning(bianl.main_window, "提示", "粘贴区域超出表格大小")
+        bianl.main_window.line_tip.setText("粘贴区域超出表格大小")
+        bianl.main_window.line_tip.setToolTip("粘贴区域超出表格大小")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.warning(bianl.main_window, "提示", "粘贴区域超出表格大小")
         return
 
     # 粘贴前逐行检查状态是否合法
@@ -1794,7 +1952,10 @@ def paste_cells_to_table():
         target_row = start_row + i
         status = bianl.product_table_row_status.get(target_row, {}).get("status", "start")
         if status == "view":
-            QMessageBox.warning(bianl.main_window, "提示", f"第 {target_row+1} 行为 view 状态，不能粘贴！")
+            bianl.main_window.line_tip.setText(f"第 {target_row+1} 行为 view 状态，不能粘贴！")
+            bianl.main_window.line_tip.setToolTip(f"第 {target_row+1} 行为 view 状态，不能粘贴！")
+            bianl.main_window.line_tip.setStyleSheet("color: black;")
+            # QMessageBox.warning(bianl.main_window, "提示", f"第 {target_row+1} 行为 view 状态，不能粘贴！")
             return
 
     # 执行粘贴
@@ -1836,22 +1997,38 @@ def load_last_project():
         # 在这里取上一个项目id
         # 加载项目信息
         # ① 先按 last_opened 找最近一次项目
+# lxyy
+        from modules.chanpinguanli import bianl, common_usage
+
+        current_user = getattr(bianl, "current_username", None)
+        if current_user:
+            current_user = str(current_user).strip()
+        else:
+            # 未登录就不查
+            return
+
         conn = common_usage.get_mysql_connection_project()
         cur = conn.cursor()
+
         cur.execute("""
-            SELECT last_project_id FROM 上一个项目id LIMIT 1;
-        """)
-        pid = cur.fetchone()
+            SELECT `last_project_id`
+            FROM `上一个项目id`
+            WHERE `last_username` = %s
+            LIMIT 1
+        """, (current_user,))
+        row = cur.fetchone()
+
         cur.close()
         conn.close()
 
+        if not row or not row.get("last_project_id"):
+            print(f"[AutoOpen] 用户 {current_user} 没有上次项目记录或为空，不自动打开。")
+            return
 
-        if pid:
-            # 兼容 dict / tuple 两种返回
-            project_id = pid.get("last_project_id") if isinstance(pid, dict) else pid[0]
-            # 把 'None'、空字符串 统一视为 None
-            if project_id in (None, "", "None"):
-                project_id = None
+        project_id = row["last_project_id"]
+
+        # （如果你仍想做“用户匹配再打开”的二次校验也可以保留，但这时已按 user 查过了，等价）
+        # 继续你的自动打开逻辑...
 
         if project_id:
             print(f"自动加载最后使用的项目: {project_id}")
@@ -1909,7 +2086,6 @@ def load_last_project():
                 for row in range(total_rows):
                     if row < product_count:
                         product = products[row]
-
 
                         # 原顺序：编号(1)、名称(2)、位号(3) → 新顺序：名称(1)、位号(2)、编号(3)改1 改66
                         bianl.product_table.setItem(row, 1,QTableWidgetItem(product.get("产品名称", "")))  # 列1：产品名称
@@ -2027,6 +2203,8 @@ def load_last_project():
             log_file.write(f"自动加载最后项目失败: {e}\n")
             log_file.write(traceback.format_exc())
             log_file.write("\n\n")
+    # 在load_last_project函数的最后添加
+    print(f"[验证] 加载完成后，bianl.current_project_id = {bianl.current_project_id}")
 
 
 # yxx改 高亮这一列

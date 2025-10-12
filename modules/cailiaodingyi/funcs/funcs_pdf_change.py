@@ -2501,7 +2501,7 @@ def get_dn_for_outer_head_cylinder(product_id: str) -> str:
     try:
         with conn.cursor() as cur:
             sql = """
-                SELECT 参数数值
+                SELECT 参数值
                 FROM 产品设计活动表_元件附加参数表
                 WHERE 产品ID=%s
                   AND 元件名称='外头盖圆筒'
@@ -2511,7 +2511,7 @@ def get_dn_for_outer_head_cylinder(product_id: str) -> str:
             rows = cur.fetchall() or []
 
             for row in rows:
-                v = row.get("参数数值")
+                v = row.get("参数值")
                 if v in (None, ""):
                     continue
                 s = str(v).strip()
@@ -2528,7 +2528,6 @@ def get_dn_for_outer_head_cylinder(product_id: str) -> str:
             return ""
     finally:
         conn.close()
-
 
 
 

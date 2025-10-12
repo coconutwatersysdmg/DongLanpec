@@ -81,3 +81,22 @@ def check_pdt_define(product_id):
     finally:
         connection.close()
 
+def check_has_any_product(project_id):
+    """检查指定项目下是否存在至少一个产品"""
+    connection = get_connection(
+        db_config['host'],
+        db_config['port'],
+        db_config['user'],
+        db_config['password'],
+        db_config['database']
+    )
+    try:
+        with connection.cursor() as cursor:
+            # 关键修改：查询该项目下是否有任何产品记录
+            sql = "SELECT 1 FROM 产品需求表 WHERE 项目ID= %s LIMIT 1"
+            cursor.execute(sql, (project_id,))
+            result = cursor.fetchone()
+            # 如果有记录则返回True，否则返回False
+            return result is not None
+    finally:
+        connection.close()

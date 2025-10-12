@@ -61,7 +61,10 @@ def save_project_to_db():
             conn.commit()
             cursor.close()
             conn.close()
-            QMessageBox.information(bianl.main_window, "成功", f"新建项目成功！")
+            # self.line_tip = setText(""成功", f"新建项目成功！"")
+            bianl.main_window.line_tip.setText("新建项目成功！")
+            bianl.main_window.line_tip.setToolTip("新建项目成功！")
+            bianl.main_window.line_tip.setStyleSheet("color: black;")
             # 删除获取的信息
             bianl.old_owner = owner
             bianl.old_project_name = project_name
@@ -115,18 +118,30 @@ def save_project_to_db():
                 status = bianl.product_table_row_status.get(row, {}).get("status", "")
                 if status == "start":
                     set_row_editable(row, True)
-            QMessageBox.information(bianl.main_window, "成功", "项目修改已保存")
+            bianl.main_window.line_tip.setText("项目修改已保存！")
+            bianl.main_window.line_tip.setToolTip("项目修改已保存！")
+            bianl.main_window.line_tip.setStyleSheet("color: black;")
+            # QMessageBox.information(bianl.main_window, "成功", "项目修改已保存")
 
         elif bianl.project_mode == "view":
-            QMessageBox.warning(bianl.main_window, "提示", "只读模式下不可保存修改！")
+            bianl.main_window.line_tip.setText("只读模式下不可保存修改！")
+            bianl.main_window.line_tip.setToolTip("只读模式下不可保存修改！")
+            bianl.main_window.line_tip.setStyleSheet("color: black;")
+            # QMessageBox.warning(bianl.main_window, "提示", "只读模式下不可保存修改！")
             return
         else:
-            QMessageBox.warning(bianl.main_window, "提示", "未知的项目状态，无法保存！")
+            bianl.main_window.line_tip.setText("未知的项目状态，无法保存！")
+            bianl.main_window.line_tip.setToolTip("未知的项目状态，无法保存！")
+            bianl.main_window.line_tip.setStyleSheet("color: black;")
+            # QMessageBox.warning(bianl.main_window, "提示", "未知的项目状态，无法保存！")
             return
 
         common_usage.set_project_inputs_editable(False)
     except Exception as e:
-        QMessageBox.critical(bianl.main_window, "错误", f"保存失败: {e}")
+        bianl.main_window.line_tip.setText(f"保存失败: {e}")
+        bianl.main_window.line_tip.setToolTip(f"保存失败: {e}")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.critical(bianl.main_window, "错误", f"保存失败: {e}")
 
 # 删除项目
 def delete_project_and_related_data():
@@ -134,7 +149,10 @@ def delete_project_and_related_data():
 
     project_id = bianl.current_project_id
     if not project_id:
-        QMessageBox.warning(bianl.main_window, "提示", "未打开任何项目，无法删除。")
+        bianl.main_window.line_tip.setText("未打开任何项目，无法删除。")
+        bianl.main_window.line_tip.setToolTip("未打开任何项目，无法删除。")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.warning(bianl.main_window, "提示", "未打开任何项目，无法删除。")
         return
 
     # 自定义按钮文本
@@ -186,7 +204,10 @@ def delete_project_and_related_data():
         if os.path.exists(folder_path):
             shutil.rmtree(folder_path)
 
-        QMessageBox.information(bianl.main_window, "成功", "项目及所有相关数据删除成功！")
+        bianl.main_window.line_tip.setText("项目及所有相关数据删除成功！")
+        bianl.main_window.line_tip.setToolTip("项目及所有相关数据删除成功！")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.information(bianl.main_window, "成功", "项目及所有相关数据删除成功！")
 
         # 清空界面
         from modules.chanpinguanli.new_project_button import clear_project_info
@@ -206,4 +227,7 @@ def delete_project_and_related_data():
         with open("error_log.txt", "a", encoding="utf-8") as log:
             log.write("删除项目时发生错误：\n")
             log.write(traceback.format_exc())
-        QMessageBox.critical(bianl.main_window, "错误", f"删除失败：{e}")
+        bianl.main_window.line_tip.setText(f"删除失败：{e}")
+        bianl.main_window.line_tip.setToolTip(f"删除失败：{e}")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.critical(bianl.main_window, "错误", f"删除失败：{e}")

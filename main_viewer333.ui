@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1626</width>
-    <height>947</height>
+    <width>1598</width>
+    <height>970</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,7 +20,11 @@
     font-size: 24px;
     font-family: &quot;华文中宋&quot;;
 }
-</string>
+/* 全局禁用样式兜底，确保下拉框禁用时背景为白色 */
+QComboBox:disabled {
+    background-color: white;
+    color: #666;
+}</string>
    </property>
    <layout class="QVBoxLayout" name="verticalLayout_4">
     <item>
@@ -46,8 +50,7 @@
             <property name="styleSheet">
              <string notr="true">QPushButton {
     text-align: left;
-    padding-left: 5px;
-}
+    padding-left: 5px;}
 </string>
             </property>
             <property name="text">
@@ -82,8 +85,7 @@
             <property name="styleSheet">
              <string notr="true">QPushButton {
     text-align: left;
-    padding-left: 5px;
-}
+    padding-left: 5px;}
 </string>
             </property>
             <property name="text">
@@ -115,8 +117,8 @@
             <property name="styleSheet">
              <string notr="true">QPushButton {
     text-align: left;
-    padding-left: 5px;
-}
+    padding-left: 5px;}
+
 </string>
             </property>
             <property name="text">
@@ -148,12 +150,11 @@
             <property name="styleSheet">
              <string notr="true">QPushButton {
     text-align: left;
-    padding-left: 5px;
-}
+    padding-left: 5px;}
 </string>
             </property>
             <property name="text">
-             <string> 管口及附件设计</string>
+             <string> 管口及附件定义</string>
             </property>
             <property name="icon">
              <iconset>
@@ -181,8 +182,7 @@
             <property name="styleSheet">
              <string notr="true">QPushButton {
     text-align: left;
-    padding-left: 5px;
-}
+    padding-left: 5px;}
 </string>
             </property>
             <property name="text">
@@ -214,8 +214,7 @@
             <property name="styleSheet">
              <string notr="true">QPushButton {
     text-align: left;
-    padding-left: 5px;
-}
+    padding-left: 5px;}
 </string>
             </property>
             <property name="text">
@@ -247,8 +246,7 @@
             <property name="styleSheet">
              <string notr="true">QPushButton {
     text-align: left;
-    padding-left: 5px;
-}
+    padding-left: 5px;}
 </string>
             </property>
             <property name="text">
@@ -280,8 +278,7 @@
             <property name="styleSheet">
              <string notr="true">QPushButton {
     text-align: left;
-    padding-left: 5px;
-}
+    padding-left: 5px;}
 </string>
             </property>
             <property name="text">
@@ -313,8 +310,7 @@
             <property name="styleSheet">
              <string notr="true">QPushButton {
     text-align: left;
-    padding-left: 5px;
-}
+    padding-left: 5px;}
 </string>
             </property>
             <property name="text">
@@ -343,46 +339,106 @@
             <property name="sizeHint" stdset="0">
              <size>
               <width>20</width>
-              <height>48</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-          <item>
-           <widget class="QLabel" name="label_3">
-            <property name="styleSheet">
-             <string notr="true">background: transparent;
-</string>
-            </property>
-            <property name="text">
-             <string/>
-            </property>
-            <property name="scaledContents">
-             <bool>false</bool>
-            </property>
-            <property name="wordWrap">
-             <bool>false</bool>
-            </property>
-            <property name="margin">
-             <number>0</number>
-            </property>
-            <property name="openExternalLinks">
-             <bool>false</bool>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <spacer name="verticalSpacer_2">
-            <property name="orientation">
-             <enum>Qt::Vertical</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>20</width>
               <height>40</height>
              </size>
             </property>
            </spacer>
+          </item>
+          <item>
+           <widget class="QGroupBox" name="current_product">
+            <property name="title">
+             <string>当前设计产品:</string>
+            </property>
+            <layout class="QVBoxLayout" name="verticalLayout_5">
+             <item>
+              <widget class="QLabel" name="label">
+               <property name="maximumSize">
+                <size>
+                 <width>110</width>
+                 <height>27</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">background-color: transparent;</string>
+               </property>
+               <property name="text">
+                <string>设备名称：</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_product_name">
+               <property name="maximumSize">
+                <size>
+                 <width>196</width>
+                 <height>27</height>
+                </size>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_4">
+               <property name="maximumSize">
+                <size>
+                 <width>110</width>
+                 <height>27</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">background-color: transparent;</string>
+               </property>
+               <property name="text">
+                <string>设备位号：</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_product_tag_numer">
+               <property name="maximumSize">
+                <size>
+                 <width>16777215</width>
+                 <height>27</height>
+                </size>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_6">
+               <property name="maximumSize">
+                <size>
+                 <width>110</width>
+                 <height>27</height>
+                </size>
+               </property>
+               <property name="styleSheet">
+                <string notr="true">background-color: transparent;</string>
+               </property>
+               <property name="text">
+                <string>产品编号：</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QLabel" name="label_product_number">
+               <property name="maximumSize">
+                <size>
+                 <width>16777215</width>
+                 <height>27</height>
+                </size>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
           </item>
           <item>
            <widget class="QPushButton" name="btn_login">
@@ -395,8 +451,7 @@
             <property name="styleSheet">
              <string notr="true">QPushButton {
     text-align: left;
-    padding-left: 5px;
-}
+    padding-left: 5px;}
 </string>
             </property>
             <property name="text">
@@ -477,7 +532,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1626</width>
+     <width>1598</width>
      <height>33</height>
     </rect>
    </property>
@@ -539,7 +594,7 @@
     <property name="title">
      <string>帮助</string>
     </property>
-    <addaction name="action_10"/>
+    <addaction name="action_help_doc"/>
     <addaction name="action_13"/>
     <addaction name="action_12"/>
    </widget>
@@ -570,67 +625,13 @@
     <addaction name="action_41"/>
     <addaction name="action_25"/>
    </widget>
-   <widget class="QMenu" name="redo">
-    <property name="title">
-     <string>12</string>
-    </property>
-    <property name="icon">
-     <iconset>
-      <normaloff>icons/重做.png</normaloff>icons/重做.png</iconset>
-    </property>
-   </widget>
-   <widget class="QMenu" name="revoke">
-    <property name="title">
-     <string>1</string>
-    </property>
-    <property name="icon">
-     <iconset>
-      <normaloff>icons/撤销.png</normaloff>icons/撤销.png</iconset>
-    </property>
-   </widget>
-   <widget class="QMenu" name="new_built">
-    <property name="title">
-     <string>3</string>
-    </property>
-    <property name="icon">
-     <iconset>
-      <normaloff>icons/新建.png</normaloff>icons/新建.png</iconset>
-    </property>
-   </widget>
-   <widget class="QMenu" name="open_">
-    <property name="title">
-     <string>4</string>
-    </property>
-    <property name="icon">
-     <iconset>
-      <normaloff>icons/打开.png</normaloff>icons/打开.png</iconset>
-    </property>
-   </widget>
-   <widget class="QMenu" name="save">
-    <property name="title">
-     <string>5</string>
-    </property>
-    <property name="icon">
-     <iconset>
-      <normaloff>icons/保存.png</normaloff>icons/保存.png</iconset>
-    </property>
-   </widget>
-   <widget class="QMenu" name="save_as">
-    <property name="title">
-     <string>6</string>
-    </property>
-    <property name="icon">
-     <iconset>
-      <normaloff>icons/另存为.png</normaloff>icons/另存为.png</iconset>
-    </property>
-   </widget>
    <addaction name="logo"/>
-   <addaction name="new_built"/>
-   <addaction name="open_"/>
-   <addaction name="save"/>
-   <addaction name="save_as"/>
-   <addaction name="revoke"/>
-   <addaction name="redo"/>
+   <addaction name="action"/>
+   <addaction name="action_2"/>
+   <addaction name="action_3"/>
+   <addaction name="action_6"/>
+   <addaction name="action_undo"/>
+   <addaction name="action_redo"/>
    <addaction name="document"/>
    <addaction name="design_mode"/>
    <addaction name="menu_2"/>
@@ -655,21 +656,37 @@
    </property>
   </action>
   <action name="action">
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/新建.png</normaloff>icons/新建.png</iconset>
+   </property>
    <property name="text">
     <string>新建项目</string>
    </property>
   </action>
   <action name="action_2">
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/打开.png</normaloff>icons/打开.png</iconset>
+   </property>
    <property name="text">
     <string>打开项目</string>
    </property>
   </action>
   <action name="action_3">
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/保存.png</normaloff>icons/保存.png</iconset>
+   </property>
    <property name="text">
     <string>保存项目</string>
    </property>
   </action>
   <action name="action_6">
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/另存为.png</normaloff>icons/另存为.png</iconset>
+   </property>
    <property name="text">
     <string>另存为</string>
    </property>
@@ -689,7 +706,7 @@
     <string>灵活设计</string>
    </property>
   </action>
-  <action name="action_10">
+  <action name="action_help_doc">
    <property name="text">
     <string>查看软件使用文档</string>
    </property>
@@ -857,6 +874,24 @@
   <action name="action_26">
    <property name="text">
     <string>文件存档</string>
+   </property>
+  </action>
+  <action name="action_undo">
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/撤销.png</normaloff>icons/撤销.png</iconset>
+   </property>
+   <property name="text">
+    <string>撤销</string>
+   </property>
+  </action>
+  <action name="action_redo">
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/重做.png</normaloff>icons/重做.png</iconset>
+   </property>
+   <property name="text">
+    <string>重做</string>
    </property>
   </action>
  </widget>

@@ -59,6 +59,9 @@ def edit_row_state():
                 continue
         except Exception as e:
             print("更新产品所在行的状态时出错")  # 调试信息
-            QMessageBox.critical(bianl.main_window, "错误", f"更新产品信息时发生错误: {e}")
+            # QMessageBox.critical(bianl.main_window, "错误", f"更新产品信息时发生错误: {e}")
+            bianl.main_window.line_tip.setText(f"删除失败：{e}")
+            bianl.main_window.line_tip.setToolTip(f"删除失败：{e}")
+            bianl.main_window.line_tip.setStyleSheet("color: black;")
             return
 

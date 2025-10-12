@@ -2,9 +2,10 @@ import json
 import traceback
 
 import pymysql
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTextEdit
+from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QMessageBox
 import os
 
+from modules.condition_input.view import check_project_and_product
 from modules.qiangdujisuan.jiekou_python.combine_json_new import calculate_heat_exchanger_strength as calculate_heat_exchanger_strength_ABEU
 from modules.qiangdujisuan.jiekou_python.combine_json_new_abes import calculate_heat_exchanger_strength as calculate_heat_exchanger_strength_ABES
 
@@ -19,8 +20,18 @@ def on_product_id_changed(new_id):
     product_id = new_id
 product_manager.product_id_changed.connect(on_product_id_changed)
 class JisuanResultViewer(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, line_tip=None, parent=None):
         super().__init__(parent)
+
+        # # 0903会议纪要 首先进行项目和产品检查
+        # print("准备检查项目和产品状态...")
+        # can_open, msg = check_project_and_product()
+        # if not can_open:
+        #     QMessageBox.information(self, "提示", msg)
+        #     self.deleteLater()  # 不打开界面
+        #     return  # 立即返回
+
+        self.line_tip = line_tip  # 保存主界面传进来的 line_tip
         self.setMinimumHeight(400)
 
         layout = QVBoxLayout(self)
@@ -79,9 +90,23 @@ class JisuanResultViewer(QWidget):
                 }
             }
 
+            # 判断是否有失败
+            has_failure = any(not success for success in simple_result["DictOutDatas"].values())
+
             # 转为字符串展示
             pretty_result = json.dumps(simple_result, ensure_ascii=False, indent=4)
+
             self.text_view.setPlainText(pretty_result)
+
+            # 如果有失败，更新 line_tip
+            if has_failure and self.line_tip:
+                self.line_tip.setStyleSheet("color: orange;")  # 设置文字颜色为橘黄色
+
+                self.line_tip.setText(
+                    "计算结果出现不通过的情况，请对照输入输出文件核查：shuru_jisuan.json 与 jisuan_output_new.json\n\n"
+                )
+
+
 
         except Exception:
 

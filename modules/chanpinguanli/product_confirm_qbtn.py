@@ -67,7 +67,10 @@ def get_input_must_var(row):
 def handle_confirm_product():
     # 只有新建 跟打开 才有项目id 通过项目id 判断此时有无项目
     if not bianl.current_project_id:
-        QMessageBox.warning(bianl.main_window, "提示", "请先新建项目！")
+        bianl.main_window.line_tip.setText("请先新建项目！")
+        bianl.main_window.line_tip.setToolTip("请先新建项目！")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.warning(bianl.main_window, "提示", "请先新建项目！")
         # 清空输入部分
         # bianl.product_table.clearContents()
         # bianl.product_table.setRowCount(3)
@@ -123,12 +126,15 @@ def handle_confirm_product():
         get_input_must_var(row)
         # 修改的时候不允许 必填项为空
         if curr_product_id and not (curr_row_product_name):
-            QMessageBox.warning(
-                bianl.main_window,
-                "必填项未填",
-                f"第 {row + 1} 行已生成产品，不允许保存为空白行。\n"
-                f"请至少输入必填项【产品名称】（或使用“删除产品”按钮来删除该产品）。"
-            )
+            bianl.main_window.line_tip.setText(f"第 {row + 1} 行已生成产品，不允许保存为空白行。请至少输入必填项【产品名称】（或使用“删除产品”按钮来删除该产品。）")
+            bianl.main_window.line_tip.setToolTip(f"第 {row + 1} 行已生成产品，不允许保存为空白行。请至少输入必填项【产品名称】\n（或使用“删除产品”按钮来删除该产品。）")
+            bianl.main_window.line_tip.setStyleSheet("color: black;")
+            # QMessageBox.warning(
+            #     bianl.main_window,
+            #     "必填项未填",
+            #     f"第 {row + 1} 行已生成产品，不允许保存为空白行。\n"
+            #     f"请至少输入必填项【产品名称】（或使用“删除产品”按钮来删除该产品）。"
+            # )
             return
 
         try:
@@ -170,6 +176,9 @@ def handle_confirm_product():
             if not all([curr_row_product_name]):
                 print("必填项未输入完整，弹出警告框")
                 missing_rows.append(row + 1)
+                bianl.main_window.line_tip.setText(f"第 {row + 1} 行存在未输入的必填项！")
+                bianl.main_window.line_tip.setToolTip(f"第 {row + 1} 行存在未输入的必填项！")
+                bianl.main_window.line_tip.setStyleSheet("color: black;")
                 # QMessageBox.warning(bianl.main_window, "警告", f"第 {row + 1} 行存在未输入的必填项！")
                 continue
 
@@ -191,6 +200,7 @@ def handle_confirm_product():
                 if product_confirm_qianzhi.check_existing_product(curr_row_product_number, curr_row_product_name, curr_row_device_position, bianl.current_project_id):
                     print("产品已存在，弹出提示框")  # 调试信息
                     cun_zai.append(row + 1)
+
                     # QMessageBox.warning(bianl.main_window, "提示", f"第 {row + 1} 行所表示的产品已存在，请修改！")
                     # return
                     # 最近的那个循环（这里是 for row in range(total_rows)），含义是“结束当前这轮，开始下一轮”。
@@ -357,7 +367,16 @@ def handle_confirm_product():
         info_msgs.append("产品信息已成功更新")
     
     if info_msgs:
-        QMessageBox.information(bianl.main_window, "处理结果", "\n".join(info_msgs))
+        bianl.main_window.line_tip.setText(";".join(info_msgs))
+        bianl.main_window.line_tip.setToolTip("\n".join(info_msgs))
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+
+    # —— lxy在 handle_confirm_product() 末尾加入（不改变你的原有逻辑）——
+    stats = getattr(bianl.main_window, "stats_page_instance", None)
+    if stats and hasattr(stats, "mark_clean"):
+        stats.mark_clean()
+
+        # QMessageBox.information(bianl.main_window, "处理结果", "\n".join(info_msgs))
 
 
     print("全部状态更新完成。")

@@ -8,11 +8,13 @@ import os
 
 from PyQt5.QtCore import QEvent
 from PyQt5.QtWidgets import QTableWidgetItem
+
+from modules.chanpinguanli.bianl import current_project_id
 from modules.condition_input.funcs.multi_conditions_dialog import MultiConditionsDialog
 from PyQt5.QtWidgets import QMessageBox, QPushButton
 
 # 导入功能函数
-from modules.condition_input.funcs.funcs_product_info import check_pdt_define
+from modules.condition_input.funcs.funcs_product_info import check_pdt_define, check_has_any_product
 from modules.condition_input.funcs.ctrl_helper import enable_full_undo
 from modules.condition_input.funcs.funcs_cdt_input import load_design_data_if_exists, render_grouped_table, \
     render_coating_table, set_multilevel_headers, apply_table_style, highlight_missing_required_rows, \
@@ -35,13 +37,39 @@ def on_product_id_changed(new_id):
 product_manager.product_id_changed.connect(on_product_id_changed)
 
 
+#0903会议纪要 添加一个通用的检查函数，用于所有非项目管理界面
+def check_project_and_product():
+    """检查项目和产品状态的通用函数（修复变量引用问题）"""
+    # 关键修改：直接通过bianl模块访问current_project_id
+    from modules.chanpinguanli import bianl
+    # 打印调试信息，确认获取的项目ID
+    print(f"检查函数中获取的项目ID: {repr(bianl.current_project_id)}")
+    # 检查项目ID是否有效
+    if not bianl.current_project_id or str(bianl.current_project_id).strip() == "":
+        return False, "请先创建项目！"
+    # 检查当前项目下是否有产品
+    if not check_has_any_product(bianl.current_project_id):
+        return False, "请先创建至少一个产品！"
+    return True, ""
+
 class DesignConditionInputViewer(QWidget):
     def __init__(self, line_tip=None):
         super().__init__()
 
+        # # 0903会议纪要 首先进行项目和产品检查
+        # print("准备检查项目和产品状态...")
+        # can_open, msg = check_project_and_product()
+        # if not can_open:
+        #     QMessageBox.information(self, "提示", msg)
+        #     self.deleteLater()  # 不打开界面
+        #     return  # 立即返回
+
         current_dir = os.path.dirname(os.path.abspath(__file__))
         ui_path = os.path.join(current_dir, "viewer.ui")
         uic.loadUi(ui_path, self)
+
+        self.product_id = product_id
+
         self.line_tip = line_tip
         screen_geometry = QApplication.desktop().screenGeometry()
         screen_width = screen_geometry.width()
@@ -52,7 +80,7 @@ class DesignConditionInputViewer(QWidget):
         self.move((screen_width - target_width) // 2, (screen_height - target_height) // 2)
 
         QToolTip.setFont(QFont("Microsoft YaHei", 12))
-        self.product_id = product_id
+        # self.product_id = product_id
         self._is_valid_product = True
         self._early_tip_msg = ""
         self._is_modified = False
@@ -60,9 +88,11 @@ class DesignConditionInputViewer(QWidget):
         if not self.product_id:
             self._is_valid_product = False
             self._early_tip_msg = "请先至项目管理处选择产品！"
+
         elif not check_pdt_define(self.product_id):
             self._is_valid_product = False
             self._early_tip_msg = "请先至项目管理处对当前产品进行定义！"
+
 
         # 统一处理提示
         if not self._is_valid_product:

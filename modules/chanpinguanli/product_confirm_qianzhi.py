@@ -61,7 +61,10 @@ def check_existing_product(product_number, product_name, device_position, projec
         return exists
     except Exception as e:
         log_error("[check_existing_product] 查询数据库失败", e)
-        QMessageBox.critical(bianl.main_window, "数据库错误", f"查询产品需求表失败: {e}")
+        bianl.main_window.line_tip.setText(f"查询产品需求表失败: {e}")
+        bianl.main_window.line_tip.setToolTip(f"查询产品需求表失败: {e}")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.critical(bianl.main_window, "数据库错误", f"查询产品需求表失败: {e}")
         return False
 #todo 把值传进来
 def save_new_product(row,curr_row_serial,curr_row_product_name,curr_row_product_number,curr_row_device_position, curr_row_design_stage,curr_row_design_edition):
@@ -113,11 +116,17 @@ def save_new_product(row,curr_row_serial,curr_row_product_name,curr_row_product_
 
         if not project_path_pd:
             print("[save_new_product] ❌ 未找到项目路径")
-            QMessageBox.warning(bianl.main_window, "警告", "未找到项目保存路径。")
+            bianl.main_window.line_tip.setText("未找到项目保存路径。")
+            bianl.main_window.line_tip.setToolTip("未找到项目保存路径。")
+            bianl.main_window.line_tip.setStyleSheet("color: black;")
+            # QMessageBox.warning(bianl.main_window, "警告", "未找到项目保存路径。")
             return
     except Exception as e:
         print(f"[save_new_product] ❌ 查询项目路径失败: {e}")
-        QMessageBox.critical(bianl.main_window, "数据库错误", f"查询项目保存路径失败: {e}")
+        bianl.main_window.line_tip.setText(f"查询项目保存路径失败: {e}")
+        bianl.main_window.line_tip.setToolTip(f"查询项目保存路径失败: {e}")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.critical(bianl.main_window, "数据库错误", f"查询项目保存路径失败: {e}")
         cursor.close()
         conn.close()
         return
@@ -131,7 +140,10 @@ def save_new_product(row,curr_row_serial,curr_row_product_name,curr_row_product_
     print(f"[save_new_product] 准备创建产品文件夹: {folder_path}")
     if os.path.exists(folder_path):
         print("[save_new_product] ⚠️ 文件夹已存在")
-        QMessageBox.warning(bianl.main_window, "提示", f"产品文件夹已存在：{folder_path}")
+        bianl.main_window.line_tip.setText(f"产品文件夹已存在：{folder_path}")
+        bianl.main_window.line_tip.setToolTip(f"产品文件夹已存在：{folder_path}")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.warning(bianl.main_window, "提示", f"产品文件夹已存在：{folder_path}")
         return
 
     try:
@@ -170,7 +182,10 @@ def save_new_product(row,curr_row_serial,curr_row_product_name,curr_row_product_
         print(f"[save_new_product] ✅ 状态更新完成 → view")
     except Exception as e:
         print(f"[save_new_product] ❌ 新建产品时出错: {e}")
-        QMessageBox.critical(bianl.main_window, "错误", f"新建产品时发生错误：{e}")
+        bianl.main_window.line_tip.setText(f"新建产品时发生错误：{e}")
+        bianl.main_window.line_tip.setToolTip(f"新建产品时发生错误：{e}")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.critical(bianl.main_window, "错误", f"新建产品时发生错误：{e}")
 
 
 
@@ -213,7 +228,10 @@ def update_existing_product(row, new_serial, new_name, new_number, new_position,
 
         project_path = result["项目保存路径"] if result and "项目保存路径" in result else None
         if not project_path:
-            QMessageBox.warning(bianl.main_window, "警告", "无法获取项目路径，跳过重命名文件夹。")
+            bianl.main_window.line_tip.setText("无法获取项目路径，跳过重命名文件夹。")
+            bianl.main_window.line_tip.setToolTip("无法获取项目路径，跳过重命名文件夹。")
+            bianl.main_window.line_tip.setStyleSheet("color: black;")
+            # QMessageBox.warning(bianl.main_window, "警告", "无法获取项目路径，跳过重命名文件夹。")
         else:
             # 项目路径
             project_root = os.path.join(project_path, f"{bianl.owner_input.text().strip()}_{bianl.project_name_input.text().strip()}")
@@ -246,8 +264,11 @@ def update_existing_product(row, new_serial, new_name, new_number, new_position,
                     print(f"[rename] 找不到旧文件夹：{old_folder}（可能旧值记录有误或路径不一致）")
                 elif os.path.exists(new_folder):
                     print(f"[rename] 目标已存在：{new_folder}，为了安全不覆盖。")
-                    QMessageBox.warning(bianl.main_window, "提示",
-                                        f"已存在同名文件夹：\n{new_folder}\n请手动处理后再试。")
+                    bianl.main_window.line_tip.setText(f"已存在同名文件夹：\n{new_folder}\n请手动处理后再试。")
+                    bianl.main_window.line_tip.setToolTip(f"已存在同名文件夹：\n{new_folder}\n请手动处理后再试。")
+                    bianl.main_window.line_tip.setStyleSheet("color: black;")
+                    # QMessageBox.warning(bianl.main_window, "提示",
+                    #                     f"已存在同名文件夹：\n{new_folder}\n请手动处理后再试。")
                 else:
                     os.rename(old_folder, new_folder)
                     print("[rename] ✅ 重命名完成")
@@ -258,7 +279,10 @@ def update_existing_product(row, new_serial, new_name, new_number, new_position,
                     # row_status["old_position"] = curr_row_device_position
             except Exception as e:
                 print(f"[rename] ❌ 重命名失败：{e}")
-                QMessageBox.critical(bianl.main_window, "错误", f"重命名失败：{e}")
+                bianl.main_window.line_tip.setText(f"重命名失败：{e}")
+                bianl.main_window.line_tip.setToolTip(f"重命名失败：{e}")
+                bianl.main_window.line_tip.setStyleSheet("color: black;")
+                # QMessageBox.critical(bianl.main_window, "错误", f"重命名失败：{e}")
 
         # 更新数据库信息（加入 WHERE 语句防止全表修改）
         conn = common_usage.get_mysql_connection_product()
@@ -282,6 +306,9 @@ def update_existing_product(row, new_serial, new_name, new_number, new_position,
         auto_edit_row.update_status(row, "view")
         print("产品已经更新完成！")
         # 不单独显示提示框，由调用函数统一处理
+        bianl.main_window.line_tip.setText("产品信息已成功更新。")
+        bianl.main_window.line_tip.setToolTip("产品信息已成功更新。")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
         #QMessageBox.information(bianl.main_window, "产品信息更新", "产品信息已成功更新。")改77
         return True
     except Exception as e:
@@ -289,7 +316,10 @@ def update_existing_product(row, new_serial, new_name, new_number, new_position,
         with open("error_log.txt", "a", encoding="utf-8") as log:
             log.write("[update_existing_product] 更新失败：\\n")
             log.write(traceback.format_exc() + "\\n")
-        QMessageBox.critical(bianl.main_window, "产品信息更改", f"更新产品失败：{e}")
+        bianl.main_window.line_tip.setText(f"更新产品失败：{e}")
+        bianl.main_window.line_tip.setToolTip(f"更新产品失败：{e}")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # QMessageBox.critical(bianl.main_window, "产品信息更改", f"更新产品失败：{e}")
         return False
 
 

@@ -505,7 +505,7 @@ class TubeDistributionCore:
             return False
 
         if decimal_err_list or int_err_list or required_err_list:
-            errors1 = [f"【{x}】只能输入数字!" for x in decimal_err_list]
+            errors1 = [f"【{x}】只能填写数字!" for x in decimal_err_list]
             errors2 = [f"【{x}】不能为空!" for x in required_err_list]
             errors3 = [f"【{x}】只能输入整数!" for x in int_err_list]
             errors = "\n".join(errors1 + errors2 + errors3)

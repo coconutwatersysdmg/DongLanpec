@@ -67,7 +67,7 @@ from modules.cailiaodingyi.funcs.funcs_pdf_render import render_guankou_param_to
 from modules.chanpinguanli import chanpinguanli_main
 from modules.chanpinguanli.chanpinguanli_main import product_manager
 from modules.condition_input.funcs.funcs_cdt_input import sync_corrosion_to_guankou_param
-from modules.condition_input.view import DesignConditionInputViewer
+from modules.condition_input.view import DesignConditionInputViewer, check_project_and_product
 from modules.guankoudingyi.dynamically_adjust_ui import Stats
 
 product_id = None
@@ -85,6 +85,15 @@ product_manager.product_id_changed.connect(on_product_id_changed)
 class DesignParameterDefineInputerViewer(QWidget):
     def __init__(self, line_tip=None, main_window=None):
         super().__init__()
+
+        # 0903会议纪要 首先进行项目和产品检查
+        # print("准备检查项目和产品状态...")
+        # can_open, msg = check_project_and_product()
+        # if not can_open:
+        #     QMessageBox.information(self, "提示", msg)
+        #     self.deleteLater()  # 不打开界面
+        #     return  # 立即返回
+
         self.line_tip = line_tip
         self.main_window = main_window
         self.guankou_define_info = None
@@ -962,6 +971,7 @@ class DesignParameterDefineInputerViewer(QWidget):
             finally:
                 self.tableWidget_guankou = old_table
 
+
     def load_original_data(self):
 
         def _norm_label(s: str) -> str:
@@ -989,7 +999,41 @@ class DesignParameterDefineInputerViewer(QWidget):
         self.comboBox_template.addItems(template_list)
         # 默认选中空白项
         index_blank = template_list.index("") if "" in template_list else 0
-        self.comboBox_template.setCurrentIndex(index_blank)
+        # self.comboBox_template.setCurrentIndex(index_blank)
+
+        # 👉 添加：监听下拉框变化，动态更新 lineEdit_template 的状态
+        if not getattr(self, "_template_signal_connected", False):
+            def _update_lineEdit_enabled(text):
+                text = text.strip()
+                # 控制可编辑状态
+                if not text or text.lower() == "none":
+                    self.lineEdit_template.setEnabled(False)
+                    current_template_name = "None"
+                else:
+                    self.lineEdit_template.setEnabled(True)
+                    current_template_name = text
+
+                # ----------------------------
+                # 这里是新增的核心逻辑：重新加载数据库数据
+                element_original_info = load_elementoriginal_data(
+                    current_template_name, self.product_type, self.product_form
+                )
+
+                # 插入数据库
+                insert_element_data(element_original_info, self.product_id, current_template_name)
+
+                # 渲染表格
+                element_original_info = move_guankou_to_first(element_original_info)
+                self.element_data = element_original_info
+                self.render_data_to_table(element_original_info)
+
+                # 渲染示意图
+                self.image_paths = [item.get('零件示意图', '') for item in element_original_info]
+                if self.image_paths:
+                    self.display_image(self.image_paths[0])
+
+            self.comboBox_template.currentTextChanged.connect(_update_lineEdit_enabled)
+            self._template_signal_connected = True
 
         # 检查产品设计活动库数据
         if has_product(product_id):
@@ -1005,11 +1049,13 @@ class DesignParameterDefineInputerViewer(QWidget):
             else:
                 print(f"[WARN] 模板下拉框中找不到：{template_name_from_db}")
 
-            # zhange
-            if not template_name_from_db or template_name_from_db == "None":
+            # 👉 手动刷新一次 lineEdit 状态（避免没触发信号）
+            current_text = self.comboBox_template.currentText()
+            if not current_text or current_text.strip() == "" or current_text.strip().lower() == "None":
                 self.lineEdit_template.setEnabled(False)
             else:
                 self.lineEdit_template.setEnabled(True)
+
 
             guankou_define_dict = {}
             category_labels = query_all_guankou_categories(product_id)

@@ -1,0 +1,6 @@
+        elif name == "换热管":
+            # 获取换热管质量
+            uhx_data = jisuan_data.get("DictOutDatas", {}).get("固定管板", {}).get("Datas", [])
+            uhx_mass = get_param(uhx_data, "单根换热管重量kg")
+            uhx_mass = float(uhx_mass) if uhx_mass not in (None, "", "None") else None
+            row[7].value = uhx_mass

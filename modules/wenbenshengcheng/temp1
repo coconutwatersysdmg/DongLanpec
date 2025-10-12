@@ -1,0 +1,51 @@
+        elif name == "U形换热管":
+            # 获取管程数
+            tube_pass = int(pipe_data.get("TubesCount", 0))
+
+            print("tube_pass",tube_pass)
+            # 获取换热管长度
+            tube_length = int(pipe_input_data.get("LB_TubeLong", 0))
+
+            print("tube_length",tube_length)
+            # 获取换热管外径、壁厚
+            outer_dia = None
+            wall_thick = None
+            for d in jisuan_data.get("DictOutDatas", {}).get("固定管板", {}).get("Datas", []):
+                print()
+                if d.get("Name") == "换热管外径":
+                    outer_dia = float(d.get("Value", 0))
+                elif d.get("Name") == "换热管壁厚":
+                    wall_thick = float(d.get("Value", 0))
+            print("outer_dia",outer_dia)
+            print("wall_thick",wall_thick)
+            if tube_pass and tube_length and outer_dia and wall_thick:
+                # 计算内径
+                inner_dia = outer_dia - wall_thick
+                area = math.pi * ((outer_dia / 1000) ** 2 - (inner_dia / 1000) ** 2) / 4  # m²
+                print("area",area)
+                # 获取TubesParam
+                tubes_param = pipe_data.get("TubesParam", [])
+                print("tubes_param",tubes_param)
+                total_mass = 0.0
+                for group in tubes_param:
+                    script_items = group.get("ScriptItem", [])
+                    print(script_items)
+                    for item in script_items:
+                        x = item.get("CenterPt", {}).get("X", 0.0)
+                        y = item.get("CenterPt", {}).get("Y", 0.0)
+
+                        if tube_pass == 2:
+                            u_radius = abs(y) / 1000  # m
+                            print(u_radius)
+                        elif tube_pass in [4, 6]:
+                            u_radius = abs(x) / 1000  # m
+                        else:
+                            continue
+
+                        expand_len = u_radius * math.pi + (tube_length / 1000) * 2  # m
+                        print("expand_len",expand_len)
+                        single_mass = area * expand_len * 7850  # kg
+                        print("single_mass", single_mass)
+                        total_mass += single_mass
+                row[7].value = '/'
+                row[8].value = round(total_mass, 3)

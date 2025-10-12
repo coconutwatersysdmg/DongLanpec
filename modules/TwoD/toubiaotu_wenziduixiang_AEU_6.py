@@ -1,4 +1,5 @@
 import json
+import math
 import re
 import time
 import traceback
@@ -328,26 +329,66 @@ def twoDgeneration(product_id):
                 time.sleep(delay)
         print("❌ 超过最大尝试次数，无法访问 ModelSpace")
     # 通用函数：修改文字对象
-    def modify_text_by_handle(acad,handle, new_text):
+    def get_current_doc():
+        acad = Autocad(create_if_not_exists=True)  # ⚡ 每次都创建新的 COM 对象
         try:
-            obj = doc.HandleToObject(handle)
-            if obj is None:
-                print(f"❌ Handle {handle} 不存在！")
-                return False
-            if obj.ObjectName in ['AcDbText', 'AcDbMText']:
-                old_text = obj.TextString
-                obj.TextString = new_text
-                print(f"✅ 修改成功: '{old_text}' → '{new_text}' (Handle: {handle})")
-                return True
-            else:
-                print(f"⚠️ Handle {handle} 类型不是文字对象：{obj.ObjectName}")
-                return False
+            return acad.doc
         except Exception as e:
-            print(f"❌ 修改失败 (Handle: {handle}): {e}")
-            return False
-    # 初始化 AutoCAD
-    extract_text(doc)
+            print(f"⚠️ 获取当前文档失败: {e}")
+            return None
 
+    def modify_text_by_handle(doc, handle, new_text, retries=5, delay=0.5):
+        doc = get_current_doc()
+        if not doc:
+            print("⚠️ 未获取当前文档")
+            return False
+
+        safe_text = str(new_text).replace("\r", "").replace("\n", "").replace("\t", "")
+
+        # 强制刷新文档状态
+        try:
+            doc.Regen()
+        except:
+            pass
+
+        # 等待 COM 对象稳定
+        time.sleep(0.5)
+
+        for attempt in range(retries):
+            try:
+                obj = doc.HandleToObject(handle)
+                if obj is None:
+                    print(f"⚠️ Handle {handle} 不存在，第 {attempt + 1} 次重试...")
+                    time.sleep(delay)
+                    continue
+
+                if hasattr(obj, 'TextString'):
+                    old = obj.TextString
+                    obj.TextString = safe_text
+                    print(f"✅ 修改成功: Handle {handle} → '{safe_text}'")
+                    return True
+                elif hasattr(obj, 'Value'):
+                    old = obj.Value
+                    obj.Value = safe_text
+                    print(f"✅ 修改成功: Handle {handle} → '{safe_text}'")
+                    return True
+                else:
+                    print(f"⚠️ Handle {handle} 对象不支持 TextString/Value")
+                    return False
+
+            except Exception as e:
+                print(f"⚠️ 第 {attempt + 1} 次修改失败: {e}")
+                time.sleep(delay)
+
+        print(f"❌ 修改失败: {handle}")
+        return False
+    # 初始化 AutoCAD
+    # extract_text(doc)
+    def safe_modify(doc, handle, value):
+        """如果 value 没有值，则替换成 '/'，再修改句柄"""
+        if value in (None, "", "None"):
+            value = "/"
+        modify_text_by_handle(doc, handle, str(value))
     # 处理产品法规 → 替换到 handle 77872
     regulation_text = get_standard_value(product_id, "技术法规")
     if regulation_text:
@@ -361,7 +402,49 @@ def twoDgeneration(product_id):
     standard_text = get_xingshi_value(product_id)
     if standard_text:
         modify_text_by_handle(doc,"77849", standard_text)
+    def ceil_two_decimals(value):
+        return math.ceil(float(value) * 100) / 100
+    # 77861 设备操作重量
+    db_config = {
+        'host': 'localhost',
+        'user': 'root',
+        'password': '123456',
+        'charset': 'utf8mb4',
+        'cursorclass': pymysql.cursors.DictCursor
+    }
+    conn2 = pymysql.connect(database='产品设计活动库', **db_config)
+    # 壳体圆筒
+    cursor2 = conn2.cursor(pymysql.cursors.DictCursor)
+    cursor2.execute("""
+        SELECT `Value` 
+        FROM 产品设计活动表_元件计算结果表 
+        WHERE `产品ID` = %s 
+          AND `元件名称` = '壳体圆筒' 
+          AND `Name` = '圆筒压力试验压力'
+    """, (product_id,))
+    row = cursor2.fetchone()
+    qiao_shiyanyali = ceil_two_decimals(row["Value"])
 
+    # 管箱圆筒
+    cursor3 = conn2.cursor(pymysql.cursors.DictCursor)
+    cursor3.execute("""
+        SELECT `Value` 
+        FROM 产品设计活动表_元件计算结果表 
+        WHERE `产品ID` = %s 
+          AND `元件名称` = '管箱圆筒' 
+          AND `Name` = '圆筒压力试验压力'
+    """, (product_id,))
+    row = cursor3.fetchone()
+    guan_shiyanyali = ceil_two_decimals(row["Value"])
+
+    # 替换图纸文字
+    modify_text_by_handle(doc, "7786D", f"{qiao_shiyanyali:.2f}/-")
+    modify_text_by_handle(doc, "77857", f"{guan_shiyanyali:.2f}/-")
+
+
+
+    cursor2.close()
+    conn2.close()
     # 获取壳程数值、管程数值
     qiao_value, guan_value = get_shejishuju_value(product_id, "介质（组分）")
     modify_text_by_handle(doc,"77874", str(qiao_value))
@@ -372,7 +455,7 @@ def twoDgeneration(product_id):
     qiao_value, guan_value = get_shejishuju_value(product_id, "工作压力")
     modify_text_by_handle(doc,"80B4D", str(qiao_value))
     modify_text_by_handle(doc,"80B55", str(guan_value))
-    qiao_value, guan_value = get_shejishuju_value(product_id, "设计压力*")
+    qiao_value, guan_value = get_shejishuju_value(product_id, "设计压力* ")
     modify_text_by_handle(doc,"77864", str(qiao_value))
     modify_text_by_handle(doc,"7784E", str(guan_value))
     qiao_value, guan_value = get_shejishuju_value(product_id, "最高允许工作压力")
@@ -410,10 +493,7 @@ def twoDgeneration(product_id):
     modify_text_by_handle(doc,"77878", str(qiao_value))
     modify_text_by_handle(doc,"77879", str(guan_value))
     # 77852 7786C 金属平均温度（正常）（管程）（壳程）
-    qiao_value1, guan_value1 = get_shejishuju_value(product_id, "自定义耐压试验压力（卧）")
-    qiao_value2, guan_value2 = get_shejishuju_value(product_id, "自定义耐压试验压力（立）")
-    modify_text_by_handle(doc,"7786D", str(qiao_value1+"/"+qiao_value1))
-    modify_text_by_handle(doc,"77857", str(qiao_value2+"/"+qiao_value2))
+
     qiao_value, guan_value = get_shejishuju_value(product_id, "耐压试验试验介质")
     modify_text_by_handle(doc,"77885", str(qiao_value))
     modify_text_by_handle(doc,"77881", str(guan_value))
@@ -729,28 +809,138 @@ def twoDgeneration(product_id):
         text = flange_type_map.get(code, "")
         modify_text_by_handle(doc, handle, text)
 
-    # ✅ 获取 外伸高度
-    cursor.execute("""
-        SELECT 管口代号, 外伸高度
-        FROM 产品设计活动表_管口表
-        WHERE 产品ID = %s AND 管口代号 IN ('N1', 'N2', 'N3', 'N4')
-    """, (product_id,))
-    extension_rows = cursor.fetchall()
-    extension_map = {
-        row["管口代号"]: str(row["外伸高度"])
-        for row in extension_rows if row["外伸高度"] is not None
+    def build_out_length_map(product_id):
+        """
+        构建管口外伸高度映射 {管口名称: 外伸高度}
+        包含：管程入口、管程出口、壳程入口、壳程出口、排气口、排液口
+        """
+        conn_product = pymysql.connect(
+            host="localhost", user="root", password="123456",
+            database="产品设计活动库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+        )
+        conn_material = pymysql.connect(
+            host="localhost", user="root", password="123456",
+            database="材料库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+        )
+        conn_component = pymysql.connect(
+            host="localhost", user="root", password="123456",
+            database="元件库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+        )
+
+        cur = conn_product.cursor()
+        cur2 = conn_material.cursor()
+        cur3 = conn_component.cursor()
+
+        # === 1. 获取开孔元件外径 ===
+        cur.execute("""
+            SELECT 元件名称, value
+            FROM 产品设计活动表_元件计算结果表
+            WHERE 产品ID = %s 
+              AND 元件名称 IN ('管程入口接管','管程出口接管','壳程入口接管','壳程出口接管')
+              AND Name = '开孔元件外径'
+        """, (product_id,))
+        waijing_map = {row["元件名称"]: float(row["value"]) for row in cur.fetchall() if row.get("value")}
+
+        # === 2. 获取接管实际外伸长度 ===
+        cur.execute("""
+            SELECT 元件名称, value
+            FROM 产品设计活动表_元件计算结果表
+            WHERE 产品ID = %s 
+              AND 元件名称 IN ('管程入口接管','管程出口接管','壳程入口接管','壳程出口接管')
+              AND Name = '接管实际外伸长度'
+        """, (product_id,))
+        changdu_map = {row["元件名称"]: float(row["value"]) for row in cur.fetchall() if row.get("value")}
+
+        # === 3. 法兰匹配获取 H 值 ===
+        # 获取管口信息
+        cur.execute("""
+            SELECT 管口代号, 管口功能, 法兰标准, 公称尺寸, 压力等级, 法兰型式, 密封面型式
+            FROM 产品设计活动表_管口表
+            WHERE 产品ID = %s AND 管口功能 IN ('管程入口','管程出口','壳程入口','壳程出口')
+        """, (product_id,))
+        ports = cur.fetchall()
+
+        # 管口类型选择
+        cur.execute("SELECT 公称尺寸类型, 公称压力类型 FROM 产品设计活动表_管口类型选择表 WHERE 产品ID = %s",
+                    (product_id,))
+        type_info = cur.fetchone()
+        size_type = type_info["公称尺寸类型"] if type_info else "DN"
+        press_type = type_info["公称压力类型"] if type_info else "PN"
+
+        # 公称尺寸表 (NPS → DN)
+        cur3.execute("SELECT NPS, DN FROM 公称尺寸表")
+        nps_map = {str(r["NPS"]).strip(): str(r["DN"]).strip() for r in cur3.fetchall()}
+
+        # 管法兰质量表
+        cur2.execute("SELECT * FROM 管法兰质量表")
+        flange_rows = cur2.fetchall()
+
+        gaodu_map = {}
+
+        for port in ports:
+            func = port["管口功能"]  # 管程入口/出口、壳程入口/出口、排气口、排液口
+            std = port["法兰标准"]
+            size = str(port["公称尺寸"]).strip()
+            pressure = str(port["压力等级"]).strip()
+            flange_type = port["法兰型式"]
+            face_type = port["密封面型式"]
+
+            if size_type.upper() == "NPS":
+                size = nps_map.get(size, size)  # 转换成 DN
+
+            for row in flange_rows:
+                if std and row["标准"] not in std:
+                    continue
+                if str(row["DN"]).strip() != size:
+                    continue
+                if press_type.upper() == "PN":
+                    if str(row["PN"]).strip() != pressure:
+                        continue
+                elif press_type.upper() == "CLASS":
+                    if str(row["Class"]).strip() != pressure:
+                        continue
+                if flange_type and str(row["法兰型式代号"]).strip() != str(flange_type).strip():
+                    continue
+
+                face_col = f"H{face_type}" if face_type else None
+                if face_col and face_col in row:
+                    gaodu_map[f"{func}接管"] = float(row[face_col])
+                break
+
+        # === 4. 计算最终外伸高度 ===
+        result = {}
+        for port in ['管程入口接管', '管程出口接管', '壳程入口接管', '壳程出口接管']:
+            try:
+                result[port] = str(
+                    waijing_map.get(port, 0) / 2 +
+                    changdu_map.get(port, 0) +
+                    gaodu_map.get(port, 0)
+                )
+            except Exception:
+                result[port] = ""
+
+        return result
+
+    # === 获取所有管口外伸高度 ===
+    out_len_map = build_out_length_map(product_id)
+
+    # === 映射到 handle ===
+    port_handle_map = {
+        "管程入口接管": "778B0",  # N1
+        "管程出口接管": "778C9",  # N2
+        "壳程入口接管": "778CA",  # N3
+        "壳程出口接管": "778CB",  # N4
+
     }
 
-    # ✅ 写入 handle：778B0、778C9、778CA、778CB
-    for handle, code in zip(["778B0", "778C9", "778CA", "778CB"], ["N1", "N2", "N3", "N4"]):
-        text = extension_map.get(code, "")
-        modify_text_by_handle(doc, handle, text)
+    for port, handle in port_handle_map.items():
+        modify_text_by_handle(doc, handle, out_len_map.get(port, ""))
     # handle → 接管组件名 映射
     handle_map = {
-        "7E6CD": "管程入口接管",
-        "7E6CE": "管程出口接管",
+        "7E6CD": "管程出口接管",
+        "7E6CE": "壳程出口接管",
         "778BA": "壳程入口接管",
-        "778AF": "壳程出口接管"
+        "778AF": "管程入口接管"
     }
     json_path = "jisuan_output_new.json"  # 替换为实际路径
     jisuan_data = load_json_data(json_path)
@@ -835,71 +1025,89 @@ def twoDgeneration(product_id):
             print(f"⚠️ 跳过 {guankou_id}，无有效法兰标准或 handle")
 
     handle_map = {
-        "778B1": "N1",
-        "778B6": "N2",
-        "778BB": "N3",
-        "778C0": "N4"
+        "778B1": "管程入口接管",
+        "778B6": "管程出口接管",
+        "778BB": "壳程入口接管",
+        "778C0": "壳程出口接管",
+        "80D4F": "排液口接管",
+        "80D57": "排气口接管",
     }
 
-
-    for handle, guankou_daihao in handle_map.items():
-        # 1️⃣ 获取材料分类
-        cursor.execute("""
-            SELECT 材料分类
-            FROM 产品设计活动表_管口类别表
+    # === 预读取附加参数表（供货状态用） ===
+    cursor.execute("""
+            SELECT 参数名称, 参数值
+            FROM 产品设计活动表_管口附加参数表
             WHERE 产品ID = %s
         """, (product_id,))
-        class_rows = cursor.fetchall()
-        category = class_rows[0]["材料分类"].strip() if class_rows and class_rows[0].get("材料分类") else None
+    extra_params = {row["参数名称"]: row["参数值"] for row in cursor.fetchall()}
 
-        # 2️⃣ 获取管口零件ID
-        cursor.execute("""
-            SELECT 管口零件ID
-            FROM 产品设计活动表_管口零件材料表
-            WHERE 产品ID = %s AND 零件名称 = '接管'
-        """, (product_id,))
-        row = cursor.fetchone()
-        part_id = row["管口零件ID"] if row and row.get("管口零件ID") else None
+    # === 遍历 handle_map ===
+    for handle, guankou_daihao in handle_map.items():
+        module = dict_out_data.get(guankou_daihao, {})
+        datas = module.get("Datas", [])
 
-        if part_id:
-            # 3️⃣ 获取材料类型参数
-            if category:
-                cursor.execute("""
-                    SELECT 参数值
-                    FROM 产品设计活动表_管口零件材料参数表
-                    WHERE 产品ID = %s AND 管口零件ID = %s AND 类别 = %s AND 参数名称 = '材料类型'
-                """, (product_id, part_id, category))
-            else:
-                cursor.execute("""
-                    SELECT 参数值
-                    FROM 产品设计活动表_管口零件材料参数表
-                    WHERE 产品ID = %s AND 管口零件ID = %s AND 参数名称 = '材料类型'
-                """, (product_id, part_id))
+        mat_type, mat_grade, mass = "", "", ""
+        for item in datas:
+            name = item.get("Name", "").strip()
+            if name == "接管材料类型":
+                mat_type = item.get("Value", "").strip()
+            elif name == "接管材料牌号":
+                mat_grade = item.get("Value", "").strip()
+            elif name == "接管重量":
+                mass = item.get("Value", "").strip()
 
-            mat_row = cursor.fetchone()
-            value = str(mat_row["参数值"]).strip() if mat_row and mat_row.get("参数值") else ""
-            modify_text_by_handle(doc, handle, value)
-        else:
-            print(f"❌ 未找到管口零件ID（{guankou_daihao}）")
+        # 匹配供货状态 & 接管法兰材料类型
+        supply_status = ""
+        flange_mat_type = mat_type  # 默认还是接管材料类型
+        for i in range(1, 4):
+            t_key, g_key = f"接管材料类型{i}", f"接管材料牌号{i}"
+            s_key, f_key = f"接管供货状态{i}", f"接管法兰材料类型{i}"
+
+            if extra_params.get(t_key) == mat_type and extra_params.get(g_key) == mat_grade:
+                supply_status = extra_params.get(s_key, "")
+                flange_mat_type = extra_params.get(f_key, mat_type)  # 优先取法兰材料类型
+                break
+
+        # 拼接最终文本 —— 用法兰材料类型替代接管材料类型
+        text = f"{flange_mat_type}"
+
+        # ⚡ 写入 Word 指定 handle
+        modify_text_by_handle(doc, handle, text)
+        print(f"✅ 写入 handle {handle} ({guankou_daihao}): {text}")
+
+    modify_text_by_handle(doc, "77816", "管箱平盖")
+    modify_text_by_handle(doc, "77824", "壳体圆筒")
     # 🔍 获取接管材料信息
-    cursor.execute("""
-        SELECT 材料牌号, 供货状态, 材料标准
-        FROM 产品设计活动表_管口零件材料表
-        WHERE 产品ID = %s AND 零件名称 = '接管'
-        LIMIT 1
-    """, (product_id,))
-    row = cursor.fetchone()
+    # 从 JSON(dict_out) 拿第一个接管的信息（假设 N1 即可）
+    module = dict_out_data.get("管程入口接管", {})
+    datas = module.get("Datas", [])
 
-    if row:
-        caipai = str(row.get("材料牌号", "") or "").strip()
-        gonghuo = str(row.get("供货状态", "") or "").strip()
-        biaozhun = str(row.get("材料标准", "") or "").strip()
+    mat_type, mat_grade, mat_std = "", "", ""
+    for item in datas:
+        name = item.get("Name", "").strip()
+        if name == "接管材料类型":
+            mat_type = item.get("Value", "").strip()
+        elif name == "接管材料牌号":
+            mat_grade = item.get("Value", "").strip()
+        elif name == "接管材料标准":
+            mat_std = item.get("Value", "").strip()
 
-        text = f"{caipai}/{gonghuo}/{biaozhun}"
-        modify_text_by_handle(doc, "77844", text)
-        print(f"✅ 写入 handle 77844: {text}")
-    else:
-        print("⚠️ 未找到接管材料信息，未写入 77844")
+    # === 匹配供货状态 ===
+    supply_status = ""
+    for i in range(1, 4):
+        t_key, g_key, s_key = f"接管材料类型{i}", f"接管材料牌号{i}", f"接管供货状态{i}"
+        if extra_params.get(t_key) == mat_type and extra_params.get(g_key) == mat_grade:
+            supply_status = extra_params.get(s_key, "")
+            break
+
+    # 拼接最终文本
+    text = f"{mat_grade}/{supply_status}/{mat_std}"
+
+    # === 写入 Word 指定 handle ===
+    modify_text_by_handle(doc, "77844", text)
+    print(f"✅ 写入 handle 77844: {text}")
+
+
     # 🔍 查询 U形换热管 材料信息
     cursor.execute("""
         SELECT 材料牌号, 供货状态, 材料标准
@@ -920,30 +1128,30 @@ def twoDgeneration(product_id):
     else:
         print("⚠️ 未找到 U形换热管 材料信息，未写入 778C8")
         # === 获取 config.ini 中布管输入参数 JSON 路径 ===
-    config_path = os.path.expandvars(r"%APPDATA%\UDS\蓝滨数字化合作\data\config.ini")
-    if not os.path.exists(config_path):
-        raise FileNotFoundError(f"❌ 未找到配置文件: {config_path}")
+    # === 从数据库读取布管输入参数 ===
+    sql = """
+        SELECT `key`, `value`
+        FROM 产品设计活动表_布管输入表
+        WHERE 产品ID = %s
+    """
+    cursor.execute(sql, (product_id,))
+    rows = cursor.fetchall()
 
-    with open(config_path, 'rb') as f:
-        raw = f.read()
-        encoding = chardet.detect(raw)['encoding'] or 'utf-8'
-
-    config = configparser.ConfigParser()
-    config.read_string(raw.decode(encoding))
-    product_dir = os.path.normpath(config.get('ProjectInfo', 'product_directory', fallback=''))
-
-    json_path = os.path.join(product_dir, "中间数据", "布管输入参数.json")
-    if not os.path.exists(json_path):
-        raise FileNotFoundError(f"❌ 未找到布管输入参数.json 文件: {json_path}")
-
-    # === 加载 JSON 内容 ===
-    with open(json_path, 'r', encoding='utf-8') as f:
-        json_data = json.load(f)
+    # 初始化字段值
+    shell_passes = ""
+    tube_passes = ""
     range_type = None
-    for item in json_data:
-        if isinstance(item, dict) and item.get("paramName") == "换热管排列形式":
-            range_type = str(item.get("paramValue", "")).strip()
-            break
+
+    for row in rows:
+        pid = str(row["key"]).strip()
+        pval = str(row["value"]).strip()
+
+        if pid == "Shell_NumberOfPasses":
+            shell_passes = pval
+        elif pid == "LB_TubePassCount":
+            tube_passes = pval
+        elif pid == "换热管排列形式":
+            range_type = pval
 
     # handle 映射
     range_handle_map = {
@@ -959,24 +1167,6 @@ def twoDgeneration(product_id):
         text = "√" if h == range_handle_map.get(range_type) else " "
         modify_text_by_handle(doc, h, text)
         print(f"✅ 设置 {h} → {text}")
-    # === 读取布管输入参数.json ===
-    with open(json_path, "r", encoding="utf-8") as f:
-        pipe_input_data = json.load(f)
-
-    # 初始化字段值
-    shell_passes = ""
-    tube_passes = ""
-
-    for item in pipe_input_data:
-        if not isinstance(item, dict):
-            continue
-        pid = item.get("paramId", "")
-        pval = str(item.get("paramValue", "")).strip()
-
-        if pid == "Shell_NumberOfPasses":
-            shell_passes = pval
-        elif pid == "LB_TubePassCount":
-            tube_passes = pval
 
     # === 写入图纸 ===
     modify_text_by_handle(doc, "77854", shell_passes)
@@ -1039,7 +1229,7 @@ def twoDgeneration(product_id):
         # === ① 生成材料清单（G/H列） ===
         generate_material_list(product_id, output_path)
         json_path = "jisuan_output_new.json"
-        # === ② 输入规格（E列） ===
+        # === ② 填写规格（E列） ===
         cunguige.main(json_path, output_path, 'Sheet1', product_id)
 
         # === ③ 计算 7785F ===

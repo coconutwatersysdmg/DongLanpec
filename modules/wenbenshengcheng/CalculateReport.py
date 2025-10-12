@@ -587,28 +587,27 @@ def fill_excel_with_dictoutdatas(file_path: str, json_path: str):
                 id_ = item.get("Id", "")
                 name = item.get("Name", "")
                 value = item.get("Value", "")
-                if id_ == "工况1：YT9" and name == "计算压力":
+                if name == "计算压力":
                     value_map["计算压力pc"] = value
-                elif id_ == "工况1：YT3" and "圆筒内/外径" in name:
+                elif "圆筒内/外径" in name:
                     value_map["圆筒内直径Di"] = value
                     value_map["圆筒外直径Do"] = value
-                elif id_ == "工况1：YT23" and name == "圆筒长度":
+                elif name == "圆筒长度":
                     value_map["圆筒长度L"] = value
-                elif id_ == "工况1：YT30" and name == "材料试验温度下许用应力":
+                elif name == "材料试验温度下许用应力":
                     value_map["耐压试验温度下材料许用应力[σ]"] = value
-                elif id_ == "工况1：YT31" and name == "材料设计温度下许用应力":
+                elif name == "材料设计温度下许用应力":
                     value_map["设计温度下材料许用应力[σ]t"] = value
                     value_map["设计温度下计算应力σt"] = value
-                elif id_ == "工况1：YT35" and name == "钢材厚度负偏差":
+                elif name == "钢材厚度负偏差":
                     value_map["材料厚度负偏差C1"] = value
-                elif id_ == "工况1：YT54" and name == "圆筒压力试验压力":
+                elif name == "圆筒压力试验压力":
                     value_map["试验压力值PT"] = value
-                elif id_ == "工况1：YT50" and name == "圆筒内压强度计算厚度δc":
+                elif name == "圆筒内压强度计算厚度δc":
                     value_map["计算厚度δ"] = value
-                elif id_ == "工况1：YT53" and name == "圆筒有效厚度":
+                elif name == "圆筒有效厚度":
                     value_map["有效厚度δe"] = value
-                    value_map["最大允许工作压力[Pw]"] = value
-                elif id_ == "工况2：YT1" and name == "圆筒名义厚度":
+                elif name == "圆筒名义厚度":
                     value_map["名义厚度δn"] = value
                     value_map["校核条件"] = value
 
@@ -645,7 +644,6 @@ def fill_excel_with_dictoutdatas(file_path: str, json_path: str):
                     value_map["有效厚度δeh"] = value
                 elif id_ == "工况1：EHB46" and name.strip() == "椭圆形封头名义厚度":
                     value_map["名义厚度δnh"] = value
-
 
             # ✅ 管箱法兰字段映射
         flange_data = outdatas.get("管箱法兰", {})
@@ -906,8 +904,8 @@ def fill_excel_with_dictoutdatas(file_path: str, json_path: str):
                         "换热管外径": "换热管外径d",
                         "换热管壁厚": "换热管壁厚δt",
                         "换热管根数": "换热管根数n",
-                        "管程数": "管程数",
-                        "换热管排列方式(0:30°;1:60°;2:90°;3:45°)": "换热管排列形式",
+                        "管程程数": "管程数",
+                        "换热管排列方式": "换热管排列形式",
                         "换热管中心距": "换热管中心距 S",
                         "外压计算长度": "换热管长度Lt",
                         "沿水平隔板槽一侧的排管根数": "水平隔板一侧排管根数nx",

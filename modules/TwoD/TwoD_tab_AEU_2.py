@@ -372,7 +372,7 @@ class TwoDGeneratorTab(QWidget):
                 LIMIT 1
             """, (product_id,))
             row = cursor.fetchone()
-            cursor.close()
+
             conn.close()
 
             nominal_diameter = 0

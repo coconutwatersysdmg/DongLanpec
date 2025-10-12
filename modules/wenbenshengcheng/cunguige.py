@@ -1,3 +1,4 @@
+import ast
 import json
 import os
 import re
@@ -7,6 +8,7 @@ import configparser
 import openpyxl
 import pandas as pd
 import pymysql
+from openpyxl.reader.excel import load_workbook
 
 from modules.buguan.buguan_ziyong.My_Piping import create_product_connection
 from modules.condition_input.funcs.db_cnt import get_connection
@@ -120,14 +122,17 @@ def generate_spec(component_name, data, product_id=None):
 
     elif component_name == "分程隔板":
         t = get_value(data, "管箱分程隔板", "管箱分程隔板名义厚度")
+        t2 = get_value(data, "管箱分程隔板", "管箱分程隔板结构尺寸长边a")
+        t3 = get_value(data, "管箱分程隔板", "管箱分程隔板结构尺寸长边b")
+
         if t is not None:
-            return f"δ={t}"
+            return f"{t2}×{t3}×{t}"
     elif component_name == "内导流筒":
         t = get_value(data, "浮头管束", "导流筒厚度")
         if t is not None:
             return f"δ={t}"
     elif component_name == "浮动管板":
-        t = get_value(data, "浮头法兰", "浮动管板名义外径")
+        t = get_value(data, "浮头法兰", "浮动管板名义厚度")
         if t is not None:
             return f"δ={t}"
     elif component_name == "隔板":
@@ -155,72 +160,166 @@ def generate_spec(component_name, data, product_id=None):
         b = get_value(data, "固定管板", "换热管壁厚")
         l = get_pipe_param_value(product_id,"换热管公称长度LN")
         if None not in (w, b, l):
-            return f"Ø{w}×Ø{b};L={l}"
+            return f"Ø{w}×{b};L={l}"
     elif component_name == "换热管":
         w = get_value(data, "固定管板", "换热管外径")
         b = get_value(data, "固定管板", "换热管壁厚")
         l = get_pipe_param_value(product_id,"换热管公称长度LN")
         if None not in (w, b, l):
-            return f"Ø{w}×Ø{b};L={l}"
+            return f"Ø{w}×{b};L={l}"
     elif component_name == "旁路挡板":
-        w = get_pipe_param_value(product_id,"LB_BaffleThick")
-        if w not in(None,"Null","null"):
-            return f"δ={w}"
+        conn = pymysql.connect(
+            host="localhost",
+            port=3306,
+            user="root",
+            password="123456",
+            database="产品设计活动库",
+            charset="utf8mb4"
+        )
+        cur = conn.cursor()
+
+        # 厚度
+        cur.execute(
+            "SELECT 参数值 FROM 产品设计活动表_布管参数表 "
+            "WHERE 产品ID=%s AND 参数名=%s LIMIT 1",
+            (product_id, "旁路挡板厚度")
+        )
+        row_param = cur.fetchone()
+        print(f"数据库查询旁路挡板厚度: {row_param}")
+        if row_param and row_param[0] is not None:
+            try:
+                thickness_mm = float(row_param[0])
+            except Exception:
+                try:
+                    thickness_mm = float(ast.literal_eval(str(row_param[0])))
+                except Exception:
+                    thickness_mm = 0.0
+            return f"δ={thickness_mm}"
     elif component_name == "固定管板":
         w = get_value(data, "固定管板", "管板名义厚度")
+        l1 = get_value(data, "固定管板", "管板外径")
+
         if w is not None:
-            return f"δ={w}"
+            return f"Ø{l1};δ={w}"
     elif component_name == "定距管":
         # w = get_value(data, "管束", "换热管外径")
         # n = get_value(data, "管束", "换热管壁厚")
-        # val1 = get_value(data, "管束", "定距管长度1")
-        # val2 = get_value(data, "管束", "定距管长度2")
-        # l = max(val1, val2)
+        val1 = get_value(data, "管束", "定距管长度1")
+        if val1 is None:
+            val1 = get_value(data, "浮头管束", "定距管长度1")
+        if val1 is None:
+            val1 = 0
+
+        val2 = get_value(data, "管束", "定距管长度2")
+        if val2 is None:
+            val2 = get_value(data, "浮头管束", "定距管长度2")
+        if val2 is None:
+            val2 = 0
+
+        l = max(int(val1), int(val2))
+
         # if None not in (w,n,l):
         #     return f"Ø{w}×{n};L={l}"
         w = get_value(data, "固定管板", "换热管外径")
         b = get_value(data, "固定管板", "换热管壁厚")
-        l = get_pipe_param_value(product_id,"换热管公称长度LN")
+
+        # l = get_pipe_param_value(product_id,"换热管公称长度LN")
         if None not in (w, b, l):
             return f"Ø{w}×Ø{b};L={l}"
     elif component_name == "折流板":
         w = get_value(data, "管束", "折流板厚度")
+        l1 = get_value(data, "管束", "折流板/支持板外直径")
+        if w is not None:
+            return f"Ø{l1};δ={w}"
         if w is None:
             w = get_value(data, "浮头管束", "折流板厚度")
+            l1 = get_value(data, "浮头管束", "折流板/支持板外直径")
+
+        return f"Ø{l1};δ={w}"
+    elif component_name == "钩圈":
+        l1 = get_value(data, "浮头法兰", "钩圈外径")
+        l2 = get_value(data, "浮头法兰", "钩圈内径")
+
+        w = get_value(data, "浮头法兰", "B型钩圈名义厚度")
         if w is not None:
-            return f"δ={w}"
+            return f"Ø{l1}×Ø{l2},H={w}"
     elif component_name == "内折流板":
+        l1 = None
         w = get_value(data, "管束", "折流板厚度")
+        l1 = get_value(data, "管束", "折流板/支持板外直径")
+        if w is not None:
+            return f"Ø{l1};δ={w}"
         if w is None:
             w = get_value(data, "浮头管束", "折流板厚度")
-        if w is not None:
-            return f"δ={w}"
+            l1 = get_value(data, "浮头管束", "折流板/支持板外直径")
+
+        return f"Ø{l1};δ={w}"
     elif component_name == "异形折流板":
+        l1 = None
         w = get_value(data, "管束", "折流板厚度")
+        l1 = get_value(data, "管束", "折流板/支持板外直径")
+        if w is not None:
+            return f"Ø{l1};δ={w}"
         if w is None:
             w = get_value(data, "浮头管束", "折流板厚度")
-        if w is not None:
-            return f"δ={w}"
+            l1 = get_value(data, "浮头管束", "折流板/支持板外直径")
+
+        return f"Ø{l1};δ={w}"
     elif component_name == "弓形折流板":
+        l1 = None
         w = get_value(data, "管束", "折流板厚度")
+        l1 = get_value(data, "管束", "折流板/支持板外直径")
+        if w is not None:
+            return f"Ø{l1};δ={w}"
         if w is None:
             w = get_value(data, "浮头管束", "折流板厚度")
-        if w is not None:
-            return f"δ={w}"
+            l1 = get_value(data, "浮头管束", "折流板/支持板外直径")
+
+        return f"Ø{l1};δ={w}"
     elif component_name == "防冲板":
         w = get_pipe_param_value(product_id,"LB_BPBThick")
         if w is not None:
             return f"δ={w}"
     elif component_name == "滑道":
-        w = get_pipe_param_value(product_id,"LB_SlipWayThick")
+        conn = get_connection(**db_config1)
+        cursor = conn.cursor()
+
+        l = get_value(data, "管束", "滑道长度")
+        if l is None:
+            l = get_value(data, "浮头管束", "滑道长度")
+        cursor.execute("""
+                            SELECT 参数值 
+                            FROM 产品设计活动表_布管参数表
+                            WHERE 产品ID = %s AND 参数名 = '滑道高度'
+                            LIMIT 1
+                        """, (product_id,))
+        h = cursor.fetchone()
+        h1 = h['参数值']
+        cursor.execute("""
+                            SELECT 参数值 
+                            FROM 产品设计活动表_布管参数表
+                            WHERE 产品ID = %s AND 参数名 = '滑道厚度'
+                            LIMIT 1
+                        """, (product_id,))
+        h = cursor.fetchone()
+        h2 = h['参数值']
+
+        return f"{l}×{h1}×{h2}"
+    elif component_name == "球冠形封头":
+        w = get_value(data,"浮头法兰", "球冠形封头名义厚度")
         if w is not None:
             return f"δ={w}"
     elif component_name == "支持板":
+        l1 = None
         w = get_value(data, "管束", "支持板厚度")
+        l1 = get_value(data, "管束", "折流板/支持板外直径")
+        if w is not None:
+            return f"Ø{l1};δ={w}"
         if w is None:
             w = get_value(data, "浮头管束", "支持板厚度")
-        if w is not None:
-            return f"δ={w}"
+            l1 = get_value(data, "浮头管束", "折流板/支持板外直径")
+
+        return f"Ø{l1};δ={w}"
 
     elif component_name == "挡管":
         w = get_value(data, "固定管板", "换热管外径")
@@ -230,7 +329,30 @@ def generate_spec(component_name, data, product_id=None):
             l = get_value(data, "浮头管束", "中间挡管/挡板长度")
         if None not in (w, b, l):
             return f"Ø{w}×{b};L={l}"
+    elif component_name == "支撑板":
+        w1 = get_value(data, "浮头管束", "支撑板厚度")
+        b1 = get_value(data, "浮头管束", "支撑板高度")
+        l1 = get_value(data, "浮头管束", "浮动侧支撑板长度")
 
+        w2 = get_value(data, "浮头管束", "支撑板厚度")
+        b2 = get_value(data, "浮头管束", "支撑板高度")
+        l2 = get_value(data, "浮头管束", "固定侧支撑板长度")
+
+        lines = ""
+        if None not in (w1, b1, l1) and None not in (w2, b2, l2):
+            # 两组都有值时，比较 l1 和 l2
+            if float(l1) >= float(l2):
+                lines=f"{l1}×{b1}×{w1}"
+            else:
+                lines=f"{l2}×{b2}×{w2}"
+        elif None not in (w1, b1, l1):
+            # 只有第一组有值
+            lines=f"{l1}×{b1}×{w1}"
+        elif None not in (w2, b2, l2):
+            # 只有第二组有值
+            lines=f"{l2}×{b2}×{w2}"
+        if lines:
+            return str(lines)
     elif component_name == "拉杆":
         val1 = get_value(data, "管束", "拉杆长度1")
         if val1 is None:
@@ -241,9 +363,20 @@ def generate_spec(component_name, data, product_id=None):
             val2 = get_value(data, "浮头管束", "拉杆长度2")
 
         w = max(val1, val2) if None not in (val1, val2) else None
-        l = get_value(data, "固定管板", "换热管外径")
+        conn = get_connection(**db_config1)
+        cursor = conn.cursor()
+        # 获取鞍座型式代号（dh）
+        cursor.execute("""
+                    SELECT 参数值 
+                    FROM 产品设计活动表_布管参数表
+                    WHERE 产品ID = %s AND 参数名 = '拉杆直径'
+                    LIMIT 1
+                """, (product_id,))
+        row_dh = cursor.fetchone()
+        l = row_dh["参数值"] if row_dh and row_dh.get("参数值") not in (None, "", "None") else None
+
         if None not in (w, l):
-            return f"Ø{w};L={l}"
+            return f"Ø{l};L={w}"
 
         if l is not None:
             try:
@@ -277,7 +410,7 @@ def generate_spec(component_name, data, product_id=None):
                     rod_diameter = 27
                 else:
                     rod_diameter = "[超出范围]"
-                return f"{rod_diameter}"
+                return f"M{rod_diameter}"
             except:
                 return ""
 
@@ -294,7 +427,7 @@ def generate_spec(component_name, data, product_id=None):
             return f"Ø{w}/Ø{n}；H={h}"
     elif component_name == "管箱平盖":
         w = get_value(data, "管箱平盖", "法兰名义外径")
-        h = get_value(data, "壳体法兰", "法兰名义厚度")
+        h = get_value(data, "管箱平盖", "法兰名义厚度")
         if None not in (w, h):
             return f"Ø{w}；H={h}"
     elif component_name == "平盖垫片":
@@ -323,14 +456,7 @@ def generate_spec(component_name, data, product_id=None):
         h = get_value(data, "壳体封头", "椭圆形封头直边高度")
         if None not in (dh,d, t, h):
             return f"{dh}{d}×{t}({t_plus});h={h}"
-    elif component_name == "球冠形封头":
-        dh = get_value(data, "外头盖封头", "封头类型代号")
-        d = get_value(data, "浮头法兰", "球冠形封头内半径")
-        t = get_value(data, "浮头法兰", "球冠形封头名义厚度")
-        t_plus = get_value(data, "外头盖封头", "椭圆形封头最小成型厚度")
-        h = get_value(data, "外头盖封头", "椭圆形封头直边高度")
-        if None not in (dh,d, t, h):
-            return f"{dh}{d}×{t}({t_plus});h={h}"
+
 
     elif component_name == "固定鞍座":
         conn = get_connection(**db_config1)
@@ -410,6 +536,26 @@ def generate_spec(component_name, data, product_id=None):
         l = 20 + 2 * dh_val + flange_thk_1 + gasket_thk_1 + flange_thk_2 + gasket_thk_2 - 2 * ttgd
 
         return f"{dh}x{l}"
+    elif component_name == "螺柱（外头盖法兰）":
+        dh = get_value(data, "外头盖法兰", "螺栓公称直径")
+        if dh is None:
+            return None
+
+        try:
+            dh_val = int(re.search(r'\d+', str(dh)).group())
+        except:
+            dh_val = 0
+
+        flange_thk_1 = get_value(data, "外头盖法兰", "法兰名义厚度") or 0
+        gasket_thk_1 = get_value(data, "外头盖法兰", "垫片厚度") or 0
+        flange_thk_2 = get_value(data, "外头盖侧法兰", "法兰名义厚度") or 0
+        gasket_thk_2 = get_value(data, "外头盖侧法兰", "垫片厚度") or 0
+        ttgd = get_ttgd_from_db(product_id) or 0
+
+        l = 20 + 2 * dh_val + flange_thk_1 + gasket_thk_1 + flange_thk_2 + gasket_thk_2 - 2 * ttgd
+
+        return f"{dh}x{l}"
+
     elif component_name == "螺柱（浮头法兰）":
         dh = get_value(data, "浮头法兰", "螺栓公称直径")
         if dh is None:
@@ -432,6 +578,12 @@ def generate_spec(component_name, data, product_id=None):
 
         if dh is not None:
             return f"{dh}"
+    elif component_name == "螺母（外头盖法兰）":
+        dh = get_value(data, "外头盖法兰", "螺栓公称直径")
+
+        if dh is not None:
+            return f"{dh}"
+
     elif component_name == "螺母（浮头法兰）":
         dh = get_value(data, "浮头法兰", "螺栓公称直径")
         if dh is not None:
@@ -526,12 +678,12 @@ def write_spec_to_excel(data, excel_path, sheet_name, product_id):
                 print(f"⚠️ 无法生成规格：{name}")
 
     wb.save(excel_path)
-    print(f"✅ 已输入规格列至 Excel：{excel_path}")
+    print(f"✅ 已填写规格列至 Excel：{excel_path}")
 
 def get_pipe_param_value(product_id, field_name):
     """
     从产品设计活动表_布管输入表中获取指定字段值
-    特殊逻辑：当 field_name = "换热管公称长度" 时，从布管参数表获取 "热交换器公称（换热管）长度 L"
+    特殊逻辑：当 field_name = "换热管公称长度" 时，从布管参数表获取 "换热管公称长度 LN"
     """
     conn = create_product_connection()
     if conn is None:
@@ -545,7 +697,7 @@ def get_pipe_param_value(product_id, field_name):
             sql = """
                 SELECT `参数值`
                 FROM 产品设计活动表_布管参数表
-                WHERE 产品ID = %s AND 参数名 = '热交换器公称（换热管）长度 L'
+                WHERE 产品ID = %s AND 参数名 = '换热管公称长度 LN'
                 LIMIT 1
             """
             cursor.execute(sql, (product_id,))
@@ -638,8 +790,9 @@ def insert_jiaguan_falan_rows(sheet, product_id, json_data):
         if insert_index is None:
             print("❌ 未找到“管口”行，无法插入接管法兰")
             return
+        mat_type, mat_grade = "", ""
 
-        # 3️⃣ 倒序插入并输入
+        # 3️⃣ 倒序插入并填写
         for data in reversed(rows):
             sheet.insert_rows(insert_index)
 
@@ -693,16 +846,18 @@ def insert_jiaguan_falan_rows(sheet, product_id, json_data):
             calc_rows = cursor.fetchall()
             cursor.close()
 
-            mat_type = ""
-            mat_grade = ""
+            # ================== 从元件计算结果表取接管信息 ==================
+            pipe_mat_type = ""
+            pipe_mat_grade = ""
             for r in calc_rows:
-                if r["Name"] == "接管材料类型":
-                    mat_type = r["Value"]
-                elif r["Name"] == "接管材料牌号":
-                    mat_grade = r["Value"]
+                name = (r.get("Name") or "").strip()
+                val = (r.get("Value") or "").strip()
+                if name == "接管材料类型":
+                    pipe_mat_type = val
+                elif name == "接管材料牌号":
+                    pipe_mat_grade = val
 
-            # 再查 附加参数表 找供货状态
-            supply_status = ""
+            # ================== 从附加参数表取所有参数 ==================
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT 参数名称, 参数值
@@ -713,45 +868,43 @@ def insert_jiaguan_falan_rows(sheet, product_id, json_data):
             cursor.close()
             conn.close()
 
-            # 参数表转成字典方便查找
-            param_map = {r["参数名称"]: r["参数值"] for r in param_rows}
+            param_map = {(r["参数名称"] or "").strip(): (r["参数值"] or "").strip() for r in param_rows}
 
-            # 遍历序号 1,2,3，找到和接管对应的材料类型、牌号
-            for idx in (1, 2, 3):
+            # ================== 初始化两套输出 ==================
+            pipe_supply_status = ""  # 接管供货状态
+            flange_mat_type = ""  # 接管法兰材料类型
+            flange_mat_grade = ""  # 接管法兰材料牌号
+            flange_supply_status = ""  # 接管法兰供货状态
+
+            # ================== 匹配编号 idx ==================
+            for idx in range(1, 4):  # 可按需要改范围
                 t_key = f"接管材料类型{idx}"
                 g_key = f"接管材料牌号{idx}"
                 s_key = f"接管供货状态{idx}"
 
-                t_val = param_map.get(t_key, "")
-                g_val = param_map.get(g_key, "")
-                print("t_val",t_val)
-                if t_val == mat_type and g_val == mat_grade:
-                    supply_status = param_map.get(s_key, "")
+                # 找到和元件计算结果表一致的接管
+                if param_map.get(t_key, "").lower() == pipe_mat_type.lower() and \
+                        param_map.get(g_key, "").lower() == pipe_mat_grade.lower():
+                    # 接管供货状态
+                    pipe_supply_status = param_map.get(s_key, "").strip()
+
+                    # 对应 idx 的接管法兰信息
+                    flange_mat_type = param_map.get(f"接管法兰材料类型{idx}", "").strip()
+                    flange_mat_grade = param_map.get(f"接管法兰材料牌号{idx}", "").strip()
+                    flange_supply_status = param_map.get(f"接管法兰供货状态{idx}", "").strip()
                     break
 
-            # 🔎 同时再去拿接管法兰材料类型/牌号（保持和接管编号一致）
-            for idx in (1, 2, 3):
-                ft_key = f"接管法兰材料类型{idx}"
-                fg_key = f"接管法兰材料牌号{idx}"
-                fs_key = f"接管法兰供货状态{idx}"
+            # ================== 写入表格 ==================
+            # F列：材料牌号（接管法兰）
+            sheet.cell(row=insert_index, column=6).value = flange_mat_grade or None
+            # J列：供货状态（接管法兰 vs. 接管？这里建议分开写到不同列，如果业务需要都要，可以再加一列）
+            sheet.cell(row=insert_index, column=10).value = flange_supply_status or pipe_supply_status
+            # K列：材料类型（接管法兰）
+            sheet.cell(row=insert_index, column=11).value = flange_mat_type or None
 
-                # 如果对应的接管编号就是这个 idx，那就取接管法兰的信息
-                t_val = param_map.get(f"接管材料类型{idx}", "")
-                g_val = param_map.get(f"接管材料牌号{idx}", "")
-                if t_val == mat_type and g_val == mat_grade:
-                    mat_type = param_map.get(ft_key, mat_type)  # 替换为接管法兰的类型
-                    mat_grade = param_map.get(fg_key, mat_grade)  # 替换为接管法兰的牌号
-                    supply_status = param_map.get(fs_key, supply_status)  # 替换为接管法兰的供货状态
-                    break
 
-            # F列：材料牌号
-            sheet.cell(row=insert_index, column=6).value = mat_grade
-            # J列：供货状态
-            sheet.cell(row=insert_index, column=10).value = supply_status
-            # K列：材料类型
-            sheet.cell(row=insert_index, column=11).value = mat_type
 
-        print(f"✅ 已插入接管法兰 {len(rows)} 条，含材料信息")
+            print(f"✅ 已插入接管法兰 {len(rows)} 条，含接管/法兰材料信息")
 
         # === 质量写入逻辑（保持原有 Step1–Step4） ===
         try:
@@ -926,10 +1079,11 @@ def insert_jiaguan_rows(sheet, product_id, data, jisuan_json_path):
 
 from openpyxl.styles import Alignment, Border, Side, Font
 
-def clean_and_renumber(sheet,product_id):
+def clean_and_renumber(sheet, product_id):
     """
     删除指定结构件行（黑名单），
-    以及灰名单中数据库无对应 name 的行。
+    以及灰名单中数据库无对应 name 的行，
+    以及从第8行开始 G 列值为 0（但垫片除外）的行。
     """
 
     # 黑名单：一定删除
@@ -944,7 +1098,8 @@ def clean_and_renumber(sheet,product_id):
     }
 
     # 灰名单：如果数据库里没有匹配则删除
-    gray_names = {"外头盖吊耳", "接地端子", "接地板","壳体吊耳"}
+    gray_names = {"外头盖吊耳", "接地端子", "接地板", "壳体吊耳", "管箱吊耳", "吊耳"}
+
     conn = pymysql.connect(
         host="localhost",
         port=3306,
@@ -973,6 +1128,7 @@ def clean_and_renumber(sheet,product_id):
     rows_to_delete = []
     for idx, row in enumerate(sheet.iter_rows(min_row=8), start=8):
         d_val = str(row[3].value).strip() if row[3].value else ""
+        g_val = row[6].value  # G 列索引是 6（从 0 开始计）
 
         # 黑名单：必删
         if d_val in names_to_remove:
@@ -983,6 +1139,11 @@ def clean_and_renumber(sheet,product_id):
         if any(g in d_val for g in gray_names):
             if not any(valid in d_val for valid in valid_names):
                 rows_to_delete.append(idx)
+                continue
+
+        # 新规则：G 列值为 0 → 删（垫片除外）
+        if g_val == 0 and "垫片" not in d_val:
+            rows_to_delete.append(idx)
 
     # 删除行
     for idx in reversed(rows_to_delete):
@@ -1057,7 +1218,7 @@ def main(json_file_path, excel_file_path, sheet_name, product_id):
             "管箱平盖": ("管箱平盖", "法兰成型质量"),
             "外头盖法兰": ("外头盖法兰", "法兰成型质量"),
             "外头盖侧法兰": ("外头盖侧法兰", "法兰成型质量"),
-
+            "浮动管板":("固定管板", "管板重量-成品"),
         }
 
         for row in sheet.iter_rows(min_row=8):
@@ -1069,15 +1230,200 @@ def main(json_file_path, excel_file_path, sheet_name, product_id):
                     for item in datas:
                         if item.get("Name") == key:
                             val = item.get("Value", "")
+
                             # 写入 L 列（即 index 11），合并单元格区域 L-Q 只写 L 即可
                             row[11].value = "成型重量："+val
+                            # 如果不是浮动管板和固定管板，再补充一句话
+                            if part_name in ("头盖法兰", "管箱法兰","壳体法兰", "外头盖侧法兰","外头盖法兰"):
+                                row[11].value += "；法兰高度不包含密封面凸台高度"
                             break
                 except Exception as e:
                     print(f"⚠️ 处理 {part_name} 时出错：{e}")
+    # 定义边框和字体
+    thin = Side(border_style="thin", color="000000")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    font = Font(name="宋体", size=10)
+
+    # 统一设置格式（第8行之后，A-R列）
+    for row in sheet.iter_rows(min_row=8, min_col=1, max_col=18):
+        for cell in row:
+            cell.border = border
+            cell.font = font
+
     wb.save(excel_file_path)
 
 
+from openpyxl import load_workbook
+import xlwings as xw
 
+
+def copy_u_tube_value_live(output_path):
+    app = xw.App(visible=False)
+    wb = app.books.open(output_path)
+    ws_source = wb.sheets["U型管明细"]
+    ws_target = wb.sheets["Sheet1"]
+
+    value = ws_source.range("G6").value  # 公式实时计算后得到的值
+
+    # 找到目标行
+    for row in range(1, ws_target.used_range.last_cell.row + 1):
+        if ws_target.range(f"D{row}").value == "U形换热管":
+            ws_target.range(f"I{row}").value = value
+            break
+
+    wb.save()
+    wb.close()
+    app.quit()
+def add_template_sheet(excel_file_path, template_file_path):
+    wb = load_workbook(excel_file_path)
+
+    # 已存在就删掉
+    if "U型管明细" in wb.sheetnames:
+        del wb["U型管明细"]
+
+    template_wb = load_workbook(template_file_path)
+    template_sheet = template_wb.active
+
+    ws_new = wb.create_sheet(title="U型管明细")
+
+    for row in template_sheet.iter_rows():
+        for cell in row:
+            new_cell = ws_new.cell(row=cell.row, column=cell.column, value=cell.value)
+            if cell.has_style:
+                new_cell.font = cell.font.copy()
+                new_cell.border = cell.border.copy()
+                new_cell.fill = cell.fill.copy()
+                new_cell.number_format = cell.number_format
+                new_cell.protection = cell.protection.copy()
+                new_cell.alignment = cell.alignment.copy()
+
+
+
+
+    thin = Side(border_style="thin", color="000000")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    font = Font(name="宋体", size=10)
+
+    for row in ws_new.iter_rows(min_row=8, min_col=1, max_col=18):
+        for cell in row:
+            cell.border = border
+            cell.font = font
+
+    wb.save(excel_file_path)
+
+def fill_template_values(excel_file_path, product_id):
+    # === 1. 建立数据库连接 ===
+    conn = pymysql.connect(
+        host="localhost",
+        user="root",
+        password="123456",
+        database="产品设计活动库",
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.Cursor
+    )
+    cursor = conn.cursor()
+    conn2 = pymysql.connect(
+        host="localhost",
+        user="root",
+        password="123456",
+        database="材料库",
+        charset="utf8mb4",
+        cursorclass=pymysql.cursors.Cursor
+    )
+    cursor2 = conn2.cursor()
+    wb = load_workbook(excel_file_path)
+    ws = wb["U型管明细"]
+
+    # 小工具函数
+    def get_value(sql, params=None):
+        cursor.execute(sql, params or ())
+        row = cursor.fetchone()
+        print(row)
+        return row[0] if row else None
+
+    def get_value2(sql, params=None):
+        cursor2.execute(sql, params or ())
+        row = cursor2.fetchone()
+        return row[0] if row else None
+
+    # === 2. C列 ===
+    ws["C2"].value = get_value(
+        "SELECT 参数值 FROM 产品设计活动表_布管参数表 WHERE 产品ID=%s AND 参数名='换热管外径 do'", (product_id,))
+    ws["C3"].value = get_value(
+        "SELECT 参数值 FROM 产品设计活动表_布管参数表 WHERE 产品ID=%s AND 参数名='换热管壁厚 δ'", (product_id,))
+    ws["C4"].value = get_value(
+        "SELECT 参数值 FROM 产品设计活动表_布管参数表 WHERE 产品ID=%s AND 参数名='换热管公称长度 LN'", (product_id,))
+
+    material_name = get_value(
+        "SELECT 参数值 FROM 产品设计活动表_元件附加参数表 WHERE 产品ID=%s AND 元件名称='U形换热管' AND 参数名称='材料牌号'",
+        (product_id,))
+    if material_name:
+        ws["C5"].value = get_value2("SELECT 材料密度 FROM 材料密度表 WHERE 材料牌号=%s LIMIT 1", (material_name,))
+
+    # === 3. E列 ===
+    ws["E2"].value = get_value(
+        "SELECT 参数值 FROM 产品设计活动表_布管参数表 WHERE 产品ID=%s AND 参数名='换热管中心距 S'", (product_id,))
+    cursor.execute("""
+        SELECT R
+        FROM 产品设计活动表_布管数量表
+        WHERE 产品ID=%s 
+        ORDER BY `至水平中心线行号` ASC
+        LIMIT 1
+    """, (product_id,))
+    row = cursor.fetchone()
+
+    if row and row[0] is not None:
+        ws["E3"].value = float(row[0]) / 2
+    else:
+        ws["E3"].value = None
+
+    # 先获取原始参数值
+    arrangement = get_value(
+        "SELECT 参数值 FROM 产品设计活动表_布管参数表 WHERE 产品ID=%s AND 参数名='换热管排列方式'",
+        (product_id,)
+    )
+
+    # 定义映射关系
+    arrangement_map = {
+        "正三角形": 30,
+        "转角正三角形": 60,
+        "正方形": 90,
+        "转角正方形": 45
+    }
+
+    # 填入 Excel
+    if arrangement in arrangement_map:
+        ws["E4"].value = arrangement_map[arrangement]
+    else:
+        ws["E4"].value = arrangement  # 如果没有匹配，就保留原值或者 None
+    ws["E5"].value = get_value(
+        "SELECT Value FROM 产品设计活动表_元件计算结果表 WHERE 产品ID=%s AND 元件名称='固定管板' AND Name='管板名义厚度'",
+        (product_id,))
+
+    cursor.execute("""
+        SELECT R, `管孔数量（上）`
+        FROM 产品设计活动表_布管数量表
+        WHERE 产品ID=%s 
+    """, (product_id,))
+    rows = cursor.fetchall()
+
+    row_idx = 10
+    for r_val, hole_count in rows:
+        if r_val is None:
+            continue  # 直接跳过
+        ws[f"E{row_idx}"].value = float(r_val) / 2
+        ws[f"G{row_idx}"].value = int(hole_count)
+        row_idx += 1
+
+    # 隐藏 M 到 R 列
+    for col in range(12, 19):  # M=13, N=14, ..., R=18
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col)].hidden = True
+    # === 5. 保存并关闭连接 ===
+    wb.save(excel_file_path)
+    cursor.close()
+    conn.close()
+    cursor2.close()
+    conn2.close()
 # === 示例调用 ===
 if __name__ == "__main__":
     main("jisuan_output_new.json", "材料清单_已填.xlsx", "Sheet1")
