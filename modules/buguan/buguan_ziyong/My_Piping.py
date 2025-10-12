@@ -544,6 +544,7 @@ class TubeLayoutEditor(QMainWindow):
         self.operations = []
         self.lagan = False
         self.tube_hole_data = []
+        self.baffle_lines = []
         self.tube_data = []
         self.has_piped = False  # 布管按钮点击状态
         self.tube_form_data = []
@@ -773,7 +774,7 @@ class TubeLayoutEditor(QMainWindow):
         self.toolbar_layout.setSpacing(10)
         toolbar_container = QWidget()
         toolbar_container.setLayout(self.toolbar_layout)
-        toolbar_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        toolbar_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         center_layout.addWidget(toolbar_container)
         image_path = r"modules/buguan/buguan_ziyong/static/tab栏/utils.png"
@@ -781,9 +782,10 @@ class TubeLayoutEditor(QMainWindow):
         try:
             toolbar_pixmap = QPixmap(image_path)
             if not toolbar_pixmap.isNull():
+                scale_ratio = 0.8
                 scaled_pixmap = toolbar_pixmap.scaled(
-                    int(toolbar_pixmap.width() * 0.5),
-                    int(toolbar_pixmap.height() * 0.5),
+                    int(toolbar_pixmap.width() * scale_ratio),
+                    int(toolbar_pixmap.height() * scale_ratio),
                     Qt.KeepAspectRatio,
                     Qt.SmoothTransformation
                 )
@@ -798,7 +800,7 @@ class TubeLayoutEditor(QMainWindow):
                 self.toolbar_layout.addWidget(btn)
 
         self.toolbar_layout.addStretch()
-        center_layout.addLayout(self.toolbar_layout)
+        # center_layout.addLayout(self.toolbar_layout)
 
         # 图形视图容器
         self.graphics_container = QWidget()
@@ -854,9 +856,9 @@ class TubeLayoutEditor(QMainWindow):
 
         for name, row, col in buttons:
             btn = QPushButton()
-            btn.setFixedSize(40, 40)
+            btn.setFixedSize(35, 35)
             btn.setIcon(QIcon(f"modules/buguan/buguan_ziyong/static/按钮/{name}.png"))
-            btn.setIconSize(QSize(35, 35))
+            btn.setIconSize(QSize(30, 30))
             btn.setStyleSheet("""
                 QPushButton {
                     border: 2px solid #8f8f91;
@@ -1018,6 +1020,14 @@ class TubeLayoutEditor(QMainWindow):
         page.mousePressEvent = handle_global_right_click
 
         return page
+
+    def _create_fallback_toolbar_buttons(self):
+        """创建备用工具栏按钮（当图片加载失败时使用）"""
+        tools = ["放大", "缩小", "平移", "测量", "导出"]
+        for tool in tools:
+            btn = QPushButton(tool)
+            btn.setFixedSize(80, 30)
+            self.toolbar_layout.addWidget(btn)
 
     def get_current_tube_hole_data(self):
         """TODO 获取布管界面管孔数量分布的当前数据列表"""
@@ -4628,6 +4638,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)"]:
                     self.update_baffle_parameters(param_name)
+                    self.draw_baffle_plates()
 
                 if param_name in ["拉杆形式", "换热管外径 do"]:
                     self.update_lagan()
@@ -5441,21 +5452,33 @@ class TubeLayoutEditor(QMainWindow):
         if current_page_index == 0 and self.has_piped:  # 布管页面
             self.clear_modification_marks()
             self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            self.line_tip.setStyleSheet("color: black;")
+            self.line_tip.setVisible(True)
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(3000, self.line_tip.hide)
             message = "数据保存成功！"
         elif current_page_index == 1:  # 管-板连接页面
             self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            self.line_tip.setStyleSheet("color: black;")
+            self.line_tip.setVisible(True)
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(3000, self.line_tip.hide)
             message = "数据保存成功！"
-        elif current_page_index == 0 and not self.has_piped:  # 未点击布管状态
+        elif current_page_index == 0 and not self.has_piped:
             self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")  # 设置文本颜色为黑色
+            self.line_tip.setStyleSheet("color: black;")
+            self.line_tip.setVisible(True)
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(3000, self.line_tip.hide)
             message = "数据保存成功！"
         else:  # 管板形式页面
             message = "数据保存成功！"
 
         self.line_tip.setText(f"数据保存成功")
-        self.actual_save_operation(current_page_index)  # 先保存后提示
+        self.line_tip.setVisible(True)
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(3000, self.line_tip.hide)
+        self.actual_save_operation(current_page_index)
 
     def build_sql_for_coordinate(self):
         current_centers_set = set(self.current_centers)
@@ -7222,8 +7245,17 @@ class TubeLayoutEditor(QMainWindow):
         from PyQt5.QtWidgets import QMessageBox
         import math
 
-        # 清空之前的折流板信息
-        self.baffle_lines = []
+        # 第一步：清除之前绘制的所有折流板线段
+        if hasattr(self, 'baffle_lines') and self.baffle_lines:
+            for baffle_info in self.baffle_lines:
+                line_item = baffle_info.get('line_item')
+                if line_item and self.graphics_scene:
+                    self.graphics_scene.removeItem(line_item)
+            # 清空折流板信息列表
+            self.baffle_lines.clear()
+        else:
+            # 如果baffle_lines不存在，则初始化
+            self.baffle_lines = []
 
         # 获取折流板相关参数
         cut_direction = None  # 折流板切口方向
@@ -7374,8 +7406,8 @@ class TubeLayoutEditor(QMainWindow):
         创建场景并设置相关参数，通过类属性存储scene和small_D
         返回值：布尔值，表示场景是否创建成功
         """
-        self.left_data_list = []  # 保持列表形式（字典列表）
-        self.left_data_pd = None  # 用于存储DataFrame
+        self.left_data_list = []
+        self.left_data_pd = None
 
         # 初始化参数
         DL = None
@@ -7387,7 +7419,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 读取参数并填充
         for row in range(table.rowCount()):
-            param_name = table.item(row, 1).text()  # 获取参数名
+            param_name = table.item(row, 1).text()
             param_value_widget = table.cellWidget(row, 2)
 
             # 根据控件类型获取参数值
@@ -11130,7 +11162,6 @@ class TubeLayoutEditor(QMainWindow):
                 print(f"字符串转换失败: {e}")
                 return current_coords
 
-        # -------------------------- 3. 新增：读取换热管外径（关键参数） --------------------------
         do = None  # 换热管外径
         for row in range(self.param_table.rowCount()):
             param_name = self.param_table.item(row, 1).text()
@@ -11150,7 +11181,6 @@ class TubeLayoutEditor(QMainWindow):
             # QMessageBox.warning(self, "参数缺失", "未找到换热管外径 do，请先配置参数表")
             return 0
 
-        # -------------------------- 4. 关键修改：获取折流板外径并计算半径 --------------------------
         baffle_diameter = self.get_baffle_diameter()
         if baffle_diameter is None:
             # QMessageBox.warning(self, "参数错误", "未找到折流板外径参数")
@@ -11159,7 +11189,6 @@ class TubeLayoutEditor(QMainWindow):
         # 计算折流板半径（用于确定挡板边界）
         R_baffle = baffle_diameter / 2.0
 
-        # -------------------------- 5. 修正逻辑：绘制挡板（贴紧折流板圆边缘）+ 新增干涉处理 --------------------------
         if selected_centers:
             for selected_center in selected_centers:
                 row_label, col_label = selected_center
