@@ -596,10 +596,10 @@ class TubeLayoutEditor(QMainWindow):
         if len(self.selected_centers) == 2:
             distance = self.calculate_distance(self.selected_centers)
             # TODO 吾日三省吾身，交之前把这注释取消
-            # self.line_tip.setText(f"您选中的两个换热管孔的间距为 {distance} mm。")
-            # self.line_tip.setVisible(True)
-            # from PyQt5.QtCore import QTimer
-            # QTimer.singleShot(3000, self.line_tip.hide)
+            self.line_tip.setText(f"您选中的两个换热管孔的间距为 {distance} mm。")
+            self.line_tip.setVisible(True)
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
             print(f"您选中的两个换热管孔的间距为 {distance} mm。")
         else:
             print("选中的圆心不是两个")
@@ -926,7 +926,7 @@ class TubeLayoutEditor(QMainWindow):
         self.action_bar = QHBoxLayout()
         self.action_bar.addStretch()
 
-        actions = ["布管", "交叉布管", "清屏", "全屏", "操作记录"]
+        actions = ["布管", "交叉布管", "全屏", "操作记录"]
         for action in actions:
             btn = QPushButton(action)
             btn.setStyleSheet("padding: 5px 10px;")
@@ -1896,7 +1896,8 @@ class TubeLayoutEditor(QMainWindow):
                 # self.set_baffle_cut_rate_to_25()
                 print("初始设置的值")
                 # self.set_tie_rod_diameter_to_16()
-            self.calculate_piping_layout()
+            tube_result = self.calculate_piping_layout()
+            self.draw_baffle_plates()
         except Exception as e:
             print(f"第一次计算布管布局出错: {str(e)}")
 
@@ -2224,525 +2225,475 @@ class TubeLayoutEditor(QMainWindow):
 
     # TODO 布管函数
     def calculate_piping_layout(self):
-        try:
-            # 重置状态变量
-            self.is_x_line1 = False
-            self.is_x_line2 = False
-            self.is_x_line3 = False
-            self.is_y_line1 = False
-            self.is_y_line2 = False
-            self.is_y_line3 = False
-            self.coord_x_line1_2 = []
-            self.coord_x_line2_2 = []
-            self.coord_x_line3_2 = []
-            self.coord_x_line1_4 = []
-            self.coord_x_line2_4 = []
-            self.coord_x_line3_4 = []
-            self.coord_y_line1_2 = []
-            self.coord_y_line2_2 = []
-            self.coord_y_line3_2 = []
-            self.coord_y_line1_4 = []
-            self.coord_y_line2_4 = []
-            self.coord_y_line3_4 = []
+        self.is_x_line1 = False
+        self.is_x_line2 = False
+        self.is_x_line3 = False
+        self.is_y_line1 = False
+        self.is_y_line2 = False
+        self.is_y_line3 = False
+        self.coord_x_line1_2 = []
+        self.coord_x_line2_2 = []
+        self.coord_x_line3_2 = []
+        self.coord_x_line1_4 = []
+        self.coord_x_line2_4 = []
+        self.coord_x_line3_4 = []
+        self.coord_y_line1_2 = []
+        self.coord_y_line2_2 = []
+        self.coord_y_line3_2 = []
+        self.coord_y_line1_4 = []
+        self.coord_y_line2_4 = []
+        self.coord_y_line3_4 = []
 
-            # 安全地清除场景内容
-            was_blocked = self.graphics_scene.blockSignals(True)
-            try:
-                # 清除连接线和标记
-                items_to_remove = []
-                for item in self.graphics_scene.items():
-                    if (isinstance(item, (QGraphicsLineItem, QGraphicsEllipseItem)) and
-                            (hasattr(item, 'data') and item.data(0) == "marker")):
-                        items_to_remove.append(item)
+        # 方法1：使用blockSignals禁用场景信号
+        was_blocked = self.graphics_scene.blockSignals(True)
+
+        try:
+            # 使用优化后的清除方法
+            if hasattr(self, 'graphics_scene') and hasattr(self.graphics_scene, 'clear_connection_lines'):
+                self.graphics_scene.clear_connection_lines()
+            if hasattr(self, 'graphics_scene') and hasattr(self.graphics_scene, 'clear_markers'):
+                self.graphics_scene.clear_markers()
+
+            # 备用方案：如果自定义方法不可用，使用批量移除
+            else:
+                items_to_remove = [item for item in self.graphics_scene.items()
+                                   if (isinstance(item, (QGraphicsLineItem, QGraphicsEllipseItem)) and
+                                       (item in getattr(self, 'connection_lines', []) or
+                                        item.data(0) == "marker"))]
 
                 for item in items_to_remove:
-                    try:
-                        self.graphics_scene.removeItem(item)
-                    except Exception as e:
-                        print(f"移除场景项时出错: {e}")
+                    self.graphics_scene.removeItem(item)
 
-                # 清除折流板线条
-                self.clear_baffle_plates()
+                if hasattr(self, 'connection_lines'):
+                    self.connection_lines.clear()
 
-            except Exception as e:
-                print(f"清除场景内容时出错: {e}")
-            finally:
-                self.graphics_scene.blockSignals(was_blocked)
-                self.graphics_scene.update()
+        finally:
+            # 恢复场景的信号状态
+            self.graphics_scene.blockSignals(was_blocked)
+            # 强制更新场景
+            self.graphics_scene.update()
 
-            self.has_piped = True
-            self.left_data_pd = []
+        self.has_piped = True
+        self.left_data_pd = []
 
-            # 1. 读取参数 - 添加更安全的参数获取
-            DL = None
-            do = None
-            height_0_180 = None
-            height_90_270 = None
-            DN = None
-            Di = None
-            table = self.param_table
+        # 1. 读取参数
+        DL = None
+        do = None
+        height_0_180 = None
+        height_90_270 = None
+        DN = None
+        Di = None
+        table = self.param_table
 
-            for row in range(table.rowCount()):
-                try:
-                    param_name_item = table.item(row, 1)
-                    param_name = param_name_item.text() if param_name_item else ""
+        for row in range(table.rowCount()):
+            param_name = table.item(row, 1).text() if table.item(row, 1) else ""
+            param_value = table.cellWidget(row, 2)
 
-                    param_value = None
-                    cell_widget = table.cellWidget(row, 2)
-                    if isinstance(cell_widget, QComboBox):
-                        param_value = cell_widget.currentText()
-                    else:
-                        value_item = table.item(row, 2)
-                        param_value = value_item.text() if value_item else ""
+            if param_value and isinstance(param_value, QComboBox):
+                param_value = param_value.currentText()
+            else:
+                item = table.item(row, 2)
+                param_value = item.text() if item else ""
 
-                    self.left_data_pd.append({
-                        "参数名": param_name,
-                        "参数值": param_value
-                    })
+            self.left_data_pd.append({
+                "参数名": param_name,
+                "参数值": param_value
+            })
 
-                    # 提取关键参数 - 添加类型转换保护
-                    if param_name == "壳体内直径 Di" and param_value:
-                        try:
-                            Di = float(param_value)
-                        except (ValueError, TypeError):
-                            Di = None
-                            print(f"壳体内直径 Di 参数转换失败: {param_value}")
-                    elif param_name == "公称直径 DN" and param_value:
-                        try:
-                            DN = float(param_value)
-                        except (ValueError, TypeError):
-                            DN = None
-                            print(f"公称直径 DN 参数转换失败: {param_value}")
-                    elif param_name == "换热管外径 do" and param_value:
-                        try:
-                            do = float(param_value)
-                            self.r = float(do / 2) if do else 0
-                        except (ValueError, TypeError):
-                            do = None
-                            print(f"换热管外径 do 参数转换失败: {param_value}")
-                    elif param_name == "非布管区域弦高（0°/180°）" and param_value:
-                        try:
-                            height_0_180 = float(param_value)
-                        except (ValueError, TypeError):
-                            height_0_180 = 0
-                            print(f"非布管区域弦高（0°/180°）参数转换失败: {param_value}")
-                    elif param_name == "非布管区域弦高（90°/270°）" and param_value:
-                        try:
-                            height_90_270 = float(param_value)
-                        except (ValueError, TypeError):
-                            height_90_270 = 0
-                            print(f"非布管区域弦高（90°/270°）参数转换失败: {param_value}")
-                    elif param_name == "布管限定圆 DL" and param_value:
-                        try:
-                            DL = float(param_value)
-                        except (ValueError, TypeError):
-                            DL = None
-                            print(f"布管限定圆 DL 参数转换失败: {param_value}")
-                except Exception as e:
-                    print(f"处理第{row}行参数时出错: {e}")
-                    continue
+            # 提取关键参数
+            if param_name == "壳体内直径 Di":
+                Di = float(param_value) if param_value else None
+            elif param_name == "公称直径 DN":
+                DN = float(param_value) if param_value else None
+            elif param_name == "换热管外径 do":
+                do = float(param_value) if param_value else None
+                self.r = float(do / 2) if do else 0
+            elif param_name == "非布管区域弦高（0°/180°）":
+                height_0_180 = float(param_value) if param_value else 0
+            elif param_name == "非布管区域弦高（90°/270°）":
+                height_90_270 = float(param_value) if param_value else 0
+            elif param_name == "布管限定圆 DL":
+                DL = float(param_value) if param_value else None
 
-            # 参数验证
-            if Di is None or do is None:
-                QMessageBox.warning(self, "提示", "请先输入壳体内直径 Di 和换热管外径 do 两个参数。")
-                return None
+        # 参数验证
+        if Di is None or do is None:
+            QMessageBox.warning(self, "提示", "请先输入壳体内直径 Di 和换热管外径 do 两个参数。")
+            return None
 
-            # 获取换热器型号 - 添加数据库连接保护
-            heat_exchanger_type = self.heat_exchanger if hasattr(self, 'heat_exchanger') else ''
+        # 获取换热器型号
+        heat_exchanger_type = self.heat_exchanger if hasattr(self, 'heat_exchanger') else ''
+        if not heat_exchanger_type and self.productID:
+            # 如果没有换热器型号，从数据库获取
             conn = None
             try:
-                if not heat_exchanger_type and self.productID:
-                    conn = create_product_connection()
-                    if conn:
-                        with conn.cursor() as cursor:
-                            query = "SELECT 产品型式 FROM 产品设计活动表 WHERE 产品ID = %s"
-                            cursor.execute(query, (self.productID,))
-                            result = cursor.fetchone()
-                            if result and '产品型式' in result:
-                                heat_exchanger_type = result['产品型式'].strip().upper()
-                                self.heat_exchanger = heat_exchanger_type
-                                print(f"从数据库获取到产品型式: {heat_exchanger_type}")
+                conn = create_product_connection()
+                if conn:
+                    with conn.cursor() as cursor:
+                        query = "SELECT 产品型式 FROM 产品设计活动表 WHERE 产品ID = %s"
+                        cursor.execute(query, (self.productID,))
+                        result = cursor.fetchone()
+                        if result and '产品型式' in result:
+                            heat_exchanger_type = result['产品型式'].strip().upper()
+                            self.heat_exchanger = heat_exchanger_type
             except pymysql.MySQLError as e:
                 print(f"数据库查询产品型式失败: {e}")
             finally:
                 if conn and conn.open:
                     conn.close()
 
-            # 更新参数表中的DL值
-            dl_row = -1
-            row_count = self.param_table.rowCount()
-            for row in range(row_count):
-                param_name_item = self.param_table.item(row, 1)
-                if param_name_item and param_name_item.text() == "布管限定圆 DL":
-                    dl_row = row
-                    break
+        # 更新参数表中的DL值
+        dl_row = -1
+        row_count = self.param_table.rowCount()
+        for row in range(row_count):
+            param_name_item = self.param_table.item(row, 1)
+            if param_name_item and param_name_item.text() == "布管限定圆 DL":
+                dl_row = row
+                break
 
-            if dl_row != -1 and DL is not None:
-                # 临时断开信号避免循环触发
-                original_handler = None
-                if hasattr(self, 'handle_param_change'):
+        if dl_row != -1:
+            # 临时断开信号避免循环触发
+            original_handler = None
+            if hasattr(self, 'handle_param_change'):
+                try:
+                    self.param_table.itemChanged.disconnect(self.handle_param_change)
+                    original_handler = self.handle_param_change
+                except:
+                    pass
+
+            # 更新布管限定圆 DL
+            dl_item = self.param_table.item(dl_row, 2)
+            if dl_item:
+                dl_item.setText(f"{DL: .1f}")
+            else:
+                self.param_table.setItem(dl_row, 2, QTableWidgetItem(f"{DL: .1f}"))
+            print(f"已更新布管限定圆 DL: {DL: .1f}")
+
+            # 重新连接信号
+            if original_handler:
+                try:
+                    self.param_table.itemChanged.connect(original_handler)
+                except:
+                    pass
+
+        # 转换为DataFrame
+        self.left_data_pd = pd.DataFrame(self.left_data_pd)
+
+        # 2. 构造JSON映射
+        param_mapping = {
+            "换热管布置方式": ("LB_IsRangeCenter", {"对中": "0", "跨中": "1", "任意": "2"}),
+            "旁路挡板厚度": ("LB_BPBThick", None),
+            "分程隔板放置型式": ("LB_ClapboardType", None),
+            "管程分程形式": ("LB_Tubeform", None),
+            "滑道高度": ("LB_SlipWayHeight", None),
+            "拉杆直径": ("LB_TieRodD", None),
+            "管程程数": ("LB_TubePassCount", None),
+            "壳程程数": ("Shell_NumberOfPasses", None),
+            "公称直径 DN": ("LB_DN", None),
+            "壳体内直径 Di": ("LB_Di", None),
+            "布管限定圆 DL": ("LB_DL", None),
+            "换热管孔需求数量": ("LB_TotalTubesCountNeed", None),
+            "换热管外径 do": ("LB_TubeD", None),
+            "换热管壁厚 δ": ("LB_TubeThick", None),
+            "换热管排列方式": (
+                "LB_RangeType", {"正三角形": "1", "转角正三角形": "0", "正方形": "2", "转角正方形": "3"}),
+            "换热管公称长度 LN": ("LB_TubeLong", None),
+            "换热管中心距 S": ("LB_S", None),
+            "折流板切口方向": ("LB_BaffleDirection", {"水平上下": "1", "垂直左右": "2"}),
+            "折流板要求切口率 (%)": ("LB_BafflePerStr", None),
+            "切口距垂直中心线间距": ("LB_BaffleToODistance", None),
+            "折流/支持板间距": ("BaffleSpacing", None),
+            "折流板外径": ("LB_BaffleOD", None),
+            "分程隔板两侧相邻管中心距（竖直）": ("LB_SN", None),
+            "分程隔板两侧相邻管中心距（水平）": ("LB_SNH", None),
+            "隔条位置尺寸 W": ("LB_SpacerPositionSize", None),
+            "滑道厚度": ("LB_SlipWayThick", None),
+            "滑道与竖直中心线夹角": ("LB_SlipWayAngle", None),
+            "防冲板厚度": ("LB_BaffleThick", None),
+            "防冲板折边角度": ("LB_BaffleA", None),
+            "与圆筒连接防冲板方位": ("LB_BafflePosition", None),
+            "与圆筒连接防冲板宽度": ("LB_BaffleW", None),
+            "与圆筒连接防冲板至圆筒内壁最大距离": ("LB_BaffleDis", None),
+            "热交换器类型": (
+                "LB_HEType", {"未选择": "2", "浮头式热交换器": "0", "固定管板式热交换器": "1", "U型管式热交换器": "2"})
+        }
+
+        input_json = {}
+        for _, row in self.left_data_pd.iterrows():
+            param_name = row["参数名"]
+            param_value = str(row["参数值"]).strip()
+            if param_name == "中间挡板厚度":
+                self.block_thickness = param_value
+
+            if param_name in param_mapping:
+                json_key, value_map = param_mapping[param_name]
+
+                if json_key == "SlipWays":
                     try:
-                        self.param_table.itemChanged.disconnect(self.handle_param_change)
-                        original_handler = self.handle_param_change
-                    except:
-                        pass
-
-                try:
-                    # 更新布管限定圆 DL
-                    dl_item = self.param_table.item(dl_row, 2)
-                    if dl_item:
-                        dl_item.setText(f"{DL:.1f}")
-                    else:
-                        self.param_table.setItem(dl_row, 2, QTableWidgetItem(f"{DL:.1f}"))
-                    print(f"已更新布管限定圆 DL: {DL:.1f}")
-                except Exception as e:
-                    print(f"更新布管限定圆 DL 时出错: {e}")
-                finally:
-                    # 重新连接信号
-                    if original_handler:
-                        try:
-                            self.param_table.itemChanged.connect(original_handler)
-                        except:
-                            pass
-
-            # 转换为DataFrame
-            try:
-                self.left_data_pd = pd.DataFrame(self.left_data_pd)
-            except Exception as e:
-                print(f"转换为DataFrame时出错: {e}")
-                return None
-
-            # 2. 构造JSON映射
-            param_mapping = {
-                "换热管布置方式": ("LB_IsRangeCenter", {"对中": "0", "跨中": "1", "任意": "2"}),
-                "旁路挡板厚度": ("LB_BPBThick", None),
-                "分程隔板放置型式": ("LB_ClapboardType", None),
-                "管程分程形式": ("LB_Tubeform", None),
-                "滑道高度": ("LB_SlipWayHeight", None),
-                "拉杆直径": ("LB_TieRodD", None),
-                "管程程数": ("LB_TubePassCount", None),
-                "壳程程数": ("Shell_NumberOfPasses", None),
-                "公称直径 DN": ("LB_DN", None),
-                "壳体内直径 Di": ("LB_Di", None),
-                "布管限定圆 DL": ("LB_DL", None),
-                "换热管孔需求数量": ("LB_TotalTubesCountNeed", None),
-                "换热管外径 do": ("LB_TubeD", None),
-                "换热管壁厚 δ": ("LB_TubeThick", None),
-                "换热管排列方式": (
-                    "LB_RangeType", {"正三角形": "1", "转角正三角形": "0", "正方形": "2", "转角正方形": "3"}),
-                "换热管公称长度 LN": ("LB_TubeLong", None),
-                "换热管中心距 S": ("LB_S", None),
-                "折流板切口方向": ("LB_BaffleDirection", {"水平上下": "1", "垂直左右": "2"}),
-                "折流板要求切口率 (%)": ("LB_BafflePerStr", None),
-                "切口距垂直中心线间距": ("LB_BaffleToODistance", None),
-                "折流/支持板间距": ("BaffleSpacing", None),
-                "折流板外径": ("LB_BaffleOD", None),
-                "分程隔板两侧相邻管中心距（竖直）": ("LB_SN", None),
-                "分程隔板两侧相邻管中心距（水平）": ("LB_SNH", None),
-                "隔条位置尺寸 W": ("LB_SpacerPositionSize", None),
-                "滑道厚度": ("LB_SlipWayThick", None),
-                "滑道与竖直中心线夹角": ("LB_SlipWayAngle", None),
-                "防冲板厚度": ("LB_BaffleThick", None),
-                "防冲板折边角度": ("LB_BaffleA", None),
-                "与圆筒连接防冲板方位": ("LB_BafflePosition", None),
-                "与圆筒连接防冲板宽度": ("LB_BaffleW", None),
-                "与圆筒连接防冲板至圆筒内壁最大距离": ("LB_BaffleDis", None),
-                "热交换器类型": (
-                    "LB_HEType",
-                    {"未选择": "2", "浮头式热交换器": "0", "固定管板式热交换器": "1", "U型管式热交换器": "2"})
-            }
-
-            input_json = {}
-            for _, row in self.left_data_pd.iterrows():
-                try:
-                    param_name = row["参数名"]
-                    param_value = str(row["参数值"]).strip() if row["参数值"] is not None else ""
-                    if param_name == "中间挡板厚度":
-                        self.block_thickness = param_value
-
-                    if param_name in param_mapping:
-                        json_key, value_map = param_mapping[param_name]
-
-                        if json_key == "SlipWays":
-                            try:
-                                input_json[json_key] = json.loads(param_value)
-                            except Exception as e:
-                                print("滑道坐标 JSON 格式错误，无法解析：", param_value)
-                                input_json[json_key] = []
-                        elif value_map:
-                            input_json[json_key] = value_map.get(param_value, "0")
-                        else:
-                            input_json[json_key] = param_value
-                except Exception as e:
-                    print(f"处理参数 {param_name} 时出错: {e}")
-                    continue
-
-            # 确保使用计算后的DL值
-            if DL is not None:
-                input_json['LB_DL'] = f"{DL:.1f}"
-            if Di is not None:
-                input_json['LB_Di'] = f"{Di:.1f}"
-
-            # 补充默认值
-            connection = None
-            try:
-                connection = pymysql.connect(
-                    host="localhost",
-                    user="root",
-                    password="123456",
-                    database="产品设计活动库",
-                    charset="utf8mb4",
-                    cursorclass=pymysql.cursors.DictCursor
-                )
-
-                cursor = connection.cursor()
-                sql = """
-                    SELECT 参数值 
-                    FROM 产品设计活动表_元件附加参数表
-                    WHERE 产品ID = %s
-                      AND 元件名称 = %s
-                      AND 参数名称 = %s
-                    LIMIT 1
-                """
-                cursor.execute(sql, (product_id, "拉杆", "拉杆型式"))
-                result = cursor.fetchone()
-                cursor.close()
-
-                if result and result["参数值"] == "焊接拉杆":
-                    # 焊接拉杆 → 直接取换热管外径
-                    input_json['LB_TieRodD'] = input_json.get('LB_TubeD', '')
+                        input_json[json_key] = json.loads(param_value)
+                    except Exception as e:
+                        print("滑道坐标 JSON 格式错误，无法解析：", param_value)
+                        input_json[json_key] = []
+                elif value_map:
+                    input_json[json_key] = value_map.get(param_value, "0")
                 else:
-                    od_val = float(input_json.get('LB_TieRodD', 0)) if input_json.get('LB_TieRodD') else 0
-                    if 10 <= od_val <= 14:
-                        input_json['LB_TieRodD'] = "10"
-                    elif 14 < od_val < 25:
-                        input_json['LB_TieRodD'] = "12"
-                    elif 25 <= od_val <= 57:
-                        input_json['LB_TieRodD'] = "16"
-                    else:
-                        input_json['LB_TieRodD'] = "12"
-                    input_json['LB_TieRodD'] = "16"
-                input_json['LB_ClapboardType'] = '2'
+                    input_json[json_key] = param_value
 
-            except Exception as e:
-                print(f"补充默认值时出错: {e}")
-            finally:
-                if connection and connection.open:
-                    connection.close()
+        # 确保使用计算后的DL值
+        input_json['LB_DL'] = f"{DL: .1f}"
+        input_json['LB_Di'] = f"{Di: .1f}" if Di else ""
 
-            # 3. 根据产品ID从数据库获取产品型式并设置热交换器类型
-            he_type = '2'  # 默认U型管式
-            product_type_str = heat_exchanger_type
-            self.heat_exchanger = product_type_str
+        # 补充默认值
+        connection = pymysql.connect(
+            host="localhost",
+            user="root",
+            password="123456",
+            database="产品设计活动库",
+            charset="utf8mb4",
+            cursorclass=pymysql.cursors.DictCursor
+        )
 
-            # 根据产品型式判断热交换器类型
-            if product_type_str in ['AEU', 'BEU']:
-                he_type = '2'  # U型管式
-            elif product_type_str == 'NEM':
-                he_type = '1'  # 固定管板式
-            elif product_type_str in ['AES', 'BES']:
-                he_type = '0'  # 浮头式
+        cursor = connection.cursor()
+        sql = """
+            SELECT 参数值 
+            FROM 产品设计活动表_元件附加参数表
+            WHERE 产品ID = %s
+              AND 元件名称 = %s
+              AND 参数名称 = %s
+            LIMIT 1
+        """
+        cursor.execute(sql, (product_id, "拉杆", "拉杆型式"))
+        result = cursor.fetchone()
+        cursor.close()
 
-            input_json['LB_HEType'] = he_type
+        if result and result["参数值"] == "焊接拉杆":
+            # 焊接拉杆 → 直接取换热管外径
+            input_json['LB_TieRodD'] = input_json.get('LB_TubeD', '')
+        else:
+            od_val = float(input_json.get('LB_TieRodD', 0)) if input_json.get('LB_TieRodD') else 0
+            if 10 <= od_val <= 14:
+                input_json['LB_TieRodD'] = "10"
+            elif 14 < od_val < 25:
+                input_json['LB_TieRodD'] = "12"
+            elif 25 <= od_val <= 57:
+                input_json['LB_TieRodD'] = "16"
+            else:
+                input_json['LB_TieRodD'] = "12"
+            input_json['LB_TieRodD'] = "16"
+        input_json['LB_ClapboardType'] = '2'
 
-            # 4.1 为平行，传"2"
-            # 4.2，6.2为double，传"0"
-            # 4.3,6.1为H，传"1"
-
-            LB_ClapboardType = '0'
-            if hasattr(self, 'tube_pass_form_value'):
-                if self.tube_pass_form_value == "4.1":
-                    LB_ClapboardType = '2'
-                elif self.tube_pass_form_value == "4.2" or self.tube_pass_form_value == "6.2":
-                    LB_ClapboardType = '0'
-                else:
-                    LB_ClapboardType = '1'
-            input_json['LB_ClapboardType'] = LB_ClapboardType
-
-            if input_json.get('LB_TubePassCount') == "2":
-                input_json['LB_SNH'] = '0'
-            if hasattr(self, 'tube_pass_form_value') and self.tube_pass_form_value == "4.1":
-                input_json['LB_SNH'] = '0'
-
-            param_mapping2 = {
-                "LB_IsRangeCenter": "换热管布置方式",
-                "LB_BPBThick": "旁路挡板厚度",
-                "LB_Tubeform": "管程分程形式",
-                "LB_SlipWayHeight": "滑道高度",
-                "LB_TieRodD": "拉杆直径",
-                "LB_DN": "公称直径 DN",
-                "LB_TubePassCount": "管程程数",
-                "Shell_NumberOfPasses": "壳程程数",
-                "LB_Di": "壳体内直径 Di",
-                "LB_DL": "布管限定圆 DL",
-                "LB_TubeD": "换热管外径 do",
-                "LB_TubeThick": "换热管壁厚 δ",
-                "LB_RangeType": "换热管排列方式",
-                "LB_TubeLong": "换热管公称长度 LN",
-                "LB_S": "换热管中心距 S",
-                "LB_BaffleDirection": "折流板切口方向",
-                "LB_BafflePerStr": "折流板要求切口率 (%)",
-                "LB_BaffleToODistance": "切口距垂直中心线间距",
-                "BaffleSpacing": "折流/支持板间距",
-                "LB_BaffleOD": "折流板外径",
-                "LB_SN": "分程隔板两侧相邻管中心距（竖直）",
-                "LB_SNH": "分程隔板两侧相邻管中心距（水平）",
-                "LB_SpacerPositionSize": "隔条位置尺寸 W",
-                "LB_SlipWayThick": "滑道厚度",
-                "LB_SlipWayAngle": "滑道与竖直中心线夹角",
-                "LB_BaffleThick": "防冲板厚度",
-                "LB_BaffleA": "防冲板折边角度",
-                "LB_BafflePosition": "与圆筒连接防冲板方位",
-                "LB_BaffleW": "与圆筒连接防冲板宽度",
-                "LB_BaffleDis": "与圆筒连接防冲板至圆筒内壁最大距离",
-                "LB_ClapboardType": "分程隔板放置型式",
-                "LB_HEType": "热交换器类型",
-            }
-
-            defaults = {}
+        # 3. 根据产品ID从数据库获取产品型式并设置热交换器类型
+        he_type = '2'  # 默认U型管式
+        product_type_str = heat_exchanger_type  # 用于存储产品型式字符串
+        self.heat_exchanger = product_type_str
+        # 根据产品型式判断热交换器类型
+        if product_type_str in ['AEU', 'BEU']:
+            he_type = '2'  # U型管式
+        elif product_type_str == 'NENs':
+            he_type = '1'  # 固定管板式
+        elif product_type_str in ['AES', 'BES']:
+            he_type = '0'  # 浮头式
+        if self.productID and not product_type_str:
             conn = None
             try:
-                conn = create_component_connection()
+                conn = create_product_connection()
                 if conn:
                     with conn.cursor() as cursor:
-                        if self.heat_exchanger in ["AEU", "BEU"]:
-                            cursor.execute("SELECT 参数名, 参数值 FROM 布管参数默认表_U型管")
-                            rows = cursor.fetchall()
-                            for row in rows:
-                                param_name = row['参数名'].strip()
-                                param_value = row['参数值']
-                                defaults[param_name] = param_value
-                        elif self.heat_exchanger in ["AES", "BES"]:
-                            cursor.execute("SELECT 参数名, 参数值 FROM 布管参数默认表_浮头式")
-                            rows = cursor.fetchall()
-                            for row in rows:
-                                param_name = row['参数名'].strip()
-                                param_value = row['参数值']
-                                defaults[param_name] = param_value
-                        else:
-                            cursor.execute("SELECT 参数名, 参数值 FROM 布管参数默认表_浮头式")
-                            rows = cursor.fetchall()
-                            for row in rows:
-                                param_name = row['参数名'].strip()
-                                param_value = row['参数值']
-                                defaults[param_name] = param_value
+                        query = "SELECT 产品型式 FROM 产品设计活动表 WHERE 产品ID = %s"
+                        cursor.execute(query, (self.productID,))
+                        result = cursor.fetchone()
+
+                        if result and '产品型式' in result:
+                            product_type_str = result['产品型式'].strip().upper()  # 标准化处理并保存
+                            self.heat_exchanger = product_type_str
+
+                            # 根据产品型式判断热交换器类型
+                            if product_type_str in ['AEU', 'BEU']:
+                                he_type = '2'  # U型管式
+                            elif product_type_str == 'NEN':
+                                he_type = '1'  # 固定管板式
+                            elif product_type_str in ['AES', 'BES']:
+                                he_type = '0'  # 浮头式
             except pymysql.MySQLError as e:
-                print(f"查询布管默认参数表失败: {e}")
+                print(f"数据库查询产品型式失败: {e}")
             finally:
                 if conn and conn.open:
                     conn.close()
 
-            for eng_key, cn_key in param_mapping2.items():
-                if eng_key not in input_json or input_json[eng_key] in [None, '']:
-                    if cn_key in defaults:
-                        input_json[eng_key] = defaults[cn_key]
-            input_json["LB_TotalTubesCountNeed"] = 10000
+        input_json['LB_HEType'] = he_type
+        # 4.1 为平行，传"2"
+        # 4.2，6.2为double，传"0"
+        # 4.3,6.1为H，传"1"
 
-            self.input_json = input_json
-            print("输入JSON:", self.input_json)
-            self.save_layout_input(product_id, self.input_json)
+        LB_ClapboardType = '0'
+        if self.tube_pass_form_value == "4.1":
+            LB_ClapboardType = '2'
+        elif self.tube_pass_form_value == "4.2" or self.tube_pass_form_value == "6.2":
+            LB_ClapboardType = '0'
+        else:
+            LB_ClapboardType = '1'
+        input_json['LB_ClapboardType'] = LB_ClapboardType
+        if input_json['LB_TubePassCount'] == "2":
+            input_json['LB_SNH'] = '0'
+        if self.tube_pass_form_value == "4.1":
+            input_json['LB_SNH'] = '0'
 
-            # 4. 执行布管计算 - 添加异常保护
-            try:
-                json_str = run_layout_tube_calculate(
-                    json.dumps(input_json, indent=2, ensure_ascii=False)
-                )
+        param_mapping2 = {
+            "LB_IsRangeCenter": "换热管布置方式",
+            "LB_BPBThick": "旁路挡板厚度",
+            "LB_Tubeform": "管程分程形式",
+            "LB_SlipWayHeight": "滑道高度",
+            "LB_TieRodD": "拉杆直径",
+            "LB_DN": "公称直径 DN",
+            "LB_TubePassCount": "管程程数",
+            "Shell_NumberOfPasses": "壳程程数",
+            "LB_Di": "壳体内直径 Di",
+            "LB_DL": "布管限定圆 DL",
+            # "LB_TotalTubesCountNeed": "换热管孔需求数量",
+            "LB_TubeD": "换热管外径 do",
+            "LB_TubeThick": "换热管壁厚 δ",
+            "LB_RangeType": "换热管排列方式",
+            "LB_TubeLong": "换热管公称长度 LN",
+            "LB_S": "换热管中心距 S",
+            "LB_BaffleDirection": "折流板切口方向",
+            "LB_BafflePerStr": "折流板要求切口率 (%)",
+            "LB_BaffleToODistance": "切口距垂直中心线间距",
+            "BaffleSpacing": "折流/支持板间距",
+            "LB_BaffleOD": "折流板外径",
+            "LB_SN": "分程隔板两侧相邻管中心距（竖直）",
+            "LB_SNH": "分程隔板两侧相邻管中心距（水平）",
+            "LB_SpacerPositionSize": "隔条位置尺寸 W",
+            "LB_SlipWayThick": "滑道厚度",
+            "LB_SlipWayAngle": "滑道与竖直中心线夹角",
+            "LB_BaffleThick": "防冲板厚度",
+            "LB_BaffleA": "防冲板折边角度",
+            "LB_BafflePosition": "与圆筒连接防冲板方位",
+            "LB_BaffleW": "与圆筒连接防冲板宽度",
+            "LB_BaffleDis": "与圆筒连接防冲板至圆筒内壁最大距离",
+            "LB_ClapboardType": "分程隔板放置型式",
+            "LB_HEType": "热交换器类型",
+        }
 
-                if not json_str:
-                    print("布管计算返回空结果")
-                    return None
-
-                self.output_data = json_str
-                self.update_pipe_parameters()
-                result = parse_heat_exchanger_json(json_str)
-
-                if not result:
-                    print("解析布管结果失败")
-                    return None
-
-                self.save_layout_result(product_id, result)
-
-                # 处理计算结果
-                target_list = []
-                if 'raw' in result and 'TubesParam' in result['raw']:
-                    for tube_param in result['raw']['TubesParam']:
-                        if 'ScriptItem' in tube_param:
-                            for item in tube_param['ScriptItem']:
-                                if 'CenterPt' in item and 'R' in item:
-                                    flat_dict = {
-                                        'X': item['CenterPt']['X'],
-                                        'Y': item['CenterPt']['Y'],
-                                        'R': item['R']
-                                    }
-                                    target_list.append(flat_dict)
-
-                self.target_list = target_list
-                self.global_centers = result.get("centers", [])
-                centers = self.global_centers
-
-                # 计算非布管区域
-                if centers and Di and do:
-                    current_centers = none_tube_centers(height_0_180, height_90_270, Di, do, centers)
-                    self.current_centers = current_centers
-
-                    # 绘制布局
-                    self.draw_layout(DN, Di, DL, do, centers)
-
-                    # 重新创建场景并连接中心
-                    if self.create_scene():
-                        self.connect_center(self.scene, self.current_centers, self.small_D)
-
-                    # 重新计算并绘制非布管区域和挡板
-                    self.none_tube(height_0_180, height_90_270, Di, do, centers)
-
-                    # 安全地绘制折流板
-                    try:
-                        self.draw_baffle_plates()
-                    except Exception as e:
-                        print(f"绘制折流板时出错: {e}")
-
-                # 强制刷新场景
-                self.graphics_scene.update()
-                QApplication.processEvents()
-
-
-                self.update_SN()
-                if hasattr(self, 'global_centers') and self.global_centers:
-                    self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
-                        self.global_centers)
-                self.update_tube_nums()
-
-                # 5. 根据产品型式设置交叉布管按钮状态
-                cross_pipe_btn = None
-                for i in range(self.action_bar.count()):
-                    item = self.action_bar.itemAt(i)
-                    if item.widget() and isinstance(item.widget(), QPushButton):
-                        if item.widget().text() == "交叉布管":
-                            cross_pipe_btn = item.widget()
-                            break
-
-                if cross_pipe_btn is not None:
-                    if product_type_str == 'BES' or product_type_str == 'AES':
-                        cross_pipe_btn.setEnabled(False)
-                        cross_pipe_btn.setToolTip("浮头式产品不支持交叉布管功能")
+        defaults = {}
+        conn = None
+        try:
+            conn = create_component_connection()
+            if conn:
+                with conn.cursor() as cursor:
+                    if self.heat_exchanger in ["AEU", "BEU"]:
+                        cursor.execute("SELECT 参数名, 参数值 FROM 布管参数默认表_U型管")
+                        rows = cursor.fetchall()
+                        for row in rows:
+                            param_name = row['参数名'].strip()
+                            param_value = row['参数值']
+                            defaults[param_name] = param_value
+                    elif self.heat_exchanger in ["AES", "BES"]:
+                        cursor.execute("SELECT 参数名, 参数值 FROM 布管参数默认表_浮头式")
+                        rows = cursor.fetchall()
+                        for row in rows:
+                            param_name = row['参数名'].strip()
+                            param_value = row['参数值']
+                            defaults[param_name] = param_value
                     else:
-                        cross_pipe_btn.setEnabled(True)
-                        cross_pipe_btn.setToolTip("")
+                        cursor.execute("SELECT 参数名, 参数值 FROM 布管参数默认表_浮头式")
+                        rows = cursor.fetchall()
+                        for row in rows:
+                            param_name = row['参数名'].strip()
+                            param_value = row['参数值']
+                            defaults[param_name] = param_value
+        except pymysql.MySQLError as e:
+            print(f"查询布管默认参数表失败: {e}")
+        finally:
+            if conn and conn.open:
+                conn.close()
 
-                return result
+        for eng_key, cn_key in param_mapping2.items():
+            if eng_key not in input_json or input_json[eng_key] in [None, '']:
+                if cn_key in defaults:
+                    input_json[eng_key] = defaults[cn_key]
+        input_json["LB_TotalTubesCountNeed"] = 10000
 
-            except Exception as e:
-                print(f"布管计算失败: {e}")
-                import traceback
-                traceback.print_exc()
-                # QMessageBox.critical(self, "布管错误", f"布管计算过程中发生错误: {str(e)}")
-                return None
+        self.input_json = input_json
+        print(self.input_json)
+        self.save_layout_input(product_id, self.input_json)
+
+        # 4. 执行布管计算
+        try:
+            json_str = run_layout_tube_calculate(
+                json.dumps(input_json, indent=2, ensure_ascii=False)
+            )
+            self.output_data = json_str
+            self.update_pipe_parameters()
+            result = parse_heat_exchanger_json(json_str)
+            self.save_layout_result(product_id, result)
+            # 处理计算结果
+            target_list = []
+            for tube_param in result['raw']['TubesParam']:
+                for item in tube_param['ScriptItem']:
+                    flat_dict = {
+                        'X': item['CenterPt']['X'],
+                        'Y': item['CenterPt']['Y'],
+                        'R': item['R']
+                    }
+                    target_list.append(flat_dict)
+
+            self.target_list = target_list
+            self.global_centers = result["centers"]
+            centers = self.global_centers
+
+            # 计算非布管区域
+            current_centers = none_tube_centers(height_0_180, height_90_270, Di, do, centers)
+            self.current_centers = current_centers
+
+            # 更新管数量和绘制布局（确保小圆绘制在最上层）
+
+            self.draw_layout(DN, Di, DL, do, result["centers"])
+
+            # 重新创建场景并连接中心，确保层级正确
+            if self.create_scene():
+                self.connect_center(self.scene, self.current_centers, self.small_D)
+
+            # 重新计算并绘制非布管区域和挡板
+            self.global_centers = result["centers"]
+            centers = self.global_centers
+            self.none_tube(height_0_180, height_90_270, Di, do, centers)
+            # self.draw_baffle_plates()
+
+            # 强制刷新场景
+            self.graphics_scene.update()
+            QApplication.processEvents()
+            tube_pass = self.get_tube_pass_count()
+
+            self.update_SN()
+            self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
+                self.global_centers)
+            self.update_tube_nums()
+
+            # 5. 根据产品型式设置交叉布管按钮状态
+            # 查找交叉布管按钮（通过按钮文本）
+            cross_pipe_btn = None
+            # 遍历中心布局中的所有按钮
+            for i in range(self.action_bar.count()):
+                item = self.action_bar.itemAt(i)
+                if item.widget() and isinstance(item.widget(), QPushButton):
+                    if item.widget().text() == "交叉布管":
+                        cross_pipe_btn = item.widget()
+                        break
+
+            # 如果找到按钮，根据产品型式设置可用状态
+            if cross_pipe_btn is not None:
+                if product_type_str == 'BES' or product_type_str == 'AES':
+                    cross_pipe_btn.setEnabled(False)
+                    cross_pipe_btn.setToolTip("浮头式产品不支持交叉布管功能")
+                else:
+                    cross_pipe_btn.setEnabled(True)
+                    cross_pipe_btn.setToolTip("")
+            else:
+                print("警告：未找到交叉布管按钮")
+
+            return result
 
         except Exception as e:
-            print(f"calculate_piping_layout 发生未预期错误: {e}")
-            import traceback
-            traceback.print_exc()
-            # QMessageBox.critical(self, "系统错误", f"布管过程中发生系统错误: {str(e)}")
+            print(f"布管计算失败: {e}")
             return None
 
     def save_layout_input(self, product_id, input_json: dict):
@@ -5332,40 +5283,124 @@ class TubeLayoutEditor(QMainWindow):
             self.delete_centers(none_tube_90_270)
 
     def delete_centers(self, centers):
-        """TODO 删除指定圆心坐标的圆并记录操作"""
+        """删除指定圆心坐标的圆并记录操作"""
+        if not centers:
+            return
+
         if not hasattr(self, 'operations'):
             self.operations = []
-        gray_pen = QPen(QColor(211, 211, 211))  # 浅灰色边框
-        gray_pen.setWidth(1)
-        gray_brush = QBrush(Qt.NoBrush)  # 空心圆
-        for x, y in centers:
-            # 找出所有圆心在 (x, y) 处的图元并移除（可能有多个图层）
+
+        # 关键修改：使用纯白色实心圆，增加边框宽度，解决视觉叠加问题
+        white_pen = QPen(QColor(255, 255, 255))  # 白色边框
+        white_pen.setWidth(3)  # 增加边框宽度到3像素，减少抗锯齿影响
+        white_brush = QBrush(QColor(255, 255, 255))  # 白色实心填充
+        blue_tube_pen = QColor(0, 0, 80)
+
+        # 转换为要删除的绝对坐标集合
+        absolute_coords_to_remove = set((round(x, 2), round(y, 2)) for x, y in centers)
+
+        # 暂停场景更新以提高性能
+        if self.graphics_scene.views():
+            self.graphics_scene.views()[0].setUpdatesEnabled(False)
+
+        try:
+            # 预构建坐标映射表，避免重复计算
+            coord_to_items = {}
             for item in self.graphics_scene.items():
                 if isinstance(item, QGraphicsEllipseItem):
                     rect = item.rect()
                     cx = item.scenePos().x() + rect.width() / 2
                     cy = item.scenePos().y() + rect.height() / 2
-                    if abs(cx - x) < 1e-2 and abs(cy - y) < 1e-2:
-                        self.graphics_scene.removeItem(item)
+                    coord_key = (round(cx, 2), round(cy, 2))
+                    if coord_key not in coord_to_items:
+                        coord_to_items[coord_key] = []
+                    coord_to_items[coord_key].append(item)
 
-            # 擦除当前圆内选中色
-            click_point = QPointF(x, y)
-            for item in self.graphics_scene.items(click_point):
-                if isinstance(item, QGraphicsEllipseItem):
-                    self.graphics_scene.removeItem(item)
-                    break
+            # 批量处理要移除和添加的图形项
+            items_to_remove = []
+            items_to_add = []
 
-            # 重新绘制浅灰色空心圆
-            self.graphics_scene.addEllipse(
-                x - self.r, y - self.r, 2 * self.r, 2 * self.r,
-                gray_pen, gray_brush
-            )
+            for x, y in centers:
+                coord_key = (round(x, 2), round(y, 2))
 
-            # 添加操作记录
-            # self.operations.append({
-            #     "type": "del",
-            #     "coord": (x, y)
-            # })
+                # 查找匹配的图形项
+                if coord_key in coord_to_items:
+                    for item in coord_to_items[coord_key]:
+                        if isinstance(item, QGraphicsEllipseItem):
+                            # 移除所有非白色实心圆的元素（包括蓝色换热管和旧的白色标记）
+                            current_color = item.pen().color()
+                            is_white_solid = (current_color == QColor(255, 255, 255) and
+                                              item.brush() != Qt.NoBrush)  # 实心白色
+
+                            if not is_white_solid:
+                                items_to_remove.append(item)
+
+                            # 检查是否为需要替换的圆（蓝色换热管或旧的白色空心圆）
+                            is_blue_tube = (current_color == blue_tube_pen)
+                            is_old_white = (current_color == QColor(255, 255, 255) and
+                                            item.brush() == Qt.NoBrush)  # 旧的白色空心圆
+
+                            if is_blue_tube or is_old_white:
+                                items_to_remove.append(item)
+                                # 添加白色实心覆盖圆 - 解决视觉叠加问题
+                                items_to_add.append((
+                                    x - self.r, y - self.r, 2 * self.r, 2 * self.r,
+                                    white_pen, white_brush
+                                ))
+                else:
+                    # 未找到对应圆时直接添加白色实心覆盖圆
+                    items_to_add.append((
+                        x - self.r, y - self.r, 2 * self.r, 2 * self.r,
+                        white_pen, white_brush
+                    ))
+
+            # 批量移除项目
+            for item in items_to_remove:
+                self.graphics_scene.removeItem(item)
+
+            # 批量添加新项目
+            for ellipse_params in items_to_add:
+                self.graphics_scene.addEllipse(*ellipse_params)
+
+        finally:
+            # 恢复场景更新
+            if self.graphics_scene.views():
+                self.graphics_scene.views()[0].setUpdatesEnabled(True)
+
+        # 更新当前圆心列表
+        if hasattr(self, 'current_centers'):
+            # 保存并重新绘制切线
+            saved_lines = []
+            if hasattr(self, 'connection_lines'):
+                saved_lines = [(line.line(), line.pen()) for line in self.connection_lines]
+                for line in self.connection_lines:
+                    self.graphics_scene.removeItem(line)
+
+            # 使用绝对坐标来过滤，确保删除所有目标坐标
+            self.current_centers = [
+                (cx, cy) for (cx, cy) in self.current_centers
+                if (round(cx, 2), round(cy, 2)) not in absolute_coords_to_remove
+            ]
+
+            if self.create_scene():
+                self.update_tube_nums()
+
+            if saved_lines and hasattr(self, 'connection_lines'):
+                self.connection_lines = []
+                for line_data, pen in saved_lines:
+                    new_line = self.graphics_scene.addLine(line_data, pen)
+                    self.connection_lines.append(new_line)
+
+        # 添加操作记录
+        for coord in centers:
+            self.operations.append({
+                "type": "del",
+                "coord": coord
+            })
+
+        # 清除选择高亮
+        if hasattr(self, 'clear_selection_highlight'):
+            self.clear_selection_highlight()
 
     def validate_input(self, item, row):
         """验证输入是否为合法浮点数"""
@@ -5503,21 +5538,21 @@ class TubeLayoutEditor(QMainWindow):
             self.line_tip.setStyleSheet("color: black;")
             self.line_tip.setVisible(True)
             from PyQt5.QtCore import QTimer
-            QTimer.singleShot(3000, self.line_tip.hide)
+            QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
             message = "数据保存成功！"
         elif current_page_index == 1:  # 管-板连接页面
             self.line_tip.setText(f"数据保存成功")
             self.line_tip.setStyleSheet("color: black;")
             self.line_tip.setVisible(True)
             from PyQt5.QtCore import QTimer
-            QTimer.singleShot(3000, self.line_tip.hide)
+            QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
             message = "数据保存成功！"
         elif current_page_index == 0 and not self.has_piped:
             self.line_tip.setText(f"数据保存成功")
             self.line_tip.setStyleSheet("color: black;")
             self.line_tip.setVisible(True)
             from PyQt5.QtCore import QTimer
-            QTimer.singleShot(3000, self.line_tip.hide)
+            QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
             message = "数据保存成功！"
         else:  # 管板形式页面
             message = "数据保存成功！"
@@ -5525,7 +5560,7 @@ class TubeLayoutEditor(QMainWindow):
         self.line_tip.setText(f"数据保存成功")
         self.line_tip.setVisible(True)
         from PyQt5.QtCore import QTimer
-        QTimer.singleShot(3000, self.line_tip.hide)
+        QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
         self.actual_save_operation(current_page_index)
 
     def build_sql_for_coordinate(self):
@@ -7293,250 +7328,199 @@ class TubeLayoutEditor(QMainWindow):
         from PyQt5.QtWidgets import QMessageBox
         import math
 
-        try:
-            # 第一步：安全地清除之前绘制的所有折流板线段
+        # 清空之前的折流板信息
+        # self.baffle_lines = []
+        print(self.baffle_lines)
+        if len(self.baffle_lines) != 0:
             self.clear_baffle_plates()
+            self.baffle_lines = []
 
-            # 获取折流板相关参数
-            cut_direction = None  # 折流板切口方向
-            cut_rate = None  # 折流板要求切口率 (%)
-            baffle_outer_diameter = None  # 折流板外径
-            shell_inner_diameter = None  # 壳体内直径（用于计算切口高度）
+        # 获取折流板相关参数
+        cut_direction = None  # 折流板切口方向
+        cut_rate = None  # 折流板要求切口率 (%)
+        shell_inner_diameter = None  # 壳体内直径
 
-            # 安全地遍历参数表格
-            for row in range(self.param_table.rowCount()):
+        # 遍历参数表格查找所需参数
+        for row in range(self.param_table.rowCount()):
+            param_name_item = self.param_table.item(row, 1)
+            if not param_name_item:
+                continue
+            param_name = param_name_item.text()
+
+            # 获取参数值（区分QComboBox和普通文本项）
+            cell_widget = self.param_table.cellWidget(row, 2)
+            if isinstance(cell_widget, QComboBox):
+                param_value = cell_widget.currentText()
+            else:
+                value_item = self.param_table.item(row, 2)
+                param_value = value_item.text() if value_item else ""
+
+            # 记录参数值
+            if param_name == "折流板切口方向":
+                cut_direction = param_value
+            elif param_name == "折流板要求切口率 (%)":
                 try:
-                    param_name_item = self.param_table.item(row, 1)
-                    if not param_name_item:
-                        continue
-
-                    param_name = param_name_item.text()
-                    if not param_name:
-                        continue
-
-                    # 安全地获取参数值
-                    param_value = ""
-                    cell_widget = self.param_table.cellWidget(row, 2)
-                    if cell_widget and isinstance(cell_widget, QComboBox):
-                        param_value = cell_widget.currentText()
-                    else:
-                        value_item = self.param_table.item(row, 2)
-                        if value_item:
-                            param_value = value_item.text()
-
-                    # 记录参数值
-                    if param_name == "折流板切口方向":
-                        cut_direction = param_value.strip() if param_value else None
-                    elif param_name == "折流板要求切口率 (%)":
-                        try:
-                            if param_value:
-                                cut_rate = float(param_value)
-                        except (ValueError, TypeError):
-                            cut_rate = None
-                    elif param_name == "折流板外径":
-                        try:
-                            if param_value:
-                                baffle_outer_diameter = float(param_value)
-                        except (ValueError, TypeError):
-                            baffle_outer_diameter = None
-                    elif param_name == "壳体内直径 Di":
-                        try:
-                            if param_value:
-                                shell_inner_diameter = float(param_value)
-                        except (ValueError, TypeError):
-                            shell_inner_diameter = None
-                except Exception as e:
-                    print(f"处理第{row}行折流板参数时出错: {e}")
-                    continue
-
-            # 验证必要参数是否存在且有效
-            if not cut_direction:
-                print("折流板切口方向参数缺失")
-                return
-
-            if cut_rate is None:
-                print("折流板要求切口率参数缺失或无效")
-                return
-
-            if baffle_outer_diameter is None or baffle_outer_diameter <= 0:
-                print("折流板外径参数缺失或无效")
-                return
-
-            if shell_inner_diameter is None or shell_inner_diameter <= 0:
-                print("壳体内直径参数缺失或无效")
-                return
-
-            # 验证切口率范围 (0-50%)
-            if not (0 <= cut_rate <= 50):
-                print(f"折流板要求切口率超出范围: {cut_rate}")
-                return
-
-            cut_height = shell_inner_diameter * (cut_rate / 100.0)*2
-            baffle_radius = baffle_outer_diameter / 2.0
-            distance_from_center = (shell_inner_diameter / 2.0) - (cut_height / 2.0)
-
-            # 验证计算结果是否合理
-            if distance_from_center < 0 or distance_from_center > baffle_radius:
-                print(
-                    f"折流板位置计算不合理: distance_from_center={distance_from_center}, baffle_radius={baffle_radius}")
-                # 使用折流板半径作为限制
-                distance_from_center = min(max(distance_from_center, 0), baffle_radius)
-
-            # 绘制黄色线段（折流板）
-            pen = QPen(QColor(204, 204, 0))  # 黄色
-            pen.setWidth(3)
-
-            if cut_direction == "水平上下":
-                # 计算弦长的一半（基于折流板外径）
+                    cut_rate = float(param_value)
+                except ValueError:
+                    # QMessageBox.warning(self, "参数错误", "折流板要求切口率必须为数值")
+                    return
+            elif param_name == "壳体内直径 Di":
                 try:
-                    # 弦长的一半 = sqrt(折流板半径² - 距离²)
-                    chord_half_length = math.sqrt(baffle_radius ** 2 - distance_from_center ** 2)
-
-                    # 验证弦长计算是否有效
-                    if math.isnan(chord_half_length) or chord_half_length <= 0:
-                        print("弦长计算无效")
-                        return
-
-                except ValueError as e:
-                    print(f"弦长计算错误: {e}")
+                    shell_inner_diameter = float(param_value)
+                except ValueError:
+                    # QMessageBox.warning(self, "参数错误", "壳体内直径必须为数值")
                     return
 
-                # 上侧线段（y = distance_from_center）
-                try:
-                    upper_line = self.graphics_scene.addLine(
-                        -chord_half_length, distance_from_center,
-                        chord_half_length, distance_from_center,
-                        pen
-                    )
-                    if upper_line:
-                        self.baffle_lines.append({
-                            'type': 'horizontal',
-                            'y_level': distance_from_center,
-                            'x_range': (-chord_half_length, chord_half_length),
-                            'line_item': upper_line,
-                            'cut_rate': cut_rate,
-                            'cut_height': cut_height
-                        })
-                        print(f"添加上侧折流板: y={distance_from_center:.2f}, 长度={chord_half_length * 2:.2f}")
-                except Exception as e:
-                    print(f"添加上侧折流板线段失败: {e}")
+        # 验证必要参数是否存在
+        if not all([cut_direction, cut_rate is not None, shell_inner_diameter is not None]):
+            # QMessageBox.warning(self, "参数缺失", "请确保折流板相关参数已正确设置")
+            return
 
-                # 下侧线段（y = -distance_from_center）
-                try:
-                    lower_line = self.graphics_scene.addLine(
-                        -chord_half_length, -distance_from_center,
-                        chord_half_length, -distance_from_center,
-                        pen
-                    )
-                    if lower_line:
-                        self.baffle_lines.append({
-                            'type': 'horizontal',
-                            'y_level': -distance_from_center,
-                            'x_range': (-chord_half_length, chord_half_length),
-                            'line_item': lower_line,
-                            'cut_rate': cut_rate,
-                            'cut_height': cut_height
-                        })
-                        print(f"添加下侧折流板: y={-distance_from_center:.2f}, 长度={chord_half_length * 2:.2f}")
-                except Exception as e:
-                    print(f"添加下侧折流板线段失败: {e}")
+        # 验证切口率范围 (0-50%)
+        if not (0 <= cut_rate <= 50):
+            # QMessageBox.warning(self, "参数错误", "折流板要求切口率必须在0%到50%范围内")
+            return
+
+        # 计算壳体半径 - 保持您的原有逻辑
+        shell_radius = shell_inner_diameter
+
+        # 根据您的公式计算折流板到圆心的距离
+        # 距离圆心 = 壳体内直径 × 0.5 × (0.5 - 切口率/100)
+        # 0.5 × 壳体内直径 等于 壳体半径，所以可简化为：
+        distance_from_center = shell_radius * (0.5 - cut_rate / 100)
+
+        # 验证计算结果是否合理（距离不能为负且不能超过半径）
+        if distance_from_center < 0 or distance_from_center > shell_radius:
+            # QMessageBox.warning(self, "参数错误", f"根据当前切口率计算出的折流板位置不合理: {distance_from_center}")
+            return
+
+        # 绘制黄色线段（折流板）
+        pen = QPen(QColor(204, 204, 0))  # 黄色
+        pen.setWidth(3)
+
+        try:
+            if cut_direction == "水平上下":
+                # 计算弦长的一半 - 保持您的原有计算公式
+                chord_half_length = math.sqrt((shell_radius / 2) ** 2 - distance_from_center ** 2)
+
+                # 上侧线段（y=distance_from_center）并存储信息
+                upper_line = self.graphics_scene.addLine(
+                    -chord_half_length, distance_from_center,
+                    chord_half_length, distance_from_center,
+                    pen
+                )
+                self.baffle_lines.append({
+                    'type': 'horizontal',
+                    'y_level': distance_from_center,
+                    'x_range': (-chord_half_length, chord_half_length),
+                    'line_item': upper_line
+                })
+
+                # 下侧线段（y=-distance_from_center）并存储信息
+                lower_line = self.graphics_scene.addLine(
+                    -chord_half_length, -distance_from_center,
+                    chord_half_length, -distance_from_center,
+                    pen
+                )
+                self.baffle_lines.append({
+                    'type': 'horizontal',
+                    'y_level': -distance_from_center,
+                    'x_range': (-chord_half_length, chord_half_length),
+                    'line_item': lower_line
+                })
+
+                # 记录操作
+                self.operations.append({
+                    "type": "baffle_plate",
+                    "direction": "horizontal",
+                    "cut_rate": cut_rate,
+                    "distance_from_center": distance_from_center,
+                    "length": chord_half_length * 2
+                })
 
             elif cut_direction == "垂直左右":
-                # 计算弦长的一半（基于折流板外径）
-                try:
-                    # 弦长的一半 = sqrt(折流板半径² - 距离²)
-                    chord_half_length = math.sqrt(baffle_radius ** 2 - distance_from_center ** 2)
+                # 计算弦长的一半 - 保持您的原有计算公式
+                chord_half_length = math.sqrt(shell_radius ** 2 - distance_from_center ** 2)
 
-                    # 验证弦长计算是否有效
-                    if math.isnan(chord_half_length) or chord_half_length <= 0:
-                        print("弦长计算无效")
-                        return
+                # 右侧线段（x=distance_from_center）并存储信息
+                right_line = self.graphics_scene.addLine(
+                    distance_from_center, -chord_half_length,
+                    distance_from_center, chord_half_length,
+                    pen
+                )
+                self.baffle_lines.append({
+                    'type': 'vertical',
+                    'x_level': distance_from_center,
+                    'y_range': (-chord_half_length, chord_half_length),
+                    'line_item': right_line
+                })
 
-                except ValueError as e:
-                    print(f"弦长计算错误: {e}")
-                    return
+                # 左侧线段（x=-distance_from_center）并存储信息
+                left_line = self.graphics_scene.addLine(
+                    -distance_from_center, -chord_half_length,
+                    -distance_from_center, chord_half_length,
+                    pen
+                )
+                self.baffle_lines.append({
+                    'type': 'vertical',
+                    'x_level': -distance_from_center,
+                    'y_range': (-chord_half_length, chord_half_length),
+                    'line_item': left_line
+                })
 
-                # 右侧线段（x = distance_from_center）
-                try:
-                    right_line = self.graphics_scene.addLine(
-                        distance_from_center, -chord_half_length,
-                        distance_from_center, chord_half_length,
-                        pen
-                    )
-                    if right_line:
-                        self.baffle_lines.append({
-                            'type': 'vertical',
-                            'x_level': distance_from_center,
-                            'y_range': (-chord_half_length, chord_half_length),
-                            'line_item': right_line,
-                            'cut_rate': cut_rate,
-                            'cut_height': cut_height
-                        })
-                        print(f"添加右侧折流板: x={distance_from_center:.2f}, 长度={chord_half_length * 2:.2f}")
-                except Exception as e:
-                    print(f"添加右侧折流板线段失败: {e}")
-
-                # 左侧线段（x = -distance_from_center）
-                try:
-                    left_line = self.graphics_scene.addLine(
-                        -distance_from_center, -chord_half_length,
-                        -distance_from_center, chord_half_length,
-                        pen
-                    )
-                    if left_line:
-                        self.baffle_lines.append({
-                            'type': 'vertical',
-                            'x_level': -distance_from_center,
-                            'y_range': (-chord_half_length, chord_half_length),
-                            'line_item': left_line,
-                            'cut_rate': cut_rate,
-                            'cut_height': cut_height
-                        })
-                        print(f"添加左侧折流板: x={-distance_from_center:.2f}, 长度={chord_half_length * 2:.2f}")
-                except Exception as e:
-                    print(f"添加左侧折流板线段失败: {e}")
-
-            else:
-                print(f"未知的折流板切口方向: {cut_direction}")
-                return
-
-            # 记录操作
-            self.operations.append({
-                "type": "baffle_plate",
-                "direction": cut_direction,
-                "cut_rate": cut_rate,
-                "cut_height": cut_height,
-                "distance_from_center": distance_from_center,
-                "baffle_diameter": baffle_outer_diameter
-            })
-
-            print(f"折流板绘制完成: 方向={cut_direction}, 切口率={cut_rate}%, 切口高度={cut_height:.2f}")
+                # 记录操作
+                self.operations.append({
+                    "type": "baffle_plate",
+                    "direction": "vertical",
+                    "cut_rate": cut_rate,
+                    "distance_from_center": distance_from_center,
+                    "length": chord_half_length * 2
+                })
 
         except Exception as e:
-            print(f"draw_baffle_plates 发生未预期错误: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"绘制折流板时出错: {e}")
+            # 如果绘制过程中出错，确保清除已创建的内容
+            self.clear_baffle_plates()
 
     def clear_baffle_plates(self):
         """安全地清除所有折流板线段"""
+        # 确保baffle_lines列表存在
         if not hasattr(self, 'baffle_lines'):
             self.baffle_lines = []
             return
 
         try:
-            for baffle_info in self.baffle_lines[:]:  # 使用切片创建副本避免修改时迭代
+            # 首先从操作记录中移除折流板相关的操作
+            if hasattr(self, 'operations'):
+                self.operations = [op for op in self.operations if op.get("type") != "baffle_plate"]
+
+            # 然后从图形场景中移除所有折流板线段
+            # 先收集所有要移除的项，避免在迭代中操作
+            items_to_remove = []
+            for baffle_info in self.baffle_lines:
                 line_item = baffle_info.get('line_item')
                 if line_item and self.graphics_scene:
+                    items_to_remove.append(line_item)
+
+            # 批量移除项目
+            if self.graphics_scene:
+                for item in items_to_remove:
                     try:
-                        self.graphics_scene.removeItem(line_item)
+                        # 更安全的检查方式
+                        if item and item in self.graphics_scene.items():
+                            self.graphics_scene.removeItem(item)
+                    except RuntimeError as e:
+                        print(f"移除折流板线段时发生运行时错误: {e}")
                     except Exception as e:
                         print(f"移除折流板线段时出错: {e}")
 
-            # 清空列表
-            self.baffle_lines.clear()
+            # 最后清空列表
+            self.baffle_lines = []
+
         except Exception as e:
             print(f"清除折流板时出错: {e}")
-            self.baffle_lines = []  # 重新初始化
+            # 如果出错，重新初始化列表
+            self.baffle_lines = []
 
     def create_scene(self):
         """
@@ -7713,6 +7697,7 @@ class TubeLayoutEditor(QMainWindow):
     def on_buguan_bt_click(self):
         try:
             result = self.calculate_piping_layout()
+            self.draw_baffle_plates()
             if result and hasattr(self, 'global_centers') and self.global_centers:
                 self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
                     self.global_centers)
@@ -9091,7 +9076,8 @@ class TubeLayoutEditor(QMainWindow):
         return distance
 
     def on_del_cross_pipes_click(self):
-        self.calculate_piping_layout()
+        tube_result = self.calculate_piping_layout()
+        self.draw_baffle_plates()
         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = self.group_centers_by_y(
             self.global_centers)
 
@@ -10126,17 +10112,18 @@ class TubeLayoutEditor(QMainWindow):
         # 使用绝对坐标来处理删除
         absolute_coords_to_remove = set(selected_centers_list)
 
-        # 定义删除样式（浅灰色空心圆）
-        gray_pen = QPen(QColor(255, 255, 255))
-        gray_pen.setWidth(1)
-        gray_brush = QBrush(Qt.NoBrush)  # 空心圆
+        # 关键修改：使用纯白色实心圆，增加边框宽度，解决视觉叠加问题
+        white_pen = QPen(QColor(255, 255, 255))  # 白色边框
+        white_pen.setWidth(3)  # 增加边框宽度到3像素，减少抗锯齿影响
+        white_brush = QBrush(QColor(255, 255, 255))  # 白色实心填充
         blue_tube_pen = QColor(0, 0, 80)
 
         # 性能优化：批量处理
         centers_to_remove = list(absolute_coords_to_remove)
 
         # 暂停场景更新以提高性能
-        self.graphics_scene.views()[0].setUpdatesEnabled(False)
+        if self.graphics_scene.views():
+            self.graphics_scene.views()[0].setUpdatesEnabled(False)
 
         try:
             # 预构建坐标映射表，避免重复计算
@@ -10162,24 +10149,31 @@ class TubeLayoutEditor(QMainWindow):
                 if coord_key in coord_to_items:
                     for item in coord_to_items[coord_key]:
                         if isinstance(item, QGraphicsEllipseItem):
-                            # 移除所有非灰色空心圆的元素（选中色）
-                            if item.brush() != gray_brush:
+                            # 移除所有非白色实心圆的元素（包括蓝色换热管和旧的白色标记）
+                            current_color = item.pen().color()
+                            is_white_solid = (current_color == QColor(255, 255, 255) and
+                                              item.brush() != Qt.NoBrush)  # 实心白色
+
+                            if not is_white_solid:
                                 items_to_remove.append(item)
 
-                            # 检查是否为需要替换的圆
-                            is_blue_tube = (item.pen().color() == blue_tube_pen)
-                            if is_blue_tube or item.brush() == gray_brush:
+                            # 检查是否为需要替换的圆（蓝色换热管或旧的白色空心圆）
+                            is_blue_tube = (current_color == blue_tube_pen)
+                            is_old_white = (current_color == QColor(255, 255, 255) and
+                                            item.brush() == Qt.NoBrush)  # 旧的白色空心圆
+
+                            if is_blue_tube or is_old_white:
                                 items_to_remove.append(item)
-                                # 添加灰色覆盖圆
+                                # 添加白色实心覆盖圆 - 解决视觉叠加问题
                                 items_to_add.append((
                                     x - self.r, y - self.r, 2 * self.r, 2 * self.r,
-                                    gray_pen, gray_brush
+                                    white_pen, white_brush
                                 ))
                 else:
-                    # 未找到对应圆时直接添加灰色覆盖圆
+                    # 未找到对应圆时直接添加白色实心覆盖圆
                     items_to_add.append((
                         x - self.r, y - self.r, 2 * self.r, 2 * self.r,
-                        gray_pen, gray_brush
+                        white_pen, white_brush
                     ))
 
             # 批量移除项目
@@ -10192,7 +10186,8 @@ class TubeLayoutEditor(QMainWindow):
 
         finally:
             # 恢复场景更新
-            self.graphics_scene.views()[0].setUpdatesEnabled(True)
+            if self.graphics_scene.views():
+                self.graphics_scene.views()[0].setUpdatesEnabled(True)
 
         # 更新当前圆心列表
         if hasattr(self, 'current_centers'):
@@ -10227,7 +10222,10 @@ class TubeLayoutEditor(QMainWindow):
                 "type": "del",
                 "coord": coord
             })
-        self.clear_selection_highlight()
+
+        # 清除选择高亮
+        if hasattr(self, 'clear_selection_highlight'):
+            self.clear_selection_highlight()
 
         return centers_to_remove
 
@@ -11584,8 +11582,6 @@ class TubeLayoutEditor(QMainWindow):
                 widget = self.param_table.cellWidget(row, 2)
                 if isinstance(widget, QComboBox):
                     default_values[param_name] = widget.currentText()
-
-
                 else:
                     item = self.param_table.item(row, 2)
                     default_values[param_name] = item.text() if item else ""
@@ -11949,7 +11945,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 return slipway_centers, interfering_y_coords
 
-            def draw_slide_polygon(base_x, base_y, unit_dx, unit_dy, thickness, length, is_left=True):
+            def get_slide_interfering_tubes(base_x, base_y, unit_dx, unit_dy, thickness, length, is_left=True):
                 perp_dx, perp_dy = -unit_dy, unit_dx
                 half_thick = thickness / 2
 
@@ -11972,10 +11968,10 @@ class TubeLayoutEditor(QMainWindow):
                     tube_diameter=do
                 )
 
-                # 收集所有干涉的y坐标
-                all_interfering_y_coords.update(interfering_y_coords)
+                return interfering_tubes, interfering_y_coords, slide_corners
 
-                polygon = QPolygonF([p1, p2, p3, p4])
+            def draw_slide_polygon(slide_corners, is_left=True):
+                polygon = QPolygonF([QPointF(x, y) for x, y in slide_corners])
 
                 # 使用ClickableRectItem而不是QGraphicsPolygonItem
                 path = QPainterPath()
@@ -11984,15 +11980,6 @@ class TubeLayoutEditor(QMainWindow):
                 item = ClickableRectItem(path, is_slide=True, editor=self)
                 item.setBrush(QColor(0, 100, 0))  # 深绿色
                 item.setPen(QPen(Qt.NoPen))  # 无边框
-                item.slide_params = {
-                    'base_x': base_x,
-                    'base_y': base_y,
-                    'unit_dx': unit_dx,
-                    'unit_dy': unit_dy,
-                    'thickness': thickness,
-                    'length': length,
-                    'is_left': is_left
-                }
 
                 self.graphics_scene.addItem(item)
                 self.green_slide_items.append(item)
@@ -12001,15 +11988,16 @@ class TubeLayoutEditor(QMainWindow):
                     slide2 = self.green_slide_items[-1]
                     slide1.set_paired_block(slide2)
 
-                return interfering_tubes
+            # 先计算两个滑道的干涉信息
+            interfering_tubes1, interfering_y_coords1, slide_corners1 = get_slide_interfering_tubes(
+                base1_x, base1_y, u1_x, u1_y, slide_thickness, slide_length, is_left=True)
+            interfering_tubes2, interfering_y_coords2, slide_corners2 = get_slide_interfering_tubes(
+                base2_x, base2_y, u2_x, u2_y, slide_thickness, slide_length, is_left=False)
 
-            # 绘制两个滑道并收集干涉信息
-            self.interfering_tubes1 = draw_slide_polygon(base1_x, base1_y, u1_x, u1_y, slide_thickness, slide_length,
-                                                         is_left=True)
-            self.interfering_tubes2 = draw_slide_polygon(base2_x, base2_y, u2_x, u2_y, slide_thickness, slide_length,
-                                                         is_left=False)
+            # 合并所有干涉的y坐标
+            all_interfering_y_coords = interfering_y_coords1.union(interfering_y_coords2)
 
-            # 处理所有干涉的管子（按行删除）
+            # 处理所有干涉的管子（按行删除）- 在绘制滑道之前执行
             if all_interfering_y_coords:
                 # 收集所有在干涉行上的换热管
                 self.slipway_centers = [
@@ -12040,6 +12028,10 @@ class TubeLayoutEditor(QMainWindow):
                         self.delete_huanreguan(centers)
 
                 self.update_tube_nums()
+
+            # 现在绘制滑道
+            draw_slide_polygon(slide_corners1, is_left=True)
+            draw_slide_polygon(slide_corners2, is_left=False)
 
             if not hasattr(self, 'operations'):
                 self.operations = []

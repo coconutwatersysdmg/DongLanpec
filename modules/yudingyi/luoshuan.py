@@ -34,8 +34,8 @@ def update_user_config_for_2_6_1(product_id, json_path="modules/yudingyi/dn_pres
                 WHERE 产品ID = %s AND 参数名称 = '公称直径*'
             """, (product_id,))
             row_d = cursor.fetchone()
-            values_d = [row_d.get("管程数值"), row_d.get("壳程数值")] if row_d else []
-            values_d = [float(v) for v in values_d if v is not None]
+            values_d = [row_d.get("管程数值"), row_d.get("壳程数值")] if row_d else [0,0]
+            values_d = [float(v if v else 100) for v in values_d if v is not None]
             nominal_diameter = max(values_d) if values_d else None
 
             # 获取设计压力
@@ -44,9 +44,9 @@ def update_user_config_for_2_6_1(product_id, json_path="modules/yudingyi/dn_pres
                 WHERE 产品ID = %s AND 参数名称 = '设计压力*'
             """, (product_id,))
             row_p = cursor.fetchone()
-            values_p = [row_p.get("管程数值"), row_p.get("壳程数值")] if row_p else []
-            values_p = [float(v) for v in values_p if v is not None]
-            design_pressure = max(values_p) if values_p else None
+            values_p = [row_p.get("管程数值"), row_p.get("壳程数值")] if row_p else [0,0]
+            values_p = [float(v if v else 0) for v in values_p if v is not None]
+            design_pressure = max(values_p) if values_p else 0
 
             if nominal_diameter is not None and design_pressure is not None:
                 # 找到 DN 对应数据
