@@ -2323,7 +2323,7 @@ class TubeLayoutEditor(QMainWindow):
         # 获取换热器型号
         heat_exchanger_type = self.heat_exchanger if hasattr(self, 'heat_exchanger') else ''
         if not heat_exchanger_type and self.productID:
-            # 如果没有换热器型号，从数据库获取
+
             conn = None
             try:
                 conn = create_product_connection()
@@ -2488,7 +2488,7 @@ class TubeLayoutEditor(QMainWindow):
         # 根据产品型式判断热交换器类型
         if product_type_str in ['AEU', 'BEU']:
             he_type = '2'  # U型管式
-        elif product_type_str == 'NENs':
+        elif product_type_str == 'NEN':
             he_type = '1'  # 固定管板式
         elif product_type_str in ['AES', 'BES']:
             he_type = '0'  # 浮头式
