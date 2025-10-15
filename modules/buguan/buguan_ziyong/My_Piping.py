@@ -1318,7 +1318,7 @@ class TubeLayoutEditor(QMainWindow):
             if product_conn_for_type and hasattr(product_conn_for_type, 'open') and product_conn_for_type.open:
                 try:
                     product_conn_for_type.close()
-                    print("产品型式查询连接已关闭")
+                    # print("产品型式查询连接已关闭")
                 except Exception as close_e:
                     print(f"关闭产品型式查询连接时出错: {str(close_e)}")
 
@@ -1376,8 +1376,8 @@ class TubeLayoutEditor(QMainWindow):
 
                                 # 公称直径DN的个性化查询（仅产品库有设计数据表）
                                 if param_name == "公称直径 DN":
-                                    print(param_value)
-                                    print("公称直径原本的值")
+                                    # print(param_value)
+                                    # print("公称直径原本的值")
                                     try:
                                         # 从产品库的设计数据表查询（符合实际表结构）
                                         design_query = """
@@ -1391,8 +1391,8 @@ class TubeLayoutEditor(QMainWindow):
                                         if isinstance(design_data, dict) and '壳程数值' in design_data and design_data[
                                             '壳程数值']:
                                             final_value = design_data['壳程数值']
-                                            print(final_value)
-                                            print("从设计数据表中读取的新值")
+                                            # print(final_value)
+                                            # print("从设计数据表中读取的新值")
                                             if param_value != final_value:
                                                 try:
                                                     delete_query = """DELETE FROM 产品设计活动表_布管元件表 WHERE 产品ID = %s"""
@@ -1438,8 +1438,8 @@ class TubeLayoutEditor(QMainWindow):
                                         """
                                         cursor.execute(design_query, (self.productID, "公称直径*"))
                                         design_data = cursor.fetchone()
-                                        print(design_data)
-                                        print("壳体内直径读了个寂寞读的是哪个？")
+                                        # print(design_data)
+                                        # print("壳体内直径读了个寂寞读的是哪个？")
 
                                         if isinstance(design_data, dict) and '管程数值' in design_data and design_data[
                                             '管程数值']:
@@ -1611,7 +1611,7 @@ class TubeLayoutEditor(QMainWindow):
                                     '参数值': f"{DL: .1f}",
                                     '单位': "mm"  # 假设单位为毫米，可根据实际场景调整
                                 })
-                            print(f"最终确定布管限定圆 DL值: {DL:.1f} mm")
+                            print(f"最终确定布管限定圆 DL值: {DL: .1f} mm")
                         else:
                             print("未计算出有效DL值，不更新参数")
 
@@ -1700,8 +1700,8 @@ class TubeLayoutEditor(QMainWindow):
                                                         design_cursor.execute(design_query,
                                                                               (self.productID, "公称直径*"))
                                                         design_data = design_cursor.fetchone()
-                                                        print(design_data)
-                                                        print("壳体内直径读了个寂寞")
+                                                        # print(design_data)
+                                                        # print("壳体内直径读了个寂寞")
 
                                                         if isinstance(design_data,
                                                                       dict) and '壳程数值' in design_data and \
@@ -3682,7 +3682,7 @@ class TubeLayoutEditor(QMainWindow):
                     self.param_table.itemChanged.connect(original_handler)
                 except:
                     pass
-        print(self.heat_exchanger)
+        # print(self.heat_exchanger)
 
         # 4. 更新折流板外径（逻辑完全保留，无修改）
         if di_value is not None and baffle_row != -1:
@@ -4646,7 +4646,8 @@ class TubeLayoutEditor(QMainWindow):
                 if param_name == "管程程数":
                     # 管程程数变化：更新管程分程形式值及对应图片
                     self.tube_pass_form_value = {
-                        "2": "2",
+                        "1": "1.1",
+                        "2": "2.1",
                         "4": "4.1",
                         "6": "6.1"
                     }.get(param_value, self.tube_pass_form_value)  # 默认保留原 value
@@ -5003,7 +5004,6 @@ class TubeLayoutEditor(QMainWindow):
             try:
                 value = int(text)
                 if value <= 0:
-                    # 输入不合法，恢复原始值
                     original = self._original_values.get((row_idx, 2), "")
                     if original:
                         combo_box.setEditText(original)
@@ -5053,6 +5053,7 @@ class TubeLayoutEditor(QMainWindow):
             # 存储标识到用户数据中
             combo.setItemData(combo.count() - 1, identifier, Qt.UserRole)
 
+    # TODO 管程分程形式加载函数，目前没有1管程
     def load_tube_pass_images(self, combo, tube_pass):
         """加载管程分程形式的图片到下拉框，关联具体标识"""
         # 清空现有项
@@ -5079,7 +5080,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 根据管程程数加载对应图片，同时关联标识
         if tube_pass == "2":
-            self.add_image_to_combo(combo, base_path, "2.png", "2")
+            self.add_image_to_combo(combo, base_path, "2.1.png", "2.1")
         elif tube_pass == "4":
             if show_4_1:
                 self.add_image_to_combo(combo, base_path, "4.1.png", "4.1")
@@ -5096,7 +5097,7 @@ class TubeLayoutEditor(QMainWindow):
             self.add_image_to_combo(combo, base_path, "6.2.2.png", "6.2")
             # self.add_image_to_combo(combo, base_path, "6.3.png", "6.3")
         elif tube_pass == "1":
-            self.add_image_to_combo(combo, base_path, "1.png", "1")
+            self.add_image_to_combo(combo, base_path, "1.1.png", "1.1")
 
         else:
             combo.addItem("未选择")
@@ -5224,7 +5225,8 @@ class TubeLayoutEditor(QMainWindow):
         elif param_name == "管程程数":
             # 管程程数变化：更新管程分程形式值及对应图片
             self.tube_pass_form_value = {
-                "2": "2",
+                "1":"1.1",
+                "2": "2.1",
                 "4": "4.1",
                 "6": "6.1"
             }.get(value, self.tube_pass_form_value)  # 默认保留原 value
@@ -7047,15 +7049,14 @@ class TubeLayoutEditor(QMainWindow):
 
                         # 图片：根据current_tube_partition匹配对应文件
                         if current_tube_partition and os.path.exists(tube_pattern_base_path):
-                            # 定义图片文件名的映射关系（与load_tube_pass_images保持一致）
                             image_file_map = {
-                                "2": "2.png",
+                                "2.1": "2.1.png",
                                 "4.1": "4.1.png",
-                                "4.2": "4.2.1.png",  # 使用第一个图片作为代表
-                                "4.3": "4.3.1.png",  # 使用第一个图片作为代表
-                                "6.1": "6.1.1.png",  # 使用第一个图片作为代表
-                                "6.2": "6.2.1.png",  # 使用第一个图片作为代表
-                                "1": "1.png"
+                                "4.2": "4.2.1.png",
+                                "4.3": "4.3.1.png",
+                                "6.1": "6.1.1.png",
+                                "6.2": "6.2.1.png",
+                                "1.1": "1.1.png"
                             }
 
                             # 获取对应的图片文件名
@@ -7330,7 +7331,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 清空之前的折流板信息
         # self.baffle_lines = []
-        print(self.baffle_lines)
+        # print(self.baffle_lines)
         if len(self.baffle_lines) != 0:
             self.clear_baffle_plates()
             self.baffle_lines = []
