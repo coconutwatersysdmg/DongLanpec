@@ -474,7 +474,6 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
 
 # TODO 此处初始化
 
-
 class TubeLayoutEditor(QMainWindow):
     def __init__(self, line_tip=None):
         super().__init__()
@@ -6213,7 +6212,7 @@ class TubeLayoutEditor(QMainWindow):
         return sql_statements
 
     def build_sql_for_cross_pipes(self):
-        import json  # 导入JSON模块用于序列化列表
+        import json
         table_name = "`产品设计活动表_布管交叉布管表`"
         product_id = self.productID
         sql_statements = []
@@ -6313,269 +6312,6 @@ class TubeLayoutEditor(QMainWindow):
             return None
 
         finally:
-            # 无论成功/失败，均关闭连接释放资源
-            if conn and conn.open:
-                conn.close()
-
-    def build_sql_for_tube(self, tube_data):
-        if not tube_data:
-            return None
-
-        table_name = "`产品设计活动表_布管参数表`"
-        component_table = "`产品设计活动表_元件附加参数表`"
-        productID = self.productID
-        sql_statements = []
-
-        def escape_str(value):
-            return value.replace("'", "''") if isinstance(value, str) else value
-
-        # 先清空本产品ID在布管参数表中的旧记录
-        safe_productID = escape_str(productID)
-        delete_sql = f"DELETE FROM {table_name} WHERE `产品ID` = '{safe_productID}'"
-        sql_statements.append(delete_sql)
-
-        # 管程=2 时把“分程隔板两侧相邻管中心距（水平）”置 0
-        is_tube_pass_two = any(
-            (data.get("参数名", "").strip() == "管程程数" and str(data.get("参数值", "")).strip() == "2")
-            for data in tube_data
-        )
-
-        # 初始化管程分程形式是否为4.1的标志
-        is_tube_pass_form_4_1 = False
-
-        # 需要跨表同步的参数（从布管参数表 -> 元件附加参数表 的映射）
-        cross_map = {
-            "换热管外径 do": "换热管外径",
-            "中间挡板厚度": "中间挡板厚度",
-            "中间挡板宽度": "中间挡板宽度",  # 新增中间挡板宽度的跨表映射
-            "拉杆形式": "拉杆型式",
-            "拉杆直径": "拉杆规格",
-            "旁路挡板厚度": "旁路挡板厚度",
-            "旁路挡板宽度": "旁路挡板宽度",  # 新增旁路挡板宽度的跨表映射
-            "防冲板形式": "防冲板形式",
-            "防冲板厚度": "防冲板厚度",
-            "滑道定位": "滑道定位",
-            "滑道高度": "滑道高度",
-            "滑道厚度": "滑道厚度",
-            "滑道与竖直中心线夹角": "滑道与竖直中心线夹角",
-            "切边长度 L1": "切边长度 L1",
-            "切边高度 h": "切边高度 h",
-        }
-
-        # 用于后面写设计数据表/元件附加参数表的值暂存
-        cross_params = {
-            "公称直径 DN": None,
-            "壳体内直径 Di": None,
-            "旁路挡板厚度": None,
-            "旁路挡板宽度": None,
-            "防冲板形式": None,
-            "防冲板厚度": None,
-            "滑道定位": None,
-            "滑道高度": None,
-            "滑道厚度": None,
-            "滑道与竖直中心线夹角": None,
-            "切边长度 L1": None,
-            "切边高度 h": None,
-            "管程分程形式": None,
-            "换热管外径 do": None,
-            "中间挡板厚度": None,
-            "中间挡板宽度": None,
-            "拉杆形式": None,
-            "拉杆直径": None,
-        }
-
-        # 遍历前端参数，落表到“布管参数表”，并收集 cross_params
-        for data in tube_data:
-            line_num = str(data.get("参数名", ""))
-            holes_up = str(data.get("参数值", ""))
-            holes_down = data.get("单位", "")
-
-            if line_num in cross_params:
-                cross_params[line_num] = holes_up
-
-            safe_line_num = escape_str(line_num)
-            safe_holes_up = escape_str(holes_up)
-            if holes_down is None or (isinstance(holes_down, str) and holes_down.strip() == ""):
-                safe_holes_down = "NULL"
-            else:
-                safe_holes_down = f"'{escape_str(str(holes_down))}'"
-
-            insert_sql = (
-                f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
-                f"VALUES ('{productID}', '{safe_line_num}', '{safe_holes_up}', {safe_holes_down})"
-            )
-            sql_statements.append(insert_sql)
-
-        # 处理“中间挡板宽度”参数，包含单位mm
-        if hasattr(self, 'center_dangban_length') and self.center_dangban_length is not None:
-            param_name = "中间挡板宽度"
-            param_value = str(self.center_dangban_length)
-            unit = "mm"  # 设置单位为mm
-
-            safe_param_name = escape_str(param_name)
-            safe_param_value = escape_str(param_value)
-            safe_unit = "NULL" if unit.strip() == "" else f"'{escape_str(unit)}'"
-
-            # 先更新已有记录
-            sql_statements.append(
-                f"UPDATE {table_name} SET `参数值` = '{safe_param_value}', `单位` = {safe_unit} "
-                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}'"
-            )
-            # 不存在则插入新记录
-            sql_statements.append(
-                f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
-                f"SELECT '{productID}', '{safe_param_name}', '{safe_param_value}', {safe_unit} "
-                f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} "
-                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
-            )
-            # 存入cross_params用于跨表同步
-            cross_params[param_name] = param_value
-
-        # 处理“旁路挡板宽度”参数，包含单位mm
-        if hasattr(self, 'side_dangban_length') and self.side_dangban_length is not None:
-            param_name = "旁路挡板宽度"
-            param_value = str(self.side_dangban_length)
-            unit = "mm"  # 设置单位为mm
-
-            safe_param_name = escape_str(param_name)
-            safe_param_value = escape_str(param_value)
-            safe_unit = "NULL" if unit.strip() == "" else f"'{escape_str(unit)}'"
-
-            # 先更新已有记录
-            sql_statements.append(
-                f"UPDATE {table_name} SET `参数值` = '{safe_param_value}', `单位` = {safe_unit} "
-                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}'"
-            )
-            # 不存在则插入新记录
-            sql_statements.append(
-                f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
-                f"SELECT '{productID}', '{safe_param_name}', '{safe_param_value}', {safe_unit} "
-                f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} "
-                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
-            )
-            # 存入cross_params用于跨表同步
-            cross_params[param_name] = param_value
-
-        # 处理“管程分程形式”的图标选择值
-        if hasattr(self, 'tube_pass_form_value') and self.tube_pass_form_value:
-            param_name = "管程分程形式"
-            param_value = self.tube_pass_form_value
-            unit = ""
-            safe_param_name = escape_str(param_name)
-            safe_param_value = escape_str(param_value)
-            safe_unit = "NULL" if unit.strip() == "" else f"'{escape_str(unit)}'"
-
-            # 检查管程分程形式是否为4.1
-            if param_value == "4.1":
-                is_tube_pass_form_4_1 = True
-
-            # upsert 到布管参数表
-            sql_statements.append(
-                f"UPDATE {table_name} SET `参数值` = '{safe_param_value}', `单位` = {safe_unit} "
-                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}'"
-            )
-            sql_statements.append(
-                f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
-                f"SELECT '{productID}', '{safe_param_name}', '{safe_param_value}', {safe_unit} "
-                f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} "
-                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
-            )
-
-            # 存入cross_params用于跨表同步
-            cross_params[param_name] = param_value
-
-        # 如果管程=2 或者管程分程形式=4.1，把"分程隔板两侧相邻管中心距（水平）"置 0
-        if is_tube_pass_two or is_tube_pass_form_4_1:
-            param_name = "分程隔板两侧相邻管中心距（水平）"
-            param_value = "0"
-            unit = ""
-            safe_param_name = escape_str(param_name)
-            safe_param_value = escape_str(param_value)
-            safe_unit = "NULL" if unit.strip() == "" else f"'{escape_str(unit)}'"
-
-            # 更新布管参数表中的该参数
-            sql_statements.append(
-                f"UPDATE {table_name} SET `参数值` = '{safe_param_value}', `单位` = {safe_unit} "
-                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}'"
-            )
-            # 如果不存在则插入
-            sql_statements.append(
-                f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
-                f"SELECT '{productID}', '{safe_param_name}', '{safe_param_value}', {safe_unit} "
-                f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} "
-                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
-            )
-
-        # # 把 self.output_data['TieRodD'] 写到"拉杆直径"
-        # tie_rod_d = self.output_data.get('TieRodD')
-        # if tie_rod_d is not None:
-        #     cross_params["拉杆直径"] = str(tie_rod_d)
-        #     param_name = "拉杆直径"
-        #     param_value = str(tie_rod_d)
-        #     safe_param_name = escape_str(param_name)
-        #     safe_param_value = escape_str(param_value)
-        #     sql_statements.append(
-        #         f"UPDATE {table_name} SET `参数值` = '{safe_param_value}', `单位` = NULL "
-        #         f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}'"
-        #     )
-        #     sql_statements.append(
-        #         f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
-        #         f"SELECT '{productID}', '{safe_param_name}', '{safe_param_value}', NULL "
-        #         f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} "
-        #         f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
-        #     )
-
-        # 公称直径写回“设计数据表”
-        if cross_params["公称直径 DN"] is not None:
-            design_table = "`产品设计活动表_设计数据表`"
-            safe_dn_value = escape_str(cross_params["公称直径 DN"])
-            sql_statements.append(
-                f"UPDATE {design_table} SET `壳程数值` = '{safe_dn_value}' "
-                f"WHERE `产品ID` = '{productID}' AND `参数名称` LIKE '公称直径%'"
-            )
-        if cross_params["壳体内直径 Di"] is not None:
-            design_table = "`产品设计活动表_设计数据表`"
-            safe_dn_value = escape_str(cross_params["壳体内直径 Di"])
-            sql_statements.append(
-                f"UPDATE {design_table} SET `管程数值` = '{safe_dn_value}' "
-                f"WHERE `产品ID` = '{productID}' AND `参数名称` LIKE '公称直径%'"
-            )
-
-        # 把映射参数写回/更新到【产品设计活动表_元件附加参数表】
-        for tube_name, comp_name in cross_map.items():
-            val = cross_params.get(tube_name)
-            if val is None or str(val).strip() == "":
-                continue
-            safe_comp_name = escape_str(comp_name)
-            safe_val = escape_str(str(val))
-
-            # UPDATE
-            sql_statements.append(
-                f"UPDATE {component_table} SET `参数值` = '{safe_val}' "
-                f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}'"
-            )
-            # INSERT IF NOT EXISTS
-            sql_statements.append(
-                f"INSERT INTO {component_table} (`产品ID`, `参数名称`, `参数值`) "
-                f"SELECT '{productID}', '{safe_comp_name}', '{safe_val}' "
-                f"WHERE NOT EXISTS (SELECT 1 FROM {component_table} "
-                f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}')"
-            )
-
-        # 执行所有 SQL
-        conn = create_product_connection()
-        if not conn:
-            return None
-        try:
-            with conn.cursor() as cursor:
-                for sql in sql_statements:
-                    cursor.execute(sql)
-            conn.commit()
-            return sql_statements
-        except pymysql.Error as e:
-            conn.rollback()
-            return None
-        finally:
             if conn and conn.open:
                 conn.close()
 
@@ -6589,9 +6325,9 @@ class TubeLayoutEditor(QMainWindow):
         def escape_str(value):
             if isinstance(value, str):
                 escaped = value.replace("'", "''")
-                escaped = escaped.replace('/', '\\')
-                return escaped.replace('\\', '\\')
-            return value
+                escaped = escaped.replace('\\', '\\\\')
+                return escaped
+            return str(value) if value is not None else ""
 
         # 获取选中图片的绝对路径
         connection_diagram = ""
@@ -6612,8 +6348,8 @@ class TubeLayoutEditor(QMainWindow):
 
         # 定义管板类型映射关系
         tube_sheet_mapping = {
-            "整体管板": 1,
-            "复合管板": 0,
+            "整体管板": "1",
+            "复合管板": "0",
             "a类型": "a",
             "b类型": "b",
             "c类型": "c",
@@ -6626,33 +6362,119 @@ class TubeLayoutEditor(QMainWindow):
         if not filtered_params:
             return None
 
-        # 生成插入语句列表
-        insert_statements = []
+        # 生成SQL语句列表
+        sql_statements = []
         product_id = escape_str(self.productID)
         safe_connection_type = escape_str(connection_type)
-        safe_tube_sheet_type = tube_sheet_type
+        safe_tube_sheet_type = escape_str(tube_sheet_type)
         safe_diagram = escape_str(connection_diagram)
 
-        for param in filtered_params:
-            param_name = param['参数名']
-            param_value = param['参数值']
+        # 创建数据库连接（在循环外创建，避免重复创建连接）
+        try:
+            from modules.buguan.buguan_ziyong.database_utils import create_connection
+            connection = create_connection()
+            cursor = connection.cursor()
 
-            safe_param_name = escape_str(param_name)
-            safe_param_value = escape_str(param_value)
+            for param in filtered_params:
+                param_name = param['参数名']
+                param_value = param['参数值']
 
-            # 构建插入语句，管板连接ID为自增主键，无需手动插入
-            insert_sql = (
-                f"INSERT INTO {table_name} ("
-                f"`产品ID`, `参数名`, `参数值`, `管板连接示意图`, "
-                f"`管板连接方式`, `管板类型`"
-                f") VALUES ("
-                f"'{product_id}', '{safe_param_name}', '{safe_param_value}', '{safe_diagram}', "
-                f"'{safe_connection_type}', '{safe_tube_sheet_type}'"
-                f");"
-            )
-            insert_statements.append(insert_sql)
+                safe_param_name = escape_str(param_name)
+                safe_param_value = escape_str(param_value)
 
-        return "; ".join(insert_statements) if insert_statements else None
+                # 首先查询是否存在记录
+                select_sql = (
+                    f"SELECT COUNT(*) as count FROM {table_name} WHERE "
+                    f"`产品ID` = '{product_id}' AND "
+                    f"`参数名` = '{safe_param_name}' AND "
+                    f"`管板连接方式` = '{safe_connection_type}' AND "
+                    f"`管板类型` = '{safe_tube_sheet_type}';"
+                )
+
+                # 根据查询结果决定更改状态
+                change_status = "0"  # 默认未更改
+
+                try:
+                    cursor.execute(select_sql)
+                    result = cursor.fetchone()
+                    if isinstance(result, dict):
+                        record_exists = result.get('count', 0) > 0
+                    elif isinstance(result, (tuple, list)):
+                        record_exists = result[0] > 0 if result else False
+                    else:
+                        record_exists = False
+
+                    print(f"记录存在: {record_exists}")  # 调试信息
+
+                    if record_exists:
+                        # 如果存在记录，先删除，然后设置更改状态为1
+                        delete_sql = (
+                            f"DELETE FROM {table_name} WHERE "
+                            f"`产品ID` = '{product_id}' AND "
+                            f"`参数名` = '{safe_param_name}' AND "
+                            f"`管板连接方式` = '{safe_connection_type}' AND "
+                            f"`管板类型` = '{safe_tube_sheet_type}';"
+                        )
+                        sql_statements.append(delete_sql)
+                        change_status = "1"  # 标记为已更改
+                        print(f"检测到已存在记录，将执行删除操作")  # 调试信息
+
+                    # 构建插入语句
+                    insert_sql = (
+                        f"INSERT INTO {table_name} ("
+                        f"`产品ID`, `参数名`, `参数值`, `管板连接示意图`, "
+                        f"`管板连接方式`, `管板类型`, `管板连接更改状态`"
+                        f") VALUES ("
+                        f"'{product_id}', '{safe_param_name}', '{safe_param_value}', '{safe_diagram}', "
+                        f"'{safe_connection_type}', '{safe_tube_sheet_type}', '{change_status}'"
+                        f");"
+                    )
+                    sql_statements.append(insert_sql)
+
+                except Exception as e:
+                    print(f"查询数据库时出错: {str(e)}")
+                    import traceback
+                    traceback.print_exc()  # 打印完整堆栈信息
+                    # 如果查询失败，按新增记录处理
+                    insert_sql = (
+                        f"INSERT INTO {table_name} ("
+                        f"`产品ID`, `参数名`, `参数值`, `管板连接示意图`, "
+                        f"`管板连接方式`, `管板类型`, `管板连接更改状态`"
+                        f") VALUES ("
+                        f"'{product_id}', '{safe_param_name}', '{safe_param_value}', '{safe_diagram}', "
+                        f"'{safe_connection_type}', '{safe_tube_sheet_type}', '0'"
+                        f");"
+                    )
+                    sql_statements.append(insert_sql)
+
+            # 关闭数据库连接
+            if connection:
+                connection.close()
+
+        except Exception as e:
+            print(f"创建数据库连接时出错: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            # 如果连接失败，按新增记录处理所有参数
+            for param in filtered_params:
+                param_name = param['参数名']
+                param_value = param['参数值']
+
+                safe_param_name = escape_str(param_name)
+                safe_param_value = escape_str(param_value)
+
+                insert_sql = (
+                    f"INSERT INTO {table_name} ("
+                    f"`产品ID`, `参数名`, `参数值`, `管板连接示意图`, "
+                    f"`管板连接方式`, `管板类型`, `管板连接更改状态`"
+                    f") VALUES ("
+                    f"'{product_id}', '{safe_param_name}', '{safe_param_value}', '{safe_diagram}', "
+                    f"'{safe_connection_type}', '{safe_tube_sheet_type}', '0'"
+                    f");"
+                )
+                sql_statements.append(insert_sql)
+
+        return "; ".join(sql_statements) if sql_statements else None
 
     def build_sql_for_tube_hole(self, tube_hole_data):
         if not tube_hole_data:

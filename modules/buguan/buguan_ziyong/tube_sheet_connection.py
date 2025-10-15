@@ -44,12 +44,26 @@ class TubeSheetConnectionPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
-        self.current_params = []  # 存储参数名和值的列表
-        self.current_image_path = ""  # 当前选中的图片路径
-        self.current_connection_type = ""  # 当前连接方式
-        # 获取当前代码文件所在目录的绝对路径
+        self.current_params = []
+        self.current_image_path = ""
+        self.current_connection_type = ""
         self.current_dir = Path(__file__).parent.resolve()
         self.setup_ui()
+
+    def get_product_id(self):
+        try:
+            if hasattr(self.parent, 'productID'):
+                product_id = self.parent.productID
+                if product_id:
+                    return product_id
+                else:
+                    return None
+            else:
+                # QMessageBox.warning(self, "警告", "父窗口中未定义 productID 属性")
+                return None
+        except Exception as e:
+            # QMessageBox.critical(self, "错误", f"获取 productID 时发生错误: {str(e)}")
+            return None
 
     def setup_ui(self):
         """创建管-板连接页面"""
@@ -91,7 +105,6 @@ class TubeSheetConnectionPage(QWidget):
         body_layout = QHBoxLayout()
         body_layout.setSpacing(30)
 
-        # 左侧图片展示区
         image_frame = QFrame()
         image_frame.setStyleSheet("background-color: #f5f5f5; border-radius: 8px;")
         image_layout = QGridLayout(image_frame)
@@ -146,7 +159,6 @@ class TubeSheetConnectionPage(QWidget):
         separator.setStyleSheet("color: #ddd;")
         self.param_layout.addWidget(separator)
 
-        # 滚动区域（用于参数较多时）
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -155,7 +167,7 @@ class TubeSheetConnectionPage(QWidget):
         self.scroll_content = QWidget()
         self.scroll_param_layout = QVBoxLayout(self.scroll_content)
         self.scroll_param_layout.setContentsMargins(10, 10, 10, 10)
-        self.scroll_param_layout.setSpacing(20)  # 增加间距
+        self.scroll_param_layout.setSpacing(20)
 
         self.scroll_area.setWidget(self.scroll_content)
         self.param_layout.addWidget(self.scroll_area)
@@ -166,10 +178,8 @@ class TubeSheetConnectionPage(QWidget):
         self.update_image_path()
 
     def update_image_path(self):
-        """更新图片显示 - 保持原逻辑，根据连接方式名称加载对应文件夹中的图片"""
         self.current_connection_type = self.connection_type_combo.currentText()
 
-        # 1. 构建目标文件夹路径（当前代码目录 -> static -> 连接方式文件夹）
         target_folder = self.current_dir.joinpath("static", self.current_connection_type)
 
         # 2. 初始化：清除所有图片标签的内容和可见性
@@ -328,13 +338,34 @@ class TubeSheetConnectionPage(QWidget):
                 break
 
     def get_connection_params(self, connection_type, tube_sheet_type):
-        """从数据库获取参数"""
-        conn = create_component_connection()
-        if not conn:
+        product_id = self.get_product_id()
+
+        if product_id:
+            product_conn = create_product_connection()
+            if product_conn:
+                try:
+                    with product_conn.cursor() as cursor:
+                        query = """
+                            SELECT 参数名, 参数值
+                            FROM 产品设计活动表_管板连接表
+                            WHERE 产品ID = %s AND 管板连接方式 = %s AND 管板类型 = %s
+                        """
+                        cursor.execute(query, (product_id, connection_type, tube_sheet_type))
+                        params = cursor.fetchall()
+                        if params:
+                            return [{"name": p["参数名"], "value": p["参数值"]} for p in params]
+                except pymysql.Error as e:
+                    print(f"产品设计活动库查询错误: {e}")
+                    QMessageBox.warning(self, "数据库警告", f"产品设计活动库查询失败: {e}\n将尝试从元件库查询")
+                finally:
+                    product_conn.close()
+
+        component_conn = create_component_connection()
+        if not component_conn:
             return []
 
         try:
-            with conn.cursor() as cursor:
+            with component_conn.cursor() as cursor:
                 query = """
                     SELECT 参数名, 参数值
                     FROM 管板连接表
@@ -344,11 +375,11 @@ class TubeSheetConnectionPage(QWidget):
                 params = cursor.fetchall()
                 return [{"name": p["参数名"], "value": p["参数值"]} for p in params]
         except pymysql.Error as e:
-            print(f"数据库错误: {e}")
+            print(f"元件库数据库错误: {e}")
             QMessageBox.critical(self, "数据库错误", f"查询失败: {e}")
             return []
         finally:
-            conn.close()
+            component_conn.close()
 
     def get_parameters_by_type(self, connection_type, tube_sheet_type):
         """获取指定类型的参数"""
