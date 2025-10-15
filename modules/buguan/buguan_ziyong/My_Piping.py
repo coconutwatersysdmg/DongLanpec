@@ -2007,7 +2007,6 @@ class TubeLayoutEditor(QMainWindow):
         impingement_plate_2_centers = all_coords.get("impingement_plate_2_centers", "")
         del_centers = all_coords.get("del_centers", [])
 
-        self.build_lagan(lagan_centers)
         self.build_side_lagan(side_centers)
         if center_dangguan_centers:
             coords_list = eval(center_dangguan_centers)
@@ -2101,6 +2100,7 @@ class TubeLayoutEditor(QMainWindow):
         except (SyntaxError, ValueError, TypeError) as e:
             print(f"处理折边式防冲板时出错: {str(e)}")
         self.delete_huanreguan(del_centers)
+        self.build_lagan(lagan_centers)
 
         # TODO 后续取消注释
         # self.line_tip.setText("请确认"壳体内径Di"是否正确！")
@@ -6718,7 +6718,6 @@ class TubeLayoutEditor(QMainWindow):
                 for statement in sql_statements:
                     self.execute_sql(statement + ';')  # 确保每条语句以分号结尾
             pass
-
 
     def update_bugan_quantity(self):
         product_id = self.productID  # 固定产品ID
@@ -11410,7 +11409,6 @@ class TubeLayoutEditor(QMainWindow):
             # 去重（避免同一根管子被多次检测）
             return list(set(interfering_tubes))
 
-        # -------------------------- 2. 原逻辑：解析选中中心点 --------------------------
         selected_centers_list = []
         if isinstance(selected_centers, list):
             selected_centers_list = [
@@ -11641,68 +11639,137 @@ class TubeLayoutEditor(QMainWindow):
         return added_count
 
     def delete_selected_side_blocks(self):
+        """删除选中的旁路挡板，支持对称模式下删除所有相关挡板"""
+        try:
+            if not hasattr(self, 'selected_side_blocks') or not self.selected_side_blocks:
+                print("没有选中的旁路挡板可删除")
+                return
 
-        if not hasattr(self, 'selected_side_blocks') or not self.selected_side_blocks:
-            return
+            # 收集要恢复的换热管坐标
+            tubes_to_restore = []
+            blocks_to_remove_info = []  # 存储要删除的挡板信息
 
-        # 收集要恢复的换热管坐标
-        tubes_to_restore = []
-        blocks_to_remove_info = []  # 存储要删除的挡板信息
+            # 找出选中挡板对应的绘制坐标信息
+            for block in self.selected_side_blocks:
+                if hasattr(block, 'original_selected_center'):
+                    block_info = block.original_selected_center
+                    blocks_to_remove_info.append(block_info)
 
-        # 找出选中挡板对应的绘制坐标信息
-        for block in self.selected_side_blocks:
-            if hasattr(block, 'original_selected_center'):
-                block_info = block.original_selected_center
-                blocks_to_remove_info.append(block_info)
+            # 去重
+            blocks_to_remove_info = list(set(blocks_to_remove_info))
 
-        # 去重
-        blocks_to_remove_info = list(set(blocks_to_remove_info))
+            if not blocks_to_remove_info:
+                print("未找到有效的挡板坐标信息")
+                return
 
-        # 存储要从self.side_dangban中删除的坐标
-        to_remove_from_side_dangban = []
+            print(f"找到 {len(blocks_to_remove_info)} 个挡板坐标准备删除")
 
-        # 根据绘制坐标找到对应的干涉管信息
-        for block_info in blocks_to_remove_info:
-            for i, dangban_entry in enumerate(self.sdangban_selected_centers):
-                if dangban_entry and dangban_entry[0] == block_info:
-                    # 第一个是绘制坐标，后面的是干涉管坐标
-                    if len(dangban_entry) > 1:
-                        tubes_to_restore.extend(dangban_entry[1:])
-                    # 记录要从self.side_dangban中删除的坐标
-                    to_remove_from_side_dangban.append(dangban_entry[0])
-                    # 从存储中移除这个条目
-                    self.sdangban_selected_centers.pop(i)
-                    break
+            # 如果是对称模式，获取所有对称坐标
+            if self.isSymmetry:
+                try:
+                    # 使用 judge_linkage 获取所有对称坐标
+                    all_symmetric_coords = self.judge_linkage(blocks_to_remove_info)
+                    print(f"对称模式：找到 {len(all_symmetric_coords)} 个对称坐标")
+                    blocks_to_remove_info = all_symmetric_coords
+                except Exception as e:
+                    print(f"获取对称坐标时出错: {str(e)}")
+                    # 出错时继续使用原始坐标，不中断删除操作
 
-        # 更新self.side_dangban，移除对应的坐标
-        self.side_dangban = [coord for coord in self.side_dangban if coord not in to_remove_from_side_dangban]
+            # 存储要从 self.side_dangban 中删除的坐标
+            to_remove_from_side_dangban = []
 
-        # 恢复干涉换热管
-        if tubes_to_restore:
-            print(f"恢复干涉换热管: {tubes_to_restore}")
-            self.build_huanreguan(tubes_to_restore)
+            # 根据绘制坐标找到对应的干涉管信息
+            for block_info in blocks_to_remove_info:
+                found = False
+                # 需要遍历所有条目，因为可能有多个条目包含相同的坐标
+                for i in range(len(self.sdangban_selected_centers) - 1, -1, -1):
+                    if i < len(self.sdangban_selected_centers) and self.sdangban_selected_centers[i]:
+                        dangban_entry = self.sdangban_selected_centers[i]
+                        if dangban_entry and dangban_entry[0] == block_info:
+                            # 第一个是绘制坐标，后面的是干涉管坐标
+                            if len(dangban_entry) > 1:
+                                tubes_to_restore.extend(dangban_entry[1:])
+                                print(f"找到干涉管坐标: {dangban_entry[1:]}")
+                            # 记录要从 self.side_dangban 中删除的坐标
+                            to_remove_from_side_dangban.append(dangban_entry[0])
+                            # 从存储中移除这个条目
+                            self.sdangban_selected_centers.pop(i)
+                            found = True
+                            break
 
-        # 复制选中列表避免迭代中修改列表导致错误
-        blocks_to_remove = list(self.selected_side_blocks)
-        removed_blocks = set()
+                if not found:
+                    print(f"警告：未找到坐标 {block_info} 对应的挡板条目")
 
-        for block in blocks_to_remove:
-            if block in removed_blocks:
-                continue
+            # 更新 self.side_dangban，移除对应的坐标
+            original_count = len(self.side_dangban)
+            self.side_dangban = [coord for coord in self.side_dangban if coord not in to_remove_from_side_dangban]
+            removed_count = original_count - len(self.side_dangban)
+            print(f"从 side_dangban 中移除了 {removed_count} 个坐标")
 
-            # 移除自身
-            if block.scene() == self.graphics_scene:  # 确认在当前场景中
-                self.graphics_scene.removeItem(block)
-            removed_blocks.add(block)
+            # 恢复干涉换热管
+            if tubes_to_restore:
+                print(f"恢复 {len(tubes_to_restore)} 个干涉换热管")
+                try:
+                    self.build_huanreguan(tubes_to_restore)
+                except Exception as e:
+                    print(f"恢复换热管时出错: {str(e)}")
 
-            # 移除配对挡板
-            if block.paired_block and block.paired_block not in removed_blocks:
-                if block.paired_block.scene() == self.graphics_scene:
-                    self.graphics_scene.removeItem(block.paired_block)
-                removed_blocks.add(block.paired_block)
+            # 复制选中列表避免迭代中修改列表导致错误
+            blocks_to_remove = list(self.selected_side_blocks)
+            removed_blocks = set()
 
-        # 清空选中列表
-        self.selected_side_blocks = []
+            # 收集所有需要删除的挡板（包括对称的）
+            all_blocks_to_remove = set(blocks_to_remove)
+
+            # 如果是对称模式，找到所有相关的挡板
+            if self.isSymmetry and blocks_to_remove:
+                try:
+                    # 通过场景中所有挡板项来查找对称的挡板
+                    for item in self.graphics_scene.items():
+                        if (isinstance(item, ClickableRectItem) and
+                                item.is_side_block and
+                                hasattr(item, 'original_selected_center')):
+
+                            item_coord = item.original_selected_center
+                            # 检查这个挡板坐标是否在要删除的坐标列表中
+                            if item_coord in blocks_to_remove_info:
+                                all_blocks_to_remove.add(item)
+                                # 同时添加其配对挡板
+                                if hasattr(item, 'paired_block') and item.paired_block:
+                                    all_blocks_to_remove.add(item.paired_block)
+                except Exception as e:
+                    print(f"查找对称挡板时出错: {str(e)}")
+
+            print(f"准备删除 {len(all_blocks_to_remove)} 个挡板图形项")
+
+            # 删除所有相关的挡板图形项
+            for block in all_blocks_to_remove:
+                if block in removed_blocks:
+                    continue
+
+                # 移除自身
+                if block.scene() == self.graphics_scene:  # 确认在当前场景中
+                    self.graphics_scene.removeItem(block)
+                removed_blocks.add(block)
+
+                # 移除配对挡板（如果存在且尚未被移除）
+                if (hasattr(block, 'paired_block') and
+                        block.paired_block and
+                        block.paired_block not in removed_blocks):
+
+                    if block.paired_block.scene() == self.graphics_scene:
+                        self.graphics_scene.removeItem(block.paired_block)
+                    removed_blocks.add(block.paired_block)
+
+            # 清空选中列表
+            self.selected_side_blocks = []
+
+            print(f"成功删除了 {len(removed_blocks)} 个挡板图形项")
+
+        except Exception as e:
+            print(f"删除旁路挡板时发生错误: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     # TODO 这个删除圆心连线的方法一直不正确，没有删除成功
     def clear_connection_lines(self, scene):
