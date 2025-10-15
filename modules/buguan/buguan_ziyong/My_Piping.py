@@ -1549,56 +1549,56 @@ class TubeLayoutEditor(QMainWindow):
                             if not self.heat_exchanger:
                                 self.heat_exchanger = "AEU"
                             # 根据换热器型号计算DL
-                            if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN"]:
-                                # 计算方式1: DL = Di - 2×b₃，其中b₃ = max(0.25×do, 8mm)
-                                b3 = max(0.25 * do, 8.0)  # 取两者较大值作为b3
-                                DL = Di - 2 * b3
-                                print(f"计算布管限定圆 DL（型号{self.heat_exchanger}）: "
-                                      f"{Di} - 2×max(0.25×{do}, 8.0) = {Di} - 2×{b3} = {DL:.1f}")
-
-                            elif self.heat_exchanger in ["AES", "BES"]:
-                                # 计算方式2: DL = Di - 2×(b₁ + b₂ + b)
-                                # 1. 确定b值（根据Di范围）
-                                if Di < 1000:
-                                    b = 4.0  # Di < 1000mm时的默认值
-                                else:  # 1000 ≤ Di ≤ 2600mm
-                                    b = 5.0  # 大直径壳程的默认值
-
-                                # 2. 确定b₁（第一圈管到壳体内壁距离）和bₙ（最外圈管到壳体内壁距离）
-                                if Di <= 700:
-                                    b_n = 10.0
-                                    b_1 = 3.0
-                                elif Di <= 1200:
-                                    b_n = 13.0
-                                    b_1 = 5.0
-                                elif Di <= 2000:
-                                    b_n = 16.0
-                                    b_1 = 6.0
-                                else:  # Di > 2000mm（最大到2600mm）
-                                    b_n = 20.0
-                                    b_1 = 7.0
-
-                                # 3. 计算b₂（第二圈管到第一圈管距离）
-                                b_2 = b_n + 1.5  # 固定公式
-
-                                # 4. 最终计算DL
-                                DL = Di - 2 * (b_1 + b_2 + b)
-                                print(f"计算布管限定圆 DL（型号{self.heat_exchanger}）: "
-                                      f"{Di} - 2×({b_1} + {b_2} + {b}) = {Di} - 2×{b_1 + b_2 + b} = {DL:.1f}")
-
-                            else:
-                                # 未知型号处理：使用方式1的默认计算
-                                b3 = max(0.25 * do, 8.0)
-                                DL = Di - 2 * b3
-                                print(f"未知换热器型号{self.heat_exchanger}，使用默认公式计算DL: "
-                                      f"{Di} - 2×max(0.25×{do}, 8.0) = {DL:.1f}")
-
-                            # 验证DL合理性（必须小于壳体内直径Di）
-                            if DL >= Di:
-                                print(f"警告：计算的DL={DL:.1f} ≥ 壳体内直径Di={Di}，结果不合理")
-                                # 强制修正为Di的95%（避免无效值）
-                                DL = Di * 0.95
-                                print(f"已自动修正DL为壳体内直径的95%: {DL:.1f}")
+                            # if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN"]:
+                            #     # 计算方式1: DL = Di - 2×b₃，其中b₃ = max(0.25×do, 8mm)
+                            #     b3 = max(0.25 * do, 8.0)  # 取两者较大值作为b3
+                            #     DL = Di - 2 * b3
+                            #     print(f"计算布管限定圆 DL（型号{self.heat_exchanger}）: "
+                            #           f"{Di} - 2×max(0.25×{do}, 8.0) = {Di} - 2×{b3} = {DL:.1f}")
+                            #
+                            # elif self.heat_exchanger in ["AES", "BES"]:
+                            #     # 计算方式2: DL = Di - 2×(b₁ + b₂ + b)
+                            #     # 1. 确定b值（根据Di范围）
+                            #     if Di < 1000:
+                            #         b = 4.0  # Di < 1000mm时的默认值
+                            #     else:  # 1000 ≤ Di ≤ 2600mm
+                            #         b = 5.0  # 大直径壳程的默认值
+                            #
+                            #     # 2. 确定b₁（第一圈管到壳体内壁距离）和bₙ（最外圈管到壳体内壁距离）
+                            #     if Di <= 700:
+                            #         b_n = 10.0
+                            #         b_1 = 3.0
+                            #     elif Di <= 1200:
+                            #         b_n = 13.0
+                            #         b_1 = 5.0
+                            #     elif Di <= 2000:
+                            #         b_n = 16.0
+                            #         b_1 = 6.0
+                            #     else:  # Di > 2000mm（最大到2600mm）
+                            #         b_n = 20.0
+                            #         b_1 = 7.0
+                            #
+                            #     # 3. 计算b₂（第二圈管到第一圈管距离）
+                            #     b_2 = b_n + 1.5  # 固定公式
+                            #
+                            #     # 4. 最终计算DL
+                            #     DL = Di - 2 * (b_1 + b_2 + b)
+                            #     print(f"计算布管限定圆 DL（型号{self.heat_exchanger}）: "
+                            #           f"{Di} - 2×({b_1} + {b_2} + {b}) = {Di} - 2×{b_1 + b_2 + b} = {DL:.1f}")
+                            #
+                            # else:
+                            #     # 未知型号处理：使用方式1的默认计算
+                            #     b3 = max(0.25 * do, 8.0)
+                            #     DL = Di - 2 * b3
+                            #     print(f"未知换热器型号{self.heat_exchanger}，使用默认公式计算DL: "
+                            #           f"{Di} - 2×max(0.25×{do}, 8.0) = {DL:.1f}")
+                            #
+                            # # 验证DL合理性（必须小于壳体内直径Di）
+                            # if DL >= Di:
+                            #     print(f"警告：计算的DL={DL:.1f} ≥ 壳体内直径Di={Di}，结果不合理")
+                            #     # 强制修正为Di的95%（避免无效值）
+                            #     DL = Di * 0.95
+                            #     print(f"已自动修正DL为壳体内直径的95%: {DL: .1f}")
 
                         # 强制更新/添加DL参数到processed_params
                         if DL is not None:
@@ -3551,13 +3551,12 @@ class TubeLayoutEditor(QMainWindow):
                     lg_diameter_widget.setText(f"{do_value}")
 
     def update_baffle_diameter(self):
-        # 1. 查找参数表中各关键参数的行索引
+        # 1. 查找参数表中各关键参数的行索引（移除布管限定圆DL的行索引查找）
         di_row = -1
         baffle_row = -1
         do_row = -1
-        dl_row = -1
         range_type_row = -1  # 换热管排列方式行索引
-        lg_row = -1  # 拉杆形式行索引（移除center_distance_row）
+        lg_row = -1  # 拉杆形式行索引
         row_count = self.param_table.rowCount()
 
         for row in range(row_count):
@@ -3572,11 +3571,9 @@ class TubeLayoutEditor(QMainWindow):
                 baffle_row = row
             elif param_name == "换热管外径 do":
                 do_row = row
-            elif param_name == "布管限定圆 DL":
-                dl_row = row
             elif param_name == "换热管排列方式":
                 range_type_row = row
-            elif param_name == "拉杆形式":  # 移除换热管中心距S的行索引查找
+            elif param_name == "拉杆形式":
                 lg_row = row
 
         # 2. 获取关键参数值
@@ -3612,7 +3609,7 @@ class TubeLayoutEditor(QMainWindow):
                         print("换热管外径 do 参数值格式错误")
                         return
 
-        # 2.3 换热管排列方式
+        # 2.3 换热管排列方式（仅用于参数完整性检查，支撑后续逻辑）
         range_type_value = None
         if range_type_row != -1:
             range_type_widget = self.param_table.cellWidget(range_type_row, 2)
@@ -3623,86 +3620,12 @@ class TubeLayoutEditor(QMainWindow):
                 if range_type_item and range_type_item.text().strip():
                     range_type_value = range_type_item.text()
 
-        # 检查必要参数是否存在（保留原依赖，用于布管限定圆和折流板计算）
+        # 检查必要参数是否存在（支撑折流板和拉杆更新逻辑）
         if di_value is None or do_value is None or range_type_value is None:
             print("缺少必要参数，无法进行计算")
             return
 
-        # 3. 根据换热器型号计算布管限定圆 DL（逻辑完全保留）
-        if dl_row != -1:
-            # 获取换热器型号
-            heat_exchanger_type = self.heat_exchanger
-            if heat_exchanger_type is None:
-                heat_exchanger_type = "AEU"
-
-            # 根据型号选择不同的计算方式
-            if heat_exchanger_type in ["AEU", "BEU", "BEM", "NEN"]:
-                # 计算方式1: DL = Di - 2b₃, b₃ = max(0.25do, 8)
-                b3 = max(0.25 * do_value, 8.0)
-                dl_value = di_value - 2 * b3
-                print(
-                    f"计算布管限定圆 DL ({heat_exchanger_type}): {di_value} - 2 * max(0.25 * {do_value}, 8.0) = {dl_value:.1f}")
-
-            elif heat_exchanger_type in ["AES", "BES"]:
-                # 计算方式2: DL = Di - 2(b₁ + b₂ + b)
-                # 确定b的值
-                if di_value < 1000:
-                    b = 4.0  # 默认值
-                else:  # 1000 ≤ Di ≤ 2600
-                    b = 5.0  # 默认值
-
-                # 确定b₁和bₙ的值
-                if di_value <= 700:
-                    b_n = 10.0
-                    b_1 = 3.0
-                elif di_value <= 1200:
-                    b_n = 13.0
-                    b_1 = 5.0
-                elif di_value <= 2000:
-                    b_n = 16.0
-                    b_1 = 6.0
-                else:  # di_value ≤ 2600
-                    b_n = 20.0
-                    b_1 = 7.0
-
-                # 计算b₂
-                b_2 = b_n + 1.5
-
-                # 计算DL
-                dl_value = di_value - 2 * (b_1 + b_2 + b)
-                print(
-                    f"计算布管限定圆 DL ({heat_exchanger_type}): {di_value} - 2 * ({b_1} + {b_2} + {b}) = {dl_value:.1f}")
-
-            else:
-                print(f"未知的换热器型号: {heat_exchanger_type}")
-                return
-
-            # 临时断开信号避免循环触发（逻辑保留）
-            original_handler = None
-            if hasattr(self, 'handle_param_change'):
-                try:
-                    self.param_table.itemChanged.disconnect(self.handle_param_change)
-                    original_handler = self.handle_param_change
-                except:
-                    pass
-
-            # 更新布管限定圆 DL（逻辑保留）
-            dl_item = self.param_table.item(dl_row, 2)
-            if dl_item:
-                dl_item.setText(f"{dl_value:.1f}")
-            else:
-                self.param_table.setItem(dl_row, 2, QTableWidgetItem(f"{dl_value:.1f}"))
-            print(f"已更新布管限定圆 DL: {dl_value: .1f}")
-
-            # 重新连接信号（逻辑保留）
-            if original_handler:
-                try:
-                    self.param_table.itemChanged.connect(original_handler)
-                except:
-                    pass
-        # print(self.heat_exchanger)
-
-        # 4. 更新折流板外径（逻辑完全保留，无修改）
+        # 3. 更新折流板外径（逻辑完全保留）
         if di_value is not None and baffle_row != -1:
             # 假设壳体材料为钢管（实际应根据具体参数获取）
             shell_material_type = "钢管"
@@ -3739,7 +3662,7 @@ class TubeLayoutEditor(QMainWindow):
                 self._update_table_cell(baffle_row, 2, baffle_diameter)
                 print(f"已更新折流板外径: {baffle_diameter}")
 
-        # 5. 更新拉杆形式（逻辑完全保留，无修改）
+        # 4. 更新拉杆形式（逻辑完全保留）
         if lg_row != -1 and do_value is not None:
             # 获取当前拉杆形式的单元格部件
             lg_widget = self.param_table.cellWidget(lg_row, 2)
@@ -3771,6 +3694,152 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 连接信号，允许用户手动更改
                 combo_box.currentTextChanged.connect(lambda: self.handle_param_change())
+
+    def update_tube_layout_circle_dl(self):
+        # 1. 查找参数表中布管限定圆计算所需的关键参数行索引
+        di_row = -1
+        do_row = -1
+        dl_row = -1
+        range_type_row = -1  # 换热管排列方式行索引（保留原依赖）
+        row_count = self.param_table.rowCount()
+
+        for row in range(row_count):
+            param_name_item = self.param_table.item(row, 1)
+            if not param_name_item:
+                continue
+            param_name = param_name_item.text()
+
+            if param_name == "壳体内直径 Di":
+                di_row = row
+            elif param_name == "换热管外径 do":
+                do_row = row
+            elif param_name == "布管限定圆 DL":
+                dl_row = row
+            elif param_name == "换热管排列方式":
+                range_type_row = row
+
+        # 2. 获取布管限定圆计算所需的关键参数值
+        # 2.1 壳体内直径 Di
+        di_value = None
+        if di_row != -1:
+            di_item = self.param_table.item(di_row, 2)
+            if di_item and di_item.text().strip():
+                try:
+                    di_value = float(di_item.text())
+                except ValueError:
+                    print("壳体内直径 Di 参数值格式错误")
+                    return
+
+        # 2.2 换热管外径 do
+        do_value = None
+        if do_row != -1:
+            do_widget = self.param_table.cellWidget(do_row, 2)
+            if isinstance(do_widget, QComboBox):
+                try:
+                    selected_text = do_widget.currentText()
+                    if selected_text.strip():
+                        do_value = float(selected_text)
+                except ValueError as e:
+                    print(f"换热管外径 do 转换错误: {e}")
+                    return
+            else:
+                do_item = self.param_table.item(do_row, 2)
+                if do_item and do_item.text().strip():
+                    try:
+                        do_value = float(do_item.text())
+                    except ValueError:
+                        print("换热管外径 do 参数值格式错误")
+                        return
+
+        # 2.3 换热管排列方式（保留原依赖检查）
+        range_type_value = None
+        if range_type_row != -1:
+            range_type_widget = self.param_table.cellWidget(range_type_row, 2)
+            if isinstance(range_type_widget, QComboBox):
+                range_type_value = range_type_widget.currentText()
+            else:
+                range_type_item = self.param_table.item(range_type_row, 2)
+                if range_type_item and range_type_item.text().strip():
+                    range_type_value = range_type_item.text()
+
+        # 检查必要参数是否存在（保留原依赖检查逻辑）
+        if di_value is None or do_value is None or range_type_value is None or dl_row == -1:
+            print("缺少布管限定圆计算所需参数，无法进行计算")
+            return
+
+        # 3. 根据换热器型号计算布管限定圆 DL（逻辑完全保留原代码）
+        # 获取换热器型号
+        heat_exchanger_type = self.heat_exchanger
+        if heat_exchanger_type is None:
+            heat_exchanger_type = "AEU"
+
+        # 根据型号选择不同的计算方式
+        if heat_exchanger_type in ["AEU", "BEU", "BEM", "NEN"]:
+            # 计算方式1: DL = Di - 2b₃, b₃ = max(0.25do, 8)
+            b3 = max(0.25 * do_value, 8.0)
+            dl_value = di_value - 2 * b3
+            print(
+                f"计算布管限定圆 DL ({heat_exchanger_type}): {di_value} - 2 * max(0.25 * {do_value}, 8.0) = {dl_value:.1f}")
+
+        elif heat_exchanger_type in ["AES", "BES"]:
+            # 计算方式2: DL = Di - 2(b₁ + b₂ + b)
+            # 确定b的值
+            if di_value < 1000:
+                b = 4.0  # 默认值
+            else:  # 1000 ≤ Di ≤ 2600
+                b = 5.0  # 默认值
+
+            # 确定b₁和bₙ的值
+            if di_value <= 700:
+                b_n = 10.0
+                b_1 = 3.0
+            elif di_value <= 1200:
+                b_n = 13.0
+                b_1 = 5.0
+            elif di_value <= 2000:
+                b_n = 16.0
+                b_1 = 6.0
+            else:  # di_value ≤ 2600
+                b_n = 20.0
+                b_1 = 7.0
+
+            # 计算b₂
+            b_2 = b_n + 1.5
+
+            # 计算DL
+            dl_value = di_value - 2 * (b_1 + b_2 + b)
+            print(
+                f"计算布管限定圆 DL ({heat_exchanger_type}): {di_value} - 2 * ({b_1} + {b_2} + {b}) = {dl_value:.1f}")
+
+        else:
+            print(f"未知的换热器型号: {heat_exchanger_type}")
+            return
+
+        # 4. 临时断开信号避免循环触发（逻辑保留原代码）
+        original_handler = None
+        if hasattr(self, 'handle_param_change'):
+            try:
+                self.param_table.itemChanged.disconnect(self.handle_param_change)
+                original_handler = self.handle_param_change
+            except:
+                pass
+
+        # 5. 更新布管限定圆 DL 到表格（逻辑保留原代码）
+        dl_item = self.param_table.item(dl_row, 2)
+        if dl_item:
+            dl_item.setText(f"{dl_value:.1f}")
+        else:
+            self.param_table.setItem(dl_row, 2, QTableWidgetItem(f"{dl_value:.1f}"))
+        print(f"已更新布管限定圆 DL: {dl_value: .1f}")
+
+        # 6. 重新连接信号（逻辑保留原代码）
+        if original_handler:
+            try:
+                self.param_table.itemChanged.connect(original_handler)
+            except:
+                pass
+
+        print(f"当前换热器型号: {self.heat_exchanger}")
 
     def update_tube_center_distance(self):
         # 1. 定位关键参数行（换热管外径、排列方式、中心距）
@@ -4649,6 +4718,7 @@ class TubeLayoutEditor(QMainWindow):
                 if param_name in ["壳体内直径 Di", "换热管外径 do", "换热管排列方式"]:
                     self.update_baffle_diameter()
                     self.update_tube_center_distance()
+                    self.update_tube_layout_circle_dl()
 
                     self.isDi_change = True
                     # self.user_update_Di()
@@ -6648,6 +6718,7 @@ class TubeLayoutEditor(QMainWindow):
                 for statement in sql_statements:
                     self.execute_sql(statement + ';')  # 确保每条语句以分号结尾
             pass
+
 
     def update_bugan_quantity(self):
         product_id = self.productID  # 固定产品ID
@@ -9555,6 +9626,268 @@ class TubeLayoutEditor(QMainWindow):
             center for center in self.current_centers
             if center not in set(current_coords)
         ]
+
+    def build_sql_for_tube(self, tube_data):
+        if not tube_data:
+            return None
+
+        table_name = "`产品设计活动表_布管参数表`"
+        component_table = "`产品设计活动表_元件附加参数表`"
+        productID = self.productID
+        sql_statements = []
+
+        def escape_str(value):
+            return value.replace("'", "''") if isinstance(value, str) else value
+
+        # 先清空本产品ID在布管参数表中的旧记录
+        safe_productID = escape_str(productID)
+        delete_sql = f"DELETE FROM {table_name} WHERE `产品ID` = '{safe_productID}'"
+        sql_statements.append(delete_sql)
+
+        # 管程=2 时把“分程隔板两侧相邻管中心距（水平）”置 0
+        is_tube_pass_two = any(
+            (data.get("参数名", "").strip() == "管程程数" and str(data.get("参数值", "")).strip() == "2")
+            for data in tube_data
+        )
+
+        # 初始化管程分程形式是否为4.1的标志
+        is_tube_pass_form_4_1 = False
+
+        # 需要跨表同步的参数（从布管参数表 -> 元件附加参数表 的映射）
+        cross_map = {
+            "换热管外径 do": "换热管外径",
+            "中间挡板厚度": "中间挡板厚度",
+            "中间挡板宽度": "中间挡板宽度",  # 新增中间挡板宽度的跨表映射
+            "拉杆形式": "拉杆型式",
+            "拉杆直径": "拉杆规格",
+            "旁路挡板厚度": "旁路挡板厚度",
+            "旁路挡板宽度": "旁路挡板宽度",  # 新增旁路挡板宽度的跨表映射
+            "防冲板形式": "防冲板形式",
+            "防冲板厚度": "防冲板厚度",
+            "滑道定位": "滑道定位",
+            "滑道高度": "滑道高度",
+            "滑道厚度": "滑道厚度",
+            "滑道与竖直中心线夹角": "滑道与竖直中心线夹角",
+            "切边长度 L1": "切边长度 L1",
+            "切边高度 h": "切边高度 h",
+        }
+
+        # 用于后面写设计数据表/元件附加参数表的值暂存
+        cross_params = {
+            "公称直径 DN": None,
+            "壳体内直径 Di": None,
+            "旁路挡板厚度": None,
+            "旁路挡板宽度": None,
+            "防冲板形式": None,
+            "防冲板厚度": None,
+            "滑道定位": None,
+            "滑道高度": None,
+            "滑道厚度": None,
+            "滑道与竖直中心线夹角": None,
+            "切边长度 L1": None,
+            "切边高度 h": None,
+            "管程分程形式": None,
+            "换热管外径 do": None,
+            "中间挡板厚度": None,
+            "中间挡板宽度": None,
+            "拉杆形式": None,
+            "拉杆直径": None,
+        }
+
+        # 遍历前端参数，落表到“布管参数表”，并收集 cross_params
+        for data in tube_data:
+            line_num = str(data.get("参数名", ""))
+            holes_up = str(data.get("参数值", ""))
+            holes_down = data.get("单位", "")
+
+            if line_num in cross_params:
+                cross_params[line_num] = holes_up
+
+            safe_line_num = escape_str(line_num)
+            safe_holes_up = escape_str(holes_up)
+            if holes_down is None or (isinstance(holes_down, str) and holes_down.strip() == ""):
+                safe_holes_down = "NULL"
+            else:
+                safe_holes_down = f"'{escape_str(str(holes_down))}'"
+
+            insert_sql = (
+                f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
+                f"VALUES ('{productID}', '{safe_line_num}', '{safe_holes_up}', {safe_holes_down})"
+            )
+            sql_statements.append(insert_sql)
+
+        # 处理“中间挡板宽度”参数，包含单位mm
+        if hasattr(self, 'center_dangban_length') and self.center_dangban_length is not None:
+            param_name = "中间挡板宽度"
+            param_value = str(self.center_dangban_length)
+            unit = "mm"  # 设置单位为mm
+
+            safe_param_name = escape_str(param_name)
+            safe_param_value = escape_str(param_value)
+            safe_unit = "NULL" if unit.strip() == "" else f"'{escape_str(unit)}'"
+
+            # 先更新已有记录
+            sql_statements.append(
+                f"UPDATE {table_name} SET `参数值` = '{safe_param_value}', `单位` = {safe_unit} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}'"
+            )
+            # 不存在则插入新记录
+            sql_statements.append(
+                f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
+                f"SELECT '{productID}', '{safe_param_name}', '{safe_param_value}', {safe_unit} "
+                f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
+            )
+            # 存入cross_params用于跨表同步
+            cross_params[param_name] = param_value
+
+        # 处理“旁路挡板宽度”参数，包含单位mm
+        if hasattr(self, 'side_dangban_length') and self.side_dangban_length is not None:
+            param_name = "旁路挡板宽度"
+            param_value = str(self.side_dangban_length)
+            unit = "mm"  # 设置单位为mm
+
+            safe_param_name = escape_str(param_name)
+            safe_param_value = escape_str(param_value)
+            safe_unit = "NULL" if unit.strip() == "" else f"'{escape_str(unit)}'"
+
+            # 先更新已有记录
+            sql_statements.append(
+                f"UPDATE {table_name} SET `参数值` = '{safe_param_value}', `单位` = {safe_unit} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}'"
+            )
+            # 不存在则插入新记录
+            sql_statements.append(
+                f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
+                f"SELECT '{productID}', '{safe_param_name}', '{safe_param_value}', {safe_unit} "
+                f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
+            )
+            # 存入cross_params用于跨表同步
+            cross_params[param_name] = param_value
+
+        # 处理“管程分程形式”的图标选择值
+        if hasattr(self, 'tube_pass_form_value') and self.tube_pass_form_value:
+            param_name = "管程分程形式"
+            param_value = self.tube_pass_form_value
+            unit = ""
+            safe_param_name = escape_str(param_name)
+            safe_param_value = escape_str(param_value)
+            safe_unit = "NULL" if unit.strip() == "" else f"'{escape_str(unit)}'"
+
+            # 检查管程分程形式是否为4.1
+            if param_value == "4.1":
+                is_tube_pass_form_4_1 = True
+
+            # upsert 到布管参数表
+            sql_statements.append(
+                f"UPDATE {table_name} SET `参数值` = '{safe_param_value}', `单位` = {safe_unit} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}'"
+            )
+            sql_statements.append(
+                f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
+                f"SELECT '{productID}', '{safe_param_name}', '{safe_param_value}', {safe_unit} "
+                f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
+            )
+
+            # 存入cross_params用于跨表同步
+            cross_params[param_name] = param_value
+
+        # 如果管程=2 或者管程分程形式=4.1，把"分程隔板两侧相邻管中心距（水平）"置 0
+        if is_tube_pass_two or is_tube_pass_form_4_1:
+            param_name = "分程隔板两侧相邻管中心距（水平）"
+            param_value = "0"
+            unit = ""
+            safe_param_name = escape_str(param_name)
+            safe_param_value = escape_str(param_value)
+            safe_unit = "NULL" if unit.strip() == "" else f"'{escape_str(unit)}'"
+
+            # 更新布管参数表中的该参数
+            sql_statements.append(
+                f"UPDATE {table_name} SET `参数值` = '{safe_param_value}', `单位` = {safe_unit} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}'"
+            )
+            # 如果不存在则插入
+            sql_statements.append(
+                f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
+                f"SELECT '{productID}', '{safe_param_name}', '{safe_param_value}', {safe_unit} "
+                f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
+            )
+
+        # # 把 self.output_data['TieRodD'] 写到"拉杆直径"
+        # tie_rod_d = self.output_data.get('TieRodD')
+        # if tie_rod_d is not None:
+        #     cross_params["拉杆直径"] = str(tie_rod_d)
+        #     param_name = "拉杆直径"
+        #     param_value = str(tie_rod_d)
+        #     safe_param_name = escape_str(param_name)
+        #     safe_param_value = escape_str(param_value)
+        #     sql_statements.append(
+        #         f"UPDATE {table_name} SET `参数值` = '{safe_param_value}', `单位` = NULL "
+        #         f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}'"
+        #     )
+        #     sql_statements.append(
+        #         f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
+        #         f"SELECT '{productID}', '{safe_param_name}', '{safe_param_value}', NULL "
+        #         f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} "
+        #         f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
+        #     )
+
+        # 公称直径写回“设计数据表”
+        if cross_params["公称直径 DN"] is not None:
+            design_table = "`产品设计活动表_设计数据表`"
+            safe_dn_value = escape_str(cross_params["公称直径 DN"])
+            sql_statements.append(
+                f"UPDATE {design_table} SET `壳程数值` = '{safe_dn_value}' "
+                f"WHERE `产品ID` = '{productID}' AND `参数名称` LIKE '公称直径%'"
+            )
+        if cross_params["壳体内直径 Di"] is not None:
+            design_table = "`产品设计活动表_设计数据表`"
+            safe_dn_value = escape_str(cross_params["壳体内直径 Di"])
+            sql_statements.append(
+                f"UPDATE {design_table} SET `管程数值` = '{safe_dn_value}' "
+                f"WHERE `产品ID` = '{productID}' AND `参数名称` LIKE '公称直径%'"
+            )
+
+        # 把映射参数写回/更新到【产品设计活动表_元件附加参数表】
+        for tube_name, comp_name in cross_map.items():
+            val = cross_params.get(tube_name)
+            if val is None or str(val).strip() == "":
+                continue
+            safe_comp_name = escape_str(comp_name)
+            safe_val = escape_str(str(val))
+
+            # UPDATE
+            sql_statements.append(
+                f"UPDATE {component_table} SET `参数值` = '{safe_val}' "
+                f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}'"
+            )
+            # INSERT IF NOT EXISTS
+            sql_statements.append(
+                f"INSERT INTO {component_table} (`产品ID`, `参数名称`, `参数值`) "
+                f"SELECT '{productID}', '{safe_comp_name}', '{safe_val}' "
+                f"WHERE NOT EXISTS (SELECT 1 FROM {component_table} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}')"
+            )
+
+        # 执行所有 SQL
+        conn = create_product_connection()
+        if not conn:
+            return None
+        try:
+            with conn.cursor() as cursor:
+                for sql in sql_statements:
+                    cursor.execute(sql)
+            conn.commit()
+            return sql_statements
+        except pymysql.Error as e:
+            conn.rollback()
+            return None
+        finally:
+            if conn and conn.open:
+                conn.close()
 
     def build_sql_for_component(self):
         conn = create_product_connection()
