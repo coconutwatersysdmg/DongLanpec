@@ -738,9 +738,8 @@ class TubeLayoutEditor(QMainWindow):
         self.stacked_widget.addWidget(self.sheet_form_page)
         self.main_layout.addWidget(self.stacked_widget)
 
+    # 布管页面
     def create_tube_layout_page(self):
-        """布管页面"""
-
         page = QWidget()
         self.main_tube_layout = QHBoxLayout(page)
         self.main_tube_layout.setContentsMargins(5, 5, 5, 5)
@@ -754,17 +753,35 @@ class TubeLayoutEditor(QMainWindow):
         self.param_table.setColumnCount(4)
         self.param_table.setHorizontalHeaderLabels(["序号", "参数名", "参数值", "单位"])
         self.param_table.verticalHeader().setVisible(False)
+
+        # 设置列宽自适应策略
         self.param_table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self.param_table.horizontalHeader().setDefaultSectionSize(100)
         self.param_table.horizontalHeader().setMinimumSectionSize(10)
+
+        # 为各列设置不同的调整策略
+        # 序号列：根据内容自适应，用户也可调整
         self.param_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
-        self.param_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Interactive)
+        # 参数名：可拉伸，占据较多空间
+        self.param_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        # 参数值：交互式调整
         self.param_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Interactive)
-        self.param_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Interactive)
-        self.param_table.setColumnWidth(0, 50)
-        self.param_table.setColumnWidth(1, 320)
-        self.param_table.setColumnWidth(2, 120)
-        self.param_table.setColumnWidth(3, 50)
+        # 单位列：根据内容自适应
+        self.param_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+
+        # 设置初始列宽比例（在表格显示后自动调整）
+        def set_initial_column_widths():
+            total_width = self.param_table.viewport().width()
+            if total_width > 0:
+                # 设置合理的初始比例：序号10%，参数名55%，参数值25%，单位10%
+                self.param_table.setColumnWidth(0, int(total_width * 0.1))  # 序号
+                self.param_table.setColumnWidth(1, int(total_width * 0.55))  # 参数名
+                self.param_table.setColumnWidth(2, int(total_width * 0.25))  # 参数值
+                self.param_table.setColumnWidth(3, int(total_width * 0.1))  # 单位
+
+        # 在表格显示后设置初始列宽
+        self.param_table.showEvent = lambda event: set_initial_column_widths()
+
         param_layout.addWidget(self.param_table)
 
         self.center_frame = QFrame()
@@ -997,12 +1014,9 @@ class TubeLayoutEditor(QMainWindow):
         # ✅ 保留：表格左键选中事件（确保左键点击正常选中）
         self.hole_distribution_table.itemSelectionChanged.connect(self.on_row_selection_changed)
 
-        # ❌ 可选删除：表格单独的右键事件（避免与全局右键重复）
-        # 若之前添加过以下代码，建议删除
         # self.hole_distribution_table.setContextMenuPolicy(Qt.CustomContextMenu)
         # self.hole_distribution_table.customContextMenuRequested.connect(self.on_table_right_click)
 
-        # ---------------------- 布局比例设置（原有代码，无需修改） ----------------------
         self.main_tube_layout.addWidget(self.param_frame, 3)
         self.main_tube_layout.addWidget(self.center_frame, 4)
         self.main_tube_layout.addWidget(self.right_frame, 2)
@@ -6404,10 +6418,7 @@ class TubeLayoutEditor(QMainWindow):
                     else:
                         record_exists = False
 
-                    print(f"记录存在: {record_exists}")  # 调试信息
-
                     if record_exists:
-                        # 如果存在记录，先删除，然后设置更改状态为1
                         delete_sql = (
                             f"DELETE FROM {table_name} WHERE "
                             f"`产品ID` = '{product_id}' AND "
@@ -6416,8 +6427,8 @@ class TubeLayoutEditor(QMainWindow):
                             f"`管板类型` = '{safe_tube_sheet_type}';"
                         )
                         sql_statements.append(delete_sql)
-                        change_status = "1"  # 标记为已更改
-                        print(f"检测到已存在记录，将执行删除操作")  # 调试信息
+                        change_status = "1"
+                        print(f"检测到已存在记录，将执行删除操作")
 
                     # 构建插入语句
                     insert_sql = (
@@ -11562,7 +11573,6 @@ class TubeLayoutEditor(QMainWindow):
             # QMessageBox.information(self, "提示", "所有滑道已删除")
 
     def build_huadao(self, location, height, thickness, angle, cut_length, cut_height):
-        """构建滑道并支持选中功能（增加干涉记录存储）"""
         if self.slide_selected_centers:
             self.build_huanreguan(self.slide_selected_centers)
             self.slide_selected_centers = []
@@ -11576,7 +11586,6 @@ class TubeLayoutEditor(QMainWindow):
             # 初始化滑道选中列表和干涉记录
             if not hasattr(self, 'selected_slides'):
                 self.selected_slides = []
-            # 新增：滑道干涉记录存储结构 [滑道参数, 干涉管坐标列表]
             if not hasattr(self, 'slide_interference_records'):
                 self.slide_interference_records = []
 
@@ -11586,17 +11595,12 @@ class TubeLayoutEditor(QMainWindow):
             QMessageBox.warning(self, "参数错误", f"请输入有效的数值参数: {str(e)}")
 
     def draw_slide_with_params(self, height, thickness, angle):
-        """根据给定参数绘制滑道（支持选中）"""
         try:
-            # 清除上次绘制的绿色滑道
             if hasattr(self, "green_slide_items"):
-                # 遍历副本，避免在迭代中修改列表
                 for item in list(self.green_slide_items):
                     try:
-                        # 尝试从场景中移除对象，若已销毁则捕获异常
                         self.graphics_scene.removeItem(item)
                     except RuntimeError:
-                        # 对象已被销毁，跳过处理
                         pass
                 # 清空列表，彻底移除无效引用
                 self.green_slide_items.clear()
@@ -11839,7 +11843,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 执行删除
                 if centers:
                     tube_num = self.get_tube_pass_count()
-                    if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+                    if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"] or self.isSymmetry:
                         all_centers = self.judge_linkage_x(centers)
                         self.delete_huanreguan(all_centers)
                     else:
@@ -12257,7 +12261,6 @@ class TubeLayoutEditor(QMainWindow):
                     "至圆筒内壁距离": self.param_widgets["至圆筒内壁距离"].toPlainText().strip()
                 }
 
-        # 从左侧参数表获取初始参数（原有逻辑保留）
         initial_params = {}
         for row in range(self.param_table.rowCount()):
             param_name_item = self.param_table.item(row, 1)
