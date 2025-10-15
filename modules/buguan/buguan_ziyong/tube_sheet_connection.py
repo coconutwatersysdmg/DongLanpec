@@ -4,7 +4,7 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtCore import Qt
 import pymysql
 import os
-from pathlib import Path  # 引入pathlib处理路径
+from pathlib import Path
 
 
 def create_component_connection():
@@ -130,18 +130,6 @@ class TubeSheetConnectionPage(QWidget):
                 background-color: #f9f9f9;
                 border-radius: 8px;
             }
-            QLabel {
-                font-size: 16px;
-                font-weight: bold;
-                margin-bottom: 5px;
-            }
-            QLineEdit {
-                font-size: 16px;
-                padding: 10px;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                min-height: 36px;
-            }
         """)
         self.param_layout = QVBoxLayout(self.param_frame)
         self.param_layout.setContentsMargins(15, 15, 15, 15)
@@ -159,14 +147,18 @@ class TubeSheetConnectionPage(QWidget):
         self.param_layout.addWidget(separator)
 
         # 滚动区域（用于参数较多时）
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_content = QWidget()
-        self.scroll_param_layout = QVBoxLayout(scroll_content)
-        self.scroll_param_layout.setContentsMargins(0, 0, 0, 0)
-        self.scroll_param_layout.setSpacing(15)
-        scroll_area.setWidget(scroll_content)
-        self.param_layout.addWidget(scroll_area)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        self.scroll_content = QWidget()
+        self.scroll_param_layout = QVBoxLayout(self.scroll_content)
+        self.scroll_param_layout.setContentsMargins(10, 10, 10, 10)
+        self.scroll_param_layout.setSpacing(20)  # 增加间距
+
+        self.scroll_area.setWidget(self.scroll_content)
+        self.param_layout.addWidget(self.scroll_area)
 
         body_layout.addWidget(self.param_frame, 1)
         main_layout.addLayout(body_layout)
@@ -174,45 +166,92 @@ class TubeSheetConnectionPage(QWidget):
         self.update_image_path()
 
     def update_image_path(self):
-        """根据连接方式更新图片路径（使用相对路径）"""
+        """更新图片显示 - 保持原逻辑，根据连接方式名称加载对应文件夹中的图片"""
         self.current_connection_type = self.connection_type_combo.currentText()
-        # 构建相对路径：当前代码目录 -> static -> 连接方式文件夹 -> 图片文件
-        # 使用pathlib的joinpath方法自动处理跨平台路径分隔符
-        path = self.current_dir.joinpath("static", self.current_connection_type)
-        # 清除所有图片
+
+        # 1. 构建目标文件夹路径（当前代码目录 -> static -> 连接方式文件夹）
+        target_folder = self.current_dir.joinpath("static", self.current_connection_type)
+
+        # 2. 初始化：清除所有图片标签的内容和可见性
         for label in self.image_labels:
             label.setPixmap(QPixmap())
             label.setVisible(False)
             label.image_path = ""
+            label.tube_sheet_type = ""  # 清空管板类型
 
-        # 加载复合管板和整体管板图片
-        try:
-            # 复合管板图片路径
-            composite_img_path = path.joinpath("复合管板.png")
-            # 检查文件是否存在
-            if composite_img_path.exists():
-                pixmap_1 = QPixmap(str(composite_img_path))
-                self.image_labels[0].setPixmap(pixmap_1.scaled(300, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                self.image_labels[0].setVisible(True)
-                self.image_labels[0].image_path = str(composite_img_path)
-            else:
-                print(f"复合管板图片不存在: {composite_img_path}")
+        if not target_folder.exists() or not target_folder.is_dir():
+            print(f"目标图片文件夹不存在：{target_folder}")
+            return
 
-            # 整体管板图片路径
-            integral_img_path = path.joinpath("整体管板.png")
-            if integral_img_path.exists():
-                pixmap_2 = QPixmap(str(integral_img_path))
-                self.image_labels[1].setPixmap(pixmap_2.scaled(300, 200, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                self.image_labels[1].setVisible(True)
-                self.image_labels[1].image_path = str(integral_img_path)
-            else:
-                print(f"整体管板图片不存在: {integral_img_path}")
+        # 3. 获取文件夹中的所有PNG图片文件
+        png_images = []
+        for file in target_folder.iterdir():
+            if file.is_file() and file.suffix.lower() == ".png":
+                png_images.append(file)
 
-        except Exception as e:
-            print(f"加载图片时出错: {e}")
+        # 4. 为每个图片文件推断管板类型
+        for idx, img_file in enumerate(png_images[:6]):  # 最多显示6张图片
+            try:
+                # 从文件名推断管板类型
+                tube_sheet_type = self.infer_tube_sheet_type(img_file.stem)
+
+                # 读取图片并按比例缩放
+                pixmap = QPixmap(str(img_file))
+                scaled_pixmap = pixmap.scaled(
+                    300, 200,  # 图片显示尺寸
+                    Qt.KeepAspectRatio,
+                    Qt.SmoothTransformation
+                )
+                # 给对应的标签设置图片、路径和管板类型
+                target_label = self.image_labels[idx]
+                target_label.setPixmap(scaled_pixmap)
+                target_label.setVisible(True)
+                target_label.image_path = str(img_file)
+                target_label.tube_sheet_type = tube_sheet_type
+
+                # 设置标签的提示文本
+                type_mapping = {
+                    '0': '复合管板',
+                    '1': '整体管板',
+                    'a': 'a类型',
+                    'b': 'b类型',
+                    'c': 'c类型',
+                    'd': 'd类型'
+                }
+                display_name = type_mapping.get(tube_sheet_type, tube_sheet_type)
+                target_label.setToolTip(f"管板类型: {display_name}")
+
+                print(f"成功加载图片：{img_file.name} (推断管板类型: {tube_sheet_type})")
+
+            except Exception as e:
+                print(f"加载图片 {img_file.name} 失败：{e}")
+
+    def infer_tube_sheet_type(self, filename):
+        """从文件名推断管板类型"""
+        filename_lower = filename.lower()
+
+        # 根据文件名中的关键词推断管板类型
+        if '复合' in filename_lower or '0' in filename_lower:
+            return '0'
+        elif '整体' in filename_lower or '1' in filename_lower:
+            return '1'
+        elif 'a' in filename_lower:
+            return 'a'
+        elif 'b' in filename_lower:
+            return 'b'
+        elif 'c' in filename_lower:
+            return 'c'
+        elif 'd' in filename_lower:
+            return 'd'
+        else:
+            # 如果无法推断，返回文件名作为类型
+            return filename
 
     def select_image(self, label):
         """选择图片后加载对应参数"""
+        if not label.isVisible() or not hasattr(label, 'tube_sheet_type'):
+            return
+
         # 更新选中样式
         for lbl in self.image_labels:
             lbl.setProperty("selected", False)
@@ -223,40 +262,63 @@ class TubeSheetConnectionPage(QWidget):
         label.style().unpolish(label)
         label.style().polish(label)
         self.current_image_path = getattr(label, 'image_path', '')
+        selected_tube_sheet_type = getattr(label, 'tube_sheet_type', '')
 
         # 清空之前的参数
-        for i in reversed(range(self.scroll_param_layout.count())):
-            widget = self.scroll_param_layout.itemAt(i).widget()
-            if widget:
-                widget.deleteLater()
-        self.current_params = []
-
-        # 确定管板类型（复合/整体）
-        connection_type = self.connection_type_combo.currentText()
-        image_type = "复合管板" if label == self.image_labels[0] else "整体管板"
+        self.clear_parameters()
 
         # 加载参数
-        param_data = self.get_parameters_by_type(connection_type, image_type)
+        param_data = self.get_parameters_by_type(self.current_connection_type, selected_tube_sheet_type)
         for param in param_data:
             param_group = QHBoxLayout()
-            param_group.setSpacing(5)
+            param_group.setSpacing(15)
+            param_group.setContentsMargins(0, 0, 0, 0)
 
             name_label = QLabel(f"{param['name']}:")
-            name_label.setFixedWidth(200)
+            name_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #333;")
+            name_label.setFixedWidth(220)  # 增加宽度适应更大的字体
+            name_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
             input_edit = QLineEdit(param['value'])
-            input_edit.setFixedWidth(80)
+            input_edit.setStyleSheet("""
+                QLineEdit {
+                    font-size: 16px;
+                    padding: 8px 12px;
+                    border: 2px solid #ccc;
+                    border-radius: 6px;
+                    background-color: white;
+                    min-height: 40px;
+                }
+                QLineEdit:focus {
+                    border: 2px solid #2196F3;
+                }
+            """)
+            input_edit.setFixedWidth(120)
+            input_edit.setFixedHeight(40)
             input_edit.textChanged.connect(lambda text, name=param['name']: self.update_param_value(name, text))
 
             self.current_params.append((param['name'], param['value']))
 
             container = QWidget()
+            container.setFixedHeight(50)  # 固定高度确保对齐
             container.setLayout(param_group)
             param_group.addWidget(name_label)
             param_group.addWidget(input_edit)
+            param_group.addStretch()  # 在右侧添加弹性空间
+
             self.scroll_param_layout.addWidget(container)
 
-        self.scroll_param_layout.addStretch()
+        # 确保滚动区域回到顶部
+        self.scroll_area.verticalScrollBar().setValue(0)
+
+    def clear_parameters(self):
+        """清空参数区域"""
+        # 移除所有参数控件
+        for i in reversed(range(self.scroll_param_layout.count())):
+            widget = self.scroll_param_layout.itemAt(i).widget()
+            if widget:
+                widget.deleteLater()
+        self.current_params = []
 
     def update_param_value(self, param_name, param_value):
         """更新参数值"""
@@ -265,7 +327,7 @@ class TubeSheetConnectionPage(QWidget):
                 self.current_params[i] = (name, param_value)
                 break
 
-    def get_connection_params(self, connection_type, image_type):
+    def get_connection_params(self, connection_type, tube_sheet_type):
         """从数据库获取参数"""
         conn = create_component_connection()
         if not conn:
@@ -273,13 +335,12 @@ class TubeSheetConnectionPage(QWidget):
 
         try:
             with conn.cursor() as cursor:
-                composite_cond = 1 if image_type == "复合管板" else 0
                 query = """
                     SELECT 参数名, 参数值
                     FROM 管板连接表
-                    WHERE 管板连接方式 = %s AND 复合管板 = %s
+                    WHERE 管板连接方式 = %s AND 管板类型 = %s
                 """
-                cursor.execute(query, (connection_type, composite_cond))
+                cursor.execute(query, (connection_type, tube_sheet_type))
                 params = cursor.fetchall()
                 return [{"name": p["参数名"], "value": p["参数值"]} for p in params]
         except pymysql.Error as e:
@@ -289,24 +350,35 @@ class TubeSheetConnectionPage(QWidget):
         finally:
             conn.close()
 
-    def get_parameters_by_type(self, connection_type, image_type):
+    def get_parameters_by_type(self, connection_type, tube_sheet_type):
         """获取指定类型的参数"""
-        return self.get_connection_params(connection_type, image_type)
+        return self.get_connection_params(connection_type, tube_sheet_type)
 
     def get_current_parameters(self):
-        """新增：获取当前页面所有参数（供保存使用）"""
+        """获取当前页面所有参数（供保存使用）"""
         # 收集基础信息（连接方式和管板类型）
         connection_type = self.connection_type_combo.currentText()
-        selected_image_type = "未选择"
+        selected_tube_sheet_type = ""
+        selected_tube_sheet_name = "未选择"
+
         for label in self.image_labels:
-            if label.property("selected"):
-                selected_image_type = "复合管板" if label == self.image_labels[0] else "整体管板"
+            if label.property("selected") and hasattr(label, 'tube_sheet_type'):
+                selected_tube_sheet_type = label.tube_sheet_type
+                type_mapping = {
+                    '0': '复合管板',
+                    '1': '整体管板',
+                    'a': 'a类型',
+                    'b': 'b类型',
+                    'c': 'c类型',
+                    'd': 'd类型'
+                }
+                selected_tube_sheet_name = type_mapping.get(selected_tube_sheet_type, selected_tube_sheet_type)
                 break
 
         # 构建参数列表（包含基础信息和详细参数）
         parameters = [
             {"参数名": "换热管与管板连接方式", "参数值": connection_type, "单位": ""},
-            {"参数名": "管板类型", "参数值": selected_image_type, "单位": ""}
+            {"参数名": "管板类型", "参数值": selected_tube_sheet_name, "单位": ""}
         ]
 
         # 添加详细参数

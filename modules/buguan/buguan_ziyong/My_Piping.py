@@ -595,12 +595,17 @@ class TubeLayoutEditor(QMainWindow):
     def show_distance(self):
         if len(self.selected_centers) == 2:
             distance = self.calculate_distance(self.selected_centers)
-            # TODO 吾日三省吾身，交之前把这注释取消
-            self.line_tip.setText(f"您选中的两个换热管孔的间距为 {distance} mm。")
-            self.line_tip.setVisible(True)
-            from PyQt5.QtCore import QTimer
-            QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
-            print(f"您选中的两个换热管孔的间距为 {distance} mm。")
+            message = f"您选中的两个换热管孔的间距为 {distance} mm。"
+
+            try:
+                self.line_tip.setText(message)
+                self.line_tip.setVisible(True)
+                from PyQt5.QtCore import QTimer
+                QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
+            except AttributeError:
+                pass
+
+            print(message)
         else:
             print("选中的圆心不是两个")
 
@@ -5225,7 +5230,7 @@ class TubeLayoutEditor(QMainWindow):
         elif param_name == "管程程数":
             # 管程程数变化：更新管程分程形式值及对应图片
             self.tube_pass_form_value = {
-                "1":"1.1",
+                "1": "1.1",
                 "2": "2.1",
                 "4": "4.1",
                 "6": "6.1"
@@ -5528,41 +5533,32 @@ class TubeLayoutEditor(QMainWindow):
             save_btn.clicked.connect(self.save_data)  # 添加保存按钮点击事件
             self.footer_layout.addWidget(save_btn)
 
-    # TODO 吾日三省吾身
     def save_data(self):
-        """TODO 保存数据，根据当前页面显示不同的保存成功提示"""
+        """保存数据，根据当前页面显示不同的保存成功提示"""
         current_page_index = self.header.currentIndex()
 
         # 根据当前页面设置不同的提示信息
         if current_page_index == 0 and self.has_piped:  # 布管页面
             self.clear_modification_marks()
-            self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")
-            self.line_tip.setVisible(True)
-            from PyQt5.QtCore import QTimer
-            QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
             message = "数据保存成功！"
         elif current_page_index == 1:  # 管-板连接页面
-            self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")
-            self.line_tip.setVisible(True)
-            from PyQt5.QtCore import QTimer
-            QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
             message = "数据保存成功！"
         elif current_page_index == 0 and not self.has_piped:
-            self.line_tip.setText(f"数据保存成功")
-            self.line_tip.setStyleSheet("color: black;")
-            self.line_tip.setVisible(True)
-            from PyQt5.QtCore import QTimer
-            QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
             message = "数据保存成功！"
         else:  # 管板形式页面
             message = "数据保存成功！"
 
-        self.line_tip.setText(f"数据保存成功")
-        self.line_tip.setVisible(True)
-        from PyQt5.QtCore import QTimer
-        QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
+        # 尝试设置提示文本，若失败则在控制台输出
+        try:
+            self.line_tip.setText("数据保存成功")
+            self.line_tip.setStyleSheet("color: black;")
+            self.line_tip.setVisible(True)
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
+        except AttributeError:
+            # 当line_tip为None时，在控制台输出信息
+            print("数据保存成功")
+
         self.actual_save_operation(current_page_index)
 
     def build_sql_for_coordinate(self):
@@ -6586,34 +6582,26 @@ class TubeLayoutEditor(QMainWindow):
     def build_sql_for_tube_sheet_connection(self):
         # 从管板连接页面获取参数
         page_data = self.tube_sheet_page.get_current_parameters()
-        if not page_data:  # page_data是包含参数的列表
+        if not page_data:
             return None
-
         table_name = "`产品设计活动表_管板连接表`"
 
-        # 统一处理字符串转义，同时确保路径分隔符正确
         def escape_str(value):
             if isinstance(value, str):
-                # 先替换单引号，处理SQL注入
                 escaped = value.replace("'", "''")
-                # 统一路径分隔符为反斜杠，确保绝对路径格式正确
                 escaped = escaped.replace('/', '\\')
-                # 转换为双反斜杠存储（数据库显示为单反斜杠）
-                return escaped.replace('\\', '\\\\')
+                return escaped.replace('\\', '\\')
             return value
 
         # 获取选中图片的绝对路径
         connection_diagram = ""
         for label in self.tube_sheet_page.image_labels:
             if label.property("selected"):
-                # 获取图片的绝对路径（假设image_path已为绝对路径，若不是可通过os.path.abspath转换）
                 connection_diagram = getattr(label, 'image_path', '')
-                # 确保路径为绝对路径
                 if connection_diagram:
                     connection_diagram = os.path.abspath(connection_diagram)
                 break
 
-        # 提取连接方式和管板类型（仅用于字段赋值，不作为参数存入）
         connection_type = ""
         tube_sheet_type_str = ""
         for param in page_data:
@@ -6622,11 +6610,18 @@ class TubeLayoutEditor(QMainWindow):
             elif param['参数名'] == "管板类型":
                 tube_sheet_type_str = param['参数值']
 
-        # 转换管板类型为整数（1为整体管板，0为复合管板）
-        tube_sheet_type = 1 if tube_sheet_type_str == "整体管板" else 0 if tube_sheet_type_str == "复合管板" else ""
+        # 定义管板类型映射关系
+        tube_sheet_mapping = {
+            "整体管板": 1,
+            "复合管板": 0,
+            "a类型": "a",
+            "b类型": "b",
+            "c类型": "c",
+            "d类型": "d"
+        }
 
-        # 过滤前两条数据（换热管与管板连接方式、管板类型），只保留后续参数
-        # 从索引2开始截取列表（跳过前两条）
+        tube_sheet_type = tube_sheet_mapping.get(tube_sheet_type_str, "")
+
         filtered_params = page_data[2:] if len(page_data) >= 2 else []
         if not filtered_params:
             return None
@@ -6635,7 +6630,7 @@ class TubeLayoutEditor(QMainWindow):
         insert_statements = []
         product_id = escape_str(self.productID)
         safe_connection_type = escape_str(connection_type)
-        safe_tube_sheet_type = tube_sheet_type  # 整数类型无需转义
+        safe_tube_sheet_type = tube_sheet_type
         safe_diagram = escape_str(connection_diagram)
 
         for param in filtered_params:
@@ -6652,7 +6647,7 @@ class TubeLayoutEditor(QMainWindow):
                 f"`管板连接方式`, `管板类型`"
                 f") VALUES ("
                 f"'{product_id}', '{safe_param_name}', '{safe_param_value}', '{safe_diagram}', "
-                f"'{safe_connection_type}', {safe_tube_sheet_type}"
+                f"'{safe_connection_type}', '{safe_tube_sheet_type}'"
                 f");"
             )
             insert_statements.append(insert_sql)
@@ -6973,7 +6968,7 @@ class TubeLayoutEditor(QMainWindow):
             connection.commit()
             # QMessageBox.information(self, "成功", "数据保存成功！")
         except Exception as e:
-            # QMessageBox.critical(self, "错误", f"保存数据时出错:\n{str(e)}")
+            QMessageBox.critical(self, "错误", f"保存数据时出错:\n{str(e)}")
             print("保存数据时出错")
 
     def switch_page(self, index):
