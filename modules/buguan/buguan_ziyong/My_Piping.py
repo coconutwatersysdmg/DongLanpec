@@ -719,23 +719,35 @@ class TubeLayoutEditor(QMainWindow):
         """创建选项卡标题"""
         self.header = QTabWidget()
         # 设置选项卡自动扩展
-        self.header.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)  # 新增
-        self.header.addTab(QWidget(), "布管")
-        self.header.addTab(QWidget(), "管-板连接")
-        self.header.addTab(QWidget(), "管板形式")
+        self.header.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        self.header.addTab(QWidget(), "管板形式")  # 索引0
+        self.header.addTab(QWidget(), "布管")  # 索引1（默认显示）
+        self.header.addTab(QWidget(), "管-板连接")  # 索引2
+
+        # 设置默认显示"布管"选项卡（索引1）
+        self.header.setCurrentIndex(1)
         self.header.currentChanged.connect(self.switch_page)
         self.main_layout.addWidget(self.header)
 
     def create_body(self):
         """创建主体内容"""
         self.stacked_widget = QStackedWidget()
-        self.create_tube_layout_page()
-        # self.create_tube_sheet_page()
-        self.tube_sheet_page = TubeSheetConnectionPage(self)
-        self.stacked_widget.addWidget(self.tube_sheet_page)
-        # self.create_sheet_form_page()
+
+        # 主体内容页顺序需要与选项卡顺序保持一致
+        # 管板形式页面（对应索引0）
         self.sheet_form_page = SheetFormPage(self)
         self.stacked_widget.addWidget(self.sheet_form_page)
+
+        # 布管页面（对应索引1）
+        self.create_tube_layout_page()  # 假设这个方法会添加布管页面到stacked_widget
+
+        # 管-板连接页面（对应索引2）
+        self.tube_sheet_page = TubeSheetConnectionPage(self)
+        self.stacked_widget.addWidget(self.tube_sheet_page)
+
+        # 设置默认显示布管页面（索引1）
+        self.stacked_widget.setCurrentIndex(1)
         self.main_layout.addWidget(self.stacked_widget)
 
     # 布管页面
@@ -9700,7 +9712,6 @@ class TubeLayoutEditor(QMainWindow):
             "拉杆直径": None,
         }
 
-        # 遍历前端参数，落表到“布管参数表”，并收集 cross_params
         for data in tube_data:
             line_num = str(data.get("参数名", ""))
             holes_up = str(data.get("参数值", ""))
