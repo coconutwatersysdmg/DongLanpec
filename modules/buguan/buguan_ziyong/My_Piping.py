@@ -594,7 +594,7 @@ class TubeLayoutEditor(QMainWindow):
     def show_distance(self):
         if len(self.selected_centers) == 2:
             distance = self.calculate_distance(self.selected_centers)
-            message = f"您选中的两个换热管孔的间距为 {distance} mm。"
+            message = f"您选中的两个换热管孔的间距为 {distance: .4f} mm。"
 
             try:
                 self.line_tip.setText(message)
@@ -2401,7 +2401,7 @@ class TubeLayoutEditor(QMainWindow):
             "换热管布置方式": ("LB_IsRangeCenter", {"对中": "0", "跨中": "1", "任意": "2"}),
             "旁路挡板厚度": ("LB_BPBThick", None),
             "分程隔板放置型式": ("LB_ClapboardType", None),
-            "管程分程形式": ("LB_Tubeform", None),
+            # "管程分程形式": ("LB_Tubeform", None),
             "滑道高度": ("LB_SlipWayHeight", None),
             "拉杆直径": ("LB_TieRodD", None),
             "管程程数": ("LB_TubePassCount", None),
@@ -2423,7 +2423,7 @@ class TubeLayoutEditor(QMainWindow):
             "折流板外径": ("LB_BaffleOD", None),
             "分程隔板两侧相邻管中心距（竖直）": ("LB_SN", None),
             "分程隔板两侧相邻管中心距（水平）": ("LB_SNH", None),
-            "隔条位置尺寸 W": ("LB_SpacerPositionSize", None),
+            "隔条位置尺寸 W": ("LB_W", None),
             "滑道厚度": ("LB_SlipWayThick", None),
             "滑道与竖直中心线夹角": ("LB_SlipWayAngle", None),
             "防冲板厚度": ("LB_BaffleThick", None),
@@ -2558,7 +2558,7 @@ class TubeLayoutEditor(QMainWindow):
         param_mapping2 = {
             "LB_IsRangeCenter": "换热管布置方式",
             "LB_BPBThick": "旁路挡板厚度",
-            "LB_Tubeform": "管程分程形式",
+            # "LB_Tubeform": "管程分程形式",
             "LB_SlipWayHeight": "滑道高度",
             "LB_TieRodD": "拉杆直径",
             "LB_DN": "公称直径 DN",
@@ -2579,7 +2579,7 @@ class TubeLayoutEditor(QMainWindow):
             "LB_BaffleOD": "折流板外径",
             "LB_SN": "分程隔板两侧相邻管中心距（竖直）",
             "LB_SNH": "分程隔板两侧相邻管中心距（水平）",
-            "LB_SpacerPositionSize": "隔条位置尺寸 W",
+            "LB_W": "隔条位置尺寸 W",
             "LB_SlipWayThick": "滑道厚度",
             "LB_SlipWayAngle": "滑道与竖直中心线夹角",
             "LB_BaffleThick": "防冲板厚度",
@@ -2640,6 +2640,7 @@ class TubeLayoutEditor(QMainWindow):
                 json.dumps(input_json, indent=2, ensure_ascii=False)
             )
             self.output_data = json_str
+            # print(self.output_data)
             self.update_pipe_parameters()
             result = parse_heat_exchanger_json(json_str)
             self.save_layout_result(product_id, result)
@@ -4723,7 +4724,7 @@ class TubeLayoutEditor(QMainWindow):
                     self.isDi_change = True
                     # self.user_update_Di()
 
-                if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)"]:
+                if param_name in ["折流板外径", "折流板切口与中心线间距", "折流板要求切口率 (%)", "折流板切口方向"]:
                     self.update_baffle_parameters(param_name)
                     self.draw_baffle_plates()
 
@@ -5257,7 +5258,7 @@ class TubeLayoutEditor(QMainWindow):
     #         self.update_tube_center_distance()
     #         # self.update_lagan()
     #         self.update_partition_plate_center_distance()
-    # TODO 在load_initial函数后触发的监听事件
+    # TODO 在load_initial函数后触发的监听事件，下拉框改变的触发事件
     def on_combobox_changed(self, row, value):
         """处理下拉框类型参数的变更事件及内容变化处理"""
         # 首先执行原current_text版本的逻辑
@@ -5337,6 +5338,12 @@ class TubeLayoutEditor(QMainWindow):
                 current_form = self.get_selected_tube_pass_form()
                 print(f"管程分程形式已更新为: {current_form}")
                 print(f"实时更新的tube_pass_form_value: {self.tube_pass_form_value}")
+        elif param_name == "折流板切口方向":
+            # 获取当前选中的值
+            do_widget = self.param_table.cellWidget(row, 2)
+            if isinstance(do_widget, QComboBox):
+                selected_value = do_widget.currentText()
+            self.draw_baffle_plates()
 
     def none_tube(self, height_0_180, height_90_270, Di, do, centers):
 
@@ -5616,22 +5623,21 @@ class TubeLayoutEditor(QMainWindow):
             save_btn.clicked.connect(self.save_data)  # 添加保存按钮点击事件
             self.footer_layout.addWidget(save_btn)
 
+    # TODO 三个页面的数据保存提示
     def save_data(self):
-        """保存数据，根据当前页面显示不同的保存成功提示"""
         current_page_index = self.header.currentIndex()
 
         # 根据当前页面设置不同的提示信息
-        if current_page_index == 0 and self.has_piped:  # 布管页面
+        if current_page_index == 0 and self.has_piped:
             self.clear_modification_marks()
             message = "数据保存成功！"
-        elif current_page_index == 1:  # 管-板连接页面
+        elif current_page_index == 1:
             message = "数据保存成功！"
         elif current_page_index == 0 and not self.has_piped:
             message = "数据保存成功！"
-        else:  # 管板形式页面
+        else:
             message = "数据保存成功！"
 
-        # 尝试设置提示文本，若失败则在控制台输出
         try:
             self.line_tip.setText("数据保存成功")
             self.line_tip.setStyleSheet("color: black;")
@@ -5639,7 +5645,6 @@ class TubeLayoutEditor(QMainWindow):
             from PyQt5.QtCore import QTimer
             QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
         except AttributeError:
-            # 当line_tip为None时，在控制台输出信息
             print("数据保存成功")
 
         self.actual_save_operation(current_page_index)
@@ -7221,13 +7226,13 @@ class TubeLayoutEditor(QMainWindow):
     from typing import List, Tuple
     from collections import defaultdict
 
+    # 绘制折流板
     def draw_baffle_plates(self):
-        """根据折流板要求切口率参数绘制折流板线段，并存储折流板位置信息"""
         from PyQt5.QtGui import QPen, QColor
         from PyQt5.QtWidgets import QMessageBox
         import math
 
-        # 清空之前的折流板信息
+        # 擦除前一次绘制的折流板信息，目前只有这个方法不闪退
         # self.baffle_lines = []
         # print(self.baffle_lines)
         if len(self.baffle_lines) != 0:
@@ -7338,8 +7343,8 @@ class TubeLayoutEditor(QMainWindow):
                 })
 
             elif cut_direction == "垂直左右":
-                # 计算弦长的一半 - 保持您的原有计算公式
-                chord_half_length = math.sqrt(shell_radius ** 2 - distance_from_center ** 2)
+
+                chord_half_length = math.sqrt((shell_radius / 2) ** 2 - distance_from_center ** 2)
 
                 # 右侧线段（x=distance_from_center）并存储信息
                 right_line = self.graphics_scene.addLine(
