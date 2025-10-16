@@ -718,14 +718,12 @@ class TubeLayoutEditor(QMainWindow):
     def create_header(self):
         """创建选项卡标题"""
         self.header = QTabWidget()
-        # 设置选项卡自动扩展
         self.header.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.header.addTab(QWidget(), "管板形式")
+        self.header.addTab(QWidget(), "布管")  # 默认显示
+        self.header.addTab(QWidget(), "管-板连接")
+        self.header.addTab(QWidget(), "轴向设计")
 
-        self.header.addTab(QWidget(), "管板形式")  # 索引0
-        self.header.addTab(QWidget(), "布管")  # 索引1（默认显示）
-        self.header.addTab(QWidget(), "管-板连接")  # 索引2
-
-        # 设置默认显示"布管"选项卡（索引1）
         self.header.setCurrentIndex(1)
         self.header.currentChanged.connect(self.switch_page)
         self.main_layout.addWidget(self.header)
@@ -734,19 +732,15 @@ class TubeLayoutEditor(QMainWindow):
         """创建主体内容"""
         self.stacked_widget = QStackedWidget()
 
-        # 主体内容页顺序需要与选项卡顺序保持一致
-        # 管板形式页面（对应索引0）
         self.sheet_form_page = SheetFormPage(self)
         self.stacked_widget.addWidget(self.sheet_form_page)
 
-        # 布管页面（对应索引1）
-        self.create_tube_layout_page()  # 假设这个方法会添加布管页面到stacked_widget
-
-        # 管-板连接页面（对应索引2）
+        self.create_tube_layout_page()
         self.tube_sheet_page = TubeSheetConnectionPage(self)
         self.stacked_widget.addWidget(self.tube_sheet_page)
+        self.axial_design_page = QWidget()
+        self.stacked_widget.addWidget(self.axial_design_page)
 
-        # 设置默认显示布管页面（索引1）
         self.stacked_widget.setCurrentIndex(1)
         self.main_layout.addWidget(self.stacked_widget)
 
