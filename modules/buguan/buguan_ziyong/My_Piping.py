@@ -3902,7 +3902,6 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
-        # 根据换热器型号设置默认显示的tab页
         if self.heat_exchanger in ["BEM", "NEN"]:
             self.header.setCurrentIndex(0)  # 管板形式页面
             self.stacked_widget.setCurrentIndex(0)
@@ -3914,8 +3913,6 @@ class TubeLayoutEditor(QMainWindow):
         # 后续计算和元素构建逻辑保持不变
         try:
             if self.heat_exchanger in ["AEU", "BEU"] and self.DN == "1200":
-                # self.set_partition_plate_pipe_spacing_to_50()
-                # self.set_baffle_cut_rate_to_25()
                 print("初始设置的值")
 
             tube_result = self.calculate_piping_layout()
