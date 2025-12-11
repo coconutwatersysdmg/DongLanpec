@@ -3917,7 +3917,7 @@ class TubeLayoutEditor(QMainWindow):
                 # self.set_partition_plate_pipe_spacing_to_50()
                 # self.set_baffle_cut_rate_to_25()
                 print("初始设置的值")
-                # self.set_tie_rod_diameter_to_16()
+
             tube_result = self.calculate_piping_layout()
             self.draw_baffle_plates()
         except Exception as e:
