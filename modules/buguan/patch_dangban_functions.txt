@@ -1,0 +1,116 @@
+===== 替换说明 =====
+请在 My_Piping.py 文件中找到以下两个函数并完整替换：
+
+1. build_center_dangban (约在第14202行)
+2. delete_selected_center_dangban (约在第14472行)
+
+注意：
+- 确保缩进一致（4个空格）
+- 替换整个函数体
+- 建议在替换前备份文件
+
+===== 函数1: build_center_dangban (完整替换从第14202行开始到 return current_coords 结束) =====
+
+找到这行：
+    def build_center_dangban(self, selected_centers, block_thickness, block_width):
+
+替换整个函数为：
+
+    def build_center_dangban(self, selected_centers, block_thickness, block_width):
+        """构建紫色中间挡板（修复对称模式批量创建&删除问题）"""
+        from PyQt5.QtGui import QPen, QBrush, QColor, QPainterPath
+        from PyQt5.QtWidgets import QMessageBox
+        import ast
+
+        # 初始化挡板选中列表（确保全局存在，避免批量创建丢失）
+        if not hasattr(self, 'selected_center_dangban'):
+            self.selected_center_dangban = []
+        if not hasattr(self, 'all_center_dangban'):
+            self.all_center_dangban = []
+
+        # [其余代码请参考您提供的完整函数...]
+        # 关键修改点：
+        # 1. 添加 all_center_dangban 列表初始化
+        # 2. 创建配对挡板（对称分布模式下）
+        # 3. 将新建挡板加入 all_center_dangban 而不是 selected_center_dangban
+
+===== 关键修改点说明 =====
+
+**修改点1**: 在初始化部分添加（约第14210行后）:
+        if not hasattr(self, 'all_center_dangban'):
+            self.all_center_dangban = []
+
+**修改点2**: 在创建挡板后添加配对挡板创建逻辑（水平挡板，约第14360行后）:
+                # 修复：创建配对挡板（对称分布模式）
+                if self.isSymmetry:
+                    # 水平对称：创建关于y轴对称的挡板
+                    rect2_x = -mid_x - half_width
+                    rect2_y = y1 - half_thickness
+                    temp_rect2 = self.graphics_scene.addRect(
+                        rect2_x, rect2_y, block_width, block_thickness, pen, brush
+                    )
+                    path2 = QPainterPath()
+                    path2.addRect(rect2_x, rect2_y, block_width, block_thickness)
+                    dangban_item2 = ClickableRectItem(
+                        path=path2,
+                        is_center_dangban=True,
+                        editor=self
+                    )
+                    dangban_item2.setPen(pen)
+                    dangban_item2.setBrush(brush)
+                    dangban_item2.original_coords = selected_centers_list
+                    dangban_item2.related_temp_items = [temp_rect2]
+                    dangban_item2.paired_block = dangban_item1
+                    dangban_item2.setZValue(10)
+                    self.graphics_scene.addItem(dangban_item2)
+
+**修改点3**: 在竖直挡板后也添加类似的配对挡板创建逻辑
+
+**修改点4**: 设置配对关系（在所有挡板创建完成后）:
+            if dangban_item1 and dangban_item2:
+                dangban_item1.paired_block = dangban_item2
+                dangban_item2.paired_block = dangban_item1
+
+**修改点5**: 将挡板加入所有挡板列表（替换原来的 selected_center_dangban.append）:
+            if dangban_item1 and dangban_item1 not in self.all_center_dangban:
+                self.all_center_dangban.append(dangban_item1)
+            if dangban_item2 and dangban_item2 not in self.all_center_dangban:
+                self.all_center_dangban.append(dangban_item2)
+
+===== 函数2: delete_selected_center_dangban (完整替换) =====
+
+这个函数相对简单，主要修改是使用对称分布状态来决定是否删除配对挡板。
+
+关键代码结构：
+        # 修复：根据对称分布状态决定删除策略
+        for item in dangban_to_remove:
+            if item in removed_items:
+                continue
+            
+            # 构建要删除的挡板列表
+            items_to_delete = [item]
+            
+            # 对称模式下添加配对挡板
+            if self.isSymmetry and hasattr(item, 'paired_block') and item.paired_block:
+                paired_item = item.paired_block
+                if paired_item not in removed_items:
+                    items_to_delete.append(paired_item)
+            
+            # 遍历删除所有相关挡板
+            for dangban_item in items_to_delete:
+                # 删除临时矩形和挡板本身
+                # ...
+
+===== 完整代码文件 =====
+
+由于函数太长，建议您直接从消息中复制完整函数代码，在Pycharm中格式化后再粘贴到Cursor中。
+
+Pycharm中的操作步骤：
+1. 复制函数代码
+2. 在Pycharm中粘贴
+3. 选中代码，按 Ctrl+Alt+L 格式化
+4. 再复制格式化后的代码
+5. 在Cursor中替换
+
+这样可以确保缩进统一。
+

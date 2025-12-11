@@ -1,0 +1,91 @@
+{
+    "Logs": [
+        "--------------------------------------------",
+        "开始AEU集成设计...",
+        "--------------------------------------------",
+        "开始'管箱圆筒'集成设计...",
+        "推荐厚度1：0",
+        "推荐厚度2：0",
+        "最终厚度：0",
+        "--------------------------------------------",
+        "开始'壳体圆筒'集成设计...",
+        "推荐厚度1：0",
+        "推荐厚度2：0",
+        "最终厚度：0",
+        "--------------------------------------------",
+        "开始'壳体封头'集成设计...",
+        "Error：AEU集成设计计算错误，System.NullReferenceException 未将对象引用设置到对象的实例。",
+        "Error：BEU集成设计计算错误，System.NullReferenceException 未将对象引用设置到对象的实例。",
+        "Error：强度计算错误，System.NullReferenceException 未将对象引用设置到对象的实例。"
+    ],
+    "DictOutDatas": {
+        "管箱圆筒": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "管箱法兰": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "管箱分程隔板": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "壳体圆筒": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "壳体法兰": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "固定管板": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "管束": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "壳体封头": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "鞍座": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "管程入口接管": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "管程出口接管": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "壳程入口接管": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "壳程出口接管": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "排气口接管": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "排液口接管": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "管箱平盖": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "头盖法兰": {
+            "IsSuccess": false,
+            "Datas": []
+        }
+    }
+}

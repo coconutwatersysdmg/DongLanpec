@@ -1,0 +1,24 @@
+# === 查询设计数据表 ===
+    cursor.execute("""
+        SELECT 参数名称, 壳程数值, 管程数值
+        FROM 产品设计活动表_设计数据表
+        WHERE 产品ID = %s
+    """, (product_id,))
+    rows = cursor.fetchall()
+    param_map = {row["参数名称"].strip(): row for row in rows}
+ # 介质类型 = 爆炸危险性 + 壳程毒性 + 管程毒性
+    media_parts = []
+    if "介质特性（爆炸危险程度）" in param_map:
+        expl = param_map["介质特性（爆炸危险程度）"].get("壳程数值", "")
+        if expl == "可燃":
+            media_parts.append("介质易爆")
+    if "介质特性（毒性危害程度）" in param_map:
+        shell_toxic = param_map["介质特性（毒性危害程度）"].get("壳程数值", "")
+        tube_toxic = param_map["介质特性（毒性危害程度）"].get("管程数值", "")
+        if shell_toxic:
+            media_parts.append(f"{shell_toxic}危害")
+        if tube_toxic:
+            media_parts.append(f"{tube_toxic}危害")
+
+    if media_parts:
+        design_params["介质类型"] = "/".join(media_parts)

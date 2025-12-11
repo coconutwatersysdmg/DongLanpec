@@ -1,0 +1,2350 @@
+{
+    "Logs": [
+        "--------------------------------------------",
+        "开始BES集成设计...",
+        "--------------------------------------------",
+        "开始'浮头法兰'集成设计...",
+        "--------------------------------------------",
+        "开始'管箱圆筒'集成设计...",
+        "Error：未查询到表'NBT47023'：PN：2 DN：950",
+        "Error：BES集成设计计算错误，System.IndexOutOfRangeException 在位置 0 处没有任何行。",
+        "Error：强度计算错误，System.IndexOutOfRangeException 在位置 0 处没有任何行。"
+    ],
+    "DictOutDatas": {
+        "管箱封头": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "管箱圆筒": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "管箱法兰": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "管箱分程隔板": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "壳体圆筒": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "壳体法兰": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "固定管板": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "浮头管束": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "外头盖封头": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "鞍座": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "管程入口接管": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "管程出口接管": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "壳程入口接管": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "壳程出口接管": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "排气口接管": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "排液口接管": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "外头盖侧法兰": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "浮头法兰": {
+            "IsSuccess": true,
+            "Datas": [
+                {
+                    "Id": "校核球冠形封头内压校核成功",
+                    "Name": "输出提示",
+                    "Value": "校核球冠形封头内压校核成功",
+                    "Desc": "",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "校核球冠形封头外压校核成功",
+                    "Name": "输出提示",
+                    "Value": "校核球冠形封头外压校核成功",
+                    "Desc": "",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "校核成功:实际使用的螺栓总截面积>=需要的螺栓总截面积",
+                    "Name": "输出提示",
+                    "Value": "校核成功:实际使用的螺栓总截面积>=需要的螺栓总截面积",
+                    "Desc": "",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "厚度判断条件校核成功",
+                    "Name": "输出提示",
+                    "Value": "厚度判断条件校核成功",
+                    "Desc": "",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "形心判断条件校核成功",
+                    "Name": "输出提示",
+                    "Value": "形心判断条件校核成功",
+                    "Desc": "",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "球冠形封头名义厚度校核成功",
+                    "Name": "输出提示",
+                    "Value": "球冠形封头名义厚度校核成功",
+                    "Desc": "",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "钩圈校核成功",
+                    "Name": "输出提示",
+                    "Value": "钩圈校核成功",
+                    "Desc": "",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL8",
+                    "Name": "安装偏差上限",
+                    "Value": "3",
+                    "Desc": "安装偏差上限",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL9",
+                    "Name": "安装偏差下限",
+                    "Value": "3",
+                    "Desc": "安装偏差下限",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL10",
+                    "Name": "Le",
+                    "Value": "32.5",
+                    "Desc": "Le",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL11",
+                    "Name": "LA",
+                    "Value": "25.5",
+                    "Desc": "LA",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL12",
+                    "Name": "螺栓间距",
+                    "Value": "75.7909227678538",
+                    "Desc": "螺栓间距",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL13",
+                    "Name": "螺栓间距最小值",
+                    "Value": "46",
+                    "Desc": "螺栓间距最小值",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL14",
+                    "Name": "螺栓间距最大值",
+                    "Value": "185.714285714286",
+                    "Desc": "螺栓间距最大值",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL15",
+                    "Name": "腐蚀前需要的球冠形封头名义厚度",
+                    "Value": "14",
+                    "Desc": "腐蚀前需要的球冠形封头名义厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL16",
+                    "Name": "腐蚀后需要的球冠形封头名义厚度",
+                    "Value": "21",
+                    "Desc": "腐蚀后需要的球冠形封头名义厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL17",
+                    "Name": "浮头法兰材料密度g/cm3",
+                    "Value": "7.85",
+                    "Desc": "浮头法兰材料密度g/cm3",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL18",
+                    "Name": "球冠形封头材料密度g/cm3",
+                    "Value": "7.85",
+                    "Desc": "球冠形封头材料密度g/cm3",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL19",
+                    "Name": "浮头法兰名义厚度",
+                    "Value": "85",
+                    "Desc": "浮头法兰名义厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL20",
+                    "Name": "壳程设计压力",
+                    "Value": "2",
+                    "Desc": "壳程设计压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL21",
+                    "Name": "壳程设计温度",
+                    "Value": "120",
+                    "Desc": "壳程设计温度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL22",
+                    "Name": "管程设计压力",
+                    "Value": "2",
+                    "Desc": "管程设计压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL23",
+                    "Name": "管程设计温度",
+                    "Value": "120",
+                    "Desc": "管程设计温度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL24",
+                    "Name": "壳程液柱密度",
+                    "Value": "0",
+                    "Desc": "壳程液柱密度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL25",
+                    "Name": "管程液柱密度",
+                    "Value": "0",
+                    "Desc": "管程液柱密度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL26",
+                    "Name": "管程法兰材料腐蚀裕量腐蚀后",
+                    "Value": "3",
+                    "Desc": "管程法兰材料腐蚀裕量腐蚀后",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL27",
+                    "Name": "壳程法兰材料腐蚀裕量腐蚀后",
+                    "Value": "4",
+                    "Desc": "壳程法兰材料腐蚀裕量腐蚀后",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL28",
+                    "Name": "管程球冠形封头腐蚀裕量腐蚀后",
+                    "Value": "3",
+                    "Desc": "管程球冠形封头腐蚀裕量腐蚀后",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL29",
+                    "Name": "壳程球冠形封头腐蚀裕量腐蚀后",
+                    "Value": "4",
+                    "Desc": "壳程球冠形封头腐蚀裕量腐蚀后",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL30",
+                    "Name": "浮头法兰材料负偏差",
+                    "Value": "0",
+                    "Desc": "浮头法兰材料负偏差",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL31",
+                    "Name": "球冠形封头厚度负偏差",
+                    "Value": "0.3",
+                    "Desc": "球冠形封头厚度负偏差",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL32",
+                    "Name": "螺柱腐蚀裕量",
+                    "Value": "0",
+                    "Desc": "螺柱腐蚀裕量",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL33",
+                    "Name": "覆层后浮头法兰内径(含覆层厚度)",
+                    "Value": "914",
+                    "Desc": "覆层后浮头法兰内径(含覆层厚度)",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL34",
+                    "Name": "浮头法兰名义外径(含覆层厚度)",
+                    "Value": "1030",
+                    "Desc": "浮头法兰名义外径(含覆层厚度)",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL35",
+                    "Name": "球冠形封头名义厚度",
+                    "Value": "22",
+                    "Desc": "球冠形封头名义厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL36",
+                    "Name": "球冠形封头冲压减薄率%",
+                    "Value": "15",
+                    "Desc": "球冠形封头冲压减薄率%",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL37",
+                    "Name": "球冠形封头拼板焊接接头系数",
+                    "Value": "1",
+                    "Desc": "球冠形封头拼板焊接接头系数",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL38",
+                    "Name": "球冠形封头内半径",
+                    "Value": "800",
+                    "Desc": "球冠形封头内半径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL39",
+                    "Name": "腐蚀后球冠形封头内半径",
+                    "Value": "803",
+                    "Desc": "腐蚀后球冠形封头内半径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL40",
+                    "Name": "腐蚀前球冠形封头内半径",
+                    "Value": "800",
+                    "Desc": "腐蚀前球冠形封头内半径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL41",
+                    "Name": "腐蚀后球冠形封头外半径",
+                    "Value": "825",
+                    "Desc": "腐蚀后球冠形封头外半径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL42",
+                    "Name": "腐蚀前球冠形封头外半径",
+                    "Value": "822",
+                    "Desc": "腐蚀前球冠形封头外半径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL43",
+                    "Name": "垫片系数",
+                    "Value": "3",
+                    "Desc": "垫片系数",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL44",
+                    "Name": "比压力",
+                    "Value": "50",
+                    "Desc": "比压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL45",
+                    "Name": "垫片厚度",
+                    "Value": "4.5",
+                    "Desc": "垫片厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL46",
+                    "Name": "垫片有效外径",
+                    "Value": "932",
+                    "Desc": "垫片有效外径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL47",
+                    "Name": "垫片有效内径",
+                    "Value": "920",
+                    "Desc": "垫片有效内径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL48",
+                    "Name": "垫片名义外径",
+                    "Value": "941",
+                    "Desc": "垫片名义外径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL49",
+                    "Name": "垫片名义内径",
+                    "Value": "914",
+                    "Desc": "垫片名义内径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL50",
+                    "Name": "分程隔板与垫片接触面面积",
+                    "Value": "6855",
+                    "Desc": "分程隔板与垫片接触面面积",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL51",
+                    "Name": "垫片分程隔板肋条有效密封宽度",
+                    "Value": "5",
+                    "Desc": "垫片分程隔板肋条有效密封宽度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL52",
+                    "Name": "隔条位置尺寸",
+                    "Value": "0",
+                    "Desc": "隔条位置尺寸",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL53",
+                    "Name": "螺栓中心圆直径",
+                    "Value": "965",
+                    "Desc": "螺栓中心圆直径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL54",
+                    "Name": "螺栓数量",
+                    "Value": "40",
+                    "Desc": "螺栓数量",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL55",
+                    "Name": "螺栓孔直径",
+                    "Value": "22",
+                    "Desc": "螺栓孔直径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL56",
+                    "Name": "法兰计算温度",
+                    "Value": "120",
+                    "Desc": "法兰计算温度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL57",
+                    "Name": "设计温度下法兰材料许用应力",
+                    "Value": "173.6",
+                    "Desc": "设计温度下法兰材料许用应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL58",
+                    "Name": "室温下法兰材料许用应力",
+                    "Value": "178",
+                    "Desc": "室温下法兰材料许用应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL59",
+                    "Name": "腐蚀前法兰有效厚度",
+                    "Value": "85",
+                    "Desc": "腐蚀前法兰有效厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL60",
+                    "Name": "腐蚀后法兰有效厚度",
+                    "Value": "81",
+                    "Desc": "腐蚀后法兰有效厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL61",
+                    "Name": "腐蚀前法兰管程计算压力",
+                    "Value": "2",
+                    "Desc": "腐蚀前法兰管程计算压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL62",
+                    "Name": "腐蚀后法兰管程计算压力",
+                    "Value": "2",
+                    "Desc": "腐蚀后法兰管程计算压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL63",
+                    "Name": "腐蚀前法兰壳程计算压力",
+                    "Value": "2",
+                    "Desc": "腐蚀前法兰壳程计算压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL64",
+                    "Name": "腐蚀后法兰壳程计算压力",
+                    "Value": "2",
+                    "Desc": "腐蚀后法兰壳程计算压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL65",
+                    "Name": "腐蚀前浮头法兰计算内径",
+                    "Value": "914",
+                    "Desc": "腐蚀前浮头法兰计算内径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL66",
+                    "Name": "腐蚀后浮头法兰计算内径",
+                    "Value": "920",
+                    "Desc": "腐蚀后浮头法兰计算内径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL67",
+                    "Name": "壳程液柱静压力",
+                    "Value": "0",
+                    "Desc": "壳程液柱静压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL68",
+                    "Name": "管程液柱静压力",
+                    "Value": "0",
+                    "Desc": "管程液柱静压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL69",
+                    "Name": "法兰压紧面压紧宽度ω",
+                    "Value": "0",
+                    "Desc": "法兰压紧面压紧宽度ω",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL70",
+                    "Name": "垫片分程隔板肋条总长",
+                    "Value": "1371",
+                    "Desc": "垫片分程隔板肋条总长",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL71",
+                    "Name": "螺栓计算温度",
+                    "Value": "120",
+                    "Desc": "螺栓计算温度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL72",
+                    "Name": "设计温度下螺栓材料许用应力",
+                    "Value": "188",
+                    "Desc": "设计温度下螺栓材料许用应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL73",
+                    "Name": "室温下螺栓材料许用应力",
+                    "Value": "210",
+                    "Desc": "室温下螺栓材料许用应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL74",
+                    "Name": "螺栓根径",
+                    "Value": "17.294",
+                    "Desc": "螺栓根径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL75",
+                    "Name": "实际使用的螺栓总截面积Ab",
+                    "Value": "9395.9518375534",
+                    "Desc": "实际使用的螺栓总截面积Ab",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL76",
+                    "Name": "设计温度下球冠形封头材料许用应力",
+                    "Value": "184.2",
+                    "Desc": "设计温度下球冠形封头材料许用应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL77",
+                    "Name": "常温下球冠形封头材料许用应力",
+                    "Value": "185",
+                    "Desc": "常温下球冠形封头材料许用应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL78",
+                    "Name": "试验温度下球冠形封头材料许用应力",
+                    "Value": "185",
+                    "Desc": "试验温度下球冠形封头材料许用应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL79",
+                    "Name": "球冠形封头冲压减薄量",
+                    "Value": "3.3",
+                    "Desc": "球冠形封头冲压减薄量",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL80",
+                    "Name": "腐蚀前球冠形封头装入深度",
+                    "Value": "31",
+                    "Desc": "腐蚀前球冠形封头装入深度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL81",
+                    "Name": "腐蚀后球冠形封头装入深度",
+                    "Value": "31",
+                    "Desc": "腐蚀后球冠形封头装入深度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL82",
+                    "Name": "球冠形封头装入深度输入值",
+                    "Value": "31",
+                    "Desc": "球冠形封头装入深度输入值",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL83",
+                    "Name": "球冠形封头覆层结合面剥离减薄厚度",
+                    "Value": "0",
+                    "Desc": "球冠形封头覆层结合面剥离减薄厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL84",
+                    "Name": "浮头法兰管程覆层厚度",
+                    "Value": "0",
+                    "Desc": "浮头法兰管程覆层厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL85",
+                    "Name": "浮头法兰壳程覆层厚度",
+                    "Value": "0",
+                    "Desc": "浮头法兰壳程覆层厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL86",
+                    "Name": "外头盖圆筒内直径",
+                    "Value": "1050",
+                    "Desc": "外头盖圆筒内直径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL87",
+                    "Name": "螺栓公称直径",
+                    "Value": "M20",
+                    "Desc": "螺栓公称直径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL88",
+                    "Name": "螺栓公称直径下限",
+                    "Value": "20",
+                    "Desc": "螺栓公称直径下限",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL89",
+                    "Name": "螺栓公称直径上限",
+                    "Value": "36",
+                    "Desc": "螺栓公称直径上限",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL90",
+                    "Name": "浮动管板名义外径",
+                    "Value": "940",
+                    "Desc": "浮动管板名义外径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL91",
+                    "Name": "浮头法兰厚度设计余量mm",
+                    "Value": "0",
+                    "Desc": "浮头法兰厚度设计余量mm",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL92",
+                    "Name": "浮头法兰厚度设计余量百分比",
+                    "Value": "0",
+                    "Desc": "浮头法兰厚度设计余量百分比",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL93",
+                    "Name": "浮头法兰厚度设计余量",
+                    "Value": "0",
+                    "Desc": "浮头法兰厚度设计余量",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL94",
+                    "Name": "球冠形封头厚度设计余量mm",
+                    "Value": "0",
+                    "Desc": "球冠形封头厚度设计余量mm",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL95",
+                    "Name": "球冠形封头厚度设计余量百分比",
+                    "Value": "0",
+                    "Desc": "球冠形封头厚度设计余量百分比",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL96",
+                    "Name": "球冠形封头厚度设计余量",
+                    "Value": "0",
+                    "Desc": "球冠形封头厚度设计余量",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL97",
+                    "Name": "球冠形封头外径弦长",
+                    "Value": "910",
+                    "Desc": "球冠形封头外径弦长",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL98",
+                    "Name": "球冠形封头内部弦高",
+                    "Value": "115.413263347879",
+                    "Desc": "球冠形封头内部弦高",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL99",
+                    "Name": "浮头法兰密封面至球冠形封头内表面最大距离",
+                    "Value": "169.413263347879",
+                    "Desc": "浮头法兰密封面至球冠形封头内表面最大距离",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL100",
+                    "Name": "球冠形封头重量",
+                    "Value": "118.113684039744",
+                    "Desc": "球冠形封头重量",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL101",
+                    "Name": "管程耐压试验系数",
+                    "Value": "1.25",
+                    "Desc": "管程耐压试验系数",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL102",
+                    "Name": "壳程耐压试验系数",
+                    "Value": "1.25",
+                    "Desc": "壳程耐压试验系数",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL103",
+                    "Name": "球冠形封头试验压力管程",
+                    "Value": "2.51085776330076",
+                    "Desc": "球冠形封头试验压力管程",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL104",
+                    "Name": "球冠形封头试验压力壳程",
+                    "Value": "2.5",
+                    "Desc": "球冠形封头试验压力壳程",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL105",
+                    "Name": "管程耐压试验下球冠形封头的应力",
+                    "Value": "76.0865988879018",
+                    "Desc": "管程耐压试验下球冠形封头的应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL106",
+                    "Name": "壳程耐压试验下球冠形封头的应力",
+                    "Value": "75.7575757575758",
+                    "Desc": "壳程耐压试验下球冠形封头的应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL107",
+                    "Name": "管程压力试验允许通过的应力",
+                    "Value": "292.5",
+                    "Desc": "管程压力试验允许通过的应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL108",
+                    "Name": "壳程压力试验允许通过的应力",
+                    "Value": "292.5",
+                    "Desc": "壳程压力试验允许通过的应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL109",
+                    "Name": "球冠形封头试验温度下屈服强度",
+                    "Value": "325",
+                    "Desc": "球冠形封头试验温度下屈服强度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL110",
+                    "Name": "管程压力试验类型",
+                    "Value": "液压",
+                    "Desc": "管程压力试验类型",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL111",
+                    "Name": "壳程压力试验类型",
+                    "Value": "液压",
+                    "Desc": "壳程压力试验类型",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL112",
+                    "Name": "浮动管板名义厚度",
+                    "Value": "0",
+                    "Desc": "浮动管板名义厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL113",
+                    "Name": "B型钩圈厚度负偏差",
+                    "Value": "0.3",
+                    "Desc": "B型钩圈厚度负偏差",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL114",
+                    "Name": "B型钩圈预紧状态下许用值",
+                    "Value": "151.2",
+                    "Desc": "B型钩圈预紧状态下许用值",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL115",
+                    "Name": "B型钩圈操作状态下许用值",
+                    "Value": "151.2",
+                    "Desc": "B型钩圈操作状态下许用值",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL116",
+                    "Name": "B型钩圈有效厚度",
+                    "Value": "15.7",
+                    "Desc": "B型钩圈有效厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL117",
+                    "Name": "B型钩圈名义厚度",
+                    "Value": "16",
+                    "Desc": "B型钩圈名义厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL118",
+                    "Name": "B型钩圈颈部厚度",
+                    "Value": "30",
+                    "Desc": "B型钩圈颈部厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL119",
+                    "Name": "实际计算钩圈开槽内径(不含覆层)",
+                    "Value": "946",
+                    "Desc": "实际计算钩圈开槽内径(不含覆层)",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL120",
+                    "Name": "B型钩圈试验温度下许用应力",
+                    "Value": "189",
+                    "Desc": "B型钩圈试验温度下许用应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL121",
+                    "Name": "B型钩圈设计温度下许用应力",
+                    "Value": "189",
+                    "Desc": "B型钩圈设计温度下许用应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL122",
+                    "Name": "钩圈材料密度",
+                    "Value": "7.85",
+                    "Desc": "钩圈材料密度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL123",
+                    "Name": "钩圈内径",
+                    "Value": "914",
+                    "Desc": "钩圈内径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL124",
+                    "Name": "钩圈外径",
+                    "Value": "1030",
+                    "Desc": "钩圈外径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL125",
+                    "Name": "钩圈分瓣处间距",
+                    "Value": "5",
+                    "Desc": "钩圈分瓣处间距",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL126",
+                    "Name": "钩圈钩角度",
+                    "Value": "73",
+                    "Desc": "钩圈钩角度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL127",
+                    "Name": "钩圈钩倒角半径",
+                    "Value": "1.5",
+                    "Desc": "钩圈钩倒角半径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL128",
+                    "Name": "钩圈重量",
+                    "Value": "24.496023650041",
+                    "Desc": "钩圈重量",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL129",
+                    "Name": "钩圈轴向定位尺寸",
+                    "Value": "0",
+                    "Desc": "钩圈轴向定位尺寸",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL130",
+                    "Name": "LA最小值",
+                    "Value": "24",
+                    "Desc": "LA最小值",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL131",
+                    "Name": "Le最小值",
+                    "Value": "20",
+                    "Desc": "Le最小值",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL132",
+                    "Name": "浮头法兰校核结果",
+                    "Value": "合格",
+                    "Desc": "浮头法兰校核结果",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL133",
+                    "Name": "球冠形封头校核结果",
+                    "Value": "合格",
+                    "Desc": "球冠形封头校核结果",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL134",
+                    "Name": "钩圈校核结果",
+                    "Value": "合格",
+                    "Desc": "钩圈校核结果",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL135",
+                    "Name": "螺栓间距校核结果",
+                    "Value": "合格",
+                    "Desc": "螺栓间距校核结果",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL136",
+                    "Name": "腐蚀前管程垫片有效外径",
+                    "Value": "940",
+                    "Desc": "腐蚀前管程垫片有效外径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL137",
+                    "Name": "腐蚀前管程垫片有效内径",
+                    "Value": "914",
+                    "Desc": "腐蚀前管程垫片有效内径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL138",
+                    "Name": "腐蚀前管程法兰计算压力",
+                    "Value": "2",
+                    "Desc": "腐蚀前管程法兰计算压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL139",
+                    "Name": "腐蚀前管程法兰预紧力矩Ma",
+                    "Value": "35798344.0007584",
+                    "Desc": "腐蚀前管程法兰预紧力矩Ma",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL140",
+                    "Name": "腐蚀前管程法兰操作力矩Mp",
+                    "Value": "38661477.851837",
+                    "Desc": "腐蚀前管程法兰操作力矩Mp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL141",
+                    "Name": "腐蚀前管程垫片接触宽度N",
+                    "Value": "13",
+                    "Desc": "腐蚀前管程垫片接触宽度N",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL142",
+                    "Name": "腐蚀前管程基本密封宽度b0",
+                    "Value": "6.5",
+                    "Desc": "腐蚀前管程基本密封宽度b0",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL143",
+                    "Name": "腐蚀前管程有效密封宽度b",
+                    "Value": "6.45025968469487",
+                    "Desc": "腐蚀前管程有效密封宽度b",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL144",
+                    "Name": "腐蚀前管程预紧状态下，需要的最小螺栓载荷Wa",
+                    "Value": "1110240.08736727",
+                    "Desc": "腐蚀前管程预紧状态下，需要的最小螺栓载荷Wa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL145",
+                    "Name": "腐蚀前管程预紧状态下，需要的螺栓总截面积Aa",
+                    "Value": "5286.85755889176",
+                    "Desc": "腐蚀前管程预紧状态下，需要的螺栓总截面积Aa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL146",
+                    "Name": "腐蚀前管程Fa",
+                    "Value": "1110240.08736727",
+                    "Desc": "腐蚀前管程Fa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL147",
+                    "Name": "腐蚀前管程球冠形封头有效厚度",
+                    "Value": "18.4",
+                    "Desc": "腐蚀前管程球冠形封头有效厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL148",
+                    "Name": "腐蚀前管程浮头法兰重量",
+                    "Value": "119.504000895139",
+                    "Desc": "腐蚀前管程浮头法兰重量",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL149",
+                    "Name": "腐蚀前管程浮头法兰容积",
+                    "Value": "37159225.8538591",
+                    "Desc": "腐蚀前管程浮头法兰容积",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL150",
+                    "Name": "腐蚀前管程操作状态下，需要的最小垫片压紧力FP",
+                    "Value": "266457.620968145",
+                    "Desc": "腐蚀前管程操作状态下，需要的最小垫片压紧力FP",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL151",
+                    "Name": "腐蚀前管程计算内压引起的总轴向力F",
+                    "Value": "1349436.11176731",
+                    "Desc": "腐蚀前管程计算内压引起的总轴向力F",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL152",
+                    "Name": "腐蚀前管程操作状态下，需要的最小螺栓载荷Wp",
+                    "Value": "1615893.73273545",
+                    "Desc": "腐蚀前管程操作状态下，需要的最小螺栓载荷Wp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL153",
+                    "Name": "腐蚀前管程操作状态下，需要的螺栓总截面积Ap",
+                    "Value": "8595.1794294439",
+                    "Desc": "腐蚀前管程操作状态下，需要的螺栓总截面积Ap",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL154",
+                    "Name": "腐蚀前管程需要的螺栓总截面积Am",
+                    "Value": "8595.1794294439",
+                    "Desc": "腐蚀前管程需要的螺栓总截面积Am",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL155",
+                    "Name": "腐蚀前管程预紧状态螺栓设计载荷W",
+                    "Value": "1889068.78303472",
+                    "Desc": "腐蚀前管程预紧状态螺栓设计载荷W",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL156",
+                    "Name": "腐蚀前管程球冠形封头边缘处球壳中面切线与法兰环径向的夹角",
+                    "Value": "34.3853015955839",
+                    "Desc": "腐蚀前管程球冠形封头边缘处球壳中面切线与法兰环径向的夹角",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL157",
+                    "Name": "腐蚀前管程预紧状态下法兰垫片压紧力FG_Preloade",
+                    "Value": "1889068.78303472",
+                    "Desc": "腐蚀前管程预紧状态下法兰垫片压紧力FG_Preloade",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL158",
+                    "Name": "腐蚀前管程内压引起的作用于法兰内径截面上的轴向力FD",
+                    "Value": "1311571.72",
+                    "Desc": "腐蚀前管程内压引起的作用于法兰内径截面上的轴向力FD",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL159",
+                    "Name": "腐蚀前管程操作状态下法兰垫片压紧力FG_Operate",
+                    "Value": "266457.620968145",
+                    "Desc": "腐蚀前管程操作状态下法兰垫片压紧力FG_Operate",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL160",
+                    "Name": "腐蚀前管程内压引起的总轴向力F与FD之差FT",
+                    "Value": "37864.3917673093",
+                    "Desc": "腐蚀前管程内压引起的总轴向力F与FD之差FT",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL161",
+                    "Name": "腐蚀前管程Fr",
+                    "Value": "1916556.70941785",
+                    "Desc": "腐蚀前管程Fr",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL162",
+                    "Name": "腐蚀前管程螺栓中心至FD作用位置处的径向距离LD",
+                    "Value": "25.5",
+                    "Desc": "腐蚀前管程螺栓中心至FD作用位置处的径向距离LD",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL163",
+                    "Name": "腐蚀前管程螺栓中心至FG作用位置处的径向距离LG",
+                    "Value": "18.9502596846949",
+                    "Desc": "腐蚀前管程螺栓中心至FG作用位置处的径向距离LG",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL164",
+                    "Name": "腐蚀前管程螺栓中心至FT作用位置处的径向距离LT",
+                    "Value": "22.2251298423474",
+                    "Desc": "腐蚀前管程螺栓中心至FT作用位置处的径向距离LT",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL165",
+                    "Name": "腐蚀前管程Fr对法兰环截面形心的力臂Lr",
+                    "Value": "0.351976615453346",
+                    "Desc": "腐蚀前管程Fr对法兰环截面形心的力臂Lr",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL166",
+                    "Name": "腐蚀前管程实际使用螺栓面积余量百分比",
+                    "Value": "9.31652927879947",
+                    "Desc": "腐蚀前管程实际使用螺栓面积余量百分比",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL167",
+                    "Name": "腐蚀前管程力矩MD",
+                    "Value": "33445078.86",
+                    "Desc": "腐蚀前管程力矩MD",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL168",
+                    "Name": "腐蚀前管程力矩MG",
+                    "Value": "5049441.11231233",
+                    "Desc": "腐蚀前管程力矩MG",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL169",
+                    "Name": "腐蚀前管程力矩MT",
+                    "Value": "841541.02342996",
+                    "Desc": "腐蚀前管程力矩MT",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL170",
+                    "Name": "腐蚀前管程力矩Mr",
+                    "Value": "674583.143905297",
+                    "Desc": "腐蚀前管程力矩Mr",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL171",
+                    "Name": "腐蚀前管程Jp",
+                    "Value": "4083.38948298133",
+                    "Desc": "腐蚀前管程Jp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL172",
+                    "Name": "腐蚀前管程Ja",
+                    "Value": "3687.52531425333",
+                    "Desc": "腐蚀前管程Ja",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL173",
+                    "Name": "腐蚀前管程操作状态法兰需要的最小厚度Sfp",
+                    "Value": "80.5170974017",
+                    "Desc": "腐蚀前管程操作状态法兰需要的最小厚度Sfp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL174",
+                    "Name": "腐蚀前管程预紧状态法兰需要的最小厚度Sfa",
+                    "Value": "60.7249974413612",
+                    "Desc": "腐蚀前管程预紧状态法兰需要的最小厚度Sfa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL175",
+                    "Name": "腐蚀前管程球冠形封头计算厚度",
+                    "Value": "7.23850886717336",
+                    "Desc": "腐蚀前管程球冠形封头计算厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL176",
+                    "Name": "腐蚀前管程垫片压紧力作用中心圆直径DG",
+                    "Value": "927.09948063061",
+                    "Desc": "腐蚀前管程垫片压紧力作用中心圆直径DG",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL177",
+                    "Name": "腐蚀前管程法兰力矩计算中的几何参数L",
+                    "Value": "14.9012667399188",
+                    "Desc": "腐蚀前管程法兰力矩计算中的几何参数L",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL178",
+                    "Name": "腐蚀前管程浮头法兰最小有效厚度Sfmin",
+                    "Value": "80.5170974017",
+                    "Desc": "腐蚀前管程浮头法兰最小有效厚度Sfmin",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL179",
+                    "Name": "腐蚀前管程球冠形封头最大允许工作压力",
+                    "Value": "5.08392",
+                    "Desc": "腐蚀前管程球冠形封头最大允许工作压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL180",
+                    "Name": "腐蚀前管程B型钩圈预紧状态下剪切应力",
+                    "Value": "12.4524452377222",
+                    "Desc": "腐蚀前管程B型钩圈预紧状态下剪切应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL181",
+                    "Name": "腐蚀前管程B型钩圈操作状态下剪切应力",
+                    "Value": "18.1238530708993",
+                    "Desc": "腐蚀前管程B型钩圈操作状态下剪切应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL182",
+                    "Name": "腐蚀前管程浮头法兰计算外径",
+                    "Value": "1030",
+                    "Desc": "腐蚀前管程浮头法兰计算外径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL183",
+                    "Name": "腐蚀后管程垫片有效外径",
+                    "Value": "932",
+                    "Desc": "腐蚀后管程垫片有效外径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL184",
+                    "Name": "腐蚀后管程垫片有效内径",
+                    "Value": "920",
+                    "Desc": "腐蚀后管程垫片有效内径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL185",
+                    "Name": "腐蚀后管程法兰计算压力",
+                    "Value": "2",
+                    "Desc": "腐蚀后管程法兰计算压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL186",
+                    "Name": "腐蚀后管程法兰预紧力矩Ma",
+                    "Value": "35487981.2389863",
+                    "Desc": "腐蚀后管程法兰预紧力矩Ma",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL187",
+                    "Name": "腐蚀后管程法兰操作力矩Mp",
+                    "Value": "28170121.8655676",
+                    "Desc": "腐蚀后管程法兰操作力矩Mp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL188",
+                    "Name": "腐蚀后管程垫片接触宽度N",
+                    "Value": "6",
+                    "Desc": "腐蚀后管程垫片接触宽度N",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL189",
+                    "Name": "腐蚀后管程基本密封宽度b0",
+                    "Value": "3",
+                    "Desc": "腐蚀后管程基本密封宽度b0",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL190",
+                    "Name": "腐蚀后管程有效密封宽度b",
+                    "Value": "3",
+                    "Desc": "腐蚀后管程有效密封宽度b",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL191",
+                    "Name": "腐蚀后管程预紧状态下，需要的最小螺栓载荷Wa",
+                    "Value": "607521",
+                    "Desc": "腐蚀后管程预紧状态下，需要的最小螺栓载荷Wa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL192",
+                    "Name": "腐蚀后管程预紧状态下，需要的螺栓总截面积Aa",
+                    "Value": "2892.95714285714",
+                    "Desc": "腐蚀后管程预紧状态下，需要的螺栓总截面积Aa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL193",
+                    "Name": "腐蚀后管程Fa",
+                    "Value": "607521",
+                    "Desc": "腐蚀后管程Fa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL194",
+                    "Name": "腐蚀后管程球冠形封头有效厚度",
+                    "Value": "11.4",
+                    "Desc": "腐蚀后管程球冠形封头有效厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL195",
+                    "Name": "腐蚀后管程浮头法兰重量",
+                    "Value": "119.402790089574",
+                    "Desc": "腐蚀后管程浮头法兰重量",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL196",
+                    "Name": "腐蚀后管程浮头法兰容积",
+                    "Value": "37159225.8538591",
+                    "Desc": "腐蚀后管程浮头法兰容积",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL197",
+                    "Name": "腐蚀后管程操作状态下，需要的最小垫片压紧力FP",
+                    "Value": "145805.04",
+                    "Desc": "腐蚀后管程操作状态下，需要的最小垫片压紧力FP",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL198",
+                    "Name": "腐蚀后管程计算内压引起的总轴向力F",
+                    "Value": "1346237.32",
+                    "Desc": "腐蚀后管程计算内压引起的总轴向力F",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL199",
+                    "Name": "腐蚀后管程操作状态下，需要的最小螺栓载荷Wp",
+                    "Value": "1492042.36",
+                    "Desc": "腐蚀后管程操作状态下，需要的最小螺栓载荷Wp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL200",
+                    "Name": "腐蚀后管程操作状态下，需要的螺栓总截面积Ap",
+                    "Value": "7936.39553191489",
+                    "Desc": "腐蚀后管程操作状态下，需要的螺栓总截面积Ap",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL201",
+                    "Name": "腐蚀后管程需要的螺栓总截面积Am",
+                    "Value": "7936.39553191489",
+                    "Desc": "腐蚀后管程需要的螺栓总截面积Am",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL202",
+                    "Name": "腐蚀后管程预紧状态螺栓设计载荷W",
+                    "Value": "1819896.47379417",
+                    "Desc": "腐蚀后管程预紧状态螺栓设计载荷W",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL203",
+                    "Name": "腐蚀后管程球冠形封头边缘处球壳中面切线与法兰环径向的夹角",
+                    "Value": "34.6675738921007",
+                    "Desc": "腐蚀后管程球冠形封头边缘处球壳中面切线与法兰环径向的夹角",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL204",
+                    "Name": "腐蚀后管程预紧状态下法兰垫片压紧力FG_Preloade",
+                    "Value": "1819896.47379417",
+                    "Desc": "腐蚀后管程预紧状态下法兰垫片压紧力FG_Preloade",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL205",
+                    "Name": "腐蚀后管程内压引起的作用于法兰内径截面上的轴向力FD",
+                    "Value": "1328848",
+                    "Desc": "腐蚀后管程内压引起的作用于法兰内径截面上的轴向力FD",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL206",
+                    "Name": "腐蚀后管程操作状态下法兰垫片压紧力FG_Operate",
+                    "Value": "145805.04",
+                    "Desc": "腐蚀后管程操作状态下法兰垫片压紧力FG_Operate",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL207",
+                    "Name": "腐蚀后管程内压引起的总轴向力F与FD之差FT",
+                    "Value": "17389.3200000001",
+                    "Desc": "腐蚀后管程内压引起的总轴向力F与FD之差FT",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL208",
+                    "Name": "腐蚀后管程Fr",
+                    "Value": "1921422.70804551",
+                    "Desc": "腐蚀后管程Fr",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL209",
+                    "Name": "腐蚀后管程螺栓中心至FD作用位置处的径向距离LD",
+                    "Value": "22.5",
+                    "Desc": "腐蚀后管程螺栓中心至FD作用位置处的径向距离LD",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL210",
+                    "Name": "腐蚀后管程螺栓中心至FG作用位置处的径向距离LG",
+                    "Value": "19.5",
+                    "Desc": "腐蚀后管程螺栓中心至FG作用位置处的径向距离LG",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL211",
+                    "Name": "腐蚀后管程螺栓中心至FT作用位置处的径向距离LT",
+                    "Value": "21",
+                    "Desc": "腐蚀后管程螺栓中心至FT作用位置处的径向距离LT",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL212",
+                    "Name": "腐蚀后管程Fr对法兰环截面形心的力臂Lr",
+                    "Value": "2.56962307864815",
+                    "Desc": "腐蚀后管程Fr对法兰环截面形心的力臂Lr",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL213",
+                    "Name": "腐蚀后管程实际使用螺栓面积余量百分比",
+                    "Value": "18.3906699177119",
+                    "Desc": "腐蚀后管程实际使用螺栓面积余量百分比",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL214",
+                    "Name": "腐蚀后管程力矩MD",
+                    "Value": "29899080",
+                    "Desc": "腐蚀后管程力矩MD",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL215",
+                    "Name": "腐蚀后管程力矩MG",
+                    "Value": "2843198.28",
+                    "Desc": "腐蚀后管程力矩MG",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL216",
+                    "Name": "腐蚀后管程力矩MT",
+                    "Value": "365175.720000001",
+                    "Desc": "腐蚀后管程力矩MT",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL217",
+                    "Name": "腐蚀后管程力矩Mr",
+                    "Value": "4937332.13443238",
+                    "Desc": "腐蚀后管程力矩Mr",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL218",
+                    "Name": "腐蚀后管程Jp",
+                    "Value": "3358.1510851231",
+                    "Desc": "腐蚀后管程Jp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL219",
+                    "Name": "腐蚀后管程Ja",
+                    "Value": "4125.93630361214",
+                    "Desc": "腐蚀后管程Ja",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL220",
+                    "Name": "腐蚀后管程操作状态法兰需要的最小厚度Sfp",
+                    "Value": "77.5178811483721",
+                    "Desc": "腐蚀后管程操作状态法兰需要的最小厚度Sfp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL221",
+                    "Name": "腐蚀后管程预紧状态法兰需要的最小厚度Sfa",
+                    "Value": "64.2334515934816",
+                    "Desc": "腐蚀后管程预紧状态法兰需要的最小厚度Sfa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL222",
+                    "Name": "腐蚀后管程垫片压紧力作用中心圆直径DG",
+                    "Value": "926",
+                    "Desc": "腐蚀后管程垫片压紧力作用中心圆直径DG",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL223",
+                    "Name": "腐蚀后管程法兰力矩计算中的几何参数L",
+                    "Value": "17.0984473087969",
+                    "Desc": "腐蚀后管程法兰力矩计算中的几何参数L",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL224",
+                    "Name": "腐蚀后管程浮头法兰最小有效厚度Sfmin",
+                    "Value": "77.5178811483721",
+                    "Desc": "腐蚀后管程浮头法兰最小有效厚度Sfmin",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL225",
+                    "Name": "腐蚀后管程球冠形封头最大允许工作压力",
+                    "Value": "3.14982",
+                    "Desc": "腐蚀后管程球冠形封头最大允许工作压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL226",
+                    "Name": "腐蚀后管程B型钩圈预紧状态下剪切应力",
+                    "Value": "6.81395138704238",
+                    "Desc": "腐蚀后管程B型钩圈预紧状态下剪切应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL227",
+                    "Name": "腐蚀后管程B型钩圈操作状态下剪切应力",
+                    "Value": "16.7347369201196",
+                    "Desc": "腐蚀后管程B型钩圈操作状态下剪切应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL228",
+                    "Name": "腐蚀后管程浮头法兰计算外径",
+                    "Value": "1022",
+                    "Desc": "腐蚀后管程浮头法兰计算外径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL229",
+                    "Name": "腐蚀前壳程垫片有效外径",
+                    "Value": "940",
+                    "Desc": "腐蚀前壳程垫片有效外径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL230",
+                    "Name": "腐蚀前壳程垫片有效内径",
+                    "Value": "914",
+                    "Desc": "腐蚀前壳程垫片有效内径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL231",
+                    "Name": "腐蚀前壳程法兰计算压力",
+                    "Value": "2",
+                    "Desc": "腐蚀前壳程法兰计算压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL232",
+                    "Name": "腐蚀前壳程法兰预紧力矩Ma",
+                    "Value": "29215520.3511689",
+                    "Desc": "腐蚀前壳程法兰预紧力矩Ma",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL233",
+                    "Name": "腐蚀前壳程法兰操作力矩Mp",
+                    "Value": "8039871.99362924",
+                    "Desc": "腐蚀前壳程法兰操作力矩Mp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL234",
+                    "Name": "腐蚀前壳程垫片接触宽度N",
+                    "Value": "13",
+                    "Desc": "腐蚀前壳程垫片接触宽度N",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL235",
+                    "Name": "腐蚀前壳程基本密封宽度b0",
+                    "Value": "6.5",
+                    "Desc": "腐蚀前壳程基本密封宽度b0",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL236",
+                    "Name": "腐蚀前壳程有效密封宽度b",
+                    "Value": "6.45025968469487",
+                    "Desc": "腐蚀前壳程有效密封宽度b",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL237",
+                    "Name": "腐蚀前壳程预紧状态下，需要的最小螺栓载荷Wa",
+                    "Value": "1110240.08736727",
+                    "Desc": "腐蚀前壳程预紧状态下，需要的最小螺栓载荷Wa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL238",
+                    "Name": "腐蚀前壳程预紧状态下，需要的螺栓总截面积Aa",
+                    "Value": "5286.85755889176",
+                    "Desc": "腐蚀前壳程预紧状态下，需要的螺栓总截面积Aa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL239",
+                    "Name": "腐蚀前壳程Fa",
+                    "Value": "1110240.08736727",
+                    "Desc": "腐蚀前壳程Fa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL240",
+                    "Name": "腐蚀前壳程球冠形封头有效厚度",
+                    "Value": "18.4",
+                    "Desc": "腐蚀前壳程球冠形封头有效厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL241",
+                    "Name": "腐蚀前壳程浮头法兰重量",
+                    "Value": "119.504000895139",
+                    "Desc": "腐蚀前壳程浮头法兰重量",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL242",
+                    "Name": "腐蚀前壳程浮头法兰容积",
+                    "Value": "37159225.8538591",
+                    "Desc": "腐蚀前壳程浮头法兰容积",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL243",
+                    "Name": "腐蚀前壳程操作状态下，需要的最小垫片压紧力FP",
+                    "Value": "266457.620968145",
+                    "Desc": "腐蚀前壳程操作状态下，需要的最小垫片压紧力FP",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL244",
+                    "Name": "腐蚀前壳程计算内压引起的总轴向力F",
+                    "Value": "1349436.11176731",
+                    "Desc": "腐蚀前壳程计算内压引起的总轴向力F",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL245",
+                    "Name": "腐蚀前壳程操作状态下，需要的最小螺栓载荷Wp",
+                    "Value": "1615893.73273545",
+                    "Desc": "腐蚀前壳程操作状态下，需要的最小螺栓载荷Wp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL246",
+                    "Name": "腐蚀前壳程操作状态下，需要的螺栓总截面积Ap",
+                    "Value": "8595.1794294439",
+                    "Desc": "腐蚀前壳程操作状态下，需要的螺栓总截面积Ap",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL247",
+                    "Name": "腐蚀前壳程需要的螺栓总截面积Am",
+                    "Value": "5286.85755889176",
+                    "Desc": "腐蚀前壳程需要的螺栓总截面积Am",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL248",
+                    "Name": "腐蚀前壳程预紧状态螺栓设计载荷W",
+                    "Value": "1541694.98662674",
+                    "Desc": "腐蚀前壳程预紧状态螺栓设计载荷W",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL249",
+                    "Name": "腐蚀前壳程球冠形封头边缘处球壳中面切线与法兰环径向的夹角",
+                    "Value": "34.3853015955839",
+                    "Desc": "腐蚀前壳程球冠形封头边缘处球壳中面切线与法兰环径向的夹角",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL250",
+                    "Name": "腐蚀前壳程预紧状态下法兰垫片压紧力FG_Preloade",
+                    "Value": "1541694.98662674",
+                    "Desc": "腐蚀前壳程预紧状态下法兰垫片压紧力FG_Preloade",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL251",
+                    "Name": "腐蚀前壳程内压引起的作用于法兰内径截面上的轴向力FD",
+                    "Value": "1311571.72",
+                    "Desc": "腐蚀前壳程内压引起的作用于法兰内径截面上的轴向力FD",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL252",
+                    "Name": "腐蚀前壳程操作状态下法兰垫片压紧力FG_Operate",
+                    "Value": "266457.620968145",
+                    "Desc": "腐蚀前壳程操作状态下法兰垫片压紧力FG_Operate",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL253",
+                    "Name": "腐蚀前壳程内压引起的总轴向力F与FD之差FT",
+                    "Value": "37864.3917673093",
+                    "Desc": "腐蚀前壳程内压引起的总轴向力F与FD之差FT",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL254",
+                    "Name": "腐蚀前壳程Fr",
+                    "Value": "1916556.70941785",
+                    "Desc": "腐蚀前壳程Fr",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL255",
+                    "Name": "腐蚀前壳程螺栓中心至FD作用位置处的径向距离LD",
+                    "Value": "25.5",
+                    "Desc": "腐蚀前壳程螺栓中心至FD作用位置处的径向距离LD",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL256",
+                    "Name": "腐蚀前壳程螺栓中心至FG作用位置处的径向距离LG",
+                    "Value": "18.9502596846949",
+                    "Desc": "腐蚀前壳程螺栓中心至FG作用位置处的径向距离LG",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL257",
+                    "Name": "腐蚀前壳程螺栓中心至FT作用位置处的径向距离LT",
+                    "Value": "22.2251298423474",
+                    "Desc": "腐蚀前壳程螺栓中心至FT作用位置处的径向距离LT",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL258",
+                    "Name": "腐蚀前壳程Fr对法兰环截面形心的力臂Lr",
+                    "Value": "0.351976615453346",
+                    "Desc": "腐蚀前壳程Fr对法兰环截面形心的力臂Lr",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL259",
+                    "Name": "腐蚀前壳程实际使用螺栓面积余量百分比",
+                    "Value": "77.7228104387022",
+                    "Desc": "腐蚀前壳程实际使用螺栓面积余量百分比",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL260",
+                    "Name": "腐蚀前壳程力矩MD",
+                    "Value": "33445078.86",
+                    "Desc": "腐蚀前壳程力矩MD",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL261",
+                    "Name": "腐蚀前壳程力矩MG",
+                    "Value": "5049441.11231233",
+                    "Desc": "腐蚀前壳程力矩MG",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL262",
+                    "Name": "腐蚀前壳程力矩MT",
+                    "Value": "841541.02342996",
+                    "Desc": "腐蚀前壳程力矩MT",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL263",
+                    "Name": "腐蚀前壳程力矩Mr",
+                    "Value": "674583.143905297",
+                    "Desc": "腐蚀前壳程力矩Mr",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL264",
+                    "Name": "腐蚀前壳程Jp",
+                    "Value": "849.163833548123",
+                    "Desc": "腐蚀前壳程Jp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL265",
+                    "Name": "腐蚀前壳程Ja",
+                    "Value": "3009.44006967854",
+                    "Desc": "腐蚀前壳程Ja",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL266",
+                    "Name": "腐蚀前壳程操作状态法兰需要的最小厚度Sfp",
+                    "Value": "47.630635569799",
+                    "Desc": "腐蚀前壳程操作状态法兰需要的最小厚度Sfp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL267",
+                    "Name": "腐蚀前壳程预紧状态法兰需要的最小厚度Sfa",
+                    "Value": "54.8583637167437",
+                    "Desc": "腐蚀前壳程预紧状态法兰需要的最小厚度Sfa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL268",
+                    "Name": "腐蚀前壳程球冠形封头计算厚度",
+                    "Value": "9.69",
+                    "Desc": "腐蚀前壳程球冠形封头计算厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL269",
+                    "Name": "腐蚀前壳程许用外压力",
+                    "Value": "2.38949237321867",
+                    "Desc": "腐蚀前壳程许用外压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL270",
+                    "Name": "腐蚀前壳程外压系数A",
+                    "Value": "0.00173357664233577",
+                    "Desc": "腐蚀前壳程外压系数A",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL271",
+                    "Name": "腐蚀前壳程外压系数B",
+                    "Value": "172.294976384714",
+                    "Desc": "腐蚀前壳程外压系数B",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL272",
+                    "Name": "腐蚀前壳程垫片压紧力作用中心圆直径DG",
+                    "Value": "927.09948063061",
+                    "Desc": "腐蚀前壳程垫片压紧力作用中心圆直径DG",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL273",
+                    "Name": "腐蚀前壳程法兰力矩计算中的几何参数L",
+                    "Value": "14.9012667399188",
+                    "Desc": "腐蚀前壳程法兰力矩计算中的几何参数L",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL274",
+                    "Name": "腐蚀前壳程浮头法兰最小有效厚度Sfmin",
+                    "Value": "54.8583637167437",
+                    "Desc": "腐蚀前壳程浮头法兰最小有效厚度Sfmin",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL275",
+                    "Name": "腐蚀前壳程B型钩圈预紧状态下剪切应力",
+                    "Value": "12.4524452377222",
+                    "Desc": "腐蚀前壳程B型钩圈预紧状态下剪切应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL276",
+                    "Name": "腐蚀前壳程B型钩圈操作状态下剪切应力",
+                    "Value": "18.1238530708993",
+                    "Desc": "腐蚀前壳程B型钩圈操作状态下剪切应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL277",
+                    "Name": "腐蚀前壳程浮头法兰计算外径",
+                    "Value": "1030",
+                    "Desc": "腐蚀前壳程浮头法兰计算外径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL278",
+                    "Name": "腐蚀后壳程垫片有效外径",
+                    "Value": "932",
+                    "Desc": "腐蚀后壳程垫片有效外径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL279",
+                    "Name": "腐蚀后壳程垫片有效内径",
+                    "Value": "920",
+                    "Desc": "腐蚀后壳程垫片有效内径",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL280",
+                    "Name": "腐蚀后壳程法兰计算压力",
+                    "Value": "2",
+                    "Desc": "腐蚀后壳程法兰计算压力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL281",
+                    "Name": "腐蚀后壳程法兰预紧力矩Ma",
+                    "Value": "25161541.1373906",
+                    "Desc": "腐蚀后壳程法兰预紧力矩Ma",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL282",
+                    "Name": "腐蚀后壳程法兰操作力矩Mp",
+                    "Value": "924704.154432375",
+                    "Desc": "腐蚀后壳程法兰操作力矩Mp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL283",
+                    "Name": "腐蚀后壳程垫片接触宽度N",
+                    "Value": "6",
+                    "Desc": "腐蚀后壳程垫片接触宽度N",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL284",
+                    "Name": "腐蚀后壳程基本密封宽度b0",
+                    "Value": "3",
+                    "Desc": "腐蚀后壳程基本密封宽度b0",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL285",
+                    "Name": "腐蚀后壳程有效密封宽度b",
+                    "Value": "3",
+                    "Desc": "腐蚀后壳程有效密封宽度b",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL286",
+                    "Name": "腐蚀后壳程预紧状态下，需要的最小螺栓载荷Wa",
+                    "Value": "607521",
+                    "Desc": "腐蚀后壳程预紧状态下，需要的最小螺栓载荷Wa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL287",
+                    "Name": "腐蚀后壳程预紧状态下，需要的螺栓总截面积Aa",
+                    "Value": "2892.95714285714",
+                    "Desc": "腐蚀后壳程预紧状态下，需要的螺栓总截面积Aa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL288",
+                    "Name": "腐蚀后壳程Fa",
+                    "Value": "607521",
+                    "Desc": "腐蚀后壳程Fa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL289",
+                    "Name": "腐蚀后壳程球冠形封头有效厚度",
+                    "Value": "11.4",
+                    "Desc": "腐蚀后壳程球冠形封头有效厚度",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL290",
+                    "Name": "腐蚀后壳程浮头法兰重量",
+                    "Value": "119.402790089574",
+                    "Desc": "腐蚀后壳程浮头法兰重量",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL291",
+                    "Name": "腐蚀后壳程浮头法兰容积",
+                    "Value": "37159225.8538591",
+                    "Desc": "腐蚀后壳程浮头法兰容积",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL292",
+                    "Name": "腐蚀后壳程操作状态下，需要的最小垫片压紧力FP",
+                    "Value": "145805.04",
+                    "Desc": "腐蚀后壳程操作状态下，需要的最小垫片压紧力FP",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL293",
+                    "Name": "腐蚀后壳程计算内压引起的总轴向力F",
+                    "Value": "1346237.32",
+                    "Desc": "腐蚀后壳程计算内压引起的总轴向力F",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL294",
+                    "Name": "腐蚀后壳程操作状态下，需要的最小螺栓载荷Wp",
+                    "Value": "1492042.36",
+                    "Desc": "腐蚀后壳程操作状态下，需要的最小螺栓载荷Wp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL295",
+                    "Name": "腐蚀后壳程操作状态下，需要的螺栓总截面积Ap",
+                    "Value": "7936.39553191489",
+                    "Desc": "腐蚀后壳程操作状态下，需要的螺栓总截面积Ap",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL296",
+                    "Name": "腐蚀后壳程需要的螺栓总截面积Am",
+                    "Value": "2892.95714285714",
+                    "Desc": "腐蚀后壳程需要的螺栓总截面积Am",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL297",
+                    "Name": "腐蚀后壳程预紧状态螺栓设计载荷W",
+                    "Value": "1290335.44294311",
+                    "Desc": "腐蚀后壳程预紧状态螺栓设计载荷W",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL298",
+                    "Name": "腐蚀后壳程球冠形封头边缘处球壳中面切线与法兰环径向的夹角",
+                    "Value": "34.6675738921007",
+                    "Desc": "腐蚀后壳程球冠形封头边缘处球壳中面切线与法兰环径向的夹角",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL299",
+                    "Name": "腐蚀后壳程预紧状态下法兰垫片压紧力FG_Preloade",
+                    "Value": "1290335.44294311",
+                    "Desc": "腐蚀后壳程预紧状态下法兰垫片压紧力FG_Preloade",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL300",
+                    "Name": "腐蚀后壳程内压引起的作用于法兰内径截面上的轴向力FD",
+                    "Value": "1328848",
+                    "Desc": "腐蚀后壳程内压引起的作用于法兰内径截面上的轴向力FD",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL301",
+                    "Name": "腐蚀后壳程操作状态下法兰垫片压紧力FG_Operate",
+                    "Value": "145805.04",
+                    "Desc": "腐蚀后壳程操作状态下法兰垫片压紧力FG_Operate",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL302",
+                    "Name": "腐蚀后壳程内压引起的总轴向力F与FD之差FT",
+                    "Value": "17389.3200000001",
+                    "Desc": "腐蚀后壳程内压引起的总轴向力F与FD之差FT",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL303",
+                    "Name": "腐蚀后壳程Fr",
+                    "Value": "1921422.70804551",
+                    "Desc": "腐蚀后壳程Fr",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL304",
+                    "Name": "腐蚀后壳程螺栓中心至FD作用位置处的径向距离LD",
+                    "Value": "22.5",
+                    "Desc": "腐蚀后壳程螺栓中心至FD作用位置处的径向距离LD",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL305",
+                    "Name": "腐蚀后壳程螺栓中心至FG作用位置处的径向距离LG",
+                    "Value": "19.5",
+                    "Desc": "腐蚀后壳程螺栓中心至FG作用位置处的径向距离LG",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL306",
+                    "Name": "腐蚀后壳程螺栓中心至FT作用位置处的径向距离LT",
+                    "Value": "21",
+                    "Desc": "腐蚀后壳程螺栓中心至FT作用位置处的径向距离LT",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL307",
+                    "Name": "腐蚀后壳程Fr对法兰环截面形心的力臂Lr",
+                    "Value": "2.56962307864815",
+                    "Desc": "腐蚀后壳程Fr对法兰环截面形心的力臂Lr",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL308",
+                    "Name": "腐蚀后壳程实际使用螺栓面积余量百分比",
+                    "Value": "224.787107916634",
+                    "Desc": "腐蚀后壳程实际使用螺栓面积余量百分比",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL309",
+                    "Name": "腐蚀后壳程力矩MD",
+                    "Value": "29899080",
+                    "Desc": "腐蚀后壳程力矩MD",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL310",
+                    "Name": "腐蚀后壳程力矩MG",
+                    "Value": "2843198.28",
+                    "Desc": "腐蚀后壳程力矩MG",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL311",
+                    "Name": "腐蚀后壳程力矩MT",
+                    "Value": "365175.720000001",
+                    "Desc": "腐蚀后壳程力矩MT",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL312",
+                    "Name": "腐蚀后壳程力矩Mr",
+                    "Value": "4937332.13443238",
+                    "Desc": "腐蚀后壳程力矩Mr",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL313",
+                    "Name": "腐蚀后壳程Jp",
+                    "Value": "110.233682141806",
+                    "Desc": "腐蚀后壳程Jp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL314",
+                    "Name": "腐蚀后壳程Ja",
+                    "Value": "2925.35423005525",
+                    "Desc": "腐蚀后壳程Ja",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL315",
+                    "Name": "腐蚀后壳程操作状态法兰需要的最小厚度Sfp",
+                    "Value": "37.163107348616",
+                    "Desc": "腐蚀后壳程操作状态法兰需要的最小厚度Sfp",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL316",
+                    "Name": "腐蚀后壳程预紧状态法兰需要的最小厚度Sfa",
+                    "Value": "54.0865438908353",
+                    "Desc": "腐蚀后壳程预紧状态法兰需要的最小厚度Sfa",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL317",
+                    "Name": "腐蚀后壳程垫片压紧力作用中心圆直径DG",
+                    "Value": "926",
+                    "Desc": "腐蚀后壳程垫片压紧力作用中心圆直径DG",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL318",
+                    "Name": "腐蚀后壳程法兰力矩计算中的几何参数L",
+                    "Value": "17.0984473087969",
+                    "Desc": "腐蚀后壳程法兰力矩计算中的几何参数L",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL319",
+                    "Name": "腐蚀后壳程浮头法兰最小有效厚度Sfmin",
+                    "Value": "54.0865438908353",
+                    "Desc": "腐蚀后壳程浮头法兰最小有效厚度Sfmin",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL320",
+                    "Name": "腐蚀后壳程B型钩圈预紧状态下剪切应力",
+                    "Value": "6.81395138704238",
+                    "Desc": "腐蚀后壳程B型钩圈预紧状态下剪切应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL321",
+                    "Name": "腐蚀后壳程B型钩圈操作状态下剪切应力",
+                    "Value": "16.7347369201196",
+                    "Desc": "腐蚀后壳程B型钩圈操作状态下剪切应力",
+                    "ReportOutput": null
+                },
+                {
+                    "Id": "工况1：FFL322",
+                    "Name": "腐蚀后壳程浮头法兰计算外径",
+                    "Value": "1022",
+                    "Desc": "腐蚀后壳程浮头法兰计算外径",
+                    "ReportOutput": null
+                }
+            ]
+        },
+        "外头盖法兰": {
+            "IsSuccess": false,
+            "Datas": []
+        },
+        "外头盖圆筒": {
+            "IsSuccess": false,
+            "Datas": []
+        }
+    }
+}

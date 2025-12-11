@@ -1,0 +1,665 @@
+{
+    "管束": {
+        "IsSuccess": true,
+        "Datas": [
+            {
+                "Id": "m_LTY1",
+                "Name": "倾斜管1直管段长度",
+                "Value": "5902.54999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LTY2",
+                "Name": "倾斜管2直管段长度",
+                "Value": "5927.54999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LTY3",
+                "Name": "倾斜管3直管段长度",
+                "Value": "5941.42154",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LTY4",
+                "Name": "倾斜管4直管段长度",
+                "Value": "5966.42154",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LTY5",
+                "Name": "倾斜管5直管段长度",
+                "Value": "5970.40774",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LTY6",
+                "Name": "倾斜管6直管段长度",
+                "Value": "5995.40774",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Sx",
+                "Name": "相邻两排（列）换热管孔竖直（水平）间距",
+                "Value": "21.65064",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SizeV",
+                "Name": "异形折流板中间开矩形缺口垂直尺寸",
+                "Value": "298",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SizeH",
+                "Name": "异形折流板中间开矩形缺口水平尺寸",
+                "Value": "563",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LX",
+                "Name": "理论最大有效直管长度",
+                "Value": "5915.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LY",
+                "Name": "理论最小有效直管长度",
+                "Value": "5818.04999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Do_SP",
+                "Name": "折流板/支持板外直径",
+                "Value": "794",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_uplimit",
+                "Name": "折流板/支持板外直径上偏差",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_downlimit",
+                "Name": "折流板/支持板外直径下偏差",
+                "Value": "-0.8",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Dx",
+                "Name": "OD1接管占用范围边缘至第一块折流板距离",
+                "Value": "31.54999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DH",
+                "Name": "第一块折流板至管板间距",
+                "Value": "506.04999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_NumberPlate",
+                "Name": "折流板数量",
+                "Value": "16",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LC",
+                "Name": "可设置折流板区域的间距",
+                "Value": "5281.54999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_OD1",
+                "Name": "接管（近管板侧）占用直径范围",
+                "Value": "290",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DistanceH",
+                "Name": "近管板侧接管中心线至管板壳程侧端面距离",
+                "Value": "329.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LengthSlide",
+                "Name": "滑道长度",
+                "Value": "5820",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LengthTubeorPlate",
+                "Name": "中间挡管/挡板长度",
+                "Value": "5365",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_XLL",
+                "Name": "与入口接管横截面平行的矩形（轴向）边长",
+                "Value": "345",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Position",
+                "Name": "轴向定位值",
+                "Value": "333.54999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lc1",
+                "Name": "拉杆长度1",
+                "Value": "5825",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lc2",
+                "Name": "拉杆长度2",
+                "Value": "5475",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnBafflingPlate",
+                "Name": "折流板厚度",
+                "Value": "10",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnBafflingPlateMin",
+                "Name": "折流板/支持板最小厚度",
+                "Value": "10",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LengthDistanceube1",
+                "Name": "定距管长度1",
+                "Value": "5756.04999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LengthDistanceube2",
+                "Name": "定距管长度2",
+                "Value": "5406.04999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_dz",
+                "Name": "尾部支撑防振杆直径",
+                "Value": "5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DoBoardShakinfProof",
+                "Name": "防振板条外径",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnBoardShakinfProof",
+                "Name": "防振板条厚度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lz",
+                "Name": "包边条长度",
+                "Value": "2494.42457",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnHoldingPlate",
+                "Name": "支持板厚度",
+                "Value": "12",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_NT",
+                "Name": "尾部支撑数量",
+                "Value": "-13",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_B_Tube",
+                "Name": "支持板至弯管切点距离",
+                "Value": "50",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C_Tube",
+                "Name": "最后一块折流板至弯管切点距离",
+                "Value": "400",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lnmax",
+                "Name": "实际无支持跨距",
+                "Value": "856.04999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_alpha",
+                "Name": "换热管材料线膨胀系数",
+                "Value": "1E-05",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_HX",
+                "Name": "接管OD2中心（近U形端）至支持板理论间距",
+                "Value": "383.45001",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LS1",
+                "Name": "壳程圆筒末端至管板壳程侧端面距离（考虑热膨胀量）",
+                "Value": "6117.13646",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LS",
+                "Name": "壳程圆筒末端至管板壳程侧端面距离",
+                "Value": "6517.95001",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SL",
+                "Name": "壳程圆筒长度",
+                "Value": "6390",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_HDL",
+                "Name": "折流板重叠区域宽度",
+                "Value": "400",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_HSL",
+                "Name": "折流板缺口至圆筒内壁距离（切口高度）",
+                "Value": "200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AA",
+                "Name": "理论异形折流板中间矩形孔边",
+                "Value": "1050",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LTY1",
+                "Name": "倾斜管1直管段长度",
+                "Value": "5902.54999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LTY2",
+                "Name": "倾斜管2直管段长度",
+                "Value": "5927.54999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LTY3",
+                "Name": "倾斜管3直管段长度",
+                "Value": "5941.42154",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LTY4",
+                "Name": "倾斜管4直管段长度",
+                "Value": "5966.42154",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LTY5",
+                "Name": "倾斜管5直管段长度",
+                "Value": "5970.40774",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LTY6",
+                "Name": "倾斜管6直管段长度",
+                "Value": "5995.40774",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Sx",
+                "Name": "相邻两排（列）换热管孔竖直（水平）间距",
+                "Value": "21.65064",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SizeV",
+                "Name": "异形折流板中间开矩形缺口垂直尺寸",
+                "Value": "298",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SizeH",
+                "Name": "异形折流板中间开矩形缺口水平尺寸",
+                "Value": "563",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LX",
+                "Name": "理论最大有效直管长度",
+                "Value": "5915.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LY",
+                "Name": "理论最小有效直管长度",
+                "Value": "5818.04999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Do_SP",
+                "Name": "折流板/支持板外直径",
+                "Value": "794",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_uplimit",
+                "Name": "折流板/支持板外直径上偏差",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_downlimit",
+                "Name": "折流板/支持板外直径下偏差",
+                "Value": "-0.8",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Dx",
+                "Name": "OD1接管占用范围边缘至第一块折流板距离",
+                "Value": "31.54999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DH",
+                "Name": "第一块折流板至管板间距",
+                "Value": "506.04999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_NumberPlate",
+                "Name": "折流板数量",
+                "Value": "16",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LC",
+                "Name": "可设置折流板区域的间距",
+                "Value": "5281.54999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_OD1",
+                "Name": "接管（近管板侧）占用直径范围",
+                "Value": "290",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DistanceH",
+                "Name": "近管板侧接管中心线至管板壳程侧端面距离",
+                "Value": "329.5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LengthSlide",
+                "Name": "滑道长度",
+                "Value": "5820",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LengthTubeorPlate",
+                "Name": "中间挡管/挡板长度",
+                "Value": "5365",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_XLL",
+                "Name": "与入口接管横截面平行的矩形（轴向）边长",
+                "Value": "345",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Position",
+                "Name": "轴向定位值",
+                "Value": "333.54999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lc1",
+                "Name": "拉杆长度1",
+                "Value": "5825",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lc2",
+                "Name": "拉杆长度2",
+                "Value": "5475",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnBafflingPlate",
+                "Name": "折流板厚度",
+                "Value": "10",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnBafflingPlateMin",
+                "Name": "折流板/支持板最小厚度",
+                "Value": "10",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LengthDistanceube1",
+                "Name": "定距管长度1",
+                "Value": "5756.04999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LengthDistanceube2",
+                "Name": "定距管长度2",
+                "Value": "5406.04999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_dz",
+                "Name": "尾部支撑防振杆直径",
+                "Value": "5",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_DoBoardShakinfProof",
+                "Name": "防振板条外径",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnBoardShakinfProof",
+                "Name": "防振板条厚度",
+                "Value": "0",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lz",
+                "Name": "包边条长度",
+                "Value": "2494.42457",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SnHoldingPlate",
+                "Name": "支持板厚度",
+                "Value": "12",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_NT",
+                "Name": "尾部支撑数量",
+                "Value": "-13",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_B_Tube",
+                "Name": "支持板至弯管切点距离",
+                "Value": "50",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_C_Tube",
+                "Name": "最后一块折流板至弯管切点距离",
+                "Value": "400",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_Lnmax",
+                "Name": "实际无支持跨距",
+                "Value": "856.04999",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_alpha",
+                "Name": "换热管材料线膨胀系数",
+                "Value": "1E-05",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_HX",
+                "Name": "接管OD2中心（近U形端）至支持板理论间距",
+                "Value": "383.45001",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LS1",
+                "Name": "壳程圆筒末端至管板壳程侧端面距离（考虑热膨胀量）",
+                "Value": "6121.68936",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_LS",
+                "Name": "壳程圆筒末端至管板壳程侧端面距离",
+                "Value": "6517.95001",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_SL",
+                "Name": "壳程圆筒长度",
+                "Value": "6390",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_HDL",
+                "Name": "折流板重叠区域宽度",
+                "Value": "400",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_HSL",
+                "Name": "折流板缺口至圆筒内壁距离（切口高度）",
+                "Value": "200",
+                "Desc": "",
+                "ReportOutput": null
+            },
+            {
+                "Id": "m_AA",
+                "Name": "理论异形折流板中间矩形孔边",
+                "Value": "1050",
+                "Desc": "",
+                "ReportOutput": null
+            }
+        ]
+    }
+}

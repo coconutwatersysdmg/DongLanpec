@@ -1,0 +1,2 @@
+[check_existing_product] 存在: False
+[set_row_editable] 设置第 2 行为 不可编辑
