@@ -13435,6 +13435,33 @@ class TubeLayoutEditor(QMainWindow):
                 QMessageBox.warning(self, "提示", "还未布管", QMessageBox.Ok)
             else:
                 slipway_set = set(self.slipway_centers)
+                # 保存前校验：所有管口必须设置径向开孔
+                try:
+                    if isinstance(getattr(self, "pipe_port_dict", None), dict) and self.pipe_port_dict:
+                        expected_codes = list(self.pipe_port_dict.keys())
+                        if not isinstance(getattr(self, "radial_hole_dict", None), dict):
+                            QMessageBox.warning(
+                                self,
+                                "提示",
+                                f"管口号为{expected_codes[0]}的管口未设置径向开孔，请确认！",
+                                QMessageBox.Ok,
+                            )
+                            return
+
+                        for code in expected_codes:
+                            info = self.radial_hole_dict.get(code)
+                            if not isinstance(info, dict) or info.get("换热管坐标") is None:
+                                QMessageBox.warning(
+                                    self,
+                                    "提示",
+                                    f"管口号为{code}的管口未设置径向开孔，请确认！",
+                                    QMessageBox.Ok,
+                                )
+                                return
+                except Exception:
+                    # 校验异常时不允许保存，避免漏检
+                    QMessageBox.warning(self, "提示", "径向开孔校验失败，请确认！", QMessageBox.Ok)
+                    return
                 # self.current_centers = [center for center in self.current_centers if center not in slipway_set]
                 # TODO 获取管口数量分布表格数据
                 tube_hole_data = self.get_current_tube_hole_data()
@@ -20222,9 +20249,21 @@ class TubeLayoutEditor(QMainWindow):
         port_combo = QComboBox()
         port_combo.setMinimumWidth(260)
         port_codes = list(self.radial_hole_dict.keys())
-        port_combo.addItems([str(x) for x in port_codes])
-        if existing_port_code is not None and str(existing_port_code) in [str(x) for x in port_codes]:
-            port_combo.setCurrentText(str(existing_port_code))
+        for code in port_codes:
+            try:
+                info = self.radial_hole_dict.get(code) if isinstance(self.radial_hole_dict, dict) else None
+                assigned = isinstance(info, dict) and info.get("换热管坐标") is not None
+            except Exception:
+                assigned = False
+            display = f"{code}（已分配）" if assigned else f"{code}"
+            port_combo.addItem(display, code)
+        if existing_port_code is not None:
+            try:
+                idx = port_combo.findData(existing_port_code)
+                if idx >= 0:
+                    port_combo.setCurrentIndex(idx)
+            except Exception:
+                pass
         row1.addWidget(port_combo)
         layout.addLayout(row1)
 
@@ -20255,13 +20294,22 @@ class TubeLayoutEditor(QMainWindow):
         if result == QDialog.Rejected:
             return
 
-        selected_port = port_combo.currentText()
+        try:
+            selected_port = port_combo.currentData()
+        except Exception:
+            selected_port = port_combo.currentText()
         selected_direction = dir_combo.currentText() or "壳程"
 
         if existing_port_code is not None and str(existing_port_code) != str(selected_port):
             try:
                 if existing_port_code in self.radial_hole_dict:
+                    old_coord = self.radial_hole_dict[existing_port_code].get("换热管坐标")
                     self.radial_hole_dict[existing_port_code]["换热管坐标"] = None
+                    if old_coord is not None:
+                        try:
+                            self.remove_radial_hole_graphics(old_coord)
+                        except Exception:
+                            pass
             except Exception:
                 pass
 
@@ -20269,7 +20317,13 @@ class TubeLayoutEditor(QMainWindow):
             for code, info in self.radial_hole_dict.items():
                 if isinstance(info, dict) and info.get("换热管坐标") is not None:
                     if _coord_equal(info.get("换热管坐标"), current_coord):
+                        old_coord = info.get("换热管坐标")
                         info["换热管坐标"] = None
+                        if old_coord is not None:
+                            try:
+                                self.remove_radial_hole_graphics(old_coord)
+                            except Exception:
+                                pass
         except Exception:
             pass
 
@@ -20278,15 +20332,58 @@ class TubeLayoutEditor(QMainWindow):
             self.clear_selection_highlight()
             return
 
+        # 若用户选择的是“已分配”的管口，先擦除该管口旧绘制并解绑旧坐标
+        try:
+            old_coord_for_selected = self.radial_hole_dict[selected_port].get("换热管坐标")
+            if old_coord_for_selected is not None and not _coord_equal(old_coord_for_selected, current_coord):
+                try:
+                    self.remove_radial_hole_graphics(old_coord_for_selected)
+                except Exception:
+                    pass
+                try:
+                    self.radial_hole_dict[selected_port]["换热管坐标"] = None
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
         self.radial_hole_dict[selected_port]["管口号"] = selected_port
         self.radial_hole_dict[selected_port]["连通方向"] = selected_direction
         self.radial_hole_dict[selected_port]["换热管坐标"] = current_coord
 
         try:
-            self.draw_radial_hole_tangents(current_coord)
-            self.clear_selection_highlight()
+            self.draw_radial_hole_graphics(current_coord)
         except Exception as e:
             print(f"绘制径向开孔切线出错: {e}")
+
+    def draw_radial_hole_graphics(self, selected_tube_coord):
+        self.draw_radial_hole_tangents(selected_tube_coord)
+        self.clear_selection_highlight()
+
+    def _radial_hole_coord_key(self, coord):
+        try:
+            return (round(float(coord[0]), 6), round(float(coord[1]), 6))
+        except Exception:
+            return None
+
+    def remove_radial_hole_graphics(self, center_coord):
+        if not hasattr(self, "graphics_scene") or self.graphics_scene is None:
+            return
+
+        key = self._radial_hole_coord_key(center_coord)
+        if key is None:
+            return
+
+        items_by_coord = getattr(self, "_radial_hole_tangent_items_by_coord", None)
+        if not isinstance(items_by_coord, dict):
+            return
+
+        items = items_by_coord.pop(key, None) or []
+        for it in items:
+            try:
+                self.graphics_scene.removeItem(it)
+            except Exception:
+                pass
 
     def draw_radial_hole_tangents(self, center_coord):
         if not hasattr(self, "graphics_scene") or self.graphics_scene is None:
@@ -20304,17 +20401,21 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             return
 
-        if getattr(self, "_radial_hole_tangent_items", None):
-            try:
-                for it in self._radial_hole_tangent_items:
-                    try:
-                        self.graphics_scene.removeItem(it)
-                    except Exception:
-                        pass
-            finally:
-                self._radial_hole_tangent_items = []
-        else:
-            self._radial_hole_tangent_items = []
+        if not isinstance(getattr(self, "_radial_hole_tangent_items_by_coord", None), dict):
+            self._radial_hole_tangent_items_by_coord = {}
+
+        key = self._radial_hole_coord_key(center_coord)
+        if key is None:
+            return
+
+        # 仅替换当前坐标对应的图元，不影响其他已绘制的径向开孔
+        old_items = self._radial_hole_tangent_items_by_coord.pop(key, None)
+        if old_items:
+            for it in old_items:
+                try:
+                    self.graphics_scene.removeItem(it)
+                except Exception:
+                    pass
 
         try:
             import math
@@ -20417,7 +20518,7 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
-        self._radial_hole_tangent_items.extend([fill_item, line1, line2])
+        self._radial_hole_tangent_items_by_coord[key] = [fill_item, line1, line2]
 
     def show_baffle_info(self):
         """折流板参数编辑弹窗：左侧可编辑参数表，右侧图片展示区。"""
