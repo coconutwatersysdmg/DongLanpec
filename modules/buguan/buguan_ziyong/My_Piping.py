@@ -77,6 +77,9 @@ ENABLE_AXIAL_DESIGN_PAGE = False
 ENABLE_DANGBAN_WELDED_OPTION = True
 
 
+edge_centers: List[Tuple[float, float]] = []
+
+
 def on_product_id_changed(new_id):
     global product_id
     product_id = new_id
@@ -1093,6 +1096,8 @@ class TubeLayoutEditor(QMainWindow):
         self.productID = product_id  # 产品ID
         self.isSymmetry = True
         self.isZhenglie = False
+        self.edge_centers = []
+        self.radial_hole_dict = {}
         self.selected_side_blocks = []  # 选中的旁路挡板，用于删除
         self.interfering_tubes1 = []  # 左侧滑道干涉换热管
         self.interfering_tubes2 = []  # 右侧滑道干涉换热管
@@ -3836,6 +3841,19 @@ class TubeLayoutEditor(QMainWindow):
         except Exception as e:
             # 兜底保护：任何异常都不影响后续计算逻辑，只打印错误并保持空字典
             print(f"初始化管口字典时出错: {str(e)}")
+
+        self.radial_hole_dict = {}
+        try:
+            if isinstance(self.pipe_port_dict, dict) and self.pipe_port_dict:
+                for code, owner in self.pipe_port_dict.items():
+                    self.radial_hole_dict[code] = {
+                        "管口号": code,
+                        "连通方向": "壳程",
+                        "换热管坐标": None,
+                        "管口所属元件": owner,
+                    }
+        except Exception as e:
+            print(f"初始化径向开孔字典时出错: {str(e)}")
 
         # 后续计算和元素构建逻辑保持不变
         try:
@@ -15429,6 +15447,47 @@ class TubeLayoutEditor(QMainWindow):
 
         return pos_grouped, neg_grouped
 
+    def find_edge_tube(self) -> List[Tuple[float, float]]:
+        global edge_centers
+
+        if not hasattr(self, "sorted_current_centers_up") or not hasattr(
+            self, "sorted_current_centers_down"
+        ):
+            self.sorted_current_centers_up, self.sorted_current_centers_down = (
+                self.group_centers_by_y(getattr(self, "current_centers", []))
+            )
+
+        rows = []
+        for row in self.sorted_current_centers_up:
+            if row:
+                rows.append(row)
+        for row in self.sorted_current_centers_down:
+            if row:
+                rows.append(row)
+
+        edge_set = set()
+        edge_centers.clear()
+        if not rows:
+            return edge_centers
+
+        top_row = max(rows, key=lambda r: r[0][1])
+        bottom_row = min(rows, key=lambda r: r[0][1])
+
+        for row in rows:
+            if row is top_row or row is bottom_row:
+                for pt in row:
+                    edge_set.add(pt)
+            else:
+                edge_set.add(row[0])
+                edge_set.add(row[-1])
+
+        edge_centers.extend(list(edge_set))
+        try:
+            self.edge_centers = edge_centers
+        except Exception:
+            pass
+        return edge_centers
+
     def group_centers_by_x(
         self, centers: List[Tuple[float, float]], tol: float = 1e-3
     ) -> Tuple[List[List[Tuple[float, float]]], List[List[Tuple[float, float]]]]:
@@ -20100,7 +20159,265 @@ class TubeLayoutEditor(QMainWindow):
         row2_y = row_ys[row2_idx]
 
     def build_radial_holes(self):
-        print("径向开孔")
+        self.find_edge_tube()
+        actual_selected_centers = self.selected_to_current_coords(self.selected_centers)
+
+        if len(actual_selected_centers) != 1:
+            QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
+            self.clear_selection_highlight()
+            return
+
+        sel_x, sel_y = actual_selected_centers[0]
+        tol = 1e-6
+        is_on_edge = any(
+            (abs(cx - sel_x) <= tol and abs(cy - sel_y) <= tol)
+            for cx, cy in self.edge_centers
+        )
+        if not is_on_edge:
+            QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
+            self.clear_selection_highlight()
+            return
+
+        if not getattr(self, "radial_hole_dict", None):
+            QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
+            self.clear_selection_highlight()
+            return
+
+        from PyQt5.QtWidgets import (
+            QDialog,
+            QVBoxLayout,
+            QHBoxLayout,
+            QLabel,
+            QComboBox,
+            QDialogButtonBox,
+        )
+
+        def _coord_equal(a, b, t=1e-6):
+            try:
+                return abs(a[0] - b[0]) <= t and abs(a[1] - b[1]) <= t
+            except Exception:
+                return False
+
+        current_coord = actual_selected_centers[0]
+        existing_port_code = None
+        existing_direction = "壳程"
+        for code, info in self.radial_hole_dict.items():
+            if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                if _coord_equal(info.get("换热管坐标"), current_coord):
+                    existing_port_code = code
+                    existing_direction = info.get("连通方向", "壳程")
+                    break
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("径向开孔")
+        dialog.setModal(True)
+        dialog.resize(520, 220)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(24, 18, 24, 18)
+        layout.setSpacing(14)
+
+        row1 = QHBoxLayout()
+        row1.setSpacing(10)
+        row1.addWidget(QLabel("管口号："))
+        port_combo = QComboBox()
+        port_combo.setMinimumWidth(260)
+        port_codes = list(self.radial_hole_dict.keys())
+        port_combo.addItems([str(x) for x in port_codes])
+        if existing_port_code is not None and str(existing_port_code) in [str(x) for x in port_codes]:
+            port_combo.setCurrentText(str(existing_port_code))
+        row1.addWidget(port_combo)
+        layout.addLayout(row1)
+
+        row2 = QHBoxLayout()
+        row2.setSpacing(10)
+        row2.addWidget(QLabel("连通方向："))
+        dir_combo = QComboBox()
+        dir_combo.addItems(["管程", "壳程"])
+        dir_combo.setMinimumWidth(260)
+        if existing_direction in ["管程", "壳程"]:
+            dir_combo.setCurrentText(existing_direction)
+        else:
+            dir_combo.setCurrentText("壳程")
+        row2.addWidget(dir_combo)
+        layout.addLayout(row2)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        buttons = QDialogButtonBox()
+        ok_btn = buttons.addButton("确认", QDialogButtonBox.AcceptRole)
+        close_btn = buttons.addButton("关闭", QDialogButtonBox.RejectRole)
+        layout.addLayout(btn_row)
+        layout.addWidget(buttons)
+        ok_btn.clicked.connect(dialog.accept)
+        close_btn.clicked.connect(dialog.reject)
+
+        result = dialog.exec_()
+        if result == QDialog.Rejected:
+            return
+
+        selected_port = port_combo.currentText()
+        selected_direction = dir_combo.currentText() or "壳程"
+
+        if existing_port_code is not None and str(existing_port_code) != str(selected_port):
+            try:
+                if existing_port_code in self.radial_hole_dict:
+                    self.radial_hole_dict[existing_port_code]["换热管坐标"] = None
+            except Exception:
+                pass
+
+        try:
+            for code, info in self.radial_hole_dict.items():
+                if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                    if _coord_equal(info.get("换热管坐标"), current_coord):
+                        info["换热管坐标"] = None
+        except Exception:
+            pass
+
+        if selected_port not in self.radial_hole_dict:
+            QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
+            self.clear_selection_highlight()
+            return
+
+        self.radial_hole_dict[selected_port]["管口号"] = selected_port
+        self.radial_hole_dict[selected_port]["连通方向"] = selected_direction
+        self.radial_hole_dict[selected_port]["换热管坐标"] = current_coord
+
+        try:
+            self.draw_radial_hole_tangents(current_coord)
+            self.clear_selection_highlight()
+        except Exception as e:
+            print(f"绘制径向开孔切线出错: {e}")
+
+    def draw_radial_hole_tangents(self, center_coord):
+        if not hasattr(self, "graphics_scene") or self.graphics_scene is None:
+            return
+
+        if not hasattr(self, "r") or not isinstance(self.r, (int, float)) or self.r <= 0:
+            return
+        if not hasattr(self, "R_wai") or not isinstance(self.R_wai, (int, float)) or self.R_wai <= 0:
+            return
+
+        try:
+            from PyQt5.QtCore import Qt
+            from PyQt5.QtCore import QRectF
+            from PyQt5.QtGui import QPen, QColor, QBrush, QPainterPath
+        except Exception:
+            return
+
+        if getattr(self, "_radial_hole_tangent_items", None):
+            try:
+                for it in self._radial_hole_tangent_items:
+                    try:
+                        self.graphics_scene.removeItem(it)
+                    except Exception:
+                        pass
+            finally:
+                self._radial_hole_tangent_items = []
+        else:
+            self._radial_hole_tangent_items = []
+
+        try:
+            import math
+        except Exception:
+            return
+
+        cx, cy = float(center_coord[0]), float(center_coord[1])
+        v_len = math.hypot(cx, cy)
+        if v_len <= 1e-9:
+            return
+
+        dx, dy = cx / v_len, cy / v_len
+        nx, ny = -dy, dx
+
+        r = float(self.r)
+        t1 = (cx + nx * r, cy + ny * r)
+        t2 = (cx - nx * r, cy - ny * r)
+
+        def ray_circle_intersection(p, d, R):
+            px, py = p
+            ddx, ddy = d
+            b = px * ddx + py * ddy
+            c = px * px + py * py - R * R
+            disc = b * b - c
+            if disc < 0:
+                return None
+            t = -b + math.sqrt(disc)
+            if t < 0:
+                return None
+            return (px + ddx * t, py + ddy * t)
+
+        end1 = ray_circle_intersection(t1, (dx, dy), float(self.R_wai))
+        end2 = ray_circle_intersection(t2, (dx, dy), float(self.R_wai))
+        if end1 is None or end2 is None:
+            return
+
+        def qt_angle_deg(center_x, center_y, px, py):
+            return math.degrees(math.atan2(-(py - center_y), (px - center_x))) % 360.0
+
+        def arc_sweep_through(start_deg, end_deg, through_deg):
+            start_deg %= 360.0
+            end_deg %= 360.0
+            through_deg %= 360.0
+
+            delta_ccw = (end_deg - start_deg) % 360.0
+            delta_cw = delta_ccw - 360.0
+
+            on_ccw = ((through_deg - start_deg) % 360.0) <= delta_ccw + 1e-9
+            on_cw = ((start_deg - through_deg) % 360.0) <= (-delta_cw) + 1e-9
+
+            if on_ccw and on_cw:
+                return delta_ccw if abs(delta_ccw) <= abs(delta_cw) else delta_cw
+            if on_ccw:
+                return delta_ccw
+            if on_cw:
+                return delta_cw
+            return delta_ccw
+
+        # 先填充由：t1->end1(切线)、外圆弧(end1->end2)、end2->t2(切线)、小圆弧(t2->t1) 围成区域
+        outer_R = float(self.R_wai)
+        outer_rect = QRectF(-outer_R, -outer_R, 2 * outer_R, 2 * outer_R)
+
+        outer_start = qt_angle_deg(0.0, 0.0, end1[0], end1[1])
+        outer_end = qt_angle_deg(0.0, 0.0, end2[0], end2[1])
+        outer_through = qt_angle_deg(0.0, 0.0, dx * outer_R, dy * outer_R)
+        outer_sweep = arc_sweep_through(outer_start, outer_end, outer_through)
+
+        tube_r = float(self.r)
+        tube_rect = QRectF(cx - tube_r, cy - tube_r, 2 * tube_r, 2 * tube_r)
+        tube_start = qt_angle_deg(cx, cy, t2[0], t2[1])
+        tube_end = qt_angle_deg(cx, cy, t1[0], t1[1])
+        tube_through = qt_angle_deg(cx, cy, cx + dx * tube_r, cy + dy * tube_r)
+        tube_sweep = arc_sweep_through(tube_start, tube_end, tube_through)
+
+        fill_path = QPainterPath()
+        fill_path.moveTo(t1[0], t1[1])
+        fill_path.lineTo(end1[0], end1[1])
+        fill_path.arcTo(outer_rect, outer_start, outer_sweep)
+        fill_path.lineTo(t2[0], t2[1])
+        fill_path.arcTo(tube_rect, tube_start, tube_sweep)
+        fill_path.closeSubpath()
+
+        fill_item = self.graphics_scene.addPath(
+            fill_path,
+            QPen(Qt.NoPen),
+            QBrush(QColor(160, 160, 160, 160)),
+        )
+        try:
+            fill_item.setZValue(110)
+        except Exception:
+            pass
+
+        pen = QPen(Qt.black, 2)
+        pen.setStyle(Qt.SolidLine)
+        line1 = self.graphics_scene.addLine(t1[0], t1[1], end1[0], end1[1], pen)
+        line2 = self.graphics_scene.addLine(t2[0], t2[1], end2[0], end2[1], pen)
+        try:
+            line1.setZValue(120)
+            line2.setZValue(120)
+        except Exception:
+            pass
+
+        self._radial_hole_tangent_items.extend([fill_item, line1, line2])
 
     def show_baffle_info(self):
         """折流板参数编辑弹窗：左侧可编辑参数表，右侧图片展示区。"""
@@ -21433,6 +21750,7 @@ class TubeLayoutEditor(QMainWindow):
         self.sorted_current_centers_up, self.sorted_current_centers_down = (
             self.group_centers_by_y(self.current_centers)
         )
+        self.find_edge_tube()
         self.update_tube_nums()
         if added_count == 0:
             return
