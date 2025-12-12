@@ -5862,7 +5862,7 @@ class TubeLayoutEditor(QMainWindow):
         for row in range(row_count):
             name_item = self.param_table.item(row, 1)
             if name_item and name_item.text() in hidden_params:
-                self.param_table.setRowHidden(row, True)
+                self.set_param_visibility(row, False)
         self.renumber_visible_rows()
 
     def save_layout_result(self, product_id, result: dict):
@@ -6086,6 +6086,7 @@ class TubeLayoutEditor(QMainWindow):
             self.param_table.setRowHidden(row, target_hidden)
             # 强制刷新行高
             self.param_table.setRowHeight(row, self.param_table.rowHeight(row))
+            self.renumber_visible_rows()
 
     def validate_baffle_parameter(self, param_name):
         """验证防冲板参数的输入合法性"""
@@ -6244,10 +6245,10 @@ class TubeLayoutEditor(QMainWindow):
             if target_row != -1:  # 确保找到目标行才执行更新
                 if should_disable:
                     # 隐藏该行参数
-                    self.param_table.setRowHidden(target_row, True)
+                    self.set_param_visibility(target_row, False)
                 else:
                     # 显示该行参数
-                    self.param_table.setRowHidden(target_row, False)
+                    self.set_param_visibility(target_row, True)
 
                     # 恢复行内单元格为默认可编辑、白色背景（与其他行保持一致）
                     for col in range(self.param_table.columnCount()):
@@ -6273,10 +6274,10 @@ class TubeLayoutEditor(QMainWindow):
             if target_row != -1:
                 if should_disable:
                     # 隐藏该行参数
-                    self.param_table.setRowHidden(target_row, True)
+                    self.set_param_visibility(target_row, False)
                 else:
                     # 显示该行参数
-                    self.param_table.setRowHidden(target_row, False)
+                    self.set_param_visibility(target_row, True)
 
                     # 恢复行内单元格为默认可编辑、白色背景（与其他行保持一致）
                     for col in range(self.param_table.columnCount()):
@@ -6312,10 +6313,10 @@ class TubeLayoutEditor(QMainWindow):
                 # 当需要禁用时，直接隐藏整行；否则显示整行
                 if should_disable:
                     # 隐藏该行参数
-                    self.param_table.setRowHidden(target_row, True)
+                    self.set_param_visibility(target_row, False)
                 else:
                     # 显示该行参数
-                    self.param_table.setRowHidden(target_row, False)
+                    self.set_param_visibility(target_row, True)
 
                     # 恢复行内单元格为默认可编辑、白色背景（与其他行保持一致）
                     for col in range(self.param_table.columnCount()):
@@ -6386,7 +6387,7 @@ class TubeLayoutEditor(QMainWindow):
 
         for target_row in (di_row, dit_row):
             if target_row != -1:
-                self.param_table.setRowHidden(target_row, hide_rows)
+                self.set_param_visibility(target_row, not hide_rows)
 
     def setup_modification_detection(self):
         """设置参数修改检测机制"""
@@ -18234,7 +18235,7 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 self.param_table.setItem(row, 2, QTableWidgetItem(text))
             # 保持你原有“隐藏参数行”的习惯
-            self.param_table.setRowHidden(row, True)
+            self.set_param_visibility(row, False)
 
         # ---------- 读取当前默认值 ----------
         row_type = find_row_by_name("拉杆形式")
@@ -18645,7 +18646,7 @@ class TubeLayoutEditor(QMainWindow):
                 w.blockSignals(False)
             else:
                 self.param_table.setItem(row, 2, QTableWidgetItem(text))
-            self.param_table.setRowHidden(row, True)
+            self.set_param_visibility(row, False)
 
         row_type = find_row_by_name("拉杆形式")
         row_dia = find_row_by_name("拉杆直径")
@@ -23015,7 +23016,7 @@ class TubeLayoutEditor(QMainWindow):
                 w.blockSignals(False)
             else:
                 self.param_table.setItem(row, 2, QTableWidgetItem(text))
-            self.param_table.setRowHidden(row, True)
+            self.set_param_visibility(row, False)
 
         # ---------- 读取默认值 ----------
         row_type = find_row_by_name("拉杆形式")
@@ -23452,7 +23453,7 @@ class TubeLayoutEditor(QMainWindow):
                 w.blockSignals(False)
             else:
                 self.param_table.setItem(row, 2, QTableWidgetItem(text))
-            self.param_table.setRowHidden(row, True)
+            self.set_param_visibility(row, False)
 
         # 读取默认值
         row_type = find_row_by_name("拉杆形式")
