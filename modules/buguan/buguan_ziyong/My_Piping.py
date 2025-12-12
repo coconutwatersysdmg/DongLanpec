@@ -1856,7 +1856,9 @@ class TubeLayoutEditor(QMainWindow):
             self.axial_design_page = QWidget(self)
             _layout = QVBoxLayout(self.axial_design_page)
             _layout.setContentsMargins(0, 0, 0, 0)
-            _layout.addWidget(QLabel("轴向设计功能暂未开发完成", self.axial_design_page))
+            _layout.addWidget(
+                QLabel("轴向设计功能暂未开发完成", self.axial_design_page)
+            )
             _layout.addStretch(1)
         self.stacked_widget.addWidget(self.axial_design_page)
 
@@ -13339,6 +13341,54 @@ class TubeLayoutEditor(QMainWindow):
         # 调用方需要按顺序执行这些SQL语句
         return [query_sql, delete_sql, insert_sql]
 
+    def build_sql_for_radial_holes(self):
+        if not hasattr(self, "productID") or not self.productID:
+            return None
+        if (
+            not isinstance(getattr(self, "radial_hole_dict", None), dict)
+            or not self.radial_hole_dict
+        ):
+            return None
+
+        table_name = "`产品设计活动表_布管管口表`"
+
+        def escape_str(value):
+            return value.replace("'", "''") if isinstance(value, str) else value
+
+        safe_product_id = escape_str(str(self.productID))
+
+        query_sql = (
+            f"SELECT 1 FROM {table_name} WHERE `产品ID` = '{safe_product_id}' LIMIT 1;"
+        )
+        delete_sql = f"DELETE FROM {table_name} WHERE `产品ID` = '{safe_product_id}';"
+
+        insert_sqls = []
+        for code, info in self.radial_hole_dict.items():
+            if not isinstance(info, dict):
+                continue
+            port_code = escape_str(str(code))
+            direction = escape_str(str(info.get("连通方向", "壳程") or "壳程"))
+
+            coord = info.get("换热管坐标")
+            if coord is None:
+                coord_str = ""
+            else:
+                try:
+                    coord_str = f"({float(coord[0])}, {float(coord[1])})"
+                except Exception:
+                    coord_str = str(coord)
+            coord_str = escape_str(coord_str)
+
+            insert_sqls.append(
+                f"INSERT INTO {table_name} (`产品ID`, `管口号`, `连通方向`, `坐标`) "
+                f"VALUES ('{safe_product_id}', '{port_code}', '{direction}', '{coord_str}');"
+            )
+
+        if not insert_sqls:
+            return None
+
+        return [query_sql, delete_sql] + insert_sqls
+
     def build_sql_for_tube_form(self):
         """构建管板形式表的SQL语句，处理元组列表格式的参数"""
         if not self.tube_form_data:
@@ -13437,9 +13487,14 @@ class TubeLayoutEditor(QMainWindow):
                 slipway_set = set(self.slipway_centers)
                 # 保存前校验：所有管口必须设置径向开孔
                 try:
-                    if isinstance(getattr(self, "pipe_port_dict", None), dict) and self.pipe_port_dict:
+                    if (
+                        isinstance(getattr(self, "pipe_port_dict", None), dict)
+                        and self.pipe_port_dict
+                    ):
                         expected_codes = list(self.pipe_port_dict.keys())
-                        if not isinstance(getattr(self, "radial_hole_dict", None), dict):
+                        if not isinstance(
+                            getattr(self, "radial_hole_dict", None), dict
+                        ):
                             QMessageBox.warning(
                                 self,
                                 "提示",
@@ -13450,7 +13505,10 @@ class TubeLayoutEditor(QMainWindow):
 
                         for code in expected_codes:
                             info = self.radial_hole_dict.get(code)
-                            if not isinstance(info, dict) or info.get("换热管坐标") is None:
+                            if (
+                                not isinstance(info, dict)
+                                or info.get("换热管坐标") is None
+                            ):
                                 QMessageBox.warning(
                                     self,
                                     "提示",
@@ -13460,7 +13518,9 @@ class TubeLayoutEditor(QMainWindow):
                                 return
                 except Exception:
                     # 校验异常时不允许保存，避免漏检
-                    QMessageBox.warning(self, "提示", "径向开孔校验失败，请确认！", QMessageBox.Ok)
+                    QMessageBox.warning(
+                        self, "提示", "径向开孔校验失败，请确认！", QMessageBox.Ok
+                    )
                     return
                 # self.current_centers = [center for center in self.current_centers if center not in slipway_set]
                 # TODO 获取管口数量分布表格数据
@@ -13479,6 +13539,11 @@ class TubeLayoutEditor(QMainWindow):
                             f.write(data_to_write)
                 except Exception as e:
                     print(f"保存 .current_centers.json 失败: {e}")
+                # 径向开孔
+                sql_list = self.build_sql_for_radial_holes()
+                if sql_list:
+                    for sql in sql_list:
+                        self.execute_sql(sql)
                 # TODO 布管数量
                 sql_list = self.build_sql_for_tube_hole(tube_hole_data)
                 if sql_list:
@@ -13507,6 +13572,24 @@ class TubeLayoutEditor(QMainWindow):
                 if sql:
                     for statement in sql:
                         self.execute_sql(statement)
+
+                sql_list = self.build_sql_for_radial_holes()
+                if sql_list:
+                    try:
+                        has_old = False
+                        query_sql = sql_list[0]
+                        delete_sql = sql_list[1]
+                        insert_sqls = sql_list[2:]
+
+                        res = self.execute_sql(query_sql, fetch=True)
+                        has_old = bool(res)
+
+                        if has_old:
+                            self.execute_sql(delete_sql)
+                        for s in insert_sqls:
+                            self.execute_sql(s)
+                    except Exception as e:
+                        print(f"保存径向开孔数据失败: {e}")
 
                 # 当前圆心坐标
                 if self.heat_exchanger in ["AES", "BES"]:
@@ -20251,7 +20334,11 @@ class TubeLayoutEditor(QMainWindow):
         port_codes = list(self.radial_hole_dict.keys())
         for code in port_codes:
             try:
-                info = self.radial_hole_dict.get(code) if isinstance(self.radial_hole_dict, dict) else None
+                info = (
+                    self.radial_hole_dict.get(code)
+                    if isinstance(self.radial_hole_dict, dict)
+                    else None
+                )
                 assigned = isinstance(info, dict) and info.get("换热管坐标") is not None
             except Exception:
                 assigned = False
@@ -20300,10 +20387,14 @@ class TubeLayoutEditor(QMainWindow):
             selected_port = port_combo.currentText()
         selected_direction = dir_combo.currentText() or "壳程"
 
-        if existing_port_code is not None and str(existing_port_code) != str(selected_port):
+        if existing_port_code is not None and str(existing_port_code) != str(
+            selected_port
+        ):
             try:
                 if existing_port_code in self.radial_hole_dict:
-                    old_coord = self.radial_hole_dict[existing_port_code].get("换热管坐标")
+                    old_coord = self.radial_hole_dict[existing_port_code].get(
+                        "换热管坐标"
+                    )
                     self.radial_hole_dict[existing_port_code]["换热管坐标"] = None
                     if old_coord is not None:
                         try:
@@ -20334,8 +20425,12 @@ class TubeLayoutEditor(QMainWindow):
 
         # 若用户选择的是“已分配”的管口，先擦除该管口旧绘制并解绑旧坐标
         try:
-            old_coord_for_selected = self.radial_hole_dict[selected_port].get("换热管坐标")
-            if old_coord_for_selected is not None and not _coord_equal(old_coord_for_selected, current_coord):
+            old_coord_for_selected = self.radial_hole_dict[selected_port].get(
+                "换热管坐标"
+            )
+            if old_coord_for_selected is not None and not _coord_equal(
+                old_coord_for_selected, current_coord
+            ):
                 try:
                     self.remove_radial_hole_graphics(old_coord_for_selected)
                 except Exception:
@@ -20389,9 +20484,17 @@ class TubeLayoutEditor(QMainWindow):
         if not hasattr(self, "graphics_scene") or self.graphics_scene is None:
             return
 
-        if not hasattr(self, "r") or not isinstance(self.r, (int, float)) or self.r <= 0:
+        if (
+            not hasattr(self, "r")
+            or not isinstance(self.r, (int, float))
+            or self.r <= 0
+        ):
             return
-        if not hasattr(self, "R_wai") or not isinstance(self.R_wai, (int, float)) or self.R_wai <= 0:
+        if (
+            not hasattr(self, "R_wai")
+            or not isinstance(self.R_wai, (int, float))
+            or self.R_wai <= 0
+        ):
             return
 
         try:
@@ -20401,7 +20504,9 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             return
 
-        if not isinstance(getattr(self, "_radial_hole_tangent_items_by_coord", None), dict):
+        if not isinstance(
+            getattr(self, "_radial_hole_tangent_items_by_coord", None), dict
+        ):
             self._radial_hole_tangent_items_by_coord = {}
 
         key = self._radial_hole_coord_key(center_coord)
@@ -30683,12 +30788,20 @@ class TubeLayoutEditor(QMainWindow):
                 if rel:
                     selected_interfering_centers.append(rel)
             if tube_num == "2":
-                selected_unique_centers = self.judge_linkage_x(selected_interfering_centers)
-                actual_unique_centers=self.selected_to_current_coords(selected_unique_centers)
+                selected_unique_centers = self.judge_linkage_x(
+                    selected_interfering_centers
+                )
+                actual_unique_centers = self.selected_to_current_coords(
+                    selected_unique_centers
+                )
                 unique_centers = list(set(actual_unique_centers))
-            elif tube_num in ["4","6"]:
-                selected_unique_centers = self.judge_linkage_y(selected_interfering_centers)
-                actual_unique_centers=self.selected_to_current_coords(selected_unique_centers)
+            elif tube_num in ["4", "6"]:
+                selected_unique_centers = self.judge_linkage_y(
+                    selected_interfering_centers
+                )
+                actual_unique_centers = self.selected_to_current_coords(
+                    selected_unique_centers
+                )
                 unique_centers = list(set(actual_unique_centers))
             else:
                 unique_centers = list(set(interfering_centers))
@@ -35528,7 +35641,9 @@ class TubeLayoutEditor(QMainWindow):
                 x_multiplier = 1 if mouse_x >= 0 else -1
 
                 result = (
-                    self.find_nearest_circle_index(centers, [], mouse_x, mouse_y, self.r)
+                    self.find_nearest_circle_index(
+                        centers, [], mouse_x, mouse_y, self.r
+                    )
                     if centers
                     else None
                 )
