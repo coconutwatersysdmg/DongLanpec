@@ -34942,6 +34942,7 @@ class TubeLayoutEditor(QMainWindow):
         from PyQt5.QtGui import QPen, QBrush, QColor
         from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsRectItem
         import math
+        import time
 
         # 确保ClickableRectItem已定义（如果在其他文件中需导入）
         # from your_module import ClickableRectItem
@@ -35048,6 +35049,61 @@ class TubeLayoutEditor(QMainWindow):
                         self.clear_selection_highlight()
                     return False
 
+            elif event.type() == QEvent.MouseButtonDblClick:
+                if event.button() != Qt.LeftButton:
+                    return super().eventFilter(obj, event)
+
+                scene_pos = self.graphics_view.mapToScene(event.pos())
+                mouse_x = scene_pos.x()
+                mouse_y = scene_pos.y()
+
+                items = self.graphics_scene.items(scene_pos)
+                for item in items:
+                    # 旁路挡板、防冲板等矩形：交给 ClickableRectItem 自己处理
+                    if isinstance(item, ClickableRectItem):
+                        return False
+                    # 拉杆等圆形：交给 ClickableCircleItem 自己处理（包括自由侧拉杆）
+                    if isinstance(item, ClickableCircleItem):
+                        return False
+
+                in_big_circle = False
+                if hasattr(self, "R_wai"):
+                    distance_to_center = math.hypot(mouse_x, mouse_y)
+                    in_big_circle = distance_to_center <= self.R_wai + 1e-6
+
+                if not in_big_circle:
+                    return super().eventFilter(obj, event)
+
+                if not hasattr(self, "full_sorted_current_centers_up"):
+                    self.full_sorted_current_centers_up = []
+                if not hasattr(self, "full_sorted_current_centers_down"):
+                    self.full_sorted_current_centers_down = []
+
+                if mouse_y >= 0:
+                    centers = self.full_sorted_current_centers_up
+                    y_multiplier = 1
+                else:
+                    centers = self.full_sorted_current_centers_down
+                    y_multiplier = -1
+
+                x_multiplier = 1 if mouse_x >= 0 else -1
+
+                result = (
+                    self.find_nearest_circle_index(centers, [], mouse_x, mouse_y, self.r)
+                    if centers
+                    else None
+                )
+
+                if result:
+                    row, col = result
+                    row_label = (row + 1) * y_multiplier
+                    col_label = (col + 1) * x_multiplier
+                    _ = (row_label, col_label)
+                    print("检测到对换热管双击操作")
+                    return True
+
+                return super().eventFilter(obj, event)
+
             elif event.type() == QEvent.MouseMove:
                 # 左键拖动时，如果已按下且有起点，则当拖动距离超过阈值时开始/更新框选矩形
                 if (
@@ -35135,6 +35191,19 @@ class TubeLayoutEditor(QMainWindow):
                             row_label = (row + 1) * y_multiplier
                             col_label = (col + 1) * x_multiplier
                             label = (row_label, col_label)
+
+                            if not hasattr(self, "_tube_last_click_time"):
+                                self._tube_last_click_time = 0.0
+                            if not hasattr(self, "_tube_last_click_label"):
+                                self._tube_last_click_label = None
+                            now_t = time.monotonic()
+                            if (
+                                self._tube_last_click_label == label
+                                and (now_t - float(self._tube_last_click_time)) <= 1.0
+                            ):
+                                print("检测到对换热管双击操作")
+                            self._tube_last_click_time = now_t
+                            self._tube_last_click_label = label
 
                             if not hasattr(self, "selected_centers"):
                                 self.selected_centers = []
