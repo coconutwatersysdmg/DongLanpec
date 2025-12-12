@@ -9472,7 +9472,7 @@ class TubeLayoutEditor(QMainWindow):
             elif changed_param_name == "折流板切口与中心线间距a":
                 if cut_spacing is None or cut_spacing < 0:
                     QMessageBox.warning(
-                        self, "参数错误", "折流板切口与中心线间距值无效"
+                        self, "参数错误", "折流板切口与中心线间距a值无效"
                     )
                     return
 
@@ -9530,7 +9530,7 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 设置程序自动更新标志，避免循环更新
                     self._is_programmatic_update = True
-                    self._programmatic_update_params.add("折流板切口与中心线间距")
+                    self._programmatic_update_params.add("折流板切口与中心线间距a")
                     try:
                         spacing_item = self.param_table.item(cut_spacing_row, 2)
                         if spacing_item:
@@ -9727,6 +9727,10 @@ class TubeLayoutEditor(QMainWindow):
             "管程程数",
             "拉杆形式",
             "公称直径 DN",
+            "弓形弦高切口率",
+            "内侧中心切口率",
+            "A型板切口与中心线间距a",
+            "B型板切口与中心线间距b"
         ]
 
         # 3. 定义统一的单元格变化总处理器（处理文本单元格）
@@ -9983,6 +9987,7 @@ class TubeLayoutEditor(QMainWindow):
             # 3) 目标参数联动逻辑（保持原有行为）
             try:
                 if param_name in target_params:
+                    #TODO 在load_initial函数后触发的输入框改变的监听事件
                     if param_name == "壳体内直径 Dis":
                         print(
                             "[on_table_item_changed DEBUG] 执行 壳体内直径 Dis 相关逻辑"
@@ -10008,6 +10013,12 @@ class TubeLayoutEditor(QMainWindow):
                             print(
                                 f"[on_table_item_changed] update_divider/... 出错: {e}"
                             )
+                    if param_name in ["弓形弦高切口率", "内侧中心切口率", "A型板切口与中心线间距a",
+                                      "B型板切口与中心线间距b"]:
+                        try:
+                            self.draw_baffle_plates()
+                        except Exception as e:
+                            print(f"绘制折流板出错: {e}")
 
                     if param_name in [
                         "壳体内直径 Dis",
@@ -10171,6 +10182,11 @@ class TubeLayoutEditor(QMainWindow):
                             self.update_partition_plate_center_distance()
                         except Exception as e:
                             print(f"[on_table_item_changed] update lagan 出错: {e}")
+                    if param_name in ["弓形弦高切口率","内侧中心切口率","A型板切口与中心线间距a","B型板切口与中心线间距b"]:
+                        try:
+                           self.draw_baffle_plates()
+                        except Exception as e:
+                            print(f"绘制折流板出错: {e}")
                     if param_name == "管程程数":
                         self.tube_pass_form_value = {
                             "1": "1.1",
@@ -10822,7 +10838,7 @@ class TubeLayoutEditor(QMainWindow):
                 print(f"警告：未获取到管程分程形式标识，使用文本: {current_text}")
                 self.tube_pass_form_value = current_text
 
-    # TODO 在load_initial函数后触发的监听事件，下拉框改变的触发事件
+    # TODO 在load_initial函数后触发的下拉框改变的监听事件
     def on_combobox_changed(self, row, value):
         """处理下拉框类型参数的变更事件及内容变化处理"""
         # 首先执行原current_text版本的逻辑
@@ -10917,6 +10933,12 @@ class TubeLayoutEditor(QMainWindow):
                 # print(f"管程分程形式已更新为: {current_form}")
                 # print(f"实时更新的tube_pass_form_value: {self.tube_pass_form_value}")
         elif param_name == "折流板切口方向":
+            # 获取当前选中的值
+            do_widget = self.param_table.cellWidget(row, 2)
+            if isinstance(do_widget, QComboBox):
+                selected_value = do_widget.currentText()
+            self.draw_baffle_plates()
+        elif param_name == "折流板类型":
             # 获取当前选中的值
             do_widget = self.param_table.cellWidget(row, 2)
             if isinstance(do_widget, QComboBox):
@@ -14593,9 +14615,13 @@ class TubeLayoutEditor(QMainWindow):
             self.baffle_lines = []
 
         # 获取折流板相关参数
+        baffle_type = None  # 折流板类型
         cut_direction = None  # 折流板切口方向
         cut_rate = None  # 折流板要求切口率
         shell_inner_diameter = None  # 壳体内直径
+        baffle_outer_diameter = None  # 折流板外径
+        a_distance = None  # A型板切口与中心线间距a
+        b_distance = None  # B型板切口与中心线间距b
 
         # 遍历参数表格查找所需参数
         for row in range(self.param_table.rowCount()):
@@ -14613,7 +14639,9 @@ class TubeLayoutEditor(QMainWindow):
                 param_value = value_item.text() if value_item else ""
 
             # 记录参数值
-            if param_name == "折流板切口方向":
+            if param_name == "折流板类型":
+                baffle_type = param_value
+            elif param_name == "折流板切口方向":
                 cut_direction = param_value
             elif param_name == "折流板要求切口率":
                 try:
@@ -14627,6 +14655,81 @@ class TubeLayoutEditor(QMainWindow):
                 except ValueError:
                     # QMessageBox.warning(self, "参数错误", "壳体内直径必须为数值")
                     return
+            elif param_name == "折流板外径":
+                try:
+                    baffle_outer_diameter = float(param_value)
+                except ValueError:
+                    return
+            elif param_name == "A型板切口与中心线间距a":
+                try:
+                    a_distance = float(param_value)
+                except ValueError:
+                    return
+            elif param_name == "B型板切口与中心线间距b":
+                try:
+                    b_distance = float(param_value)
+                except ValueError:
+                    return
+
+        baffle_type_text = (baffle_type or "").strip()
+        if baffle_type_text in ["双弓型", "双弓形"]:
+            # 双弓型：根据 a/b 画竖向弦线
+            # 优先使用折流板外径作为大圆直径；若缺失则退回壳体内直径
+            circle_diameter = baffle_outer_diameter or shell_inner_diameter
+            if circle_diameter is None:
+                return
+            if a_distance is None or b_distance is None:
+                return
+            if circle_diameter <= 0:
+                return
+
+            R = circle_diameter / 2.0
+
+            def draw_vertical_chord(x_level: float, color: QColor, tag: str):
+                if x_level is None:
+                    return
+                if abs(x_level) > R:
+                    return
+                half_len = math.sqrt(max(0.0, R * R - x_level * x_level))
+                pen_local = QPen(color)
+                pen_local.setWidth(3)
+                line_item = self.graphics_scene.addLine(
+                    x_level,
+                    -half_len,
+                    x_level,
+                    half_len,
+                    pen_local,
+                )
+                self.baffle_lines.append(
+                    {
+                        "type": "vertical",
+                        "x_level": x_level,
+                        "y_range": (-half_len, half_len),
+                        "line_item": line_item,
+                        "baffle_subtype": tag,
+                    }
+                )
+
+            # 深黄色：A 型板（±a）
+            deep_yellow = QColor(232, 204, 70)
+            draw_vertical_chord(a_distance, deep_yellow, "A")
+            draw_vertical_chord(-a_distance, deep_yellow, "A")
+
+            # 浅黄色：B 型板（±b）
+            light_yellow = QColor(244, 224, 120)
+            draw_vertical_chord(b_distance, light_yellow, "B")
+            draw_vertical_chord(-b_distance, light_yellow, "B")
+
+            self.operations.append(
+                {
+                    "type": "baffle_plate",
+                    "direction": "double_bow_vertical",
+                    "a": a_distance,
+                    "b": b_distance,
+                    "circle_diameter": circle_diameter,
+                }
+            )
+            return
 
         # 验证必要参数是否存在
         if not all(
@@ -20051,7 +20154,7 @@ class TubeLayoutEditor(QMainWindow):
         other_params = [
             ("折流板切口方向", "折流板切口方向", ""),
             ("折流板要求切口率", "折流板要求切口率", "%"),
-            ("折流板切口与中心线间距a", "折流板切口与中心线间距", "mm"),
+            ("折流板切口与中心线间距a", "折流板切口与中心线间距a", "mm"),
         ]
 
         # 读取初始折流板类型
