@@ -20057,6 +20057,8 @@ class TubeLayoutEditor(QMainWindow):
         # 读取初始折流板类型
         current_baffle_type = get_param_value("折流板类型") or "单弓形"
 
+        show_other_params = current_baffle_type != "双弓形"
+
         # ---------- 构造对话框 ----------
         try:
             from PyQt5.QtWidgets import (
@@ -20074,7 +20076,7 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             # 若导入失败，仅在控制台输出信息
             print("折流板参数:")
-            for cn, real, unit in base_params + other_params:
+            for cn, real, unit in base_params + (other_params if show_other_params else []):
                 print(f"  {cn}: {get_param_value(real)} {unit}")
             if current_baffle_type == "双弓形":
                 for cn, real, unit, default_val in extra_params:
@@ -20104,8 +20106,10 @@ class TubeLayoutEditor(QMainWindow):
         initial_numeric_values = {}
         for cn, rn, unit in base_params:
             dialog_rows.append((cn, rn, unit, None))
-        for cn, rn, unit in other_params:
-            dialog_rows.append((cn, rn, unit, None))
+
+        if show_other_params:
+            for cn, rn, unit in other_params:
+                dialog_rows.append((cn, rn, unit, None))
 
         # 如果一开始就是双弓形，则把附加参数一起加入
         if current_baffle_type == "双弓形":
@@ -20163,6 +20167,7 @@ class TubeLayoutEditor(QMainWindow):
                 unit_item = QTableWidgetItem("")
                 unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
                 table.setItem(row, 2, unit_item)
+
             elif cn == "折流板切口方向":
                 direction_combo = _QComboBoxForDialog()
                 direction_combo.addItems(["水平上下", "垂直左右"])
@@ -20291,6 +20296,61 @@ class TubeLayoutEditor(QMainWindow):
             for r in reversed(rows_to_remove):
                 table.removeRow(r)
 
+        def ensure_other_rows_exist():
+            """在需要显示时，确保三条“切口相关”参数行存在（若缺失则追加）。"""
+            existing_names = set()
+            for r in range(table.rowCount()):
+                item = table.item(r, 0)
+                if item:
+                    existing_names.add(item.text().strip())
+
+            for cn, rn, unit in other_params:
+                if cn in existing_names:
+                    continue
+                row = table.rowCount()
+                table.insertRow(row)
+
+                name_item = QTableWidgetItem(cn)
+                name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+                table.setItem(row, 0, name_item)
+
+                value_from_table = get_param_value(rn)
+                if (value_from_table is None or value_from_table == "") and cn == "折流板切口与中心线间距a":
+                    value_text = "123.2"
+                else:
+                    value_text = value_from_table or ""
+
+                if cn == "折流板切口方向":
+                    direction_combo = _QComboBoxForDialog()
+                    direction_combo.addItems(["水平上下", "垂直左右"])
+                    if value_text in ["水平上下", "垂直左右"]:
+                        direction_combo.setCurrentText(value_text)
+                    else:
+                        direction_combo.setCurrentText("水平上下")
+                    table.setCellWidget(row, 1, direction_combo)
+                else:
+                    value_item = QTableWidgetItem(str(value_text))
+                    value_item.setFlags(value_item.flags() | Qt.ItemIsEditable)
+                    table.setItem(row, 1, value_item)
+
+                unit_item = QTableWidgetItem(unit or "")
+                unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
+                table.setItem(row, 2, unit_item)
+
+        def remove_other_rows():
+            """在双弓形时，从弹窗中移除三条“切口相关”参数行（不影响主参数表）。"""
+            rows_to_remove = []
+            for r in range(table.rowCount()):
+                item = table.item(r, 0)
+                if not item:
+                    continue
+                name = item.text().strip()
+                if any(name == cn for (cn, _rn, _unit) in other_params):
+                    rows_to_remove.append(r)
+
+            for r in reversed(rows_to_remove):
+                table.removeRow(r)
+
         if baffle_type_row is not None:
             type_combo = table.cellWidget(baffle_type_row, 1)
 
@@ -20299,8 +20359,10 @@ class TubeLayoutEditor(QMainWindow):
                 update_images(btype)
                 if btype == "双弓形":
                     ensure_extra_rows_exist()
+                    remove_other_rows()
                 else:
                     remove_extra_rows()
+                    ensure_other_rows_exist()
                 table.resizeColumnsToContents()
 
             if isinstance(type_combo, _QComboBoxForDialog):
