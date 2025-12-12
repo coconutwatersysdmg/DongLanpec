@@ -1691,9 +1691,7 @@ class TubeLayoutEditor(QMainWindow):
             f"根据标准要求，拉杆数量不应小于 {std_display} 根。"
         )
         try:
-            desc_text = (
-                desc_text.replace("，", "，\n").replace(",", ",\n").strip()
-            )
+            desc_text = desc_text.replace("，", "，\n").replace(",", ",\n").strip()
         except Exception:
             pass
 
@@ -1892,7 +1890,9 @@ class TubeLayoutEditor(QMainWindow):
 
         # 拉杆数量统计表（放在左侧参数列表底部）
         self.lagan_summary_container = QWidget(self.param_frame)
-        self.lagan_summary_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.lagan_summary_container.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed
+        )
 
         lagan_layout = QGridLayout(self.lagan_summary_container)
         lagan_layout.setContentsMargins(5, 5, 5, 5)
@@ -3783,7 +3783,11 @@ class TubeLayoutEditor(QMainWindow):
                 product_conn = None
                 try:
                     product_conn = create_product_connection()
-                    if product_conn and hasattr(product_conn, "open") and product_conn.open:
+                    if (
+                        product_conn
+                        and hasattr(product_conn, "open")
+                        and product_conn.open
+                    ):
                         cursor = product_conn.cursor()
                         query = (
                             "SELECT 管口代号, 管口所属元件 "
@@ -9730,7 +9734,7 @@ class TubeLayoutEditor(QMainWindow):
             "弓形弦高切口率",
             "内侧中心切口率",
             "A型板切口与中心线间距a",
-            "B型板切口与中心线间距b"
+            "B型板切口与中心线间距b",
         ]
 
         # 3. 定义统一的单元格变化总处理器（处理文本单元格）
@@ -9987,7 +9991,7 @@ class TubeLayoutEditor(QMainWindow):
             # 3) 目标参数联动逻辑（保持原有行为）
             try:
                 if param_name in target_params:
-                    #TODO 在load_initial函数后触发的输入框改变的监听事件
+                    # TODO 在load_initial函数后触发的输入框改变的监听事件
                     if param_name == "壳体内直径 Dis":
                         print(
                             "[on_table_item_changed DEBUG] 执行 壳体内直径 Dis 相关逻辑"
@@ -10013,8 +10017,12 @@ class TubeLayoutEditor(QMainWindow):
                             print(
                                 f"[on_table_item_changed] update_divider/... 出错: {e}"
                             )
-                    if param_name in ["弓形弦高切口率", "内侧中心切口率", "A型板切口与中心线间距a",
-                                      "B型板切口与中心线间距b"]:
+                    if param_name in [
+                        "弓形弦高切口率",
+                        "内侧中心切口率",
+                        "A型板切口与中心线间距a",
+                        "B型板切口与中心线间距b",
+                    ]:
                         try:
                             self.draw_baffle_plates()
                         except Exception as e:
@@ -10182,9 +10190,14 @@ class TubeLayoutEditor(QMainWindow):
                             self.update_partition_plate_center_distance()
                         except Exception as e:
                             print(f"[on_table_item_changed] update lagan 出错: {e}")
-                    if param_name in ["弓形弦高切口率","内侧中心切口率","A型板切口与中心线间距a","B型板切口与中心线间距b"]:
+                    if param_name in [
+                        "弓形弦高切口率",
+                        "内侧中心切口率",
+                        "A型板切口与中心线间距a",
+                        "B型板切口与中心线间距b",
+                    ]:
                         try:
-                           self.draw_baffle_plates()
+                            self.draw_baffle_plates()
                         except Exception as e:
                             print(f"绘制折流板出错: {e}")
                     if param_name == "管程程数":
@@ -14610,6 +14623,7 @@ class TubeLayoutEditor(QMainWindow):
 
         from PyQt5.QtGui import QPen, QColor
         import math
+
         if len(self.baffle_lines) != 0:
             self.clear_baffle_plates()
             self.baffle_lines = []
@@ -15801,7 +15815,10 @@ class TubeLayoutEditor(QMainWindow):
 
                 target_color = QColor(173, 216, 230)
                 for it in list(self.graphics_scene.items()):
-                    if isinstance(it, QGraphicsEllipseItem) and it.brush().color() == target_color:
+                    if (
+                        isinstance(it, QGraphicsEllipseItem)
+                        and it.brush().color() == target_color
+                    ):
                         # 若是 marker，直接删除
                         if it.data(0) == "marker":
                             self.graphics_scene.removeItem(it)
@@ -20179,7 +20196,9 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             # 若导入失败，仅在控制台输出信息
             print("折流板参数:")
-            for cn, real, unit in base_params + (other_params if show_other_params else []):
+            for cn, real, unit in base_params + (
+                other_params if show_other_params else []
+            ):
                 print(f"  {cn}: {get_param_value(real)} {unit}")
             if current_baffle_type == "双弓形":
                 for cn, real, unit, default_val in extra_params:
@@ -20418,7 +20437,9 @@ class TubeLayoutEditor(QMainWindow):
                 table.setItem(row, 0, name_item)
 
                 value_from_table = get_param_value(rn)
-                if (value_from_table is None or value_from_table == "") and cn == "折流板切口与中心线间距a":
+                if (
+                    value_from_table is None or value_from_table == ""
+                ) and cn == "折流板切口与中心线间距a":
                     value_text = "123.2"
                 else:
                     value_text = value_from_table or ""
@@ -20602,7 +20623,10 @@ class TubeLayoutEditor(QMainWindow):
             # 0. 迁移：DN/Dis联动（当“是否以外径为基准”为“否”时，Dis=DN）
             try:
                 outer_base = get_text_from_dialog("是否以外径为基准")
-                if outer_base == "否" and changed_name in ["公称直径 DN", "是否以外径为基准"]:
+                if outer_base == "否" and changed_name in [
+                    "公称直径 DN",
+                    "是否以外径为基准",
+                ]:
                     dn_val = get_float_from_dialog("公称直径 DN")
                     if dn_val is not None:
                         set_dialog_value("壳体内直径 Dis", dn_val)
@@ -20722,7 +20746,11 @@ class TubeLayoutEditor(QMainWindow):
                 set_dialog_value("内侧中心切口率", rate)
 
             # 3. 迁移：折流板外径/要求切口率/切口与中心线间距 联动
-            if changed_name in ["折流板外径", "折流板要求切口率", "折流板切口与中心线间距a"]:
+            if changed_name in [
+                "折流板外径",
+                "折流板要求切口率",
+                "折流板切口与中心线间距a",
+            ]:
                 Di2 = get_float_from_dialog("壳体内直径 Dis")
                 if Di2 is None or Di2 <= 0:
                     return
@@ -20734,19 +20762,27 @@ class TubeLayoutEditor(QMainWindow):
                 if changed_name == "折流板要求切口率":
                     cut_rate = get_float_from_dialog("折流板要求切口率")
                     if cut_rate is None or not (0 <= cut_rate <= 50):
-                        set_warning('您输入的"折流板要求切口率"值无效，必须在0%到50%范围内')
+                        set_warning(
+                            '您输入的"折流板要求切口率"值无效，必须在0%到50%范围内'
+                        )
                         return
                     clear_warning()
                     cut_size = (cut_rate / 100.0) * Di2
                     new_spacing = baffle_radius - cut_size
                     if new_spacing < 0 or new_spacing > baffle_radius:
-                        set_warning('根据当前切口率计算出的"折流板切口与中心线间距a"不合理，请核对后重新输入！')
+                        set_warning(
+                            '根据当前切口率计算出的"折流板切口与中心线间距a"不合理，请核对后重新输入！'
+                        )
                         return
                     set_dialog_value("折流板切口与中心线间距a", new_spacing)
 
                 elif changed_name == "折流板切口与中心线间距a":
                     cut_spacing = get_float_from_dialog("折流板切口与中心线间距a")
-                    if cut_spacing is None or cut_spacing < 0 or cut_spacing > baffle_radius:
+                    if (
+                        cut_spacing is None
+                        or cut_spacing < 0
+                        or cut_spacing > baffle_radius
+                    ):
                         set_warning(
                             f'您输入的"折流板切口与中心线间距a"必须在0到{baffle_radius:.1f}mm范围内！'
                         )
@@ -20754,7 +20790,9 @@ class TubeLayoutEditor(QMainWindow):
                     clear_warning()
                     new_cut_rate = ((baffle_radius - cut_spacing) / Di2) * 100.0
                     if not (0 <= new_cut_rate <= 50):
-                        set_warning('计算出的"折流板要求切口率"超出合理范围(0-50%)，请核对输入！')
+                        set_warning(
+                            '计算出的"折流板要求切口率"超出合理范围(0-50%)，请核对输入！'
+                        )
                         return
                     set_dialog_value("折流板要求切口率", new_cut_rate)
 
@@ -21079,9 +21117,8 @@ class TubeLayoutEditor(QMainWindow):
                 dict_tubes = None
                 try:
                     plate_id_dbg = getattr(baffle, "impingement_plate_id", None)
-                    if (
-                        plate_id_dbg is not None
-                        and hasattr(self, "impingement_plate_dic")
+                    if plate_id_dbg is not None and hasattr(
+                        self, "impingement_plate_dic"
                     ):
                         rec_dbg = self.impingement_plate_dic.get(plate_id_dbg)
                         if isinstance(rec_dbg, dict):
