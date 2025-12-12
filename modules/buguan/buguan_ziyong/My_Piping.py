@@ -670,7 +670,6 @@ class ClickableCircleItem(QGraphicsEllipseItem):
     ):
         super().__init__(rect, parent)
         self.setAcceptHoverEvents(True)
-        self.setFlag(QGraphicsEllipseItem.ItemIsSelectable, True)
         # 明确接受左键以确保能接收双击事件
         try:
             self.setAcceptedMouseButtons(Qt.LeftButton)
@@ -743,58 +742,76 @@ class ClickableCircleItem(QGraphicsEllipseItem):
                 except Exception:
                     pass
                 event.accept()
-            elif self.is_lagan:
+            elif self.is_lagan and self.editor:
+                # 普通拉杆：行为与普通换热管一致
+                # 1）通过 selected_centers 参与选管逻辑
+                # 2）自身显示淡蓝色实心选中效果
                 try:
-                    print("[ClickableCircleItem] lagan left-click -> toggle select")
-                except Exception:
-                    pass
-                # 普通拉杆的选中逻辑：显示淡蓝色实心圆
-                self.is_selected = not self.is_selected
-                if not hasattr(self, "original_brush"):
-                    self.original_brush = self.brush()
-                if not hasattr(self, "original_pen"):
-                    self.original_pen = self.pen()
-                if self.is_selected:
-                    self.setPen(self.lagan_selected_pen)
-                    self.setBrush(self.selected_brush)
-                else:
-                    self.setPen(self.original_pen)
-                    self.setBrush(self.original_brush)
-                try:
-                    print(f"[ClickableCircleItem] lagan is_selected={self.is_selected}")
-                except Exception:
-                    pass
+                    # 获取场景中的圆心坐标
+                    try:
+                        c = self.sceneBoundingRect().center()
+                        cx, cy = float(c.x()), float(c.y())
+                    except Exception:
+                        c = self.rect().center()
+                        pos = self.scenePos() + c
+                        cx, cy = float(pos.x()), float(pos.y())
 
-                # 更新主窗口选中列表
-                if self.editor:
-                    if not hasattr(self.editor, "selected_lagans"):
-                        self.editor.selected_lagans = []
-                    if self.is_selected:
-                        if self not in self.editor.selected_lagans:
-                            self.editor.selected_lagans.append(self)
-                    else:
-                        if self in self.editor.selected_lagans:
-                            self.editor.selected_lagans.remove(self)
-                            print(
-                                f"[ClickableCircleItem] 从选中列表移除拉杆，当前选中数量: {len(self.editor.selected_lagans)}"
-                            )
+                    editor = self.editor
+                    if hasattr(editor, "actual_to_selected_coords"):
+                        rel = editor.actual_to_selected_coords((cx, cy))
 
-                # 强制更新视图以显示选中状态
-                try:
-                    self.update()
-                    if self.scene():
-                        self.scene().update()
-                except Exception:
-                    pass
-                # 尝试提示自由拉杆-换热管的间距（仅在满足条件时）
-                try:
-                    if self.editor and hasattr(
-                        self.editor, "check_and_show_lagan_tube_distance"
-                    ):
-                        self.editor.check_and_show_lagan_tube_distance()
+                        # 规范化为[(row,col), ...]
+                        rel_list = []
+                        if rel:
+                            if (
+                                isinstance(rel, (list, tuple))
+                                and len(rel) == 2
+                                and isinstance(rel[0], int)
+                            ):
+                                rel_list.append(tuple(rel))
+                            elif isinstance(rel, list):
+                                for r in rel:
+                                    if (
+                                        isinstance(r, (list, tuple))
+                                        and len(r) == 2
+                                        and isinstance(r[0], int)
+                                    ):
+                                        rel_list.append(tuple(r))
+
+                        if not hasattr(editor, "selected_centers"):
+                            editor.selected_centers = []
+                        if not hasattr(editor, "selected_lagans"):
+                            editor.selected_lagans = []
+
+                        if rel_list:
+                            # 若已全部在 selected_centers 中，则视为取消选择；否则加入
+                            cur = list(editor.selected_centers)
+                            if all(coord in cur for coord in rel_list):
+                                # 取消选中：移除坐标 + 恢复原始画刷
+                                cur = [c for c in cur if c not in rel_list]
+                                self.setBrush(self.original_brush)
+                                # 同步普通拉杆选中列表
+                                if self in editor.selected_lagans:
+                                    editor.selected_lagans.remove(self)
+                            else:
+                                # 选中：加入坐标 + 设置淡蓝色实心
+                                for coord in rel_list:
+                                    if coord not in cur:
+                                        cur.append(coord)
+                                from PyQt5.QtGui import QColor, QBrush
+
+                                self.setBrush(QBrush(QColor(173, 216, 230)))
+                                # 同步普通拉杆选中列表
+                                if self not in editor.selected_lagans:
+                                    editor.selected_lagans.append(self)
+                            editor.selected_centers = cur
                 except Exception:
                     pass
                 event.accept()
+            else:
+                # 其他圆（普通换热管等）：使用父类默认行为
+                super().mousePressEvent(event)
+                return
 
     def mouseDoubleClickEvent(self, event):
         try:
@@ -814,51 +831,8 @@ class ClickableCircleItem(QGraphicsEllipseItem):
                 return
             except Exception:
                 pass
-        # 普通拉杆/换热管：仅当该圆心属于 lagan_info 时，弹出拉杆参数设置对话框
-        try:
-            if (
-                self.editor
-                and hasattr(self.editor, "lagan_info")
-                and hasattr(self.editor, "edit_lagan_params_dialog_only")
-            ):
-                # 获取该圆的场景中心坐标并四舍五入到6位小数，与 lagan_info 存储格式一致
-                try:
-                    c = self.sceneBoundingRect().center()
-                    cx, cy = round(float(c.x()), 6), round(float(c.y()), 6)
-                except Exception:
-                    c = self.rect().center()
-                    pos = self.scenePos() + c
-                    cx, cy = round(float(pos.x()), 6), round(float(pos.y()), 6)
-                print(f"[ClickableCircleItem] double-click center=({cx}, {cy})")
-
-                # 将 lagan_info 统一成 key6 形式进行比较
-                def key6_pair(p):
-                    try:
-                        return (round(float(p[0]), 6), round(float(p[1]), 6))
-                    except Exception:
-                        return None
-
-                lagan_set = set(
-                    k
-                    for k in (key6_pair(p) for p in (self.editor.lagan_info or []))
-                    if k is not None
-                )
-                print(f"[ClickableCircleItem] lagan_info size={len(lagan_set)}")
-
-                if (cx, cy) in lagan_set:
-                    try:
-                        print(
-                            "[ClickableCircleItem] center matched lagan_info -> open edit_lagan_params_dialog_only()"
-                        )
-                        self.editor.edit_lagan_params_dialog_only()
-                        event.accept()
-                        return
-                    except Exception:
-                        pass
-                else:
-                    print("[ClickableCircleItem] center NOT in lagan_info -> no action")
-        except Exception:
-            pass
+        # 其他情况（包括普通拉杆和普通换热管）：不再有任何拉杆专用双击逻辑
+        # 直接走父类默认行为，与普通换热管一致
         super().mouseDoubleClickEvent(event)
 
 
@@ -3910,6 +3884,48 @@ class TubeLayoutEditor(QMainWindow):
             self.stacked_widget.setCurrentIndex(1)
 
     def initial_operation(self):
+        # 先根据产品ID从产品设计活动表_管口表读取管口代号及所属元件，存成全局数据字典
+        # 字典结构：{管口代号: 管口所属元件}；若查询不到数据，也创建为空字典
+        self.pipe_port_dict = {}
+        try:
+            if hasattr(self, "productID") and self.productID:
+                product_conn = None
+                try:
+                    product_conn = create_product_connection()
+                    if product_conn and hasattr(product_conn, "open") and product_conn.open:
+                        cursor = product_conn.cursor()
+                        query = (
+                            "SELECT 管口代号, 管口所属元件 "
+                            "FROM 产品设计活动表_管口表 "
+                            "WHERE 产品ID = %s"
+                        )
+                        cursor.execute(query, (self.productID,))
+                        results = cursor.fetchall() or []
+                        for row in results:
+                            # row 为字典，键包含“管口代号”和“管口所属元件”
+                            code = row.get("管口代号")
+                            owner = row.get("管口所属元件")
+                            if code is not None:
+                                self.pipe_port_dict[code] = owner
+                        cursor.close()
+                except Exception as e:
+                    print(f"查询产品设计活动表_管口表出错: {str(e)}")
+                finally:
+                    if (
+                        product_conn
+                        and hasattr(product_conn, "open")
+                        and product_conn.open
+                    ):
+                        try:
+                            product_conn.close()
+                        except Exception as e:
+                            print(f"关闭产品数据库连接(管口表)时出错: {str(e)}")
+            else:
+                print("产品ID不存在，无法查询产品设计活动表_管口表，使用空管口字典")
+        except Exception as e:
+            # 兜底保护：任何异常都不影响后续计算逻辑，只打印错误并保持空字典
+            print(f"初始化管口字典时出错: {str(e)}")
+
         # 后续计算和元素构建逻辑保持不变
         try:
             if self.heat_exchanger in ["AEU", "BEU"] and self.DN == "1200":
@@ -13462,6 +13478,19 @@ class TubeLayoutEditor(QMainWindow):
                 # TODO 获取管口数量分布表格数据
                 tube_hole_data = self.get_current_tube_hole_data()
                 tube_data = self.get_current_tube_data()
+                # 将当前圆心坐标 self.current_centers 保存到与本文件同目录下的 buguan_info.json
+                try:
+                    if getattr(self, "current_centers", None):
+                        output_path = os.path.join(
+                            os.path.dirname(__file__), "buguan_info.json"
+                        )
+                        data_to_write = json.dumps(
+                            self.current_centers, ensure_ascii=False, indent=2
+                        )
+                        with open(output_path, "w", encoding="utf-8") as f:
+                            f.write(data_to_write)
+                except Exception as e:
+                    print(f"保存 .current_centers.json 失败: {e}")
                 # TODO 布管数量
                 sql_list = self.build_sql_for_tube_hole(tube_hole_data)
                 if sql_list:
@@ -13478,10 +13507,11 @@ class TubeLayoutEditor(QMainWindow):
                 if sql_statements:
                     for statement in sql_statements:
                         self.execute_sql(statement)
-                sql = self.build_sql_for_coordinate()
-                if sql:
-                    for statement in sql:
-                        self.execute_sql(statement)
+                # 全部坐标存表，暂时注释掉
+                # sql = self.build_sql_for_coordinate()
+                # if sql:
+                #     for statement in sql:
+                #         self.execute_sql(statement)
 
                 self.build_sql_for_component()
 
@@ -15651,40 +15681,149 @@ class TubeLayoutEditor(QMainWindow):
         from PyQt5.QtCore import QPointF
         from PyQt5.QtWidgets import QGraphicsEllipseItem
 
-        if not hasattr(self, "selected_centers") or not self.selected_centers:
-            return
-
-        # 清除所有标记并恢复原始状态
-        for row_label, col_label in self.selected_centers:
-            # 确定是上半部分还是下半部分
-            is_upper = row_label > 0
-            row_idx = abs(row_label) - 1
-            col_idx = abs(col_label) - 1  # 处理列的绝对值
-
-            # 选择正确的圆心列表
-            centers = (
-                self.full_sorted_current_centers_up
-                if is_upper
-                else self.full_sorted_current_centers_down
+        try:
+            print(
+                "[clear_selection_highlight] called, has selected_centers=",
+                hasattr(self, "selected_centers") and bool(self.selected_centers),
+                "len(selected_lagans)=",
+                len(self.selected_lagans) if hasattr(self, "selected_lagans") else 0,
             )
+        except Exception:
+            pass
 
-            # 检查索引有效性
-            if row_idx < 0 or row_idx >= len(centers):
-                continue
-            if col_idx < 0 or col_idx >= len(centers[row_idx]):
-                continue
+        # 1) 清除管孔选中高亮（marker）
+        if hasattr(self, "selected_centers") and self.selected_centers:
+            for row_label, col_label in self.selected_centers:
+                # 确定是上半部分还是下半部分
+                is_upper = row_label > 0
+                row_idx = abs(row_label) - 1
+                col_idx = abs(col_label) - 1  # 处理列的绝对值
 
-            x, y = centers[row_idx][col_idx]
-            click_point = QPointF(x, y)
+                # 选择正确的圆心列表
+                centers = (
+                    self.full_sorted_current_centers_up
+                    if is_upper
+                    else self.full_sorted_current_centers_down
+                )
 
-            # 只删除标记项，保留原始圆
-            for item in self.graphics_scene.items(click_point):
-                if isinstance(item, QGraphicsEllipseItem) and item.data(0) == "marker":
-                    self.graphics_scene.removeItem(item)
-                    break
+                # 检查索引有效性
+                if row_idx < 0 or row_idx >= len(centers):
+                    continue
+                if col_idx < 0 or col_idx >= len(centers[row_idx]):
+                    continue
 
-        # 清空选中记录（使用属性赋值方式）
-        self.selected_centers = []
+                x, y = centers[row_idx][col_idx]
+                click_point = QPointF(x, y)
+
+                # 只删除标记项，保留原始圆
+                for item in self.graphics_scene.items(click_point):
+                    if (
+                        isinstance(item, QGraphicsEllipseItem)
+                        and item.data(0) == "marker"
+                    ):
+                        self.graphics_scene.removeItem(item)
+                        break
+
+        # 2) 清除普通拉杆和自由拉杆的选中高亮
+        try:
+            # 普通拉杆
+            if hasattr(self, "selected_lagans") and self.selected_lagans:
+                try:
+                    print(
+                        "[clear_selection_highlight] reset selected_lagans count=",
+                        len(self.selected_lagans),
+                    )
+                except Exception:
+                    pass
+                for rod in list(self.selected_lagans):
+                    try:
+                        if hasattr(rod, "is_selected"):
+                            rod.is_selected = False
+                        if hasattr(rod, "original_pen"):
+                            rod.setPen(rod.original_pen)
+                        if hasattr(rod, "original_brush"):
+                            rod.setBrush(rod.original_brush)
+                        rod.update()
+                    except Exception:
+                        pass
+                self.selected_lagans = []
+
+            # 自由拉杆（最左最右拉杆）
+            if hasattr(self, "selected_side_rods") and self.selected_side_rods:
+                try:
+                    print(
+                        "[clear_selection_highlight] reset selected_side_rods count=",
+                        len(self.selected_side_rods),
+                    )
+                except Exception:
+                    pass
+                for rod in list(self.selected_side_rods):
+                    try:
+                        if hasattr(rod, "is_selected"):
+                            rod.is_selected = False
+                        if hasattr(rod, "original_pen"):
+                            rod.setPen(rod.original_pen)
+                        if hasattr(rod, "original_brush"):
+                            rod.setBrush(rod.original_brush)
+                        rod.update()
+                    except Exception:
+                        pass
+                self.selected_side_rods = []
+            # 兜底：遍历场景中所有拉杆圆（ClickableCircleItem），确保状态与画刷恢复
+            try:
+                if hasattr(self, "graphics_scene") and self.graphics_scene:
+                    reset_count = 0
+                    for item in self.graphics_scene.items():
+                        # 使用类型名检查，避免 ClickableCircleItem 在不同导入路径下类标识不一致
+                        if (
+                            hasattr(item, "__class__")
+                            and item.__class__.__name__ == "ClickableCircleItem"
+                        ):
+                            if hasattr(item, "is_selected"):
+                                item.is_selected = False
+                            if hasattr(item, "original_pen"):
+                                item.setPen(item.original_pen)
+                            if hasattr(item, "original_brush"):
+                                item.setBrush(item.original_brush)
+                            item.update()
+                            reset_count += 1
+                    try:
+                        print(
+                            "[clear_selection_highlight] fallback reset lagan items count=",
+                            reset_count,
+                        )
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+        # 3) 最后清空管孔选中记录
+        if hasattr(self, "selected_centers"):
+            self.selected_centers = []
+
+        # 4) 最终兜底：按颜色清理所有淡蓝色实心圆，确保界面上无残留高亮
+        try:
+            if hasattr(self, "graphics_scene") and self.graphics_scene:
+                from PyQt5.QtGui import QColor, QBrush
+
+                target_color = QColor(173, 216, 230)
+                for it in list(self.graphics_scene.items()):
+                    if isinstance(it, QGraphicsEllipseItem) and it.brush().color() == target_color:
+                        # 若是 marker，直接删除
+                        if it.data(0) == "marker":
+                            self.graphics_scene.removeItem(it)
+                            continue
+
+                        # 否则尽量恢复原始画刷；若无则置为无填充
+                        if hasattr(it, "original_brush"):
+                            it.setBrush(it.original_brush)
+                        else:
+                            it.setBrush(QBrush(Qt.NoBrush))
+                        it.update()
+        except Exception:
+            pass
 
     def on_show_operations_click(self):
         if not hasattr(self, "operations") or not self.operations:
@@ -20710,11 +20849,38 @@ class TubeLayoutEditor(QMainWindow):
 
             # 平板形/圆弧形：沿用原有 interfering_tubes + impingement_plate_1/2 维护方式
             if plate_type_val in (1, 2):
-                if hasattr(baffle, "interfering_tubes") and baffle.interfering_tubes:
-                    tubes_to_restore.extend(baffle.interfering_tubes)
-                    interfering_coords = {
-                        (x, abs(y)) for x, y in baffle.interfering_tubes
-                    }
+                # 优先从对象属性读取干涉管；如为空则尝试从字典记录中恢复
+                attr_tubes = (
+                    getattr(baffle, "interfering_tubes", None)
+                    if hasattr(baffle, "interfering_tubes")
+                    else None
+                )
+                dict_tubes = None
+                try:
+                    plate_id_dbg = getattr(baffle, "impingement_plate_id", None)
+                    if (
+                        plate_id_dbg is not None
+                        and hasattr(self, "impingement_plate_dic")
+                    ):
+                        rec_dbg = self.impingement_plate_dic.get(plate_id_dbg)
+                        if isinstance(rec_dbg, dict):
+                            dict_tubes = rec_dbg.get("interfering_tubes_rel")
+                except Exception:
+                    dict_tubes = None
+
+                try:
+                    print(
+                        f"[delete_selected_baffles] plate_type={plate_type_val}, "
+                        f"attr_interfering_tubes={attr_tubes}, dict_interfering_tubes={dict_tubes}"
+                    )
+                except Exception:
+                    pass
+
+                use_tubes = attr_tubes if attr_tubes else dict_tubes
+
+                if use_tubes:
+                    tubes_to_restore.extend(use_tubes)
+                    interfering_coords = {(x, abs(y)) for x, y in use_tubes}
 
                     # impingement_plate_1 和 impingement_plate_2 现在是嵌套列表：[[coord1, coord2], ...]
                     # 删除包含任何干涉坐标的坐标对
@@ -20826,6 +20992,12 @@ class TubeLayoutEditor(QMainWindow):
 
         # 恢复干涉换热管
         if tubes_to_restore:
+            try:
+                print(
+                    f"[delete_selected_baffles] tubes_to_restore(before build) = {tubes_to_restore}"
+                )
+            except Exception:
+                pass
             tube_num = self.get_tube_pass_count()
             if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
                 tubes_to_restore = self.judge_linkage(tubes_to_restore)
@@ -20844,9 +21016,15 @@ class TubeLayoutEditor(QMainWindow):
     # TODO 添加换热管
     def build_huanreguan(self, selected_centers):
         self.operation_order += 1
-        # print(f"build_huanreguan: {selected_centers}")
+        try:
+            print(f"[build_huanreguan] selected_centers(raw) = {selected_centers}")
+        except Exception:
+            pass
         actual_centers = self.selected_to_current_coords(selected_centers)
-        # print(actual_centers)
+        try:
+            print(f"[build_huanreguan] actual_centers = {actual_centers}")
+        except Exception:
+            pass
 
         from PyQt5.QtGui import QPen, QBrush, QColor
         from PyQt5.QtWidgets import QGraphicsEllipseItem
@@ -21025,9 +21203,8 @@ class TubeLayoutEditor(QMainWindow):
 
         def is_rod(it) -> bool:
             try:
-                return (it.__class__.__name__ == "ClickableCircleItem") or getattr(
-                    it, "is_side_rod", False
-                )
+                # 仅将最左/最右自由拉杆视为拉杆，普通拉杆当作普通换热管处理
+                return getattr(it, "is_side_rod", False)
             except Exception:
                 return False
 
@@ -21297,24 +21474,27 @@ class TubeLayoutEditor(QMainWindow):
             v[0].setUpdatesEnabled(False)
         try:
             for kx, ky in abs_keys:
+                has_rod = False
                 # 清掉该坐标处所有“非白实心 & 非拉杆”的椭圆
                 for it in list(coord_index.get((kx, ky), [])):
                     if is_rod(it):
+                        has_rod = True
                         continue
                     if not is_white_solid(it):
                         try:
                             self.graphics_scene.removeItem(it)
                         except Exception:
                             pass
-                # 补白实心占位（幂等）
-                self.graphics_scene.addEllipse(
-                    kx - self.r,
-                    ky - self.r,
-                    2 * self.r,
-                    2 * self.r,
-                    white_pen,
-                    white_brush,
-                )
+                # 若该位置不存在拉杆，再补白实心占位；避免覆盖红色拉杆
+                if not has_rod:
+                    self.graphics_scene.addEllipse(
+                        kx - self.r,
+                        ky - self.r,
+                        2 * self.r,
+                        2 * self.r,
+                        white_pen,
+                        white_brush,
+                    )
         finally:
             if v:
                 v[0].setUpdatesEnabled(True)
@@ -29945,6 +30125,7 @@ class TubeLayoutEditor(QMainWindow):
             "防冲板方位角",
             "至圆筒内壁距离",
         ]
+        print(self.selected_centers)
         if (
             not hasattr(self, "selected_centers")
             or len(self.selected_centers) == 1
@@ -29952,7 +30133,7 @@ class TubeLayoutEditor(QMainWindow):
         ):
             from PyQt5.QtWidgets import QMessageBox
 
-            QMessageBox.warning(self, "提示", "选择换热管的数量不正确！")
+            QMessageBox.warning(self, "提示", "选择换热管的数量不正确！这里吗")
             self.clear_selection_highlight()
             return
 
@@ -30550,7 +30731,7 @@ class TubeLayoutEditor(QMainWindow):
             if len(selected_centers) != 2:
                 from PyQt5.QtWidgets import QMessageBox
 
-                QMessageBox.warning(self, "提示", "选择换热管的数量不正确！")
+                QMessageBox.warning(self, "提示", "选择换热管的数量不正确！你好")
                 self.clear_selection_highlight()
                 return []
 
@@ -30642,7 +30823,7 @@ class TubeLayoutEditor(QMainWindow):
                     print(f"字符串转换失败: {e}")
                     return current_coords
 
-            # 获取并清除选中标记
+            # 获取并清除选中标记（仅删除高亮 marker，不删除管孔/拉杆本体）
             points = []
             if selected_centers:
                 for row_label, col_label in selected_centers:
@@ -30658,12 +30839,15 @@ class TubeLayoutEditor(QMainWindow):
                     ):
                         x, y = centers_group[row_idx][col_idx]
                         points.append((x, y))
-                    # 擦除选中标记
-                    click_point = QPointF(x, y)
-                    for item in self.graphics_scene.items(click_point):
-                        if isinstance(item, QGraphicsEllipseItem):
-                            self.graphics_scene.removeItem(item)
-                            break
+                        # 擦除选中标记：只移除 data(0)=="marker" 的高亮圆
+                        click_point = QPointF(x, y)
+                        for item in self.graphics_scene.items(click_point):
+                            if (
+                                isinstance(item, QGraphicsEllipseItem)
+                                and item.data(0) == "marker"
+                            ):
+                                self.graphics_scene.removeItem(item)
+                                break
 
             if len(points) != 2:
                 # QMessageBox.warning(self, "错误", "无法获取两个圆心坐标")
@@ -30867,7 +31051,8 @@ class TubeLayoutEditor(QMainWindow):
                 }
             )
 
-            self.selected_centers = []
+            # 平板形绘制完成后，清除选中高亮和 selected_centers
+            self.clear_selection_highlight()
 
         elif baffle_type == "圆弧形":
             # 圆弧形：同样使用选中圆心间距作为防冲板宽度
@@ -30876,7 +31061,7 @@ class TubeLayoutEditor(QMainWindow):
             if len(selected_centers) != 2:
                 from PyQt5.QtWidgets import QMessageBox
 
-                QMessageBox.warning(self, "提示", "选择换热管的数量不正确！")
+                QMessageBox.warning(self, "提示", "选择换热管的数量不正确！哈哈")
                 self.clear_selection_highlight()
                 return []
             # 解析选中的中心点
@@ -30953,7 +31138,7 @@ class TubeLayoutEditor(QMainWindow):
                 self.clear_selection_highlight()
                 return
 
-            # 获取并清除选中标记
+            # 获取并清除选中标记（仅删除高亮 marker，不删除管孔/拉杆本体）
             points = []
             for row_label, col_label in selected_centers:
                 row_idx = abs(row_label) - 1
@@ -30968,12 +31153,15 @@ class TubeLayoutEditor(QMainWindow):
                 ):
                     x, y = centers_group[row_idx][col_idx]
                     points.append((x, y))
-                # 清除选中标记
-                click_point = QPointF(x, y)
-                for item in self.graphics_scene.items(click_point):
-                    if isinstance(item, QGraphicsEllipseItem):
-                        self.graphics_scene.removeItem(item)
-                        break
+                    # 清除选中标记：只移除 data(0)=="marker" 的高亮圆
+                    click_point = QPointF(x, y)
+                    for item in self.graphics_scene.items(click_point):
+                        if (
+                            isinstance(item, QGraphicsEllipseItem)
+                            and item.data(0) == "marker"
+                        ):
+                            self.graphics_scene.removeItem(item)
+                            break
 
             if len(points) != 2:
                 print(f"❌ 获取的有效坐标数量不对: {len(points)}")
@@ -31266,6 +31454,19 @@ class TubeLayoutEditor(QMainWindow):
                 ]
                 centers = [c for c in centers if c is not None]
                 baffle_item.interfering_tubes = centers.copy()
+                # 同步写入字典记录，防止后续对象属性丢失
+                try:
+                    plate_id = getattr(baffle_item, "impingement_plate_id", None)
+                    if (
+                        plate_id is not None
+                        and hasattr(self, "impingement_plate_dic")
+                        and isinstance(self.impingement_plate_dic.get(plate_id), dict)
+                    ):
+                        self.impingement_plate_dic[plate_id][
+                            "interfering_tubes_rel"
+                        ] = centers.copy()
+                except Exception:
+                    pass
 
                 # 存储防冲板删除的换热管（处理前的centers）
                 if not hasattr(self, "impingement_plate_del_centers"):
@@ -34506,16 +34707,10 @@ class TubeLayoutEditor(QMainWindow):
                     distance_to_center = math.hypot(self.mouse_x, self.mouse_y)
                     in_big_circle = distance_to_center <= self.R_wai + 1e-6
 
-                # 不在大圆内：视为点击空白，清空选中
+                # 不在大圆内：视为点击空白，清空选中（统一走 clear_selection_highlight）
                 if not in_big_circle:
-                    if hasattr(self, "selected_centers") and self.selected_centers:
-                        self.selected_centers = []
-                    for it in list(self.graphics_scene.items()):
-                        if (
-                            isinstance(it, QGraphicsEllipseItem)
-                            and it.data(0) == "marker"
-                        ):
-                            self.graphics_scene.removeItem(it)
+                    if hasattr(self, "clear_selection_highlight"):
+                        self.clear_selection_highlight()
                     return super().eventFilter(obj, event)
 
                 if not hasattr(self, "full_sorted_current_centers_up"):
@@ -34572,15 +34767,9 @@ class TubeLayoutEditor(QMainWindow):
                         marker.setData(0, "marker")
                     return True
                 else:
-                    # 在大圆内但未命中任何圆心：视为点击空白，清空选中
-                    if hasattr(self, "selected_centers") and self.selected_centers:
-                        self.selected_centers = []
-                    for it in list(self.graphics_scene.items()):
-                        if (
-                            isinstance(it, QGraphicsEllipseItem)
-                            and it.data(0) == "marker"
-                        ):
-                            self.graphics_scene.removeItem(it)
+                    # 在大圆内但未命中任何圆心：视为点击空白，清空选中（统一走 clear_selection_highlight）
+                    if hasattr(self, "clear_selection_highlight"):
+                        self.clear_selection_highlight()
                     return False
 
             elif event.type() == QEvent.MouseMove:
@@ -34636,17 +34825,10 @@ class TubeLayoutEditor(QMainWindow):
                             in_big_circle = distance_to_center <= self.R_wai + 1e-6
 
                         if not in_big_circle:
-                            if (
-                                hasattr(self, "selected_centers")
-                                and self.selected_centers
-                            ):
-                                self.selected_centers = []
-                            for it in list(self.graphics_scene.items()):
-                                if (
-                                    isinstance(it, QGraphicsEllipseItem)
-                                    and it.data(0) == "marker"
-                                ):
-                                    self.graphics_scene.removeItem(it)
+                            # 鼠标按下时已进入框选模式（MouseButtonPress return True），
+                            # 单击空白的清除逻辑实际发生在 Release，这里必须统一走 clear_selection_highlight
+                            if hasattr(self, "clear_selection_highlight"):
+                                self.clear_selection_highlight()
                             return True
 
                         if not hasattr(self, "full_sorted_current_centers_up"):
@@ -34710,17 +34892,9 @@ class TubeLayoutEditor(QMainWindow):
                                 marker.setData(0, "marker")
                             return True
                         else:
-                            if (
-                                hasattr(self, "selected_centers")
-                                and self.selected_centers
-                            ):
-                                self.selected_centers = []
-                            for it in list(self.graphics_scene.items()):
-                                if (
-                                    isinstance(it, QGraphicsEllipseItem)
-                                    and it.data(0) == "marker"
-                                ):
-                                    self.graphics_scene.removeItem(it)
+                            # 在大圆内但未命中任何圆心：视为点击空白，清空选中（含拉杆）
+                            if hasattr(self, "clear_selection_highlight"):
+                                self.clear_selection_highlight()
                             return True
 
                     # 情况2：有有效矩形 → 按矩形范围执行框选
@@ -34777,6 +34951,10 @@ class TubeLayoutEditor(QMainWindow):
                         for it in list(self.graphics_scene.items()):
                             if isinstance(it, _QBoxEllipse2) and it.data(0) == "marker":
                                 self.graphics_scene.removeItem(it)
+
+                        # 未按 Ctrl 的框选属于“覆盖式选择”，因此也应先清除拉杆选中高亮
+                        if hasattr(self, "clear_selection_highlight"):
+                            self.clear_selection_highlight()
 
                         if new_labels:
                             self.selected_centers = new_labels
