@@ -20,11 +20,12 @@ from PyQt5.QtCore import QSize, QTimer
 from PyQt5.QtGui import QBrush, QIcon
 from PyQt5.QtGui import QColor, QPen, QPolygonF, QPainterPath, QIntValidator
 from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsLineItem
-from PyQt5.QtWidgets import QMessageBox, QComboBox
 from PyQt5.QtWidgets import (
     QMainWindow,
     QWidget,
+    QLabel,
     QHBoxLayout,
+    QVBoxLayout,
     QTabWidget,
     QPushButton,
     QGraphicsView,
@@ -39,6 +40,8 @@ from PyQt5.QtWidgets import (
     QGraphicsPathItem,
     QGraphicsItem,
     QGridLayout,
+    QMessageBox,
+    QComboBox,
 )
 from modules.buguan.buguan_ziyong.axial_design_page import AxialDesignPage
 from modules.buguan.buguan_ziyong.database_utils import create_activity_connection
@@ -65,8 +68,13 @@ from modules.buguan.buguan_ziyong.component.center_dangguan import (
 # product_id = 'PD2025092421444001'
 product_id = "PD20250929"
 
-
 # product_id = 'PD2025092509281701'
+
+# TODO 轴向设计页面开关
+ENABLE_AXIAL_DESIGN_PAGE = False
+
+# TODO 防冲板形式“焊接式”选项开关
+ENABLE_DANGBAN_WELDED_OPTION = False
 
 
 def on_product_id_changed(new_id):
@@ -1836,7 +1844,15 @@ class TubeLayoutEditor(QMainWindow):
         self.create_tube_layout_page()
         self.tube_sheet_page = TubeSheetConnectionPage(self)
         self.stacked_widget.addWidget(self.tube_sheet_page)
-        self.axial_design_page = AxialDesignPage(self)
+
+        if ENABLE_AXIAL_DESIGN_PAGE:
+            self.axial_design_page = AxialDesignPage(self)
+        else:
+            self.axial_design_page = QWidget(self)
+            _layout = QVBoxLayout(self.axial_design_page)
+            _layout.setContentsMargins(0, 0, 0, 0)
+            _layout.addWidget(QLabel("轴向设计功能暂未开发完成", self.axial_design_page))
+            _layout.addStretch(1)
         self.stacked_widget.addWidget(self.axial_design_page)
 
         self.stacked_widget.setCurrentIndex(1)
@@ -30414,7 +30430,9 @@ class TubeLayoutEditor(QMainWindow):
                 # 防冲板形式
                 form_layout.addWidget(QLabel("防冲板形式:"), row_idx, 0)
                 baffle_type_combo = QComboBox()
-                baffle_types = ["平板形", "圆弧形", "焊接式"]
+                baffle_types = ["平板形", "圆弧形"]
+                if ENABLE_DANGBAN_WELDED_OPTION:
+                    baffle_types.append("焊接式")
                 baffle_type_combo.addItems(baffle_types)
                 baffle_type_combo.setCurrentText(
                     self.params.get("防冲板形式", baffle_types[0])
