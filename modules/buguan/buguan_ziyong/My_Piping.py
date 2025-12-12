@@ -74,7 +74,7 @@ product_id = "PD20250929"
 ENABLE_AXIAL_DESIGN_PAGE = False
 
 # TODO 防冲板形式“焊接式”选项开关
-ENABLE_DANGBAN_WELDED_OPTION = False
+ENABLE_DANGBAN_WELDED_OPTION = True
 
 
 def on_product_id_changed(new_id):
@@ -30253,8 +30253,28 @@ class TubeLayoutEditor(QMainWindow):
 
         if not interfering_centers:
             return
-
-        unique_centers = list(set(interfering_centers))
+        if self.heat_exchanger in ["AEU", "BEU"]:
+            tube_num = self.get_tube_pass_count()
+            selected_interfering_centers = []
+            for pt in interfering_centers:
+                try:
+                    rel = self.actual_to_selected_coords(pt)
+                except Exception:
+                    rel = None
+                if rel:
+                    selected_interfering_centers.append(rel)
+            if tube_num == "2":
+                selected_unique_centers = self.judge_linkage_x(selected_interfering_centers)
+                actual_unique_centers=self.selected_to_current_coords(selected_unique_centers)
+                unique_centers = list(set(actual_unique_centers))
+            elif tube_num in ["4","6"]:
+                selected_unique_centers = self.judge_linkage_y(selected_interfering_centers)
+                actual_unique_centers=self.selected_to_current_coords(selected_unique_centers)
+                unique_centers = list(set(actual_unique_centers))
+            else:
+                unique_centers = list(set(interfering_centers))
+        else:
+            unique_centers = list(set(interfering_centers))
 
         try:
             print(f"焊接式防冲板干涉计算: 最终干涉换热管数量 = {len(unique_centers)}")
