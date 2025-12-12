@@ -3047,6 +3047,17 @@ class TubeLayoutEditor(QMainWindow):
                                                         delete_query, (self.productID,)
                                                     )
 
+                                                    check_query = """SELECT 1 FROM 产品设计活动表_布管管口表 WHERE 产品ID = %s LIMIT 1"""
+                                                    cursor.execute(
+                                                        check_query, (self.productID,)
+                                                    )
+                                                    if cursor.fetchone():
+                                                        delete_query = """DELETE FROM 产品设计活动表_布管管口表 WHERE 产品ID = %s"""
+                                                        cursor.execute(
+                                                            delete_query,
+                                                            (self.productID,),
+                                                        )
+
                                                     product_conn.commit()
                                                     print(
                                                         f"已删除产品ID为{self.productID}的布管元件表和交叉布管表所有数据"
@@ -3122,6 +3133,17 @@ class TubeLayoutEditor(QMainWindow):
                                                     cursor.execute(
                                                         delete_query, (self.productID,)
                                                     )
+
+                                                    check_query = """SELECT 1 FROM 产品设计活动表_布管管口表 WHERE 产品ID = %s LIMIT 1"""
+                                                    cursor.execute(
+                                                        check_query, (self.productID,)
+                                                    )
+                                                    if cursor.fetchone():
+                                                        delete_query = """DELETE FROM 产品设计活动表_布管管口表 WHERE 产品ID = %s"""
+                                                        cursor.execute(
+                                                            delete_query,
+                                                            (self.productID,),
+                                                        )
 
                                                     product_conn.commit()
 
@@ -3857,6 +3879,85 @@ class TubeLayoutEditor(QMainWindow):
         except Exception as e:
             print(f"初始化径向开孔字典时出错: {str(e)}")
 
+        loaded_radial_rows = False
+        try:
+            if hasattr(self, "productID") and self.productID:
+                product_conn2 = None
+                try:
+                    product_conn2 = create_product_connection()
+                    if (
+                        product_conn2
+                        and hasattr(product_conn2, "open")
+                        and product_conn2.open
+                    ):
+                        cursor2 = product_conn2.cursor()
+                        query2 = (
+                            "SELECT 管口号, 连通方向, 坐标 "
+                            "FROM 产品设计活动表_布管管口表 "
+                            "WHERE 产品ID = %s"
+                        )
+                        cursor2.execute(query2, (self.productID,))
+                        rows2 = cursor2.fetchall() or []
+                        if rows2:
+                            loaded_radial_rows = True
+
+                        def _parse_coord(coord_str):
+                            if coord_str is None:
+                                return None
+                            s = str(coord_str).strip()
+                            if s == "" or s == "0" or s.lower() == "none":
+                                return None
+                            if s.startswith("(") and s.endswith(")"):
+                                s2 = s[1:-1]
+                                parts = [p.strip() for p in s2.split(",")]
+                                if len(parts) >= 2:
+                                    try:
+                                        return (float(parts[0]), float(parts[1]))
+                                    except Exception:
+                                        return None
+                            return None
+
+                        for row in rows2:
+                            try:
+                                code = row.get("管口号")
+                                direction = row.get("连通方向")
+                                coord_str = row.get("坐标")
+                            except Exception:
+                                continue
+                            if code is None:
+                                continue
+                            if code not in self.radial_hole_dict:
+                                self.radial_hole_dict[code] = {
+                                    "管口号": code,
+                                    "连通方向": "壳程",
+                                    "换热管坐标": None,
+                                    "管口所属元件": None,
+                                }
+                            try:
+                                self.radial_hole_dict[code]["连通方向"] = direction or "壳程"
+                            except Exception:
+                                pass
+                            coord = _parse_coord(coord_str)
+                            try:
+                                self.radial_hole_dict[code]["换热管坐标"] = coord
+                            except Exception:
+                                pass
+                        cursor2.close()
+                except Exception as e:
+                    print(f"读取布管管口表(径向开孔)出错: {str(e)}")
+                finally:
+                    if (
+                        product_conn2
+                        and hasattr(product_conn2, "open")
+                        and product_conn2.open
+                    ):
+                        try:
+                            product_conn2.close()
+                        except Exception:
+                            pass
+        except Exception:
+            loaded_radial_rows = False
+
         # 后续计算和元素构建逻辑保持不变
         try:
             if self.heat_exchanger in ["AEU", "BEU"] and self.DN == "1200":
@@ -3864,6 +3965,21 @@ class TubeLayoutEditor(QMainWindow):
 
             tube_result = self.calculate_piping_layout()
             self.draw_baffle_plates()
+
+            if loaded_radial_rows:
+                try:
+                    self.clear_all_radial_hole_graphics()
+                except Exception:
+                    pass
+                try:
+                    for _code, info in (self.radial_hole_dict or {}).items():
+                        if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                            try:
+                                self.draw_radial_hole_tangents(info.get("换热管坐标"))
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
         except Exception as e:
             print(f"第一次计算布管布局出错: {str(e)}")
 
@@ -15304,6 +15420,7 @@ class TubeLayoutEditor(QMainWindow):
             self.operation_order = 0
             self.impingement_plate_dic = {}  # Add this line
             self._impingement_plate_auto_id = 0
+            self.self.radial_hole_dict={}
 
         except Exception as e:
             print(f"布管按钮点击时发生错误: {e}")
@@ -20479,6 +20596,23 @@ class TubeLayoutEditor(QMainWindow):
                 self.graphics_scene.removeItem(it)
             except Exception:
                 pass
+
+    def clear_all_radial_hole_graphics(self):
+        if not hasattr(self, "graphics_scene") or self.graphics_scene is None:
+            return
+
+        items_by_coord = getattr(self, "_radial_hole_tangent_items_by_coord", None)
+        if not isinstance(items_by_coord, dict) or not items_by_coord:
+            self._radial_hole_tangent_items_by_coord = {}
+            return
+
+        for _k, items in list(items_by_coord.items()):
+            for it in items or []:
+                try:
+                    self.graphics_scene.removeItem(it)
+                except Exception:
+                    pass
+        self._radial_hole_tangent_items_by_coord = {}
 
     def draw_radial_hole_tangents(self, center_coord):
         if not hasattr(self, "graphics_scene") or self.graphics_scene is None:
