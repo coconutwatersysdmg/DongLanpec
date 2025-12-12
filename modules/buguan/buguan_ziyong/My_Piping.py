@@ -1687,9 +1687,15 @@ class TubeLayoutEditor(QMainWindow):
                 pass
 
         desc_text = (
-            f"当前产品公称直径为DN{dn_text}，拉杆公称直径为M{lagan_text}，\n"
+            f"当前产品公称直径为DN{dn_text}，拉杆公称直径为M{lagan_text}，"
             f"根据标准要求，拉杆数量不应小于 {std_display} 根。"
         )
+        try:
+            desc_text = (
+                desc_text.replace("，", "，\n").replace(",", ",\n").strip()
+            )
+        except Exception:
+            pass
 
         item = self.lagan_summary_table.item(0, 2)
         if item is None:
@@ -1761,7 +1767,7 @@ class TubeLayoutEditor(QMainWindow):
                     for r in range(3):
                         item_col0 = self.lagan_summary_table.item(r, 0)
                         if item_col0:
-                            item_col0.setTextAlignment(Qt.AlignCenter)
+                            item_col0.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
                     for r in range(3):
                         item_col1 = self.lagan_summary_table.item(r, 1)
                         if item_col1:
@@ -1883,6 +1889,93 @@ class TubeLayoutEditor(QMainWindow):
         )
 
         param_layout.addWidget(self.param_table)
+
+        # 拉杆数量统计表（放在左侧参数列表底部）
+        self.lagan_summary_container = QWidget(self.param_frame)
+        self.lagan_summary_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        lagan_layout = QGridLayout(self.lagan_summary_container)
+        lagan_layout.setContentsMargins(5, 5, 5, 5)
+        lagan_layout.setSpacing(4)
+
+        self.lagan_summary_table = NoWheelTableWidget()
+        self.lagan_summary_table.setParent(self.lagan_summary_container)
+        self.lagan_summary_table.setRowCount(3)
+        self.lagan_summary_table.setColumnCount(3)
+        self.lagan_summary_table.setHorizontalHeaderLabels(["项目", "数量", "说明"])
+        self.lagan_summary_table.horizontalHeader().setVisible(False)
+        self.lagan_summary_table.verticalHeader().setVisible(False)
+        self.lagan_summary_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.lagan_summary_table.setSelectionMode(QAbstractItemView.NoSelection)
+
+        # 列宽策略与左侧参数表一致：可拖拽调整 + 说明列拉伸
+        self.lagan_summary_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Interactive
+        )
+        self.lagan_summary_table.horizontalHeader().setDefaultSectionSize(100)
+        self.lagan_summary_table.horizontalHeader().setMinimumSectionSize(10)
+        self.lagan_summary_table.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.Interactive
+        )
+        self.lagan_summary_table.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.Interactive
+        )
+        self.lagan_summary_table.horizontalHeader().setSectionResizeMode(
+            2, QHeaderView.Interactive
+        )
+
+        # 第一列初始列宽再增大，确保文字完整显示
+        try:
+            self.lagan_summary_table.setColumnWidth(0, 220)
+        except Exception:
+            pass
+
+        # 第三列初始列宽增大，确保默认能看到更多“说明”内容
+        try:
+            self.lagan_summary_table.setColumnWidth(2, 420)
+        except Exception:
+            pass
+
+        # 视觉样式与左侧参数表保持一致（复用字体与样式表，避免硬编码）
+        try:
+            self.lagan_summary_table.setFont(self.param_table.font())
+        except Exception:
+            pass
+        try:
+            self.lagan_summary_table.setStyleSheet(self.param_table.styleSheet())
+        except Exception:
+            self.lagan_summary_table.setStyleSheet("")
+
+        # 与参数表一致的网格线/外观
+        try:
+            self.lagan_summary_table.setShowGrid(self.param_table.showGrid())
+        except Exception:
+            pass
+        self.lagan_summary_table.setWordWrap(True)
+        self.lagan_summary_table.setTextElideMode(Qt.ElideNone)
+        # 表格整体滚动条（像左侧参数表一样）
+        self.lagan_summary_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.lagan_summary_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+
+        # 行高：为第三列说明留足空间
+        try:
+            default_row_h = self.param_table.verticalHeader().defaultSectionSize()
+        except Exception:
+            default_row_h = 20
+        # 统计表行高进一步加大，确保“说明”列多行文字完整显示
+        default_row_h = max(int(default_row_h), 60)
+        for _row in range(3):
+            self.lagan_summary_table.setRowHeight(_row, default_row_h)
+
+        self.lagan_summary_table.setSpan(0, 2, 3, 1)
+        desc_item = QTableWidgetItem(
+            "当前产品公称直径为DN1800，拉杆公称直径为M16，\n根据标准要求，拉杆数量不应少于12根。"
+        )
+        desc_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.lagan_summary_table.setItem(0, 2, desc_item)
+
+        lagan_layout.addWidget(self.lagan_summary_table, 0, 0)
+        param_layout.addWidget(self.lagan_summary_container)
 
         self.center_frame = QFrame()
         self.center_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -2201,53 +2294,7 @@ class TubeLayoutEditor(QMainWindow):
             "background-color: rgba(255, 255, 255, 200); border-radius: 5px;"
         )
 
-        # 左下角拉杆数量统计表容器（支持拖动）
-        self.lagan_summary_container = QWidget(self.graphics_container)
-        self.lagan_summary_container.setStyleSheet(
-            "background-color: rgba(255, 255, 255, 200); border-radius: 5px;"
-        )
-
-        # 为拉杆数量统计表容器增加拖动功能
-        def _lagan_summary_mousePressEvent(event):
-            from PyQt5.QtCore import Qt
-
-            if event.button() == Qt.LeftButton:
-                # 记录鼠标相对容器左上角的位置
-                self.lagan_summary_container._drag_pos = event.pos()
-                event.accept()
-            else:
-                event.ignore()
-
-        def _lagan_summary_mouseMoveEvent(event):
-            from PyQt5.QtCore import Qt
-
-            # 按住左键拖动时，移动容器
-            if event.buttons() & Qt.LeftButton and hasattr(
-                self.lagan_summary_container, "_drag_pos"
-            ):
-                # 计算在父容器中的全局位置
-                new_pos = self.lagan_summary_container.mapToParent(
-                    event.pos() - self.lagan_summary_container._drag_pos
-                )
-
-                # 可选：简单限制不拖出图形容器边界
-                parent_w = self.graphics_container.width()
-                parent_h = self.graphics_container.height()
-                w = self.lagan_summary_container.width()
-                h = self.lagan_summary_container.height()
-
-                x = max(0, min(new_pos.x(), max(0, parent_w - w)))
-                y = max(0, min(new_pos.y(), max(0, parent_h - h)))
-
-                self.lagan_summary_container.move(x, y)
-                event.accept()
-            else:
-                event.ignore()
-
-        self.lagan_summary_container.mousePressEvent = _lagan_summary_mousePressEvent
-        self.lagan_summary_container.mouseMoveEvent = _lagan_summary_mouseMoveEvent
-
-        # 绑定窗口缩放事件，使右上角勾选框和左下角统计表随窗口变化
+        # 绑定窗口缩放事件，使右上角勾选框随窗口变化
         def update_overlay_widgets_position(event):
             # 右上角勾选框
             x_right = (
@@ -2255,75 +2302,6 @@ class TubeLayoutEditor(QMainWindow):
             )
             y_top = 10
             self.checkbox_container.move(x_right, y_top)
-
-            # 左上角拉杆统计表
-            if hasattr(self, "lagan_summary_container") and hasattr(
-                self, "lagan_summary_table"
-            ):
-                # 固定一个适中的第三列表宽，配合自动换行和按内容调整行高
-                try:
-                    # 固定列宽：在之前缩小的基础上，适当增大第一列和第三列
-                    col0_w = 100  # 第一列
-                    col1_w = 24  # 第二列保持不变
-                    col2_w = 200  # 第三列再加宽一点
-
-                    self.lagan_summary_table.setColumnWidth(0, col0_w)
-                    self.lagan_summary_table.setColumnWidth(1, col1_w)
-                    self.lagan_summary_table.setColumnWidth(2, col2_w)
-
-                    # 行高按内容自适应，然后再做一次压缩，避免单行过高
-                    self.lagan_summary_table.resizeRowsToContents()
-                    try:
-                        row_count = self.lagan_summary_table.rowCount()
-                        # 行高上下限再压缩一档，让整体更紧凑
-                        min_row_h = 18
-                        max_row_h = 40
-                        for r in range(row_count):
-                            h = self.lagan_summary_table.rowHeight(r)
-                            h_clamped = max(min_row_h, min(h, max_row_h))
-                            if h != h_clamped:
-                                self.lagan_summary_table.setRowHeight(r, h_clamped)
-                    except Exception:
-                        pass
-
-                    # 根据三列实际宽度计算容器宽度（预留一点边距）
-                    container_w = col0_w + col1_w + col2_w + 20
-
-                    # 根据所有行高重新计算容器高度，而不是沿用之前的大高度
-                    total_rows_h = 0
-                    for r in range(self.lagan_summary_table.rowCount()):
-                        total_rows_h += self.lagan_summary_table.rowHeight(r)
-                    container_h = total_rows_h + 20  # 上下预留一点边距
-
-                    self.lagan_summary_container.resize(container_w, container_h)
-
-                    # try:
-                    #     print(
-                    #         "[DEBUG] lagan column widths:",
-                    #         self.lagan_summary_table.columnWidth(0),
-                    #         self.lagan_summary_table.columnWidth(1),
-                    #         self.lagan_summary_table.columnWidth(2),
-                    #     )
-                    # except Exception:
-                    #     pass
-
-                    table_h = (
-                        self.lagan_summary_table.verticalHeader().length()
-                        + self.lagan_summary_table.frameWidth() * 2
-                    )
-
-                    container_h = table_h + 10
-                    max_h = int(self.graphics_container.height() * 0.3)
-                    container_h = min(container_h, max_h)
-
-                    self.lagan_summary_container.resize(container_w, container_h)
-                except Exception:
-                    pass
-
-                # 左上角：x 固定 10，y 同右上角略向下 10
-                x_left = 10
-                y_top_table = 10
-                self.lagan_summary_container.move(x_left, y_top_table)
 
             if hasattr(
                 super(type(self.graphics_container), self.graphics_container),
@@ -2344,103 +2322,16 @@ class TubeLayoutEditor(QMainWindow):
         checkbox_layout.addWidget(self.symmetric_checkbox)
         self.symmetric_checkbox.stateChanged.connect(self.handle_symmetric_layout)
 
-        # 拉杆数量统计表（3列3行）
-        lagan_layout = QGridLayout(self.lagan_summary_container)
-        lagan_layout.setContentsMargins(5, 5, 5, 5)
-        lagan_layout.setSpacing(4)
-
-        self.lagan_summary_table = QTableWidget(3, 3, self.lagan_summary_container)
-        self.lagan_summary_table.horizontalHeader().setVisible(False)
-        self.lagan_summary_table.verticalHeader().setVisible(False)
-        self.lagan_summary_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.lagan_summary_table.setSelectionMode(QAbstractItemView.NoSelection)
-        # 显示表格网格线和单元格边框
-        self.lagan_summary_table.setShowGrid(True)
-        # 整体略微缩小字体，配合后续列宽/行高缩放
-        self.lagan_summary_table.setStyleSheet(
-            "QTableView{font-size: 14px; font-weight: bold; gridline-color: black;}"
-            "QTableView::item{padding:0px; border:1px solid black;}"
-        )
-        # 允许单元格内文字自动换行，避免为显示完整文字而无限拉宽列宽
-        self.lagan_summary_table.setWordWrap(True)
-        # 不使用省略号，超出部分通过换行显示
-        self.lagan_summary_table.setTextElideMode(Qt.ElideNone)
-        self.lagan_summary_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.lagan_summary_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        # 在表格任意位置按下左键并拖动时，拖动整个拉杆数量统计面板
-        def _lagan_table_mousePressEvent(event):
-            from PyQt5.QtCore import Qt
-
-            if event.button() == Qt.LeftButton:
-                # 记录全局坐标和容器当前坐标
-                if hasattr(self, "lagan_summary_container"):
-                    c = self.lagan_summary_container
-                    c._drag_global_pos = event.globalPos()
-                    c._drag_widget_pos = c.pos()
-                event.accept()
-            else:
-                # 其它按键按原逻辑处理
-                try:
-                    from PyQt5.QtWidgets import QTableWidget
-
-                    QTableWidget.mousePressEvent(self.lagan_summary_table, event)
-                except Exception:
-                    event.ignore()
-
-        def _lagan_table_mouseMoveEvent(event):
-            from PyQt5.QtCore import Qt
-
-            if (
-                event.buttons() & Qt.LeftButton
-                and hasattr(self, "lagan_summary_container")
-                and hasattr(self.lagan_summary_container, "_drag_global_pos")
-                and hasattr(self.lagan_summary_container, "_drag_widget_pos")
-            ):
-                c = self.lagan_summary_container
-                delta = event.globalPos() - c._drag_global_pos
-                new_pos = c._drag_widget_pos + delta
-
-                # 限制在父容器范围内
-                parent_w = self.graphics_container.width()
-                parent_h = self.graphics_container.height()
-                w = c.width()
-                h = c.height()
-
-                x = max(0, min(new_pos.x(), max(0, parent_w - w)))
-                y = max(0, min(new_pos.y(), max(0, parent_h - h)))
-
-                c.move(x, y)
-                event.accept()
-            else:
-                try:
-                    from PyQt5.QtWidgets import QTableWidget
-
-                    QTableWidget.mouseMoveEvent(self.lagan_summary_table, event)
-                except Exception:
-                    event.ignore()
-
-        self.lagan_summary_table.mousePressEvent = _lagan_table_mousePressEvent
-        self.lagan_summary_table.mouseMoveEvent = _lagan_table_mouseMoveEvent
-
-        # 再调小每一行行高，让表格更扁一些
-        for _row in range(3):
-            self.lagan_summary_table.setRowHeight(_row, 20)
-
-        # 合并第三列三行为一格，显示固定文字
-        self.lagan_summary_table.setSpan(0, 2, 3, 1)
-        desc_item = QTableWidgetItem(
-            "当前产品公称直径为DN1800，拉杆公称直径为M16，\n根据标准要求，拉杆数量不应少于12根。"
-        )
-        desc_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self.lagan_summary_table.setItem(0, 2, desc_item)
-
         # 初始化左侧两列的标题文字
         self.lagan_summary_table.setItem(0, 0, QTableWidgetItem("最少拉杆数量"))
         self.lagan_summary_table.setItem(1, 0, QTableWidgetItem("已有拉杆数量"))
         self.lagan_summary_table.setItem(2, 0, QTableWidgetItem("缺少拉杆数量"))
 
-        lagan_layout.addWidget(self.lagan_summary_table, 0, 0, 1, 1)
+        # 初始化刷新一次统计表（使第三列说明与左侧参数列表一致）
+        try:
+            self.update_total_lagan_count()
+        except Exception:
+            pass
 
         # 将图形容器添加到中心布局
         center_layout.addWidget(self.graphics_container)
@@ -3035,7 +2926,7 @@ class TubeLayoutEditor(QMainWindow):
             "折流板类型",
             "折流板切口方向",
             "折流板要求切口率",
-            "折流板切口与中心线间距",
+            "折流板切口与中心线间距a",
             "弓形弦高切口率",
             "内侧中心切口率",
             "A型板切口与中心线间距a",
@@ -9491,7 +9382,7 @@ class TubeLayoutEditor(QMainWindow):
                     baffle_diameter = float(param_value)
                 except ValueError:
                     baffle_diameter = None
-            elif param_name == "折流板切口与中心线间距":
+            elif param_name == "折流板切口与中心线间距a":
                 cut_spacing_row = row
                 try:
                     cut_spacing = float(param_value)
@@ -9537,14 +9428,14 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 设置程序自动更新标志，避免循环更新
                     self._is_programmatic_update = True
-                    self._programmatic_update_params.add("折流板切口与中心线间距")
+                    self._programmatic_update_params.add("折流板切口与中心线间距a")
                     try:
                         spacing_item = self.param_table.item(cut_spacing_row, 2)
                         if spacing_item:
                             spacing_item.setText(f"{new_spacing: .1f}")
                     finally:
                         self._programmatic_update_params.discard(
-                            "折流板切口与中心线间距"
+                            "折流板切口与中心线间距a"
                         )
                         self._is_programmatic_update = False
 
@@ -9577,7 +9468,7 @@ class TubeLayoutEditor(QMainWindow):
                         self._programmatic_update_params.discard("折流板要求切口率")
                         self._is_programmatic_update = False
 
-            elif changed_param_name == "折流板切口与中心线间距":
+            elif changed_param_name == "折流板切口与中心线间距a":
                 if cut_spacing is None or cut_spacing < 0:
                     QMessageBox.warning(
                         self, "参数错误", "折流板切口与中心线间距值无效"
@@ -9645,7 +9536,7 @@ class TubeLayoutEditor(QMainWindow):
                             spacing_item.setText(f"{new_spacing:.1f}")
                     finally:
                         self._programmatic_update_params.discard(
-                            "折流板切口与中心线间距"
+                            "折流板切口与中心线间距a"
                         )
                         self._is_programmatic_update = False
 
@@ -9830,7 +9721,7 @@ class TubeLayoutEditor(QMainWindow):
             "壳体内直径 Dis",
             "换热管外径 do",
             "折流板外径",
-            "折流板切口与中心线间距",
+            "折流板切口与中心线间距a",
             "折流板要求切口率",
             "管程程数",
             "拉杆形式",
@@ -10134,7 +10025,7 @@ class TubeLayoutEditor(QMainWindow):
                         self.isDi_change = True
                     if param_name in [
                         "折流板外径",
-                        "折流板切口与中心线间距",
+                        "折流板切口与中心线间距a",
                         "折流板要求切口率",
                         "折流板切口方向",
                     ]:
@@ -10392,7 +10283,7 @@ class TubeLayoutEditor(QMainWindow):
         self.baffle_params_rows = {
             "壳体内直径 Dis": None,
             "折流板外径": None,
-            "折流板切口与中心线间距": None,
+            "折流板切口与中心线间距a": None,
             "折流板要求切口率": None,
             "换热管外径 do": None,
         }
@@ -14181,7 +14072,7 @@ class TubeLayoutEditor(QMainWindow):
             "折流板类型",
             "折流板切口方向",
             "折流板要求切口率",
-            "折流板切口与中心线间距",
+            "折流板切口与中心线间距a",
             "弓形弦高切口率",
             "内侧中心切口率",
             "A型板切口与中心线间距a",
@@ -14696,10 +14587,6 @@ class TubeLayoutEditor(QMainWindow):
 
         from PyQt5.QtGui import QPen, QColor
         import math
-
-        # 擦除前一次绘制的折流板信息，目前只有这个方法不闪退
-        # self.baffle_lines = []
-        # print(self.baffle_lines)
         if len(self.baffle_lines) != 0:
             self.clear_baffle_plates()
             self.baffle_lines = []
@@ -20143,6 +20030,9 @@ class TubeLayoutEditor(QMainWindow):
         # ---------- 基本/附加参数定义 ----------
         # 基本参数：始终显示
         base_params = [
+            # ("是否以外径为基准", "是否以外径为基准", ""),
+            # ("公称直径 DN", "公称直径 DN", "mm"),
+            # ("壳体内直径 Dis", "壳体内直径 Dis", "mm"),
             ("折流板外径", "折流板外径", "mm"),
             ("折流/支持板间距", "折流/支持板间距", "mm"),
             ("折流板类型", "折流板类型", ""),
@@ -20270,6 +20160,28 @@ class TubeLayoutEditor(QMainWindow):
                 baffle_type_row = row
                 # 单位为空
                 unit_item = QTableWidgetItem("")
+                unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
+                table.setItem(row, 2, unit_item)
+            elif cn == "折流板切口方向":
+                direction_combo = _QComboBoxForDialog()
+                direction_combo.addItems(["水平上下", "垂直左右"])
+                if value_text in ["水平上下", "垂直左右"]:
+                    direction_combo.setCurrentText(value_text)
+                else:
+                    direction_combo.setCurrentText("水平上下")
+                table.setCellWidget(row, 1, direction_combo)
+                unit_item = QTableWidgetItem(unit or "")
+                unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
+                table.setItem(row, 2, unit_item)
+            elif cn == "是否以外径为基准":
+                outer_base_combo = _QComboBoxForDialog()
+                outer_base_combo.addItems(["是", "否"])
+                if value_text in ["是", "否"]:
+                    outer_base_combo.setCurrentText(value_text)
+                else:
+                    outer_base_combo.setCurrentText("是")
+                table.setCellWidget(row, 1, outer_base_combo)
+                unit_item = QTableWidgetItem(unit or "")
                 unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
                 table.setItem(row, 2, unit_item)
             else:
@@ -20456,6 +20368,61 @@ class TubeLayoutEditor(QMainWindow):
             finally:
                 updating_linked_values["active"] = False
 
+        def set_dialog_text_value(name: str, value: str):
+            row = find_row_by_name(name)
+            if row < 0:
+                return
+            item = table.item(row, 1)
+            if item is None:
+                return
+            updating_linked_values["active"] = True
+            try:
+                item.setText(str(value))
+            finally:
+                updating_linked_values["active"] = False
+
+        def get_text_from_dialog(name: str) -> str:
+            row = find_row_by_name(name)
+            if row < 0:
+                return ""
+            widget = table.cellWidget(row, 1)
+            if isinstance(widget, _QComboBoxForDialog):
+                return widget.currentText().strip()
+            item = table.item(row, 1)
+            return item.text().strip() if item else ""
+
+        def calc_baffle_od_from_di(di_value: float):
+            try:
+                if di_value is None or di_value <= 0:
+                    return None
+                shell_material_type = "钢管"
+                if di_value <= 400:
+                    if shell_material_type == "钢管":
+                        measured_inner_diameter = di_value - 5
+                        return float(f"{measured_inner_diameter - 2:.1f}")
+                    return float(f"{di_value - 2.5:.1f}")
+                if 400 < di_value <= 500:
+                    return float(f"{di_value - 3.5:.1f}")
+                if 500 < di_value <= 900:
+                    return float(f"{di_value - 4.5:.1f}")
+                if 900 < di_value <= 1300:
+                    return float(f"{di_value - 6:.1f}")
+                if 1300 < di_value <= 1700:
+                    return float(f"{di_value - 7:.1f}")
+                if 1700 < di_value <= 2100:
+                    return float(f"{di_value - 8.5:.1f}")
+                if 2100 < di_value <= 2300:
+                    return float(f"{di_value - 12:.1f}")
+                if 2300 < di_value <= 2600:
+                    return float(f"{di_value - 14:.1f}")
+                if 2600 < di_value <= 3200:
+                    return float(f"{di_value - 16:.1f}")
+                if 3200 < di_value <= 4000:
+                    return float(f"{di_value - 18:.1f}")
+                return float(f"{di_value - 20:.1f}")
+            except Exception:
+                return None
+
         def clear_warning():
             warning_label.setText("")
 
@@ -20466,7 +20433,29 @@ class TubeLayoutEditor(QMainWindow):
             if updating_linked_values["active"]:
                 return
 
-            Di = get_shell_inner_diameter()
+            # 0. 迁移：DN/Dis联动（当“是否以外径为基准”为“否”时，Dis=DN）
+            try:
+                outer_base = get_text_from_dialog("是否以外径为基准")
+                if outer_base == "否" and changed_name in ["公称直径 DN", "是否以外径为基准"]:
+                    dn_val = get_float_from_dialog("公称直径 DN")
+                    if dn_val is not None:
+                        set_dialog_value("壳体内直径 Dis", dn_val)
+            except Exception:
+                pass
+
+            # 0.1 迁移：壳体内直径变化时，自动更新折流板外径
+            if changed_name == "壳体内直径 Dis":
+                di_val = get_float_from_dialog("壳体内直径 Dis")
+                if di_val is None:
+                    return
+                new_od = calc_baffle_od_from_di(di_val)
+                if new_od is not None:
+                    set_dialog_value("折流板外径", new_od)
+
+            # 弹窗内联动计算优先使用弹窗当前值，避免主表未写回导致联动不生效
+            Di = get_float_from_dialog("壳体内直径 Dis")
+            if Di is None:
+                Di = get_shell_inner_diameter()
             Db = get_baffle_outer_diameter()
 
             # 1. 弓形弦高切口率 <-> A型板切口与中心线间距a
@@ -20566,6 +20555,58 @@ class TubeLayoutEditor(QMainWindow):
                 rate = b_val / Di * 100.0
                 set_dialog_value("内侧中心切口率", rate)
 
+            # 3. 迁移：折流板外径/要求切口率/切口与中心线间距 联动
+            if changed_name in ["折流板外径", "折流板要求切口率", "折流板切口与中心线间距a"]:
+                Di2 = get_float_from_dialog("壳体内直径 Dis")
+                if Di2 is None or Di2 <= 0:
+                    return
+                Db2 = get_float_from_dialog("折流板外径")
+                if Db2 is None or Db2 <= 0:
+                    return
+                baffle_radius = Db2 / 2.0
+
+                if changed_name == "折流板要求切口率":
+                    cut_rate = get_float_from_dialog("折流板要求切口率")
+                    if cut_rate is None or not (0 <= cut_rate <= 50):
+                        set_warning('您输入的"折流板要求切口率"值无效，必须在0%到50%范围内')
+                        return
+                    clear_warning()
+                    cut_size = (cut_rate / 100.0) * Di2
+                    new_spacing = baffle_radius - cut_size
+                    if new_spacing < 0 or new_spacing > baffle_radius:
+                        set_warning('根据当前切口率计算出的"折流板切口与中心线间距a"不合理，请核对后重新输入！')
+                        return
+                    set_dialog_value("折流板切口与中心线间距a", new_spacing)
+
+                elif changed_name == "折流板切口与中心线间距a":
+                    cut_spacing = get_float_from_dialog("折流板切口与中心线间距a")
+                    if cut_spacing is None or cut_spacing < 0 or cut_spacing > baffle_radius:
+                        set_warning(
+                            f'您输入的"折流板切口与中心线间距a"必须在0到{baffle_radius:.1f}mm范围内！'
+                        )
+                        return
+                    clear_warning()
+                    new_cut_rate = ((baffle_radius - cut_spacing) / Di2) * 100.0
+                    if not (0 <= new_cut_rate <= 50):
+                        set_warning('计算出的"折流板要求切口率"超出合理范围(0-50%)，请核对输入！')
+                        return
+                    set_dialog_value("折流板要求切口率", new_cut_rate)
+
+                elif changed_name == "折流板外径":
+                    # 优先保持用户输入不变，只尝试根据已有一个量更新另一个量
+                    cut_rate = get_float_from_dialog("折流板要求切口率")
+                    cut_spacing = get_float_from_dialog("折流板切口与中心线间距a")
+                    clear_warning()
+                    if cut_rate is not None and 0 <= cut_rate <= 50:
+                        cut_size = (cut_rate / 100.0) * Di2
+                        new_spacing = baffle_radius - cut_size
+                        if 0 <= new_spacing <= baffle_radius:
+                            set_dialog_value("折流板切口与中心线间距a", new_spacing)
+                    elif cut_spacing is not None and 0 <= cut_spacing <= baffle_radius:
+                        new_cut_rate = ((baffle_radius - cut_spacing) / Di2) * 100.0
+                        if 0 <= new_cut_rate <= 50:
+                            set_dialog_value("折流板要求切口率", new_cut_rate)
+
         def on_item_changed(item: QTableWidgetItem):
             if not item or item.column() != 1:
                 return
@@ -20578,11 +20619,25 @@ class TubeLayoutEditor(QMainWindow):
                 "A型板切口与中心线间距a",
                 "内侧中心切口率",
                 "B型板切口与中心线间距b",
+                "公称直径 DN",
+                "壳体内直径 Dis",
+                "折流板外径",
+                "折流板要求切口率",
+                "折流板切口与中心线间距a",
             ]:
                 return
             validate_and_link(changed_name)
 
         table.itemChanged.connect(on_item_changed)
+
+        # 下拉框变化也需要触发联动（是否以外径为基准/切口方向不会触发itemChanged）
+        outer_base_row = find_row_by_name("是否以外径为基准")
+        if outer_base_row >= 0:
+            outer_base_combo = table.cellWidget(outer_base_row, 1)
+            if isinstance(outer_base_combo, _QComboBoxForDialog):
+                outer_base_combo.currentTextChanged.connect(
+                    lambda _t: validate_and_link("是否以外径为基准")
+                )
 
         # ---------- 底部按钮：确定 / 关闭 ----------
         button_layout = QHBoxLayout()
