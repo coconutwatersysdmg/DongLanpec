@@ -3934,7 +3934,9 @@ class TubeLayoutEditor(QMainWindow):
                                     "管口所属元件": None,
                                 }
                             try:
-                                self.radial_hole_dict[code]["连通方向"] = direction or "壳程"
+                                self.radial_hole_dict[code]["连通方向"] = (
+                                    direction or "壳程"
+                                )
                             except Exception:
                                 pass
                             coord = _parse_coord(coord_str)
@@ -3973,7 +3975,10 @@ class TubeLayoutEditor(QMainWindow):
                     pass
                 try:
                     for _code, info in (self.radial_hole_dict or {}).items():
-                        if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                        if (
+                            isinstance(info, dict)
+                            and info.get("换热管坐标") is not None
+                        ):
                             try:
                                 self.draw_radial_hole_tangents(info.get("换热管坐标"))
                             except Exception:
@@ -15420,7 +15425,7 @@ class TubeLayoutEditor(QMainWindow):
             self.operation_order = 0
             self.impingement_plate_dic = {}  # Add this line
             self._impingement_plate_auto_id = 0
-            self.self.radial_hole_dict={}
+            self.self.radial_hole_dict = {}
 
         except Exception as e:
             print(f"布管按钮点击时发生错误: {e}")
@@ -30590,7 +30595,7 @@ class TubeLayoutEditor(QMainWindow):
             center_point = QPointF(x1, y1)
             interfering_centers = [
                 center
-                for center in self.current_centers
+                for center in (self.current_centers or []) + (self.lagan_info or [])
                 if math.hypot(center[0] - x1, center[1] - y1)
                 <= (half_thickness + tube_radius)
             ]
@@ -30639,7 +30644,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 返回距离
                 return math.hypot(px - proj_x, py - proj_y)
 
-            for center in self.current_centers:
+            for center in (self.current_centers or []) + (self.lagan_info or []):
                 cx, cy = center
 
                 # 快速边界框检查（避免创建图形对象）
