@@ -76,6 +76,9 @@ ENABLE_AXIAL_DESIGN_PAGE = False
 # TODO 防冲板形式“焊接式”选项开关
 ENABLE_DANGBAN_WELDED_OPTION = True
 
+# TODO 径向开孔功能开关
+ENABLE_RADIAL_HOLES = False
+
 
 edge_centers: List[Tuple[float, float]] = []
 
@@ -2159,19 +2162,8 @@ class TubeLayoutEditor(QMainWindow):
                 20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation
             )
         )
-        btn11_text_button = QPushButton("折流板")
-        btn11_text_button.clicked.connect(self.show_baffle_info)
-        btn11_layout.addWidget(btn11_icon_label)
-        btn11_layout.addWidget(btn11_text_button)
-        self.toolbar_row2_layout.addWidget(btn11_widget)
-        btn_radial_holes = QPushButton("径向开孔")
-        btn_radial_holes.setMinimumHeight(30)
-        btn_radial_holes.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        btn_radial_holes.setStyleSheet(toolbar_button_style)
-        btn_radial_holes.setIcon(QIcon(icon_path12))
-        btn_radial_holes.setIconSize(QSize(20, 20))
-        btn_radial_holes.clicked.connect(self.build_radial_holes)
-        self.toolbar_row2_layout.addWidget(btn_radial_holes)
+        
+        # Define btn10 before using it
         btn10 = QPushButton("删除")
         btn10.setMinimumHeight(30)
         btn10.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
@@ -2180,6 +2172,21 @@ class TubeLayoutEditor(QMainWindow):
         btn10.setIconSize(QSize(20, 20))
         btn10.clicked.connect(self.on_del_click)
         self.toolbar_row2_layout.addWidget(btn10)
+
+        # Create the radial holes button
+        btn_radial_holes = QPushButton("径向开孔")
+        btn_radial_holes.setMinimumHeight(30)
+        btn_radial_holes.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        btn_radial_holes.setStyleSheet(toolbar_button_style)
+        btn_radial_holes.setIcon(QIcon(icon_path12))
+        btn_radial_holes.setIconSize(QSize(20, 20))
+        btn_radial_holes.clicked.connect(self.build_radial_holes)
+        
+        # Disable the button if the feature is not enabled
+        if not ENABLE_RADIAL_HOLES:
+            btn_radial_holes.setEnabled(False)
+            
+        self.toolbar_row2_layout.addWidget(btn_radial_holes)
 
         # 保存工具栏按钮顺序，便于根据窗口状态动态重排
         self.toolbar_buttons = [
@@ -13606,44 +13613,45 @@ class TubeLayoutEditor(QMainWindow):
                 QMessageBox.warning(self, "提示", "还未布管", QMessageBox.Ok)
             else:
                 slipway_set = set(self.slipway_centers)
-                # 保存前校验：所有管口必须设置径向开孔
-                try:
-                    if (
-                        isinstance(getattr(self, "pipe_port_dict", None), dict)
-                        and self.pipe_port_dict
-                    ):
-                        expected_codes = list(self.pipe_port_dict.keys())
-                        if not isinstance(
-                            getattr(self, "radial_hole_dict", None), dict
-                        ):
-                            QMessageBox.warning(
-                                self,
-                                "提示",
-                                f"管口号为{expected_codes[0]}的管口未设置径向开孔，请确认！",
-                                QMessageBox.Ok,
-                            )
-                            return
+                # 暂时取消管口检查
+                # # 保存前校验：所有管口必须设置径向开孔
+                # try:
+                #     if (
+                #         isinstance(getattr(self, "pipe_port_dict", None), dict)
+                #         and self.pipe_port_dict
+                #     ):
+                #         expected_codes = list(self.pipe_port_dict.keys())
+                #         if not isinstance(
+                #             getattr(self, "radial_hole_dict", None), dict
+                #         ):
+                #             QMessageBox.warning(
+                #                 self,
+                #                 "提示",
+                #                 f"管口号为{expected_codes[0]}的管口未设置径向开孔，请确认！",
+                #                 QMessageBox.Ok,
+                #             )
+                #             return
 
-                        for code in expected_codes:
-                            info = self.radial_hole_dict.get(code)
-                            if (
-                                not isinstance(info, dict)
-                                or info.get("换热管坐标") is None
-                            ):
-                                QMessageBox.warning(
-                                    self,
-                                    "提示",
-                                    f"管口号为{code}的管口未设置径向开孔，请确认！",
-                                    QMessageBox.Ok,
-                                )
-                                return
-                except Exception:
-                    # 校验异常时不允许保存，避免漏检
-                    QMessageBox.warning(
-                        self, "提示", "径向开孔校验失败，请确认！", QMessageBox.Ok
-                    )
-                    return
-                # self.current_centers = [center for center in self.current_centers if center not in slipway_set]
+                #         for code in expected_codes:
+                #             info = self.radial_hole_dict.get(code)
+                #             if (
+                #                 not isinstance(info, dict)
+                #                 or info.get("换热管坐标") is None
+                #             ):
+                #                 QMessageBox.warning(
+                #                     self,
+                #                     "提示",
+                #                     f"管口号为{code}的管口未设置径向开孔，请确认！",
+                #                     QMessageBox.Ok,
+                #                 )
+                #                 return
+                # except Exception:
+                    # # 校验异常时不允许保存，避免漏检
+                    # QMessageBox.warning(
+                    #     self, "提示", "径向开孔校验失败，请确认！", QMessageBox.Ok
+                    # )
+                    # return
+                self.current_centers = [center for center in self.current_centers if center not in slipway_set]
                 # TODO 获取管口数量分布表格数据
                 tube_hole_data = self.get_current_tube_hole_data()
                 tube_data = self.get_current_tube_data()
