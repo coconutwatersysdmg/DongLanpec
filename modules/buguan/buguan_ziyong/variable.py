@@ -13,7 +13,7 @@ center_dangguan_num = 0  # 记录中间挡管数量计数器
 selected_center_dangguan = []  # 选中的中间挡管对象列表
 
 # 是否为 b 型管板的 c/d/e 节点（例如 b_c、b_d、b_e）
-is_b_cde_node = False
+is_b_cdeh_node = False
 
 # 当前管板参数快照（包含节点信息），例如：
 # {
@@ -224,17 +224,17 @@ def update_selected_center_dangguan(new_value):
         editor.selected_center_dangguan = new_value
 
 
-def update_is_b_cde_node(new_value):
-    """更新 is_b_cde_node 全局变量，并同步回实例（如果存在）"""
-    global is_b_cde_node
-    is_b_cde_node = bool(new_value)
+def update_is_b_cdeh_node(new_value):
+    """更新 is_b_cdeh_node 全局变量，并同步回实例（如果存在）"""
+    global is_b_cdeh_node
+    is_b_cdeh_node = bool(new_value)
 
     # 同时更新实例（如果存在）
     editor = get_current_editor()
     if editor:
         # 为兼容性，仅在实例上简单挂一个同名属性
         try:
-            editor.is_b_cde_node = bool(new_value)
+            editor.is_b_cdeh_node = bool(new_value)
         except Exception:
             pass
 

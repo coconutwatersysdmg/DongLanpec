@@ -48,7 +48,7 @@ from modules.buguan.buguan_ziyong.database_utils import create_activity_connecti
 from modules.buguan.buguan_ziyong.variable import (
     update_axial_basic_params,
     axial_basic_params,
-    update_is_b_cde_node,
+    update_is_b_cdeh_node,
     update_tube_sheet_params_snapshot,
     tube_sheet_params_snapshot,
 )
@@ -1077,12 +1077,7 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
     return current_centers
 
 
-# 使用示例
-# current_centers = none_tube_centers(height_0_180, height_90_270, Di, do, centers)
-
-
 # TODO 此处初始化
-
 
 class TubeLayoutEditor(QMainWindow):
     def __init__(self, line_tip=None):
@@ -4443,8 +4438,6 @@ class TubeLayoutEditor(QMainWindow):
             if not any(is_close(center, rm) for rm in centers_to_remove)
         ]
 
-        # TODO 后续取消注释
-        # self.line_tip.setText("请确认"壳体内径Di"是否正确！")
         # 在初始化完成后设置监听器
         self.setup_parameter_listeners()
         self.update_baffle_parameters("折流板要求切口率")
@@ -6357,7 +6350,6 @@ class TubeLayoutEditor(QMainWindow):
                         return None
         return None
 
-    # TODO 折流板要求切口率、折流板切口与中心线间距参数值联动更新
     def update_SN(self):
         """根据管程数的值更新分程隔板两侧相邻管中心距（竖直/水平）所在行的状态"""
         print(self.tube_pass_form_value)
@@ -7197,6 +7189,7 @@ class TubeLayoutEditor(QMainWindow):
                 combo_box.currentTextChanged.connect(lambda: self.handle_param_change())
 
     def update_tube_layout_circle_dl(self):
+        # TODO 更新布管限定圆 DL
         # 1. 查找参数表中布管限定圆计算所需的关键参数行索引
         di_row = -1
         do_row = -1
@@ -7331,7 +7324,7 @@ class TubeLayoutEditor(QMainWindow):
             return None
 
         # b 型 c/d/e 特殊节点处理
-        if getattr(self, "is_b_cde_node", False):
+        if getattr(self, "is_b_cdeh_node", False):
             try:
                 # 注意：这里不能直接使用导入时的 tube_sheet_params_snapshot 引用，
                 # 因为在 variable.py 中是通过重新赋值更新全局字典，会导致本模块中的
@@ -7499,6 +7492,46 @@ class TubeLayoutEditor(QMainWindow):
                                 f"[update_tube_layout_circle_dl] h 节点计算异常，回退原逻辑: {e}"
                             )
                             dl_value = _calc_dl_by_type(di_value, do_value)
+                elif str(node_name).lower() == "d":
+                    # D 节点：DL = min{(Di-2×h-2×g), (Di-2×h-2×f), (Di-2×b3)}
+                    # 其中 b3 = max(0.25do, 8)
+                    # Di/do 从左侧参数表获取，h/g/f 从快照参数中读取
+                    h_raw = params_dict.get("h")
+                    g_raw = params_dict.get("g")
+                    f_raw = params_dict.get("f")
+
+                    if h_raw is None or g_raw is None or f_raw is None:
+                        print(
+                            "[update_tube_layout_circle_dl] D 节点快照中缺少 h/g/f，回退到原逻辑计算 DL"
+                        )
+                        dl_value = _calc_dl_by_type(di_value, do_value)
+                    else:
+                        try:
+                            di_local = float(di_value)
+                            do_local = float(do_value)
+                            h_val = float(h_raw)
+                            g_val = float(g_raw)
+                            f_val = float(f_raw)
+
+                            # b3 = max(0.25do, 8)
+                            b3 = max(0.25 * do_local, 8.0)
+
+                            dl_expr1 = di_local - 2 * h_val - 2 * g_val
+                            dl_expr2 = di_local - 2 * h_val - 2 * f_val
+                            dl_expr3 = di_local - 2 * b3
+
+                            dl_value = min(dl_expr1, dl_expr2, dl_expr3)
+
+                            print(
+                                "[update_tube_layout_circle_dl] D 节点特殊公式计算 DL: "
+                                f"expr1 = {dl_expr1:.3f}, expr2 = {dl_expr2:.3f}, "
+                                f"expr3 = {dl_expr3:.3f}, 取 min = {dl_value:.3f}"
+                            )
+                        except Exception as e:
+                            print(
+                                f"[update_tube_layout_circle_dl] D 节点计算异常，回退原逻辑: {e}"
+                            )
+                            dl_value = _calc_dl_by_type(di_value, do_value)
                 else:
                     # 非 c 节点（如 d/e），暂时回退到原有按型号逻辑
                     print(
@@ -7506,6 +7539,7 @@ class TubeLayoutEditor(QMainWindow):
                         "回退到按型号的原逻辑计算 DL"
                     )
                     dl_value = _calc_dl_by_type(di_value, do_value)
+
             except Exception as e:
                 print(
                     f"[update_tube_layout_circle_dl] b 型节点特殊计算异常，回退原逻辑: {e}"
@@ -7660,122 +7694,8 @@ class TubeLayoutEditor(QMainWindow):
                 f"无匹配数据：未找到外径{do_value}mm + {unified_range_type}（对应原始排列方式：{range_type_value}）的中心距配置"
             )
 
-    # 10/28 1
-    # def user_update_Di(self):
-    #     """
-    #     当“是否以外径为基准”为“是”时，根据公称直径DN计算壳体内直径Di，
-    #     并更新表格，同时执行三值一致性检查。
-    #     """
-    #     from PyQt5.QtWidgets import QTableWidgetItem, QComboBox
-    #     from PyQt5.QtCore import QCoreApplication
-
-    #     # 1. 判断是否以外径为基准
-    #     is_outer_diameter_base = self.get_is_outer_diameter_base()
-
-    #     if is_outer_diameter_base == "否":
-    #         print("参数'是否以外径为基准'为'否'，跳过更新壳体内直径")
-    #         return
-
-    #     if is_outer_diameter_base != "是":
-    #         print(f"参数'是否以外径为基准'的值为'{is_outer_diameter_base}'，不符合预期")
-    #         return
-
-    #     # 2. 获取 DN、Di 的行号
-    #     di_row = dn_row = -1
-    #     row_count = self.param_table.rowCount()
-    #     for row in range(row_count):
-    #         name_item = self.param_table.item(row, 1)
-    #         if not name_item:
-    #             continue
-    #         name = name_item.text().strip()
-    #         if name == "壳体内直径 Dis":
-    #             di_row = row
-    #         elif name == "公称直径 DN":
-    #             dn_row = row
-
-    #     if di_row == -1 or dn_row == -1:
-    #         print("[WARN] 未找到 DN/Di 参数行，无法更新。")
-    #         return
-
-    #     # 3. 获取当前 DN、Di 值
-    #     def get_value(row):
-    #         widget = self.param_table.cellWidget(row, 2)
-    #         if isinstance(widget, QComboBox):
-    #             val = widget.currentText().strip()
-    #         else:
-    #             item = self.param_table.item(row, 2)
-    #             val = item.text().strip() if item else None
-    #         try:
-    #             return float(val)
-    #         except (TypeError, ValueError):
-    #             return None
-
-    #     di_value = get_value(di_row)
-    #     dn_value = get_value(dn_row)
-
-    #     print(f"[DEBUG] 当前DN={dn_value}, Di={di_value}")
-
-    #     if dn_value is None or di_value is None:
-    #         print("[WARN] 存在空值，跳过更新。")
-    #         return
-
-    #     # 4. 计算新的Di
-    #     current_di = self.cal_di(di_value, dn_value)
-    #     if current_di is None or not isinstance(current_di, (int, float)):
-    #         print(f"cal_di() 返回无效值: {current_di}")
-    #         return
-
-    #     print(f"[INFO] 计算得到新壳体内直径 Dis = {current_di:.1f} mm")
-
-    #     # 5. 临时断开信号，防止重复触发 itemChanged
-    #     original_handler = None
-    #     if hasattr(self, "handle_param_change"):
-    #         try:
-    #             self.param_table.itemChanged.disconnect(self.handle_param_change)
-    #             original_handler = self.handle_param_change
-    #         except Exception:
-    #             pass
-
-    #     # 6. 更新表格中的 Di
-    #     try:
-    #         widget = self.param_table.cellWidget(di_row, 2)
-    #         str_value = f"{current_di:.1f}"
-    #         if isinstance(widget, QComboBox):
-    #             idx = widget.findText(str_value)
-    #             if idx >= 0:
-    #                 widget.setCurrentIndex(idx)
-    #             else:
-    #                 widget.setEditText(str_value)
-    #         else:
-    #             item = self.param_table.item(di_row, 2)
-    #             if item:
-    #                 item.setText(str_value)
-    #             else:
-    #                 self.param_table.setItem(di_row, 2, QTableWidgetItem(str_value))
-
-    #         print(f"[INFO] 壳体内直径 Dis 更新为 {current_di:.1f} mm")
-
-    #     except Exception as e:
-    #         print(f"[ERROR] 更新壳体内直径时出错: {e}")
-
-    #     finally:
-    #         # 恢复信号连接
-    #         if original_handler:
-    #             try:
-    #                 self.param_table.itemChanged.connect(original_handler)
-    #             except Exception:
-    #                 pass
-
-    #     # 7. ✅ 自动触发三值约束检查（仅执行一次）
-    #     try:
-    #         QCoreApplication.processEvents()
-    #         print("[DEBUG] 自动触发三值一致性检查（来源：user_update_Di）")
-    #         self.check_diameter_consistency(trigger_name="壳体内直径 Dis")
-    #     except Exception as e:
-    #         print(f"[ERROR] 调用 check_diameter_consistency 出错: {e}")
-
-    # 10/28 2
     def user_update_Di(self):
+        # TODO  更新壳体内直径
         """
         当“是否以外径为基准”为“是”时，根据公称直径DN计算壳体内直径Di，
         并更新表格，同时执行三值一致性检查（仅触发一次）。
@@ -8084,8 +8004,9 @@ class TubeLayoutEditor(QMainWindow):
             )
 
     def update_divider_position_and_size(self):
+        # TODO 更新隔条位置尺寸
         self.calculate_piping()
-        """更新隔条位置尺寸"""
+
         # 设置程序自动更新标记
         self._is_programmatic_update = True
         self._programmatic_update_params.add("隔条位置尺寸 W")
@@ -13551,7 +13472,7 @@ class TubeLayoutEditor(QMainWindow):
                 if sql_list:
                     for sql in sql_list:
                         self.execute_sql(sql)
-                # TODO 布管数量
+                # TODO 布管数量存储
                 sql_list = self.build_sql_for_tube_hole(tube_hole_data)
                 if sql_list:
                     for sql in sql_list:
@@ -13561,7 +13482,7 @@ class TubeLayoutEditor(QMainWindow):
                 if sql_list:
                     for sql in sql_list:
                         self.execute_sql(sql)
-                # TODO 布管参数
+                # TODO 布管参数存储
                 tube_data = self.get_current_tube_data()
                 sql_statements = self.build_sql_for_tube(tube_data)
                 if sql_statements:
@@ -14109,15 +14030,15 @@ class TubeLayoutEditor(QMainWindow):
                         node_name = parts[1].lower()
 
                 # 仅当为 b 型管板的 c/e/h 节点时才作为特殊情况处理
-                self.is_b_cde_node = (
-                    ((main_category == "b") and (node_name in ["c", "e", "h"]))
+                self.is_b_cdeh_node = (
+                    ((main_category == "b") and (node_name in ["c", "d", "e", "h"]))
                     if main_category
                     else False
                 )
 
-                # 每次切到布管 tab 都同步更新全局 is_b_cde_node
+                # 每次切到布管 tab 都同步更新全局 is_b_cdeh_node
                 try:
-                    update_is_b_cde_node(self.is_b_cde_node)
+                    update_is_b_cdeh_node(self.is_b_cdeh_node)
                 except Exception:
                     pass
 
@@ -14125,7 +14046,7 @@ class TubeLayoutEditor(QMainWindow):
                 #     f"[My_Piping] 当前管板类型: {plate_type if plate_type else '未获得'}，"
                 #     f"所属大类: {main_category if main_category else '未知'}，"
                 #     f"节点: {node_name if node_name else '未知'}，"
-                #     f"是否为 b 型 c/e/h 节点: {self.is_b_cde_node}"
+                #     f"是否为 b 型 c/e/h 节点: {self.is_b_cdeh_node}"
                 # )
 
                 # 调试：打印当前识别到的管板类型与节点、参数数量
@@ -14133,14 +14054,14 @@ class TubeLayoutEditor(QMainWindow):
                     print(
                         f"[My_Piping] plate_type={plate_type!r}, "
                         f"main_category={main_category!r}, node_name={node_name!r}, "
-                        f"is_b_cde_node={self.is_b_cde_node}, "
+                        f"is_b_cdeh_node={self.is_b_cdeh_node}, "
                         f"full_params_len={len(full_params) if full_params else 0}"
                     )
                 except Exception:
                     pass
 
                 # 若为 b 型管板的 c/e/h 节点，则输出当前所有管板参数，并保存快照
-                if self.is_b_cde_node and full_params:
+                if self.is_b_cdeh_node and full_params:
                     print("[My_Piping] 命中 b 型 c/d/e 节点分支，准备保存快照。")
 
                     # 构造当前管板参数快照，包含节点信息
@@ -14173,7 +14094,7 @@ class TubeLayoutEditor(QMainWindow):
                         self.update_tube_layout_circle_dl()
                     except Exception as e:
                         print(
-                            f"[My_Piping] 根据 b 型 c/d/e 节点快照更新 DL 时发生异常: {e}"
+                            f"[My_Piping] 根据 b 型 c/d/e/h 节点快照更新 DL 时发生异常: {e}"
                         )
 
                     # for name, value in full_params:
@@ -14192,7 +14113,6 @@ class TubeLayoutEditor(QMainWindow):
 
                     # print("[My_Piping] 当前管板类型不是 b 型的 c/d/e 节点，或未获取到管板参数，本次不做额外处理。")
 
-                # TODO 更新布管限定圆（仅打印当前快照用于调试，不再在此处重复计算 DL）
                 try:
                     from pprint import pformat
 
