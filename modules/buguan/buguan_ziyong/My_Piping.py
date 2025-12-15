@@ -2146,34 +2146,17 @@ class TubeLayoutEditor(QMainWindow):
         btn9.clicked.connect(self.on_dangban_click)
         self.toolbar_row2_layout.addWidget(btn9)
 
-        # 使用 QWidget 容器 + 图标 QLabel + 文字 QLabel，构造一个不可点击的“假按钮”
-        btn11_widget = QWidget()
-        btn11_widget.setMinimumHeight(30)
-        btn11_widget.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
-        btn11_widget.setStyleSheet(toolbar_button_style)
+        # 折流板按钮
+        btn_baffle = QPushButton("折流板")
+        btn_baffle.setMinimumHeight(30)
+        btn_baffle.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        btn_baffle.setStyleSheet(toolbar_button_style)
+        btn_baffle.setIcon(QIcon(icon_path11))
+        btn_baffle.setIconSize(QSize(20, 20))
+        btn_baffle.clicked.connect(self.show_baffle_info)
+        self.toolbar_row2_layout.addWidget(btn_baffle)
 
-        btn11_layout = QHBoxLayout(btn11_widget)
-        btn11_layout.setContentsMargins(8, 0, 8, 0)
-        btn11_layout.setSpacing(4)
-
-        btn11_icon_label = QLabel()
-        btn11_icon_label.setPixmap(
-            QPixmap(icon_path11).scaled(
-                20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation
-            )
-        )
-        
-        # Define btn10 before using it
-        btn10 = QPushButton("删除")
-        btn10.setMinimumHeight(30)
-        btn10.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        btn10.setStyleSheet(toolbar_button_style)
-        btn10.setIcon(QIcon(icon_path10))
-        btn10.setIconSize(QSize(20, 20))
-        btn10.clicked.connect(self.on_del_click)
-        self.toolbar_row2_layout.addWidget(btn10)
-
-        # Create the radial holes button
+        # 径向开孔按钮
         btn_radial_holes = QPushButton("径向开孔")
         btn_radial_holes.setMinimumHeight(30)
         btn_radial_holes.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
@@ -2182,26 +2165,36 @@ class TubeLayoutEditor(QMainWindow):
         btn_radial_holes.setIconSize(QSize(20, 20))
         btn_radial_holes.clicked.connect(self.build_radial_holes)
         
-        # Disable the button if the feature is not enabled
+        # 如果功能未启用，则禁用该按钮
         if not ENABLE_RADIAL_HOLES:
             btn_radial_holes.setEnabled(False)
             
         self.toolbar_row2_layout.addWidget(btn_radial_holes)
 
+        # 删除按钮
+        btn_delete = QPushButton("删除")
+        btn_delete.setMinimumHeight(30)
+        btn_delete.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        btn_delete.setStyleSheet(toolbar_button_style)
+        btn_delete.setIcon(QIcon(icon_path10))  # Changed from icon_path11 to icon_path10
+        btn_delete.setIconSize(QSize(20, 20))
+        btn_delete.clicked.connect(self.on_del_click)
+        self.toolbar_row2_layout.addWidget(btn_delete)
+
         # 保存工具栏按钮顺序，便于根据窗口状态动态重排
         self.toolbar_buttons = [
-            btn1,
-            btn2,
-            btn3,
-            btn4,
-            btn5,
-            btn6,
-            btn7,
-            btn8,
-            btn9,
-            btn11_widget,
-            btn_radial_holes,
-            btn10,
+            btn1,  # 换热管
+            btn2,  # 拉杆
+            btn3,  # 自由拉杆
+            btn4,  # 中间挡管
+            btn5,  # 旁路挡板
+            btn6,  # 滑道
+            btn7,  # 吊环螺钉
+            btn8,  # 中间挡板
+            btn9,  # 防冲板
+            btn_baffle,  # 折流板
+            btn_radial_holes,  # 径向开孔
+            btn_delete  # 删除
         ]
 
         # 根据初始窗口状态设置工具栏布局
@@ -14969,14 +14962,14 @@ class TubeLayoutEditor(QMainWindow):
 
             R = circle_diameter / 2.0
 
-            def draw_vertical_chord(x_level: float, color: QColor, tag: str):
+            def draw_vertical_chord(x_level: float, color: QColor, tag: str, line_width=3):
                 if x_level is None:
                     return
                 if abs(x_level) > R:
                     return
                 half_len = math.sqrt(max(0.0, R * R - x_level * x_level))
                 pen_local = QPen(color)
-                pen_local.setWidth(3)
+                pen_local.setWidth(line_width)
                 line_item = self.graphics_scene.addLine(
                     x_level,
                     -half_len,
@@ -14994,15 +14987,18 @@ class TubeLayoutEditor(QMainWindow):
                     }
                 )
 
-            # 深黄色：A 型板（±a）
-            deep_yellow = QColor(232, 204, 70)
-            draw_vertical_chord(a_distance, deep_yellow, "A")
-            draw_vertical_chord(-a_distance, deep_yellow, "A")
+            # 折流板线条宽度（可调参数，值越大线越粗）
+            baffle_line_width = 5  # 默认值，可根据需要调整（例如：1=细线，3=中等，5=粗线）
+            
+            # 浅蓝色：A 型板（±a）
+            light_blue = QColor(150, 200, 255)  # 更浅的蓝色
+            draw_vertical_chord(a_distance, light_blue, "A", line_width=baffle_line_width)
+            draw_vertical_chord(-a_distance, light_blue, "A", line_width=baffle_line_width)
 
-            # 浅黄色：B 型板（±b）
-            light_yellow = QColor(244, 224, 120)
-            draw_vertical_chord(b_distance, light_yellow, "B")
-            draw_vertical_chord(-b_distance, light_yellow, "B")
+            # 浅红色：B 型板（±b）
+            light_red = QColor(255, 150, 150)  # 浅红色
+            draw_vertical_chord(b_distance, light_red, "B", line_width=baffle_line_width)
+            draw_vertical_chord(-b_distance, light_red, "B", line_width=baffle_line_width)
 
             self.operations.append(
                 {
