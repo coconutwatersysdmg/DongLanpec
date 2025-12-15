@@ -1081,7 +1081,6 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
 
 class TubeLayoutEditor(QMainWindow):
     def __init__(self, line_tip=None):
-        # 0903会议纪要 首先进行项目和产品检查
         # 注意：必须在super().__init__()之前检查，避免创建不必要的窗口
         print("准备检查项目和产品状态...")
         can_open, msg = check_project_and_product()
@@ -10720,7 +10719,7 @@ class TubeLayoutEditor(QMainWindow):
             # 存储标识到用户数据中
             combo.setItemData(combo.count() - 1, identifier, Qt.UserRole)
 
-    # TODO 管程分程形式加载函数，目前没有1管程
+    # TODO 管程分程形式加载函数
     def load_tube_pass_images(self, combo, tube_pass):
         """加载管程分程形式的图片到下拉框，关联具体标识"""
         # 清空现有项
@@ -14303,48 +14302,71 @@ class TubeLayoutEditor(QMainWindow):
         # else:
         #     QMessageBox.warning(self, "警告", "未找到参数表格！")
 
-    # TODO 窗口自适应
     def resizeEvent(self, event):
-        """窗口大小变化时的自适应调整"""
+        """窗口大小变化时的自适应调整，支持不同分辨率和DPI设置"""
         super().resizeEvent(event)
-        # 自动调整表格列宽
-        self.param_table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.Interactive
-        )
-        self.hole_distribution_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Stretch
-        )
+        
+        # 获取屏幕的DPI缩放比例
+        screen = self.screen()
+        dpi_scale = screen.logicalDotsPerInch() / 96.0  # 96 DPI是标准缩放
+        
+        # 调整参数表格列宽
+        if hasattr(self, "param_table"):
+            # 获取表格可用宽度
+            table_width = self.param_table.viewport().width()
+            
+            # 根据DPI缩放调整列宽
+            if table_width > 0:
+                # 设置各列宽度比例 (序号:10%, 参数名:50%, 参数值:30%, 单位:10%)
+                # 考虑DPI缩放
+                col0_width = int(100 * dpi_scale)
+                col3_width = int(100 * dpi_scale)
+                remaining_width = max(0, table_width - col0_width - col3_width)
+                col1_width = int(remaining_width * 0.7)  # 参数名占剩余宽度的70%
+                col2_width = remaining_width - col1_width  # 参数值占剩余宽度的30%
+                
+                self.param_table.setColumnWidth(0, col0_width)  # 序号
+                self.param_table.setColumnWidth(1, col1_width)  # 参数名
+                self.param_table.setColumnWidth(2, col2_width)  # 参数值
+                self.param_table.setColumnWidth(3, col3_width)  # 单位
+
+        # 调整管孔分布表格
+        if hasattr(self, "hole_distribution_table"):
+            # 保持表头自动拉伸，但设置最小列宽
+            header = self.hole_distribution_table.horizontalHeader()
+            header.setSectionResizeMode(QHeaderView.Interactive)
+            
+            # 设置最小列宽，防止内容被截断
+            min_col_width = int(80 * dpi_scale)
+            for col in range(3):
+                if header.sectionSize(col) < min_col_width:
+                    header.resizeSection(col, min_col_width)
 
         # 调整图形视图
         if hasattr(self, "graphics_view") and hasattr(self, "graphics_scene"):
             self.graphics_view.fitInView(
-                self.graphics_scene.sceneRect(), Qt.KeepAspectRatio
+                self.graphics_scene.sceneRect(), 
+                Qt.KeepAspectRatio
             )
-            # 调整工具栏图片的大小
+
+        # 调整工具栏图片大小
         if hasattr(self, "toolbar_label"):
-            # 获取当前窗口宽度
             window_width = self.width()
-            # 设置图片的最大宽度为窗口宽度的一定比例（例如 80%）
-            max_width = int(window_width * 0.8)
+            max_width = int(window_width * 0.8 * dpi_scale)  # 考虑DPI缩放
             self.toolbar_label.setMaximumWidth(max_width)
 
-        # 非全屏状态下，窗口尺寸变化后自动按比例调整参数表列宽
-        if (
-            hasattr(self, "param_table")
-            and hasattr(self, "is_fullscreen")
-            and not self.is_fullscreen
-        ):
+        # 非全屏状态下，窗口尺寸变化后自动调整参数表列宽
+        if (hasattr(self, "param_table") and 
+            hasattr(self, "is_fullscreen") and 
+            not self.is_fullscreen):
             from PyQt5.QtWidgets import QApplication
-
             QApplication.processEvents()
             QTimer.singleShot(50, self.restore_param_table_column_widths)
 
-        # 根据窗口状态（是否最大化 / 全屏）动态调整工具栏按钮布局
-        if (
-            hasattr(self, "toolbar_layout")
-            and hasattr(self, "toolbar_row1_layout")
-            and hasattr(self, "toolbar_row2_layout")
-        ):
+        # 根据窗口状态动态调整工具栏按钮布局
+        if (hasattr(self, "toolbar_layout") and 
+            hasattr(self, "toolbar_row1_layout") and 
+            hasattr(self, "toolbar_row2_layout")):
             self.update_toolbar_layout_mode()
 
     def update_toolbar_layout_mode(self):
