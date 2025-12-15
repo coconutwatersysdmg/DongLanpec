@@ -2164,11 +2164,11 @@ class TubeLayoutEditor(QMainWindow):
         btn_radial_holes.setIcon(QIcon(icon_path12))
         btn_radial_holes.setIconSize(QSize(20, 20))
         btn_radial_holes.clicked.connect(self.build_radial_holes)
-        
+
         # 如果功能未启用，则禁用该按钮
         if not ENABLE_RADIAL_HOLES:
             btn_radial_holes.setEnabled(False)
-            
+
         self.toolbar_row2_layout.addWidget(btn_radial_holes)
 
         # 删除按钮
@@ -2176,7 +2176,9 @@ class TubeLayoutEditor(QMainWindow):
         btn_delete.setMinimumHeight(30)
         btn_delete.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         btn_delete.setStyleSheet(toolbar_button_style)
-        btn_delete.setIcon(QIcon(icon_path10))  # Changed from icon_path11 to icon_path10
+        btn_delete.setIcon(
+            QIcon(icon_path10)
+        )  # Changed from icon_path11 to icon_path10
         btn_delete.setIconSize(QSize(20, 20))
         btn_delete.clicked.connect(self.on_del_click)
         self.toolbar_row2_layout.addWidget(btn_delete)
@@ -2194,7 +2196,7 @@ class TubeLayoutEditor(QMainWindow):
             btn9,  # 防冲板
             btn_baffle,  # 折流板
             btn_radial_holes,  # 径向开孔
-            btn_delete  # 删除
+            btn_delete,  # 删除
         ]
 
         # 根据初始窗口状态设置工具栏布局
@@ -9707,127 +9709,6 @@ class TubeLayoutEditor(QMainWindow):
         finally:
             self._is_validating = False
 
-    def set_baffle_cut_rate_to_25(self):
-        """
-        将折流板要求切口率 更新为 25%
-        """
-        # 查找折流板要求切口率在表格中的行索引
-        cut_rate_row = None
-
-        # 遍历表格找到目标参数
-        for row in range(self.param_table.rowCount()):
-            param_name_item = self.param_table.item(row, 1)
-            if not param_name_item:
-                continue
-
-            param_name = param_name_item.text()
-            if param_name == "折流板要求切口率":
-                cut_rate_row = row
-                break
-
-        # 检查是否找到该参数
-        if cut_rate_row is None:
-            return
-
-        # 禁用事件触发，避免不必要的连锁更新
-        self._is_validating = True
-
-        try:
-            # 获取参数单元格的控件
-            cell_widget = self.param_table.cellWidget(cut_rate_row, 2)
-
-            # 根据不同的控件类型设置值
-            if isinstance(cell_widget, QComboBox):
-                # 如果是下拉框，尝试找到25%的选项并选中
-                index = cell_widget.findText("25.0")
-                if index >= 0:
-                    cell_widget.setCurrentIndex(index)
-                else:
-                    # 如果没有精确匹配项，直接设置文本
-                    cell_widget.setCurrentText("25.0")
-            else:
-                # 如果是普通文本单元格，直接设置值
-                rate_item = self.param_table.item(cut_rate_row, 2)
-                if rate_item:
-                    rate_item.setText("25.0")
-                else:
-                    # 如果单元格不存在，创建新单元格并设置值
-                    self.param_table.setItem(cut_rate_row, 2, QTableWidgetItem("25.0"))
-
-        except Exception as e:
-            logging.error(f"设置折流板切口率为25%失败: {str(e)}")
-        finally:
-            # 恢复事件触发
-            self._is_validating = False
-
-    def set_partition_plate_pipe_spacing_to_50(self):
-        """
-        将分程隔板两侧相邻管中心距（竖直）和分程隔板两侧相邻管中心距（水平）都更新为50
-        """
-        # 查找两个目标参数在表格中的行索引
-        vertical_spacing_row = None  # 分程隔板两侧相邻管中心距（竖直）
-        horizontal_spacing_row = None  # 分程隔板两侧相邻管中心距（水平）
-
-        # 遍历表格找到目标参数
-        for row in range(self.param_table.rowCount()):
-            param_name_item = self.param_table.item(row, 1)
-            if not param_name_item:
-                continue
-
-            param_name = param_name_item.text()
-            if param_name == "分程隔板两侧相邻管中心距（竖直）":
-                vertical_spacing_row = row
-            elif param_name == "分程隔板两侧相邻管中心距（水平）":
-                horizontal_spacing_row = row
-
-            # 两个参数都找到后可提前退出循环
-            if vertical_spacing_row is not None and horizontal_spacing_row is not None:
-                break
-
-        # 检查是否找到所有参数
-        missing_params = []
-        if vertical_spacing_row is None:
-            missing_params.append("分程隔板两侧相邻管中心距（竖直）")
-        if horizontal_spacing_row is None:
-            missing_params.append("分程隔板两侧相邻管中心距（水平）")
-
-        if missing_params:
-            return
-
-        # 禁用事件触发，避免不必要的连锁更新
-        self._is_validating = True
-
-        try:
-            # 定义设置参数值的内部函数，避免重复代码
-            def set_param_value(row):
-                cell_widget = self.param_table.cellWidget(row, 2)
-                if isinstance(cell_widget, QComboBox):
-                    # 如果是下拉框，尝试找到50的选项并选中
-                    index = cell_widget.findText("50")
-                    if index >= 0:
-                        cell_widget.setCurrentIndex(index)
-                    else:
-                        # 如果没有精确匹配项，直接设置文本
-                        cell_widget.setCurrentText("50")
-                else:
-                    # 如果是普通文本单元格，直接设置值
-                    item = self.param_table.item(row, 2)
-                    if item:
-                        item.setText("50")
-                    else:
-                        # 如果单元格不存在，创建新单元格并设置值
-                        self.param_table.setItem(row, 2, QTableWidgetItem("50"))
-
-            # 设置两个参数的值
-            set_param_value(vertical_spacing_row)
-            set_param_value(horizontal_spacing_row)
-
-        except Exception as e:
-            logging.error(f"设置分程隔板相邻管中心距为50失败: {str(e)}")
-        finally:
-            # 恢复事件触发
-            self._is_validating = False
-
     def _update_table_cell(self, row, column, value):
         """统一更新表格单元格的方法"""
         widget = self.param_table.cellWidget(row, column)
@@ -13465,19 +13346,22 @@ class TubeLayoutEditor(QMainWindow):
     def build_sql_for_radial_holes(self):
         if not hasattr(self, "productID") or not self.productID:
             return None
-            
+
         table_name = "`产品设计活动表_布管管口表`"
 
         def escape_str(value):
             return value.replace("'", "''") if isinstance(value, str) else value
 
         safe_product_id = escape_str(str(self.productID))
-        
+
         # Always include the delete SQL to clear existing records
         delete_sql = f"DELETE FROM {table_name} WHERE `产品ID` = '{safe_product_id}';"
-        
+
         # If there's no radial hole data, just return the delete SQL
-        if not isinstance(getattr(self, "radial_hole_dict", None), dict) or not self.radial_hole_dict:
+        if (
+            not isinstance(getattr(self, "radial_hole_dict", None), dict)
+            or not self.radial_hole_dict
+        ):
             return [delete_sql]
 
         insert_sqls = []
@@ -13636,12 +13520,16 @@ class TubeLayoutEditor(QMainWindow):
                 #                 )
                 #                 return
                 # except Exception:
-                    # # 校验异常时不允许保存，避免漏检
-                    # QMessageBox.warning(
-                    #     self, "提示", "径向开孔校验失败，请确认！", QMessageBox.Ok
-                    # )
-                    # return
-                self.current_centers = [center for center in self.current_centers if center not in slipway_set]
+                # # 校验异常时不允许保存，避免漏检
+                # QMessageBox.warning(
+                #     self, "提示", "径向开孔校验失败，请确认！", QMessageBox.Ok
+                # )
+                # return
+                self.current_centers = [
+                    center
+                    for center in self.current_centers
+                    if center not in slipway_set
+                ]
                 # TODO 获取管口数量分布表格数据
                 tube_hole_data = self.get_current_tube_hole_data()
                 tube_data = self.get_current_tube_data()
@@ -14962,7 +14850,9 @@ class TubeLayoutEditor(QMainWindow):
 
             R = circle_diameter / 2.0
 
-            def draw_vertical_chord(x_level: float, color: QColor, tag: str, line_width=3):
+            def draw_vertical_chord(
+                x_level: float, color: QColor, tag: str, line_width=3
+            ):
                 if x_level is None:
                     return
                 if abs(x_level) > R:
@@ -14988,17 +14878,27 @@ class TubeLayoutEditor(QMainWindow):
                 )
 
             # 折流板线条宽度（可调参数，值越大线越粗）
-            baffle_line_width = 5  # 默认值，可根据需要调整（例如：1=细线，3=中等，5=粗线）
-            
+            baffle_line_width = (
+                5  # 默认值，可根据需要调整（例如：1=细线，3=中等，5=粗线）
+            )
+
             # 浅蓝色：A 型板（±a）
             light_blue = QColor(150, 200, 255)  # 更浅的蓝色
-            draw_vertical_chord(a_distance, light_blue, "A", line_width=baffle_line_width)
-            draw_vertical_chord(-a_distance, light_blue, "A", line_width=baffle_line_width)
+            draw_vertical_chord(
+                a_distance, light_blue, "A", line_width=baffle_line_width
+            )
+            draw_vertical_chord(
+                -a_distance, light_blue, "A", line_width=baffle_line_width
+            )
 
             # 浅红色：B 型板（±b）
             light_red = QColor(255, 150, 150)  # 浅红色
-            draw_vertical_chord(b_distance, light_red, "B", line_width=baffle_line_width)
-            draw_vertical_chord(-b_distance, light_red, "B", line_width=baffle_line_width)
+            draw_vertical_chord(
+                b_distance, light_red, "B", line_width=baffle_line_width
+            )
+            draw_vertical_chord(
+                -b_distance, light_red, "B", line_width=baffle_line_width
+            )
 
             self.operations.append(
                 {
@@ -20767,6 +20667,9 @@ class TubeLayoutEditor(QMainWindow):
 
     def show_baffle_info(self):
         """折流板参数编辑弹窗：左侧可编辑参数表，右侧图片展示区。"""
+        # 切口率（cut_rate）= (折流板半径 - 切口间距) / 壳体内直径 × 100%
+        # 切口间距（cut_spacing）= 折流板半径 - (切口率/100) × 壳体内直径
+        # 折流板半径 = 折流板外径 / 2
 
         def get_param_value(param_name: str) -> str:
             """从 self.param_table 按参数名读取当前值（支持下拉框/文本）。"""
@@ -20830,9 +20733,6 @@ class TubeLayoutEditor(QMainWindow):
         # ---------- 基本/附加参数定义 ----------
         # 基本参数：始终显示
         base_params = [
-            # ("是否以外径为基准", "是否以外径为基准", ""),
-            # ("公称直径 DN", "公称直径 DN", "mm"),
-            # ("壳体内直径 Dis", "壳体内直径 Dis", "mm"),
             ("折流板外径", "折流板外径", "mm"),
             ("折流/支持板间距", "折流/支持板间距", "mm"),
             ("折流板类型", "折流板类型", ""),
@@ -20855,7 +20755,6 @@ class TubeLayoutEditor(QMainWindow):
 
         # 读取初始折流板类型
         current_baffle_type = get_param_value("折流板类型") or "单弓形"
-
         show_other_params = current_baffle_type != "双弓形"
 
         # ---------- 构造对话框 ----------
@@ -20919,8 +20818,8 @@ class TubeLayoutEditor(QMainWindow):
 
         table.setRowCount(len(dialog_rows))
 
-        # 记录“折流板类型”所在行，用于绑定下拉框联动
-        baffle_type_row = None
+        # 记录"壳体内直径 Dis"所在行，用于联动计算
+        shell_inner_diameter_row = -1
 
         for row, (cn, rn, unit, default_val) in enumerate(dialog_rows):
             name_item = QTableWidgetItem(str(cn))
@@ -20963,7 +20862,6 @@ class TubeLayoutEditor(QMainWindow):
                 else:
                     type_combo.setCurrentText(current_baffle_type)
                 table.setCellWidget(row, 1, type_combo)
-                baffle_type_row = row
                 # 单位为空
                 unit_item = QTableWidgetItem("")
                 unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
@@ -20977,17 +20875,6 @@ class TubeLayoutEditor(QMainWindow):
                 else:
                     direction_combo.setCurrentText("水平上下")
                 table.setCellWidget(row, 1, direction_combo)
-                unit_item = QTableWidgetItem(unit or "")
-                unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
-                table.setItem(row, 2, unit_item)
-            elif cn == "是否以外径为基准":
-                outer_base_combo = _QComboBoxForDialog()
-                outer_base_combo.addItems(["是", "否"])
-                if value_text in ["是", "否"]:
-                    outer_base_combo.setCurrentText(value_text)
-                else:
-                    outer_base_combo.setCurrentText("是")
-                table.setCellWidget(row, 1, outer_base_combo)
                 unit_item = QTableWidgetItem(unit or "")
                 unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
                 table.setItem(row, 2, unit_item)
@@ -21014,6 +20901,10 @@ class TubeLayoutEditor(QMainWindow):
         image_container_2 = QLabel(dialog)
         image_container_2.setAlignment(Qt.AlignCenter)
 
+        # 假设图片在当前目录下的static/baffle文件夹中
+        import os
+
+        current_dir = os.path.dirname(os.path.abspath(__file__))
         baffle_dir = os.path.join(current_dir, "static", "baffle")
 
         def load_and_set_image(label: QLabel, filename: str):
@@ -21098,7 +20989,7 @@ class TubeLayoutEditor(QMainWindow):
                 table.removeRow(r)
 
         def ensure_other_rows_exist():
-            """在需要显示时，确保三条“切口相关”参数行存在（若缺失则追加）。"""
+            """在需要显示时，确保三条"切口相关"参数行存在（若缺失则追加）。"""
             existing_names = set()
             for r in range(table.rowCount()):
                 item = table.item(r, 0)
@@ -21141,7 +21032,7 @@ class TubeLayoutEditor(QMainWindow):
                 table.setItem(row, 2, unit_item)
 
         def remove_other_rows():
-            """在双弓形时，从弹窗中移除三条“切口相关”参数行（不影响主参数表）。"""
+            """在双弓形时，从弹窗中移除三条"切口相关"参数行（不影响主参数表）。"""
             rows_to_remove = []
             for r in range(table.rowCount()):
                 item = table.item(r, 0)
@@ -21154,7 +21045,15 @@ class TubeLayoutEditor(QMainWindow):
             for r in reversed(rows_to_remove):
                 table.removeRow(r)
 
-        if baffle_type_row is not None:
+        # 查找折流板类型行以绑定变化事件
+        baffle_type_row = -1
+        for r in range(table.rowCount()):
+            item = table.item(r, 0)
+            if item and item.text().strip() == "折流板类型":
+                baffle_type_row = r
+                break
+
+        if baffle_type_row >= 0:
             type_combo = table.cellWidget(baffle_type_row, 1)
 
             def on_baffle_type_changed(text: str):
@@ -21175,7 +21074,7 @@ class TubeLayoutEditor(QMainWindow):
         warning_label = QLabel("")
         warning_label.setStyleSheet("color: red;")
 
-        # ---------- 参数校验与联动：弓形弦高切口率/A型板a、内侧中心切口率/B型板b ----------
+        # ---------- 参数校验与联动 ----------
         def find_row_by_name(name: str) -> int:
             for r in range(table.rowCount()):
                 item = table.item(r, 0)
@@ -21198,25 +21097,18 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 return None
 
-        def get_baffle_outer_diameter():
-            # 优先从弹窗中的“折流板外径”行读取
-            val = get_float_from_dialog("折流板外径")
-            if val is not None:
-                return val
-            # 退回到主参数表
-            try:
-                text = get_param_value("折流板外径")
-                return float(text) if text else None
-            except Exception:
-                return None
-
         def get_shell_inner_diameter():
+            """获取壳体内直径，优先从弹窗中读取，然后从主参数表读取"""
+            # 尝试从主参数表读取
             try:
                 text = get_param_value("壳体内直径 Dis")
-                return float(text) if text else None
+                if text:
+                    return float(text)
             except Exception:
-                return None
+                pass
+            return None
 
+        # 标记当前是否正在程序化更新，避免循环触发
         updating_linked_values = {"active": False}
 
         def set_dialog_value(name: str, value: float):
@@ -21229,65 +21121,11 @@ class TubeLayoutEditor(QMainWindow):
             # 避免递归触发 itemChanged
             updating_linked_values["active"] = True
             try:
-                text = f"{value:.3f}".rstrip("0").rstrip(".")
+                # 格式化显示，保留1位小数
+                text = f"{value:.1f}"
                 item.setText(text)
             finally:
                 updating_linked_values["active"] = False
-
-        def set_dialog_text_value(name: str, value: str):
-            row = find_row_by_name(name)
-            if row < 0:
-                return
-            item = table.item(row, 1)
-            if item is None:
-                return
-            updating_linked_values["active"] = True
-            try:
-                item.setText(str(value))
-            finally:
-                updating_linked_values["active"] = False
-
-        def get_text_from_dialog(name: str) -> str:
-            row = find_row_by_name(name)
-            if row < 0:
-                return ""
-            widget = table.cellWidget(row, 1)
-            if isinstance(widget, _QComboBoxForDialog):
-                return widget.currentText().strip()
-            item = table.item(row, 1)
-            return item.text().strip() if item else ""
-
-        def calc_baffle_od_from_di(di_value: float):
-            try:
-                if di_value is None or di_value <= 0:
-                    return None
-                shell_material_type = "钢管"
-                if di_value <= 400:
-                    if shell_material_type == "钢管":
-                        measured_inner_diameter = di_value - 5
-                        return float(f"{measured_inner_diameter - 2:.1f}")
-                    return float(f"{di_value - 2.5:.1f}")
-                if 400 < di_value <= 500:
-                    return float(f"{di_value - 3.5:.1f}")
-                if 500 < di_value <= 900:
-                    return float(f"{di_value - 4.5:.1f}")
-                if 900 < di_value <= 1300:
-                    return float(f"{di_value - 6:.1f}")
-                if 1300 < di_value <= 1700:
-                    return float(f"{di_value - 7:.1f}")
-                if 1700 < di_value <= 2100:
-                    return float(f"{di_value - 8.5:.1f}")
-                if 2100 < di_value <= 2300:
-                    return float(f"{di_value - 12:.1f}")
-                if 2300 < di_value <= 2600:
-                    return float(f"{di_value - 14:.1f}")
-                if 2600 < di_value <= 3200:
-                    return float(f"{di_value - 16:.1f}")
-                if 3200 < di_value <= 4000:
-                    return float(f"{di_value - 18:.1f}")
-                return float(f"{di_value - 20:.1f}")
-            except Exception:
-                return None
 
         def clear_warning():
             warning_label.setText("")
@@ -21295,232 +21133,258 @@ class TubeLayoutEditor(QMainWindow):
         def set_warning(text: str):
             warning_label.setText(text)
 
-        def validate_and_link(changed_name: str):
+        def validate_and_update_baffle_params(changed_name: str):
+            """执行折流板参数联动计算（基于原函数的逻辑）"""
             if updating_linked_values["active"]:
                 return
 
-            # 0. 迁移：DN/Dis联动（当“是否以外径为基准”为“否”时，Dis=DN）
+            # 获取壳体内直径（从主参数表）
+            shell_inner_diameter = get_shell_inner_diameter()
+            if shell_inner_diameter is None or shell_inner_diameter <= 0:
+                # 壳体内直径无效，无法计算
+                return
+
+            # 获取弹窗中的三个关键参数
+            baffle_diameter = get_float_from_dialog("折流板外径")
+            cut_spacing = get_float_from_dialog("折流板切口与中心线间距a")
+            cut_rate = get_float_from_dialog("折流板要求切口率")
+
+            # 检查必要参数是否存在
+            if baffle_diameter is None or baffle_diameter <= 0:
+                # 折流板外径无效，无法计算
+                return
+
+            baffle_radius = baffle_diameter / 2.0
+
             try:
-                outer_base = get_text_from_dialog("是否以外径为基准")
-                if outer_base == "否" and changed_name in [
-                    "公称直径 DN",
-                    "是否以外径为基准",
-                ]:
-                    dn_val = get_float_from_dialog("公称直径 DN")
-                    if dn_val is not None:
-                        set_dialog_value("壳体内直径 Dis", dn_val)
-            except Exception:
-                pass
-
-            # 0.1 迁移：壳体内直径变化时，自动更新折流板外径
-            if changed_name == "壳体内直径 Dis":
-                di_val = get_float_from_dialog("壳体内直径 Dis")
-                if di_val is None:
-                    return
-                new_od = calc_baffle_od_from_di(di_val)
-                if new_od is not None:
-                    set_dialog_value("折流板外径", new_od)
-
-            # 弹窗内联动计算优先使用弹窗当前值，避免主表未写回导致联动不生效
-            Di = get_float_from_dialog("壳体内直径 Dis")
-            if Di is None:
-                Di = get_shell_inner_diameter()
-            Db = get_baffle_outer_diameter()
-
-            # 1. 弓形弦高切口率 <-> A型板切口与中心线间距a
-            if changed_name == "弓形弦高切口率":
-                rate = get_float_from_dialog("弓形弦高切口率")
-                if rate is None:
-                    return
-                if rate < 0 or rate > 50:
-                    set_warning(
-                        '您输入的"弓形弦高切口率"的参数值不合理，请核对后重新输入！'
-                    )
-                    # 非法时恢复为初始默认值（若有）
-                    if "弓形弦高切口率" in initial_numeric_values:
-                        set_dialog_value(
-                            "弓形弦高切口率", initial_numeric_values["弓形弦高切口率"]
-                        )
-                    return
-                if Di is None or Db is None:
-                    clear_warning()
-                    return
-                clear_warning()
-                frac = rate / 100.0
-                a_value = Db / 2.0 - frac * Di
-                set_dialog_value("A型板切口与中心线间距a", a_value)
-
-            elif changed_name == "A型板切口与中心线间距a":
-                a_val = get_float_from_dialog("A型板切口与中心线间距a")
-                if a_val is None:
-                    return
-                if Db is None:
-                    clear_warning()
-                    return
-                # 范围: [0, 折流/支持板外径/2]
-                if a_val < 0 or a_val > Db / 2.0:
-                    set_warning(
-                        '您输入的"A型板切口与中心线间距a"参数值不合理，请核对后重新输入！'
-                    )
-                    if "A型板切口与中心线间距a" in initial_numeric_values:
-                        set_dialog_value(
-                            "A型板切口与中心线间距a",
-                            initial_numeric_values["A型板切口与中心线间距a"],
-                        )
-                    return
-                if Di is None:
-                    clear_warning()
-                    return
-                clear_warning()
-                # 反算弓形弦高切口率 (百分数形式)
-                rate = (Db / 2.0 - a_val) / Di * 100.0
-                set_dialog_value("弓形弦高切口率", rate)
-
-            # 2. 内侧中心切口率 <-> B型板切口与中心线间距b
-            elif changed_name == "内侧中心切口率":
-                rate = get_float_from_dialog("内侧中心切口率")
-                if rate is None:
-                    return
-                if rate < 0 or rate > 50:
-                    set_warning(
-                        '您输入的"内侧中心切口率"的参数值不合理，请核对后重新输入！'
-                    )
-                    if "内侧中心切口率" in initial_numeric_values:
-                        set_dialog_value(
-                            "内侧中心切口率", initial_numeric_values["内侧中心切口率"]
-                        )
-                    return
-                if Di is None:
-                    clear_warning()
-                    return
-                clear_warning()
-                frac = rate / 100.0
-                b_value = frac * Di
-                set_dialog_value("B型板切口与中心线间距b", b_value)
-
-            elif changed_name == "B型板切口与中心线间距b":
-                b_val = get_float_from_dialog("B型板切口与中心线间距b")
-                if b_val is None:
-                    return
-                if Db is None:
-                    clear_warning()
-                    return
-                # 范围: [0, 折流/支持板外径/2]
-                if b_val < 0 or b_val > Db / 2.0:
-                    set_warning(
-                        '您输入的"B型板切口与中心线间距b"参数值不合理，请核对后重新输入！'
-                    )
-                    if "B型板切口与中心线间距b" in initial_numeric_values:
-                        set_dialog_value(
-                            "B型板切口与中心线间距b",
-                            initial_numeric_values["B型板切口与中心线间距b"],
-                        )
-                    return
-                if Di is None:
-                    clear_warning()
-                    return
-                clear_warning()
-                # 反算内侧中心切口率 (百分数形式)
-                rate = b_val / Di * 100.0
-                set_dialog_value("内侧中心切口率", rate)
-
-            # 3. 迁移：折流板外径/要求切口率/切口与中心线间距 联动
-            if changed_name in [
-                "折流板外径",
-                "折流板要求切口率",
-                "折流板切口与中心线间距a",
-            ]:
-                Di2 = get_float_from_dialog("壳体内直径 Dis")
-                if Di2 is None or Di2 <= 0:
-                    return
-                Db2 = get_float_from_dialog("折流板外径")
-                if Db2 is None or Db2 <= 0:
-                    return
-                baffle_radius = Db2 / 2.0
-
-                if changed_name == "折流板要求切口率":
-                    cut_rate = get_float_from_dialog("折流板要求切口率")
-                    if cut_rate is None or not (0 <= cut_rate <= 50):
-                        set_warning(
-                            '您输入的"折流板要求切口率"值无效，必须在0%到50%范围内'
-                        )
+                if changed_name == "折流板外径":
+                    if baffle_diameter <= 0:
                         return
-                    clear_warning()
-                    cut_size = (cut_rate / 100.0) * Di2
-                    new_spacing = baffle_radius - cut_size
-                    if new_spacing < 0 or new_spacing > baffle_radius:
-                        set_warning(
-                            '根据当前切口率计算出的"折流板切口与中心线间距a"不合理，请核对后重新输入！'
-                        )
-                        return
-                    set_dialog_value("折流板切口与中心线间距a", new_spacing)
+
+                    if cut_rate is not None and 0 <= cut_rate <= 50:
+                        # 根据切口率计算新的切口间距
+                        cut_size = (cut_rate / 100.0) * shell_inner_diameter
+                        new_spacing = baffle_radius - cut_size
+
+                        if new_spacing < 0 or new_spacing > baffle_radius:
+                            set_warning(
+                                f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)"
+                            )
+                            return
+
+                        clear_warning()
+                        set_dialog_value("折流板切口与中心线间距a", new_spacing)
+
+                    elif cut_spacing is not None:
+                        if not (0 <= cut_spacing <= baffle_radius):
+                            set_warning(
+                                f"切口与中心线间距必须在0到{baffle_radius:.1f}mm范围内！"
+                            )
+                            return
+
+                        new_cut_rate = (
+                            (baffle_radius - cut_spacing) / shell_inner_diameter
+                        ) * 100.0
+
+                        if not (0 <= new_cut_rate <= 50):
+                            set_warning(
+                                f"计算出的切口率({new_cut_rate:.1f}%)超出合理范围(0-50%)"
+                            )
+                            return
+
+                        clear_warning()
+                        set_dialog_value("折流板要求切口率", new_cut_rate)
 
                 elif changed_name == "折流板切口与中心线间距a":
-                    cut_spacing = get_float_from_dialog("折流板切口与中心线间距a")
-                    if (
-                        cut_spacing is None
-                        or cut_spacing < 0
-                        or cut_spacing > baffle_radius
-                    ):
+                    if cut_spacing is None or cut_spacing < 0:
+                        set_warning("折流板切口与中心线间距a值无效")
+                        return
+
+                    if cut_spacing > baffle_radius:
                         set_warning(
-                            f'您输入的"折流板切口与中心线间距a"必须在0到{baffle_radius:.1f}mm范围内！'
+                            f"切口与中心线间距必须在0到{baffle_radius:.1f}mm范围内！"
                         )
                         return
-                    clear_warning()
-                    new_cut_rate = ((baffle_radius - cut_spacing) / Di2) * 100.0
+
+                    new_cut_rate = (
+                        (baffle_radius - cut_spacing) / shell_inner_diameter
+                    ) * 100.0
+
                     if not (0 <= new_cut_rate <= 50):
                         set_warning(
-                            '计算出的"折流板要求切口率"超出合理范围(0-50%)，请核对输入！'
+                            f"计算出的切口率({new_cut_rate:.1f}%)超出合理范围(0-50%)"
                         )
                         return
+
+                    clear_warning()
                     set_dialog_value("折流板要求切口率", new_cut_rate)
 
-                elif changed_name == "折流板外径":
-                    # 优先保持用户输入不变，只尝试根据已有一个量更新另一个量
-                    cut_rate = get_float_from_dialog("折流板要求切口率")
-                    cut_spacing = get_float_from_dialog("折流板切口与中心线间距a")
+                elif changed_name == "折流板要求切口率":
+                    if cut_rate is None or not (0 <= cut_rate <= 50):
+                        set_warning("折流板要求切口率值无效，必须在0%到50%范围内")
+                        return
+
+                    cut_size = (cut_rate / 100.0) * shell_inner_diameter
+                    new_spacing = baffle_radius - cut_size
+
+                    if new_spacing < 0 or new_spacing > baffle_radius:
+                        set_warning(
+                            f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)"
+                        )
+                        return
+
                     clear_warning()
-                    if cut_rate is not None and 0 <= cut_rate <= 50:
-                        cut_size = (cut_rate / 100.0) * Di2
-                        new_spacing = baffle_radius - cut_size
-                        if 0 <= new_spacing <= baffle_radius:
-                            set_dialog_value("折流板切口与中心线间距a", new_spacing)
-                    elif cut_spacing is not None and 0 <= cut_spacing <= baffle_radius:
-                        new_cut_rate = ((baffle_radius - cut_spacing) / Di2) * 100.0
-                        if 0 <= new_cut_rate <= 50:
-                            set_dialog_value("折流板要求切口率", new_cut_rate)
+                    set_dialog_value("折流板切口与中心线间距a", new_spacing)
+
+            except Exception as e:
+                print(f"更新折流板参数失败: {str(e)}")
 
         def on_item_changed(item: QTableWidgetItem):
+            """表格项变化时的处理"""
             if not item or item.column() != 1:
                 return
             name_item = table.item(item.row(), 0)
             if not name_item:
                 return
             changed_name = name_item.text().strip()
-            if changed_name not in [
-                "弓形弦高切口率",
-                "A型板切口与中心线间距a",
-                "内侧中心切口率",
-                "B型板切口与中心线间距b",
-                "公称直径 DN",
-                "壳体内直径 Dis",
+
+            # 检查是否是折流板联动参数
+            if changed_name in [
                 "折流板外径",
                 "折流板要求切口率",
                 "折流板切口与中心线间距a",
             ]:
-                return
-            validate_and_link(changed_name)
+                validate_and_update_baffle_params(changed_name)
 
+            # 原有的双弓形参数联动（保持不变）
+            elif changed_name in [
+                "弓形弦高切口率",
+                "A型板切口与中心线间距a",
+                "内侧中心切口率",
+                "B型板切口与中心线间距b",
+            ]:
+                # 原有的双弓形参数联动逻辑
+                if updating_linked_values["active"]:
+                    return
+
+                # 获取壳体内直径和折流板外径
+                Di = get_shell_inner_diameter()
+                Db = get_float_from_dialog("折流板外径")
+
+                if changed_name == "弓形弦高切口率":
+                    rate = get_float_from_dialog("弓形弦高切口率")
+                    if rate is None:
+                        return
+                    if rate < 0 or rate > 50:
+                        set_warning(
+                            '您输入的"弓形弦高切口率"的参数值不合理，请核对后重新输入！'
+                        )
+                        if "弓形弦高切口率" in initial_numeric_values:
+                            updating_linked_values["active"] = True
+                            try:
+                                set_dialog_value(
+                                    "弓形弦高切口率",
+                                    initial_numeric_values["弓形弦高切口率"],
+                                )
+                            finally:
+                                updating_linked_values["active"] = False
+                        return
+                    if Di is None or Db is None:
+                        clear_warning()
+                        return
+                    clear_warning()
+                    frac = rate / 100.0
+                    a_value = Db / 2.0 - frac * Di
+                    set_dialog_value("A型板切口与中心线间距a", a_value)
+
+                elif changed_name == "A型板切口与中心线间距a":
+                    a_val = get_float_from_dialog("A型板切口与中心线间距a")
+                    if a_val is None:
+                        return
+                    if Db is None:
+                        clear_warning()
+                        return
+                    # 范围: [0, 折流/支持板外径/2]
+                    if a_val < 0 or a_val > Db / 2.0:
+                        set_warning(
+                            '您输入的"A型板切口与中心线间距a"参数值不合理，请核对后重新输入！'
+                        )
+                        if "A型板切口与中心线间距a" in initial_numeric_values:
+                            updating_linked_values["active"] = True
+                            try:
+                                set_dialog_value(
+                                    "A型板切口与中心线间距a",
+                                    initial_numeric_values["A型板切口与中心线间距a"],
+                                )
+                            finally:
+                                updating_linked_values["active"] = False
+                        return
+                    if Di is None:
+                        clear_warning()
+                        return
+                    clear_warning()
+                    # 反算弓形弦高切口率 (百分数形式)
+                    rate = (Db / 2.0 - a_val) / Di * 100.0
+                    set_dialog_value("弓形弦高切口率", rate)
+
+                elif changed_name == "内侧中心切口率":
+                    rate = get_float_from_dialog("内侧中心切口率")
+                    if rate is None:
+                        return
+                    if rate < 0 or rate > 50:
+                        set_warning(
+                            '您输入的"内侧中心切口率"的参数值不合理，请核对后重新输入！'
+                        )
+                        if "内侧中心切口率" in initial_numeric_values:
+                            updating_linked_values["active"] = True
+                            try:
+                                set_dialog_value(
+                                    "内侧中心切口率",
+                                    initial_numeric_values["内侧中心切口率"],
+                                )
+                            finally:
+                                updating_linked_values["active"] = False
+                        return
+                    if Di is None:
+                        clear_warning()
+                        return
+                    clear_warning()
+                    frac = rate / 100.0
+                    b_value = frac * Di
+                    set_dialog_value("B型板切口与中心线间距b", b_value)
+
+                elif changed_name == "B型板切口与中心线间距b":
+                    b_val = get_float_from_dialog("B型板切口与中心线间距b")
+                    if b_val is None:
+                        return
+                    if Db is None:
+                        clear_warning()
+                        return
+                    # 范围: [0, 折流/支持板外径/2]
+                    if b_val < 0 or b_val > Db / 2.0:
+                        set_warning(
+                            '您输入的"B型板切口与中心线间距b"参数值不合理，请核对后重新输入！'
+                        )
+                        if "B型板切口与中心线间距b" in initial_numeric_values:
+                            updating_linked_values["active"] = True
+                            try:
+                                set_dialog_value(
+                                    "B型板切口与中心线间距b",
+                                    initial_numeric_values["B型板切口与中心线间距b"],
+                                )
+                            finally:
+                                updating_linked_values["active"] = False
+                        return
+                    if Di is None:
+                        clear_warning()
+                        return
+                    clear_warning()
+                    # 反算内侧中心切口率 (百分数形式)
+                    rate = b_val / Di * 100.0
+                    set_dialog_value("内侧中心切口率", rate)
+
+        # 连接表格变化事件
         table.itemChanged.connect(on_item_changed)
-
-        # 下拉框变化也需要触发联动（是否以外径为基准/切口方向不会触发itemChanged）
-        outer_base_row = find_row_by_name("是否以外径为基准")
-        if outer_base_row >= 0:
-            outer_base_combo = table.cellWidget(outer_base_row, 1)
-            if isinstance(outer_base_combo, _QComboBoxForDialog):
-                outer_base_combo.currentTextChanged.connect(
-                    lambda _t: validate_and_link("是否以外径为基准")
-                )
 
         # ---------- 底部按钮：确定 / 关闭 ----------
         button_layout = QHBoxLayout()
