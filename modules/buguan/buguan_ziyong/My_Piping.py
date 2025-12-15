@@ -13472,23 +13472,20 @@ class TubeLayoutEditor(QMainWindow):
     def build_sql_for_radial_holes(self):
         if not hasattr(self, "productID") or not self.productID:
             return None
-        if (
-            not isinstance(getattr(self, "radial_hole_dict", None), dict)
-            or not self.radial_hole_dict
-        ):
-            return None
-
+            
         table_name = "`产品设计活动表_布管管口表`"
 
         def escape_str(value):
             return value.replace("'", "''") if isinstance(value, str) else value
 
         safe_product_id = escape_str(str(self.productID))
-
-        query_sql = (
-            f"SELECT 1 FROM {table_name} WHERE `产品ID` = '{safe_product_id}' LIMIT 1;"
-        )
+        
+        # Always include the delete SQL to clear existing records
         delete_sql = f"DELETE FROM {table_name} WHERE `产品ID` = '{safe_product_id}';"
+        
+        # If there's no radial hole data, just return the delete SQL
+        if not isinstance(getattr(self, "radial_hole_dict", None), dict) or not self.radial_hole_dict:
+            return [delete_sql]
 
         insert_sqls = []
         for code, info in self.radial_hole_dict.items():
@@ -15433,7 +15430,7 @@ class TubeLayoutEditor(QMainWindow):
             self.operation_order = 0
             self.impingement_plate_dic = {}  # Add this line
             self._impingement_plate_auto_id = 0
-            self.self.radial_hole_dict = {}
+            self.radial_hole_dict = {}
 
         except Exception as e:
             print(f"布管按钮点击时发生错误: {e}")
