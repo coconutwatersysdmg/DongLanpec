@@ -14425,7 +14425,7 @@ class TubeLayoutEditor(QMainWindow):
         # 最终强制覆盖缓存的列宽（这一步才能“打掉初始异常列宽”）
         for i in range(col_count):
             header.resizeSection(i, widths[i])
-
+    # TODO 表格列宽自动拉伸
     def resizeEvent(self, event):
         """窗口大小变化时的自适应调整"""
         super().resizeEvent(event)
@@ -14437,7 +14437,8 @@ class TubeLayoutEditor(QMainWindow):
                 col0_width = 80  # 序号
                 col3_width = 80  # 单位
                 remaining = max(0, table_width - col0_width - col3_width)
-                col1_width = int(remaining * 0.70)  # 参数名
+                # 缩小“参数名”列宽占比，让“参数值”列更宽一些
+                col1_width = int(remaining * 0.55)  # 参数名
                 col2_width = remaining - col1_width  # 参数值
 
                 self.param_table.setColumnWidth(0, col0_width)
