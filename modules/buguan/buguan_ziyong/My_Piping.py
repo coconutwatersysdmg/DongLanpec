@@ -79,7 +79,6 @@ ENABLE_DANGBAN_WELDED_OPTION = True
 # TODO 径向开孔功能开关
 ENABLE_RADIAL_HOLES = True
 
-
 edge_centers: List[Tuple[float, float]] = []
 
 
@@ -237,9 +236,9 @@ class ZoomableGraphicsView(QGraphicsView):
 
             # 优先使用当前选中的圆心（与换热管选中逻辑一致）进行判断
             if (
-                editor is not None
-                and hasattr(editor, "selected_centers")
-                and editor.selected_centers
+                    editor is not None
+                    and hasattr(editor, "selected_centers")
+                    and editor.selected_centers
             ):
                 try:
                     abs_selected = []
@@ -272,7 +271,7 @@ class ZoomableGraphicsView(QGraphicsView):
                     lagan_list_raw2 = (
                         list(editor.lagan_info)
                         if hasattr(editor, "lagan_info")
-                        and isinstance(editor.lagan_info, (list, tuple))
+                           and isinstance(editor.lagan_info, (list, tuple))
                         else []
                     )
                     lagan_set2 = set(
@@ -303,15 +302,15 @@ class ZoomableGraphicsView(QGraphicsView):
             # 次优先：复用 eventFilter 的“最近圆心”定位逻辑，用双击点的场景坐标映射到圆心
             try:
                 if (
-                    editor is not None
-                    and hasattr(editor, "find_nearest_circle_index")
-                    and hasattr(editor, "r")
+                        editor is not None
+                        and hasattr(editor, "find_nearest_circle_index")
+                        and hasattr(editor, "r")
                 ):
                     mx, my = float(scene_pos.x()), float(scene_pos.y())
                     # 选择上下两组中心列表
                     centers = None
                     if hasattr(editor, "full_sorted_current_centers_up") and hasattr(
-                        editor, "full_sorted_current_centers_down"
+                            editor, "full_sorted_current_centers_down"
                     ):
                         if my >= 0:
                             centers = editor.full_sorted_current_centers_up
@@ -343,7 +342,7 @@ class ZoomableGraphicsView(QGraphicsView):
                                 lagan_list_raw3 = (
                                     list(editor.lagan_info)
                                     if hasattr(editor, "lagan_info")
-                                    and isinstance(editor.lagan_info, (list, tuple))
+                                       and isinstance(editor.lagan_info, (list, tuple))
                                     else []
                                 )
                                 lagan_set3 = set(
@@ -356,7 +355,7 @@ class ZoomableGraphicsView(QGraphicsView):
                                     f"[ZoomableGraphicsView] (nearest-check) in_lagan_info={hit}, lagan_size={len(lagan_set3)}"
                                 )
                                 if hit and hasattr(
-                                    editor, "edit_lagan_params_dialog_only"
+                                        editor, "edit_lagan_params_dialog_only"
                                 ):
                                     print(
                                         "[ZoomableGraphicsView] (nearest-check) open edit_lagan_params_dialog_only()"
@@ -371,9 +370,9 @@ class ZoomableGraphicsView(QGraphicsView):
 
             # 仅当点击到圆形并且拿到 editor 时才处理
             if (
-                item is not None
-                and isinstance(item, QGraphicsEllipseItem)
-                and editor is not None
+                    item is not None
+                    and isinstance(item, QGraphicsEllipseItem)
+                    and editor is not None
             ):
                 # 计算该圆在场景中的中心坐标
                 try:
@@ -391,9 +390,9 @@ class ZoomableGraphicsView(QGraphicsView):
 
                 # 构造 lagan_info 的坐标集合（按 6 位小数统一）
                 if (
-                    hasattr(editor, "lagan_info")
-                    and editor.lagan_info is not None
-                    and hasattr(editor, "edit_lagan_params_dialog_only")
+                        hasattr(editor, "lagan_info")
+                        and editor.lagan_info is not None
+                        and hasattr(editor, "edit_lagan_params_dialog_only")
                 ):
 
                     def key6_pair(p):
@@ -450,8 +449,8 @@ class ZoomableGraphicsView(QGraphicsView):
                 else:
                     try:
                         has_list = (
-                            hasattr(editor, "lagan_info")
-                            and editor.lagan_info is not None
+                                hasattr(editor, "lagan_info")
+                                and editor.lagan_info is not None
                         )
                         has_func = hasattr(editor, "edit_lagan_params_dialog_only")
                         print(
@@ -467,15 +466,15 @@ class ZoomableGraphicsView(QGraphicsView):
 
 class ClickableRectItem(QGraphicsPathItem):
     def __init__(
-        self,
-        path=None,
-        parent=None,
-        is_side_block=False,
-        is_baffle=False,
-        is_slide=False,
-        is_center_dangguan=False,
-        is_center_dangban=False,
-        editor=None,
+            self,
+            path=None,
+            parent=None,
+            is_side_block=False,
+            is_baffle=False,
+            is_slide=False,
+            is_center_dangguan=False,
+            is_center_dangban=False,
+            editor=None,
     ):
         # 关键修改：将QRectF自动转换为QPainterPath
         if isinstance(path, QRectF):
@@ -534,11 +533,11 @@ class ClickableRectItem(QGraphicsPathItem):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton and (
-            self.is_side_block
-            or self.is_baffle
-            or self.is_slide
-            or self.is_center_dangguan
-            or self.is_center_dangban
+                self.is_side_block
+                or self.is_baffle
+                or self.is_slide
+                or self.is_center_dangguan
+                or self.is_center_dangban
         ):
             # 切换选中状态
             self.is_selected = not self.is_selected
@@ -577,7 +576,7 @@ class ClickableRectItem(QGraphicsPathItem):
                         if self in self.editor.selected_slides:
                             self.editor.selected_slides.remove(self)
                 elif self.is_center_dangguan and hasattr(
-                    self.editor, "selected_center_dangguan"
+                        self.editor, "selected_center_dangguan"
                 ):
                     if self.is_selected:
                         if self not in self.editor.selected_center_dangguan:
@@ -612,7 +611,7 @@ class ClickableRectItem(QGraphicsPathItem):
                             except:
                                 pass
                 elif self.is_center_dangban and hasattr(
-                    self.editor, "selected_center_dangban"
+                        self.editor, "selected_center_dangban"
                 ):
                     if self.is_selected:
                         if self not in self.editor.selected_center_dangban:
@@ -641,9 +640,9 @@ class ClickableRectItem(QGraphicsPathItem):
                 pass
         # 旁路挡板双击编辑
         if (
-            getattr(self, "is_side_block", False)
-            and self.editor
-            and hasattr(self.editor, "edit_side_block")
+                getattr(self, "is_side_block", False)
+                and self.editor
+                and hasattr(self.editor, "edit_side_block")
         ):
             try:
                 self.editor.edit_side_block(self)
@@ -653,9 +652,9 @@ class ClickableRectItem(QGraphicsPathItem):
                 pass
         # 滑道双击编辑
         if (
-            getattr(self, "is_slide", False)
-            and self.editor
-            and hasattr(self.editor, "edit_slide")
+                getattr(self, "is_slide", False)
+                and self.editor
+                and hasattr(self.editor, "edit_slide")
         ):
             try:
                 self.editor.edit_slide(self)
@@ -665,9 +664,9 @@ class ClickableRectItem(QGraphicsPathItem):
                 pass
         # 中间挡板双击编辑
         if (
-            getattr(self, "is_center_dangban", False)
-            and self.editor
-            and hasattr(self.editor, "edit_center_dangban")
+                getattr(self, "is_center_dangban", False)
+                and self.editor
+                and hasattr(self.editor, "edit_center_dangban")
         ):
             try:
                 self.editor.edit_center_dangban(self)
@@ -680,7 +679,7 @@ class ClickableRectItem(QGraphicsPathItem):
 
 class ClickableCircleItem(QGraphicsEllipseItem):
     def __init__(
-        self, rect, parent=None, is_side_rod=False, is_lagan=False, editor=None
+            self, rect, parent=None, is_side_rod=False, is_lagan=False, editor=None
     ):
         super().__init__(rect, parent)
         self.setAcceptHoverEvents(True)
@@ -750,7 +749,7 @@ class ClickableCircleItem(QGraphicsEllipseItem):
                 # 尝试提示自由拉杆-换热管的间距（仅在满足条件时）
                 try:
                     if self.editor and hasattr(
-                        self.editor, "check_and_show_lagan_tube_distance"
+                            self.editor, "check_and_show_lagan_tube_distance"
                     ):
                         self.editor.check_and_show_lagan_tube_distance()
                 except Exception:
@@ -778,17 +777,17 @@ class ClickableCircleItem(QGraphicsEllipseItem):
                         rel_list = []
                         if rel:
                             if (
-                                isinstance(rel, (list, tuple))
-                                and len(rel) == 2
-                                and isinstance(rel[0], int)
+                                    isinstance(rel, (list, tuple))
+                                    and len(rel) == 2
+                                    and isinstance(rel[0], int)
                             ):
                                 rel_list.append(tuple(rel))
                             elif isinstance(rel, list):
                                 for r in rel:
                                     if (
-                                        isinstance(r, (list, tuple))
-                                        and len(r) == 2
-                                        and isinstance(r[0], int)
+                                            isinstance(r, (list, tuple))
+                                            and len(r) == 2
+                                            and isinstance(r[0], int)
                                     ):
                                         rel_list.append(tuple(r))
 
@@ -1054,7 +1053,7 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
     none_tube_90_270 = []
 
     if height_0_180 != 0:
-        Chorda = math.sqrt(Ri**2 - ha**2)
+        Chorda = math.sqrt(Ri ** 2 - ha ** 2)
         # 存储0或180的非布管小圆圆心坐标（使用与参考代码相同的判断逻辑）
         for center in centers:
             x, y = center
@@ -1063,7 +1062,7 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
                 none_tube_0_180.append(center)
 
     if height_90_270 != 0:
-        Chordb = math.sqrt(Ri**2 - hb**2)
+        Chordb = math.sqrt(Ri ** 2 - hb ** 2)
         # 存储90或270的非布管小圆圆心坐标（使用与参考代码相同的判断逻辑）
         for center in centers:
             x, y = center
@@ -1253,8 +1252,8 @@ class TubeLayoutEditor(QMainWindow):
         # 每次 current_centers 变化时，更新 R 值和最小非0 R值
         # 确保 hole_distribution_table 已经创建（避免初始化时出错）
         if (
-            hasattr(self, "hole_distribution_table")
-            and self.hole_distribution_table is not None
+                hasattr(self, "hole_distribution_table")
+                and self.hole_distribution_table is not None
         ):
             try:
                 # 更新水平表的最小非0 R值（self.min_distance_row）
@@ -1401,7 +1400,7 @@ class TubeLayoutEditor(QMainWindow):
         )
         coord_to_row = None
         if getattr(self, "_coord_to_row_cache_key", None) == cache_key and hasattr(
-            self, "_coord_to_row_cache"
+                self, "_coord_to_row_cache"
         ):
             coord_to_row = self._coord_to_row_cache
         else:
@@ -1524,7 +1523,7 @@ class TubeLayoutEditor(QMainWindow):
         )
         coord_to_col = None
         if getattr(self, "_coord_to_col_cache_key", None) == cache_key and hasattr(
-            self, "_coord_to_col_cache"
+                self, "_coord_to_col_cache"
         ):
             coord_to_col = self._coord_to_col_cache
         else:
@@ -1632,10 +1631,10 @@ class TubeLayoutEditor(QMainWindow):
             if isinstance(coords, tuple) and len(coords) == 2:
                 x2, y2 = coords
             elif (
-                isinstance(coords, list)
-                and len(coords) == 1
-                and isinstance(coords[0], (tuple, list))
-                and len(coords[0]) == 2
+                    isinstance(coords, list)
+                    and len(coords) == 1
+                    and isinstance(coords[0], (tuple, list))
+                    and len(coords[0]) == 2
             ):
                 x2, y2 = coords[0]
             else:
@@ -1669,7 +1668,7 @@ class TubeLayoutEditor(QMainWindow):
 
     # TODO 获取选中的两个换热管的编号
     def get_selected_y_center_numbers(
-        self, selected_centers, print_cross_y_left, print_cross_y_right, row
+            self, selected_centers, print_cross_y_left, print_cross_y_right, row
     ):
         if row == 1:
             # 初始化返回的编号
@@ -1804,7 +1803,7 @@ class TubeLayoutEditor(QMainWindow):
             std_display = (
                 str(int(std_val))
                 if isinstance(std_val, int)
-                or getattr(std_val, "is_integer", lambda: False)()
+                   or getattr(std_val, "is_integer", lambda: False)()
                 else str(std_val)
             )
         else:
@@ -1814,7 +1813,7 @@ class TubeLayoutEditor(QMainWindow):
                     std_display = (
                         str(int(cur_std))
                         if isinstance(cur_std, int)
-                        or getattr(cur_std, "is_integer", lambda: False)()
+                           or getattr(cur_std, "is_integer", lambda: False)()
                         else str(cur_std)
                     )
             except Exception:
@@ -1843,7 +1842,7 @@ class TubeLayoutEditor(QMainWindow):
         if not self.has_piped and total == 0:
             total = 980
         self.total_holes_label.setText(f"总管孔数量: {total}")
-    
+
     def toggle_arrange_text(self):
         """切换按钮文字（按行排列 <-> 按列排列）并更新表格数据"""
         if hasattr(self, 'is_arrange_by_row'):
@@ -2371,14 +2370,14 @@ class TubeLayoutEditor(QMainWindow):
 
         def update_overlay_widgets_position(event):
             x_right = (
-                self.graphics_container.width() - self.checkbox_container.width() - 10
+                    self.graphics_container.width() - self.checkbox_container.width() - 10
             )
             y_top = 10
             self.checkbox_container.move(x_right, y_top)
 
             if hasattr(
-                super(type(self.graphics_container), self.graphics_container),
-                "resizeEvent",
+                    super(type(self.graphics_container), self.graphics_container),
+                    "resizeEvent",
             ):
                 super(
                     type(self.graphics_container), self.graphics_container
@@ -2442,15 +2441,15 @@ class TubeLayoutEditor(QMainWindow):
         holes_label_layout = QHBoxLayout()
         holes_label_layout.setContentsMargins(0, 0, 0, 0)
         holes_label_layout.setSpacing(12)
-        
+
         # 添加左侧弹性空间，使内容居中
         holes_label_layout.addStretch()
-        
+
         self.total_holes_label = QLabel("总管孔数量: 980")
         self.total_holes_label.setFont(QFont("Arial", 10, QFont.Bold))
         self.total_holes_label.setAlignment(Qt.AlignCenter)
         holes_label_layout.addWidget(self.total_holes_label)
-        
+
         # 创建排列切换按钮
         self.arrange_button = QPushButton("按行排列")
         self.arrange_button.setFont(QFont("Microsoft YaHei", 9, QFont.Normal))
@@ -2479,15 +2478,15 @@ class TubeLayoutEditor(QMainWindow):
         """)
         self.arrange_button.clicked.connect(self.toggle_arrange_text)
         holes_label_layout.addWidget(self.arrange_button)
-        
+
         # 添加右侧弹性空间，使内容居中
         holes_label_layout.addStretch()
-        
+
         # 将水平布局添加到右侧布局
         holes_label_widget = QWidget()
         holes_label_widget.setLayout(holes_label_layout)
         right_layout.addWidget(holes_label_widget)
-        
+
         # 初始化按钮状态
         self.is_arrange_by_row = True
 
@@ -2742,9 +2741,9 @@ class TubeLayoutEditor(QMainWindow):
 
         # 根据最新的全屏状态刷新工具栏布局
         if (
-            hasattr(self, "toolbar_layout")
-            and hasattr(self, "toolbar_row1_layout")
-            and hasattr(self, "toolbar_row2_layout")
+                hasattr(self, "toolbar_layout")
+                and hasattr(self, "toolbar_row1_layout")
+                and hasattr(self, "toolbar_row2_layout")
         ):
             self.update_toolbar_layout_mode()
 
@@ -2933,9 +2932,9 @@ class TubeLayoutEditor(QMainWindow):
             print(f"查询交叉布管信息时发生异常：{str(e)}")
         finally:
             if (
-                cross_pipe_conn
-                and hasattr(cross_pipe_conn, "open")
-                and cross_pipe_conn.open
+                    cross_pipe_conn
+                    and hasattr(cross_pipe_conn, "open")
+                    and cross_pipe_conn.open
             ):
                 try:
                     cross_pipe_conn.close()
@@ -2989,9 +2988,9 @@ class TubeLayoutEditor(QMainWindow):
         finally:
             # 5. 确保关闭数据库连接，避免资源泄漏
             if (
-                product_conn_for_type
-                and hasattr(product_conn_for_type, "open")
-                and product_conn_for_type.open
+                    product_conn_for_type
+                    and hasattr(product_conn_for_type, "open")
+                    and product_conn_for_type.open
             ):
                 try:
                     product_conn_for_type.close()
@@ -3067,7 +3066,7 @@ class TubeLayoutEditor(QMainWindow):
 
                         for param in product_params:
                             if isinstance(param, dict) and all(
-                                key in param for key in ["参数名", "参数值", "单位"]
+                                    key in param for key in ["参数名", "参数值", "单位"]
                             ):
                                 param_name = param["参数名"]
                                 param_value = param["参数值"]
@@ -3108,9 +3107,9 @@ class TubeLayoutEditor(QMainWindow):
                                         design_data = cursor.fetchone()
 
                                         if (
-                                            isinstance(design_data, dict)
-                                            and "壳程数值" in design_data
-                                            and design_data["壳程数值"]
+                                                isinstance(design_data, dict)
+                                                and "壳程数值" in design_data
+                                                and design_data["壳程数值"]
                                         ):
                                             final_value = design_data["壳程数值"]
                                             # print(final_value)
@@ -3170,9 +3169,9 @@ class TubeLayoutEditor(QMainWindow):
                                         design_data = cursor.fetchone()
 
                                         if (
-                                            isinstance(design_data, dict)
-                                            and "数值" in design_data
-                                            and design_data["数值"]
+                                                isinstance(design_data, dict)
+                                                and "数值" in design_data
+                                                and design_data["数值"]
                                         ):
                                             final_value = design_data["数值"]
                                             print(
@@ -3200,9 +3199,9 @@ class TubeLayoutEditor(QMainWindow):
                                         # print("壳体内直径读了个寂寞读的是哪个？")
 
                                         if (
-                                            isinstance(design_data, dict)
-                                            and "壳程数值" in design_data
-                                            and design_data["壳程数值"]
+                                                isinstance(design_data, dict)
+                                                and "壳程数值" in design_data
+                                                and design_data["壳程数值"]
                                         ):
                                             design_di_value = design_data["壳程数值"]
                                             final_value = design_di_value
@@ -3283,9 +3282,9 @@ class TubeLayoutEditor(QMainWindow):
                                         design_data = cursor.fetchone()
 
                                         if (
-                                            isinstance(design_data, dict)
-                                            and "参数值" in design_data
-                                            and design_data["参数值"]
+                                                isinstance(design_data, dict)
+                                                and "参数值" in design_data
+                                                and design_data["参数值"]
                                         ):
                                             final_value = design_data["参数值"]
                                             print(
@@ -3355,7 +3354,7 @@ class TubeLayoutEditor(QMainWindow):
                                     original_di_float = float(original_di_value)
                                     # 比较原始值和最终值，如果不同则计算DL
                                     if (
-                                        abs(original_di_float - Di) > 0.001
+                                            abs(original_di_float - Di) > 0.001
                                     ):  # 使用小容差比较浮点数
                                         should_calculate_dl = True
                                         print(
@@ -3438,8 +3437,8 @@ class TubeLayoutEditor(QMainWindow):
                                 # 如果不需要计算DL，则从processed_params中查找现有的DL值
                                 for param in processed_params:
                                     if (
-                                        param["参数名"] == "布管限定圆 DL"
-                                        and param["参数值"]
+                                            param["参数名"] == "布管限定圆 DL"
+                                            and param["参数值"]
                                     ):
                                         try:
                                             DL = float(param["参数值"])
@@ -3544,7 +3543,7 @@ class TubeLayoutEditor(QMainWindow):
                             processed_params = []
                             for param in default_params:
                                 if isinstance(param, dict) and all(
-                                    key in param for key in ["参数名", "参数值", "单位"]
+                                        key in param for key in ["参数名", "参数值", "单位"]
                                 ):
                                     param_name = param["参数名"]
                                     param_value = param["参数值"]
@@ -3595,12 +3594,12 @@ class TubeLayoutEditor(QMainWindow):
                                                         )
 
                                                         if (
-                                                            isinstance(
-                                                                design_data, dict
-                                                            )
-                                                            and "壳程数值"
-                                                            in design_data
-                                                            and design_data["壳程数值"]
+                                                                isinstance(
+                                                                    design_data, dict
+                                                                )
+                                                                and "壳程数值"
+                                                                in design_data
+                                                                and design_data["壳程数值"]
                                                         ):
                                                             final_value = design_data[
                                                                 "壳程数值"
@@ -3629,12 +3628,12 @@ class TubeLayoutEditor(QMainWindow):
                                                         # print("壳体内直径读了个寂寞")
 
                                                         if (
-                                                            isinstance(
-                                                                design_data, dict
-                                                            )
-                                                            and "壳程数值"
-                                                            in design_data
-                                                            and design_data["壳程数值"]
+                                                                isinstance(
+                                                                    design_data, dict
+                                                                )
+                                                                and "壳程数值"
+                                                                in design_data
+                                                                and design_data["壳程数值"]
                                                         ):
                                                             final_value = design_data[
                                                                 "壳程数值"
@@ -3643,7 +3642,7 @@ class TubeLayoutEditor(QMainWindow):
                                                                 f"更新壳体内直径 Dis: {param_value} -> {final_value}"
                                                             )
                                                     elif (
-                                                        param_name == "是否以外径为基准"
+                                                            param_name == "是否以外径为基准"
                                                     ):
                                                         design_query = """
                                                             SELECT 数值 
@@ -3662,11 +3661,11 @@ class TubeLayoutEditor(QMainWindow):
                                                         )
 
                                                         if (
-                                                            isinstance(
-                                                                design_data, dict
-                                                            )
-                                                            and "数值" in design_data
-                                                            and design_data["数值"]
+                                                                isinstance(
+                                                                    design_data, dict
+                                                                )
+                                                                and "数值" in design_data
+                                                                and design_data["数值"]
                                                         ):
                                                             final_value = design_data[
                                                                 "数值"
@@ -3681,9 +3680,9 @@ class TubeLayoutEditor(QMainWindow):
                                             )
                                         finally:
                                             if (
-                                                product_design_conn
-                                                and hasattr(product_design_conn, "open")
-                                                and product_design_conn.open
+                                                    product_design_conn
+                                                    and hasattr(product_design_conn, "open")
+                                                    and product_design_conn.open
                                             ):
                                                 try:
                                                     product_design_conn.close()
@@ -3710,8 +3709,8 @@ class TubeLayoutEditor(QMainWindow):
                             # 提取并转换关键参数
                             for param in processed_params:
                                 if (
-                                    param["参数名"] == "壳体内直径 Dis"
-                                    and param["参数值"]
+                                        param["参数名"] == "壳体内直径 Dis"
+                                        and param["参数值"]
                                 ):
                                     try:
                                         Di = float(
@@ -3720,15 +3719,15 @@ class TubeLayoutEditor(QMainWindow):
                                     except (ValueError, TypeError) as e:
                                         print(f"壳体内直径 Dis 转换失败: {str(e)}")
                                 elif (
-                                    param["参数名"] == "换热管外径 do"
-                                    and param["参数值"]
+                                        param["参数名"] == "换热管外径 do"
+                                        and param["参数值"]
                                 ):
                                     try:
                                         do = float(param["参数值"])  # 强制类型转换
                                     except (ValueError, TypeError) as e:
                                         print(f"换热管外径 do 转换失败: {str(e)}")
                                 elif (
-                                    param["参数名"] == "公称直径 DN" and param["参数值"]
+                                        param["参数名"] == "公称直径 DN" and param["参数值"]
                                 ):
                                     try:
                                         DN = float(param["参数值"])  # 强制类型转换
@@ -3870,9 +3869,9 @@ class TubeLayoutEditor(QMainWindow):
                 print(f"默认参数加载错误: {str(e)}")
             finally:
                 if (
-                    component_conn
-                    and hasattr(component_conn, "open")
-                    and component_conn.open
+                        component_conn
+                        and hasattr(component_conn, "open")
+                        and component_conn.open
                 ):
                     try:
                         component_conn.close()
@@ -3908,9 +3907,9 @@ class TubeLayoutEditor(QMainWindow):
                 try:
                     product_conn = create_product_connection()
                     if (
-                        product_conn
-                        and hasattr(product_conn, "open")
-                        and product_conn.open
+                            product_conn
+                            and hasattr(product_conn, "open")
+                            and product_conn.open
                     ):
                         cursor = product_conn.cursor()
                         query = (
@@ -3938,9 +3937,9 @@ class TubeLayoutEditor(QMainWindow):
                     print(f"查询产品设计活动表_管口表出错: {str(e)}")
                 finally:
                     if (
-                        product_conn
-                        and hasattr(product_conn, "open")
-                        and product_conn.open
+                            product_conn
+                            and hasattr(product_conn, "open")
+                            and product_conn.open
                     ):
                         try:
                             product_conn.close()
@@ -3951,7 +3950,6 @@ class TubeLayoutEditor(QMainWindow):
         except Exception as e:
             # 兜底保护：任何异常都不影响后续计算逻辑，只打印错误并保持空字典
             print(f"初始化管口字典时出错: {str(e)}")
-
 
         try:
             if isinstance(self.pipe_port_dict, dict) and self.pipe_port_dict:
@@ -3972,9 +3970,9 @@ class TubeLayoutEditor(QMainWindow):
                 try:
                     product_conn2 = create_product_connection()
                     if (
-                        product_conn2
-                        and hasattr(product_conn2, "open")
-                        and product_conn2.open
+                            product_conn2
+                            and hasattr(product_conn2, "open")
+                            and product_conn2.open
                     ):
                         cursor2 = product_conn2.cursor()
                         query2 = (
@@ -4021,7 +4019,7 @@ class TubeLayoutEditor(QMainWindow):
                                 }
                             try:
                                 self.radial_hole_dict[code]["连通方向"] = (
-                                    direction or "壳程"
+                                        direction or "壳程"
                                 )
                             except Exception:
                                 pass
@@ -4035,9 +4033,9 @@ class TubeLayoutEditor(QMainWindow):
                     print(f"读取布管管口表(径向开孔)出错: {str(e)}")
                 finally:
                     if (
-                        product_conn2
-                        and hasattr(product_conn2, "open")
-                        and product_conn2.open
+                            product_conn2
+                            and hasattr(product_conn2, "open")
+                            and product_conn2.open
                     ):
                         try:
                             product_conn2.close()
@@ -4062,8 +4060,8 @@ class TubeLayoutEditor(QMainWindow):
                 try:
                     for _code, info in (self.radial_hole_dict or {}).items():
                         if (
-                            isinstance(info, dict)
-                            and info.get("换热管坐标") is not None
+                                isinstance(info, dict)
+                                and info.get("换热管坐标") is not None
                         ):
                             try:
                                 self.draw_radial_hole_tangents(info.get("换热管坐标"))
@@ -4270,7 +4268,7 @@ class TubeLayoutEditor(QMainWindow):
                         try:
                             x, y = coord
                             if isinstance(x, (int, float)) and isinstance(
-                                y, (int, float)
+                                    y, (int, float)
                             ):
                                 # 直接调用绘制函数
                                 draw_center_dangguan_at_position(coord, self)
@@ -4951,9 +4949,9 @@ class TubeLayoutEditor(QMainWindow):
 
             # 查找圆筒内径的值
             if (
-                "DictOutDatas" in data
-                and "壳体圆筒" in data["DictOutDatas"]
-                and "Datas" in data["DictOutDatas"]["壳体圆筒"]
+                    "DictOutDatas" in data
+                    and "壳体圆筒" in data["DictOutDatas"]
+                    and "Datas" in data["DictOutDatas"]["壳体圆筒"]
             ):
 
                 for item in data["DictOutDatas"]["壳体圆筒"]["Datas"]:
@@ -5009,11 +5007,11 @@ class TubeLayoutEditor(QMainWindow):
         try:
             # 使用优化后的清除方法
             if hasattr(self, "graphics_scene") and hasattr(
-                self.graphics_scene, "clear_connection_lines"
+                    self.graphics_scene, "clear_connection_lines"
             ):
                 self.graphics_scene.clear_connection_lines()
             if hasattr(self, "graphics_scene") and hasattr(
-                self.graphics_scene, "clear_markers"
+                    self.graphics_scene, "clear_markers"
             ):
                 self.graphics_scene.clear_markers()
 
@@ -5023,11 +5021,11 @@ class TubeLayoutEditor(QMainWindow):
                     item
                     for item in self.graphics_scene.items()
                     if (
-                        isinstance(item, (QGraphicsLineItem, QGraphicsEllipseItem))
-                        and (
-                            item in getattr(self, "connection_lines", [])
-                            or item.data(0) == "marker"
-                        )
+                            isinstance(item, (QGraphicsLineItem, QGraphicsEllipseItem))
+                            and (
+                                    item in getattr(self, "connection_lines", [])
+                                    or item.data(0) == "marker"
+                            )
                     )
                 ]
 
@@ -5819,8 +5817,8 @@ class TubeLayoutEditor(QMainWindow):
                         for row in range(self.param_table.rowCount()):
                             param_name_item = self.param_table.item(row, 1)
                             if (
-                                param_name_item
-                                and param_name_item.text().strip() == "隔条位置尺寸 W"
+                                    param_name_item
+                                    and param_name_item.text().strip() == "隔条位置尺寸 W"
                             ):
                                 w_row = row
                                 break
@@ -5842,8 +5840,8 @@ class TubeLayoutEditor(QMainWindow):
                         if w_row != -1:
                             # 方法1：检查是否在modified_rows中
                             if (
-                                hasattr(self, "modified_rows")
-                                and w_row in self.modified_rows
+                                    hasattr(self, "modified_rows")
+                                    and w_row in self.modified_rows
                             ):
                                 is_user_modified = True
                             # 方法2：检查当前值是否和原始值不同
@@ -5852,8 +5850,8 @@ class TubeLayoutEditor(QMainWindow):
                                     (w_row, 2), ""
                                 )
                                 if (
-                                    current_w_value
-                                    and current_w_value != original_value
+                                        current_w_value
+                                        and current_w_value != original_value
                                 ):
                                     is_user_modified = True
 
@@ -5889,8 +5887,8 @@ class TubeLayoutEditor(QMainWindow):
                     for row in range(self.param_table.rowCount()):
                         param_name_item = self.param_table.item(row, 1)
                         if (
-                            param_name_item
-                            and param_name_item.text().strip() == "隔条位置尺寸 W"
+                                param_name_item
+                                and param_name_item.text().strip() == "隔条位置尺寸 W"
                         ):
                             w_row = row
                             break
@@ -5907,8 +5905,8 @@ class TubeLayoutEditor(QMainWindow):
                     is_user_modified = False
                     if w_row != -1:
                         if (
-                            hasattr(self, "modified_rows")
-                            and w_row in self.modified_rows
+                                hasattr(self, "modified_rows")
+                                and w_row in self.modified_rows
                         ):
                             is_user_modified = True
                         elif hasattr(self, "original_param_values"):
@@ -6461,7 +6459,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 获取折流板外径
                 baffle_diameter = self.get_baffle_diameter()
                 if baffle_diameter is not None and (
-                    value <= 0 or value >= baffle_diameter
+                        value <= 0 or value >= baffle_diameter
                 ):
                     QMessageBox.warning(
                         self,
@@ -6483,7 +6481,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 获取折流板外径
                 baffle_diameter = self.get_baffle_diameter()
                 if baffle_diameter is not None and (
-                    value <= 0 or value >= baffle_diameter / 2
+                        value <= 0 or value >= baffle_diameter / 2
                 ):
                     QMessageBox.warning(
                         self,
@@ -6624,7 +6622,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 判断是否应该不可编辑：管程数为1或2 或 管程分程形式为"4.2"
                 should_disable = (
-                    (tube_pass == 1) or (tube_pass == 2) or (tube_pass_form == "4.2")
+                        (tube_pass == 1) or (tube_pass == 2) or (tube_pass_form == "4.2")
                 )
 
                 # 当需要禁用时，直接隐藏整行；否则显示整行
@@ -6728,8 +6726,8 @@ class TubeLayoutEditor(QMainWindow):
         if param_name_item:
             param_name = param_name_item.text().strip()
             if (
-                self._is_programmatic_update
-                and param_name in self._programmatic_update_params
+                    self._is_programmatic_update
+                    and param_name in self._programmatic_update_params
             ):
                 print(f"[程序自动更新] {param_name} 被更新，跳过用户修改处理")
                 return  # 跳过用户修改的处理逻辑
@@ -6954,8 +6952,8 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 创建或更新为可编辑的下拉框（使用NoWheelComboBox禁用滚轮）
                     if not (
-                        isinstance(lg_diameter_widget, QComboBox)
-                        and lg_diameter_widget.isEditable()
+                            isinstance(lg_diameter_widget, QComboBox)
+                            and lg_diameter_widget.isEditable()
                     ):
                         print("创建新的可编辑下拉框")
                         combo_box = NoWheelComboBox()
@@ -7058,9 +7056,9 @@ class TubeLayoutEditor(QMainWindow):
                                 target_value = saved_value
                                 print(f"恢复下拉框更新前的值: {target_value}")
                             elif (
-                                lg_current_value
-                                and lg_current_value.strip()
-                                and lg_current_value.strip() in thread_options
+                                    lg_current_value
+                                    and lg_current_value.strip()
+                                    and lg_current_value.strip() in thread_options
                             ):
                                 # 如果lg_current_value在选项中，使用它
                                 target_value = lg_current_value.strip()
@@ -7423,10 +7421,10 @@ class TubeLayoutEditor(QMainWindow):
 
         # 检查必要参数是否存在（保留原依赖检查逻辑）
         if (
-            di_value is None
-            or do_value is None
-            or range_type_value is None
-            or dl_row == -1
+                di_value is None
+                or do_value is None
+                or range_type_value is None
+                or dl_row == -1
         ):
             print("缺少布管限定圆计算所需参数，无法进行计算")
             return
@@ -7515,11 +7513,11 @@ class TubeLayoutEditor(QMainWindow):
                         # 按公式：DL = min{ Di - 2*f*[1 + sqrt(1 + g^2)] - 2*h , Di - 2*b3 }
                         # 注意：题目里提到的 f 未在快照中给出，这里按 1.0 处理为 f 的缺省值
                         f_value = 1.0
-                        inner_term = 1.0 + g**2
+                        inner_term = 1.0 + g ** 2
                         dl_expr1 = (
-                            di_value
-                            - 2 * f_value * (1.0 + math.sqrt(inner_term))
-                            - 2 * h
+                                di_value
+                                - 2 * f_value * (1.0 + math.sqrt(inner_term))
+                                - 2 * h
                         )
                         dl_expr2 = di_value - 2 * b3
                         dl_value = min(dl_expr1, dl_expr2)
@@ -7558,11 +7556,11 @@ class TubeLayoutEditor(QMainWindow):
                         s_raw = params_dict.get("s")
 
                         if (
-                            e_raw is None
-                            or p_raw is None
-                            or l_raw is None
-                            or q_raw is None
-                            or s_raw is None
+                                e_raw is None
+                                or p_raw is None
+                                or l_raw is None
+                                or q_raw is None
+                                or s_raw is None
                         ):
                             print(
                                 "[update_tube_layout_circle_dl] b_e 节点快照中缺少 e/p/l/q/s，回退到原逻辑计算 DL"
@@ -7598,8 +7596,8 @@ class TubeLayoutEditor(QMainWindow):
                                     # 三个表达式
                                     dl_expr1 = dit - 2 * e_val - 2 * p_val
                                     inner = (
-                                        2 * l_val - q_val + l_val / cos_s
-                                    ) / tan_s + l_val
+                                                    2 * l_val - q_val + l_val / cos_s
+                                            ) / tan_s + l_val
                                     dl_expr2 = dis - 2 * inner - 2 * p_val
                                     dl_expr3 = dit - 2 * b3
 
@@ -8372,8 +8370,8 @@ class TubeLayoutEditor(QMainWindow):
                             output_data_dict = json.loads(output_data_dict)
 
                         if (
-                            isinstance(output_data_dict, dict)
-                            and "W" in output_data_dict
+                                isinstance(output_data_dict, dict)
+                                and "W" in output_data_dict
                         ):
                             w_value = output_data_dict["W"]
                             print(f"从output_data中获取W值：{w_value}")
@@ -8388,8 +8386,8 @@ class TubeLayoutEditor(QMainWindow):
                                 # 获取当前行的参数名
                                 param_name_item = self.param_table.item(row, 1)
                                 if (
-                                    param_name_item
-                                    and param_name_item.text() == param_name
+                                        param_name_item
+                                        and param_name_item.text() == param_name
                                 ):
                                     # 检查该单元格是普通文本项还是下拉框组件
                                     cell_widget = self.param_table.cellWidget(row, 2)
@@ -8681,8 +8679,8 @@ class TubeLayoutEditor(QMainWindow):
                             output_data_dict = json.loads(output_data_dict)
 
                         if (
-                            isinstance(output_data_dict, dict)
-                            and "W" in output_data_dict
+                                isinstance(output_data_dict, dict)
+                                and "W" in output_data_dict
                         ):
                             w_value = output_data_dict["W"]
                             print(f"从output_data中获取W值：{w_value}")
@@ -8697,8 +8695,8 @@ class TubeLayoutEditor(QMainWindow):
                                 # 获取当前行的参数名
                                 param_name_item = self.param_table.item(row, 1)
                                 if (
-                                    param_name_item
-                                    and param_name_item.text() == param_name
+                                        param_name_item
+                                        and param_name_item.text() == param_name
                                 ):
                                     # 检查该单元格是普通文本项还是下拉框组件
                                     cell_widget = self.param_table.cellWidget(row, 2)
@@ -9417,8 +9415,8 @@ class TubeLayoutEditor(QMainWindow):
             elif tube_pass in ["4", "6"]:
                 # 获取竖直中心距（与浮头式数据一致）
                 if (
-                    do_value not in aes_bes_map
-                    or range_type not in aes_bes_map[do_value]
+                        do_value not in aes_bes_map
+                        or range_type not in aes_bes_map[do_value]
                 ):
                     print(
                         f"U形管式-{tube_pass}管程：未找到外径{do_value}mm+{range_type}的分程隔板中心距（竖直）数据"
@@ -9643,12 +9641,12 @@ class TubeLayoutEditor(QMainWindow):
                     cut_rate = None
 
         if not all(
-            [
-                shell_inner_diameter_row is not None,
-                baffle_diameter_row is not None,
-                cut_spacing_row is not None,
-                cut_rate_row is not None,
-            ]
+                [
+                    shell_inner_diameter_row is not None,
+                    baffle_diameter_row is not None,
+                    cut_spacing_row is not None,
+                    cut_rate_row is not None,
+                ]
         ):
             return
 
@@ -9693,8 +9691,8 @@ class TubeLayoutEditor(QMainWindow):
                         return
 
                     new_cut_rate = (
-                        (baffle_radius - cut_spacing) / shell_inner_diameter
-                    ) * 100
+                                           (baffle_radius - cut_spacing) / shell_inner_diameter
+                                   ) * 100
 
                     if not (0 <= new_cut_rate <= 50):
                         QMessageBox.warning(
@@ -9734,8 +9732,8 @@ class TubeLayoutEditor(QMainWindow):
                         return
 
                     new_cut_rate = (
-                        (baffle_radius - cut_spacing) / shell_inner_diameter
-                    ) * 100
+                                           (baffle_radius - cut_spacing) / shell_inner_diameter
+                                   ) * 100
 
                     if not (0 <= new_cut_rate <= 50):
                         QMessageBox.warning(
@@ -9883,8 +9881,8 @@ class TubeLayoutEditor(QMainWindow):
             # 抑制：避免同一次非法输入触发两次警告（例如编辑器提交/联动导致的重复触发）
             try:
                 if (
-                    getattr(self, "_suppress_baffle_od_warn", False)
-                    and param_name == "折流板外径"
+                        getattr(self, "_suppress_baffle_od_warn", False)
+                        and param_name == "折流板外径"
                 ):
                     return
             except Exception:
@@ -9892,8 +9890,8 @@ class TubeLayoutEditor(QMainWindow):
 
             # 检查是否是程序自动更新（标记变量方法）
             if (
-                self._is_programmatic_update
-                and param_name in self._programmatic_update_params
+                    self._is_programmatic_update
+                    and param_name in self._programmatic_update_params
             ):
                 print(f"[程序自动更新] {param_name} 被更新，跳过用户修改处理")
                 return  # 跳过用户修改的处理逻辑
@@ -9967,7 +9965,7 @@ class TubeLayoutEditor(QMainWindow):
                     prev_val = None
                     try:
                         if hasattr(self, "input_json") and isinstance(
-                            self.input_json, dict
+                                self.input_json, dict
                         ):
                             pv = self.input_json.get("LB_BaffleOD", None)
                             if pv not in (None, ""):
@@ -10083,10 +10081,10 @@ class TubeLayoutEditor(QMainWindow):
                 dl_v = _read_val_by_name("布管限定圆 DL")
                 if not hasattr(self, "_last_valid_values"):
                     if (
-                        dn_v is not None
-                        and di_v is not None
-                        and dl_v is not None
-                        and dn_v >= di_v >= dl_v
+                            dn_v is not None
+                            and di_v is not None
+                            and dl_v is not None
+                            and dn_v >= di_v >= dl_v
                     ):
                         self._last_valid_values = {"DN": dn_v, "Di": di_v, "DL": dl_v}
                         print(
@@ -10178,8 +10176,8 @@ class TubeLayoutEditor(QMainWindow):
                                 for r in range(self.param_table.rowCount()):
                                     name_item = self.param_table.item(r, 1)
                                     if (
-                                        name_item
-                                        and name_item.text().strip() == "壳体内直径 Dis"
+                                            name_item
+                                            and name_item.text().strip() == "壳体内直径 Dis"
                                     ):
                                         di_row = r
                                         break
@@ -10226,14 +10224,14 @@ class TubeLayoutEditor(QMainWindow):
                                             # 1) 从 input_json
                                             try:
                                                 if hasattr(
-                                                    self, "input_json"
+                                                        self, "input_json"
                                                 ) and isinstance(self.input_json, dict):
                                                     if (
-                                                        "LB_BaffleOD" in self.input_json
-                                                        and self.input_json[
-                                                            "LB_BaffleOD"
-                                                        ]
-                                                        not in (None, "")
+                                                            "LB_BaffleOD" in self.input_json
+                                                            and self.input_json[
+                                                        "LB_BaffleOD"
+                                                    ]
+                                                            not in (None, "")
                                                     ):
                                                         prev_val = str(
                                                             self.input_json[
@@ -10244,7 +10242,7 @@ class TubeLayoutEditor(QMainWindow):
                                                 pass
                                             # 2) 回退到原值缓存
                                             if prev_val is None and hasattr(
-                                                self, "original_param_values"
+                                                    self, "original_param_values"
                                             ):
                                                 prev_val = (
                                                     self.original_param_values.get(
@@ -10334,8 +10332,8 @@ class TubeLayoutEditor(QMainWindow):
                         try:
                             self.update_SN()
                             if (
-                                hasattr(self, "tube_pass_form_combo")
-                                and self.tube_pass_form_combo
+                                    hasattr(self, "tube_pass_form_combo")
+                                    and self.tube_pass_form_combo
                             ):
                                 self.load_tube_pass_images(
                                     self.tube_pass_form_combo, param_value
@@ -10353,8 +10351,8 @@ class TubeLayoutEditor(QMainWindow):
             # 4) 最后触发三值一致性检查（确保 UI 已稳定）
             # 如果是程序自动更新隔条位置尺寸，跳过一致性检查
             if (
-                self._is_programmatic_update
-                and param_name in self._programmatic_update_params
+                    self._is_programmatic_update
+                    and param_name in self._programmatic_update_params
             ):
                 print(f"[程序自动更新] 跳过一致性检查（来源：{param_name}）")
             else:
@@ -10646,8 +10644,8 @@ class TubeLayoutEditor(QMainWindow):
                         tube_pass_row = -1
                         for r in range(self.param_table.rowCount()):
                             if (
-                                self.param_table.item(r, 1)
-                                and self.param_table.item(r, 1).text() == "管程程数"
+                                    self.param_table.item(r, 1)
+                                    and self.param_table.item(r, 1).text() == "管程程数"
                             ):
                                 tube_pass_row = r
                                 break
@@ -10984,8 +10982,8 @@ class TubeLayoutEditor(QMainWindow):
         if param_name_item:
             param_name = param_name_item.text().strip()
             if (
-                self._is_programmatic_update
-                and param_name in self._programmatic_update_params
+                    self._is_programmatic_update
+                    and param_name in self._programmatic_update_params
             ):
                 print(f"[程序自动更新] {param_name} 下拉框被更新，跳过用户修改处理")
                 return  # 跳过用户修改的处理逻辑
@@ -11088,7 +11086,7 @@ class TubeLayoutEditor(QMainWindow):
         ha = Ri - height_0_180
         hb = Ri - height_90_270
         if height_0_180 != 0:
-            Chorda = math.sqrt(Ri**2 - ha**2)
+            Chorda = math.sqrt(Ri ** 2 - ha ** 2)
 
             # 存储 0 或 180 的非布管小圆圆心坐标
             none_tube_0_180 = []
@@ -11096,13 +11094,13 @@ class TubeLayoutEditor(QMainWindow):
             for center in centers:
                 x, y = center
                 if -Chorda < x < Chorda and (
-                    (ha - do < y < Ri) or (-Ri < y < -ha + do)
+                        (ha - do < y < Ri) or (-Ri < y < -ha + do)
                 ):
                     none_tube_0_180.append(center)
 
             self.delete_centers(none_tube_0_180)
         if height_90_270 != 0:
-            Chordb = math.sqrt(Ri**2 - hb**2)
+            Chordb = math.sqrt(Ri ** 2 - hb ** 2)
 
             # 存储 90 或 270 的非布管小圆圆心坐标
             none_tube_90_270 = []
@@ -11111,7 +11109,7 @@ class TubeLayoutEditor(QMainWindow):
             for center in centers:
                 x, y = center
                 if -Chordb < y < Chordb and (
-                    (hb - do < x < Ri) or (-Ri < x < -hb + do)
+                        (hb - do < x < Ri) or (-Ri < x < -hb + do)
                 ):
                     none_tube_90_270.append(center)
 
@@ -11165,8 +11163,8 @@ class TubeLayoutEditor(QMainWindow):
                             # 移除所有非白色实心圆的元素（包括蓝色换热管和旧的白色标记）
                             current_color = item.pen().color()
                             is_white_solid = (
-                                current_color == QColor(255, 255, 255)
-                                and item.brush() != Qt.NoBrush
+                                    current_color == QColor(255, 255, 255)
+                                    and item.brush() != Qt.NoBrush
                             )  # 实心白色
 
                             if not is_white_solid:
@@ -11175,8 +11173,8 @@ class TubeLayoutEditor(QMainWindow):
                             # 检查是否为需要替换的圆（蓝色换热管或旧的白色空心圆）
                             is_blue_tube = current_color == blue_tube_pen
                             is_old_white = (
-                                current_color == QColor(255, 255, 255)
-                                and item.brush() == Qt.NoBrush
+                                    current_color == QColor(255, 255, 255)
+                                    and item.brush() == Qt.NoBrush
                             )  # 旧的白色空心圆
 
                             if is_blue_tube or is_old_white:
@@ -11723,7 +11721,7 @@ class TubeLayoutEditor(QMainWindow):
     def build_sql_for_u_tube_calc(self):
 
         if not hasattr(self, "current_centers") or not isinstance(
-            self.current_centers, (list, set, tuple)
+                self.current_centers, (list, set, tuple)
         ):
             # QMessageBox.warning(self, "警告", "缺少有效布管坐标数据（self.current_centers异常）！")
             return None
@@ -12068,8 +12066,8 @@ class TubeLayoutEditor(QMainWindow):
                                 down_val = (
                                     int(raw_down)
                                     if (
-                                        raw_down is not None
-                                        and str(raw_down).strip() not in ("", "None")
+                                            raw_down is not None
+                                            and str(raw_down).strip() not in ("", "None")
                                     )
                                     else 0
                                 )
@@ -12115,9 +12113,9 @@ class TubeLayoutEditor(QMainWindow):
                                     down_val = (
                                         int(raw_down)
                                         if (
-                                            raw_down is not None
-                                            and str(raw_down).strip()
-                                            not in ("", "None")
+                                                raw_down is not None
+                                                and str(raw_down).strip()
+                                                not in ("", "None")
                                         )
                                         else 0
                                     )
@@ -12225,7 +12223,7 @@ class TubeLayoutEditor(QMainWindow):
         from collections import defaultdict
 
         if not hasattr(self, "current_centers") or not isinstance(
-            self.current_centers, (list, set, tuple)
+                self.current_centers, (list, set, tuple)
         ):
             # QMessageBox.warning(self, "警告", "缺少有效布管坐标数据（self.current_centers异常）！")
             return None
@@ -12451,9 +12449,9 @@ class TubeLayoutEditor(QMainWindow):
                     max_row_span = max(row_spans) if row_spans else 0
                     # 高度 = 最大行跨度 + y方向跨度 + do_value
                     max_height = (
-                        max_row_span
-                        + (max(y_groups.keys()) - min(y_groups.keys()))
-                        + do_value
+                            max_row_span
+                            + (max(y_groups.keys()) - min(y_groups.keys()))
+                            + do_value
                     )
             elif cut_dir == "水平上下":
                 # 按 x 分组，每列计算 y 跨度
@@ -12467,9 +12465,9 @@ class TubeLayoutEditor(QMainWindow):
                     max_col_span = max(col_spans) if col_spans else 0
                     # 高度 = 最大列跨度 + x方向跨度 + do_value
                     max_height = (
-                        max_col_span
-                        + (max(x_groups.keys()) - min(x_groups.keys()))
-                        + do_value
+                            max_col_span
+                            + (max(x_groups.keys()) - min(x_groups.keys()))
+                            + do_value
                     )
             else:
                 # 默认 y方向跨度 + do_value
@@ -12487,7 +12485,7 @@ class TubeLayoutEditor(QMainWindow):
             fenchengxingshi = "2.1"
 
         need_two_rows = (cut_dir == "垂直" and tube_arr == "正三角形") or (
-            cut_dir == "水平" and tube_arr == "转角正三角形"
+                cut_dir == "水平" and tube_arr == "转角正三角形"
         )
 
         selected_coords_cross = []
@@ -12581,10 +12579,10 @@ class TubeLayoutEditor(QMainWindow):
             )
 
         if (
-            fenchengxingshi == "4.3"
-            or fenchengxingshi == "6.2"
-            or fenchengxingshi == "6.1"
-            or fenchengxingshi == "4.2"
+                fenchengxingshi == "4.3"
+                or fenchengxingshi == "6.2"
+                or fenchengxingshi == "6.1"
+                or fenchengxingshi == "4.2"
         ):
             selected_coords_vertical = []
 
@@ -12608,7 +12606,7 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 第二列逻辑：|y| 大于第一列 |y| 的最小值
                     if (cut_dir == "水平" and tube_arr == "正三角形") or (
-                        cut_dir == "垂直" and tube_arr == "转角正三角形"
+                            cut_dir == "垂直" and tube_arr == "转角正三角形"
                     ):
 
                         # 找出所有 y<0 且 |y| > 第一列 |y| 的点
@@ -12662,8 +12660,8 @@ class TubeLayoutEditor(QMainWindow):
                 strange_tube_result = self.calculate_strange_tube()
                 print(strange_tube_result, "strange_tube_result")
                 if (
-                    isinstance(strange_tube_result, (list, tuple))
-                    and len(strange_tube_result) >= 4
+                        isinstance(strange_tube_result, (list, tuple))
+                        and len(strange_tube_result) >= 4
                 ):
                     calc_results["'丁字'交叉沿水平隔板槽连续侧的排管根数"] = str(
                         strange_tube_result[1]
@@ -12929,32 +12927,32 @@ class TubeLayoutEditor(QMainWindow):
                             # 检查是否属于第一排
                             in_line1 = False
                             if hasattr(self, "print_cross_x_up_line1") and hasattr(
-                                self, "print_cross_x_down_line1"
+                                    self, "print_cross_x_down_line1"
                             ):
                                 for item in (
-                                    self.print_cross_x_up_line1
-                                    + self.print_cross_x_down_line1
+                                        self.print_cross_x_up_line1
+                                        + self.print_cross_x_down_line1
                                 ):
                                     if (
-                                        len(item) >= 3
-                                        and (item[1], item[2]) == coord1
-                                        or (item[1], item[2]) == coord2
+                                            len(item) >= 3
+                                            and (item[1], item[2]) == coord1
+                                            or (item[1], item[2]) == coord2
                                     ):
                                         in_line1 = True
                                         break
                             if (
-                                not in_line1
-                                and hasattr(self, "print_cross_y_left_line1")
-                                and hasattr(self, "print_cross_y_right_line1")
+                                    not in_line1
+                                    and hasattr(self, "print_cross_y_left_line1")
+                                    and hasattr(self, "print_cross_y_right_line1")
                             ):
                                 for item in (
-                                    self.print_cross_y_left_line1
-                                    + self.print_cross_y_right_line1
+                                        self.print_cross_y_left_line1
+                                        + self.print_cross_y_right_line1
                                 ):
                                     if (
-                                        len(item) >= 3
-                                        and (item[1], item[2]) == coord1
-                                        or (item[1], item[2]) == coord2
+                                            len(item) >= 3
+                                            and (item[1], item[2]) == coord1
+                                            or (item[1], item[2]) == coord2
                                     ):
                                         in_line1 = True
                                         break
@@ -12963,32 +12961,32 @@ class TubeLayoutEditor(QMainWindow):
                             in_line2 = False
                             if not in_line1:
                                 if hasattr(self, "print_cross_x_up_line2") and hasattr(
-                                    self, "print_cross_x_down_line2"
+                                        self, "print_cross_x_down_line2"
                                 ):
                                     for item in (
-                                        self.print_cross_x_up_line2
-                                        + self.print_cross_x_down_line2
+                                            self.print_cross_x_up_line2
+                                            + self.print_cross_x_down_line2
                                     ):
                                         if (
-                                            len(item) >= 3
-                                            and (item[1], item[2]) == coord1
-                                            or (item[1], item[2]) == coord2
+                                                len(item) >= 3
+                                                and (item[1], item[2]) == coord1
+                                                or (item[1], item[2]) == coord2
                                         ):
                                             in_line2 = True
                                             break
                                 if (
-                                    not in_line2
-                                    and hasattr(self, "print_cross_y_left_line2")
-                                    and hasattr(self, "print_cross_y_right_line2")
+                                        not in_line2
+                                        and hasattr(self, "print_cross_y_left_line2")
+                                        and hasattr(self, "print_cross_y_right_line2")
                                 ):
                                     for item in (
-                                        self.print_cross_y_left_line2
-                                        + self.print_cross_y_right_line2
+                                            self.print_cross_y_left_line2
+                                            + self.print_cross_y_right_line2
                                     ):
                                         if (
-                                            len(item) >= 3
-                                            and (item[1], item[2]) == coord1
-                                            or (item[1], item[2]) == coord2
+                                                len(item) >= 3
+                                                and (item[1], item[2]) == coord1
+                                                or (item[1], item[2]) == coord2
                                         ):
                                             in_line2 = True
                                             break
@@ -12997,32 +12995,32 @@ class TubeLayoutEditor(QMainWindow):
                             in_line3 = False
                             if not in_line1 and not in_line2:
                                 if hasattr(self, "print_cross_x_up_line3") and hasattr(
-                                    self, "print_cross_x_down_line3"
+                                        self, "print_cross_x_down_line3"
                                 ):
                                     for item in (
-                                        self.print_cross_x_up_line3
-                                        + self.print_cross_x_down_line3
+                                            self.print_cross_x_up_line3
+                                            + self.print_cross_x_down_line3
                                     ):
                                         if (
-                                            len(item) >= 3
-                                            and (item[1], item[2]) == coord1
-                                            or (item[1], item[2]) == coord2
+                                                len(item) >= 3
+                                                and (item[1], item[2]) == coord1
+                                                or (item[1], item[2]) == coord2
                                         ):
                                             in_line3 = True
                                             break
                                 if (
-                                    not in_line3
-                                    and hasattr(self, "print_cross_y_left_line3")
-                                    and hasattr(self, "print_cross_y_right_line3")
+                                        not in_line3
+                                        and hasattr(self, "print_cross_y_left_line3")
+                                        and hasattr(self, "print_cross_y_right_line3")
                                 ):
                                     for item in (
-                                        self.print_cross_y_left_line3
-                                        + self.print_cross_y_right_line3
+                                            self.print_cross_y_left_line3
+                                            + self.print_cross_y_right_line3
                                     ):
                                         if (
-                                            len(item) >= 3
-                                            and (item[1], item[2]) == coord1
-                                            or (item[1], item[2]) == coord2
+                                                len(item) >= 3
+                                                and (item[1], item[2]) == coord1
+                                                or (item[1], item[2]) == coord2
                                         ):
                                             in_line3 = True
                                             break
@@ -13460,8 +13458,8 @@ class TubeLayoutEditor(QMainWindow):
 
         # If there's no radial hole data, just return the delete SQL
         if (
-            not isinstance(getattr(self, "radial_hole_dict", None), dict)
-            or not self.radial_hole_dict
+                not isinstance(getattr(self, "radial_hole_dict", None), dict)
+                or not self.radial_hole_dict
         ):
             return [delete_sql]
 
@@ -13725,8 +13723,8 @@ class TubeLayoutEditor(QMainWindow):
                 tube_data = []
                 component_data = []
                 if (
-                    hasattr(self, "axial_design_page")
-                    and self.axial_design_page is not None
+                        hasattr(self, "axial_design_page")
+                        and self.axial_design_page is not None
                 ):
                     try:
                         tube_data = self.axial_design_page.get_tube_params_data()
@@ -13840,7 +13838,7 @@ class TubeLayoutEditor(QMainWindow):
             return
 
         if not hasattr(self, "current_centers") or not isinstance(
-            self.current_centers, (list, set, tuple)
+                self.current_centers, (list, set, tuple)
         ):
             self.min_distance_col = 0
             return
@@ -13870,7 +13868,7 @@ class TubeLayoutEditor(QMainWindow):
         product_id = self.productID  # 固定产品ID
 
         if not hasattr(self, "current_centers") or not isinstance(
-            self.current_centers, (list, set, tuple)
+                self.current_centers, (list, set, tuple)
         ):
             # QMessageBox.warning(self, "警告", "缺少有效布管坐标数据（self.current_centers异常）！")
             return None
@@ -14046,7 +14044,7 @@ class TubeLayoutEditor(QMainWindow):
                         continue
                     # 如果是数字0或字符串'0'，则跳过（保持原有 R）
                     if raw_val == 0 or (
-                        isinstance(raw_val, str) and raw_val.strip() in ("0", "0.0")
+                            isinstance(raw_val, str) and raw_val.strip() in ("0", "0.0")
                     ):
                         continue
 
@@ -14070,14 +14068,14 @@ class TubeLayoutEditor(QMainWindow):
                         try:
                             # 格式 A: 两个点，每个点是长度为2的 list/tuple
                             if len(parsed) == 2 and all(
-                                isinstance(p, (list, tuple)) and len(p) == 2
-                                for p in parsed
+                                    isinstance(p, (list, tuple)) and len(p) == 2
+                                    for p in parsed
                             ):
                                 x1, y1 = map(float, parsed[0])
                                 x2, y2 = map(float, parsed[1])
                             # 格式 B: 平展四个数 [x1,y1,x2,y2]
                             elif len(parsed) == 4 and all(
-                                isinstance(n, (int, float, str)) for n in parsed
+                                    isinstance(n, (int, float, str)) for n in parsed
                             ):
                                 x1, y1, x2, y2 = map(float, parsed)
                             else:
@@ -14184,11 +14182,11 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 从管板形式页面获取当前所有管板参数（包括管板类型）
                 if hasattr(self, "sheet_form_page") and hasattr(
-                    self.sheet_form_page, "get_current_tube_form_data"
+                        self.sheet_form_page, "get_current_tube_form_data"
                 ):
                     try:
                         full_params = (
-                            self.sheet_form_page.get_current_tube_form_data() or []
+                                self.sheet_form_page.get_current_tube_form_data() or []
                         )
                     except Exception as e:
                         print(f"[My_Piping] 获取当前管板形式参数时出错: {e}")
@@ -14411,7 +14409,7 @@ class TubeLayoutEditor(QMainWindow):
 
                         # 图片：根据current_tube_partition匹配对应文件
                         if current_tube_partition and os.path.exists(
-                            tube_pattern_base_path
+                                tube_pattern_base_path
                         ):
                             image_file_map = {
                                 "2.1": "2.1.png",
@@ -14470,9 +14468,9 @@ class TubeLayoutEditor(QMainWindow):
                 }
                 # 仅管程分程形式添加图片（确保图片非空）
                 if (
-                    param_name == "管程分程形式"
-                    and param_image
-                    and not param_image.isNull()
+                        param_name == "管程分程形式"
+                        and param_image
+                        and not param_image.isNull()
                 ):
                     param_data["image"] = param_image
 
@@ -14528,6 +14526,7 @@ class TubeLayoutEditor(QMainWindow):
         # 最终强制覆盖缓存的列宽（这一步才能“打掉初始异常列宽”）
         for i in range(col_count):
             header.resizeSection(i, widths[i])
+
     # TODO 表格列宽自动拉伸
     def resizeEvent(self, event):
         """窗口大小变化时的自适应调整"""
@@ -14569,9 +14568,9 @@ class TubeLayoutEditor(QMainWindow):
 
         # 非全屏状态下，窗口尺寸变化后自动按比例调整参数表列宽
         if (
-            hasattr(self, "param_table")
-            and hasattr(self, "is_fullscreen")
-            and not self.is_fullscreen
+                hasattr(self, "param_table")
+                and hasattr(self, "is_fullscreen")
+                and not self.is_fullscreen
         ):
             from PyQt5.QtWidgets import QApplication
 
@@ -14580,9 +14579,9 @@ class TubeLayoutEditor(QMainWindow):
 
         # 根据窗口状态（是否最大化 / 全屏）动态调整工具栏按钮布局
         if (
-            hasattr(self, "toolbar_layout")
-            and hasattr(self, "toolbar_row1_layout")
-            and hasattr(self, "toolbar_row2_layout")
+                hasattr(self, "toolbar_layout")
+                and hasattr(self, "toolbar_row1_layout")
+                and hasattr(self, "toolbar_row2_layout")
         ):
             self.update_toolbar_layout_mode()
 
@@ -14789,12 +14788,12 @@ class TubeLayoutEditor(QMainWindow):
                             self.connection_lines.append(line)
 
     def draw_layout(
-        self,
-        big_D_wai,
-        Di,
-        big_D_nei: float,
-        small_D: float,
-        centers: List[Tuple[float, float]],
+            self,
+            big_D_wai,
+            Di,
+            big_D_nei: float,
+            small_D: float,
+            centers: List[Tuple[float, float]],
     ):
         #     """
         #     在 self.graphics_scene 上：
@@ -15010,7 +15009,7 @@ class TubeLayoutEditor(QMainWindow):
             R = circle_diameter / 2.0
 
             def draw_vertical_chord(
-                x_level: float, color: QColor, tag: str, line_width=3
+                    x_level: float, color: QColor, tag: str, line_width=3
             ):
                 if x_level is None:
                     return
@@ -15072,7 +15071,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 验证必要参数是否存在
         if not all(
-            [cut_direction, cut_rate is not None, shell_inner_diameter is not None]
+                [cut_direction, cut_rate is not None, shell_inner_diameter is not None]
         ):
             # QMessageBox.warning(self, "参数缺失", "请确保折流板相关参数已正确设置")
             return
@@ -15103,7 +15102,7 @@ class TubeLayoutEditor(QMainWindow):
             if cut_direction == "水平上下":
                 # 计算弦长的一半 - 保持您的原有计算公式
                 chord_half_length = math.sqrt(
-                    (shell_radius / 2) ** 2 - distance_from_center**2
+                    (shell_radius / 2) ** 2 - distance_from_center ** 2
                 )
 
                 # 上侧线段（y=distance_from_center）并存储信息
@@ -15154,7 +15153,7 @@ class TubeLayoutEditor(QMainWindow):
             elif cut_direction == "垂直左右":
 
                 chord_half_length = math.sqrt(
-                    (shell_radius / 2) ** 2 - distance_from_center**2
+                    (shell_radius / 2) ** 2 - distance_from_center ** 2
                 )
 
                 # 右侧线段（x=distance_from_center）并存储信息
@@ -15486,7 +15485,7 @@ class TubeLayoutEditor(QMainWindow):
             self.impingement_plate_dic = {}
             self._impingement_plate_auto_id = 0
             if hasattr(self, "radial_hole_dict") and isinstance(
-                self.radial_hole_dict, dict
+                    self.radial_hole_dict, dict
             ):
                 for v in self.radial_hole_dict.values():
                     try:
@@ -15517,12 +15516,12 @@ class TubeLayoutEditor(QMainWindow):
                 print(f"[on_buguan_bt_click] 重新连接信号时出错: {e}")
 
     def find_nearest_circle_index(
-        self,
-        sorted_centers_up: List[List[Tuple[float, float]]],
-        sorted_centers_down: List[List[Tuple[float, float]]],
-        mouse_x: float,
-        mouse_y: float,
-        r: float,
+            self,
+            sorted_centers_up: List[List[Tuple[float, float]]],
+            sorted_centers_down: List[List[Tuple[float, float]]],
+            mouse_x: float,
+            mouse_y: float,
+            r: float,
     ) -> Tuple[int, int]:
         """
         从上下两组圆心坐标中查找距离 (mouse_x, mouse_y) 最近的圆心，
@@ -15556,7 +15555,7 @@ class TubeLayoutEditor(QMainWindow):
         return None
 
     def group_centers_by_y(
-        self, centers: List[Tuple[float, float]], tol: float = 1e-3
+            self, centers: List[Tuple[float, float]], tol: float = 1e-3
     ) -> Tuple[List[List[Tuple[float, float]]], List[List[Tuple[float, float]]]]:
         """
         将 centers 分别按 y>0 和 y<0 分组，y 相近（在 tol 范围内）视为同一组，并对每组按 x 坐标升序排列。
@@ -15577,7 +15576,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 如果存在满布状态数据，获取其行键
         if hasattr(self, "full_sorted_current_centers_up") and hasattr(
-            self, "full_sorted_current_centers_down"
+                self, "full_sorted_current_centers_down"
         ):
             # 获取满布状态的行键
             for row in self.full_sorted_current_centers_up:
@@ -15638,8 +15637,8 @@ class TubeLayoutEditor(QMainWindow):
                 # 3. 确保剩余行是偶数且正负对称
                 #    从第二行开始，只保留成对的行
                 max_paired_rows = min(len(pos_grouped) - 1, len(neg_grouped) - 1)
-                pos_grouped = [pos_grouped[0]] + pos_grouped[1 : 1 + max_paired_rows]
-                neg_grouped = [neg_grouped[0]] + neg_grouped[1 : 1 + max_paired_rows]
+                pos_grouped = [pos_grouped[0]] + pos_grouped[1: 1 + max_paired_rows]
+                neg_grouped = [neg_grouped[0]] + neg_grouped[1: 1 + max_paired_rows]
 
         return pos_grouped, neg_grouped
 
@@ -15647,7 +15646,7 @@ class TubeLayoutEditor(QMainWindow):
         global edge_centers
 
         if not hasattr(self, "sorted_current_centers_up") or not hasattr(
-            self, "sorted_current_centers_down"
+                self, "sorted_current_centers_down"
         ):
             self.sorted_current_centers_up, self.sorted_current_centers_down = (
                 self.group_centers_by_y(getattr(self, "current_centers", []))
@@ -15685,7 +15684,7 @@ class TubeLayoutEditor(QMainWindow):
         return edge_centers
 
     def group_centers_by_x(
-        self, centers: List[Tuple[float, float]], tol: float = 1e-3
+            self, centers: List[Tuple[float, float]], tol: float = 1e-3
     ) -> Tuple[List[List[Tuple[float, float]]], List[List[Tuple[float, float]]]]:
         """
         按照 x 坐标将圆心分组为列，并分为左侧（x<0）和右侧（x>=0）
@@ -15710,7 +15709,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 如果存在满布状态数据，获取其列键
         if hasattr(self, "full_sorted_current_centers_left") and hasattr(
-            self, "full_sorted_current_centers_right"
+                self, "full_sorted_current_centers_right"
         ):
             # 获取满布状态的列键（左侧）
             for col in self.full_sorted_current_centers_left:
@@ -15781,8 +15780,8 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 2) 只保留中间列 + 成对的列，保持对称
                 max_paired_cols = min(len(right_grouped) - 1, len(left_grouped) - 1)
-                right_grouped = [right_grouped[0]] + right_grouped[1 : 1 + max_paired_cols]
-                left_grouped = [left_grouped[0]] + left_grouped[1 : 1 + max_paired_cols]
+                right_grouped = [right_grouped[0]] + right_grouped[1: 1 + max_paired_cols]
+                left_grouped = [left_grouped[0]] + left_grouped[1: 1 + max_paired_cols]
 
         return left_grouped, right_grouped
 
@@ -15847,8 +15846,8 @@ class TubeLayoutEditor(QMainWindow):
                 click_point = QPointF(x_center, y_center)
                 for item in self.graphics_scene.items(click_point):
                     if (
-                        isinstance(item, QGraphicsEllipseItem)
-                        and item.data(0) == "marker"
+                            isinstance(item, QGraphicsEllipseItem)
+                            and item.data(0) == "marker"
                     ):
                         self.graphics_scene.removeItem(item)
                         break
@@ -15878,7 +15877,7 @@ class TubeLayoutEditor(QMainWindow):
         )
         """响应右侧表格选中事件，高亮对应小圆和表格整行，并同步更新 self.selected_centers"""
         if not hasattr(self, "full_sorted_current_centers_up") or not hasattr(
-            self, "full_sorted_current_centers_down"
+                self, "full_sorted_current_centers_down"
         ):
             return
 
@@ -15968,7 +15967,7 @@ class TubeLayoutEditor(QMainWindow):
             )
             message = f"您当前选中的换热管孔的数量为{count}个"
             print(message)
-   
+
     # TODO 整列选中函数
     def on_col_selection_changed(self):
         """整列选中：按列高亮并选中对应的左右列圆心"""
@@ -15981,13 +15980,13 @@ class TubeLayoutEditor(QMainWindow):
         )
 
         if not hasattr(self, "full_sorted_current_centers_left") or not hasattr(
-            self, "full_sorted_current_centers_right"
+                self, "full_sorted_current_centers_right"
         ):
             return
 
         # 特殊布局：只保留中间列的一侧（右侧）有值
         is_special_layout = hasattr(self, "tube_pass_form_value") and (
-            self.tube_pass_form_value in ["1.1", "2.1", "4.1", "4.3", "6.1"]
+                self.tube_pass_form_value in ["1.1", "2.1", "4.1", "4.3", "6.1"]
         )
 
         # 清除旧高亮
@@ -16120,8 +16119,8 @@ class TubeLayoutEditor(QMainWindow):
                 # 只删除标记项，保留原始圆
                 for item in self.graphics_scene.items(click_point):
                     if (
-                        isinstance(item, QGraphicsEllipseItem)
-                        and item.data(0) == "marker"
+                            isinstance(item, QGraphicsEllipseItem)
+                            and item.data(0) == "marker"
                     ):
                         self.graphics_scene.removeItem(item)
                         break
@@ -16178,8 +16177,8 @@ class TubeLayoutEditor(QMainWindow):
                     for item in self.graphics_scene.items():
                         # 使用类型名检查，避免 ClickableCircleItem 在不同导入路径下类标识不一致
                         if (
-                            hasattr(item, "__class__")
-                            and item.__class__.__name__ == "ClickableCircleItem"
+                                hasattr(item, "__class__")
+                                and item.__class__.__name__ == "ClickableCircleItem"
                         ):
                             if hasattr(item, "is_selected"):
                                 item.is_selected = False
@@ -16213,8 +16212,8 @@ class TubeLayoutEditor(QMainWindow):
                 target_color = QColor(173, 216, 230)
                 for it in list(self.graphics_scene.items()):
                     if (
-                        isinstance(it, QGraphicsEllipseItem)
-                        and it.brush().color() == target_color
+                            isinstance(it, QGraphicsEllipseItem)
+                            and it.brush().color() == target_color
                     ):
                         # 若是 marker，直接删除
                         if it.data(0) == "marker":
@@ -16356,7 +16355,7 @@ class TubeLayoutEditor(QMainWindow):
             # 收集所有点的X坐标信息
             all_points = []
             for row in (
-                self.sorted_current_centers_up + self.sorted_current_centers_down
+                    self.sorted_current_centers_up + self.sorted_current_centers_down
             ):
                 all_points.extend(row)
 
@@ -16427,8 +16426,8 @@ class TubeLayoutEditor(QMainWindow):
 
     def find_full_closest_to_axes(self):
         if (
-            self.full_sorted_current_centers_up
-            and self.full_sorted_current_centers_down
+                self.full_sorted_current_centers_up
+                and self.full_sorted_current_centers_down
         ):
 
             self.full_print_cross_x_up_line1 = []
@@ -16486,8 +16485,8 @@ class TubeLayoutEditor(QMainWindow):
             # 收集所有点的X坐标信息
             all_points = []
             for row in (
-                self.full_sorted_current_centers_up
-                + self.full_sorted_current_centers_down
+                    self.full_sorted_current_centers_up
+                    + self.full_sorted_current_centers_down
             ):
                 all_points.extend(row)
 
@@ -16640,7 +16639,7 @@ class TubeLayoutEditor(QMainWindow):
 
     # 获取选中的两个换热管的编号，x轴上下编号
     def get_selected_x_center_numbers(
-        self, selected_centers, print_cross_x_up, print_cross_x_down, row
+            self, selected_centers, print_cross_x_up, print_cross_x_down, row
     ):
         # 初始化返回的编号
         if row == 1:
@@ -16720,7 +16719,7 @@ class TubeLayoutEditor(QMainWindow):
             return {"up_number": up_number, "down_number": down_number}
 
     def get_selected_x_4_center_numbers(
-        self, selected_centers, print_cross_x_up, print_cross_x_down
+            self, selected_centers, print_cross_x_up, print_cross_x_down
     ):
 
         up_numbers = []
@@ -16749,7 +16748,7 @@ class TubeLayoutEditor(QMainWindow):
         return {"up_numbers": up_numbers, "down_numbers": down_numbers}
 
     def get_selected_y_4_center_numbers(
-        self, selected_centers, print_cross_y_left, print_cross_y_right
+            self, selected_centers, print_cross_y_left, print_cross_y_right
     ):
 
         up_numbers = []
@@ -17140,7 +17139,7 @@ class TubeLayoutEditor(QMainWindow):
         return pair_y_info_left, pair_y_info_right
 
     def cross_x_2_pipes(
-        self, selected_centers, print_cross_x_up, print_cross_x_down, row
+            self, selected_centers, print_cross_x_up, print_cross_x_down, row
     ):
         # 获取选择的中心点编号
         result = self.get_selected_x_center_numbers(
@@ -17223,15 +17222,15 @@ class TubeLayoutEditor(QMainWindow):
                     """检查坐标是否在列表中（考虑浮点数误差）"""
                     for excluded_coord in coord_list:
                         if (
-                            abs(coord[0] - excluded_coord[0]) < tolerance
-                            and abs(coord[1] - excluded_coord[1]) < tolerance
+                                abs(coord[0] - excluded_coord[0]) < tolerance
+                                and abs(coord[1] - excluded_coord[1]) < tolerance
                         ):
                             return True
                     return False
 
                 # 如果两个坐标中至少有一个在排除列表中，跳过这一对
                 if is_coord_in_list(up_absolute, excluded_coords) or is_coord_in_list(
-                    down_absolute, excluded_coords
+                        down_absolute, excluded_coords
                 ):
                     print(
                         f"跳过坐标对: {[up_selected, down_selected]}，因为其中一个坐标在排除列表中"
@@ -17276,7 +17275,7 @@ class TubeLayoutEditor(QMainWindow):
                 self.delete_huanreguan(del_centers)
 
     def cross_y_2_pipes(
-        self, current_coords, print_cross_y_left, print_cross_y_right, row
+            self, current_coords, print_cross_y_left, print_cross_y_right, row
     ):
         # 获取选择的中心点编号（实际坐标传入，参数名从selected_centers改为current_coords，匹配需求）
         global valid_distance
@@ -17393,15 +17392,15 @@ class TubeLayoutEditor(QMainWindow):
                     """检查坐标是否在列表中（考虑浮点数误差）"""
                     for excluded_coord in coord_list:
                         if (
-                            abs(coord[0] - excluded_coord[0]) < tolerance
-                            and abs(coord[1] - excluded_coord[1]) < tolerance
+                                abs(coord[0] - excluded_coord[0]) < tolerance
+                                and abs(coord[1] - excluded_coord[1]) < tolerance
                         ):
                             return True
                     return False
 
                 # 如果两个坐标中至少有一个在排除列表中，跳过这一对
                 if is_coord_in_list(left_absolute, excluded_coords) or is_coord_in_list(
-                    right_absolute, excluded_coords
+                        right_absolute, excluded_coords
                 ):
                     print(
                         f"跳过坐标对: {[left_selected, right_selected]}，因为其中一个坐标在排除列表中"
@@ -17526,15 +17525,15 @@ class TubeLayoutEditor(QMainWindow):
                             """检查坐标是否在列表中（考虑浮点数误差）"""
                             for excluded_coord in coord_list:
                                 if (
-                                    abs(coord[0] - excluded_coord[0]) < tolerance
-                                    and abs(coord[1] - excluded_coord[1]) < tolerance
+                                        abs(coord[0] - excluded_coord[0]) < tolerance
+                                        and abs(coord[1] - excluded_coord[1]) < tolerance
                                 ):
                                     return True
                             return False
 
                         # 如果两个坐标中至少有一个在排除列表中，跳过这一对
                         if is_coord_in_list(
-                            up_absolute, excluded_coords
+                                up_absolute, excluded_coords
                         ) or is_coord_in_list(down_absolute, excluded_coords):
                             print(
                                 f"跳过坐标对: {[up_selected, down_selected]}，因为其中一个坐标在排除列表中"
@@ -17658,16 +17657,16 @@ class TubeLayoutEditor(QMainWindow):
         def is_cross_gap_4(x1, x2):
             # 4管程：判断是否跨越单一间隔 [gap_left_4, gap_right_4]
             return (x1 <= gap_left_4 and x2 >= gap_right_4) or (
-                x1 >= gap_right_4 and x2 <= gap_left_4
+                    x1 >= gap_right_4 and x2 <= gap_left_4
             )
 
         def is_cross_gap_6(x1, x2):
             # 6管程：判断是否跨越两个间隔 [actual_gap_line1, actual_gap_line2] 或 [actual_gap_line3, actual_gap_line4]
             cross_gap1 = (x1 < actual_gap_line1 and x2 > actual_gap_line2) or (
-                x1 > actual_gap_line2 and x2 < actual_gap_line1
+                    x1 > actual_gap_line2 and x2 < actual_gap_line1
             )
             cross_gap2 = (x1 < actual_gap_line3 and x2 > actual_gap_line4) or (
-                x1 > actual_gap_line4 and x2 < actual_gap_line3
+                    x1 > actual_gap_line4 and x2 < actual_gap_line3
             )
             return cross_gap1 or cross_gap2
 
@@ -17823,7 +17822,7 @@ class TubeLayoutEditor(QMainWindow):
                 for i, (left_selected, right_selected) in enumerate(coordinate_pairs):
                     distance = self.calculate_distance([left_selected, right_selected])
                     if int(distance) == valid_distance and i < len(
-                        absolute_coord_pairs
+                            absolute_coord_pairs
                     ):
                         filtered_abs_coords.append(absolute_coord_pairs[i])
 
@@ -18075,86 +18074,86 @@ class TubeLayoutEditor(QMainWindow):
                 if current_coords:
                     # 判断两个坐标是否分别属于指定的线（顺序不限）
                     coord1_in_up = (
-                        current_coords[0] in self.original_print_cross_x_up_line1
+                            current_coords[0] in self.original_print_cross_x_up_line1
                     )
                     coord1_in_down = (
-                        current_coords[0] in self.original_print_cross_x_down_line1
+                            current_coords[0] in self.original_print_cross_x_down_line1
                     )
                     coord2_in_up = (
-                        current_coords[1] in self.original_print_cross_x_up_line1
+                            current_coords[1] in self.original_print_cross_x_up_line1
                     )
                     coord2_in_down = (
-                        current_coords[1] in self.original_print_cross_x_down_line1
+                            current_coords[1] in self.original_print_cross_x_down_line1
                     )
 
                     coord3_in_left = (
-                        current_coords[0] in self.original_print_cross_y_left_line1
+                            current_coords[0] in self.original_print_cross_y_left_line1
                     )
                     coord3_in_right = (
-                        current_coords[0] in self.original_print_cross_y_right_line1
+                            current_coords[0] in self.original_print_cross_y_right_line1
                     )
                     coord4_in_left = (
-                        current_coords[1] in self.original_print_cross_y_left_line1
+                            current_coords[1] in self.original_print_cross_y_left_line1
                     )
                     coord4_in_right = (
-                        current_coords[1] in self.original_print_cross_y_right_line1
+                            current_coords[1] in self.original_print_cross_y_right_line1
                     )
 
                     coord5_in_up = (
-                        current_coords[0] in self.original_print_cross_x_up_line2
+                            current_coords[0] in self.original_print_cross_x_up_line2
                     )
                     coord5_in_down = (
-                        current_coords[0] in self.original_print_cross_x_down_line2
+                            current_coords[0] in self.original_print_cross_x_down_line2
                     )
                     coord6_in_up = (
-                        current_coords[1] in self.original_print_cross_x_up_line2
+                            current_coords[1] in self.original_print_cross_x_up_line2
                     )
                     coord6_in_down = (
-                        current_coords[1] in self.original_print_cross_x_down_line2
+                            current_coords[1] in self.original_print_cross_x_down_line2
                     )
 
                     coord7_in_left = (
-                        current_coords[0] in self.original_print_cross_y_left_line2
+                            current_coords[0] in self.original_print_cross_y_left_line2
                     )
                     coord7_in_right = (
-                        current_coords[0] in self.original_print_cross_y_right_line2
+                            current_coords[0] in self.original_print_cross_y_right_line2
                     )
                     coord8_in_left = (
-                        current_coords[1] in self.original_print_cross_y_left_line2
+                            current_coords[1] in self.original_print_cross_y_left_line2
                     )
                     coord8_in_right = (
-                        current_coords[1] in self.original_print_cross_y_right_line2
+                            current_coords[1] in self.original_print_cross_y_right_line2
                     )
 
                     coord9_in_up = (
-                        current_coords[0] in self.original_print_cross_x_up_line3
+                            current_coords[0] in self.original_print_cross_x_up_line3
                     )
                     coord9_in_down = (
-                        current_coords[0] in self.original_print_cross_x_down_line3
+                            current_coords[0] in self.original_print_cross_x_down_line3
                     )
                     coord10_in_up = (
-                        current_coords[1] in self.original_print_cross_x_up_line3
+                            current_coords[1] in self.original_print_cross_x_up_line3
                     )
                     coord10_in_down = (
-                        current_coords[1] in self.original_print_cross_x_down_line3
+                            current_coords[1] in self.original_print_cross_x_down_line3
                     )
 
                     coord11_in_left = (
-                        current_coords[0] in self.original_print_cross_y_left_line3
+                            current_coords[0] in self.original_print_cross_y_left_line3
                     )
                     coord11_in_right = (
-                        current_coords[0] in self.original_print_cross_y_right_line3
+                            current_coords[0] in self.original_print_cross_y_right_line3
                     )
                     coord12_in_left = (
-                        current_coords[1] in self.original_print_cross_y_left_line3
+                            current_coords[1] in self.original_print_cross_y_left_line3
                     )
                     coord12_in_right = (
-                        current_coords[1] in self.original_print_cross_y_right_line3
+                            current_coords[1] in self.original_print_cross_y_right_line3
                     )
 
                     # x轴第一排
                     if (coord1_in_up and coord2_in_down) or (
-                        coord1_in_down and coord2_in_up
+                            coord1_in_down and coord2_in_up
                     ):
                         if self.is_x_line1:
                             QMessageBox.warning(
@@ -18171,14 +18170,14 @@ class TubeLayoutEditor(QMainWindow):
                         self.coord_x_line1_2 = current_coords
                         # 存储绝对坐标对
                         if (
-                            hasattr(self, "_current_abs_coords")
-                            and self._current_abs_coords
+                                hasattr(self, "_current_abs_coords")
+                                and self._current_abs_coords
                         ):
                             self.abs_coords_line1 = self._current_abs_coords.copy()
                         self.is_x_line1 = True
                     # y轴第一排
                     elif (coord3_in_left and coord4_in_right) or (
-                        coord3_in_right and coord4_in_left
+                            coord3_in_right and coord4_in_left
                     ):
                         if self.is_y_line1:
                             QMessageBox.warning(
@@ -18195,14 +18194,14 @@ class TubeLayoutEditor(QMainWindow):
                         self.coord_y_line1_2 = current_coords
                         # 存储绝对坐标对
                         if (
-                            hasattr(self, "_current_abs_coords")
-                            and self._current_abs_coords
+                                hasattr(self, "_current_abs_coords")
+                                and self._current_abs_coords
                         ):
                             self.abs_coords_line1 = self._current_abs_coords.copy()
                         self.is_y_line1 = True
                     # x轴第二排
                     elif (coord5_in_up and coord6_in_down) or (
-                        coord5_in_down and coord6_in_up
+                            coord5_in_down and coord6_in_up
                     ):
                         if self.is_x_line2:
                             QMessageBox.warning(
@@ -18220,8 +18219,8 @@ class TubeLayoutEditor(QMainWindow):
                             self.coord_x_line2_2 = current_coords
                             # 存储绝对坐标对
                             if (
-                                hasattr(self, "_current_abs_coords")
-                                and self._current_abs_coords
+                                    hasattr(self, "_current_abs_coords")
+                                    and self._current_abs_coords
                             ):
                                 self.abs_coords_line2 = self._current_abs_coords.copy()
                             self.is_x_line2 = True
@@ -18233,7 +18232,7 @@ class TubeLayoutEditor(QMainWindow):
                             self.selected_centers = []
                     # y轴第二排
                     elif (coord7_in_left and coord8_in_right) or (
-                        coord7_in_right and coord8_in_left
+                            coord7_in_right and coord8_in_left
                     ):
                         if self.is_y_line2:
                             QMessageBox.warning(
@@ -18251,8 +18250,8 @@ class TubeLayoutEditor(QMainWindow):
                             self.coord_y_line2_2 = current_coords
                             # 存储绝对坐标对
                             if (
-                                hasattr(self, "_current_abs_coords")
-                                and self._current_abs_coords
+                                    hasattr(self, "_current_abs_coords")
+                                    and self._current_abs_coords
                             ):
                                 self.abs_coords_line2 = self._current_abs_coords.copy()
                             self.is_y_line2 = True
@@ -18264,7 +18263,7 @@ class TubeLayoutEditor(QMainWindow):
                             self.selected_centers = []
                     # x轴第三排
                     elif (coord9_in_up and coord10_in_down) or (
-                        coord9_in_down and coord10_in_up
+                            coord9_in_down and coord10_in_up
                     ):
                         if self.is_x_line3:
                             QMessageBox.warning(
@@ -18282,8 +18281,8 @@ class TubeLayoutEditor(QMainWindow):
                             self.coord_x_line3_2 = current_coords
                             # 存储绝对坐标对
                             if (
-                                hasattr(self, "_current_abs_coords")
-                                and self._current_abs_coords
+                                    hasattr(self, "_current_abs_coords")
+                                    and self._current_abs_coords
                             ):
                                 self.abs_coords_line3 = self._current_abs_coords.copy()
                             self.is_x_line3 = True
@@ -18295,7 +18294,7 @@ class TubeLayoutEditor(QMainWindow):
                             self.selected_centers = []
                     # y轴第三排
                     elif (coord11_in_left and coord12_in_right) or (
-                        coord11_in_right and coord12_in_left
+                            coord11_in_right and coord12_in_left
                     ):
                         if self.is_y_line3:
                             QMessageBox.warning(
@@ -18314,8 +18313,8 @@ class TubeLayoutEditor(QMainWindow):
                             self.coord_y_line3_2 = current_coords
                             # 存储绝对坐标对
                             if (
-                                hasattr(self, "_current_abs_coords")
-                                and self._current_abs_coords
+                                    hasattr(self, "_current_abs_coords")
+                                    and self._current_abs_coords
                             ):
                                 self.abs_coords_line3 = self._current_abs_coords.copy()
                         else:
@@ -18412,8 +18411,8 @@ class TubeLayoutEditor(QMainWindow):
                     self.coord_x_line1_4 = self.extract_key_pair(current_coords)
                     # 存储绝对坐标对
                     if (
-                        hasattr(self, "_current_abs_coords")
-                        and self._current_abs_coords
+                            hasattr(self, "_current_abs_coords")
+                            and self._current_abs_coords
                     ):
                         self.abs_coords_line1 = self._current_abs_coords.copy()
                     self.is_x_line1 = True
@@ -18431,8 +18430,8 @@ class TubeLayoutEditor(QMainWindow):
                     self.coord_y_line1_4 = self.extract_key_pair(current_coords)
                     # 存储绝对坐标对
                     if (
-                        hasattr(self, "_current_abs_coords")
-                        and self._current_abs_coords
+                            hasattr(self, "_current_abs_coords")
+                            and self._current_abs_coords
                     ):
                         self.abs_coords_line1 = self._current_abs_coords.copy()
                     self.is_y_line1 = True
@@ -18451,8 +18450,8 @@ class TubeLayoutEditor(QMainWindow):
                         self.coord_x_line2_4 = self.extract_key_pair(current_coords)
                         # 存储绝对坐标对
                         if (
-                            hasattr(self, "_current_abs_coords")
-                            and self._current_abs_coords
+                                hasattr(self, "_current_abs_coords")
+                                and self._current_abs_coords
                         ):
                             self.abs_coords_line2 = self._current_abs_coords.copy()
                         self.is_x_line2 = True
@@ -18477,8 +18476,8 @@ class TubeLayoutEditor(QMainWindow):
                         self.coord_y_line2_4 = self.extract_key_pair(current_coords)
                         # 存储绝对坐标对
                         if (
-                            hasattr(self, "_current_abs_coords")
-                            and self._current_abs_coords
+                                hasattr(self, "_current_abs_coords")
+                                and self._current_abs_coords
                         ):
                             self.abs_coords_line2 = self._current_abs_coords.copy()
                         self.is_y_line2 = True
@@ -18503,8 +18502,8 @@ class TubeLayoutEditor(QMainWindow):
                         self.coord_x_line3_4 = self.extract_key_pair(current_coords)
                         # 存储绝对坐标对
                         if (
-                            hasattr(self, "_current_abs_coords")
-                            and self._current_abs_coords
+                                hasattr(self, "_current_abs_coords")
+                                and self._current_abs_coords
                         ):
                             self.abs_coords_line3 = self._current_abs_coords.copy()
                         self.is_x_line3 = True
@@ -18529,8 +18528,8 @@ class TubeLayoutEditor(QMainWindow):
                         self.coord_y_line3_4 = self.extract_key_pair(current_coords)
                         # 存储绝对坐标对
                         if (
-                            hasattr(self, "_current_abs_coords")
-                            and self._current_abs_coords
+                                hasattr(self, "_current_abs_coords")
+                                and self._current_abs_coords
                         ):
                             self.abs_coords_line3 = self._current_abs_coords.copy()
                         self.is_y_line3 = True
@@ -18580,9 +18579,9 @@ class TubeLayoutEditor(QMainWindow):
         for row in range(self.param_table.rowCount()):
             name_item = self.param_table.item(row, 1)
             if (
-                name_item
-                and "换热管外径" in name_item.text()
-                and "do" in name_item.text()
+                    name_item
+                    and "换热管外径" in name_item.text()
+                    and "do" in name_item.text()
             ):
                 value_widget = self.param_table.cellWidget(row, 2)
                 do_text = (
@@ -19407,8 +19406,8 @@ class TubeLayoutEditor(QMainWindow):
         # 管程=2 时把“分程隔板两侧相邻管中心距（水平）”置 0
         is_tube_pass_two = any(
             (
-                data.get("参数名", "").strip() == "管程程数"
-                and str(data.get("参数值", "")).strip() == "2"
+                    data.get("参数名", "").strip() == "管程程数"
+                    and str(data.get("参数值", "")).strip() == "2"
             )
             for data in tube_data
         )
@@ -19472,7 +19471,7 @@ class TubeLayoutEditor(QMainWindow):
             safe_line_num = escape_str(line_num)
             safe_holes_up = escape_str(holes_up)
             if holes_down is None or (
-                isinstance(holes_down, str) and holes_down.strip() == ""
+                    isinstance(holes_down, str) and holes_down.strip() == ""
             ):
                 safe_holes_down = "NULL"
             else:
@@ -19486,8 +19485,8 @@ class TubeLayoutEditor(QMainWindow):
 
         # 处理“中间挡板宽度”参数，包含单位mm
         if (
-            hasattr(self, "center_dangban_length")
-            and self.center_dangban_length is not None
+                hasattr(self, "center_dangban_length")
+                and self.center_dangban_length is not None
         ):
             param_name = "中间挡板宽度"
             param_value = str(self.center_dangban_length)
@@ -19514,8 +19513,8 @@ class TubeLayoutEditor(QMainWindow):
 
         # 处理“旁路挡板宽度”参数，包含单位mm
         if (
-            hasattr(self, "side_dangban_length")
-            and self.side_dangban_length is not None
+                hasattr(self, "side_dangban_length")
+                and self.side_dangban_length is not None
         ):
             param_name = "旁路挡板宽度"
             param_value = str(self.side_dangban_length)
@@ -19543,12 +19542,12 @@ class TubeLayoutEditor(QMainWindow):
         # 处理“管程分程形式”的图标选择值
         # 在插入/更新前检查是否为空，如果为空则根据规则设置默认值
         if (
-            not hasattr(self, "tube_pass_form_value")
-            or not self.tube_pass_form_value
-            or (
+                not hasattr(self, "tube_pass_form_value")
+                or not self.tube_pass_form_value
+                or (
                 isinstance(self.tube_pass_form_value, str)
                 and self.tube_pass_form_value.strip() == ""
-            )
+        )
         ):
             # 获取管程数
             tube_num = self.get_tube_pass_count()
@@ -20281,7 +20280,7 @@ class TubeLayoutEditor(QMainWindow):
         """更新右侧管数分布表格内容（按列统计）"""
         from PyQt5.QtCore import Qt
         from PyQt5.QtWidgets import QTableWidgetItem
-        
+
         # 按X坐标分组中心
         self.sorted_current_centers_left, self.sorted_current_centers_right = (
             self.group_centers_by_x(self.current_centers)
@@ -20379,12 +20378,12 @@ class TubeLayoutEditor(QMainWindow):
                     # 填充表格数据
                     for row, data in enumerate(tube_num_data):
                         if isinstance(data, dict) and all(
-                            key in data
-                            for key in [
-                                "至水平中心线行号",
-                                "管孔数量（上）",
-                                "管孔数量（下）",
-                            ]
+                                key in data
+                                for key in [
+                                    "至水平中心线行号",
+                                    "管孔数量（上）",
+                                    "管孔数量（下）",
+                                ]
                         ):
                             # 行号
                             line_num = data["至水平中心线行号"]
@@ -20526,7 +20525,8 @@ class TubeLayoutEditor(QMainWindow):
         # 计算row1和row2的y坐标的和的绝对值
         row1_y = row_ys[row1_idx]
         row2_y = row_ys[row2_idx]
-    #TODO 径向开孔功能
+
+    # TODO 径向开孔功能
     def on_radial_holes_click(self):
         self.find_edge_tube()
         actual_selected_centers = self.selected_to_current_coords(self.selected_centers)
@@ -20551,6 +20551,15 @@ class TubeLayoutEditor(QMainWindow):
             QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
             self.clear_selection_highlight()
             return
+        tube_num = self.get_tube_pass_count()
+        if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+            selected_centers = self.judge_linkage_y(self.selected_centers)
+        elif tube_num in ["4", "6"] and self.heat_exchanger in ["AEU", "BEU"]:
+            selected_centers = self.judge_linkage_y(self.selected_centers)
+        else:
+            selected_centers = self.selected_centers
+
+        self.delete_huanreguan(selected_centers)
 
         from PyQt5.QtWidgets import (
             QDialog,
@@ -20647,7 +20656,7 @@ class TubeLayoutEditor(QMainWindow):
         selected_direction = dir_combo.currentText() or "壳程"
 
         if existing_port_code is not None and str(existing_port_code) != str(
-            selected_port
+                selected_port
         ):
             try:
                 if existing_port_code in self.radial_hole_dict:
@@ -20688,7 +20697,7 @@ class TubeLayoutEditor(QMainWindow):
                 "换热管坐标"
             )
             if old_coord_for_selected is not None and not _coord_equal(
-                old_coord_for_selected, current_coord
+                    old_coord_for_selected, current_coord
             ):
                 try:
                     self.remove_radial_hole_graphics(old_coord_for_selected)
@@ -20707,15 +20716,6 @@ class TubeLayoutEditor(QMainWindow):
 
         try:
             self.draw_radial_hole_tangents(current_coord)
-            tube_num=self.get_tube_pass_count()
-            if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
-                selected_centers = self.judge_linkage_y(self.selected_centers)
-            elif tube_num in ["4", "6"] and self.heat_exchanger in ["AEU", "BEU"]:
-                selected_centers = self.judge_linkage_y(self.selected_centers)
-            else:
-                selected_centers = self.selected_centers
-
-            self.delete_huanreguan(selected_centers)
             self.clear_selection_highlight()
         except Exception as e:
             print(f"绘制径向开孔切线出错: {e}")
@@ -20767,15 +20767,15 @@ class TubeLayoutEditor(QMainWindow):
             return
 
         if (
-            not hasattr(self, "r")
-            or not isinstance(self.r, (int, float))
-            or self.r <= 0
+                not hasattr(self, "r")
+                or not isinstance(self.r, (int, float))
+                or self.r <= 0
         ):
             return
         if (
-            not hasattr(self, "R_wai")
-            or not isinstance(self.R_wai, (int, float))
-            or self.R_wai <= 0
+                not hasattr(self, "R_wai")
+                or not isinstance(self.R_wai, (int, float))
+                or self.R_wai <= 0
         ):
             return
 
@@ -20787,7 +20787,7 @@ class TubeLayoutEditor(QMainWindow):
             return
 
         if not isinstance(
-            getattr(self, "_radial_hole_tangent_items_by_coord", None), dict
+                getattr(self, "_radial_hole_tangent_items_by_coord", None), dict
         ):
             self._radial_hole_tangent_items_by_coord = {}
 
@@ -20909,6 +20909,7 @@ class TubeLayoutEditor(QMainWindow):
 
     def show_baffle_info(self):
         """折流板参数编辑弹窗：左侧可编辑参数表，右侧图片展示区。"""
+
         # 切口率（cut_rate）= (折流板半径 - 切口间距) / 壳体内直径 × 100%
         # 切口间距（cut_spacing）= 折流板半径 - (切口率/100) × 壳体内直径
         # 折流板半径 = 折流板外径 / 2
@@ -21017,7 +21018,7 @@ class TubeLayoutEditor(QMainWindow):
             # 若导入失败，仅在控制台输出信息
             print("折流板参数:")
             for cn, real, unit in base_params + (
-                other_params if show_other_params else []
+                    other_params if show_other_params else []
             ):
                 print(f"  {cn}: {get_param_value(real)} {unit}")
             if current_baffle_type == "双弓形":
@@ -21250,7 +21251,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 value_from_table = get_param_value(rn)
                 if (
-                    value_from_table is None or value_from_table == ""
+                        value_from_table is None or value_from_table == ""
                 ) and cn == "折流板切口与中心线间距a":
                     value_text = "123.2"
                 else:
@@ -21425,8 +21426,8 @@ class TubeLayoutEditor(QMainWindow):
                             return
 
                         new_cut_rate = (
-                            (baffle_radius - cut_spacing) / shell_inner_diameter
-                        ) * 100.0
+                                               (baffle_radius - cut_spacing) / shell_inner_diameter
+                                       ) * 100.0
 
                         if not (0 <= new_cut_rate <= 50):
                             set_warning(
@@ -21449,8 +21450,8 @@ class TubeLayoutEditor(QMainWindow):
                         return
 
                     new_cut_rate = (
-                        (baffle_radius - cut_spacing) / shell_inner_diameter
-                    ) * 100.0
+                                           (baffle_radius - cut_spacing) / shell_inner_diameter
+                                   ) * 100.0
 
                     if not (0 <= new_cut_rate <= 50):
                         set_warning(
@@ -21713,12 +21714,12 @@ class TubeLayoutEditor(QMainWindow):
 
                 for item in self.graphics_scene.items():
                     if (
-                        hasattr(item, "__class__")
-                        and item.__class__.__name__ == "ClickableCircleItem"
-                        and hasattr(item, "is_side_rod")
-                        and item.is_side_rod
-                        and hasattr(item, "is_selected")
-                        and item.is_selected
+                            hasattr(item, "__class__")
+                            and item.__class__.__name__ == "ClickableCircleItem"
+                            and hasattr(item, "is_side_rod")
+                            and item.is_side_rod
+                            and hasattr(item, "is_selected")
+                            and item.is_selected
                     ):
                         selected_side_rod_items.append(item)
 
@@ -21746,9 +21747,9 @@ class TubeLayoutEditor(QMainWindow):
 
                 for item in self.graphics_scene.items():
                     if (
-                        isinstance(item, ClickableCircleItem)
-                        and hasattr(item, "is_lagan")
-                        and item.is_lagan
+                            isinstance(item, ClickableCircleItem)
+                            and hasattr(item, "is_lagan")
+                            and item.is_lagan
                     ):
                         if hasattr(item, "is_selected") and item.is_selected:
                             selected_lagan_items.append(item)
@@ -21779,10 +21780,10 @@ class TubeLayoutEditor(QMainWindow):
             selected_items = []
             for item in self.graphics_scene.items():
                 if (
-                    hasattr(item, "is_center_dangguan")
-                    and item.is_center_dangguan
-                    and hasattr(item, "is_selected")
-                    and item.is_selected
+                        hasattr(item, "is_center_dangguan")
+                        and item.is_center_dangguan
+                        and hasattr(item, "is_selected")
+                        and item.is_selected
                 ):
                     selected_items.append(item)
 
@@ -21832,8 +21833,8 @@ class TubeLayoutEditor(QMainWindow):
 
             # 处理中间挡板删除
             if (
-                hasattr(self, "selected_center_dangban")
-                and self.selected_center_dangban
+                    hasattr(self, "selected_center_dangban")
+                    and self.selected_center_dangban
             ):
                 self.delete_selected_center_dangban()
 
@@ -21907,7 +21908,7 @@ class TubeLayoutEditor(QMainWindow):
                 try:
                     plate_id_dbg = getattr(baffle, "impingement_plate_id", None)
                     if plate_id_dbg is not None and hasattr(
-                        self, "impingement_plate_dic"
+                            self, "impingement_plate_dic"
                     ):
                         rec_dbg = self.impingement_plate_dic.get(plate_id_dbg)
                         if isinstance(rec_dbg, dict):
@@ -21935,8 +21936,8 @@ class TubeLayoutEditor(QMainWindow):
                     for pair in self.impingement_plate_1:
                         # 如果这个坐标对中有任何一个坐标是干涉坐标，就移除整个坐标对
                         if not any(
-                            (coord[0], abs(coord[1])) in interfering_coords
-                            for coord in pair
+                                (coord[0], abs(coord[1])) in interfering_coords
+                                for coord in pair
                         ):
                             new_impingement_plate_1.append(pair)
                         else:
@@ -21947,8 +21948,8 @@ class TubeLayoutEditor(QMainWindow):
                     for pair in self.impingement_plate_2:
                         # 如果这个坐标对中有任何一个坐标是干涉坐标，就移除整个坐标对
                         if not any(
-                            (coord[0], abs(coord[1])) in interfering_coords
-                            for coord in pair
+                                (coord[0], abs(coord[1])) in interfering_coords
+                                for coord in pair
                         ):
                             new_impingement_plate_2.append(pair)
                         else:
@@ -21989,28 +21990,28 @@ class TubeLayoutEditor(QMainWindow):
                     target_set = set(pair)
                     # 从 impingement_plate_1 中移除完全匹配的坐标对
                     if hasattr(self, "impingement_plate_1") and isinstance(
-                        self.impingement_plate_1, list
+                            self.impingement_plate_1, list
                     ):
                         self.impingement_plate_1 = [
                             p
                             for p in self.impingement_plate_1
                             if not (
-                                isinstance(p, list)
-                                and len(p) == 2
-                                and set(p) == target_set
+                                    isinstance(p, list)
+                                    and len(p) == 2
+                                    and set(p) == target_set
                             )
                         ]
                     # 从 impingement_plate_2 中移除完全匹配的坐标对
                     if hasattr(self, "impingement_plate_2") and isinstance(
-                        self.impingement_plate_2, list
+                            self.impingement_plate_2, list
                     ):
                         self.impingement_plate_2 = [
                             p
                             for p in self.impingement_plate_2
                             if not (
-                                isinstance(p, list)
-                                and len(p) == 2
-                                and set(p) == target_set
+                                    isinstance(p, list)
+                                    and len(p) == 2
+                                    and set(p) == target_set
                             )
                         ]
             except Exception:
@@ -22019,7 +22020,7 @@ class TubeLayoutEditor(QMainWindow):
             # 同步移除内存字典中的防冲板记录
             try:
                 if hasattr(baffle, "impingement_plate_id") and hasattr(
-                    self, "impingement_plate_dic"
+                        self, "impingement_plate_dic"
                 ):
                     self.impingement_plate_dic.pop(
                         getattr(baffle, "impingement_plate_id"), None
@@ -22118,8 +22119,8 @@ class TubeLayoutEditor(QMainWindow):
         # 先清除可能存在的淡蓝高亮 marker（避免视觉叠层）
         for it in list(self.graphics_scene.items()):
             if (
-                isinstance(it, QGraphicsEllipseItem)
-                and it.brush().color() == hilite_brush_color
+                    isinstance(it, QGraphicsEllipseItem)
+                    and it.brush().color() == hilite_brush_color
             ):
                 try:
                     self.graphics_scene.removeItem(it)
@@ -22243,8 +22244,8 @@ class TubeLayoutEditor(QMainWindow):
         def is_white_solid(it: QGraphicsEllipseItem) -> bool:
             try:
                 return (
-                    it.pen().color() == QColor(255, 255, 255)
-                    and it.brush().style() != Qt.NoBrush
+                        it.pen().color() == QColor(255, 255, 255)
+                        and it.brush().style() != Qt.NoBrush
                 )
             except Exception:
                 return False
@@ -22279,8 +22280,8 @@ class TubeLayoutEditor(QMainWindow):
                 elif isinstance(first_coord, float):
                     is_relative_coords = False
                 elif (
-                    isinstance(first_coord, (str))
-                    and first_coord.replace("-", "").replace(".", "").isdigit()
+                        isinstance(first_coord, (str))
+                        and first_coord.replace("-", "").replace(".", "").isdigit()
                 ):
                     # 处理字符串形式的数字
                     try:
@@ -22338,6 +22339,41 @@ class TubeLayoutEditor(QMainWindow):
 
         if not abs_keys:
             return []
+
+        # 先处理与径向开孔绑定的换热管：
+        # 若 selected_centers 中包含某个 radial_hole_dict 条目的“换热管坐标”，
+        # 则删除对应的径向开孔绘图，并将该条记录的“换热管坐标”置空。
+        try:
+            if hasattr(self, "radial_hole_dict") and isinstance(
+                    self.radial_hole_dict, dict
+            ):
+                print(f"[radial_hole] delete_huanreguan abs_keys={abs_keys}")
+                for code, info in list(self.radial_hole_dict.items()):
+                    if not isinstance(info, dict):
+                        continue
+                    coord = info.get("换热管坐标")
+                    if coord is None:
+                        continue
+                    try:
+                        cx, cy = coord
+                        key = key6(cx, cy)
+                    except Exception as e:
+                        print(f"[radial_hole] coord parse error for code={code}: {e}")
+                        continue
+                    print(f"[radial_hole] check code={code}, coord={coord}, key={key}")
+                    if key in abs_keys:
+                        print(f"[radial_hole] match found, remove graphics for code={code}")
+                        # 删除该径向开孔的图形
+                        try:
+                            if hasattr(self, "remove_radial_hole_graphics"):
+                                self.remove_radial_hole_graphics(coord)
+                        except Exception as e:
+                            print(f"[radial_hole] remove_radial_hole_graphics error: {e}")
+                        # 清空数据字典中的绑定坐标
+                        info["换热管坐标"] = None
+        except Exception as e:
+            # 径向开孔处理失败不影响后续删除换热管逻辑
+            print(f"[radial_hole] exception in delete_huanreguan radial handling: {e}")
 
         # 建“坐标 -> 椭圆列表”索引（统一 6 位 + 场景中心）
         from collections import defaultdict
@@ -22695,8 +22731,8 @@ class TubeLayoutEditor(QMainWindow):
             baffles_to_remove = []
             for baffle_item in self.baffle_items:
                 if (
-                    hasattr(baffle_item, "original_selected_centers")
-                    and baffle_item.original_selected_centers
+                        hasattr(baffle_item, "original_selected_centers")
+                        and baffle_item.original_selected_centers
                 ):
                     # 检查删除的坐标是否包含在 original_selected_centers 中
                     # original_selected_centers 是列表格式，如 [(row1, col1), (row2, col2)]
@@ -22715,11 +22751,11 @@ class TubeLayoutEditor(QMainWindow):
                     self.baffle_items.remove(baffle_item)
                 # 从 impingement_plate_1 或 impingement_plate_2 中删除对应的坐标对
                 if (
-                    hasattr(baffle_item, "original_selected_centers")
-                    and baffle_item.original_selected_centers
+                        hasattr(baffle_item, "original_selected_centers")
+                        and baffle_item.original_selected_centers
                 ):
                     if baffle_item.baffle_type == "平板形" and hasattr(
-                        self, "impingement_plate_1"
+                            self, "impingement_plate_1"
                     ):
                         self.impingement_plate_1 = [
                             pair
@@ -22727,7 +22763,7 @@ class TubeLayoutEditor(QMainWindow):
                             if pair != baffle_item.original_selected_centers
                         ]
                     elif baffle_item.baffle_type == "圆弧形" and hasattr(
-                        self, "impingement_plate_2"
+                            self, "impingement_plate_2"
                     ):
                         self.impingement_plate_2 = [
                             pair
@@ -22948,8 +22984,8 @@ class TubeLayoutEditor(QMainWindow):
                 item
                 for item in selected_centers
                 if isinstance(item, tuple)
-                and len(item) == 2
-                and all(isinstance(x, (int, float)) for x in item)
+                   and len(item) == 2
+                   and all(isinstance(x, (int, float)) for x in item)
             ]
         elif isinstance(selected_centers, str):
             try:
@@ -22959,8 +22995,8 @@ class TubeLayoutEditor(QMainWindow):
                         item
                         for item in parsed_list
                         if isinstance(item, tuple)
-                        and len(item) == 2
-                        and all(isinstance(x, (int, float)) for x in item)
+                           and len(item) == 2
+                           and all(isinstance(x, (int, float)) for x in item)
                     ]
             except (SyntaxError, ValueError, TypeError):
                 selected_centers_list = []
@@ -23166,8 +23202,8 @@ class TubeLayoutEditor(QMainWindow):
                 item
                 for item in selected_centers
                 if isinstance(item, tuple)
-                and len(item) == 2
-                and all(isinstance(x, (int, float)) for x in item)
+                   and len(item) == 2
+                   and all(isinstance(x, (int, float)) for x in item)
             ]
         elif isinstance(selected_centers, str):
             try:
@@ -23177,8 +23213,8 @@ class TubeLayoutEditor(QMainWindow):
                         item
                         for item in parsed_list
                         if isinstance(item, tuple)
-                        and len(item) == 2
-                        and all(isinstance(x, (int, float)) for x in item)
+                           and len(item) == 2
+                           and all(isinstance(x, (int, float)) for x in item)
                     ]
             except (SyntaxError, ValueError, TypeError) as e:
                 selected_centers_list = []
@@ -23413,8 +23449,8 @@ class TubeLayoutEditor(QMainWindow):
 
         # 检查是否与防冲板删除的换热管重合
         if (
-            hasattr(self, "impingement_plate_del_centers")
-            and self.impingement_plate_del_centers
+                hasattr(self, "impingement_plate_del_centers")
+                and self.impingement_plate_del_centers
         ):
             # 找出重合的坐标（按绝对坐标比较）
             impingement_set = set(
@@ -23508,7 +23544,7 @@ class TubeLayoutEditor(QMainWindow):
                         if row_idx >= len(self.full_sorted_current_centers_down):
                             continue
                         if col_idx >= len(
-                            self.full_sorted_current_centers_down[row_idx]
+                                self.full_sorted_current_centers_down[row_idx]
                         ):
                             continue
                         x, y = self.full_sorted_current_centers_down[row_idx][col_idx]
@@ -23735,21 +23771,21 @@ class TubeLayoutEditor(QMainWindow):
                 center_sym = self.actual_to_selected_coords(center_actual)
 
                 if (
-                    y_axis_sym
-                    and y_axis_sym not in linkage_centers
-                    and y_axis_sym not in y_axis_syms
+                        y_axis_sym
+                        and y_axis_sym not in linkage_centers
+                        and y_axis_sym not in y_axis_syms
                 ):
                     y_axis_syms.append(y_axis_sym)
                 if (
-                    x_axis_sym
-                    and x_axis_sym not in linkage_centers
-                    and x_axis_sym not in x_axis_syms
+                        x_axis_sym
+                        and x_axis_sym not in linkage_centers
+                        and x_axis_sym not in x_axis_syms
                 ):
                     x_axis_syms.append(x_axis_sym)
                 if (
-                    center_sym
-                    and center_sym not in linkage_centers
-                    and center_sym not in center_syms
+                        center_sym
+                        and center_sym not in linkage_centers
+                        and center_sym not in center_syms
                 ):
                     center_syms.append(center_sym)
 
@@ -23894,9 +23930,9 @@ class TubeLayoutEditor(QMainWindow):
         """
         # 如果当前没有换热管选中，但存在选中的普通拉杆，则尝试用拉杆位置作为目标管孔
         if (
-            (not getattr(self, "selected_centers", None))
-            and hasattr(self, "selected_lagans")
-            and self.selected_lagans
+                (not getattr(self, "selected_centers", None))
+                and hasattr(self, "selected_lagans")
+                and self.selected_lagans
         ):
             rel_from_lagans = []
             try:
@@ -23923,17 +23959,17 @@ class TubeLayoutEditor(QMainWindow):
                     if rel:
                         # 支持单个元组或列表
                         if (
-                            isinstance(rel, (list, tuple))
-                            and len(rel) == 2
-                            and isinstance(rel[0], int)
+                                isinstance(rel, (list, tuple))
+                                and len(rel) == 2
+                                and isinstance(rel[0], int)
                         ):
                             rel_from_lagans.append(tuple(rel))
                         elif isinstance(rel, list):
                             for r in rel:
                                 if (
-                                    isinstance(r, (list, tuple))
-                                    and len(r) == 2
-                                    and isinstance(r[0], int)
+                                        isinstance(r, (list, tuple))
+                                        and len(r) == 2
+                                        and isinstance(r[0], int)
                                 ):
                                     rel_from_lagans.append(tuple(r))
             except Exception:
@@ -24391,8 +24427,8 @@ class TubeLayoutEditor(QMainWindow):
                 click_point = QPointF(x, y)
                 for item in self.graphics_scene.items(click_point):
                     if (
-                        isinstance(item, QGraphicsEllipseItem)
-                        and item.brush().color() == target_color
+                            isinstance(item, QGraphicsEllipseItem)
+                            and item.brush().color() == target_color
                     ):
                         self.graphics_scene.removeItem(item)
             except Exception as e:
@@ -24755,11 +24791,11 @@ class TubeLayoutEditor(QMainWindow):
                 for item in self.graphics_scene.items():
                     # 使用类型名检查，避免 ClickableCircleItem 未定义的问题
                     if (
-                        hasattr(item, "__class__")
-                        and item.__class__.__name__ == "ClickableCircleItem"
-                        and hasattr(item, "is_side_rod")
-                        and item.is_side_rod
-                        and hasattr(item, "original_selected_center")
+                            hasattr(item, "__class__")
+                            and item.__class__.__name__ == "ClickableCircleItem"
+                            and hasattr(item, "is_side_rod")
+                            and item.is_side_rod
+                            and hasattr(item, "original_selected_center")
                     ):
 
                         item_coord = item.original_selected_center
@@ -24798,9 +24834,9 @@ class TubeLayoutEditor(QMainWindow):
 
             # 移除配对拉杆（如果存在且尚未被移除）
             if (
-                hasattr(rod, "paired_rod")
-                and rod.paired_rod
-                and rod.paired_rod not in removed_rods
+                    hasattr(rod, "paired_rod")
+                    and rod.paired_rod
+                    and rod.paired_rod not in removed_rods
             ):
 
                 if rod.paired_rod.scene() == self.graphics_scene:
@@ -24809,8 +24845,8 @@ class TubeLayoutEditor(QMainWindow):
 
             # 从red_dangban列表中移除对应的坐标
             if (
-                hasattr(rod, "original_selected_center")
-                and rod.original_selected_center
+                    hasattr(rod, "original_selected_center")
+                    and rod.original_selected_center
             ):
                 if rod.original_selected_center in self.red_dangban:
                     self.red_dangban.remove(rod.original_selected_center)
@@ -24877,8 +24913,8 @@ class TubeLayoutEditor(QMainWindow):
                 item
                 for item in selected_centers
                 if isinstance(item, tuple)
-                and len(item) == 2
-                and all(isinstance(x, (int, float)) for x in item)
+                   and len(item) == 2
+                   and all(isinstance(x, (int, float)) for x in item)
             ]
         elif isinstance(selected_centers, str):
             try:
@@ -24888,8 +24924,8 @@ class TubeLayoutEditor(QMainWindow):
                         item
                         for item in parsed_list
                         if isinstance(item, tuple)
-                        and len(item) == 2
-                        and all(isinstance(x, (int, float)) for x in item)
+                           and len(item) == 2
+                           and all(isinstance(x, (int, float)) for x in item)
                     ]
             except (SyntaxError, ValueError, TypeError) as e:
                 print("字符串解析错误:", e)
@@ -25132,7 +25168,7 @@ class TubeLayoutEditor(QMainWindow):
                     else self.full_sorted_current_centers_down
                 )
                 if row_idx < len(centers_group) and col_idx < len(
-                    centers_group[row_idx]
+                        centers_group[row_idx]
                 ):
                     x, y = centers_group[row_idx][col_idx]
                     points.append((x, y))
@@ -25162,7 +25198,7 @@ class TubeLayoutEditor(QMainWindow):
                                         self.selected_centers
                                     )
                                     for pair_idx in range(
-                                        0, len(selected_centers_sym), 2
+                                            0, len(selected_centers_sym), 2
                                     ):
                                         if pair_idx + 1 < len(selected_centers_sym):
                                             pair = [
@@ -25180,7 +25216,7 @@ class TubeLayoutEditor(QMainWindow):
                                                     else self.full_sorted_current_centers_down
                                                 )
                                                 if row_idx < len(
-                                                    centers_group
+                                                        centers_group
                                                 ) and col_idx < len(
                                                     centers_group[row_idx]
                                                 ):
@@ -25199,7 +25235,7 @@ class TubeLayoutEditor(QMainWindow):
                                                 if sym_intersection is not None:
                                                     six, siy = sym_intersection
                                                     if is_point_between_parents(
-                                                        six, siy, sx1, sy1, sx2, sy2
+                                                            six, siy, sx1, sy1, sx2, sy2
                                                     ):
                                                         draw_center_dangguan_at_position(
                                                             (six, 0), self
@@ -25226,7 +25262,7 @@ class TubeLayoutEditor(QMainWindow):
                                             self.selected_centers
                                         )
                                         for pair_idx in range(
-                                            0, len(selected_centers_sym), 2
+                                                0, len(selected_centers_sym), 2
                                         ):
                                             if pair_idx + 1 < len(selected_centers_sym):
                                                 pair = [
@@ -25244,7 +25280,7 @@ class TubeLayoutEditor(QMainWindow):
                                                         else self.full_sorted_current_centers_down
                                                     )
                                                     if row_idx < len(
-                                                        centers_group
+                                                            centers_group
                                                     ) and col_idx < len(
                                                         centers_group[row_idx]
                                                     ):
@@ -25263,7 +25299,7 @@ class TubeLayoutEditor(QMainWindow):
                                                     if sym_intersection is not None:
                                                         six, siy = sym_intersection
                                                         if is_point_between_parents(
-                                                            six, siy, sx1, sy1, sx2, sy2
+                                                                six, siy, sx1, sy1, sx2, sy2
                                                         ):
                                                             draw_center_dangguan_at_position(
                                                                 (six, 0), self
@@ -25298,9 +25334,9 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 4管程4.1特殊处理：计算与x轴、y=w、y=-w的交点
                 if (
-                    tube_num == "4"
-                    and hasattr(self, "tube_pass_form_value")
-                    and self.tube_pass_form_value == "4.1"
+                        tube_num == "4"
+                        and hasattr(self, "tube_pass_form_value")
+                        and self.tube_pass_form_value == "4.1"
                 ):
                     # 获取隔条位置尺寸 W 的值
                     w_str = self.get_getiao()
@@ -25366,8 +25402,8 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 情况1：没有交点或2-3个交点在父坐标之间
                     if (
-                        len(intersections_in_range) == 0
-                        or len(intersections_in_range) >= 2
+                            len(intersections_in_range) == 0
+                            or len(intersections_in_range) >= 2
                     ):
                         QMessageBox.warning(
                             self,
@@ -25407,7 +25443,7 @@ class TubeLayoutEditor(QMainWindow):
                                                 else self.full_sorted_current_centers_down
                                             )
                                             if row_idx < len(
-                                                centers_group
+                                                    centers_group
                                             ) and col_idx < len(centers_group[row_idx]):
                                                 x, y = centers_group[row_idx][col_idx]
                                                 sym_points.append((x, y))
@@ -25439,11 +25475,11 @@ class TubeLayoutEditor(QMainWindow):
                                                 )
                                             # 找到在父坐标之间的交点
                                             for (
-                                                sym_intersection
+                                                    sym_intersection
                                             ) in sym_all_intersections:
                                                 six, siy = sym_intersection
                                                 if is_point_between_parents(
-                                                    six, siy, sx1, sy1, sx2, sy2
+                                                        six, siy, sx1, sy1, sx2, sy2
                                                 ):
                                                     draw_center_dangguan_at_position(
                                                         (six, siy), self
@@ -25471,7 +25507,7 @@ class TubeLayoutEditor(QMainWindow):
                                         self.selected_centers
                                     )
                                     for pair_idx in range(
-                                        0, len(selected_centers_sym), 2
+                                            0, len(selected_centers_sym), 2
                                     ):
                                         if pair_idx + 1 < len(selected_centers_sym):
                                             pair = [
@@ -25489,7 +25525,7 @@ class TubeLayoutEditor(QMainWindow):
                                                     else self.full_sorted_current_centers_down
                                                 )
                                                 if row_idx < len(
-                                                    centers_group
+                                                        centers_group
                                                 ) and col_idx < len(
                                                     centers_group[row_idx]
                                                 ):
@@ -25525,11 +25561,11 @@ class TubeLayoutEditor(QMainWindow):
                                                     )
                                                 # 找到在父坐标之间的交点
                                                 for (
-                                                    sym_intersection
+                                                        sym_intersection
                                                 ) in sym_all_intersections:
                                                     six, siy = sym_intersection
                                                     if is_point_between_parents(
-                                                        six, siy, sx1, sy1, sx2, sy2
+                                                            six, siy, sx1, sy1, sx2, sy2
                                                     ):
                                                         draw_center_dangguan_at_position(
                                                             (six, siy), self
@@ -25547,9 +25583,9 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 4管程4.2特殊处理：计算与x轴和y轴的交点
                 if (
-                    tube_num == "4"
-                    and hasattr(self, "tube_pass_form_value")
-                    and self.tube_pass_form_value == "4.2"
+                        tube_num == "4"
+                        and hasattr(self, "tube_pass_form_value")
+                        and self.tube_pass_form_value == "4.2"
                 ):
                     # 计算两点连线与x轴和y轴的交点
                     intersection_with_x_axis, intersection_with_y_axis = (
@@ -25572,8 +25608,8 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 情况1：没有交点或两个交点都在父坐标之间
                     if (
-                        len(intersections_in_range) == 0
-                        or len(intersections_in_range) == 2
+                            len(intersections_in_range) == 0
+                            or len(intersections_in_range) == 2
                     ):
                         QMessageBox.warning(
                             self,
@@ -25630,7 +25666,7 @@ class TubeLayoutEditor(QMainWindow):
                                                 else self.full_sorted_current_centers_down
                                             )
                                             if row_idx < len(
-                                                centers_group
+                                                    centers_group
                                             ) and col_idx < len(centers_group[row_idx]):
                                                 x, y = centers_group[row_idx][col_idx]
                                                 sym_points.append((x, y))
@@ -25654,11 +25690,11 @@ class TubeLayoutEditor(QMainWindow):
                                                 )
                                             # 找到在父坐标之间的交点
                                             for (
-                                                sym_intersection
+                                                    sym_intersection
                                             ) in sym_all_intersections:
                                                 six, siy = sym_intersection
                                                 if is_point_between_parents(
-                                                    six, siy, sx1, sy1, sx2, sy2
+                                                        six, siy, sx1, sy1, sx2, sy2
                                                 ):
                                                     draw_center_dangguan_at_position(
                                                         (six, siy), self
@@ -25697,7 +25733,7 @@ class TubeLayoutEditor(QMainWindow):
                                             self.selected_centers
                                         )
                                     for pair_idx in range(
-                                        0, len(selected_centers_sym), 2
+                                            0, len(selected_centers_sym), 2
                                     ):
                                         if pair_idx + 1 < len(selected_centers_sym):
                                             pair = [
@@ -25715,7 +25751,7 @@ class TubeLayoutEditor(QMainWindow):
                                                     else self.full_sorted_current_centers_down
                                                 )
                                                 if row_idx < len(
-                                                    centers_group
+                                                        centers_group
                                                 ) and col_idx < len(
                                                     centers_group[row_idx]
                                                 ):
@@ -25744,11 +25780,11 @@ class TubeLayoutEditor(QMainWindow):
                                                     )
                                                 # 找到在父坐标之间的交点
                                                 for (
-                                                    sym_intersection
+                                                        sym_intersection
                                                 ) in sym_all_intersections:
                                                     six, siy = sym_intersection
                                                     if is_point_between_parents(
-                                                        six, siy, sx1, sy1, sx2, sy2
+                                                            six, siy, sx1, sy1, sx2, sy2
                                                     ):
                                                         draw_center_dangguan_at_position(
                                                             (six, siy), self
@@ -25766,9 +25802,9 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 4管程4.3特殊处理：计算与y轴、y=w、y=-w的交点
                 if (
-                    tube_num == "4"
-                    and hasattr(self, "tube_pass_form_value")
-                    and self.tube_pass_form_value == "4.3"
+                        tube_num == "4"
+                        and hasattr(self, "tube_pass_form_value")
+                        and self.tube_pass_form_value == "4.3"
                 ):
                     # 获取隔条位置尺寸 W 的值
                     w_str = self.get_getiao()
@@ -25832,8 +25868,8 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 情况1：没有交点或2-3个交点在父坐标之间
                     if (
-                        len(intersections_in_range) == 0
-                        or len(intersections_in_range) >= 2
+                            len(intersections_in_range) == 0
+                            or len(intersections_in_range) >= 2
                     ):
                         QMessageBox.warning(
                             self,
@@ -25901,7 +25937,7 @@ class TubeLayoutEditor(QMainWindow):
                                                 else self.full_sorted_current_centers_down
                                             )
                                             if row_idx < len(
-                                                centers_group
+                                                    centers_group
                                             ) and col_idx < len(centers_group[row_idx]):
                                                 x, y = centers_group[row_idx][col_idx]
                                                 sym_points.append((x, y))
@@ -25935,11 +25971,11 @@ class TubeLayoutEditor(QMainWindow):
                                                 )
                                             # 找到在父坐标之间的交点
                                             for (
-                                                sym_intersection
+                                                    sym_intersection
                                             ) in sym_all_intersections:
                                                 six, siy = sym_intersection
                                                 if is_point_between_parents(
-                                                    six, siy, sx1, sy1, sx2, sy2
+                                                        six, siy, sx1, sy1, sx2, sy2
                                                 ):
                                                     draw_center_dangguan_at_position(
                                                         (six, siy), self
@@ -25978,7 +26014,7 @@ class TubeLayoutEditor(QMainWindow):
                                             self.selected_centers
                                         )
                                     for pair_idx in range(
-                                        0, len(selected_centers_sym), 2
+                                            0, len(selected_centers_sym), 2
                                     ):
                                         if pair_idx + 1 < len(selected_centers_sym):
                                             pair = [
@@ -25996,7 +26032,7 @@ class TubeLayoutEditor(QMainWindow):
                                                     else self.full_sorted_current_centers_down
                                                 )
                                                 if row_idx < len(
-                                                    centers_group
+                                                        centers_group
                                                 ) and col_idx < len(
                                                     centers_group[row_idx]
                                                 ):
@@ -26034,11 +26070,11 @@ class TubeLayoutEditor(QMainWindow):
                                                     )
                                                 # 找到在父坐标之间的交点
                                                 for (
-                                                    sym_intersection
+                                                        sym_intersection
                                                 ) in sym_all_intersections:
                                                     six, siy = sym_intersection
                                                     if is_point_between_parents(
-                                                        six, siy, sx1, sy1, sx2, sy2
+                                                            six, siy, sx1, sy1, sx2, sy2
                                                     ):
                                                         draw_center_dangguan_at_position(
                                                             (six, siy), self
@@ -26056,9 +26092,9 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 6管程6.1特殊处理：计算与x轴、y=w、y=-w、y轴的交点
                 if (
-                    tube_num == "6"
-                    and hasattr(self, "tube_pass_form_value")
-                    and self.tube_pass_form_value == "6.1"
+                        tube_num == "6"
+                        and hasattr(self, "tube_pass_form_value")
+                        and self.tube_pass_form_value == "6.1"
                 ):
                     # 获取隔条位置尺寸 W 的值
                     w_str = self.get_getiao()
@@ -26123,8 +26159,8 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 情况1：没有交点或2-4个交点在父坐标之间
                     if (
-                        len(intersections_in_range) == 0
-                        or len(intersections_in_range) >= 2
+                            len(intersections_in_range) == 0
+                            or len(intersections_in_range) >= 2
                     ):
                         QMessageBox.warning(
                             self,
@@ -26193,7 +26229,7 @@ class TubeLayoutEditor(QMainWindow):
                                                 else self.full_sorted_current_centers_down
                                             )
                                             if row_idx < len(
-                                                centers_group
+                                                    centers_group
                                             ) and col_idx < len(centers_group[row_idx]):
                                                 x, y = centers_group[row_idx][col_idx]
                                                 sym_points.append((x, y))
@@ -26231,11 +26267,11 @@ class TubeLayoutEditor(QMainWindow):
                                                 )
                                             # 找到在父坐标之间的交点
                                             for (
-                                                sym_intersection
+                                                    sym_intersection
                                             ) in sym_all_intersections:
                                                 six, siy = sym_intersection
                                                 if is_point_between_parents(
-                                                    six, siy, sx1, sy1, sx2, sy2
+                                                        six, siy, sx1, sy1, sx2, sy2
                                                 ):
                                                     draw_center_dangguan_at_position(
                                                         (six, siy), self
@@ -26274,7 +26310,7 @@ class TubeLayoutEditor(QMainWindow):
                                             self.selected_centers
                                         )
                                     for pair_idx in range(
-                                        0, len(selected_centers_sym), 2
+                                            0, len(selected_centers_sym), 2
                                     ):
                                         if pair_idx + 1 < len(selected_centers_sym):
                                             pair = [
@@ -26292,7 +26328,7 @@ class TubeLayoutEditor(QMainWindow):
                                                     else self.full_sorted_current_centers_down
                                                 )
                                                 if row_idx < len(
-                                                    centers_group
+                                                        centers_group
                                                 ) and col_idx < len(
                                                     centers_group[row_idx]
                                                 ):
@@ -26335,11 +26371,11 @@ class TubeLayoutEditor(QMainWindow):
                                                     )
                                                 # 找到在父坐标之间的交点
                                                 for (
-                                                    sym_intersection
+                                                        sym_intersection
                                                 ) in sym_all_intersections:
                                                     six, siy = sym_intersection
                                                     if is_point_between_parents(
-                                                        six, siy, sx1, sy1, sx2, sy2
+                                                            six, siy, sx1, sy1, sx2, sy2
                                                     ):
                                                         draw_center_dangguan_at_position(
                                                             (six, siy), self
@@ -26357,9 +26393,9 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 6管程6.2特殊处理：计算与y=w、y=-w、y轴的交点
                 if (
-                    tube_num == "6"
-                    and hasattr(self, "tube_pass_form_value")
-                    and self.tube_pass_form_value == "6.2"
+                        tube_num == "6"
+                        and hasattr(self, "tube_pass_form_value")
+                        and self.tube_pass_form_value == "6.2"
                 ):
                     # 获取隔条位置尺寸 W 的值
                     w_str = self.get_getiao()
@@ -26423,8 +26459,8 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 情况1：没有交点或2-3个交点在父坐标之间
                     if (
-                        len(intersections_in_range) == 0
-                        or len(intersections_in_range) >= 2
+                            len(intersections_in_range) == 0
+                            or len(intersections_in_range) >= 2
                     ):
                         QMessageBox.warning(
                             self,
@@ -26492,7 +26528,7 @@ class TubeLayoutEditor(QMainWindow):
                                                 else self.full_sorted_current_centers_down
                                             )
                                             if row_idx < len(
-                                                centers_group
+                                                    centers_group
                                             ) and col_idx < len(centers_group[row_idx]):
                                                 x, y = centers_group[row_idx][col_idx]
                                                 sym_points.append((x, y))
@@ -26526,11 +26562,11 @@ class TubeLayoutEditor(QMainWindow):
                                                 )
                                             # 找到在父坐标之间的交点
                                             for (
-                                                sym_intersection
+                                                    sym_intersection
                                             ) in sym_all_intersections:
                                                 six, siy = sym_intersection
                                                 if is_point_between_parents(
-                                                    six, siy, sx1, sy1, sx2, sy2
+                                                        six, siy, sx1, sy1, sx2, sy2
                                                 ):
                                                     draw_center_dangguan_at_position(
                                                         (six, siy), self
@@ -26569,7 +26605,7 @@ class TubeLayoutEditor(QMainWindow):
                                             self.selected_centers
                                         )
                                     for pair_idx in range(
-                                        0, len(selected_centers_sym), 2
+                                            0, len(selected_centers_sym), 2
                                     ):
                                         if pair_idx + 1 < len(selected_centers_sym):
                                             pair = [
@@ -26587,7 +26623,7 @@ class TubeLayoutEditor(QMainWindow):
                                                     else self.full_sorted_current_centers_down
                                                 )
                                                 if row_idx < len(
-                                                    centers_group
+                                                        centers_group
                                                 ) and col_idx < len(
                                                     centers_group[row_idx]
                                                 ):
@@ -26625,11 +26661,11 @@ class TubeLayoutEditor(QMainWindow):
                                                     )
                                                 # 找到在父坐标之间的交点
                                                 for (
-                                                    sym_intersection
+                                                        sym_intersection
                                                 ) in sym_all_intersections:
                                                     six, siy = sym_intersection
                                                     if is_point_between_parents(
-                                                        six, siy, sx1, sy1, sx2, sy2
+                                                            six, siy, sx1, sy1, sx2, sy2
                                                     ):
                                                         draw_center_dangguan_at_position(
                                                             (six, siy), self
@@ -26821,12 +26857,12 @@ class TubeLayoutEditor(QMainWindow):
         if isinstance(selected_centers, list):
             # 检查是否是嵌套列表（如 [[coord1, coord2], [coord3, coord4]]）
             if (
-                len(selected_centers) > 0
-                and isinstance(selected_centers[0], list)
-                and all(
-                    isinstance(sublist, list) and len(sublist) == 2
-                    for sublist in selected_centers
-                )
+                    len(selected_centers) > 0
+                    and isinstance(selected_centers[0], list)
+                    and all(
+                isinstance(sublist, list) and len(sublist) == 2
+                for sublist in selected_centers
+            )
             ):
 
                 # 这是嵌套列表，清空并逐对处理
@@ -26840,7 +26876,7 @@ class TubeLayoutEditor(QMainWindow):
 
             # 检查是否是扁平的长列表（如 [coord1, coord2, coord3, coord4]），需要成对拆分
             elif len(selected_centers) > 2 and all(
-                isinstance(item, tuple) and len(item) == 2 for item in selected_centers
+                    isinstance(item, tuple) and len(item) == 2 for item in selected_centers
             ):
 
                 # 这是扁平列表，清空并成对处理
@@ -26861,8 +26897,8 @@ class TubeLayoutEditor(QMainWindow):
                 item
                 for item in selected_centers
                 if isinstance(item, tuple)
-                and len(item) == 2
-                and all(isinstance(x, (int, float)) for x in item)
+                   and len(item) == 2
+                   and all(isinstance(x, (int, float)) for x in item)
             ]
         elif isinstance(selected_centers, str):
             try:
@@ -26872,8 +26908,8 @@ class TubeLayoutEditor(QMainWindow):
                         item
                         for item in parsed_list
                         if isinstance(item, tuple)
-                        and len(item) == 2
-                        and all(isinstance(x, (int, float)) for x in item)
+                           and len(item) == 2
+                           and all(isinstance(x, (int, float)) for x in item)
                     ]
             except (SyntaxError, ValueError, TypeError) as e:
                 selected_centers_list = []
@@ -26910,7 +26946,7 @@ class TubeLayoutEditor(QMainWindow):
                         else self.full_sorted_current_centers_down
                     )
                     if row_idx < len(centers_group) and col_idx < len(
-                        centers_group[row_idx]
+                            centers_group[row_idx]
                     ):
                         x, y = centers_group[row_idx][col_idx]
                         points_temp.append((x, y))
@@ -26956,8 +26992,8 @@ class TubeLayoutEditor(QMainWindow):
                                         self.selected_to_current_coords(pair)
                                     )
                                     if (
-                                        current_coords_check
-                                        and len(current_coords_check) == 2
+                                            current_coords_check
+                                            and len(current_coords_check) == 2
                                     ):
                                         points_check = []
                                         for row_label, col_label in pair:
@@ -26969,7 +27005,7 @@ class TubeLayoutEditor(QMainWindow):
                                                 else self.full_sorted_current_centers_down
                                             )
                                             if row_idx < len(
-                                                centers_group
+                                                    centers_group
                                             ) and col_idx < len(centers_group[row_idx]):
                                                 x, y = centers_group[row_idx][col_idx]
                                                 points_check.append((x, y))
@@ -27058,7 +27094,7 @@ class TubeLayoutEditor(QMainWindow):
                 )
 
                 if row_idx < len(centers_group) and col_idx < len(
-                    centers_group[row_idx]
+                        centers_group[row_idx]
                 ):
                     x, y = centers_group[row_idx][col_idx]
                     points.append((x, y))
@@ -27067,7 +27103,7 @@ class TubeLayoutEditor(QMainWindow):
                     click_point = QPointF(x, y)
                     for item in self.graphics_scene.items(click_point):
                         if isinstance(item, QGraphicsEllipseItem) and hasattr(
-                            item, "is_temporary_highlight"
+                                item, "is_temporary_highlight"
                         ):
                             self.graphics_scene.removeItem(item)
                             break
@@ -27193,8 +27229,8 @@ class TubeLayoutEditor(QMainWindow):
                 item
                 for item in selected_centers
                 if isinstance(item, tuple)
-                and len(item) == 2
-                and all(isinstance(x, (int, float)) for x in item)
+                   and len(item) == 2
+                   and all(isinstance(x, (int, float)) for x in item)
             ]
         elif isinstance(selected_centers, str):
             try:
@@ -27204,8 +27240,8 @@ class TubeLayoutEditor(QMainWindow):
                         item
                         for item in parsed_list
                         if isinstance(item, tuple)
-                        and len(item) == 2
-                        and all(isinstance(x, (int, float)) for x in item)
+                           and len(item) == 2
+                           and all(isinstance(x, (int, float)) for x in item)
                     ]
             except (SyntaxError, ValueError, TypeError):
                 return []
@@ -27233,7 +27269,7 @@ class TubeLayoutEditor(QMainWindow):
                 )
 
                 if row_idx < len(centers_group) and col_idx < len(
-                    centers_group[row_idx]
+                        centers_group[row_idx]
                 ):
                     x, y = centers_group[row_idx][col_idx]
                     points.append((x, y))
@@ -27306,8 +27342,8 @@ class TubeLayoutEditor(QMainWindow):
         """删除选中的中间挡管（完全照搬旁路挡板删除逻辑）"""
         try:
             if (
-                not hasattr(self, "selected_center_dangguan")
-                or not self.selected_center_dangguan
+                    not hasattr(self, "selected_center_dangguan")
+                    or not self.selected_center_dangguan
             ):
                 return
 
@@ -27369,9 +27405,9 @@ class TubeLayoutEditor(QMainWindow):
                     all_center_dangguan_in_scene = []
                     for item in self.graphics_scene.items():
                         if (
-                            isinstance(item, ClickableRectItem)
-                            and item.is_center_dangguan
-                            and hasattr(item, "original_selected_center")
+                                isinstance(item, ClickableRectItem)
+                                and item.is_center_dangguan
+                                and hasattr(item, "original_selected_center")
                         ):
                             all_center_dangguan_in_scene.append(item)
 
@@ -27406,7 +27442,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 删除关联的临时矩形
                 if hasattr(dangguan, "related_temp_items") and isinstance(
-                    dangguan.related_temp_items, list
+                        dangguan.related_temp_items, list
                 ):
                     for temp_item in dangguan.related_temp_items:
                         if temp_item and temp_item.scene() == self.graphics_scene:
@@ -27639,7 +27675,7 @@ class TubeLayoutEditor(QMainWindow):
                         for item in list(self.graphics_scene.items()):
                             try:
                                 if isinstance(item, ClickableRectItem) and getattr(
-                                    item, "is_side_block", False
+                                        item, "is_side_block", False
                                 ):
                                     # 只删当前 scene 里的
                                     if item.scene() == self.graphics_scene:
@@ -27769,8 +27805,8 @@ class TubeLayoutEditor(QMainWindow):
                     point
                     for point in centers
                     if abs(point[1] - selected_y)
-                    < 1e-6
-                    < abs(point[0] - selected_centers[0][0])
+                       < 1e-6
+                       < abs(point[0] - selected_centers[0][0])
                 ]
 
                 # 按横坐标排序，找到最左边的第一个点
@@ -27788,7 +27824,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 计算交点
                 if abs(n_y) <= R_bend:
-                    x_offset = math.sqrt(R_bend**2 - n_y**2)
+                    x_offset = math.sqrt(R_bend ** 2 - n_y ** 2)
                     intersection1 = (x_offset, n_y)
                     intersection2 = (-x_offset, n_y)
                 else:
@@ -27842,7 +27878,7 @@ class TubeLayoutEditor(QMainWindow):
                             centers_group = self.full_sorted_current_centers_down
 
                         if row_idx < len(centers_group) and col_idx < len(
-                            centers_group[row_idx]
+                                centers_group[row_idx]
                         ):
                             x, y = centers_group[row_idx][col_idx]
                             click_point = QPointF(x, y)
@@ -27896,7 +27932,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 计算交点（垂直方向：y = ±sqrt(R² - x²)）
                 if abs(n_x) <= R_bend:
-                    y_offset = math.sqrt(R_bend**2 - n_x**2)
+                    y_offset = math.sqrt(R_bend ** 2 - n_x ** 2)
                     intersection1 = (n_x, y_offset)
                     intersection2 = (n_x, -y_offset)
                 else:
@@ -27987,8 +28023,8 @@ class TubeLayoutEditor(QMainWindow):
                 item
                 for item in selected_centers
                 if isinstance(item, tuple)
-                and len(item) == 2
-                and all(isinstance(x, (int, float)) for x in item)
+                   and len(item) == 2
+                   and all(isinstance(x, (int, float)) for x in item)
             ]
         elif isinstance(selected_centers, str):
             try:
@@ -27998,8 +28034,8 @@ class TubeLayoutEditor(QMainWindow):
                         item
                         for item in parsed_list
                         if isinstance(item, tuple)
-                        and len(item) == 2
-                        and all(isinstance(x, (int, float)) for x in item)
+                           and len(item) == 2
+                           and all(isinstance(x, (int, float)) for x in item)
                     ]
             except (SyntaxError, ValueError, TypeError) as e:
                 print("字符串解析错误:", e)
@@ -28097,7 +28133,7 @@ class TubeLayoutEditor(QMainWindow):
                 _, y = row[0]
 
                 # 关键修改：计算折流板圆在当前Y坐标的左右边界（X的最大/最小值）
-                _val = R_baffle**2 - y**2
+                _val = R_baffle ** 2 - y ** 2
                 if _val < 0 and abs(_val) < 1e-6:
                     _val = 0.0
                 if _val < 0:
@@ -28253,8 +28289,8 @@ class TubeLayoutEditor(QMainWindow):
                 item
                 for item in selected_centers
                 if isinstance(item, tuple)
-                and len(item) == 2
-                and all(isinstance(x, (int, float)) for x in item)
+                   and len(item) == 2
+                   and all(isinstance(x, (int, float)) for x in item)
             ]
         elif isinstance(selected_centers, str):
             try:
@@ -28264,8 +28300,8 @@ class TubeLayoutEditor(QMainWindow):
                         item
                         for item in parsed_list
                         if isinstance(item, tuple)
-                        and len(item) == 2
-                        and all(isinstance(x, (int, float)) for x in item)
+                           and len(item) == 2
+                           and all(isinstance(x, (int, float)) for x in item)
                     ]
             except (SyntaxError, ValueError, TypeError) as e:
                 print("字符串解析错误:", e)
@@ -28354,7 +28390,7 @@ class TubeLayoutEditor(QMainWindow):
                 x, y = row[col_idx]
 
                 # 计算折流板圆在当前Y坐标的左右边界（X的最大/最小值）
-                max_x = math.sqrt(R_baffle**2 - y**2)  # 右侧边界X值（正数）
+                max_x = math.sqrt(R_baffle ** 2 - y ** 2)  # 右侧边界X值（正数）
                 min_x = -max_x  # 左侧边界X值（负数）
 
                 # 计算选中换热管到左右边界的距离
@@ -28374,7 +28410,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 挡板高度取用户输入与折流板圆当前Y坐标高度的最小值（避免超出圆）
                 max_block_height = 2 * math.sqrt(
-                    R_baffle**2 - y**2
+                    R_baffle ** 2 - y ** 2
                 )  # 折流板圆当前Y坐标的高度（上下边界距离）
                 actual_block_height = min(block_height, max_block_height)
                 # 当输入厚度超过几何上限时打印调试信息，方便判B：点旁路挡板按钮弹出窗口，在窗口里改厚度再点确定？断为什么看起来“没变细/没变粗”
@@ -28456,7 +28492,7 @@ class TubeLayoutEditor(QMainWindow):
         return added_count
 
     def build_single_side_dangban_vertical(
-        self, selected_centers, block_length, block_height
+            self, selected_centers, block_length, block_height
     ):
         """构建垂直方向单侧旁路挡板，确保所有挡板都在折流板外径圆内且紧贴边缘"""
         if not selected_centers:
@@ -28480,8 +28516,8 @@ class TubeLayoutEditor(QMainWindow):
                 item
                 for item in selected_centers
                 if isinstance(item, tuple)
-                and len(item) == 2
-                and all(isinstance(x, (int, float)) for x in item)
+                   and len(item) == 2
+                   and all(isinstance(x, (int, float)) for x in item)
             ]
         elif isinstance(selected_centers, str):
             try:
@@ -28491,8 +28527,8 @@ class TubeLayoutEditor(QMainWindow):
                         item
                         for item in parsed_list
                         if isinstance(item, tuple)
-                        and len(item) == 2
-                        and all(isinstance(x, (int, float)) for x in item)
+                           and len(item) == 2
+                           and all(isinstance(x, (int, float)) for x in item)
                     ]
             except (SyntaxError, ValueError, TypeError) as e:
                 print("字符串解析错误:", e)
@@ -28620,7 +28656,7 @@ class TubeLayoutEditor(QMainWindow):
                 x = col_x
 
                 # 计算折流板圆在当前X坐标的上下边界（Y的最大/最小值）
-                max_y = math.sqrt(R_baffle**2 - x**2)  # 上侧边界Y值（正数）
+                max_y = math.sqrt(R_baffle ** 2 - x ** 2)  # 上侧边界Y值（正数）
                 min_y = -max_y  # 下侧边界Y值（负数）
 
                 # 计算选中换热管到上下边界的距离
@@ -28640,7 +28676,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 挡板宽度取用户输入与折流板圆当前X坐标宽度的最小值（避免超出圆）
                 # 数值稳定性处理：避免 R_baffle**2 - x**2 因浮点误差为微小负数
-                _val = R_baffle**2 - x**2
+                _val = R_baffle ** 2 - x ** 2
                 if _val < 0 and abs(_val) < 1e-6:
                     _val = 0.0
                 if _val < 0:
@@ -28742,8 +28778,8 @@ class TubeLayoutEditor(QMainWindow):
                 item
                 for item in selected_centers
                 if isinstance(item, tuple)
-                and len(item) == 2
-                and all(isinstance(x, (int, float)) for x in item)
+                   and len(item) == 2
+                   and all(isinstance(x, (int, float)) for x in item)
             ]
         elif isinstance(selected_centers, str):
             try:
@@ -28753,8 +28789,8 @@ class TubeLayoutEditor(QMainWindow):
                         item
                         for item in parsed_list
                         if isinstance(item, tuple)
-                        and len(item) == 2
-                        and all(isinstance(x, (int, float)) for x in item)
+                           and len(item) == 2
+                           and all(isinstance(x, (int, float)) for x in item)
                     ]
             except (SyntaxError, ValueError, TypeError) as e:
                 print("字符串解析错误:", e)
@@ -28775,7 +28811,7 @@ class TubeLayoutEditor(QMainWindow):
             if isinstance(coord, tuple) and len(coord) >= 2:
                 # 如果是相对坐标，需要转换获取实际x值
                 if isinstance(coord[0], (int, float)) and isinstance(
-                    coord[1], (int, float)
+                        coord[1], (int, float)
                 ):
                     actual_coords = self.selected_to_current_coords([coord])
                     if actual_coords:
@@ -28905,7 +28941,7 @@ class TubeLayoutEditor(QMainWindow):
                 x = col_x
 
                 # 关键修改：计算折流板圆在当前X坐标的上下边界（Y的最大/最小值）
-                max_y = math.sqrt(R_baffle**2 - x**2)  # 上侧边界Y值（正数）
+                max_y = math.sqrt(R_baffle ** 2 - x ** 2)  # 上侧边界Y值（正数）
                 min_y = -max_y  # 下侧边界Y值（负数）
 
                 # 修正1：以折流板圆边界为基准计算挡板位置（贴紧边缘）
@@ -28916,7 +28952,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 修正2：挡板宽度取用户输入与折流板圆当前X坐标宽度的最小值（避免超出圆）
                 max_block_width = 2 * math.sqrt(
-                    R_baffle**2 - x**2
+                    R_baffle ** 2 - x ** 2
                 )  # 折流板圆当前X坐标的宽度（左右边界距离）
                 actual_block_width = min(block_height, max_block_width)
                 # 挡板X坐标：居中对齐（以当前列x为中心）
@@ -29025,8 +29061,8 @@ class TubeLayoutEditor(QMainWindow):
         """删除选中的旁路挡板，支持对称模式下删除所有相关挡板"""
         try:
             if (
-                not hasattr(self, "selected_side_blocks")
-                or not self.selected_side_blocks
+                    not hasattr(self, "selected_side_blocks")
+                    or not self.selected_side_blocks
             ):
                 print("没有选中的旁路挡板可删除")
                 return
@@ -29079,7 +29115,7 @@ class TubeLayoutEditor(QMainWindow):
                     existing_coords = []
                     try:
                         for entry in (
-                            getattr(self, "sdangban_selected_centers", []) or []
+                                getattr(self, "sdangban_selected_centers", []) or []
                         ):
                             if entry:
                                 existing_coords.append(entry[0])
@@ -29124,8 +29160,8 @@ class TubeLayoutEditor(QMainWindow):
                 # 需要遍历所有条目，因为可能有多个条目包含相同的坐标
                 for i in range(len(self.sdangban_selected_centers) - 1, -1, -1):
                     if (
-                        i < len(self.sdangban_selected_centers)
-                        and self.sdangban_selected_centers[i]
+                            i < len(self.sdangban_selected_centers)
+                            and self.sdangban_selected_centers[i]
                     ):
                         dangban_entry = self.sdangban_selected_centers[i]
                         if dangban_entry and dangban_entry[0] == block_info:
@@ -29162,9 +29198,9 @@ class TubeLayoutEditor(QMainWindow):
                     # 通过场景中所有挡板项来查找对称的挡板
                     for item in self.graphics_scene.items():
                         if (
-                            isinstance(item, ClickableRectItem)
-                            and item.is_side_block
-                            and hasattr(item, "original_selected_center")
+                                isinstance(item, ClickableRectItem)
+                                and item.is_side_block
+                                and hasattr(item, "original_selected_center")
                         ):
 
                             item_coord = item.original_selected_center
@@ -29201,7 +29237,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 移除自身
                 try:
                     if hasattr(block, "center_dangban_id") and hasattr(
-                        self, "side_dangban_dic"
+                            self, "side_dangban_dic"
                     ):
                         self.side_dangban_dic.pop(
                             getattr(block, "center_dangban_id"), None
@@ -29215,15 +29251,15 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 移除配对挡板（如果存在且尚未被移除）
                 if (
-                    hasattr(block, "paired_block")
-                    and block.paired_block
-                    and block.paired_block not in removed_blocks
+                        hasattr(block, "paired_block")
+                        and block.paired_block
+                        and block.paired_block not in removed_blocks
                 ):
 
                     try:
                         paired = block.paired_block
                         if hasattr(paired, "center_dangban_id") and hasattr(
-                            self, "side_dangban_dic"
+                                self, "side_dangban_dic"
                         ):
                             self.side_dangban_dic.pop(
                                 getattr(paired, "center_dangban_id"), None
@@ -29385,7 +29421,7 @@ class TubeLayoutEditor(QMainWindow):
                         for item in list(self.graphics_scene.items()):
                             try:
                                 if isinstance(item, ClickableRectItem) and getattr(
-                                    item, "is_side_block", False
+                                        item, "is_side_block", False
                                 ):
                                     if item.scene() == self.graphics_scene:
                                         self.graphics_scene.removeItem(item)
@@ -29723,10 +29759,10 @@ class TubeLayoutEditor(QMainWindow):
                         parsed = ast.literal_eval(str(coord_str))
                         selected = []
                         if (
-                            isinstance(parsed, (list, tuple))
-                            and len(parsed) == 2
-                            and isinstance(parsed[0], (list, tuple))
-                            and isinstance(parsed[1], (list, tuple))
+                                isinstance(parsed, (list, tuple))
+                                and len(parsed) == 2
+                                and isinstance(parsed[0], (list, tuple))
+                                and isinstance(parsed[1], (list, tuple))
                         ):
                             try:
                                 a = (int(parsed[0][0]), int(parsed[0][1]))
@@ -29991,8 +30027,8 @@ class TubeLayoutEditor(QMainWindow):
 
             # 5. 恢复因交叉布管而被删除的换热管
             if (
-                hasattr(self, "cross_pipe_deleted_tubes")
-                and self.cross_pipe_deleted_tubes
+                    hasattr(self, "cross_pipe_deleted_tubes")
+                    and self.cross_pipe_deleted_tubes
             ):
                 # 恢复所有被删除的换热管
                 self.build_huanreguan(self.cross_pipe_deleted_tubes)
@@ -30165,7 +30201,7 @@ class TubeLayoutEditor(QMainWindow):
             all_centers = self.judge_linkage_x(self.slide_selected_centers)
             self.build_huanreguan(all_centers)
         elif (
-            tube_num == "4" or tube_num == "6" and self.heat_exchanger in ["AEU", "BEU"]
+                tube_num == "4" or tube_num == "6" and self.heat_exchanger in ["AEU", "BEU"]
         ):
             all_centers = self.judge_linkage_y(self.slide_selected_centers)
             self.build_huanreguan(all_centers)
@@ -30374,8 +30410,8 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 检查点是否在边界框内
                 if not (
-                    min_x - 1e-8 <= x <= max_x + 1e-8
-                    and min_y - 1e-8 <= y <= max_y + 1e-8
+                        min_x - 1e-8 <= x <= max_x + 1e-8
+                        and min_y - 1e-8 <= y <= max_y + 1e-8
                 ):
                     return False
 
@@ -30418,7 +30454,7 @@ class TubeLayoutEditor(QMainWindow):
                 return math.hypot(x - proj_x, y - proj_y)
 
             def check_tube_slide_interference(
-                slide_corners, tube_centers, tube_diameter
+                    slide_corners, tube_centers, tube_diameter
             ):
                 # 【修改核心】：通过滑道矩形四角y坐标确定干涉范围，替代原几何干涉判断
                 # 1. 提取滑道矩形四个角的y坐标
@@ -30436,8 +30472,8 @@ class TubeLayoutEditor(QMainWindow):
                     center
                     for center in tube_centers
                     if lower_y - 1e-8 - self.r
-                    <= center[1]
-                    <= upper_y + 1e-8 + self.r  # 浮点数误差容忍
+                       <= center[1]
+                       <= upper_y + 1e-8 + self.r  # 浮点数误差容忍
                 ]
                 # 5. 收集干涉管的y坐标
                 interfering_y_coords = {center[1] for center in interfering_tubes}
@@ -30445,7 +30481,7 @@ class TubeLayoutEditor(QMainWindow):
                 return interfering_tubes, interfering_y_coords
 
             def get_slide_interfering_tubes(
-                base_x, base_y, unit_dx, unit_dy, thickness, length, is_left=True
+                    base_x, base_y, unit_dx, unit_dy, thickness, length, is_left=True
             ):
                 perp_dx, perp_dy = -unit_dy, unit_dx
                 half_thick = thickness / 2
@@ -30657,8 +30693,8 @@ class TubeLayoutEditor(QMainWindow):
         # 定义一个判断两点是否重合的辅助函数（处理浮点数精度）
         def is_coincident(center1, center2, epsilon=1e-6):
             return (
-                abs(center1[0] - center2[0]) < epsilon
-                and abs(center1[1] - center2[1]) < epsilon
+                    abs(center1[0] - center2[0]) < epsilon
+                    and abs(center1[1] - center2[1]) < epsilon
             )
 
         # 保留不在lagan_centers中的点
@@ -30709,7 +30745,7 @@ class TubeLayoutEditor(QMainWindow):
                 center
                 for center in (self.current_centers or []) + (self.lagan_info or [])
                 if math.hypot(center[0] - x1, center[1] - y1)
-                <= (half_thickness + tube_radius)
+                              <= (half_thickness + tube_radius)
             ]
         else:
             # 单位法向量（垂直于线段方向）
@@ -30761,10 +30797,10 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 快速边界框检查（避免创建图形对象）
                 if (
-                    cx + tube_radius < rect_min_x
-                    or cx - tube_radius > rect_max_x
-                    or cy + tube_radius < rect_min_y
-                    or cy - tube_radius > rect_max_y
+                        cx + tube_radius < rect_min_x
+                        or cx - tube_radius > rect_max_x
+                        or cy + tube_radius < rect_min_y
+                        or cy - tube_radius > rect_max_y
                 ):
                     continue
 
@@ -30785,8 +30821,8 @@ class TubeLayoutEditor(QMainWindow):
 
                     for x1, y1, x2, y2 in edges:
                         if (
-                            point_to_segment_distance(cx, cy, x1, y1, x2, y2)
-                            <= tube_radius
+                                point_to_segment_distance(cx, cy, x1, y1, x2, y2)
+                                <= tube_radius
                         ):
                             is_interfering = True
                             break
@@ -30874,7 +30910,7 @@ class TubeLayoutEditor(QMainWindow):
             self.update_tube_nums()
 
     def calculate_welded_impingement_interfering_tubes(
-        self, A_point, P_point, Q_point, B_point, baffle_thickness
+            self, A_point, P_point, Q_point, B_point, baffle_thickness
     ):
         """计算焊接式防冲板 APQB 与壳体大圆围成的扇形区域内的换热管，并删除干涉管。
 
@@ -30890,12 +30926,12 @@ class TubeLayoutEditor(QMainWindow):
         """
 
         if (
-            not isinstance(baffle_thickness, (int, float))
-            or baffle_thickness <= 0
-            or A_point is None
-            or B_point is None
-            or P_point is None
-            or Q_point is None
+                not isinstance(baffle_thickness, (int, float))
+                or baffle_thickness <= 0
+                or A_point is None
+                or B_point is None
+                or P_point is None
+                or Q_point is None
         ):
             return
 
@@ -31085,79 +31121,79 @@ class TubeLayoutEditor(QMainWindow):
 
         if a_gt_b_x and a_gt_b_y:  # 第一种情况
             if (
-                (A.x() > 0 > A.y() and B.x() > 0 and B.y() > 0)
-                or (
+                    (A.x() > 0 > A.y() and B.x() > 0 and B.y() > 0)
+                    or (
                     A.x() < 0
                     and A.y() < 0
                     and (B.x() > 0 > B.y() or B.x() < 0 and B.y() < 0)
-                )
-                or (
+            )
+                    or (
                     A.x() < 0 < A.y()
                     and (
-                        B.x() < 0 < B.y()
-                        or B.x() > 0 > B.y()
-                        or B.x() < 0
-                        and B.y() < 0
+                            B.x() < 0 < B.y()
+                            or B.x() > 0 > B.y()
+                            or B.x() < 0
+                            and B.y() < 0
                     )
-                )
-                or (
+            )
+                    or (
                     A.x() > 0
                     and A.y() > 0
                     and (B.x() < 0 and B.y() < 0 or B.x() < 0 < B.y())
-                )
+            )
             ):
                 use_standard = True
 
         elif a_lt_b_x and a_gt_b_y:  # 第二种情况
             if (
-                (A.x() > 0 > A.y() and (B.x() > 0 and B.y() > 0 or B.x() > 0 > B.y()))
-                or (
+                    (A.x() > 0 > A.y() and (B.x() > 0 and B.y() > 0 or B.x() > 0 > B.y()))
+                    or (
                     A.x() < 0
                     and A.y() < 0
                     and (B.x() > 0 > B.y() or B.x() > 0 and B.y() > 0)
-                )
-                or (
+            )
+                    or (
                     A.x() < 0 < A.y() and (B.x() < 0 < B.y() or B.x() < 0 and B.y() < 0)
-                )
-                or (
+            )
+                    or (
                     A.x() > 0
                     and A.y() > 0
                     and (B.x() < 0 and B.y() < 0 or B.x() < 0 < B.y())
-                )
+            )
             ):
                 use_standard = True
 
         elif a_gt_b_x and a_lt_b_y:  # 第三种情况
             if (
-                (A.x() > 0 > A.y() and (B.x() > 0 and B.y() > 0 or B.x() < 0 < B.y()))
-                or (
+                    (A.x() > 0 > A.y() and (B.x() > 0 and B.y() > 0 or B.x() < 0 < B.y()))
+                    or (
                     A.x() < 0
                     and A.y() < 0
                     and (B.x() > 0 > B.y() or B.x() < 0 and B.y() < 0)
-                )
-                or (
+            )
+                    or (
                     A.x() < 0 < A.y() and (B.x() > 0 > B.y() or B.x() < 0 and B.y() < 0)
-                )
-                or (
+            )
+                    or (
                     A.x() > 0
                     and A.y() > 0
                     and (B.x() < 0 < B.y() or B.x() > 0 and B.y() > 0)
-                )
+            )
             ):
                 use_standard = True
 
         elif a_lt_b_x and a_lt_b_y:  # 第四种情况
             if (
-                (A.x() > 0 > A.y() and (B.x() > 0 and B.y() > 0 or B.x() > 0 > B.y()))
-                or (A.x() < 0 and A.y() < 0 and B.x() > 0 > B.y())
-                or (
+                    (A.x() > 0 > A.y() and (B.x() > 0 and B.y() > 0 or B.x() > 0 > B.y()))
+                    or (A.x() < 0 and A.y() < 0 and B.x() > 0 > B.y())
+                    or (
                     A.x() < 0 < A.y() and (B.x() > 0 > B.y() or B.x() < 0 and B.y() < 0)
-                )
-                or (
+            )
+                    or (
                     A.x() > 0
                     and A.y() > 0
                     and (B.x() < 0 < B.y() or B.x() > 0 and B.y() > 0)
-                )
+            )
             ):
                 use_standard = True
 
@@ -31616,10 +31652,10 @@ class TubeLayoutEditor(QMainWindow):
 
         # 针对圆弧形防冲板，在调用build_impingement_plate之前检查顶部长度是否为负值
         if (
-            baffle_type == "圆弧形"
-            and baffle_angle is not None
-            and tube_outer_diameter is not None
-            and tube_pitch is not None
+                baffle_type == "圆弧形"
+                and baffle_angle is not None
+                and tube_outer_diameter is not None
+                and tube_pitch is not None
         ):
             from PyQt5.QtCore import QPointF
             import math
@@ -31639,7 +31675,7 @@ class TubeLayoutEditor(QMainWindow):
                         else self.full_sorted_current_centers_down
                     )
                     if row_idx < len(centers_group) and col_idx < len(
-                        centers_group[row_idx]
+                            centers_group[row_idx]
                     ):
                         x, y = centers_group[row_idx][col_idx]
                         points.append((x, y))
@@ -31665,11 +31701,11 @@ class TubeLayoutEditor(QMainWindow):
                         angle_rad = math.radians(baffle_angle)
                         fix_dy_plus_1 = int(tube_pitch) + 1
                         fix_tube_half_plus_6_plus_1 = (
-                            int(tube_outer_diameter / 2 + 6) + 1
+                                int(tube_outer_diameter / 2 + 6) + 1
                         )
                         baffle_height = max(fix_dy_plus_1, fix_tube_half_plus_6_plus_1)
                         top_length = AB_length - 2 * (
-                            baffle_height / math.tan(angle_rad)
+                                baffle_height / math.tan(angle_rad)
                         )
 
                         # 检查顶部长度是否为负值
@@ -31700,16 +31736,16 @@ class TubeLayoutEditor(QMainWindow):
 
     # TODO 防冲板函数
     def build_impingement_plate(
-        self,
-        selected_centers,
-        baffle_type,
-        baffle_thickness,
-        baffle_angle,
-        baffle_width,
-        baffle_azimuth,
-        baffle_distance,
-        tube_outer_diameter,
-        tube_pitch,
+            self,
+            selected_centers,
+            baffle_type,
+            baffle_thickness,
+            baffle_angle,
+            baffle_width,
+            baffle_azimuth,
+            baffle_distance,
+            tube_outer_diameter,
+            tube_pitch,
     ):
         self.operation_order += 1
 
@@ -31744,12 +31780,12 @@ class TubeLayoutEditor(QMainWindow):
         if isinstance(selected_centers, list):
             # 检查是否是嵌套列表（如 [[coord1, coord2], [coord3, coord4]]）
             if (
-                len(selected_centers) > 0
-                and isinstance(selected_centers[0], list)
-                and all(
-                    isinstance(sublist, list) and len(sublist) == 2
-                    for sublist in selected_centers
-                )
+                    len(selected_centers) > 0
+                    and isinstance(selected_centers[0], list)
+                    and all(
+                isinstance(sublist, list) and len(sublist) == 2
+                for sublist in selected_centers
+            )
             ):
 
                 # 这是嵌套列表，清空并逐对处理
@@ -31775,7 +31811,7 @@ class TubeLayoutEditor(QMainWindow):
 
             # 检查是否是扁平的长列表（如 [coord1, coord2, coord3, coord4]），需要成对拆分
             elif len(selected_centers) > 2 and all(
-                isinstance(item, tuple) and len(item) == 2 for item in selected_centers
+                    isinstance(item, tuple) and len(item) == 2 for item in selected_centers
             ):
 
                 # 这是扁平列表，清空并成对处理
@@ -31820,8 +31856,8 @@ class TubeLayoutEditor(QMainWindow):
                     item
                     for item in selected_centers
                     if isinstance(item, tuple)
-                    and len(item) == 2
-                    and all(isinstance(x, (int, float)) for x in item)
+                       and len(item) == 2
+                       and all(isinstance(x, (int, float)) for x in item)
                 ]
             elif isinstance(selected_centers, str):
                 try:
@@ -31831,8 +31867,8 @@ class TubeLayoutEditor(QMainWindow):
                             item
                             for item in parsed_list
                             if isinstance(item, tuple)
-                            and len(item) == 2
-                            and all(isinstance(x, (int, float)) for x in item)
+                               and len(item) == 2
+                               and all(isinstance(x, (int, float)) for x in item)
                         ]
                 except (SyntaxError, ValueError, TypeError) as e:
                     print("字符串解析错误:", e)
@@ -31882,7 +31918,7 @@ class TubeLayoutEditor(QMainWindow):
                         else self.full_sorted_current_centers_down
                     )
                     if row_idx < len(centers_group) and col_idx < len(
-                        centers_group[row_idx]
+                            centers_group[row_idx]
                     ):
                         x, y = centers_group[row_idx][col_idx]
                         click_point = QPointF(x, y)
@@ -31913,7 +31949,7 @@ class TubeLayoutEditor(QMainWindow):
                         else self.full_sorted_current_centers_down
                     )
                     if row_idx < len(centers_group) and col_idx < len(
-                        centers_group[row_idx]
+                            centers_group[row_idx]
                     ):
                         x, y = centers_group[row_idx][col_idx]
                         points.append((x, y))
@@ -31921,8 +31957,8 @@ class TubeLayoutEditor(QMainWindow):
                         click_point = QPointF(x, y)
                         for item in self.graphics_scene.items(click_point):
                             if (
-                                isinstance(item, QGraphicsEllipseItem)
-                                and item.data(0) == "marker"
+                                    isinstance(item, QGraphicsEllipseItem)
+                                    and item.data(0) == "marker"
                             ):
                                 self.graphics_scene.removeItem(item)
                                 break
@@ -32149,8 +32185,8 @@ class TubeLayoutEditor(QMainWindow):
                     item
                     for item in selected_centers
                     if isinstance(item, tuple)
-                    and len(item) == 2
-                    and all(isinstance(x, (int, float)) for x in item)
+                       and len(item) == 2
+                       and all(isinstance(x, (int, float)) for x in item)
                 ]
             elif isinstance(selected_centers, str):
                 try:
@@ -32160,8 +32196,8 @@ class TubeLayoutEditor(QMainWindow):
                             item
                             for item in parsed_list
                             if isinstance(item, tuple)
-                            and len(item) == 2
-                            and all(isinstance(x, (int, float)) for x in item)
+                               and len(item) == 2
+                               and all(isinstance(x, (int, float)) for x in item)
                         ]
                 except (SyntaxError, ValueError, TypeError) as e:
                     print("字符串解析错误:", e)
@@ -32227,7 +32263,7 @@ class TubeLayoutEditor(QMainWindow):
                     else self.full_sorted_current_centers_down
                 )
                 if row_idx < len(centers_group) and col_idx < len(
-                    centers_group[row_idx]
+                        centers_group[row_idx]
                 ):
                     x, y = centers_group[row_idx][col_idx]
                     points.append((x, y))
@@ -32235,8 +32271,8 @@ class TubeLayoutEditor(QMainWindow):
                     click_point = QPointF(x, y)
                     for item in self.graphics_scene.items(click_point):
                         if (
-                            isinstance(item, QGraphicsEllipseItem)
-                            and item.data(0) == "marker"
+                                isinstance(item, QGraphicsEllipseItem)
+                                and item.data(0) == "marker"
                         ):
                             self.graphics_scene.removeItem(item)
                             break
@@ -32320,14 +32356,14 @@ class TubeLayoutEditor(QMainWindow):
 
             # 分别计算使用两个y_axis方向的P点
             P1 = (
-                A
-                + x_axis * (incline_length * math.cos(angle_rad))
-                + y_axis1 * (incline_length * math.sin(angle_rad))
+                    A
+                    + x_axis * (incline_length * math.cos(angle_rad))
+                    + y_axis1 * (incline_length * math.sin(angle_rad))
             )
             P2 = (
-                A
-                + x_axis * (incline_length * math.cos(angle_rad))
-                + y_axis2 * (incline_length * math.sin(angle_rad))
+                    A
+                    + x_axis * (incline_length * math.cos(angle_rad))
+                    + y_axis2 * (incline_length * math.sin(angle_rad))
             )
 
             # 计算P1、P2到原点的距离平方
@@ -32536,9 +32572,9 @@ class TubeLayoutEditor(QMainWindow):
                 try:
                     plate_id = getattr(baffle_item, "impingement_plate_id", None)
                     if (
-                        plate_id is not None
-                        and hasattr(self, "impingement_plate_dic")
-                        and isinstance(self.impingement_plate_dic.get(plate_id), dict)
+                            plate_id is not None
+                            and hasattr(self, "impingement_plate_dic")
+                            and isinstance(self.impingement_plate_dic.get(plate_id), dict)
                     ):
                         self.impingement_plate_dic[plate_id][
                             "interfering_tubes_rel"
@@ -32596,8 +32632,8 @@ class TubeLayoutEditor(QMainWindow):
                     item
                     for item in selected_centers
                     if isinstance(item, tuple)
-                    and len(item) == 2
-                    and all(isinstance(x, (int, float)) for x in item)
+                       and len(item) == 2
+                       and all(isinstance(x, (int, float)) for x in item)
                 ]
             elif isinstance(selected_centers, str):
                 try:
@@ -32607,8 +32643,8 @@ class TubeLayoutEditor(QMainWindow):
                             item
                             for item in parsed_list
                             if isinstance(item, tuple)
-                            and len(item) == 2
-                            and all(isinstance(x, (int, float)) for x in item)
+                               and len(item) == 2
+                               and all(isinstance(x, (int, float)) for x in item)
                         ]
                 except (SyntaxError, ValueError, TypeError) as e:
                     print("字符串解析错误:", e)
@@ -32797,10 +32833,10 @@ class TubeLayoutEditor(QMainWindow):
             # 6) 先使用 APQB 梯形与 global_centers 计算焊接式防冲板的干涉换热管并删除
             try:
                 if (
-                    A_point is not None
-                    and B_point is not None
-                    and isinstance(baffle_thickness, (int, float))
-                    and baffle_thickness > 0
+                        A_point is not None
+                        and B_point is not None
+                        and isinstance(baffle_thickness, (int, float))
+                        and baffle_thickness > 0
                 ):
                     self.calculate_welded_impingement_interfering_tubes(
                         A_point=A_point,
@@ -33003,10 +33039,10 @@ class TubeLayoutEditor(QMainWindow):
         try:
             plate_id = getattr(baffle_item, "impingement_plate_id", None)
             if (
-                plate_id is not None
-                and hasattr(self, "impingement_plate_dic")
-                and isinstance(self.impingement_plate_dic, dict)
-                and plate_id in self.impingement_plate_dic
+                    plate_id is not None
+                    and hasattr(self, "impingement_plate_dic")
+                    and isinstance(self.impingement_plate_dic, dict)
+                    and plate_id in self.impingement_plate_dic
             ):
                 rec = self.impingement_plate_dic.get(plate_id, {})
                 type_map = {1: "平板形", 2: "圆弧形", 3: "焊接式"}
@@ -33310,10 +33346,10 @@ class TubeLayoutEditor(QMainWindow):
         try:
             plate_id = getattr(baffle_item, "impingement_plate_id", None)
             if (
-                plate_id is not None
-                and hasattr(self, "impingement_plate_dic")
-                and isinstance(self.impingement_plate_dic, dict)
-                and plate_id in self.impingement_plate_dic
+                    plate_id is not None
+                    and hasattr(self, "impingement_plate_dic")
+                    and isinstance(self.impingement_plate_dic, dict)
+                    and plate_id in self.impingement_plate_dic
             ):
                 type_map = {"平板形": 1, "圆弧形": 2, "焊接式": 3}
                 new_type_val = type_map.get(baffle_type)
@@ -34098,7 +34134,7 @@ class TubeLayoutEditor(QMainWindow):
             return (c[1] - a[1]) * (b[0] - a[0]) > (b[1] - a[1]) * (c[0] - a[0])
 
         return (ccw(p1, q1, q2) != ccw(p2, q1, q2)) and (
-            ccw(p1, p2, q1) != ccw(p1, p2, q2)
+                ccw(p1, p2, q1) != ccw(p1, p2, q2)
         )
 
     def check_center_block_intersection(self, new_start, new_end):
@@ -34128,9 +34164,9 @@ class TubeLayoutEditor(QMainWindow):
         def _get_layout_param(key, default=0.0):
             try:
                 if (
-                    hasattr(self, "input_json")
-                    and key in self.input_json
-                    and self.input_json[key] not in [None, ""]
+                        hasattr(self, "input_json")
+                        and key in self.input_json
+                        and self.input_json[key] not in [None, ""]
                 ):
                     return float(str(self.input_json[key]).strip())
             except Exception:
@@ -34224,9 +34260,9 @@ class TubeLayoutEditor(QMainWindow):
                 (p1, p2)
                 for (p1, p2) in self.center_dangban_lines
                 if p1
-                and p2
-                and isinstance(p1, (list, tuple))
-                and isinstance(p2, (list, tuple))
+                   and p2
+                   and isinstance(p1, (list, tuple))
+                   and isinstance(p2, (list, tuple))
             ]
 
             # 2. 遍历存储的标签，转换为真实坐标进行检测
@@ -34238,7 +34274,7 @@ class TubeLayoutEditor(QMainWindow):
                 if a1_real and a2_real:
                     # 调用您在 self 类中定义的 is_line_intersect
                     if self.is_line_intersect(
-                        new_start_real, new_end_real, a1_real, a2_real
+                            new_start_real, new_end_real, a1_real, a2_real
                     ):
                         return True
             return False
@@ -34310,13 +34346,13 @@ class TubeLayoutEditor(QMainWindow):
             heat_exchanger = getattr(self, "heat_exchanger", None)
             tube_pass_form_value = getattr(self, "tube_pass_form_value", None)
             is_special_4_1 = (str(heat_exchanger) in ("AES", "BES", "NEN")) and (
-                str(tube_pass_form_value) == "4.1"
+                    str(tube_pass_form_value) == "4.1"
             )
             is_special_4_3 = (str(heat_exchanger) in ("AES", "BES", "NEN")) and (
-                str(tube_pass_form_value) == "4.3"
+                    str(tube_pass_form_value) == "4.3"
             )
             is_special_6_1 = (str(heat_exchanger) in ("AES", "BES", "NEN")) and (
-                str(tube_pass_form_value) == "6.1"
+                    str(tube_pass_form_value) == "6.1"
             )
 
             print("\n[DEBUG] ===== 检测分程隔板两侧逻辑 =====")
@@ -34338,10 +34374,10 @@ class TubeLayoutEditor(QMainWindow):
                     print("[DEBUG] ✅ 满足竖直分程隔板两侧规则")
 
             if (
-                (is_special_4_3 or is_special_6_1)
-                and (line_num_1 in (1, 2))
-                and (line_num_2 in (1, 2))
-                and abs(dx - LB_SNH) <= tol_h
+                    (is_special_4_3 or is_special_6_1)
+                    and (line_num_1 in (1, 2))
+                    and (line_num_2 in (1, 2))
+                    and abs(dx - LB_SNH) <= tol_h
             ):
                 vertical_ok = True
                 print(
@@ -34400,10 +34436,10 @@ class TubeLayoutEditor(QMainWindow):
 
                 if side_type == "horizontal":
                     if (
-                        (tube_pass_int == 6)
-                        or is_special_4_3
-                        or is_special_4_1
-                        or is_special_6_1
+                            (tube_pass_int == 6)
+                            or is_special_4_3
+                            or is_special_4_1
+                            or is_special_6_1
                     ):
                         if LB_TubeD > 0 and dx > 3 * LB_TubeD:
                             return (
@@ -34484,17 +34520,17 @@ class TubeLayoutEditor(QMainWindow):
                     )
                 elif tube_num in ["4", "6"]:
                     if (
-                        self.selected_centers
-                        and len(self.selected_centers) >= 2
-                        and self.selected_centers[0][0] == self.selected_centers[1][0]
+                            self.selected_centers
+                            and len(self.selected_centers) >= 2
+                            and self.selected_centers[0][0] == self.selected_centers[1][0]
                     ):
                         selected_centers_for_check = self.judge_linkage_x(
                             self.selected_centers
                         )
                     elif (
-                        self.selected_centers
-                        and len(self.selected_centers) >= 2
-                        and self.selected_centers[0][1] == self.selected_centers[1][1]
+                            self.selected_centers
+                            and len(self.selected_centers) >= 2
+                            and self.selected_centers[0][1] == self.selected_centers[1][1]
                     ):
                         selected_centers_for_check = self.judge_linkage_y(
                             self.selected_centers
@@ -34674,9 +34710,9 @@ class TubeLayoutEditor(QMainWindow):
 
             # 更新分组映射（确保使用最新坐标）
             if (
-                hasattr(self, "group_centers_by_y")
-                and hasattr(self, "global_centers")
-                and hasattr(self, "current_centers")
+                    hasattr(self, "group_centers_by_y")
+                    and hasattr(self, "global_centers")
+                    and hasattr(self, "current_centers")
             ):
                 (
                     self.full_sorted_current_centers_up,
@@ -34704,8 +34740,8 @@ class TubeLayoutEditor(QMainWindow):
                 # 1) 清空现有中间挡板图元：从场景中扫描 is_center_dangban 的项，并一并删除其临时 path
                 try:
                     if (
-                        hasattr(self, "graphics_scene")
-                        and self.graphics_scene is not None
+                            hasattr(self, "graphics_scene")
+                            and self.graphics_scene is not None
                     ):
                         for item in list(self.graphics_scene.items()):
                             try:
@@ -34713,14 +34749,14 @@ class TubeLayoutEditor(QMainWindow):
                                     # 先删附属的临时 path 项
                                     try:
                                         temp_items = (
-                                            getattr(item, "related_temp_items", None)
-                                            or []
+                                                getattr(item, "related_temp_items", None)
+                                                or []
                                         )
                                         for t in list(temp_items):
                                             try:
                                                 if (
-                                                    t is not None
-                                                    and t.scene() == self.graphics_scene
+                                                        t is not None
+                                                        and t.scene() == self.graphics_scene
                                                 ):
                                                     self.graphics_scene.removeItem(t)
                                             except Exception:
@@ -34806,19 +34842,19 @@ class TubeLayoutEditor(QMainWindow):
 
             # selected_centers_local 可能为多对，按原来方式循环成对绘制
             if (
-                isinstance(selected_centers_local, (list, tuple))
-                and len(selected_centers_local) >= 2
+                    isinstance(selected_centers_local, (list, tuple))
+                    and len(selected_centers_local) >= 2
             ):
                 # 若用户选择的是多个点（成对排列），保持原先批量逻辑：步长2
                 if (
-                    all(
-                        isinstance(it, (tuple, list)) and len(it) == 2
-                        for it in selected_centers_local
-                    )
-                    and len(selected_centers_local) > 2
+                        all(
+                            isinstance(it, (tuple, list)) and len(it) == 2
+                            for it in selected_centers_local
+                        )
+                        and len(selected_centers_local) > 2
                 ):
                     for i in range(0, len(selected_centers_local), 2):
-                        pair = selected_centers_local[i : i + 2]
+                        pair = selected_centers_local[i: i + 2]
                         if len(pair) == 2:
                             normalized_pair, _ = normalize_selected_centers(pair)
 
@@ -34939,12 +34975,12 @@ class TubeLayoutEditor(QMainWindow):
         dialog.exec_()
 
     def build_center_dangban(
-        self,
-        selected_centers,
-        block_thickness,
-        block_width,
-        from_symmetric=False,
-        added_pairs=None,
+            self,
+            selected_centers,
+            block_thickness,
+            block_width,
+            from_symmetric=False,
+            added_pairs=None,
     ):
         self.operation_order += 1
         """构建紫色中间挡板（支持任意角度，对称模式自动绘制所有对应挡板）
@@ -34987,9 +35023,9 @@ class TubeLayoutEditor(QMainWindow):
         if isinstance(selected_centers, (list, tuple)):
             for it in selected_centers:
                 if (
-                    isinstance(it, (list, tuple))
-                    and len(it) == 2
-                    and all(isinstance(x, (int, float)) for x in it)
+                        isinstance(it, (list, tuple))
+                        and len(it) == 2
+                        and all(isinstance(x, (int, float)) for x in it)
                 ):
                     selected_centers_list.append((int(it[0]), int(it[1])))
 
@@ -35024,7 +35060,7 @@ class TubeLayoutEditor(QMainWindow):
                 else self.full_sorted_current_centers_down
             )
             if 0 <= row_idx < len(centers_group) and 0 <= col_idx < len(
-                centers_group[row_idx]
+                    centers_group[row_idx]
             ):
                 x, y = centers_group[row_idx][col_idx]
                 points.append((x, y))
@@ -35129,15 +35165,15 @@ class TubeLayoutEditor(QMainWindow):
         position_exists = False
         for item in self.graphics_scene.items():
             if isinstance(item, ClickableRectItem) and getattr(
-                item, "is_center_dangban", False
+                    item, "is_center_dangban", False
             ):
                 try:
                     item_rect = item.boundingRect()
                     item_center_x = item.x() + item_rect.center().x()
                     item_center_y = item.y() + item_rect.center().y()
                     if (
-                        abs(item_center_x - target_center_x) < 10
-                        and abs(item_center_y - target_center_y) < 10
+                            abs(item_center_x - target_center_x) < 10
+                            and abs(item_center_y - target_center_y) < 10
                     ):
                         position_exists = True
                         break
@@ -35247,8 +35283,8 @@ class TubeLayoutEditor(QMainWindow):
         """删除选中的中间挡板（已修复，确保清理干涉检测列表）"""
         try:
             if (
-                not hasattr(self, "selected_center_dangban")
-                or not self.selected_center_dangban
+                    not hasattr(self, "selected_center_dangban")
+                    or not self.selected_center_dangban
             ):
                 return
 
@@ -35266,9 +35302,9 @@ class TubeLayoutEditor(QMainWindow):
             for block in blocks_to_remove:
                 # 假设 `original_coords` 是 [(r1, c1), (r2, c2)]
                 if (
-                    hasattr(block, "original_coords")
-                    and isinstance(block.original_coords, (list, tuple))
-                    and len(block.original_coords) == 2
+                        hasattr(block, "original_coords")
+                        and isinstance(block.original_coords, (list, tuple))
+                        and len(block.original_coords) == 2
                 ):
                     try:
                         # 转换为 frozenset( (r1, c1), (r2, c2) )
@@ -35327,7 +35363,7 @@ class TubeLayoutEditor(QMainWindow):
                     for item in self.graphics_scene.items():
                         # (使用 getattr 避免 ClickableRectItem 未定义)
                         if getattr(item, "is_center_dangban", False) and hasattr(
-                            item, "original_selected_center"
+                                item, "original_selected_center"
                         ):
                             all_center_dangban_in_scene.append(item)
 
@@ -35347,9 +35383,9 @@ class TubeLayoutEditor(QMainWindow):
 
                             # 【修复点 2】: 确保对称块的 label pair 也被收集
                             if (
-                                hasattr(item, "original_coords")
-                                and isinstance(item.original_coords, (list, tuple))
-                                and len(item.original_coords) == 2
+                                    hasattr(item, "original_coords")
+                                    and isinstance(item.original_coords, (list, tuple))
+                                    and len(item.original_coords) == 2
                             ):
                                 try:
                                     pair_frozenset = frozenset(
@@ -35404,7 +35440,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 删除关联的临时矩形
                 temp_removed = 0
                 if hasattr(block, "related_temp_items") and isinstance(
-                    block.related_temp_items, list
+                        block.related_temp_items, list
                 ):
                     for temp_item in block.related_temp_items:
                         if temp_item and temp_item.scene() == self.graphics_scene:
@@ -35414,7 +35450,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 移除自身，并同步移除内存字典记录
                 try:
                     if hasattr(block, "center_dangban_id") and hasattr(
-                        self, "center_dangban_dic"
+                            self, "center_dangban_dic"
                     ):
                         self.center_dangban_dic.pop(
                             getattr(block, "center_dangban_id"), None
@@ -35542,8 +35578,8 @@ class TubeLayoutEditor(QMainWindow):
                 try:
                     # 1) 从场景中删除所有中间挡板图元（含其临时 path 项）
                     if (
-                        hasattr(self, "graphics_scene")
-                        and self.graphics_scene is not None
+                            hasattr(self, "graphics_scene")
+                            and self.graphics_scene is not None
                     ):
                         for item in list(self.graphics_scene.items()):
                             try:
@@ -35551,14 +35587,14 @@ class TubeLayoutEditor(QMainWindow):
                                     # 先删附属的临时 path
                                     try:
                                         temp_items = (
-                                            getattr(item, "related_temp_items", None)
-                                            or []
+                                                getattr(item, "related_temp_items", None)
+                                                or []
                                         )
                                         for t in list(temp_items):
                                             try:
                                                 if (
-                                                    t is not None
-                                                    and t.scene() == self.graphics_scene
+                                                        t is not None
+                                                        and t.scene() == self.graphics_scene
                                                 ):
                                                     self.graphics_scene.removeItem(t)
                                             except Exception:
@@ -35620,9 +35656,9 @@ class TubeLayoutEditor(QMainWindow):
                 # 计算需要处理的坐标对（最多2个：原对+其对称对）
                 pairs_to_process = [base_pair]
                 if (
-                    self.isSymmetry
-                    and isinstance(base_pair, (list, tuple))
-                    and len(base_pair) == 2
+                        self.isSymmetry
+                        and isinstance(base_pair, (list, tuple))
+                        and len(base_pair) == 2
                 ):
                     try:
                         a, b = base_pair[0], base_pair[1]
@@ -35710,8 +35746,8 @@ class TubeLayoutEditor(QMainWindow):
             return None
 
         if (
-            not hasattr(self, "full_sorted_current_centers_up")
-            or not self.full_sorted_current_centers_up
+                not hasattr(self, "full_sorted_current_centers_up")
+                or not self.full_sorted_current_centers_up
         ):
             return None
 
@@ -35755,8 +35791,8 @@ class TubeLayoutEditor(QMainWindow):
                 item
                 for item in selected_centers
                 if isinstance(item, tuple)
-                and len(item) == 2
-                and all(isinstance(x, (int, float)) for x in item)
+                   and len(item) == 2
+                   and all(isinstance(x, (int, float)) for x in item)
             ]
         elif isinstance(selected_centers, str):
             try:
@@ -35766,8 +35802,8 @@ class TubeLayoutEditor(QMainWindow):
                         item
                         for item in parsed_list
                         if isinstance(item, tuple)
-                        and len(item) == 2
-                        and all(isinstance(x, (int, float)) for x in item)
+                           and len(item) == 2
+                           and all(isinstance(x, (int, float)) for x in item)
                     ]
             except (SyntaxError, ValueError, TypeError):
                 return []
@@ -35795,10 +35831,10 @@ class TubeLayoutEditor(QMainWindow):
                 )
 
                 if (
-                    row_idx < 0
-                    or row_idx >= len(centers_group)
-                    or col_idx < 0
-                    or col_idx >= len(centers_group[row_idx])
+                        row_idx < 0
+                        or row_idx >= len(centers_group)
+                        or col_idx < 0
+                        or col_idx >= len(centers_group[row_idx])
                 ):
                     continue
 
@@ -35837,8 +35873,8 @@ class TubeLayoutEditor(QMainWindow):
                     item_center_x = item.x() + item_rect.center().x()
                     item_center_y = item.y() + item_rect.center().y()
                     if (
-                        abs(item_center_x - target_center_x) < 5
-                        and abs(item_center_y - target_center_y) < 5
+                            abs(item_center_x - target_center_x) < 5
+                            and abs(item_center_y - target_center_y) < 5
                     ):
                         return []  # 位置已存在，跳过
 
@@ -35886,8 +35922,8 @@ class TubeLayoutEditor(QMainWindow):
                     item_center_x = item.x() + item_rect.center().x()
                     item_center_y = item.y() + item_rect.center().y()
                     if (
-                        abs(item_center_x - target_center_x) < 5
-                        and abs(item_center_y - target_center_y) < 5
+                            abs(item_center_x - target_center_x) < 5
+                            and abs(item_center_y - target_center_y) < 5
                     ):
                         return []  # 位置已存在，跳过
 
@@ -35918,8 +35954,8 @@ class TubeLayoutEditor(QMainWindow):
         """删除选中的中间挡板（完全照搬旁路挡板删除逻辑）"""
         try:
             if (
-                not hasattr(self, "selected_center_dangban")
-                or not self.selected_center_dangban
+                    not hasattr(self, "selected_center_dangban")
+                    or not self.selected_center_dangban
             ):
                 return
 
@@ -35989,9 +36025,9 @@ class TubeLayoutEditor(QMainWindow):
                     all_center_dangban_in_scene = []
                     for item in self.graphics_scene.items():
                         if (
-                            isinstance(item, ClickableRectItem)
-                            and item.is_center_dangban
-                            and hasattr(item, "original_selected_center")
+                                isinstance(item, ClickableRectItem)
+                                and item.is_center_dangban
+                                and hasattr(item, "original_selected_center")
                         ):
                             # print(f"  挡板: original_selected_center={item.original_selected_center}, 位置={item.pos()}")
                             all_center_dangban_in_scene.append(item)
@@ -36038,7 +36074,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 删除关联的临时矩形
                 temp_removed = 0
                 if hasattr(block, "related_temp_items") and isinstance(
-                    block.related_temp_items, list
+                        block.related_temp_items, list
                 ):
                     for temp_item in block.related_temp_items:
                         if temp_item and temp_item.scene() == self.graphics_scene:
@@ -36050,7 +36086,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 移除自身，并同步移除内存字典记录
                 try:
                     if hasattr(block, "center_dangban_id") and hasattr(
-                        self, "center_dangban_dic"
+                            self, "center_dangban_dic"
                     ):
                         self.center_dangban_dic.pop(
                             getattr(block, "center_dangban_id"), None
@@ -36115,7 +36151,7 @@ class TubeLayoutEditor(QMainWindow):
                     if getattr(item, "is_screw_ring", False):
                         ring_id = getattr(item, "screw_ring_id", None)
                         if ring_id is not None and hasattr(
-                            self, "toggle_screw_ring_selection"
+                                self, "toggle_screw_ring_selection"
                         ):
                             self.toggle_screw_ring_selection(ring_id)
                             event.accept()
@@ -36187,8 +36223,8 @@ class TubeLayoutEditor(QMainWindow):
                         click_point = QPointF(x, y)
                         for it in self.graphics_scene.items(click_point):
                             if (
-                                isinstance(it, QGraphicsEllipseItem)
-                                and it.data(0) == "marker"
+                                    isinstance(it, QGraphicsEllipseItem)
+                                    and it.data(0) == "marker"
                             ):
                                 self.graphics_scene.removeItem(it)
                                 break
@@ -36277,9 +36313,9 @@ class TubeLayoutEditor(QMainWindow):
             elif event.type() == QEvent.MouseMove:
                 # 左键拖动时，如果已按下且有起点，则当拖动距离超过阈值时开始/更新框选矩形
                 if (
-                    self._box_selecting
-                    and self._box_start_pos is not None
-                    and event.buttons() & Qt.LeftButton
+                        self._box_selecting
+                        and self._box_start_pos is not None
+                        and event.buttons() & Qt.LeftButton
                 ):
                     current_pos = self.graphics_view.mapToScene(event.pos())
                     rect = QRectF(self._box_start_pos, current_pos).normalized()
@@ -36307,8 +36343,8 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 若存在可见矩形，则执行框选逻辑；否则视为单击（或极小移动）
                     has_rect = (
-                        isinstance(self._box_rect_item, QGraphicsRectItem)
-                        and self._box_rect_item.scene() is not None
+                            isinstance(self._box_rect_item, QGraphicsRectItem)
+                            and self._box_rect_item.scene() is not None
                     )
 
                     # 无论如何先清理临时矩形和状态
@@ -36368,8 +36404,8 @@ class TubeLayoutEditor(QMainWindow):
                                 self._tube_last_click_label = None
                             now_t = time.monotonic()
                             if (
-                                self._tube_last_click_label == label
-                                and (now_t - float(self._tube_last_click_time)) <= 1.0
+                                    self._tube_last_click_label == label
+                                    and (now_t - float(self._tube_last_click_time)) <= 1.0
                             ):
                                 print("检测到对换热管双击操作")
                             self._tube_last_click_time = now_t
@@ -36386,8 +36422,8 @@ class TubeLayoutEditor(QMainWindow):
                                 click_point = QPointF(x, y)
                                 for it in self.graphics_scene.items(click_point):
                                     if (
-                                        isinstance(it, QGraphicsEllipseItem)
-                                        and it.data(0) == "marker"
+                                            isinstance(it, QGraphicsEllipseItem)
+                                            and it.data(0) == "marker"
                                     ):
                                         self.graphics_scene.removeItem(it)
                                         break
@@ -36422,7 +36458,7 @@ class TubeLayoutEditor(QMainWindow):
                     marker_points = []
 
                     for row, row_list in enumerate(
-                        self.full_sorted_current_centers_up or []
+                            self.full_sorted_current_centers_up or []
                     ):
                         for col, coord in enumerate(row_list):
                             x, y = coord
@@ -36435,7 +36471,7 @@ class TubeLayoutEditor(QMainWindow):
                                 marker_points.append((x, y))
 
                     for row, row_list in enumerate(
-                        self.full_sorted_current_centers_down or []
+                            self.full_sorted_current_centers_down or []
                     ):
                         for col, coord in enumerate(row_list):
                             x, y = coord
@@ -36487,8 +36523,8 @@ class TubeLayoutEditor(QMainWindow):
                                 marker.setData(0, "marker")
                         else:
                             if (
-                                hasattr(self, "selected_centers")
-                                and self.selected_centers
+                                    hasattr(self, "selected_centers")
+                                    and self.selected_centers
                             ):
                                 self.selected_centers = []
                     else:
@@ -36513,8 +36549,8 @@ class TubeLayoutEditor(QMainWindow):
                                 click_point = QPointF(x, y)
                                 for it in self.graphics_scene.items(click_point):
                                     if (
-                                        isinstance(it, _QBoxEllipse2)
-                                        and it.data(0) == "marker"
+                                            isinstance(it, _QBoxEllipse2)
+                                            and it.data(0) == "marker"
                                     ):
                                         self.graphics_scene.removeItem(it)
                                         break
