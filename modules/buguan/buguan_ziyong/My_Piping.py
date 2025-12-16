@@ -1718,6 +1718,15 @@ class TubeLayoutEditor(QMainWindow):
         if not self.has_piped and total == 0:
             total = 980
         self.total_holes_label.setText(f"总管孔数量: {total}")
+    
+    def toggle_arrange_text(self):
+        """切换按钮文字（按行排列 <-> 按列排列）"""
+        if hasattr(self, 'is_arrange_by_row'):
+            self.is_arrange_by_row = not self.is_arrange_by_row
+            if self.is_arrange_by_row:
+                self.arrange_button.setText("按行排列")
+            else:
+                self.arrange_button.setText("按列排列")
 
     def update_total_lagan_count(self):
         """根据 lagan_info 和 red_dangban 的长度更新总拉杆数量标签"""
@@ -2300,10 +2309,58 @@ class TubeLayoutEditor(QMainWindow):
         hole_title.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(hole_title)
 
+        # 创建水平布局用于放置标签和按钮（整体居中）
+        holes_label_layout = QHBoxLayout()
+        holes_label_layout.setContentsMargins(0, 0, 0, 0)
+        holes_label_layout.setSpacing(12)
+        
+        # 添加左侧弹性空间，使内容居中
+        holes_label_layout.addStretch()
+        
         self.total_holes_label = QLabel("总管孔数量: 980")
         self.total_holes_label.setFont(QFont("Arial", 10, QFont.Bold))
         self.total_holes_label.setAlignment(Qt.AlignCenter)
-        right_layout.addWidget(self.total_holes_label)
+        holes_label_layout.addWidget(self.total_holes_label)
+        
+        # 创建排列切换按钮
+        self.arrange_button = QPushButton("按行排列")
+        self.arrange_button.setFont(QFont("Microsoft YaHei", 9, QFont.Normal))
+        self.arrange_button.setMinimumSize(100, 32)
+        self.arrange_button.setMaximumSize(100, 32)
+        self.arrange_button.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #5B9BD5, stop:1 #41719C);
+                color: white;
+                border: 1px solid #3A6A8C;
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 9pt;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #6BA8E0, stop:1 #4E85B5);
+                border: 1px solid #4A7AA0;
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #41719C, stop:1 #2E4F6B);
+                border: 1px solid #2E4F6B;
+            }
+        """)
+        self.arrange_button.clicked.connect(self.toggle_arrange_text)
+        holes_label_layout.addWidget(self.arrange_button)
+        
+        # 添加右侧弹性空间，使内容居中
+        holes_label_layout.addStretch()
+        
+        # 将水平布局添加到右侧布局
+        holes_label_widget = QWidget()
+        holes_label_widget.setLayout(holes_label_layout)
+        right_layout.addWidget(holes_label_widget)
+        
+        # 初始化按钮状态
+        self.is_arrange_by_row = True
 
         self.total_lagan_label = QLabel("总拉杆数量: 0（当前无标准要求）")
         self.total_lagan_label.setFont(QFont("Arial", 10, QFont.Bold))
@@ -30725,13 +30782,12 @@ class TubeLayoutEditor(QMainWindow):
         ]
         print(self.selected_centers)
         if (
-            not hasattr(self, "selected_centers")
-            or len(self.selected_centers) == 1
-            or len(self.selected_centers) == 3
+                not hasattr(self, "selected_centers")
+                or len(self.selected_centers) not in (0, 2)
         ):
             from PyQt5.QtWidgets import QMessageBox
 
-            QMessageBox.warning(self, "提示", "选择换热管的数量不正确！这里吗")
+            QMessageBox.warning(self, "提示", "选择换热管的数量不正确！")
             self.clear_selection_highlight()
             return
 
@@ -31331,7 +31387,7 @@ class TubeLayoutEditor(QMainWindow):
             if len(selected_centers) != 2:
                 from PyQt5.QtWidgets import QMessageBox
 
-                QMessageBox.warning(self, "提示", "选择换热管的数量不正确！你好")
+                QMessageBox.warning(self, "提示", "选择换热管的数量不正确！")
                 self.clear_selection_highlight()
                 return []
 
@@ -31661,7 +31717,7 @@ class TubeLayoutEditor(QMainWindow):
             if len(selected_centers) != 2:
                 from PyQt5.QtWidgets import QMessageBox
 
-                QMessageBox.warning(self, "提示", "选择换热管的数量不正确！哈哈")
+                QMessageBox.warning(self, "提示", "选择换热管的数量不正确！")
                 self.clear_selection_highlight()
                 return []
             # 解析选中的中心点
