@@ -3946,7 +3946,7 @@ class TubeLayoutEditor(QMainWindow):
             # 兜底保护：任何异常都不影响后续计算逻辑，只打印错误并保持空字典
             print(f"初始化管口字典时出错: {str(e)}")
 
-        self.radial_hole_dict = {}
+
         try:
             if isinstance(self.pipe_port_dict, dict) and self.pipe_port_dict:
                 for code, owner in self.pipe_port_dict.items():
@@ -4502,6 +4502,80 @@ class TubeLayoutEditor(QMainWindow):
         self.build_lagan(lagan_centers)
 
         self.delete_huanreguan(del_centers)
+        self.radial_hole_dict = {}
+
+        # 读取吊环螺钉表并重建场景中的吊环螺钉
+        try:
+            if hasattr(self, "productID") and self.productID:
+                conn = create_product_connection()
+                if conn:
+                    rows = []
+                    try:
+                        with conn.cursor() as cursor:
+                            cursor.execute(
+                                """
+                                SELECT 角度, 中心距, 圆直径
+                                FROM 产品设计活动表_布管吊环螺钉表
+                                WHERE 产品ID = %s
+                                """,
+                                (self.productID,),
+                            )
+                            rows = cursor.fetchall() or []
+                    finally:
+                        try:
+                            conn.close()
+                        except Exception:
+                            pass
+
+                    # 清除已有吊环图元与数据
+                    try:
+                        if hasattr(self, "graphics_scene") and self.graphics_scene:
+                            for item in list(self.graphics_scene.items()):
+                                if getattr(item, "is_screw_ring", False):
+                                    self.graphics_scene.removeItem(item)
+                    except Exception:
+                        pass
+                    if hasattr(self, "screw_ring_dic") and self.screw_ring_dic is not None:
+                        self.screw_ring_dic.clear()
+                    if hasattr(self, "selected_screw_ring_ids") and self.selected_screw_ring_ids is not None:
+                        self.selected_screw_ring_ids.clear()
+                    if hasattr(self, "_screw_ring_auto_id"):
+                        self._screw_ring_auto_id = 0
+
+                    # 逐条重建：先写入字典，再尝试绘制（若场景可用）
+                    for r in rows:
+                        try:
+                            angle = float(r.get("角度", 0) if isinstance(r, dict) else r[0])
+                            distance = float(r.get("中心距", 0) if isinstance(r, dict) else r[1])
+                            diameter = float(r.get("圆直径", 0) if isinstance(r, dict) else r[2])
+                        except Exception as e:
+                            continue
+
+                        screw_id = getattr(self, "_screw_ring_auto_id", 0) + 1
+                        self._screw_ring_auto_id = screw_id
+
+                        rec = {
+                            "id": screw_id,
+                            "angle": angle,
+                            "distance": distance,
+                            "diameter": diameter,
+                            "center": None,
+                            "items": [],
+                        }
+                        if not hasattr(self, "screw_ring_dic") or self.screw_ring_dic is None:
+                            self.screw_ring_dic = {}
+                        self.screw_ring_dic[screw_id] = rec
+
+                        # 如果场景已准备好，直接绘制；否则保留在字典中，后续可重放
+                        try:
+                            if hasattr(self, "graphics_scene") and self.graphics_scene:
+                                self.build_screw_ring(angle, distance, diameter)
+                            else:
+                                print("[screw_ring] graphics_scene NOT ready, cached only")
+                        except Exception as e:
+                            continue
+        except Exception as e:
+            print(f"读取吊环螺钉表时出错: {e}")
 
         actual_del_centers = self.selected_to_current_coords(del_centers)
         actual_lagan_centers = self.selected_to_current_coords(lagan_centers)
@@ -11897,41 +11971,59 @@ class TubeLayoutEditor(QMainWindow):
             if conn and conn.open:
                 conn.close()
 
-        def is_deleted(x, y, tol=1e-6):
-            for dx, dy in deleted_coords:
-                if abs(x - dx) < tol and abs(y - dy) < tol:
-                    return True
-            return False
+    def build_sql_for_screw_ring(self):
+        """
+        将吊环螺钉数据写入 产品设计活动表_布管吊环螺钉表：
+        1) 先删除该产品已有记录
+        2) 再将 screw_ring_dic 中的所有数据写入
+        数据字典字段：angle, distance, diameter
+        """
+        if not getattr(self, "productID", None):
+            return
 
-        x_groups = defaultdict(list)  # key: X坐标，value: 对应Y坐标列表
-        y_groups = defaultdict(list)  # key: Y坐标，value: 对应X坐标列表
+        conn = create_product_connection()
+        if not conn:
+            return
 
-        for x, y in coords:
-            x_groups[x].append(y)
-            y_groups[y].append(x)
+        try:
+            with conn.cursor() as cursor:
+                # 1) 先删除该产品已有记录
+                delete_sql = (
+                    "DELETE FROM 产品设计活动表_布管吊环螺钉表 WHERE 产品ID = %s"
+                )
+                cursor.execute(delete_sql, (self.productID,))
 
-        print(len(coords), "coords")
-        # 计算最大Y方向间距（同一X列的Y最大值-最小值）
-        max_y_gap = 0.0
-        for x, y_list in x_groups.items():
-            numeric_y = [
-                float(y) for y in y_list if str(y).replace(".", "").isdigit()
-            ]  # 过滤非数字Y
-            if len(numeric_y) >= 2:
-                gap = max(numeric_y) - min(numeric_y)
-                max_y_gap = max(max_y_gap, gap)
+                # 2) 组织待插入的数据
+                screw_dic = getattr(self, "screw_ring_dic", {}) or {}
+                rows = []
+                for rec in screw_dic.values():
+                    if not isinstance(rec, dict):
+                        continue
+                    angle = rec.get("angle", "")
+                    distance = rec.get("distance", "")
+                    diameter = rec.get("diameter", "")
+                    rows.append(
+                        (self.productID, str(angle), str(distance), str(diameter))
+                    )
 
-        # 计算最大X方向间距（同一Y行的X最大值-最小值）
-        max_x_gap = 0.0
-        for y, x_list in y_groups.items():
-            numeric_x = [
-                float(x) for x in x_list if str(x).replace(".", "").isdigit()
-            ]  # 过滤非数字X
-            if len(numeric_x) >= 2:
-                gap = max(numeric_x) - min(numeric_x)
-                max_x_gap = max(max_x_gap, gap)
-        print(max_y_gap, "max_y_gap")
-        print(max_x_gap, "max_x_gap")
+                if rows:
+                    insert_sql = """
+                        INSERT INTO 产品设计活动表_布管吊环螺钉表
+                        (产品ID, 角度, 中心距, 圆直径)
+                        VALUES (%s, %s, %s, %s)
+                    """
+                    cursor.executemany(insert_sql, rows)
+
+                conn.commit()
+                return True
+        except pymysql.Error as e:
+            conn.rollback()
+            QMessageBox.critical(self, "数据库错误", f"吊环螺钉数据保存失败: {str(e)}")
+            return None
+        finally:
+            if conn and conn.open:
+                conn.close()
+
         # U型管弯曲直径：取最大X/Y间距的较大值（保留3位小数）
         u_max_diameter = max(max_x_gap, max_y_gap) * 2
         u_max_diameter = round(u_max_diameter, 3)
@@ -13578,6 +13670,7 @@ class TubeLayoutEditor(QMainWindow):
                 #         self.execute_sql(statement)
 
                 self.build_sql_for_component()
+                self.build_sql_for_screw_ring()
 
                 sql = self.build_sql_for_cross_pipes()
                 if sql:
