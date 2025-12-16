@@ -1275,7 +1275,10 @@ class TubeLayoutEditor(QMainWindow):
         if self._selected_centers != value:
             self._selected_centers = value
             # print("self.selected_centers发生变化")
-            self.highlight_right_table()
+            if getattr(self, "is_arrange_by_row", True):
+                self.highlight_right_table_row()
+            else:
+                self.highlight_right_table_col()
             self.show_distance()
             # 当选中换热管孔集合发生变化时，提示当前选中数量
             try:
@@ -1343,7 +1346,7 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 pass
 
-    def highlight_right_table(self):
+    def highlight_right_table_row(self):
         # 1) 早返回：无选中则清除既有高亮并退出
         actual_centers = self.selected_to_current_coords(
             getattr(self, "selected_centers", None)
@@ -1466,6 +1469,124 @@ class TubeLayoutEditor(QMainWindow):
                 pass
 
         self._hole_table_highlight_rows = new_set
+
+    def highlight_right_table_col(self):
+        """根据选中圆心高亮竖向统计表（按列排列时使用）"""
+        actual_centers = self.selected_to_current_coords(
+            getattr(self, "selected_centers", None)
+        )
+        table = getattr(self, "hole_distribution_table", None)
+        if table is None:
+            return
+        if not actual_centers:
+            prev_set = getattr(self, "_hole_table_highlight_cols", set())
+            if prev_set:
+                try:
+                    table.blockSignals(True)
+                    table.setUpdatesEnabled(False)
+                except Exception:
+                    pass
+                try:
+                    numeric_cols = list(range(table.columnCount()))
+                    for col_num in prev_set:
+                        r = col_num - 1
+                        if 0 <= r < table.rowCount():
+                            for c in numeric_cols:
+                                item = table.item(r, c)
+                                if item:
+                                    item.setBackground(QBrush(Qt.NoBrush))
+                finally:
+                    try:
+                        table.setUpdatesEnabled(True)
+                        table.blockSignals(False)
+                    except Exception:
+                        pass
+                self._hole_table_highlight_cols = set()
+            return
+
+        def norm(p):
+            try:
+                return (round(float(p[0]), 6), round(float(p[1]), 6))
+            except Exception:
+                return None
+
+        left = getattr(self, "full_sorted_current_centers_left", []) or []
+        right = getattr(self, "full_sorted_current_centers_right", []) or []
+        cache_key = (
+            len(left),
+            len(right),
+            sum(len(c) for c in left),
+            sum(len(c) for c in right),
+        )
+        coord_to_col = None
+        if getattr(self, "_coord_to_col_cache_key", None) == cache_key and hasattr(
+            self, "_coord_to_col_cache"
+        ):
+            coord_to_col = self._coord_to_col_cache
+        else:
+            coord_to_col = {}
+            for i, col in enumerate(left):
+                for pt in col:
+                    k = norm(pt)
+                    if k is not None:
+                        coord_to_col[k] = i + 1
+            for i, col in enumerate(right):
+                for pt in col:
+                    k = norm(pt)
+                    if k is not None:
+                        coord_to_col[k] = i + 1
+            self._coord_to_col_cache = coord_to_col
+            self._coord_to_col_cache_key = cache_key
+
+        cols = []
+        for p in actual_centers:
+            k = norm(p)
+            if k is None:
+                continue
+            c = coord_to_col.get(k)
+            if c is not None:
+                cols.append(c)
+
+        unique_cols = sorted(set(cols)) if cols else []
+        numeric_cols = list(range(table.columnCount()))
+        if not numeric_cols:
+            return
+
+        new_set = set(unique_cols)
+        prev_set = getattr(self, "_hole_table_highlight_cols", set())
+        if new_set == prev_set:
+            return
+
+        light_yellow = QColor(255, 225, 120)
+
+        try:
+            table.blockSignals(True)
+            table.setUpdatesEnabled(False)
+        except Exception:
+            pass
+        try:
+            for col_num in prev_set - new_set:
+                r = col_num - 1
+                if 0 <= r < table.rowCount():
+                    for c in numeric_cols:
+                        item = table.item(r, c)
+                        if item:
+                            item.setBackground(QBrush(Qt.NoBrush))
+            for col_num in new_set - prev_set:
+                r = col_num - 1
+                if 0 <= r < table.rowCount():
+                    for c in numeric_cols:
+                        item = table.item(r, c)
+                        if item:
+                            item.setBackground(QBrush(light_yellow))
+        finally:
+            try:
+                table.setUpdatesEnabled(True)
+                table.blockSignals(False)
+            except Exception:
+                pass
+
+        self._hole_table_highlight_cols = new_set
 
     def check_and_show_lagan_tube_distance(self):
         """当且仅当选中一个自由拉杆和一个换热管时，提示两者间距（四位小数）。其它情况不提示。"""
@@ -1720,13 +1841,17 @@ class TubeLayoutEditor(QMainWindow):
         self.total_holes_label.setText(f"总管孔数量: {total}")
     
     def toggle_arrange_text(self):
-        """切换按钮文字（按行排列 <-> 按列排列）"""
+        """切换按钮文字（按行排列 <-> 按列排列）并更新表格数据"""
         if hasattr(self, 'is_arrange_by_row'):
             self.is_arrange_by_row = not self.is_arrange_by_row
             if self.is_arrange_by_row:
                 self.arrange_button.setText("按行排列")
             else:
                 self.arrange_button.setText("按列排列")
+            # 切换后更新表格数据
+            self.update_tube_nums()
+            # 重新绑定表格选中逻辑
+            self.bind_table_selection_handler()
 
     def update_total_lagan_count(self):
         """根据 lagan_info 和 red_dangban 的长度更新总拉杆数量标签"""
@@ -2412,16 +2537,14 @@ class TubeLayoutEditor(QMainWindow):
 
         right_layout.addWidget(self.hole_distribution_table, 1)
 
-        self.hole_distribution_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = (
             self.group_centers_by_y(self.global_centers)
         )
         self.sorted_current_centers_up, self.sorted_current_centers_down = (
             self.group_centers_by_y(self.current_centers)
         )
-        self.hole_distribution_table.itemSelectionChanged.connect(
-            self.on_row_selection_changed
-        )
+        # 根据当前排列状态绑定行/列选中逻辑
+        self.bind_table_selection_handler()
 
         self.main_tube_layout.addWidget(self.param_frame, 3)
         self.main_tube_layout.addWidget(self.center_frame, 4)
@@ -15322,7 +15445,6 @@ class TubeLayoutEditor(QMainWindow):
         将 centers 分别按 y>0 和 y<0 分组，y 相近（在 tol 范围内）视为同一组，并对每组按 x 坐标升序排列。
         返回一个元组：(positive_groups, negative_groups)
         始终保持与满布状态相同的行数结构，缺失的行用空列表填充
-
         特殊处理：当管程分程形式为4.3或6.2时，最中间一行只有正行，没有对称的负行
         """
         from collections import defaultdict
@@ -15463,7 +15585,7 @@ class TubeLayoutEditor(QMainWindow):
         # 获取当前管程分程形式
         is_special_layout = hasattr(
             self, "tube_pass_form_value"
-        ) and self.tube_pass_form_value in ["4.3", "6.2"]
+        ) and self.tube_pass_form_value in ["1.1", "2.1", "4.1", "4.3", "6.1"]
 
         # 获取满布状态的列键作为参考
         full_left_keys = set()
@@ -15525,10 +15647,25 @@ class TubeLayoutEditor(QMainWindow):
             for key in sorted_right_keys
         ]
 
-        # 特殊布局处理：4.3或6.2分程形式（如果需要的话）
+        # 特殊布局处理：当管程分程形式为1.1、2.1、4.1、4.3、6.1时
+        # 完全仿照 group_centers_by_y 的逻辑：
+        # 中间列只保留右侧有值，左侧对应为空；其余列成对对称
         if is_special_layout:
-            # 这里可以根据需要添加特殊布局的处理逻辑
-            pass
+            if right_grouped:
+                # 确保左侧列表至少有一个元素以便置空
+                if not left_grouped:
+                    left_grouped = [[]]
+
+                # 1) 调整左侧中间列为空（与 group_centers_by_y 的负行置空一致）
+                if len(left_grouped) == len(right_grouped):
+                    left_grouped[0] = []
+                elif len(left_grouped) < len(right_grouped):
+                    left_grouped.insert(0, [])
+
+                # 2) 只保留中间列 + 成对的列，保持对称
+                max_paired_cols = min(len(right_grouped) - 1, len(left_grouped) - 1)
+                right_grouped = [right_grouped[0]] + right_grouped[1 : 1 + max_paired_cols]
+                left_grouped = [left_grouped[0]] + left_grouped[1 : 1 + max_paired_cols]
 
         return left_grouped, right_grouped
 
@@ -15714,6 +15851,116 @@ class TubeLayoutEditor(QMainWindow):
             )
             message = f"您当前选中的换热管孔的数量为{count}个"
             print(message)
+   
+    # TODO 整列选中函数
+    def on_col_selection_changed(self):
+        """整列选中：按列高亮并选中对应的左右列圆心"""
+        # 更新列分组（满布与当前）
+        self.full_sorted_current_centers_left, self.full_sorted_current_centers_right = (
+            self.group_centers_by_x(self.global_centers)
+        )
+        self.sorted_current_centers_left, self.sorted_current_centers_right = (
+            self.group_centers_by_x(self.current_centers)
+        )
+
+        if not hasattr(self, "full_sorted_current_centers_left") or not hasattr(
+            self, "full_sorted_current_centers_right"
+        ):
+            return
+
+        # 特殊布局：只保留中间列的一侧（右侧）有值
+        is_special_layout = hasattr(self, "tube_pass_form_value") and (
+            self.tube_pass_form_value in ["1.1", "2.1", "4.1", "4.3", "6.1"]
+        )
+
+        # 清除旧高亮
+        self.clear_selection_highlight()
+        self.isZhenglie = True
+
+        # 清除表格所有单元格高亮
+        for row in range(self.hole_distribution_table.rowCount()):
+            for col in range(self.hole_distribution_table.columnCount()):
+                item = self.hole_distribution_table.item(row, col)
+                if item:
+                    item.setBackground(QBrush(Qt.NoBrush))
+
+        # 当前选中的行集合（按列排列时，一行代表一列的数据）
+        selected_indexes = self.hole_distribution_table.selectedIndexes()
+        selected_rows = (
+            set(index.row() for index in selected_indexes) if selected_indexes else set()
+        )
+        if not selected_rows:
+            return
+
+        # 表格高亮选中行
+        for row in selected_rows:
+            for col in range(self.hole_distribution_table.columnCount()):
+                item = self.hole_distribution_table.item(row, col)
+                if item:
+                    item.setBackground(QBrush(QColor(173, 216, 230)))  # LightBlue
+                else:
+                    temp_item = QTableWidgetItem()
+                    temp_item.setBackground(QBrush(QColor(173, 216, 230)))
+                    self.hole_distribution_table.setItem(row, col, temp_item)
+
+        # 逐列处理圆心选中
+        for row in selected_rows:
+            col_idx = row  # 当前表格行对应的列索引
+            # 特殊布局：中间列只选右侧
+            if is_special_layout and col_idx == 0:
+                if col_idx < len(self.full_sorted_current_centers_right):
+                    centers_right = self.full_sorted_current_centers_right[col_idx]
+                    for (x, y) in centers_right:
+                        self.simulate_center_click(x, y)
+                continue
+
+            # 正常对称处理：左右两侧
+            if col_idx < len(self.full_sorted_current_centers_left):
+                centers_left = self.full_sorted_current_centers_left[col_idx]
+                for (x, y) in centers_left:
+                    self.simulate_center_click(x, y)
+
+            if col_idx < len(self.full_sorted_current_centers_right):
+                centers_right = self.full_sorted_current_centers_right[col_idx]
+                for (x, y) in centers_right:
+                    self.simulate_center_click(x, y)
+
+        # 提示当前选中数量
+        try:
+            count = (
+                len(self.selected_centers) if hasattr(self, "selected_centers") else 0
+            )
+            message = f"您当前选中的换热管孔的数量为{count}个"
+            self.line_tip.setText(message)
+            self.line_tip.setStyleSheet("color: black;")
+            self.line_tip.setVisible(True)
+            from PyQt5.QtCore import QTimer
+
+            QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
+        except AttributeError:
+            count = (
+                len(self.selected_centers) if hasattr(self, "selected_centers") else 0
+            )
+            message = f"您当前选中的换热管孔的数量为{count}个"
+            print(message)
+
+    def bind_table_selection_handler(self):
+        """根据排列方式绑定行/列选中逻辑"""
+        if not hasattr(self, "hole_distribution_table"):
+            return
+        table = self.hole_distribution_table
+        try:
+            table.itemSelectionChanged.disconnect()
+        except Exception:
+            pass
+
+        if getattr(self, "is_arrange_by_row", True):
+            table.setSelectionBehavior(QAbstractItemView.SelectRows)
+            table.itemSelectionChanged.connect(self.on_row_selection_changed)
+        else:
+            # 按列排列时，表格一行对应一列的数据，仍按行选择
+            table.setSelectionBehavior(QAbstractItemView.SelectRows)
+            table.itemSelectionChanged.connect(self.on_col_selection_changed)
 
     def clear_selection_highlight(self):
         from PyQt5.QtCore import QPointF
@@ -19913,18 +20160,65 @@ class TubeLayoutEditor(QMainWindow):
             up_item.setTextAlignment(Qt.AlignCenter)
             right_table.setItem(i, 2, up_item)
 
+    def update_tube_nums_x(self):
+        """更新右侧管数分布表格内容（按列统计）"""
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtWidgets import QTableWidgetItem
+        
+        # 按X坐标分组中心
+        self.sorted_current_centers_left, self.sorted_current_centers_right = (
+            self.group_centers_by_x(self.current_centers)
+        )
+        self.full_sorted_current_centers_left, self.full_sorted_current_centers_right = (
+            self.group_centers_by_x(self.global_centers)
+        )
+
+        # 获取右侧表格并清空内容
+        right_table = self.hole_distribution_table
+        right_table.clearContents()
+
+        # 计算所需行数（取左右两组的最大长度）
+        row_count = max(
+            len(self.sorted_current_centers_left), len(self.sorted_current_centers_right)
+        )
+        right_table.setRowCount(row_count)
+
+        # 填充表格数据
+        for i in range(row_count):
+            # 列号（从1开始）
+            col_num_item = QTableWidgetItem(str(i + 1))
+            col_num_item.setTextAlignment(Qt.AlignCenter)
+            right_table.setItem(i, 0, col_num_item)
+
+            # 左列管数
+            left_count = (
+                len(self.sorted_current_centers_left[i])
+                if i < len(self.sorted_current_centers_left)
+                else 0
+            )
+            left_item = QTableWidgetItem(str(left_count))
+            left_item.setTextAlignment(Qt.AlignCenter)
+            right_table.setItem(i, 1, left_item)
+
+            # 右列管数
+            right_count = (
+                len(self.sorted_current_centers_right[i])
+                if i < len(self.sorted_current_centers_right)
+                else 0
+            )
+            right_item = QTableWidgetItem(str(right_count))
+            right_item.setTextAlignment(Qt.AlignCenter)
+            right_table.setItem(i, 2, right_item)
+
     def update_tube_nums(self):
-        tube_num = self.get_tube_pass_count()
-        # if self.heat_exchanger in ["AEU", "BEU"]:
-        #     if tube_num == "2":
-        #         # print("2管程按照行换热管数量更新右侧表格")
-        #         self.update_tube_nums_y()
-        #     else:
-        #         # print("4，6管程按照列换热管数量更新右侧表格")
-        #         self.update_tube_nums_x()
-        # else:
-        #     self.update_tube_nums_y()
-        self.update_tube_nums_y()
+        """根据按钮状态更新表格（按行或按列）"""
+        # 根据按钮状态决定使用按行还是按列统计
+        if hasattr(self, 'is_arrange_by_row') and self.is_arrange_by_row:
+            # 按行排列
+            self.update_tube_nums_y()
+        else:
+            # 按列排列
+            self.update_tube_nums_x()
 
     def load_initial_tube_num(self):
         """从产品设计活动库的布管数量表加载初始管孔数量数据"""
@@ -22245,9 +22539,10 @@ class TubeLayoutEditor(QMainWindow):
         self.update_total_lagan_count()
 
         # 自动兼容不同命名
-        if hasattr(self, "update_tube_nums_y"):
+        if hasattr(self, "update_tube_nums"):
+            self.update_tube_nums()
+        elif hasattr(self, "update_tube_nums_y"):
             self.update_tube_nums_y()
-        elif hasattr(self, "update_tube_nums"):
             self.update_tube_nums()
 
         # 检查被删除的换热管是否作为某个防冲板的 selected_centers，如果是则删除该防冲板
