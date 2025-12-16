@@ -1079,6 +1079,7 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
 
 # TODO 此处初始化
 
+
 class TubeLayoutEditor(QMainWindow):
     def __init__(self, line_tip=None):
         # 注意：必须在super().__init__()之前检查，避免创建不必要的窗口
@@ -1166,9 +1167,7 @@ class TubeLayoutEditor(QMainWindow):
         self.block_thickness = 15
         self.sheet_form_current_images = None
         self.setWindowTitle("布管参数设计")
-        self.setGeometry(
-            200, 200, 1600, 900
-        )  # TODO 窗格大小修改了一下，不改自动拉伸时会显得很局促
+        self.setGeometry(200, 200, 1600, 900)
         self.is_fullscreen = False
         self.setup_ui()
         self.connection_lines = []
@@ -1864,6 +1863,24 @@ class TubeLayoutEditor(QMainWindow):
 
     # 布管页面
     def create_tube_layout_page(self):
+        from PyQt5.QtCore import Qt, QSize, QTimer
+        from PyQt5.QtGui import QIcon, QColor, QPen, QFont
+        from PyQt5.QtWidgets import (
+            QWidget,
+            QFrame,
+            QHBoxLayout,
+            QVBoxLayout,
+            QGridLayout,
+            QLabel,
+            QPushButton,
+            QSizePolicy,
+            QTableWidget,
+            QTableWidgetItem,
+            QAbstractItemView,
+            QHeaderView,
+            QCheckBox,
+        )
+
         page = QWidget()
         self.main_tube_layout = QHBoxLayout(page)
         self.main_tube_layout.setContentsMargins(5, 5, 5, 5)
@@ -1878,37 +1895,29 @@ class TubeLayoutEditor(QMainWindow):
         self.param_table.setHorizontalHeaderLabels(["序号", "参数名", "参数值", "单位"])
         self.param_table.verticalHeader().setVisible(False)
 
-        # 设置列宽自适应策略
         self.param_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.Interactive
         )
         self.param_table.horizontalHeader().setDefaultSectionSize(100)
         self.param_table.horizontalHeader().setMinimumSectionSize(10)
 
-        # 为各列设置不同的调整策略
-        # 序号列：根据内容自适应，用户也可调整
         self.param_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.Interactive
         )
-        # 参数名：可拉伸，占据较多空间
         self.param_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        # 参数值：交互式调整
         self.param_table.horizontalHeader().setSectionResizeMode(
             2, QHeaderView.Interactive
         )
-        # 单位列：根据内容自适应
         self.param_table.horizontalHeader().setSectionResizeMode(
             3, QHeaderView.ResizeToContents
         )
 
-        # 在表格显示后设置初始列宽
         self.param_table.showEvent = (
             lambda event: self.restore_param_table_column_widths()
         )
-
         param_layout.addWidget(self.param_table)
 
-        # 拉杆数量统计表（放在左侧参数列表底部）
+        # 拉杆数量统计表（左侧底部）
         self.lagan_summary_container = QWidget(self.param_frame)
         self.lagan_summary_container.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed
@@ -1928,7 +1937,6 @@ class TubeLayoutEditor(QMainWindow):
         self.lagan_summary_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.lagan_summary_table.setSelectionMode(QAbstractItemView.NoSelection)
 
-        # 列宽策略与左侧参数表一致：可拖拽调整 + 说明列拉伸
         self.lagan_summary_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.Interactive
         )
@@ -1944,19 +1952,15 @@ class TubeLayoutEditor(QMainWindow):
             2, QHeaderView.Interactive
         )
 
-        # 第一列初始列宽再增大，确保文字完整显示
         try:
             self.lagan_summary_table.setColumnWidth(0, 220)
         except Exception:
             pass
-
-        # 第三列初始列宽增大，确保默认能看到更多“说明”内容
         try:
             self.lagan_summary_table.setColumnWidth(2, 420)
         except Exception:
             pass
 
-        # 视觉样式与左侧参数表保持一致（复用字体与样式表，避免硬编码）
         try:
             self.lagan_summary_table.setFont(self.param_table.font())
         except Exception:
@@ -1966,23 +1970,20 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             self.lagan_summary_table.setStyleSheet("")
 
-        # 与参数表一致的网格线/外观
         try:
             self.lagan_summary_table.setShowGrid(self.param_table.showGrid())
         except Exception:
             pass
+
         self.lagan_summary_table.setWordWrap(True)
         self.lagan_summary_table.setTextElideMode(Qt.ElideNone)
-        # 表格整体滚动条（像左侧参数表一样）
         self.lagan_summary_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         self.lagan_summary_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
 
-        # 行高：为第三列说明留足空间
         try:
             default_row_h = self.param_table.verticalHeader().defaultSectionSize()
         except Exception:
             default_row_h = 20
-        # 统计表行高进一步加大，确保“说明”列多行文字完整显示
         default_row_h = max(int(default_row_h), 60)
         for _row in range(3):
             self.lagan_summary_table.setRowHeight(_row, default_row_h)
@@ -1997,19 +1998,17 @@ class TubeLayoutEditor(QMainWindow):
         lagan_layout.addWidget(self.lagan_summary_table, 0, 0)
         param_layout.addWidget(self.lagan_summary_container)
 
+        # 中间区域
         self.center_frame = QFrame()
         self.center_frame.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         center_layout = QVBoxLayout(self.center_frame)
         center_layout.setContentsMargins(5, 5, 5, 5)
         center_layout.setSpacing(0)
 
-        # 工具栏
         self.toolbar_layout = QVBoxLayout()
-        # 左、上、右、下外边距（右侧设为0，让按钮更贴近右边缘）
         self.toolbar_layout.setContentsMargins(5, 5, 0, 5)
         self.toolbar_layout.setSpacing(5)
 
-        # 工具栏两行布局
         self.toolbar_row1_layout = QHBoxLayout()
         self.toolbar_row1_layout.setSpacing(10)
         self.toolbar_row2_layout = QHBoxLayout()
@@ -2021,27 +2020,23 @@ class TubeLayoutEditor(QMainWindow):
         toolbar_container = QWidget()
         toolbar_container.setLayout(self.toolbar_layout)
         toolbar_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        toolbar_container.setStyleSheet(
-            "background-color: rgba(255, 255, 255, 210);"  # 半透明白色背景
-        )
-
+        toolbar_container.setStyleSheet("background-color: rgba(255, 255, 255, 210);")
         center_layout.addWidget(toolbar_container)
 
-        # 工具栏按钮统一样式
         toolbar_button_style = (
             "QPushButton {"
-            "  background-color: #ffffff;"  # 纯白背景
-            "  border: none;"  # 无边框
+            "  background-color: #ffffff;"
+            "  border: none;"
             "  border-radius: 2px;"
-            "  padding: 1px 6px;"  # 更紧凑的内边距
+            "  padding: 1px 6px;"
             "  color: #222222;"
-            "  font-size: 12pt;"  # 字体略大一点
+            "  font-size: 12pt;"
             "}"
             "QPushButton:hover {"
-            "  background-color: #f2f2f2;"  # hover 浅灰
+            "  background-color: #f2f2f2;"
             "}"
             "QPushButton:pressed {"
-            "  background-color: #e0e0e0;"  # 按下稍深灰
+            "  background-color: #e0e0e0;"
             "}"
         )
 
@@ -2140,7 +2135,6 @@ class TubeLayoutEditor(QMainWindow):
         btn9.clicked.connect(self.on_dangban_click)
         self.toolbar_row2_layout.addWidget(btn9)
 
-        # 折流板按钮
         btn_baffle = QPushButton("折流板")
         btn_baffle.setMinimumHeight(30)
         btn_baffle.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
@@ -2150,7 +2144,6 @@ class TubeLayoutEditor(QMainWindow):
         btn_baffle.clicked.connect(self.show_baffle_info)
         self.toolbar_row2_layout.addWidget(btn_baffle)
 
-        # 径向开孔按钮
         btn_radial_holes = QPushButton("径向开孔")
         btn_radial_holes.setMinimumHeight(30)
         btn_radial_holes.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
@@ -2158,79 +2151,63 @@ class TubeLayoutEditor(QMainWindow):
         btn_radial_holes.setIcon(QIcon(icon_path12))
         btn_radial_holes.setIconSize(QSize(20, 20))
         btn_radial_holes.clicked.connect(self.build_radial_holes)
-
-        # 如果功能未启用，则禁用该按钮
         if not ENABLE_RADIAL_HOLES:
             btn_radial_holes.setEnabled(False)
-
         self.toolbar_row2_layout.addWidget(btn_radial_holes)
 
-        # 删除按钮
         btn_delete = QPushButton("删除")
         btn_delete.setMinimumHeight(30)
         btn_delete.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         btn_delete.setStyleSheet(toolbar_button_style)
-        btn_delete.setIcon(
-            QIcon(icon_path10)
-        )  # Changed from icon_path11 to icon_path10
+        btn_delete.setIcon(QIcon(icon_path10))
         btn_delete.setIconSize(QSize(20, 20))
         btn_delete.clicked.connect(self.on_del_click)
         self.toolbar_row2_layout.addWidget(btn_delete)
 
-        # 保存工具栏按钮顺序，便于根据窗口状态动态重排
         self.toolbar_buttons = [
-            btn1,  # 换热管
-            btn2,  # 拉杆
-            btn3,  # 自由拉杆
-            btn4,  # 中间挡管
-            btn5,  # 旁路挡板
-            btn6,  # 滑道
-            btn7,  # 吊环螺钉
-            btn8,  # 中间挡板
-            btn9,  # 防冲板
-            btn_baffle,  # 折流板
-            btn_radial_holes,  # 径向开孔
-            btn_delete,  # 删除
+            btn1,
+            btn2,
+            btn3,
+            btn4,
+            btn5,
+            btn6,
+            btn7,
+            btn8,
+            btn9,
+            btn_baffle,
+            btn_radial_holes,
+            btn_delete,
         ]
 
-        # 根据初始窗口状态设置工具栏布局
         self.update_toolbar_layout_mode()
-        # center_layout.addLayout(self.toolbar_layout)
 
-        # 图形视图容器
+        # 图形容器
         self.graphics_container = QWidget()
         self.graphics_container.setObjectName("graphicsContainer")
         self.graphics_container.setLayout(QVBoxLayout())
         self.graphics_container.layout().setContentsMargins(0, 0, 0, 0)
 
-        # 图形视图
         self.graphics_scene = QGraphicsScene()
         self.graphics_view = ZoomableGraphicsView(self.graphics_scene)
         self.graphics_view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.graphics_view.setScene(self.graphics_scene)
         self.graphics_view.setGeometry(100, 100, 600, 600)
 
-        # 设置场景大小和坐标轴（向上多留出空间，避免 0° 位置贴到工具栏）
-        # 注意：Qt 坐标中越往上 y 越小，这里把 top 设得更小一些（-340），相当于在上方多扩一点空白
         self.graphics_scene.setSceneRect(-300, -340, 600, 680)
-        # 使用半透明颜色（alpha=128表示50%透明度）
+
         x_axis_color = QColor(Qt.red)
         x_axis_color.setAlpha(128)
-        x_axis_pen = QPen(x_axis_color, 3)
         y_axis_color = QColor(Qt.green)
         y_axis_color.setAlpha(128)
+        x_axis_pen = QPen(x_axis_color, 3)
         y_axis_pen = QPen(y_axis_color, 3)
         label_font = QFont("Arial", 12)
 
-        # 绘制坐标轴
         x_axis_line = self.graphics_scene.addLine(-250, 0, 250, 0, x_axis_pen)
         y_axis_line = self.graphics_scene.addLine(0, -250, 0, 250, y_axis_pen)
-
-        # 设置坐标轴绘制优先级
         x_axis_line.setZValue(15)
         y_axis_line.setZValue(15)
 
-        # 坐标轴标签（半透明）
         x_label = self.graphics_scene.addText("X", label_font)
         x_label_color = QColor(Qt.red)
         x_label_color.setAlpha(128)
@@ -2245,77 +2222,16 @@ class TubeLayoutEditor(QMainWindow):
         y_label.setPos(5, -260)
         y_label.setZValue(15)
 
-        # 将图形视图添加到容器
         self.graphics_container.layout().addWidget(self.graphics_view)
 
-        # # 创建浮动的按钮容器
-        # self.button_container = QWidget(self.graphics_container)
-        # self.button_container.setFixedSize(200, 150)
-        # self.button_container.setStyleSheet("background-color: rgba(255, 255, 255, 200); border-radius: 5px;")
-        # self.button_container.move(10, 10)
-
-        # # 创建按钮网格布局
-        # button_layout = QGridLayout(self.button_container)
-        # button_layout.setContentsMargins(5, 5, 5, 5)
-        # button_layout.setSpacing(5)
-
-        # buttons = [
-        #     ("button1_1", 0, 0), ("button1_2", 0, 1), ("button1_3", 0, 2), ("button1_4", 0, 3),
-        #     ("button2_1", 1, 0), ("button2_2", 1, 1), ("button2_3", 1, 2),
-        #     ("button3_1", 2, 0), ("button3_2", 2, 1), ("button3_3", 2, 2)
-        # ]
-
-        # for name, row, col in buttons:
-        #     btn = QPushButton()
-        #     btn.setFixedSize(35, 35)
-        #     btn.setIcon(QIcon(f"modules/buguan/buguan_ziyong/static/按钮/{name}.png"))
-        #     btn.setIconSize(QSize(30, 30))
-        #     btn.setStyleSheet("""
-        #         QPushButton {
-        #             border: 2px solid #8f8f91;
-        #             border-radius: 5px;
-        #             background-color: #f0f0f0;
-        #         }
-        #         QPushButton:pressed {
-        #             background-color: #dadbde;
-        #             border: 2px solid #5c5c5c;
-        #         }
-        #     """)
-        #     button_layout.addWidget(btn, row, col)
-
-        #     # 连接按钮信号
-        #     if name == 'button1_1':
-        #         btn.clicked.connect(self.on_huanreguan_click)
-        #     elif name == 'button1_2':
-        #         btn.clicked.connect(self.on_lagan_click)
-        #     elif name == 'button1_3':
-        #         btn.clicked.connect(self.on_free_form_lagan_click)
-        #     elif name == 'button1_4':
-        #         btn.clicked.connect(self.on_del_click)
-        #     elif name == 'button2_1':
-        #         btn.clicked.connect(self.on_center_block_click)
-        #     elif name == 'button2_2':
-        #         btn.clicked.connect(self.on_side_block_click)
-        #     elif name == 'button2_3':
-        #         initial_centers = self.current_centers.copy()
-        #         btn.clicked.connect(lambda: self.on_green_slide_click(initial_centers))
-        #     elif name == 'button3_1':
-        #         btn.clicked.connect(self.on_screw_ring_click)
-        #     elif name == 'button3_2':
-        #         btn.clicked.connect(self.on_purple_block_click)
-        #     elif name == 'button3_3':
-        #         btn.clicked.connect(self.on_dangban_click)
-
-        # 勾选框容器（右上角）
+        # 勾选框容器
         self.checkbox_container = QWidget(self.graphics_container)
         self.checkbox_container.setFixedSize(150, 30)
         self.checkbox_container.setStyleSheet(
             "background-color: rgba(255, 255, 255, 200); border-radius: 5px;"
         )
 
-        # 绑定窗口缩放事件，使右上角勾选框随窗口变化
         def update_overlay_widgets_position(event):
-            # 右上角勾选框
             x_right = (
                 self.graphics_container.width() - self.checkbox_container.width() - 10
             )
@@ -2332,7 +2248,6 @@ class TubeLayoutEditor(QMainWindow):
 
         self.graphics_container.resizeEvent = update_overlay_widgets_position
 
-        # 添加勾选框
         checkbox_layout = QHBoxLayout(self.checkbox_container)
         checkbox_layout.setContentsMargins(5, 5, 5, 5)
         self.symmetric_checkbox = QCheckBox("对称分布")
@@ -2341,21 +2256,16 @@ class TubeLayoutEditor(QMainWindow):
         checkbox_layout.addWidget(self.symmetric_checkbox)
         self.symmetric_checkbox.stateChanged.connect(self.handle_symmetric_layout)
 
-        # 初始化左侧两列的标题文字
         self.lagan_summary_table.setItem(0, 0, QTableWidgetItem("最少拉杆数量"))
         self.lagan_summary_table.setItem(1, 0, QTableWidgetItem("已有拉杆数量"))
         self.lagan_summary_table.setItem(2, 0, QTableWidgetItem("缺少拉杆数量"))
-
-        # 初始化刷新一次统计表（使第三列说明与左侧参数列表一致）
         try:
             self.update_total_lagan_count()
         except Exception:
             pass
 
-        # 将图形容器添加到中心布局
         center_layout.addWidget(self.graphics_container)
 
-        # 底部操作栏
         self.action_bar = QHBoxLayout()
         self.action_bar.addStretch()
 
@@ -2380,50 +2290,46 @@ class TubeLayoutEditor(QMainWindow):
 
         center_layout.addLayout(self.action_bar)
 
+        # 右侧区域
         self.right_frame = QFrame()
         right_layout = QVBoxLayout(self.right_frame)
         right_layout.setContentsMargins(5, 5, 5, 5)
 
-        # 管孔数量标题
         hole_title = QLabel("管孔数量分布")
         hole_title.setFont(QFont("Arial", 12, QFont.Bold))
         hole_title.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(hole_title)
 
-        # 总数量显示
         self.total_holes_label = QLabel("总管孔数量: 980")
         self.total_holes_label.setFont(QFont("Arial", 10, QFont.Bold))
         self.total_holes_label.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(self.total_holes_label)
 
-        # 总拉杆数量显示
         self.total_lagan_label = QLabel("总拉杆数量: 0（当前无标准要求）")
         self.total_lagan_label.setFont(QFont("Arial", 10, QFont.Bold))
         self.total_lagan_label.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(self.total_lagan_label)
-        # 当前不再在界面上显示总拉杆数量，但保留对象供其他逻辑使用
         self.total_lagan_label.hide()
 
-        # 创建管孔分布表格
         self.hole_distribution_table = QTableWidget()
-        self.hole_distribution_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Stretch
-        )
         self.hole_distribution_table.setColumnCount(3)
 
-        # 固定使用2管程的表头（水平方向布置）
         headers = ["至水平中心线行号", "管孔数量(上)", "管孔数量(下)"]
-
         self.hole_distribution_table.setHorizontalHeaderLabels(headers)
         for i, header_text in enumerate(headers):
             self.hole_distribution_table.horizontalHeaderItem(i).setToolTip(header_text)
+
         self.hole_distribution_table.verticalHeader().setVisible(False)
         self.hole_distribution_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.hole_distribution_table.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding
         )
 
-        # 设置表格数据
+        # ✅ 关键修改：创建阶段强制 Fixed（不要 Stretch）
+        _hdr = self.hole_distribution_table.horizontalHeader()
+        _hdr.setSectionResizeMode(QHeaderView.Fixed)
+        _hdr.setStretchLastSection(False)
+
         hole_data = [
             (1, 29, 29),
             (2, 28, 28),
@@ -2449,10 +2355,7 @@ class TubeLayoutEditor(QMainWindow):
 
         right_layout.addWidget(self.hole_distribution_table, 1)
 
-        # ✅ 保留：表格左键选中事件（确保左键点击正常选中）
-        # 注意：在4,6管程时，表格的行代表圆心数组的列，所以还是使用SelectRows
         self.hole_distribution_table.setSelectionBehavior(QAbstractItemView.SelectRows)
-        # 初始绑定（后续会根据管程数动态调整）
         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = (
             self.group_centers_by_y(self.global_centers)
         )
@@ -2463,27 +2366,23 @@ class TubeLayoutEditor(QMainWindow):
             self.on_row_selection_changed
         )
 
-        # self.hole_distribution_table.setContextMenuPolicy(Qt.CustomContextMenu)
-        # self.hole_distribution_table.customContextMenuRequested.connect(self.on_table_right_click)
-
         self.main_tube_layout.addWidget(self.param_frame, 3)
         self.main_tube_layout.addWidget(self.center_frame, 4)
         self.main_tube_layout.addWidget(self.right_frame, 2)
         self.stacked_widget.addWidget(page)
 
+        # ✅ 关键修改：页面进入 stacked_widget 后，post-layout 强制覆盖右表列宽
+        QTimer.singleShot(0, self.update_right_table_column_widths)
+        QTimer.singleShot(50, self.update_right_table_column_widths)
+
         self.enable_scene_click_capture()
 
         def handle_global_right_click(event):
-            # 判断是否是右键点击
             if event.button() == Qt.RightButton:
-                # 1. 清除表格所有选中状态
                 self.hole_distribution_table.clearSelection()
-                # 2. 清除图形区的高亮（调用原有清除逻辑）
                 self.on_row_selection_changed()
-            # 保留原有鼠标事件功能（如左键点击其他控件）
             QWidget.mousePressEvent(page, event)
 
-        # 将自定义事件绑定到page
         page.mousePressEvent = handle_global_right_click
 
         return page
@@ -13309,7 +13208,7 @@ class TubeLayoutEditor(QMainWindow):
         if not insert_sqls:
             return None
 
-        return [query_sql, delete_sql] + insert_sqls
+        return [delete_sql] + insert_sqls
 
     def build_sql_for_tube_form(self):
         """构建管板形式表的SQL语句，处理元组列表格式的参数"""
@@ -13471,7 +13370,7 @@ class TubeLayoutEditor(QMainWindow):
                 if sql_list:
                     for sql in sql_list:
                         self.execute_sql(sql)
-                # TODO 布管数量存储
+                1  # TODO 布管数量存储
                 sql_list = self.build_sql_for_tube_hole(tube_hole_data)
                 if sql_list:
                     for sql in sql_list:
@@ -14302,71 +14201,105 @@ class TubeLayoutEditor(QMainWindow):
         # else:
         #     QMessageBox.warning(self, "警告", "未找到参数表格！")
 
-    def resizeEvent(self, event):
-        """窗口大小变化时的自适应调整，支持不同分辨率和DPI设置"""
-        super().resizeEvent(event)
-        
-        # 获取屏幕的DPI缩放比例
-        screen = self.screen()
-        dpi_scale = screen.logicalDotsPerInch() / 96.0  # 96 DPI是标准缩放
-        
-        # 调整参数表格列宽
-        if hasattr(self, "param_table"):
-            # 获取表格可用宽度
-            table_width = self.param_table.viewport().width()
-            
-            # 根据DPI缩放调整列宽
-            if table_width > 0:
-                # 设置各列宽度比例 (序号:10%, 参数名:50%, 参数值:30%, 单位:10%)
-                # 考虑DPI缩放
-                col0_width = int(100 * dpi_scale)
-                col3_width = int(100 * dpi_scale)
-                remaining_width = max(0, table_width - col0_width - col3_width)
-                col1_width = int(remaining_width * 0.7)  # 参数名占剩余宽度的70%
-                col2_width = remaining_width - col1_width  # 参数值占剩余宽度的30%
-                
-                self.param_table.setColumnWidth(0, col0_width)  # 序号
-                self.param_table.setColumnWidth(1, col1_width)  # 参数名
-                self.param_table.setColumnWidth(2, col2_width)  # 参数值
-                self.param_table.setColumnWidth(3, col3_width)  # 单位
+    def update_right_table_column_widths(self):
+        """右侧管孔分布表：稳定的列宽控制（避免初始布局阶段列宽异常）"""
+        if not hasattr(self, "hole_distribution_table"):
+            return
 
-        # 调整管孔分布表格
-        if hasattr(self, "hole_distribution_table"):
-            # 保持表头自动拉伸，但设置最小列宽
-            header = self.hole_distribution_table.horizontalHeader()
-            header.setSectionResizeMode(QHeaderView.Interactive)
-            
-            # 设置最小列宽，防止内容被截断
-            min_col_width = int(80 * dpi_scale)
-            for col in range(3):
-                if header.sectionSize(col) < min_col_width:
-                    header.resizeSection(col, min_col_width)
+        table = self.hole_distribution_table
+        header = table.horizontalHeader()
+
+        # 强制固定模式（避免 Qt 自己再算）
+        header.setSectionResizeMode(QHeaderView.Fixed)
+        header.setStretchLastSection(False)
+
+        w = table.viewport().width()
+        col_count = table.columnCount()
+
+        # 关键：初始布局未稳定时，w 可能为 0 或非常离谱；此时先不算
+        if w <= 0 or col_count <= 0:
+            return
+
+        screen = self.screen()
+        dpi_scale = screen.logicalDotsPerInch() / 96.0 if screen else 1.0
+
+        # 这里的 max_w 才是“防止初始列宽很大”的硬限制
+        min_w = int(60 * dpi_scale)
+        max_w = int(220 * dpi_scale)
+
+        # 3列时按你的表头含义分配比例（可按需调整）
+        if col_count == 3:
+            ratios = [0.30, 0.35, 0.35]  # 行号列稍窄，上/下数量列稍宽
+        else:
+            ratios = [1.0 / col_count] * col_count
+
+        widths = [int(w * r) for r in ratios]
+        widths = [max(min_w, min(x, max_w)) for x in widths]
+
+        # 如果 clamp 后总宽仍超过 viewport，就等比缩小
+        total = sum(widths)
+        if total > w and total > 0:
+            scale = w / total
+            widths = [max(min_w, int(x * scale)) for x in widths]
+
+        # 最终强制覆盖缓存的列宽（这一步才能“打掉初始异常列宽”）
+        for i in range(col_count):
+            header.resizeSection(i, widths[i])
+
+    def resizeEvent(self, event):
+        """窗口大小变化时的自适应调整"""
+        super().resizeEvent(event)
+
+        # 自动调整表格列宽（仅左侧 param_table）
+        if hasattr(self, "param_table"):
+            table_width = self.param_table.viewport().width()
+            if table_width > 0:
+                col0_width = 80  # 序号
+                col3_width = 80  # 单位
+                remaining = max(0, table_width - col0_width - col3_width)
+                col1_width = int(remaining * 0.70)  # 参数名
+                col2_width = remaining - col1_width  # 参数值
+
+                self.param_table.setColumnWidth(0, col0_width)
+                self.param_table.setColumnWidth(1, col1_width)
+                self.param_table.setColumnWidth(2, col2_width)
+                self.param_table.setColumnWidth(3, col3_width)
+
+        # 保持你原来的右侧表策略不变
+        self.hole_distribution_table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Stretch
+        )
 
         # 调整图形视图
         if hasattr(self, "graphics_view") and hasattr(self, "graphics_scene"):
             self.graphics_view.fitInView(
-                self.graphics_scene.sceneRect(), 
-                Qt.KeepAspectRatio
+                self.graphics_scene.sceneRect(), Qt.KeepAspectRatio
             )
-
-        # 调整工具栏图片大小
+            # 调整工具栏图片的大小
         if hasattr(self, "toolbar_label"):
+            # 获取当前窗口宽度
             window_width = self.width()
-            max_width = int(window_width * 0.8 * dpi_scale)  # 考虑DPI缩放
+            # 设置图片的最大宽度为窗口宽度的一定比例（例如 80%）
+            max_width = int(window_width * 0.8)
             self.toolbar_label.setMaximumWidth(max_width)
 
-        # 非全屏状态下，窗口尺寸变化后自动调整参数表列宽
-        if (hasattr(self, "param_table") and 
-            hasattr(self, "is_fullscreen") and 
-            not self.is_fullscreen):
+        # 非全屏状态下，窗口尺寸变化后自动按比例调整参数表列宽
+        if (
+            hasattr(self, "param_table")
+            and hasattr(self, "is_fullscreen")
+            and not self.is_fullscreen
+        ):
             from PyQt5.QtWidgets import QApplication
+
             QApplication.processEvents()
             QTimer.singleShot(50, self.restore_param_table_column_widths)
 
-        # 根据窗口状态动态调整工具栏按钮布局
-        if (hasattr(self, "toolbar_layout") and 
-            hasattr(self, "toolbar_row1_layout") and 
-            hasattr(self, "toolbar_row2_layout")):
+        # 根据窗口状态（是否最大化 / 全屏）动态调整工具栏按钮布局
+        if (
+            hasattr(self, "toolbar_layout")
+            and hasattr(self, "toolbar_row1_layout")
+            and hasattr(self, "toolbar_row2_layout")
+        ):
             self.update_toolbar_layout_mode()
 
     def update_toolbar_layout_mode(self):
@@ -15325,114 +15258,6 @@ class TubeLayoutEditor(QMainWindow):
 
         return None
 
-    # TODO 整行选中函数
-    # def on_row_selection_changed(self):
-    #     """响应右侧表格选中事件，高亮对应小圆或在未选中时恢复，并同步更新 self.selected_centers"""
-    #     if not hasattr(self, 'full_sorted_current_centers_up') or not hasattr(self, 'full_sorted_current_centers_down'):
-    #         return
-    #
-    #     # 清除旧高亮，恢复为标准小圆
-    #     self.clear_selection_highlight()
-    #
-    #     # 获取当前选中的行（去重）
-    #     selected_rows = set()
-    #     for index in self.hole_distribution_table.selectedIndexes():
-    #         selected_rows.add(index.row())
-    #
-    #     if not selected_rows:
-    #         return
-    #
-    #     # 绘制新的高亮
-    #     pen = QPen(Qt.NoPen)
-    #     brush = QBrush(QColor(173, 216, 230))  # LightBlue
-    #
-    #     for row in selected_rows:
-    #         # 处理下半部分（行号为负）
-    #         if row < len(self.full_sorted_current_centers_down):
-    #             centers_down = self.full_sorted_current_centers_down[row]
-    #             for col_idx, (x, y) in enumerate(centers_down):
-    #                 # 添加高亮标记
-    #                 marker = self.graphics_scene.addEllipse(
-    #                     x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
-    #                 )
-    #                 marker.setData(0, "marker")  # 标记这个圆是 marker
-    #                 col_num = -(col_idx + 1)
-    #                 self.selected_centers.append((-(row + 1), col_num))
-    #
-    #         # 处理上半部分（行号为正）
-    #         if row < len(self.full_sorted_current_centers_up):
-    #             centers_up = self.full_sorted_current_centers_up[row]
-    #             for col_idx, (x, y) in enumerate(centers_up):
-    #                 # 添加高亮标记
-    #                 marker = self.graphics_scene.addEllipse(
-    #                     x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
-    #                 )
-    #                 marker.setData(0, "marker")  # 标记这个圆是 marker
-    #                 col_num = (col_idx + 1)
-    #                 self.selected_centers.append(((row + 1), col_num))
-    # def on_row_selection_changed(self):
-    #     """响应右侧表格选中事件，高亮对应小圆和表格整行，并同步更新 self.selected_centers"""
-    #     if not hasattr(self, 'full_sorted_current_centers_up') or not hasattr(self, 'full_sorted_current_centers_down'):
-    #         return
-    #
-    #     # 清除旧高亮，恢复为标准小圆
-    #     self.clear_selection_highlight()
-    #
-    #     # 清除表格所有行的高亮
-    #     for row in range(self.hole_distribution_table.rowCount()):
-    #         for col in range(self.hole_distribution_table.columnCount()):
-    #             item = self.hole_distribution_table.item(row, col)
-    #             if item:
-    #                 # 恢复默认样式
-    #                 item.setBackground(QBrush(Qt.NoBrush))
-    #
-    #     # 获取当前选中的单元格
-    #     selected_indexes = self.hole_distribution_table.selectedIndexes()
-    #     if not selected_indexes:
-    #         return
-    #
-    #     # 获取选中的行（去重）
-    #     selected_rows = set(index.row() for index in selected_indexes)
-    #     # 只处理第一个选中的行
-    #     selected_row = next(iter(selected_rows))
-    #
-    #     # 高亮表格中选中行的所有列（三列）
-    #     for col in range(self.hole_distribution_table.columnCount()):
-    #         item = self.hole_distribution_table.item(selected_row, col)
-    #         if item:
-    #             # 设置单元格背景为蓝色
-    #             item.setBackground(QBrush(QColor(173, 216, 230)))  # LightBlue
-    #         else:
-    #             # 如果单元格不存在，创建一个临时项来设置背景
-    #             temp_item = QTableWidgetItem()
-    #             temp_item.setBackground(QBrush(QColor(173, 216, 230)))
-    #             self.hole_distribution_table.setItem(selected_row, col, temp_item)
-    #
-    #     # 绘制小圆的高亮
-    #     pen = QPen(Qt.NoPen)
-    #     brush = QBrush(QColor(173, 216, 230))  # LightBlue
-    #
-    #     # 处理下半部分（行号为负）
-    #     if selected_row < len(self.full_sorted_current_centers_down):
-    #         centers_down = self.full_sorted_current_centers_down[selected_row]
-    #         for col_idx, (x, y) in enumerate(centers_down):
-    #             marker = self.graphics_scene.addEllipse(
-    #                 x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
-    #             )
-    #             marker.setData(0, "marker")
-    #             col_num = -(col_idx + 1)
-    #             self.selected_centers.append((-(selected_row + 1), col_num))
-    #
-    #     # 处理上半部分（行号为正）
-    #     if selected_row < len(self.full_sorted_current_centers_up):
-    #         centers_up = self.full_sorted_current_centers_up[selected_row]
-    #         for col_idx, (x, y) in enumerate(centers_up):
-    #             marker = self.graphics_scene.addEllipse(
-    #                 x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
-    #             )
-    #             marker.setData(0, "marker")
-    #             col_num = (col_idx + 1)
-    #             self.selected_centers.append(((selected_row + 1), col_num))
     def group_centers_by_y(
         self, centers: List[Tuple[float, float]], tol: float = 1e-3
     ) -> Tuple[List[List[Tuple[float, float]]], List[List[Tuple[float, float]]]]:
@@ -15732,6 +15557,7 @@ class TubeLayoutEditor(QMainWindow):
                 )
                 marker.setData(0, "marker")  # 标记这个圆是 marker
 
+    # TODO 整行选中函数
     def on_row_selection_changed(self):
         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = (
             self.group_centers_by_y(self.global_centers)
@@ -31411,7 +31237,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 计算两个圆心的距离（供几何计算/宽度使用）
         # 约定：
-        # - 平板形 / 圆弧形：以此计算值作为“防冲板宽度”（即两选中圆心间距），并覆盖 impingement_plate_thick；
+        # - 平板形 / 圆弧形：以此计算值作为"防冲板宽度"（即两选中圆心间距），并覆盖 impingement_plate_thick；
         # - 焊接式：仍然使用参数弹窗中的宽度（baffle_width），焊接式不通过本函数绘制，保持现状。
         distance = self.calculate_distance(selected_centers)
         try:
@@ -32285,6 +32111,31 @@ class TubeLayoutEditor(QMainWindow):
             self.clear_selection_highlight()
 
         elif baffle_type == "焊接式":
+            # 为焊接式防冲板解析选中的中心点
+            selected_centers_list = []
+            if isinstance(selected_centers, list):
+                selected_centers_list = [
+                    item
+                    for item in selected_centers
+                    if isinstance(item, tuple)
+                    and len(item) == 2
+                    and all(isinstance(x, (int, float)) for x in item)
+                ]
+            elif isinstance(selected_centers, str):
+                try:
+                    parsed_list = ast.literal_eval(selected_centers)
+                    if isinstance(parsed_list, list):
+                        selected_centers_list = [
+                            item
+                            for item in parsed_list
+                            if isinstance(item, tuple)
+                            and len(item) == 2
+                            and all(isinstance(x, (int, float)) for x in item)
+                        ]
+                except (SyntaxError, ValueError, TypeError) as e:
+                    print("字符串解析错误:", e)
+                    selected_centers_list = []
+
             # 仅根据壳体内直径 Dis、至圆筒内壁距离和防冲板方位角，计算并标记 C 点
             # 1) 读取壳体内直径 Dis
             Di = None
@@ -32331,7 +32182,7 @@ class TubeLayoutEditor(QMainWindow):
 
             # 3) 计算 C 点距圆心的半径
             #    与 draw_layout 中的 circle_Di 一致：以圆心 (0,0)、半径 R_Di = Di/2 绘制壳体内直径大圆
-            #    这里按“距圆筒内壁距离”为从壳体大圆向内的径向距离，故 C 点半径 = R_Di - 距内壁
+            #    这里按"距圆筒内壁距离"为从壳体大圆向内的径向距离，故 C 点半径 = R_Di - 距内壁
             R_Di = getattr(self, "R_Di", None)
             if not isinstance(R_Di, (int, float)) or R_Di <= 0:
                 R_Di = Di / 2.0
@@ -32342,11 +32193,11 @@ class TubeLayoutEditor(QMainWindow):
                 return
 
             # 4) 计算 C 点坐标
-            #    最新定义：以 y 轴负方向(向下)为 0°，向 x 轴负方向(向左)偏移“防冲板方位角”
+            #    最新定义：以 y 轴负方向(向下)为 0°，向 x 轴负方向(向左)偏移"防冲板方位角"
             #    在当前坐标系中：x 轴正半轴为 0°，逆时针为正方向：
             #      - y 轴负方向(向下) 对应 270°
             #      - x 轴负方向(向左) 对应 180°
-            #    因此从“向下 270°”逆时针旋转 azimuth_deg 到“向左 180°”一带：
+            #    因此从"向下 270°"逆时针旋转 azimuth_deg 到"向左 180°"一带：
             #      angle_deg = 270° + 防冲板方位角
             angle_deg = 270.0 + azimuth_deg
             angle_rad = math.radians(angle_deg)
@@ -32483,7 +32334,7 @@ class TubeLayoutEditor(QMainWindow):
             except Exception as e:
                 print(f"焊接式防冲板: 计算/删除干涉换热管失败: {e}")
 
-            # 7) 再按 A-P-Q-B 顺序绘制焊接式防冲板轮廓线，线宽为“防冲板厚度”参数
+            # 7) 再按 A-P-Q-B 顺序绘制焊接式防冲板轮廓线，线宽为"防冲板厚度"参数
             try:
                 from PyQt5.QtCore import Qt, QPointF
                 from PyQt5.QtGui import QPainterPath
