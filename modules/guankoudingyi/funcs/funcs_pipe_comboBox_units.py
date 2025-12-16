@@ -31,7 +31,7 @@ def setup_unit_selection_handlers(stats_widget):
                 stats_widget.current_pressure_type = unit_value  # ✨记录最新选择值
 
                 # 获取新默认值和下拉选项
-                _, default_standard, default_level = get_standard_flange_pressure_level_default_value(product_id, stats_widget)
+                _, default_standard, default_level, default_nominal_size = get_standard_flange_pressure_level_default_value(product_id, stats_widget)
                 table = stats_widget.tableWidget_pipe
 
                 for row in range(table.rowCount()):
@@ -39,6 +39,10 @@ def setup_unit_selection_handlers(stats_widget):
                     code_item = table.item(row, 1)
                     if not code_item or not code_item.text().strip():
                         continue
+                    # 公称尺寸（第4列）设定为空
+                    nominal_size_item = QTableWidgetItem(default_nominal_size)
+                    nominal_size_item.setTextAlignment(Qt.AlignCenter)
+                    table.setItem(row, 4, nominal_size_item)
                     # 法兰标准
                     standard_item = QTableWidgetItem(default_standard)
                     standard_item.setTextAlignment(Qt.AlignCenter)

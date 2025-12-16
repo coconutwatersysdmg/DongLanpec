@@ -77,7 +77,7 @@ ENABLE_AXIAL_DESIGN_PAGE = False
 ENABLE_DANGBAN_WELDED_OPTION = True
 
 # TODO 径向开孔功能开关
-ENABLE_RADIAL_HOLES = False
+ENABLE_RADIAL_HOLES = True
 
 
 edge_centers: List[Tuple[float, float]] = []
@@ -1146,6 +1146,10 @@ class TubeLayoutEditor(QMainWindow):
         # 防冲板全局数据字典与自增ID
         self.impingement_plate_dic = {}
         self._impingement_plate_auto_id = 0
+        # 吊环螺钉全局数据字典与自增ID
+        self.screw_ring_dic = {}
+        self._screw_ring_auto_id = 0
+        self.selected_screw_ring_ids = set()
         self.operation_order = 0
         self.isBlock = False
         self.impingement_plate_1 = []
@@ -3912,7 +3916,8 @@ class TubeLayoutEditor(QMainWindow):
                         query = (
                             "SELECT 管口代号, 管口所属元件 "
                             "FROM 产品设计活动表_管口表 "
-                            "WHERE 产品ID = %s"
+                            "WHERE 产品ID = %s "
+                            "AND 管口所属元件 LIKE '%%管板%%'"
                         )
                         cursor.execute(query, (self.productID,))
                         results = cursor.fetchall() or []
@@ -14618,7 +14623,7 @@ class TubeLayoutEditor(QMainWindow):
         """
         import math
         from PyQt5.QtGui import QPen, QColor
-        from PyQt5.QtWidgets import QGraphicsLineItem
+        from PyQt5.QtWidgets import QGraphicsLineItem, QGraphicsItem
 
         # 先清除已有的连线
         self.clear_connection_lines(scene)
@@ -15380,9 +15385,12 @@ class TubeLayoutEditor(QMainWindow):
             self.center_dangban_dic = {}
             self._center_dangban_auto_id = 0
             self.operation_order = 0
-            self.impingement_plate_dic = {}  # Add this line
+            self.impingement_plate_dic = {}
             self._impingement_plate_auto_id = 0
             self.radial_hole_dict = {}
+            self.screw_ring_dic = {}
+            self._screw_ring_auto_id = 0
+            self.selected_screw_ring_ids = set()
 
         except Exception as e:
             print(f"布管按钮点击时发生错误: {e}")
@@ -21578,6 +21586,10 @@ class TubeLayoutEditor(QMainWindow):
             # 处理挡板删除
             if hasattr(self, "selected_baffles") and self.selected_baffles:
                 self.delete_selected_baffles()
+
+            # 处理吊环螺钉删除
+            if hasattr(self, "selected_screw_ring_ids") and self.selected_screw_ring_ids:
+                self.delete_selected_screw_rings()
 
             # 处理侧边杆删除
             # 先收集所有选中的侧边杆
@@ -33365,7 +33377,7 @@ class TubeLayoutEditor(QMainWindow):
         # 定义需要获取的参数及其默认值
         params = {
             "吊环螺钉起始方位角": {"row": -1, "default": 0.0},
-            "吊环螺钉规格": {"row": -1, "default": "M10"},
+            "吊环螺钉规格": {"row": -1, "default": "M20"},
             "吊环螺钉孔中心距": {"row": -1, "default": 50.0},
             "吊环螺钉数量": {"row": -1, "default": 4},
         }
@@ -33420,10 +33432,36 @@ class TubeLayoutEditor(QMainWindow):
         angle_layout.addWidget(self.start_angle_input)
         main_layout.addLayout(angle_layout)
 
-        # 2. 吊环螺钉规格输入
+        # 2. 吊环螺钉规格下拉
         spec_layout = QHBoxLayout()
         spec_label = QLabel("吊环螺钉规格:")
-        self.spec_input = QLineEdit(params["吊环螺钉规格"]["default"])
+        self.spec_input = QComboBox()
+        screw_specs = [
+            "M8",
+            "M10",
+            "M12",
+            "M16",
+            "M20",
+            "M24",
+            "M30",
+            "M36",
+            "M42",
+            "M48",
+            "M56",
+            "M64",
+            "M72×6",
+            "M80×6",
+            "M100×6",
+        ]
+        self.spec_input.addItems(screw_specs)
+        # 将默认值设为当前值；如在列表则选中，否则追加后选中
+        default_spec = params["吊环螺钉规格"]["default"]
+        idx = self.spec_input.findText(default_spec)
+        if idx >= 0:
+            self.spec_input.setCurrentIndex(idx)
+        else:
+            self.spec_input.addItem(default_spec)
+            self.spec_input.setCurrentText(default_spec)
         spec_layout.addWidget(spec_label)
         spec_layout.addWidget(self.spec_input)
         main_layout.addLayout(spec_layout)
@@ -33459,18 +33497,68 @@ class TubeLayoutEditor(QMainWindow):
             # 验证输入有效性
             try:
                 # 转换并验证输入值
-                start_angle = float(self.start_angle_input.text())
-                center_distance = float(self.center_distance_input.text())
-                count = int(self.count_input.text())
-                spec = self.spec_input.text().strip()
+                start_angle = float(self.start_angle_input.text())  # 起始方位角
+                center_distance = float(self.center_distance_input.text())  # 孔中心距
+                count = int(self.count_input.text())  # 吊环螺钉数量
+                spec = self.spec_input.currentText().strip()
 
                 if count <= 0:
                     raise ValueError("吊环螺钉数量必须为正整数")
                 if not spec:
                     raise ValueError("吊环螺钉规格不能为空")
 
-                # 实际功能暂不实现，仅演示参数更新
-                # QMessageBox.information(self, "提示", "参数已确认，实际功能待实现")
+                # 重新绘制吊环螺钉：先清除旧的，再按数量等分 360° 绘制
+                try:
+                    # 先删除场景中已有的吊环螺钉图元
+                    if hasattr(self, "graphics_scene") and self.graphics_scene is not None:
+                        for item in list(self.graphics_scene.items()):
+                            try:
+                                if getattr(item, "is_screw_ring", False):
+                                    self.graphics_scene.removeItem(item)
+                            except Exception:
+                                continue
+                    # 同步清空吊环数据字典和选中列表
+                    if hasattr(self, "screw_ring_dic"):
+                        self.screw_ring_dic.clear()
+                    if hasattr(self, "selected_screw_ring_ids"):
+                        self.selected_screw_ring_ids.clear()
+
+                    # 将规格文本（如 M8、M20、M72×6）解析为直径数值
+                    import re
+
+                    match = re.search(r"(\d+)", spec)
+                    if not match:
+                        raise ValueError("吊环螺钉规格格式错误，无法解析直径")
+                    screw_diameter = float(match.group(1))
+
+                    # 在真正绘制前，先检查所有位置是否与现有元件干涉
+                    import math
+                    from PyQt5.QtWidgets import QMessageBox
+
+                    # 角度步长：360° / count；整体以“起始方位角”作为偏移量
+                    step = 360.0 / count
+                    # 先做干涉检查
+                    for i in range(count):
+                        angle_i = start_angle + i * step  # 第一个就是起始方位角，后续叠加步长
+                        # 计算该位置的圆心坐标（与 build_screw_ring 一致）
+                        polar_deg = 90.0 - angle_i
+                        polar_rad = math.radians(polar_deg)
+                        cx = center_distance * math.cos(polar_rad)
+                        cy = center_distance * math.sin(polar_rad)
+                        if not self.is_screw_ring_clear(cx, cy, screw_diameter):
+                            QMessageBox.warning(
+                                self,
+                                "提示",
+                                "吊环螺钉与其他元件发生干涉，请修改！",
+                            )
+                            return
+
+                    # 通过检查后再真正绘制
+                    for i in range(count):
+                        angle_i = start_angle + i * step  # 起始方位角偏移
+                        self.build_screw_ring(angle_i, center_distance, screw_diameter)
+                except Exception as e:
+                    print(f"[on_screw_ring_click] build_screw_ring error: {e}")
 
                 # 更新参数表
                 update_params_to_table()
@@ -33498,7 +33586,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 更新吊环螺钉规格
                 if params["吊环螺钉规格"]["row"] != -1:
                     row = params["吊环螺钉规格"]["row"]
-                    value = self.spec_input.text().strip()
+                    value = self.spec_input.currentText().strip()
                     update_param_cell(row, value)
 
                 # 更新吊环螺钉孔中心距
@@ -33580,6 +33668,252 @@ class TubeLayoutEditor(QMainWindow):
 
         # 未找到参数时返回None
         return None
+
+    def build_screw_ring(self, angle_deg, distance, diameter):
+        """
+        在中间图形界面绘制吊环螺钉示意：
+        - 原点为 (0, 0)，与换热管圆心相同
+        - 角度 angle_deg：以 y 轴正方向为基准，向 x 轴正方向偏移（顺时针为正）
+        - 距离 distance：从原点到吊环圆心的距离
+        - 圆直径 diameter：传入的吊环螺钉规格（如 M20 → 20）
+        - 绘制空心蓝色圆，内部绘制 3 条水平弦和 3 条垂直弦
+        """
+        import math
+        from PyQt5.QtGui import QPen, QColor
+        from PyQt5.QtCore import Qt
+        from PyQt5.QtWidgets import QGraphicsLineItem
+
+        if not hasattr(self, "graphics_scene") or self.graphics_scene is None:
+            return
+
+        # 1. 解析直径（由吊环螺钉规格传入，如 20 表示 M20）
+        try:
+            dia_value = float(diameter)
+        except (TypeError, ValueError):
+            return
+
+        radius = dia_value / 2.0
+        if radius <= 0:
+            return
+
+        # 2. 解析角度和距离
+        try:
+            angle_deg = float(angle_deg)
+            distance = float(distance)
+        except (TypeError, ValueError):
+            return
+        if distance <= 0:
+            return
+
+        # 3. 计算圆心坐标
+        # 以 Qt 坐标系为参考：
+        #   0°  在 +x 方向，90° 在 +y 方向
+        # 用户描述：从 y 轴正方向向 x 轴正方向偏移 angle_deg（顺时针）
+        # 因此对应的极角为：base_angle (90°) - angle_deg
+        polar_deg = 90.0 - angle_deg
+        polar_rad = math.radians(polar_deg)
+        cx = distance * math.cos(polar_rad)
+        cy = distance * math.sin(polar_rad)
+
+        # 4. 绘制蓝色空心圆
+        outer_pen = QPen(QColor(0, 102, 204))  # 深一点的蓝色
+        outer_pen.setWidth(2)
+        outer_pen.setCosmetic(True)
+        from PyQt5.QtGui import QBrush
+
+        outer_brush = QBrush(Qt.NoBrush)
+
+        circle_item = self.graphics_scene.addEllipse(
+            cx - radius,
+            cy - radius,
+            2 * radius,
+            2 * radius,
+            outer_pen,
+            outer_brush,
+        )
+        circle_item.setZValue(5)
+        circle_item.is_screw_ring = True
+        circle_item._orig_pen = outer_pen
+        # 标记图元所属的吊环ID（后续生成）
+
+        # 5. 在圆内绘制 3 条水平弦和 3 条竖直弦
+        # 位置取 -radius/2, 0, +radius/2
+        line_pen = QPen(QColor(0, 102, 204))
+        line_pen.setWidth(1)
+        line_pen.setCosmetic(True)
+
+        offsets = [-radius / 2.0, 0.0, radius / 2.0]
+        inner_r = radius * 0.9  # 稍微缩短一点，避免压在圆外缘上
+
+        line_items = []
+        # 水平弦：y 固定，x 从 cx - inner_r 到 cx + inner_r
+        for dy in offsets:
+            y = cy + dy
+            line = QGraphicsLineItem(
+                cx - inner_r,
+                y,
+                cx + inner_r,
+                y,
+            )
+            line.setPen(line_pen)
+            line.setZValue(5.1)
+            line.is_screw_ring = True
+            self.graphics_scene.addItem(line)
+            line_items.append(line)
+
+        # 垂直弦：x 固定，y 从 cy - inner_r 到 cy + inner_r
+        for dx in offsets:
+            x = cx + dx
+            line = QGraphicsLineItem(
+                x,
+                cy - inner_r,
+                x,
+                cy + inner_r,
+            )
+            line.setPen(line_pen)
+            line.setZValue(5.1)
+            line.is_screw_ring = True
+            self.graphics_scene.addItem(line)
+            line_items.append(line)
+
+        # 6. 记录数据字典，并为所有图元绑定同一个ID，便于选择/删除
+        screw_id = getattr(self, "_screw_ring_auto_id", 0) + 1
+        self._screw_ring_auto_id = screw_id
+
+        items = [circle_item] + line_items
+        # 为本次创建的图元打上ID和可点击属性
+        for it in items:
+            it.screw_ring_id = screw_id
+            it.setAcceptedMouseButtons(Qt.LeftButton)
+            it.setFlag(QGraphicsItem.ItemIsSelectable, True)
+
+        rec = {
+            "id": screw_id,
+            "angle": angle_deg,
+            "distance": distance,
+            "diameter": diameter,
+            "center": (cx, cy),
+            "items": items,
+        }
+        if not hasattr(self, "screw_ring_dic") or self.screw_ring_dic is None:
+            self.screw_ring_dic = {}
+        self.screw_ring_dic[screw_id] = rec
+
+    def is_screw_ring_clear(self, cx, cy, ring_diameter) -> bool:
+        """
+        检查以 (cx, cy) 为圆心、直径为 ring_diameter 的吊环圆
+        是否与 self.current_centers ∪ self.lagan_info 中的任意换热管圆干涉。
+        换热管直径均为“换热管外径 do”，从左侧参数表获取。
+        若与任意一圆相交/相切则认为干涉，返回 False；完全不干涉返回 True。
+        """
+        import math
+
+        # 获取换热管外径 do
+        do_str = self.get_tube_do()
+        try:
+            do_value = float(do_str)
+        except (TypeError, ValueError):
+            # 无法获取 do 时，保守起见认为有干涉
+            return False
+
+        tube_radius = do_value / 2.0
+        try:
+            ring_d = float(ring_diameter)
+        except (TypeError, ValueError):
+            return False
+        ring_radius = ring_d / 2.0
+        if tube_radius <= 0 or ring_radius <= 0:
+            return False
+
+        # 需要检查的圆心集合：current_centers 与 lagan_info 的并集（绝对坐标）
+        centers = list(getattr(self, "current_centers", []) or [])
+        lagan_list = getattr(self, "lagan_info", []) or []
+        if lagan_list:
+            centers.extend(lagan_list)
+
+        # 若没有任何换热管/拉杆，则一定不干涉
+        if not centers:
+            return True
+
+        min_dist_sq = (tube_radius + ring_radius) ** 2
+
+        for (x, y) in centers:
+            try:
+                dx = float(x) - float(cx)
+                dy = float(y) - float(cy)
+            except (TypeError, ValueError):
+                continue
+            if dx * dx + dy * dy <= min_dist_sq:
+                # 相交或相切均视为干涉
+                return False
+
+        return True
+
+    # 吊环螺钉：选中、高亮、删除工具函数
+    def _set_screw_ring_selected(self, ring_id, selected: bool):
+        rec = (
+            self.screw_ring_dic.get(ring_id)
+            if hasattr(self, "screw_ring_dic") and self.screw_ring_dic is not None
+            else None
+        )
+        if not isinstance(rec, dict):
+            return
+        items = rec.get("items") or []
+        for it in items:
+            # 仅对圆外框调整描边
+            if isinstance(it, QGraphicsEllipseItem):
+                try:
+                    if selected:
+                        gold_pen = QPen(QColor(255, 215, 0), 3)
+                        gold_pen.setCosmetic(True)
+                        it.setPen(gold_pen)
+                    else:
+                        if hasattr(it, "_orig_pen"):
+                            it.setPen(it._orig_pen)
+                except Exception:
+                    pass
+        if selected:
+            self.selected_screw_ring_ids.add(ring_id)
+        else:
+            self.selected_screw_ring_ids.discard(ring_id)
+
+    def toggle_screw_ring_selection(self, ring_id):
+        if not hasattr(self, "selected_screw_ring_ids"):
+            self.selected_screw_ring_ids = set()
+        selected = ring_id in self.selected_screw_ring_ids
+        self._set_screw_ring_selected(ring_id, not selected)
+
+    def clear_screw_ring_selection(self):
+        if not hasattr(self, "selected_screw_ring_ids"):
+            return
+        for rid in list(self.selected_screw_ring_ids):
+            self._set_screw_ring_selected(rid, False)
+        self.selected_screw_ring_ids.clear()
+
+    def delete_selected_screw_rings(self):
+        """删除已选中的吊环螺钉（图元+数据字典）"""
+        if not getattr(self, "selected_screw_ring_ids", None):
+            return
+        to_delete = list(self.selected_screw_ring_ids)
+        for rid in to_delete:
+            rec = (
+                self.screw_ring_dic.get(rid)
+                if hasattr(self, "screw_ring_dic") and self.screw_ring_dic is not None
+                else None
+            )
+            if isinstance(rec, dict):
+                items = rec.get("items") or []
+                for it in items:
+                    try:
+                        if hasattr(self, "graphics_scene") and self.graphics_scene:
+                            self.graphics_scene.removeItem(it)
+                    except Exception:
+                        pass
+                try:
+                    del self.screw_ring_dic[rid]
+                except Exception:
+                    pass
+        self.selected_screw_ring_ids.clear()
 
     def get_baffle_cut_direction(self):
         row_count = self.param_table.rowCount()
@@ -35662,6 +35996,16 @@ class TubeLayoutEditor(QMainWindow):
                 self.mouse_y = scene_pos.y()
 
                 items = self.graphics_scene.items(scene_pos)
+                # 吊环螺钉单击：高亮/选择
+                for item in items:
+                    if getattr(item, "is_screw_ring", False):
+                        ring_id = getattr(item, "screw_ring_id", None)
+                        if ring_id is not None and hasattr(
+                            self, "toggle_screw_ring_selection"
+                        ):
+                            self.toggle_screw_ring_selection(ring_id)
+                            event.accept()
+                            return True
                 for item in items:
                     # 旁路挡板、防冲板等矩形：交给 ClickableRectItem 自己处理
                     if isinstance(item, ClickableRectItem):
@@ -35759,6 +36103,15 @@ class TubeLayoutEditor(QMainWindow):
                 mouse_y = scene_pos.y()
 
                 items = self.graphics_scene.items(scene_pos)
+                # 吊环螺钉双击：打开参数弹窗
+                for item in items:
+                    if getattr(item, "is_screw_ring", False):
+                        try:
+                            self.on_screw_ring_click()
+                        except Exception:
+                            pass
+                        event.accept()
+                        return True
                 for item in items:
                     # 旁路挡板、防冲板等矩形：交给 ClickableRectItem 自己处理
                     if isinstance(item, ClickableRectItem):

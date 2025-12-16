@@ -1,3 +1,5 @@
+import os
+
 from PyQt5.QtCore import Qt, QObject, QEvent, QItemSelectionModel
 
 from PyQt5 import QtWidgets, uic
@@ -10,7 +12,8 @@ from pandas.core.interchange import column
 
 from modules.chanpinguanli.chanpinguanli_main import product_manager
 from modules.condition_input.view import check_project_and_product
-from modules.guankoudingyi.funcs.funcs_pipe_data_output import export_nozzle_listing
+from modules.guankoudingyi.funcs.funcs_pipe_data_in_out import export_nozzle_listing
+from modules.guankoudingyi.funcs.pipe_get_units_types import get_current_unit_types_from_ui
 #导入函数功能
 from modules.guankoudingyi.obtain_product_type_version import get_product_type_and_version
 
@@ -29,6 +32,10 @@ from modules.guankoudingyi.funcs.funcs_pipe_sort import setup_header_click_sort
 # 导入确认按钮功能
 from modules.guankoudingyi.funcs.funs_enter_key import connect_save_button
 from modules.guankoudingyi.view_drawing.main_view import embed_heat_exchanger_view, HeatExchangerView
+#导入管口复制功能
+from modules.guankoudingyi.funcs.funcs_pipe_table import copy_pipe_data
+#管口批量导入功能
+from modules.guankoudingyi.funcs.funcs_pipe_data_in_out import import_nozzle_from_excel
 
 # 几个界面连接所添加的产品ID的传送
 product_id = None
@@ -173,16 +180,20 @@ class Stats(QtWidgets.QWidget):
     def __init__(self, line_tip=None):
         super().__init__()
 
-        # # 0903会议纪要 首先进行项目和产品检查
-        # print("准备检查项目和产品状态...")
-        # can_open, msg = check_project_and_product()
-        # if not can_open:
-        #     QMessageBox.information(self, "提示", msg)
-        #     self.deleteLater()  # 不打开界面
-        #     return  # 立即返回
+        # 0903会议纪要 首先进行项目和产品检查
+        print("准备检查项目和产品状态...")
+        can_open, msg = check_project_and_product()
+        if not can_open:
+            QMessageBox.information(self, "提示", msg)
+            self.deleteLater()  # 不打开界面
+            return  # 立即返回
 
         self.line_tip = line_tip
-        uic.loadUi("modules/guankoudingyi/ui/pipe_attachment_define.ui", self)
+
+        # uic.loadUi("modules/guankoudingyi/ui/pipe_attachment_define.ui", self)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        ui_path = os.path.join(current_dir, "ui", "pipe_attachment_define.ui")
+        uic.loadUi(ui_path, self)
 
         # 保存product_id为实例变量，这样其他方法可以访问
         self.product_id = product_id
@@ -258,6 +269,7 @@ class Stats(QtWidgets.QWidget):
         if self.view:
             self.view.set_product_id(self.product_id) # ✅ 必须加上这一句，否则类型为 None
             self.view.nps_to_dn_map = load_nps_to_dn_map()  # ✅ 注入 NPS→DN 映射表
+            self.view.query_current_units = lambda: get_current_unit_types_from_ui(self)  # ✅ 让视图能获取当前公称尺寸的单位
             self.view.set_pipe_data(self.get_all_pipe_data())
 
         #管口删除
@@ -268,6 +280,10 @@ class Stats(QtWidgets.QWidget):
         self.pushButton_pipe_down.clicked.connect(lambda: move_selected_pipe_rows_down(self))
         #管口信息导出
         self.pushButton_out.clicked.connect(self._on_click_export)
+        #管口复制
+        self.pushButton_cv.clicked.connect(lambda: copy_pipe_data(self, product_id))
+        #管口信息导入
+        self.pushButton_in.clicked.connect(lambda: import_nozzle_from_excel(self))
 
         # 单元格改变的监听
         self.tableWidget_pipe.cellChanged.connect(self.handle_cell_change)
@@ -512,19 +528,19 @@ class Stats(QtWidgets.QWidget):
             2: 110,  # 管口功能
             3: 110,  # 管口用途
             4: 110,  # 公称尺寸
-            5: 220,  # 法兰标准
+            5: 240,  # 法兰标准
             6: 110,  # 压力等级
             7: 110,  # 法兰型式
             8: 130,  # 密封面型式
             9: 160,  # 焊端规格
-            10: 160,  # 管口所属元件
+            10: 175,  # 管口所属元件
             11: 160,  # 轴向定位基准
             12: 160,  # 轴向定位距离
             13: 140,  # 轴向夹角(°)
             14: 140,  # 周向方位(°)
             15: 140,  # 偏心距(mm)
             16: 160,  # 外伸高度
-            17: 110,  # 管口附件
+            17: 190,  # 管口附件
             18: 110  # 管口载荷
         }
 

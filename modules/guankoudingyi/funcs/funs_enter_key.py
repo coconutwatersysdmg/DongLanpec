@@ -1,3 +1,4 @@
+from PyQt5.QtCore import QTimer
 from PyQt5.QtWidgets import QMessageBox, QLabel, QComboBox
 import pymysql
 from modules.guankoudingyi.db_cnt import get_connection, db_config_2
@@ -20,6 +21,25 @@ def save_all_pipe_data(stats_widget):
     if not product_id:
         QMessageBox.warning(stats_widget, "错误", "产品ID不能为空")
         return
+        # ===== 保存前校验：“管口功能”必填（仅校验已填写“管口代号”的行） =====
+    if table is not None:
+        missing_codes = []
+        last_row = table.rowCount() - 1  # 排除最后空行
+        for row in range(last_row):
+            code_item = table.item(row, 1)  # 管口代号
+            func_item = table.item(row, 2)  # 管口功能
+            code = code_item.text().strip() if code_item else ""
+            func = func_item.text().strip() if func_item else ""
+            if code and not func:
+                missing_codes.append(code)
+        if missing_codes:
+            msg = "请输入管口代号为 " + "、".join(missing_codes) + " 的管口功能"
+            if hasattr(stats_widget, 'line_tip'):
+                stats_widget.line_tip.setText(msg)
+                stats_widget.line_tip.setStyleSheet("color: #FFA500;")  # 橘色提示
+            return
+        # ===== 校验通过，继续原有保存逻辑 =====
+
 
     # 定义列映射
     column_map = {
@@ -111,11 +131,19 @@ def save_all_pipe_data(stats_widget):
             """, (product_id, hid, port_code, component))
 
         conn.commit()
-        QMessageBox.information(stats_widget, "保存成功", "保存成功。")
+        # 在line_tip中显示保存成功信息
+        if hasattr(stats_widget, 'line_tip'):
+            stats_widget.line_tip.setText("保存成功！")
+            stats_widget.line_tip.setStyleSheet("color: black;")
+            QTimer.singleShot(5000, lambda: stats_widget.line_tip.setText(""))
     except Exception as e:
         if conn:
             conn.rollback()
-        QMessageBox.critical(stats_widget, "保存失败", f"保存数据时出错：{e}")
+        # 在line_tip中显示保存失败信息
+        if hasattr(stats_widget, 'line_tip'):
+            stats_widget.line_tip.setText(f"保存失败：{e}")
+            stats_widget.line_tip.setStyleSheet("color: red;")
+            QTimer.singleShot(5000, lambda: stats_widget.line_tip.setText(""))
     finally:
         if cur:
             cur.close()
