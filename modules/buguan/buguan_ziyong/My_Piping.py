@@ -2288,7 +2288,7 @@ class TubeLayoutEditor(QMainWindow):
         btn_radial_holes.setStyleSheet(toolbar_button_style)
         btn_radial_holes.setIcon(QIcon(icon_path12))
         btn_radial_holes.setIconSize(QSize(20, 20))
-        btn_radial_holes.clicked.connect(self.build_radial_holes)
+        btn_radial_holes.clicked.connect(self.on_radial_holes_click)
         if not ENABLE_RADIAL_HOLES:
             btn_radial_holes.setEnabled(False)
         self.toolbar_row2_layout.addWidget(btn_radial_holes)
@@ -3921,10 +3921,16 @@ class TubeLayoutEditor(QMainWindow):
                         )
                         cursor.execute(query, (self.productID,))
                         results = cursor.fetchall() or []
+                        print(f"[radial_hole] 管口表查询到 {len(results)} 条记录")
                         for row in results:
-                            # row 为字典，键包含“管口代号”和“管口所属元件”
-                            code = row.get("管口代号")
-                            owner = row.get("管口所属元件")
+                            # row 可能是 dict 或 tuple，这里兼容两种情况
+                            if isinstance(row, dict):
+                                code = row.get("管口代号")
+                                owner = row.get("管口所属元件")
+                            else:
+                                # 假设顺序为 (管口代号, 管口所属元件)
+                                code = row[0] if len(row) > 0 else None
+                                owner = row[1] if len(row) > 1 else None
                             if code is not None:
                                 self.pipe_port_dict[code] = owner
                         cursor.close()
@@ -4502,7 +4508,6 @@ class TubeLayoutEditor(QMainWindow):
         self.build_lagan(lagan_centers)
 
         self.delete_huanreguan(del_centers)
-        self.radial_hole_dict = {}
 
         # 读取吊环螺钉表并重建场景中的吊环螺钉
         try:
@@ -15480,7 +15485,17 @@ class TubeLayoutEditor(QMainWindow):
             self.operation_order = 0
             self.impingement_plate_dic = {}
             self._impingement_plate_auto_id = 0
-            self.radial_hole_dict = {}
+            if hasattr(self, "radial_hole_dict") and isinstance(
+                self.radial_hole_dict, dict
+            ):
+                for v in self.radial_hole_dict.values():
+                    try:
+                        if isinstance(v, dict) and "换热管坐标" in v:
+                            v["换热管坐标"] = None
+                    except Exception:
+                        continue
+            else:
+                self.radial_hole_dict = {}
             self.screw_ring_dic = {}
             self._screw_ring_auto_id = 0
             self.selected_screw_ring_ids = set()
@@ -20511,8 +20526,8 @@ class TubeLayoutEditor(QMainWindow):
         # 计算row1和row2的y坐标的和的绝对值
         row1_y = row_ys[row1_idx]
         row2_y = row_ys[row2_idx]
-
-    def build_radial_holes(self):
+    #TODO 径向开孔功能
+    def on_radial_holes_click(self):
         self.find_edge_tube()
         actual_selected_centers = self.selected_to_current_coords(self.selected_centers)
 
@@ -20532,7 +20547,7 @@ class TubeLayoutEditor(QMainWindow):
             self.clear_selection_highlight()
             return
 
-        if not getattr(self, "radial_hole_dict", None):
+        if not getattr(self, "pipe_port_dict", None):
             QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
             self.clear_selection_highlight()
             return
@@ -20691,13 +20706,19 @@ class TubeLayoutEditor(QMainWindow):
         self.radial_hole_dict[selected_port]["换热管坐标"] = current_coord
 
         try:
-            self.draw_radial_hole_graphics(current_coord)
+            self.draw_radial_hole_tangents(current_coord)
+            tube_num=self.get_tube_pass_count()
+            if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+                selected_centers = self.judge_linkage_y(self.selected_centers)
+            elif tube_num in ["4", "6"] and self.heat_exchanger in ["AEU", "BEU"]:
+                selected_centers = self.judge_linkage_y(self.selected_centers)
+            else:
+                selected_centers = self.selected_centers
+
+            self.delete_huanreguan(selected_centers)
+            self.clear_selection_highlight()
         except Exception as e:
             print(f"绘制径向开孔切线出错: {e}")
-
-    def draw_radial_hole_graphics(self, selected_tube_coord):
-        self.draw_radial_hole_tangents(selected_tube_coord)
-        self.clear_selection_highlight()
 
     def _radial_hole_coord_key(self, coord):
         try:
