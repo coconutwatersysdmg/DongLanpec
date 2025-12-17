@@ -15752,87 +15752,122 @@ class TubeLayoutEditor(QMainWindow):
                     break
 
     def on_buguan_bt_click(self):
-        # 临时断开所有 itemChanged 监听，避免布管时触发参数修改逻辑
-        # 这样可以防止 update_pipe_parameters() 更新参数时误触发 update_divider_position_and_size_user() 等函数
-        try:
-            self.param_table.itemChanged.disconnect()
-            print(f"[on_buguan_bt_click] 已断开所有itemChanged信号连接")
-        except Exception as e:
-            print(f"[on_buguan_bt_click] 断开信号连接时出错: {e}")
+        """
+        布管按钮点击入口。
+        该函数容易因 UI/图元/信号链路导致异常从 slot 泄漏而“闪退”，因此在关键步骤加细粒度 try/except。
+        """
+        import traceback
+
+        # 防止重复点击/重入导致状态交错（常见闪退源）
+        if getattr(self, "_buguan_in_progress", False):
+            return
+        self._buguan_in_progress = True
+
+        step_errors = []
+
+        def _safe_step(step_name, fn, *args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as e:
+                msg = f"[on_buguan_bt_click ERROR] {step_name} 出错: {e}"
+                print(msg)
+                traceback.print_exc()
+                step_errors.append(msg)
+                return None
+
+        # 1) 临时断开所有 itemChanged 监听，避免布管时触发参数修改逻辑
+        _safe_step(
+            "断开 param_table.itemChanged",
+            lambda: self.param_table.itemChanged.disconnect(),
+        )
 
         try:
-            result = self.calculate_piping_layout()
-            self.draw_baffle_plates()
-            if result and hasattr(self, "global_centers") and self.global_centers:
-                (
-                    self.full_sorted_current_centers_up,
-                    self.full_sorted_current_centers_down,
-                ) = self.group_centers_by_y(self.global_centers)
-            self.update_total_lagan_count()
-            self.selected_centers = []
-            self.lagan_info = []
-            self.red_dangban = []
-            self.center_dangban = []
-            self.center_dangguan = []
-            self.center_dangguan_num = 0
-            self.del_centers = []
-            self.side_dangban = []
-            self.impingement_plate_1 = []
-            self.impingement_plate_2 = []
-            self.impingement_plate_del_centers = []
-            self.isHuadao = False
-            self.slide_selected_centers = []
-            self.interfering_tubes1 = []
-            self.interfering_tubes2 = []
-            self.coord_x_line1_2 = []
-            self.coord_y_line1_2 = []
-            self.coord_x_line2_2 = []
-            self.coord_y_line2_2 = []
-            self.coord_x_line3_2 = []
-            self.coord_y_line3_2 = []
-            self.coord_x_line1_4 = []
-            self.coord_y_line1_4 = []
-            self.coord_x_line2_4 = []
-            self.coord_y_line2_4 = []
-            self.coord_x_line3_4 = []
-            self.coord_y_line3_4 = []
-            self.side_dangban_dic = {}
-            self._side_dangban_auto_id = 0
-            self.center_dangban_dic = {}
-            self._center_dangban_auto_id = 0
-            self.operation_order = 0
-            self.impingement_plate_dic = {}
-            self._impingement_plate_auto_id = 0
-            if hasattr(self, "radial_hole_dict") and isinstance(
-                    self.radial_hole_dict, dict
-            ):
-                for v in self.radial_hole_dict.values():
-                    try:
+            # 2) 计算布管（核心）
+            result = _safe_step("calculate_piping_layout", self.calculate_piping_layout)
+
+            # 3) 绘制折流板（可能依赖 result/参数齐全）
+            _safe_step("draw_baffle_plates", self.draw_baffle_plates)
+
+            # 4) 更新满布行分组缓存（供后续点击/框选/表格使用）
+            if result and getattr(self, "global_centers", None):
+                def _rebuild_full_rows():
+                    (
+                        self.full_sorted_current_centers_up,
+                        self.full_sorted_current_centers_down,
+                    ) = self.group_centers_by_y(self.global_centers)
+                _safe_step("group_centers_by_y(global_centers)", _rebuild_full_rows)
+
+            # 5) 更新左下角拉杆统计（依赖 UI 组件存在）
+            _safe_step("update_total_lagan_count(1)", self.update_total_lagan_count)
+
+            # 6) 重置大量状态（这些字段会影响后续交互；逐块保护）
+            _safe_step("reset selected_centers", setattr, self, "selected_centers", [])
+
+            # 其余状态清零（尽量不触发 setter）
+            for attr, default in [
+                ("lagan_info", []),
+                ("red_dangban", []),
+                ("center_dangban", []),
+                ("center_dangguan", []),
+                ("center_dangguan_num", 0),
+                ("del_centers", []),
+                ("side_dangban", []),
+                ("impingement_plate_1", []),
+                ("impingement_plate_2", []),
+                ("impingement_plate_del_centers", []),
+                ("isHuadao", False),
+                ("slide_selected_centers", []),
+                ("interfering_tubes1", []),
+                ("interfering_tubes2", []),
+                ("coord_x_line1_2", []),
+                ("coord_y_line1_2", []),
+                ("coord_x_line2_2", []),
+                ("coord_y_line2_2", []),
+                ("coord_x_line3_2", []),
+                ("coord_y_line3_2", []),
+                ("coord_x_line1_4", []),
+                ("coord_y_line1_4", []),
+                ("coord_x_line2_4", []),
+                ("coord_y_line2_4", []),
+                ("coord_x_line3_4", []),
+                ("coord_y_line3_4", []),
+                ("side_dangban_dic", {}),
+                ("_side_dangban_auto_id", 0),
+                ("center_dangban_dic", {}),
+                ("_center_dangban_auto_id", 0),
+                ("operation_order", 0),
+                ("impingement_plate_dic", {}),
+                ("_impingement_plate_auto_id", 0),
+            ]:
+                _safe_step(f"reset {attr}", setattr, self, attr, default)
+
+            # 7) 径向开孔字典：只清空每条的换热管坐标
+            def _reset_radial_holes():
+                if hasattr(self, "radial_hole_dict") and isinstance(self.radial_hole_dict, dict):
+                    for v in self.radial_hole_dict.values():
                         if isinstance(v, dict) and "换热管坐标" in v:
                             v["换热管坐标"] = None
-                    except Exception:
-                        continue
-            else:
-                self.radial_hole_dict = {}
-            self.screw_ring_dic = {}
-            self._screw_ring_auto_id = 0
-            self.selected_screw_ring_ids = set()
+                else:
+                    self.radial_hole_dict = {}
+            _safe_step("reset radial_hole_dict", _reset_radial_holes)
 
-        except Exception as e:
-            print(f"布管按钮点击时发生错误: {e}")
-            import traceback
+            # 8) 吊环螺钉相关：初始化
+            _safe_step("reset screw_ring_dic", setattr, self, "screw_ring_dic", {})
+            _safe_step("reset _screw_ring_auto_id", setattr, self, "_screw_ring_auto_id", 0)
+            _safe_step("reset selected_screw_ring_ids", setattr, self, "selected_screw_ring_ids", set())
 
-            traceback.print_exc()
-            # QMessageBox.critical(self, "错误", f"布管过程中发生错误: {str(e)}")
         finally:
-            # 确保在布管完成后重新连接所有监听
-            try:
-                self.setup_parameter_listeners()  # 恢复 on_table_item_changed 等监听
-                self.setup_param_listeners()  # 恢复 update_leftpad_params 监听
-                self.update_total_lagan_count()
-                print(f"[on_buguan_bt_click] 已重新连接所有itemChanged信号")
-            except Exception as e:
-                print(f"[on_buguan_bt_click] 重新连接信号时出错: {e}")
+            # 9) 恢复监听（无论成功与否都必须做）
+            _safe_step("setup_parameter_listeners", self.setup_parameter_listeners)
+            _safe_step("setup_param_listeners", self.setup_param_listeners)
+            _safe_step("update_total_lagan_count(2)", self.update_total_lagan_count)
+
+            self._buguan_in_progress = False
+
+            if step_errors:
+                print("[on_buguan_bt_click] 本次布管步骤出现异常（已捕获，避免闪退）：")
+                for m in step_errors:
+                    print("  -", m)
 
     def find_nearest_circle_index(
             self,
@@ -16444,6 +16479,26 @@ class TubeLayoutEditor(QMainWindow):
     def clear_selection_highlight(self):
         from PyQt5.QtCore import QPointF
         from PyQt5.QtWidgets import QGraphicsEllipseItem
+        # ⚠️ 原生层闪退(0xC0000005)规避：
+        # 布管/重建场景期间，Qt 可能正处于图元批量增删与重绘过程中。
+        # 此时遍历 scene.items() 并对图元 setPen/setBrush/removeItem 容易触发 C++ 访问违规。
+        # 因此在布管进行中仅清理 Python 侧“选中状态”，不触碰 scene 图元。
+        if getattr(self, "_buguan_in_progress", False):
+            try:
+                self._selected_centers = []
+            except Exception:
+                pass
+            try:
+                if hasattr(self, "selected_lagans"):
+                    self.selected_lagans = []
+            except Exception:
+                pass
+            try:
+                if hasattr(self, "selected_side_rods"):
+                    self.selected_side_rods = []
+            except Exception:
+                pass
+            return
 
         try:
             print(
@@ -25437,19 +25492,6 @@ class TubeLayoutEditor(QMainWindow):
         # 返回 True 表示成功绘制
         return True
 
-    def on_temporary_center_dangguan_click(self):
-        from PyQt5.QtWidgets import QMessageBox
-
-        QMessageBox.warning(self, "警告", "该功能尚在开发中")
-        self.clear_selection_highlight()
-        return
-
-    def on_temporary_center_dangban_click(self):
-        from PyQt5.QtWidgets import QMessageBox
-
-        QMessageBox.warning(self, "警告", "该功能尚在开发中")
-        self.clear_selection_highlight()
-        return
 
     def on_center_block_click(self):
         """中间挡管功能（使用新函数）"""
@@ -34318,7 +34360,10 @@ class TubeLayoutEditor(QMainWindow):
     def is_screw_ring_clear(self, cx, cy, ring_diameter) -> bool:
         """
         检查以 (cx, cy) 为圆心、直径为 ring_diameter 的吊环圆
-        是否与 self.current_centers ∪ self.lagan_info 中的任意换热管圆干涉。
+        是否与以下圆的并集发生干涉：
+        - self.current_centers（换热管圆心，绝对坐标）
+        - self.lagan_info（拉杆/相关元件圆心，绝对坐标）
+        - 自由拉杆（build_free_form_lagan 构建的红色实心圆；坐标来源 self.red_dangban 或场景图元）
         换热管直径均为“换热管外径 do”，从左侧参数表获取。
         若与任意一圆相交/相切则认为干涉，返回 False；完全不干涉返回 True。
         """
@@ -34341,11 +34386,108 @@ class TubeLayoutEditor(QMainWindow):
         if tube_radius <= 0 or ring_radius <= 0:
             return False
 
-        # 需要检查的圆心集合：current_centers 与 lagan_info 的并集（绝对坐标）
+        # 需要检查的圆心集合：current_centers ∪ lagan_info ∪ red_dangban（自由拉杆）
         centers = list(getattr(self, "current_centers", []) or [])
         lagan_list = getattr(self, "lagan_info", []) or []
         if lagan_list:
             centers.extend(lagan_list)
+
+        # 追加：自由拉杆（红色实心圆）
+        red_centers = []
+        # 1) 优先从场景里取（最准确）：ClickableCircleItem / QGraphicsEllipseItem 上标记 is_side_rod
+        try:
+            if hasattr(self, "graphics_scene") and self.graphics_scene:
+                for it in list(self.graphics_scene.items()):
+                    try:
+                        if getattr(it, "is_side_rod", False):
+                            # QGraphicsEllipseItem / ClickableCircleItem：rect 中心即为圆心
+                            r = it.rect()
+                            red_centers.append((float(r.center().x()), float(r.center().y())))
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
+        # 2) 若场景不可用或未取到，回退：由 self.red_dangban（相对标签）推回绝对坐标
+        if not red_centers:
+            try:
+                red_list = getattr(self, "red_dangban", []) or []
+
+                # 确保 full_sorted_current_centers_up/down 可用（用于计算每行的 S、左右边界）
+                if not hasattr(self, "full_sorted_current_centers_up") or not hasattr(
+                    self, "full_sorted_current_centers_down"
+                ):
+                    try:
+                        self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = (
+                            self.group_centers_by_y(getattr(self, "global_centers", []) or [])
+                        )
+                    except Exception:
+                        self.full_sorted_current_centers_up = []
+                        self.full_sorted_current_centers_down = []
+
+                for rel in red_list:
+                    if not (isinstance(rel, tuple) and len(rel) == 2):
+                        continue
+                    row_label, col_label = rel
+                    if not isinstance(row_label, (int, float)) or not isinstance(
+                        col_label, (int, float)
+                    ):
+                        continue
+
+                    # 将相对标签转换为该标签对应换热管的绝对坐标（用于判断更靠近左/右）
+                    try:
+                        tube_coords = self.selected_to_current_coords([(row_label, col_label)])
+                    except Exception:
+                        tube_coords = None
+                    if not tube_coords:
+                        continue
+                    selected_abs_x, selected_abs_y = tube_coords[0]
+
+                    row_idx = int(abs(row_label) - 1)
+                    if row_label > 0:
+                        if row_idx >= len(self.full_sorted_current_centers_up):
+                            continue
+                        centers_row = self.full_sorted_current_centers_up[row_idx]
+                    else:
+                        if row_idx >= len(self.full_sorted_current_centers_down):
+                            continue
+                        centers_row = self.full_sorted_current_centers_down[row_idx]
+
+                    if not centers_row or len(centers_row) < 2:
+                        continue
+
+                    # 计算行中心距 S（取相邻两管）
+                    x1, y1 = centers_row[0]
+                    x2, y2 = centers_row[1]
+                    try:
+                        S = math.hypot(float(x2) - float(x1), float(y2) - float(y1))
+                    except Exception:
+                        continue
+
+                    # 行最左/最右圆心
+                    x_left = float(centers_row[0][0])
+                    x_right = float(centers_row[-1][0])
+                    y = float(centers_row[0][1])
+
+                    distance_to_left = abs(float(selected_abs_x) - x_left)
+                    distance_to_right = abs(float(selected_abs_x) - x_right)
+
+                    if distance_to_left < distance_to_right:
+                        lagan_x = x_left - S
+                        lagan_y = y
+                    elif distance_to_left > distance_to_right:
+                        lagan_x = x_right + S
+                        lagan_y = y
+                    else:
+                        lagan_x = x_left - S
+                        lagan_y = y
+
+                    red_centers.append((lagan_x, lagan_y))
+            except Exception:
+                pass
+
+        if red_centers:
+            centers.extend(red_centers)
 
         # 若没有任何换热管/拉杆，则一定不干涉
         if not centers:
