@@ -1848,13 +1848,31 @@ class TubeLayoutEditor(QMainWindow):
         if hasattr(self, 'is_arrange_by_row'):
             self.is_arrange_by_row = not self.is_arrange_by_row
             if self.is_arrange_by_row:
-                self.arrange_button.setText("按行排列")
+                self.arrange_button.setText("按行")
             else:
-                self.arrange_button.setText("按列排列")
+                self.arrange_button.setText("按列")
+            # 切换后同步切换右侧表头
+            self.update_hole_distribution_headers()
             # 切换后更新表格数据
             self.update_tube_nums()
             # 重新绑定表格选中逻辑
             self.bind_table_selection_handler()
+
+    def update_hole_distribution_headers(self):
+        """根据按钮状态切换右侧管孔数量分布表的表头"""
+        if not hasattr(self, "hole_distribution_table"):
+            return
+
+        if hasattr(self, "is_arrange_by_row") and self.is_arrange_by_row:
+            headers = ["至水平中心线行号", "管孔数量(上)", "管孔数量(下)"]
+        else:
+            headers = ["至竖直中心线列号", "管孔数量(左)", "管孔数量(右)"]
+
+        self.hole_distribution_table.setHorizontalHeaderLabels(headers)
+        for i, header_text in enumerate(headers):
+            header_item = self.hole_distribution_table.horizontalHeaderItem(i)
+            if header_item:
+                header_item.setToolTip(header_text)
 
     def update_total_lagan_count(self):
         """根据 lagan_info 和 red_dangban 的长度更新总拉杆数量标签"""
@@ -2451,7 +2469,7 @@ class TubeLayoutEditor(QMainWindow):
         holes_label_layout.addWidget(self.total_holes_label)
 
         # 创建排列切换按钮
-        self.arrange_button = QPushButton("按行排列")
+        self.arrange_button = QPushButton("按行")
         self.arrange_button.setFont(QFont("Microsoft YaHei", 9, QFont.Normal))
         self.arrange_button.setMinimumSize(100, 32)
         self.arrange_button.setMaximumSize(100, 32)
@@ -2490,7 +2508,7 @@ class TubeLayoutEditor(QMainWindow):
         # 初始化按钮状态
         self.is_arrange_by_row = True
 
-        self.total_lagan_label = QLabel("总拉杆数量: 0（当前无标准要求）")
+        self.total_lagan_label = QLabel("总拉杆数量: 0")
         self.total_lagan_label.setFont(QFont("Arial", 10, QFont.Bold))
         self.total_lagan_label.setAlignment(Qt.AlignCenter)
         right_layout.addWidget(self.total_lagan_label)
@@ -2498,11 +2516,8 @@ class TubeLayoutEditor(QMainWindow):
 
         self.hole_distribution_table = QTableWidget()
         self.hole_distribution_table.setColumnCount(3)
-
-        headers = ["至水平中心线行号", "管孔数量(上)", "管孔数量(下)"]
-        self.hole_distribution_table.setHorizontalHeaderLabels(headers)
-        for i, header_text in enumerate(headers):
-            self.hole_distribution_table.horizontalHeaderItem(i).setToolTip(header_text)
+        # 表头根据“按行/按列”状态动态切换
+        self.update_hole_distribution_headers()
 
         self.hole_distribution_table.verticalHeader().setVisible(False)
         self.hole_distribution_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -20300,16 +20315,6 @@ class TubeLayoutEditor(QMainWindow):
             row_num_item.setTextAlignment(Qt.AlignCenter)
             right_table.setItem(i, 0, row_num_item)
 
-            # 下行管数
-            down_count = (
-                len(self.sorted_current_centers_down[i])
-                if i < len(self.sorted_current_centers_down)
-                else 0
-            )
-            down_item = QTableWidgetItem(str(down_count))
-            down_item.setTextAlignment(Qt.AlignCenter)
-            right_table.setItem(i, 1, down_item)
-
             # 上行管数
             up_count = (
                 len(self.sorted_current_centers_up[i])
@@ -20318,7 +20323,17 @@ class TubeLayoutEditor(QMainWindow):
             )
             up_item = QTableWidgetItem(str(up_count))
             up_item.setTextAlignment(Qt.AlignCenter)
-            right_table.setItem(i, 2, up_item)
+            right_table.setItem(i, 1, up_item)
+
+            # 下行管数
+            down_count = (
+                len(self.sorted_current_centers_down[i])
+                if i < len(self.sorted_current_centers_down)
+                else 0
+            )
+            down_item = QTableWidgetItem(str(down_count))
+            down_item.setTextAlignment(Qt.AlignCenter)
+            right_table.setItem(i, 2, down_item)
 
     def update_tube_nums_x(self):
         """更新右侧管数分布表格内容（按列统计）"""
@@ -20372,6 +20387,8 @@ class TubeLayoutEditor(QMainWindow):
 
     def update_tube_nums(self):
         """根据按钮状态更新表格（按行或按列）"""
+        # 先同步表头（无论按行/按列）
+        self.update_hole_distribution_headers()
         # 根据按钮状态决定使用按行还是按列统计
         if hasattr(self, 'is_arrange_by_row') and self.is_arrange_by_row:
             # 按行排列
