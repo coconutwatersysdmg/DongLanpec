@@ -15688,6 +15688,8 @@ class TubeLayoutEditor(QMainWindow):
     ) -> Tuple[List[List[Tuple[float, float]]], List[List[Tuple[float, float]]]]:
         """
         按照 x 坐标将圆心分组为列，并分为左侧（x<0）和右侧（x>=0）
+        1. x坐标差值绝对值≤1的点算同一列
+        2. 左右对称的列（x和-x）算同一组，放在同一行
 
         Args:
             centers: 圆心坐标列表 [(x, y), ...]
@@ -15697,94 +15699,136 @@ class TubeLayoutEditor(QMainWindow):
             (left_grouped, right_grouped): 左侧列列表和右侧列列表
         """
         from collections import defaultdict
+        import math
 
         # 获取当前管程分程形式
         is_special_layout = hasattr(
             self, "tube_pass_form_value"
         ) and self.tube_pass_form_value in ["1.1", "2.1", "4.1", "4.3", "6.1"]
 
-        # 获取满布状态的列键作为参考
-        full_left_keys = set()
-        full_right_keys = set()
+        print(f"[group_centers_by_x] 输入 {len(centers)} 个点")
+        print(f"[group_centers_by_x] 特殊布局: {is_special_layout}")
 
-        # 如果存在满布状态数据，获取其列键
-        if hasattr(self, "full_sorted_current_centers_left") and hasattr(
-                self, "full_sorted_current_centers_right"
-        ):
-            # 获取满布状态的列键（左侧）
-            for col in self.full_sorted_current_centers_left:
-                if col:  # 确保列不为空
-                    x = col[0][0]  # 取该列第一个点的x坐标
-                    full_left_keys.add(int(round(-x / tol)))  # 使用 -x 作为键
-
-            # 获取满布状态的列键（右侧）
-            for col in self.full_sorted_current_centers_right:
-                if col:  # 确保列不为空
-                    x = col[0][0]  # 取该列第一个点的x坐标
-                    full_right_keys.add(int(round(x / tol)))  # 使用 x 作为键
-
-        # 处理当前传入的圆心，按 x 坐标分组
-        left_groups = defaultdict(list)  # x < 0 的列（左侧）
-        right_groups = defaultdict(list)  # x >= 0 的列（右侧）
+        # 第一步：将所有点分为左侧和右侧
+        left_points = []
+        right_points = []
 
         for x, y in centers:
             if x < 0:
-                # 左侧部分：使用 -x 作为键，这样 x 越大（越接近0），键越小，排序时越靠前
-                x_key = int(round(-x / tol))
-                left_groups[x_key].append((x, y))
+                left_points.append((x, y))
             else:
-                # 右侧部分：使用 x 作为键，这样 x 越小，键越小，排序时越靠前
-                x_key = int(round(x / tol))
-                right_groups[x_key].append((x, y))
+                right_points.append((x, y))
 
-        # 合并满布状态的列键和当前列键
-        all_left_keys = (
-            full_left_keys.union(left_groups.keys())
-            if full_left_keys
-            else sorted(left_groups.keys())
-        )
-        all_right_keys = (
-            full_right_keys.union(right_groups.keys())
-            if full_right_keys
-            else sorted(right_groups.keys())
-        )
+        print(f"[group_centers_by_x] 左侧点: {len(left_points)}, 右侧点: {len(right_points)}")
 
-        # 对列键排序（左侧和右侧都按键从小到大排序）
-        sorted_left_keys = sorted(all_left_keys)
-        sorted_right_keys = sorted(all_right_keys)
+        # 第二步：分别对左侧和右侧进行分组（差值≤1算同一列）
+        def cluster_points_by_x(points, is_left=True):
+            """将点按x坐标聚类，差值≤1算同一列"""
+            if not points:
+                return {}
 
-        # 构建结果：每列内的点按 y 坐标从小到大排序
-        left_grouped = [
-            sorted(left_groups.get(key, []), key=lambda p: p[1])
-            for key in sorted_left_keys
-        ]
-        right_grouped = [
-            sorted(right_groups.get(key, []), key=lambda p: p[1])
-            for key in sorted_right_keys
-        ]
+            # 按x坐标排序
+            sorted_points = sorted(points, key=lambda p: p[0])
 
-        # 特殊布局处理：当管程分程形式为1.1、2.1、4.1、4.3、6.1时
-        # 完全仿照 group_centers_by_y 的逻辑：
-        # 中间列只保留右侧有值，左侧对应为空；其余列成对对称
+            clusters = []
+            current_cluster = [sorted_points[0]]
+
+            for i in range(1, len(sorted_points)):
+                current_x = sorted_points[i][0]
+                prev_x = current_cluster[-1][0]
+
+                # 如果差值≤1，加入当前簇
+                if abs(current_x - prev_x) <= 1.0:
+                    current_cluster.append(sorted_points[i])
+                else:
+                    # 开始新簇
+                    clusters.append(current_cluster)
+                    current_cluster = [sorted_points[i]]
+
+            if current_cluster:
+                clusters.append(current_cluster)
+
+            # 为每个簇计算代表x值（平均值）
+            result = {}
+            for cluster in clusters:
+                # 计算簇的平均x值
+                avg_x = sum(p[0] for p in cluster) / len(cluster)
+                # 对于左侧，我们关心的是-x的绝对值，因为要匹配对称列
+                if is_left:
+                    key = round(-avg_x, 1)  # 使用-x的绝对值作为键
+                else:
+                    key = round(avg_x, 1)  # 使用x值作为键
+
+                # 按y坐标排序
+                sorted_cluster = sorted(cluster, key=lambda p: p[1])
+                result[key] = sorted_cluster
+
+            return result
+
+        # 对左侧和右侧分别聚类
+        left_clusters = cluster_points_by_x(left_points, is_left=True)
+        right_clusters = cluster_points_by_x(right_points, is_left=False)
+
+        print(f"[group_centers_by_x] 左侧聚类: {len(left_clusters)}列")
+        for key in sorted(left_clusters.keys()):
+            points = left_clusters[key]
+            x_vals = [p[0] for p in points]
+            print(f"  列键 {key}: {len(points)}点, x范围: {min(x_vals):.3f}~{max(x_vals):.3f}")
+
+        print(f"[group_centers_by_x] 右侧聚类: {len(right_clusters)}列")
+        for key in sorted(right_clusters.keys()):
+            points = right_clusters[key]
+            x_vals = [p[0] for p in points]
+            print(f"  列键 {key}: {len(points)}点, x范围: {min(x_vals):.3f}~{max(x_vals):.3f}")
+
+        # 第三步：对于特殊布局，将左右对称的列配对
         if is_special_layout:
-            if right_grouped:
-                # 确保左侧列表至少有一个元素以便置空
-                if not left_grouped:
-                    left_grouped = [[]]
+            print(f"[group_centers_by_x] 开始对称列配对...")
 
-                # 1) 调整左侧中间列为空（与 group_centers_by_y 的负行置空一致）
-                if len(left_grouped) == len(right_grouped):
-                    left_grouped[0] = []
-                elif len(left_grouped) < len(right_grouped):
-                    left_grouped.insert(0, [])
+            # 找出所有可能的列键（基于绝对值）
+            all_keys = set()
+            all_keys.update(left_clusters.keys())
+            all_keys.update(right_clusters.keys())
 
-                # 2) 只保留中间列 + 成对的列，保持对称
-                max_paired_cols = min(len(right_grouped) - 1, len(left_grouped) - 1)
-                right_grouped = [right_grouped[0]] + right_grouped[1: 1 + max_paired_cols]
-                left_grouped = [left_grouped[0]] + left_grouped[1: 1 + max_paired_cols]
+            sorted_keys = sorted(all_keys)
+            print(f"[group_centers_by_x] 所有列键: {sorted_keys}")
 
-        return left_grouped, right_grouped
+            # 构建最终的分组结果
+            left_grouped = []
+            right_grouped = []
 
+            for key in sorted_keys:
+                # 左侧列：键为key，对应x≈-key的点
+                left_col = left_clusters.get(key, [])
+
+                # 右侧列：键为key，对应x≈key的点
+                right_col = right_clusters.get(key, [])
+
+                left_grouped.append(left_col)
+                right_grouped.append(right_col)
+
+                print(
+                    f"  行键 {key}: 左={len(left_col)}点, 右={len(right_col)}点, 总计={len(left_col) + len(right_col)}点")
+
+            # 对于特殊布局，中间列（key=0）只保留右侧有值，左侧为空
+            if len(left_grouped) > 0 and len(right_grouped) > 0:
+                # 第一行应该是中间列
+                left_grouped[0] = []
+                print(f"[group_centers_by_x] 特殊布局调整: 中间列（键=0）左侧置空")
+
+            return left_grouped, right_grouped
+
+        else:
+            # 非特殊布局：直接返回聚类结果
+            # 左侧按键从小到大排序（键是-x的平均值）
+            sorted_left_keys = sorted(left_clusters.keys())
+            left_grouped = [left_clusters[key] for key in sorted_left_keys]
+
+            # 右侧按键从小到大排序
+            sorted_right_keys = sorted(right_clusters.keys())
+            right_grouped = [right_clusters[key] for key in sorted_right_keys]
+
+            return left_grouped, right_grouped
     def on_table_right_click(self, position):
         """处理表格右键点击事件，取消选中状态"""
         # 清除所有选中
@@ -22059,10 +22103,11 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 self.build_huanreguan(tubes_to_restore)
 
-    # '''
-    # 10/22 修改
+
     # TODO 添加换热管
     def build_huanreguan(self, selected_centers):
+        actual_centers=self.selected_to_current_coords(selected_centers)
+        print(actual_centers)
         self.operation_order += 1
         try:
             print(f"[build_huanreguan] selected_centers(raw) = {selected_centers}")
