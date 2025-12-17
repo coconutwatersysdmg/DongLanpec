@@ -5171,6 +5171,27 @@ class TubeLayoutEditor(QMainWindow):
                 except:
                     pass
 
+        # ==========================
+        # DN/Dis/DL 临时回滚基准（temp1）
+        # 每次布管（calculate_piping_layout）开始新一轮基准：后续用户修改会生成 temp2 做校验
+        # 校验通过：temp2 -> temp1；不通过：回写到 temp1（只回写被改参数）
+        # ==========================
+        try:
+            if DN is not None and Di is not None and DL is not None and DN >= Di >= DL:
+                self._dn_di_dl_temp1 = {"DN": float(DN), "Di": float(Di), "DL": float(DL)}
+                self._dn_di_dl_temp2 = None
+                # 同步旧机制（如果有依赖）
+                self._last_valid_values = dict(self._dn_di_dl_temp1)
+                self._dn_di_dl_no_history_warned = False
+                print(f"[DN/Di/DL temp] 初始化 temp1（来源：calculate_piping_layout）: {self._dn_di_dl_temp1}")
+            else:
+                # 若当前三值不合法，则保留上一轮 temp1（避免基准被污染）
+                print(
+                    f"[DN/Di/DL temp WARN] 本轮布管未初始化 temp1（当前 DN/Di/DL 不满足约束）：DN={DN}, Di={Di}, DL={DL}"
+                )
+        except Exception as e:
+            print(f"[DN/Di/DL temp ERROR] 初始化 temp1 失败: {e}")
+
         # 转换为DataFrame
         self.left_data_pd = pd.DataFrame(self.left_data_pd)
 
@@ -6819,6 +6840,19 @@ class TubeLayoutEditor(QMainWindow):
                 if isinstance(combo, QComboBox):
                     self.original_param_values[(row, 2)] = combo.currentText()
 
+        # 保存后清理 DN/Dis/DL 的 temp 缓存（按需求：保存时清除即可）
+        for _k in (
+            "_dn_di_dl_temp1",
+            "_dn_di_dl_temp2",
+            "_dn_di_dl_no_history_warned",
+            "_last_valid_values",
+        ):
+            if hasattr(self, _k):
+                try:
+                    delattr(self, _k)
+                except Exception:
+                    pass
+
     def setup_combobox_modification_detection(self):
         """设置下拉框的修改检测"""
         row_count = self.param_table.rowCount()
@@ -8000,7 +8034,6 @@ class TubeLayoutEditor(QMainWindow):
         except Exception as e:
             print(f"[user_update_Di ERROR] 调用 check_diameter_consistency 出错: {e}")
 
-    # 10/28 2
     def check_diameter_consistency(self, trigger_name=None):
         """
         检查并保证：公称直径 DN >= 壳体内直径 Dis >= 布管限定圆 DL
@@ -8010,7 +8043,14 @@ class TubeLayoutEditor(QMainWindow):
         - 在恢复写回期间禁用一致性钩子与 itemChanged，避免重入和多重弹窗
         """
         from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QComboBox
-        from PyQt5.QtCore import QCoreApplication
+        from PyQt5.QtCore import QCoreApplication, QSignalBlocker
+
+        # 若当前处于程序写回/回滚的抑制期，直接跳过，避免“关掉又弹”的连锁触发
+        if getattr(self, "_suppress_consistency_hook", False):
+            print(
+                f"[check_diameter_consistency DEBUG] suppress=True，跳过检查（来源：{trigger_name}）"
+            )
+            return True
 
         # 查找三行索引
         dn_row = di_row = dl_row = -1
@@ -8056,23 +8096,209 @@ class TubeLayoutEditor(QMainWindow):
         # 若有任一值无效，则不做强制检查（避免误判）
         if None in (dn, di, dl):
             print("[check_diameter_consistency WARN] 存在无效数值，跳过约束检查。")
-            return
+            return False
+
+        # =========================================================
+        # temp1/temp2 机制（优先）：每次布管 calculate_piping_layout 初始化 temp1
+        # - temp1：最后一次通过检查的基准值
+        # - temp2：本次用户修改后的候选值（当前表格读到的 dn/di/dl）
+        # 通过：temp2 -> temp1；不通过：回写到 temp1（只回写被修改的那一个）
+        # =========================================================
+        temp1 = getattr(self, "_dn_di_dl_temp1", None)
+        if isinstance(temp1, dict) and all(k in temp1 for k in ("DN", "Di", "DL")):
+            self._dn_di_dl_temp2 = {"DN": dn, "Di": di, "DL": dl}
+
+            if dn >= di >= dl:
+                # 合法：提升 temp2 为 temp1
+                self._dn_di_dl_temp1 = {"DN": dn, "Di": di, "DL": dl}
+                self._last_valid_values = dict(self._dn_di_dl_temp1)
+                self._dn_di_dl_no_history_warned = False
+                if hasattr(self, "_dn_di_dl_no_history_warned"):
+                    self._dn_di_dl_no_history_warned = False
+                print(
+                    f"[DN/Di/DL temp] 校验通过：temp2 -> temp1: {self._dn_di_dl_temp1}"
+                )
+                return True
+
+            # 不合法：弹窗 + 回写到 temp1
+            QMessageBox.warning(
+                self,
+                "提示",
+                "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！",
+            )
+
+            # 写回函数（复用本函数的写表能力）
+            def _write_value(row, value):
+                widget = self.param_table.cellWidget(row, 2)
+                if value is None:
+                    return
+                str_val = str(int(value)) if float(value) == int(float(value)) else f"{float(value):.1f}"
+                if isinstance(widget, QComboBox):
+                    idx = widget.findText(str_val)
+                    if idx >= 0:
+                        widget.setCurrentIndex(idx)
+                    else:
+                        try:
+                            widget.setEditText(str_val)
+                        except Exception:
+                            self.param_table.setItem(row, 2, QTableWidgetItem(str_val))
+                else:
+                    item = self.param_table.item(row, 2)
+                    if item:
+                        item.setText(str_val)
+                    else:
+                        self.param_table.setItem(row, 2, QTableWidgetItem(str_val))
+
+            # “改了哪个就回写哪个”，否则回写三项
+            trigger_to_field = {
+                "公称直径 DN": ("DN", dn_row),
+                "壳体内直径 Dis": ("Di", di_row),
+                "布管限定圆 DL": ("DL", dl_row),
+                "user_update_Di": ("Di", di_row),
+            }
+            target = trigger_to_field.get(str(trigger_name), None)
+
+            self._suppress_consistency_hook = True
+            original_handler = None
+            if hasattr(self, "handle_param_change"):
+                try:
+                    self.param_table.itemChanged.disconnect(self.handle_param_change)
+                    original_handler = self.handle_param_change
+                except Exception:
+                    original_handler = None
+
+            try:
+                self.param_table.blockSignals(True)
+                if target:
+                    field, row_idx = target
+                    _write_value(row_idx, float(temp1.get(field)))
+                else:
+                    _write_value(dn_row, float(temp1.get("DN")))
+                    _write_value(di_row, float(temp1.get("Di")))
+                    _write_value(dl_row, float(temp1.get("DL")))
+                try:
+                    QCoreApplication.processEvents()
+                except Exception:
+                    pass
+            finally:
+                try:
+                    self.param_table.blockSignals(False)
+                except Exception:
+                    pass
+                if original_handler:
+                    try:
+                        self.param_table.itemChanged.connect(original_handler)
+                    except Exception:
+                        pass
+                self._suppress_consistency_hook = False
+
+            print(f"[DN/Di/DL temp] 校验不通过：已回写到 temp1: {temp1}")
+            return False
 
         # 如果尚无上次合法记录，则在当前合法时初始化
         if not hasattr(self, "_last_valid_values"):
             # 只有在当前三值合法时才记录
             if dn >= di >= dl:
                 self._last_valid_values = {"DN": dn, "Di": di, "DL": dl}
+                # 一旦恢复合法，清除“无历史合法值”提示的去重标志
+                if hasattr(self, "_dn_di_dl_no_history_warned"):
+                    self._dn_di_dl_no_history_warned = False
                 print("[check_diameter_consistency DEBUG] 初始化上次合法值记录。")
+                return True
             else:
-                # 没有历史合法值可回滚，提示并直接尝试合理修正（但为安全起见这里仅提示）
-                QMessageBox.warning(
-                    self,
-                    "提示",
-                    "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n"
-                    "但未发现历史合法值以回滚，请手动校正。",
-                )
-                return
+                # 没有历史合法值可回滚：先尝试用 self.input_json 回填“被修改的那个参数值”
+                # （若回填后已合法，则不弹窗；仅当回填失败/仍不合法时再弹窗，并保证只弹一次）
+
+                def _get_input_json_text(key):
+                    try:
+                        src = getattr(self, "input_json", None)
+                        if isinstance(src, dict):
+                            v = src.get(key, None)
+                        else:
+                            v = None
+                        if v is None:
+                            return None
+                        return str(v).strip()
+                    except Exception:
+                        return None
+
+                def _write_text(row, text):
+                    if text is None:
+                        return
+                    widget = self.param_table.cellWidget(row, 2)
+                    if isinstance(widget, QComboBox):
+                        idx = widget.findText(str(text))
+                        if idx >= 0:
+                            widget.setCurrentIndex(idx)
+                        else:
+                            try:
+                                widget.setEditText(str(text))
+                            except Exception:
+                                self.param_table.setItem(
+                                    row, 2, QTableWidgetItem(str(text))
+                                )
+                    else:
+                        item = self.param_table.item(row, 2)
+                        if item:
+                            item.setText(str(text))
+                        else:
+                            self.param_table.setItem(row, 2, QTableWidgetItem(str(text)))
+
+                # “改了哪个填充哪个”：优先用 trigger_name 判断
+                trigger_to_row_key = {
+                    "公称直径 DN": (dn_row, "LB_DN"),
+                    "壳体内直径 Dis": (di_row, "LB_Di"),
+                    "布管限定圆 DL": (dl_row, "LB_DL"),
+                    # programmatic trigger
+                    "user_update_Di": (di_row, "LB_Di"),
+                }
+                target = trigger_to_row_key.get(str(trigger_name), None)
+                filled = False
+                if target:
+                    target_row, json_key = target
+                    fill_text = _get_input_json_text(json_key)
+                    if fill_text is not None:
+                        # 抑制重入：写回期间屏蔽一致性检查
+                        self._suppress_consistency_hook = True
+                        try:
+                            self.param_table.blockSignals(True)
+                            widget = self.param_table.cellWidget(target_row, 2)
+                            blocker = QSignalBlocker(widget) if widget is not None else None
+                            try:
+                                _write_text(target_row, fill_text)
+                            finally:
+                                # 显式释放 blocker
+                                blocker = None
+                        finally:
+                            try:
+                                self.param_table.blockSignals(False)
+                            except Exception:
+                                pass
+                            self._suppress_consistency_hook = False
+                        filled = True
+
+                        # 写回后如已满足约束，立即建立 last_valid_values
+                        try:
+                            QCoreApplication.processEvents()
+                        except Exception:
+                            pass
+                        dn2 = _read_value(dn_row)
+                        di2 = _read_value(di_row)
+                        dl2 = _read_value(dl_row)
+                        if None not in (dn2, di2, dl2) and dn2 >= di2 >= dl2:
+                            self._last_valid_values = {"DN": dn2, "Di": di2, "DL": dl2}
+                            self._dn_di_dl_no_history_warned = False
+                            return True
+
+                # 回填失败或回填后仍不合法：弹窗（去重）
+                if not getattr(self, "_dn_di_dl_no_history_warned", False):
+                    self._dn_di_dl_no_history_warned = True
+                    QMessageBox.warning(
+                        self,
+                        "提示",
+                        "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！",
+                    )
+                return False
 
         # 如果满足约束，更新 last_valid_values 并返回
         if dn >= di >= dl:
@@ -8080,7 +8306,7 @@ class TubeLayoutEditor(QMainWindow):
             print(
                 f"[check_diameter_consistency DEBUG] 三值合法：已更新 last_valid_values -> {self._last_valid_values}"
             )
-            return
+            return True
 
         # 到这里说明不满足约束：需要恢复上一次合法值（严格恢复，不做推断）
         last_vals = getattr(self, "_last_valid_values", None)
@@ -8088,13 +8314,65 @@ class TubeLayoutEditor(QMainWindow):
             print(
                 "[check_diameter_consistency WARN] 无可用 last_valid_values，无法回滚。"
             )
-            QMessageBox.warning(self, "提示", "参数值不匹配且无法恢复，请手动校正。")
-            return
+            # 同上：无历史合法值时，只弹一次，并尝试用 input_json 回填“被修改的那个值”
+            if not getattr(self, "_dn_di_dl_no_history_warned", False):
+                self._dn_di_dl_no_history_warned = True
+                QMessageBox.warning(
+                    self,
+                    "提示",
+                    "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！",
+                )
+
+            # 尝试用 self.input_json 回填“被修改的那个参数值”（同上逻辑）
+            try:
+                trigger_to_row_key = {
+                    "公称直径 DN": (dn_row, "LB_DN"),
+                    "壳体内直径 Dis": (di_row, "LB_Di"),
+                    "布管限定圆 DL": (dl_row, "LB_DL"),
+                    "user_update_Di": (di_row, "LB_Di"),
+                }
+                target = trigger_to_row_key.get(str(trigger_name), None)
+                if target and isinstance(getattr(self, "input_json", None), dict):
+                    target_row, json_key = target
+                    fill_text = str(self.input_json.get(json_key, "")).strip()
+                    if fill_text:
+                        self._suppress_consistency_hook = True
+                        try:
+                            self.param_table.blockSignals(True)
+                            widget = self.param_table.cellWidget(target_row, 2)
+                            if isinstance(widget, QComboBox):
+                                idx = widget.findText(fill_text)
+                                if idx >= 0:
+                                    widget.setCurrentIndex(idx)
+                                else:
+                                    try:
+                                        widget.setEditText(fill_text)
+                                    except Exception:
+                                        self.param_table.setItem(
+                                            target_row, 2, QTableWidgetItem(fill_text)
+                                        )
+                            else:
+                                it = self.param_table.item(target_row, 2)
+                                if it:
+                                    it.setText(fill_text)
+                                else:
+                                    self.param_table.setItem(
+                                        target_row, 2, QTableWidgetItem(fill_text)
+                                    )
+                        finally:
+                            try:
+                                self.param_table.blockSignals(False)
+                            except Exception:
+                                pass
+                            self._suppress_consistency_hook = False
+            except Exception:
+                pass
+            return False
 
         # 防止重入与重复弹窗：设置抑制标志并断开 itemChanged
         if getattr(self, "_suppress_consistency_hook", False):
             print("[check_diameter_consistency DEBUG] 当前处于抑制状态，跳过再次检查。")
-            return
+            return True
 
         self._suppress_consistency_hook = True
         original_handler = None
@@ -8186,6 +8464,8 @@ class TubeLayoutEditor(QMainWindow):
             print(
                 "[check_diameter_consistency WARN] 回滚后仍未得到合法三值，需手动调整。"
             )
+        # 回滚发生：对调用方而言应视为“本次输入未通过”，避免继续用非法输入触发联动/重绘
+        return False
 
     def update_divider_position_and_size(self):
         # TODO 更新隔条位置尺寸
@@ -10130,6 +10410,21 @@ class TubeLayoutEditor(QMainWindow):
                 self.validate_input(changed_item, row)
             except Exception as e:
                 print(f"[on_table_item_changed] validate_input 出错: {e}")
+
+            # 2.5) 关键：DN/Dis/DL 先做一致性检查（不通过就立刻回滚并停止后续联动/重绘）
+            # 目的：避免“非法值先触发 update_baffle_diameter/draw_baffle_plates 等重绘，回滚后图形仍保留”
+            if param_name in ("公称直径 DN", "壳体内直径 Dis", "布管限定圆 DL"):
+                try:
+                    ok = self.check_diameter_consistency(trigger_name=param_name)
+                except Exception as e:
+                    print(f"[on_table_item_changed] 一致性检查执行失败: {e}")
+                    ok = False
+
+                if ok is False:
+                    print(
+                        f"[on_table_item_changed] DN/Dis/DL 未通过检查，已回滚（来源：{param_name}），跳过后续联动。"
+                    )
+                    return
 
             # 3) 目标参数联动逻辑（保持原有行为）
             try:
