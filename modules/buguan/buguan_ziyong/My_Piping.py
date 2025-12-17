@@ -2135,12 +2135,21 @@ class TubeLayoutEditor(QMainWindow):
         self.lagan_summary_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
         self.lagan_summary_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
 
+        # 拉杆统计表行高：要求与左侧参数表每行行高一致
         try:
-            default_row_h = self.param_table.verticalHeader().defaultSectionSize()
+            if hasattr(self, "param_table") and self.param_table.rowCount() > 0:
+                default_row_h = int(self.param_table.rowHeight(0))
+            else:
+                default_row_h = int(self.param_table.verticalHeader().defaultSectionSize())
         except Exception:
             default_row_h = 20
-        default_row_h = max(int(default_row_h), 60)
-        for _row in range(3):
+
+        default_row_h = max(int(default_row_h), 1)
+        try:
+            self.lagan_summary_table.verticalHeader().setDefaultSectionSize(default_row_h)
+        except Exception:
+            pass
+        for _row in range(self.lagan_summary_table.rowCount()):
             self.lagan_summary_table.setRowHeight(_row, default_row_h)
 
         self.lagan_summary_table.setSpan(0, 2, 3, 1)
