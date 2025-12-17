@@ -19467,7 +19467,7 @@ class TubeLayoutEditor(QMainWindow):
         type_combo.currentTextChanged.connect(on_type_changed)
         dia_combo.currentTextChanged.connect(lambda _text: update_standard_tip())
 
-        # 按钮
+        # 按钮（普通拉杆：只有"确定 / 取消"）
         btns = QHBoxLayout()
         ok = QPushButton("确定")
         cancel = QPushButton("取消")
@@ -19536,6 +19536,7 @@ class TubeLayoutEditor(QMainWindow):
             dlg.reject()
 
         cancel.clicked.connect(on_cancel_clicked)
+
         dlg.exec_()
 
     def edit_lagan_params_dialog_only(self):
@@ -19774,8 +19775,10 @@ class TubeLayoutEditor(QMainWindow):
         btns = QHBoxLayout()
         ok = QPushButton("确定")
         cancel = QPushButton("取消")
+        convert_btn = QPushButton("转换为吊环螺钉")
         btns.addWidget(ok)
         btns.addWidget(cancel)
+        btns.addWidget(convert_btn)
         main.addLayout(btns)
 
         def apply_and_close_only():
@@ -25100,8 +25103,10 @@ class TubeLayoutEditor(QMainWindow):
         btns = QHBoxLayout()
         ok = QPushButton("确定")
         cancel = QPushButton("取消")
+        convert_btn = QPushButton("转换为吊环螺钉")
         btns.addWidget(ok)
         btns.addWidget(cancel)
+        btns.addWidget(convert_btn)
         main.addLayout(btns)
 
         confirmed = {"ok": False}
@@ -25126,6 +25131,81 @@ class TubeLayoutEditor(QMainWindow):
             dlg.reject()
 
         cancel.clicked.connect(on_cancel_clicked)
+
+        def on_convert_to_screw_ring():
+            """
+            自由拉杆 → 吊环螺钉：
+            - 在当前自由拉杆位置绘制一个吊环螺钉
+            - 吊环直径 = 换热管外径 do
+            - 利用坐标反推角度/中心距，复用 build_screw_ring（会自动写入 screw_ring_dic）
+            """
+            from PyQt5.QtWidgets import QMessageBox
+            import math
+
+            do_str = self.get_tube_do()
+            try:
+                dia_val = float(do_str) if do_str is not None else None
+            except Exception:
+                dia_val = None
+            if not dia_val or dia_val <= 0:
+                QMessageBox.warning(dlg, "提示", "未找到有效的换热管外径 do，无法转换为吊环螺钉")
+                return
+
+            # 取当前自由拉杆的场景坐标
+            try:
+                c = lagan_item.sceneBoundingRect().center()
+                cx, cy = float(c.x()), float(c.y())
+            except Exception:
+                try:
+                    local_c = lagan_item.rect().center()
+                    pos = lagan_item.scenePos() + local_c
+                    cx, cy = float(pos.x()), float(pos.y())
+                except Exception:
+                    QMessageBox.warning(dlg, "提示", "无法获取自由拉杆坐标，转换失败")
+                    return
+
+            distance = math.hypot(cx, cy)
+            if distance <= 0:
+                QMessageBox.warning(dlg, "提示", "自由拉杆坐标异常，转换失败")
+                return
+
+            # 计算对称坐标（最多4个）
+            coords_to_draw = [(cx, cy)]
+            if self.isSymmetry:
+                coords_to_draw = [
+                    (cx, cy),
+                    (-cx, -cy),
+                    (-cx, cy),
+                    (cx, -cy),
+                ]
+                # 去重
+                seen = set()
+                unique = []
+                for coord in coords_to_draw:
+                    key = (round(coord[0], 2), round(coord[1], 2))
+                    if key not in seen:
+                        seen.add(key)
+                        unique.append(coord)
+                coords_to_draw = unique
+
+            # 删除当前自由拉杆（含对称）
+            if not hasattr(self, "selected_side_rods"):
+                self.selected_side_rods = []
+            self.selected_side_rods = [lagan_item]
+            self.delete_selected_side_rods()
+
+            # 绘制吊环螺钉（对称位置都画）
+            for scx, scy in coords_to_draw:
+                dist = math.hypot(scx, scy)
+                if dist <= 0:
+                    continue
+                polar = math.degrees(math.atan2(scy, scx))
+                angle = 90.0 - polar
+                self.build_screw_ring(angle, dist, dia_val)
+
+            dlg.accept()
+
+        convert_btn.clicked.connect(on_convert_to_screw_ring)
         dlg.exec_()
 
         if not confirmed["ok"]:
@@ -25459,6 +25539,7 @@ class TubeLayoutEditor(QMainWindow):
         lagan_rod.setPen(red_pen)
         lagan_rod.setBrush(red_brush)
         lagan_rod.original_pen = red_pen
+        lagan_rod.original_brush = red_brush  # 确保清高亮时恢复为实心红色
         lagan_rod.original_selected_center = (row_label, col_label)
         lagan_rod.setZValue(20)
         self.graphics_scene.addItem(lagan_rod)
