@@ -36554,7 +36554,7 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 根据是否按下 Ctrl 键决定框选行为：
                     # - 未按 Ctrl：使用矩形内元素覆盖当前选中集（原有行为）；
-                    # - 按住 Ctrl：对矩形内元素执行“已选则取消、未选则加入”的反选逻辑。
+                    # - 按住 Ctrl：仅对矩形内“已选中”的元素执行取消选中（只取消，不新增）。
                     ctrl_pressed = bool(event.modifiers() & Qt.ControlModifier)
 
                     from PyQt5.QtWidgets import QGraphicsEllipseItem as _QBoxEllipse2
@@ -36590,13 +36590,9 @@ class TubeLayoutEditor(QMainWindow):
                             ):
                                 self.selected_centers = []
                     else:
-                        # Ctrl + 框选：对矩形内的元素做“增量反选”
+                        # Ctrl + 框选：仅取消（矩形内已选则取消；未选不做任何事）
                         if not hasattr(self, "selected_centers"):
                             self.selected_centers = []
-
-                        # 为了能删除对应高亮，根据坐标执行增删
-                        pen = QPen(Qt.NoPen)
-                        brush = QBrush(QColor(173, 216, 230))
 
                         # 将当前已选标签放入集合方便判断
                         current_labels = list(self.selected_centers)
@@ -36616,18 +36612,6 @@ class TubeLayoutEditor(QMainWindow):
                                     ):
                                         self.graphics_scene.removeItem(it)
                                         break
-                            else:
-                                # 未选中 → 加入选择并新增高亮
-                                current_labels.append(label)
-                                marker = self.graphics_scene.addEllipse(
-                                    x - self.r,
-                                    y - self.r,
-                                    2 * self.r,
-                                    2 * self.r,
-                                    pen,
-                                    brush,
-                                )
-                                marker.setData(0, "marker")
 
                         # 回写最终选中集合
                         self.selected_centers = current_labels
