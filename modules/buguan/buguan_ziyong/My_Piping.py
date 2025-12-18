@@ -34104,6 +34104,7 @@ class TubeLayoutEditor(QMainWindow):
         dialog = QDialog(self)
         dialog.setWindowTitle("吊环螺钉参数设置")
         dialog.setModal(True)  # 模态窗口，阻止其他操作
+        dialog.resize(600, 300)
 
         # 主布局
         main_layout = QVBoxLayout(dialog)
@@ -34168,6 +34169,12 @@ class TubeLayoutEditor(QMainWindow):
         count_layout.addWidget(self.count_input)
         main_layout.addLayout(count_layout)
 
+        # 错误提示标签（红色）
+        warning_label = QLabel("")
+        warning_label.setStyleSheet("color: red;")
+        warning_label.setWordWrap(True)
+        main_layout.addWidget(warning_label)
+
         # 按钮布局
         btn_layout = QHBoxLayout()
         self.confirm_screw_btn = QPushButton("确定")
@@ -34176,8 +34183,112 @@ class TubeLayoutEditor(QMainWindow):
         btn_layout.addWidget(self.close_screw_btn)
         main_layout.addLayout(btn_layout)
 
+        # 获取管箱内直径Dit的函数
+        def get_dit_value():
+            """从参数表中获取管箱内直径Dit的值"""
+            try:
+                row_count = self.param_table.rowCount()
+                for row in range(row_count):
+                    name_item = self.param_table.item(row, 1)
+                    if name_item and name_item.text() == "管箱内直径 Dit":
+                        cell_widget = self.param_table.cellWidget(row, 2)
+                        if isinstance(cell_widget, QComboBox):
+                            value_text = cell_widget.currentText()
+                        else:
+                            value_item = self.param_table.item(row, 2)
+                            value_text = value_item.text() if value_item else ""
+                        try:
+                            return float(value_text)
+                        except:
+                            return None
+            except Exception:
+                pass
+            return None
+
+        # 解析吊环螺钉规格，提取直径数值
+        def parse_screw_spec(spec_text):
+            """从规格文本（如M20、M72×6）中提取直径数值"""
+            import re
+            match = re.search(r"(\d+)", spec_text)
+            if match:
+                return float(match.group(1))
+            return None
+
+        # 验证输入值的函数
+        def validate_inputs():
+            """验证输入值，返回(是否有效, 错误消息)"""
+            warning_label.setText("")  # 清空之前的提示
+            
+            # 验证起始方位角
+            try:
+                start_angle = float(self.start_angle_input.text())
+                if start_angle < 0 or start_angle >= 360:
+                    default_angle = params["吊环螺钉起始方位角"]["default"]
+                    self.start_angle_input.setText(str(default_angle))
+                    return False, f"吊环螺钉起始方位角范围应为[0, 360)，请修改！"
+            except ValueError:
+                default_angle = params["吊环螺钉起始方位角"]["default"]
+                self.start_angle_input.setText(str(default_angle))
+                return False, "吊环螺钉起始方位角必须为数字，请修改！"
+            
+            # 验证孔中心距
+            try:
+                center_distance = float(self.center_distance_input.text())
+                # 获取管箱内直径Dit
+                dit_value = get_dit_value()
+                if dit_value is None or dit_value <= 0:
+                    return True, ""  # 如果无法获取Dit，跳过验证
+                
+                # 获取吊环螺钉规格直径
+                spec_text = self.spec_input.currentText().strip()
+                screw_diameter = parse_screw_spec(spec_text)
+                if screw_diameter is None:
+                    return True, ""  # 如果无法解析规格，跳过验证
+                
+                # 计算最大允许值：Dit/2 - 规格/2
+                max_distance = dit_value / 2.0 - screw_diameter / 2.0
+                
+                if center_distance >= max_distance:
+                    default_distance = params["吊环螺钉孔中心距"]["default"]
+                    self.center_distance_input.setText(str(default_distance))
+                    return False, f"吊环螺钉中心距最大为{max_distance:.2f} mm，请修改！"
+            except ValueError:
+                default_distance = params["吊环螺钉孔中心距"]["default"]
+                self.center_distance_input.setText(str(default_distance))
+                return False, "吊环螺钉孔中心距必须为数字，请修改！"
+            
+            return True, ""
+
+        # 输入框失去焦点时的验证
+        def on_angle_editing_finished():
+            is_valid, error_msg = validate_inputs()
+            if not is_valid:
+                warning_label.setText(error_msg)
+        
+        def on_distance_editing_finished():
+            is_valid, error_msg = validate_inputs()
+            if not is_valid:
+                warning_label.setText(error_msg)
+        
+        def on_spec_changed():
+            # 当规格改变时，重新验证孔中心距
+            is_valid, error_msg = validate_inputs()
+            if not is_valid:
+                warning_label.setText(error_msg)
+        
+        # 绑定事件
+        self.start_angle_input.editingFinished.connect(on_angle_editing_finished)
+        self.center_distance_input.editingFinished.connect(on_distance_editing_finished)
+        self.spec_input.currentTextChanged.connect(on_spec_changed)
+
         # 确定按钮点击事件
         def on_confirm_screw():
+            # 先验证输入
+            is_valid, error_msg = validate_inputs()
+            if not is_valid:
+                warning_label.setText(error_msg)
+                return
+            
             # 验证输入有效性
             try:
                 # 转换并验证输入值
