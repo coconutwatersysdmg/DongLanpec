@@ -6267,7 +6267,7 @@ class TubeLayoutEditor(QMainWindow):
             return False
         finally:
             conn.close()
-
+#TODO 重新为可见行分配连续序号
     def renumber_visible_rows(self):
         """重新为可见行分配连续序号（1,2,3...）"""
         row_count = self.param_table.rowCount()
@@ -6446,8 +6446,8 @@ class TubeLayoutEditor(QMainWindow):
         if current_hidden != target_hidden or force:
             self.param_table.setRowHidden(row, target_hidden)
             # 强制刷新行高
-            self.param_table.setRowHeight(row, self.param_table.rowHeight(row))
-            self.renumber_visible_rows()
+            # self.param_table.setRowHeight(row, self.param_table.rowHeight(row))
+            # self.renumber_visible_rows()
 
     def validate_baffle_parameter(self, param_name):
         """验证防冲板参数的输入合法性"""
@@ -6709,6 +6709,27 @@ class TubeLayoutEditor(QMainWindow):
         update_w_row_status(
             w_row
         )  # 处理隔条位置尺寸 W（使用专用函数，考虑管程分程形式）
+
+        # ===== 调试输出：检查相关行是否存在及其隐藏状态 =====
+        try:
+            print("=== [DEBUG update_SN] 当前相关参数行可见性 ===")
+            for row in range(self.param_table.rowCount()):
+                name_item = self.param_table.item(row, 1)
+                name = name_item.text().strip() if name_item else ""
+                if name in [
+                    "分程隔板两侧相邻管中心距（竖直）",
+                    "分程隔板两侧相邻管中心距（水平）",
+                    "隔条位置尺寸 W",
+                ]:
+                    hidden = self.param_table.isRowHidden(row)
+                    num_item = self.param_table.item(row, 0)
+                    num = num_item.text().strip() if num_item else "?"
+                    print(
+                        f"  行索引={row}, 序号={num}, 参数名={name}, hidden={hidden}"
+                    )
+            print("=== [DEBUG update_SN] 结束 ===")
+        except Exception as _e_dbg:
+            print(f"[DEBUG update_SN] 打印可见性信息出错: {_e_dbg}")
 
     def update_diameter_visibility_by_outer_flag(self):
         if not hasattr(self, "param_table") or self.param_table is None:
