@@ -7413,7 +7413,8 @@ class TubeLayoutEditor(QMainWindow):
         do_row = -1
         dl_row = -1
         range_type_row = -1  # 换热管排列方式行索引（保留原依赖）
-        dit_row = -1  # 管箱内直径 Dit 行索引（b_e 节点公式使用）
+        dit_row = -1
+        dn_row = -1  # 公称直径 DN 行索引（用于回退）
         row_count = self.param_table.rowCount()
 
         for row in range(row_count):
@@ -7432,8 +7433,20 @@ class TubeLayoutEditor(QMainWindow):
                 range_type_row = row
             elif param_name == "管箱内直径 Dit":
                 dit_row = row
+            elif param_name == "公称直径 DN":
+                dn_row = row
 
         # 2. 获取布管限定圆计算所需的关键参数值
+        # 2.0 公称直径 DN（用于回退）
+        dn_value = None
+        if dn_row != -1:
+            dn_item = self.param_table.item(dn_row, 2)
+            if dn_item and dn_item.text().strip():
+                try:
+                    dn_value = float(dn_item.text())
+                except ValueError:
+                    pass  # DN 获取失败不影响，只是回退时不可用
+        
         # 2.1 壳体内直径 Dis
         di_value = None
         if di_row != -1:
@@ -7444,6 +7457,11 @@ class TubeLayoutEditor(QMainWindow):
                 except ValueError:
                     print("壳体内直径 Dis 参数值格式错误")
                     return
+        # 如果 Dis 未获取到，使用 DN 作为回退
+        if di_value is None or di_value <= 0:
+            if dn_value is not None and dn_value > 0:
+                print(f"[update_tube_layout_circle_dl] 未获取到 Dis，使用 DN={dn_value} 作为回退")
+                di_value = dn_value
 
         # 2.2 换热管外径 do
         do_value = None
@@ -7553,35 +7571,42 @@ class TubeLayoutEditor(QMainWindow):
                 params_dict = {str(k).strip(): v for k, v in params_list}
 
                 if str(node_name).lower() == "c":
-                    # 从快照中获取 g、h
+                    # 从快照中获取 g、h、f
+                    # 公式：DL = min[{Di - 2×f×[1+(1+g²)^0.5] - 2×h}, Di - 2×b3]
+                    # 其中：b3 = max(0.25×do, 8)
                     g_raw = params_dict.get("g")
                     h_raw = params_dict.get("h")
+                    f_raw = params_dict.get("f")
+                    
                     if g_raw is None or h_raw is None:
                         print(
-                            "[update_tube_layout_circle_dl] 快照中缺少 g 或 h，回退到原逻辑计算 DL"
+                            "[update_tube_layout_circle_dl] c 节点快照中缺少 g 或 h，回退到原逻辑计算 DL"
                         )
                         dl_value = _calc_dl_by_type(di_value, do_value)
                     else:
                         g = float(g_raw)
                         h = float(h_raw)
+                        # f 如果快照中没有，使用默认值 1.0
+                        f_value = float(f_raw) if f_raw is not None else 1.0
 
-                        # b3 — b3 = max(0.25do, 8)
+                        # b3 = max(0.25×do, 8)
                         b3 = max(0.25 * do_value, 8.0)
 
-                        # 按公式：DL = min{ Di - 2*f*[1 + sqrt(1 + g^2)] - 2*h , Di - 2*b3 }
-                        # 注意：题目里提到的 f 未在快照中给出，这里按 1.0 处理为 f 的缺省值
-                        f_value = 1.0
-                        inner_term = 1.0 + g ** 2
-                        dl_expr1 = (
-                                di_value
-                                - 2 * f_value * (1.0 + math.sqrt(inner_term))
-                                - 2 * h
-                        )
+                        # 按公式：DL = min{ Di - 2×f×[1+(1+g²)^0.5] - 2×h , Di - 2×b3 }
+                        # 计算 (1+g²)^0.5 = sqrt(1 + g²)
+                        sqrt_term = math.sqrt(1.0 + g ** 2)
+                        # 计算 f×[1+(1+g²)^0.5] = f × (1 + sqrt(1 + g²))
+                        f_term = f_value * (1.0 + sqrt_term)
+                        # 计算第一个表达式：Di - 2×f×[1+(1+g²)^0.5] - 2×h
+                        dl_expr1 = di_value - 2 * f_term - 2 * h
+                        # 计算第二个表达式：Di - 2×b3
                         dl_expr2 = di_value - 2 * b3
+                        # 取最小值
                         dl_value = min(dl_expr1, dl_expr2)
 
                         print(
                             "[update_tube_layout_circle_dl] c 节点特殊公式计算 DL: "
+                            f"g={g}, h={h}, f={f_value}, b3={b3:.2f}, "
                             f"expr1 = {dl_expr1:.2f}, expr2 = {dl_expr2:.2f}, 取 min = {dl_value:.2f}"
                         )
                 elif str(node_name).lower() == "e":
@@ -7598,82 +7623,111 @@ class TubeLayoutEditor(QMainWindow):
                             try:
                                 dit_value = float(dit_item.text())
                             except ValueError:
-                                print("管箱内直径 Dit 参数值格式错误")
-                                return
+                                pass  # 格式错误时继续，尝试用 DN 回退
+                    
+                    # 如果 Dit 未获取到，使用 DN 作为回退
+                    if dit_value is None or dit_value <= 0:
+                        if dn_value is not None and dn_value > 0:
+                            print(f"[update_tube_layout_circle_dl] e 节点未获取到 Dit，使用 DN={dn_value} 作为回退")
+                            dit_value = dn_value
+                        else:
+                            print(
+                                "[update_tube_layout_circle_dl] b_e 节点缺少 Dit 且无 DN 回退，回退到原逻辑计算 DL"
+                            )
+                            dl_value = _calc_dl_by_type(di_value, do_value)
+                            return  # 无法计算，直接返回
+                    
+                    # 确保 Dis 也有值（如果之前未获取到，使用 DN 回退）
+                    if di_value is None or di_value <= 0:
+                        if dn_value is not None and dn_value > 0:
+                            print(f"[update_tube_layout_circle_dl] e 节点未获取到 Dis，使用 DN={dn_value} 作为回退")
+                            di_value = dn_value
+                        else:
+                            print(
+                                "[update_tube_layout_circle_dl] b_e 节点缺少 Dis 且无 DN 回退，回退到原逻辑计算 DL"
+                            )
+                            dl_value = _calc_dl_by_type(di_value, do_value)
+                            return  # 无法计算，直接返回
+                    
+                    # 继续执行 e 节点的计算
+                    e_raw = params_dict.get("e")
+                    p_raw = params_dict.get("p")
+                    l_raw = params_dict.get("l")
+                    q_raw = params_dict.get("q")
+                    s_raw = params_dict.get("s")
 
-                    if dit_value is None:
+                    if (
+                            e_raw is None
+                            or p_raw is None
+                            or l_raw is None
+                            or q_raw is None
+                            or s_raw is None
+                    ):
                         print(
-                            "[update_tube_layout_circle_dl] b_e 节点缺少 Dit，回退到原逻辑计算 DL"
+                            "[update_tube_layout_circle_dl] b_e 节点快照中缺少 e/p/l/q/s，回退到原逻辑计算 DL"
                         )
                         dl_value = _calc_dl_by_type(di_value, do_value)
                     else:
-                        e_raw = params_dict.get("e")
-                        p_raw = params_dict.get("p")
-                        l_raw = params_dict.get("l")
-                        q_raw = params_dict.get("q")
-                        s_raw = params_dict.get("s")
+                        try:
+                            dit = float(dit_value)
+                            dis = float(di_value)
+                            do_local = float(do_value)
 
-                        if (
-                                e_raw is None
-                                or p_raw is None
-                                or l_raw is None
-                                or q_raw is None
-                                or s_raw is None
-                        ):
-                            print(
-                                "[update_tube_layout_circle_dl] b_e 节点快照中缺少 e/p/l/q/s，回退到原逻辑计算 DL"
-                            )
-                            dl_value = _calc_dl_by_type(di_value, do_value)
-                        else:
-                            try:
-                                dit = float(dit_value)
-                                dis = float(di_value)
-                                do_local = float(do_value)
+                            e_val = float(e_raw)
+                            p_val = float(p_raw)
+                            l_val = float(l_raw)
+                            q_val = float(q_raw)
+                            s_deg = float(s_raw)
 
-                                e_val = float(e_raw)
-                                p_val = float(p_raw)
-                                l_val = float(l_raw)
-                                q_val = float(q_raw)
-                                s_deg = float(s_raw)
+                            # b3 = max(0.25do, 8)
+                            b3 = max(0.25 * do_local, 8.0)
 
-                                # b3 = max(0.25do, 8)
-                                b3 = max(0.25 * do_local, 8.0)
+                            # 角度转弧度
+                            s_rad = math.radians(s_deg)
 
-                                # 角度转弧度
-                                s_rad = math.radians(s_deg)
-
-                                # 防止 tan/cos 在奇异点产生异常
-                                cos_s = math.cos(s_rad)
-                                tan_s = math.tan(s_rad)
-                                if abs(cos_s) < 1e-8 or abs(tan_s) < 1e-8:
-                                    print(
-                                        "[update_tube_layout_circle_dl] b_e 节点角度 s 导致 cos 或 tan 过小，回退原逻辑"
-                                    )
-                                    dl_value = _calc_dl_by_type(di_value, do_value)
-                                else:
-                                    # 三个表达式
-                                    dl_expr1 = dit - 2 * e_val - 2 * p_val
-                                    inner = (
-                                                    2 * l_val - q_val + l_val / cos_s
-                                            ) / tan_s + l_val
-                                    dl_expr2 = dis - 2 * inner - 2 * p_val
-                                    dl_expr3 = dit - 2 * b3
-
-                                    dl_value = min(dl_expr1, dl_expr2, dl_expr3)
-
-                                    print(
-                                        "[update_tube_layout_circle_dl] e 节点特殊公式计算 DL: "
-                                        f"expr1 = {dl_expr1:.3f}, expr2 = {dl_expr2:.3f}, "
-                                        f"expr3 = {dl_expr3:.3f}, 取 min = {dl_value:.3f}"
-                                    )
-                            except Exception as e:
+                            # 防止 tan/cos 在奇异点产生异常
+                            cos_s = math.cos(s_rad)
+                            tan_s = math.tan(s_rad)
+                            if abs(cos_s) < 1e-8 or abs(tan_s) < 1e-8:
                                 print(
-                                    f"[update_tube_layout_circle_dl] b_e 节点计算异常，回退原逻辑: {e}"
+                                    "[update_tube_layout_circle_dl] b_e 节点角度 s 导致 cos 或 tan 过小，回退原逻辑"
                                 )
                                 dl_value = _calc_dl_by_type(di_value, do_value)
+                            else:
+                                # 三个表达式
+                                # 公式：DL = min{(Dit-2×e-2×p), (Dis-2×[(2×l-q+l/cos s)/tan s+l]-2×p), (Dit-2×b3)}
+                                # 其中：b3 = max(0.25×do, 8)
+                                
+                                # 表达式1：Dit - 2×e - 2×p
+                                dl_expr1 = dit - 2 * e_val - 2 * p_val
+                                
+                                # 表达式2：Dis - 2×[(2×l-q+l/cos s)/tan s+l] - 2×p
+                                # 先计算括号内的内容：[(2×l-q+l/cos s)/tan s+l]
+                                numerator = 2 * l_val - q_val + l_val / cos_s  # (2×l-q+l/cos s)
+                                bracket_content = numerator / tan_s + l_val  # [(2×l-q+l/cos s)/tan s+l]
+                                dl_expr2 = dis - 2 * bracket_content - 2 * p_val
+                                
+                                # 表达式3：Dit - 2×b3
+                                dl_expr3 = dit - 2 * b3
+
+                                dl_value = min(dl_expr1, dl_expr2, dl_expr3)
+
+                                print(
+                                    "[update_tube_layout_circle_dl] e 节点特殊公式计算 DL: "
+                                    f"e={e_val}, p={p_val}, l={l_val}, q={q_val}, s={s_deg}°, b3={b3:.2f}, "
+                                    f"expr1 = {dl_expr1:.3f}, expr2 = {dl_expr2:.3f}, "
+                                    f"expr3 = {dl_expr3:.3f}, 取 min = {dl_value:.3f}"
+                                )
+                        except Exception as e:
+                            print(
+                                f"[update_tube_layout_circle_dl] b_e 节点计算异常，回退原逻辑: {e}"
+                            )
+                            dl_value = _calc_dl_by_type(di_value, do_value)
                 elif str(node_name).lower() == "h":
-                    # h 节点：DL = min{(Di - 2*g - 2*k), (Di - 2*j - 2*k), (Di - 2*b3)}
-                    # 其中 Di/do 从左侧参数表获取，g/j/k 从快照参数中读取
+                    # h 节点：DL = min{(Di-2×g-2×k), (Di-2×j-2×k), (Di-2×b3)}
+                    # 其中：b3 = max(0.25×do, 8)
+                    # k：布管限定圆与管板倒角距离，默认值3，用户可修改
+                    # Di/do 从左侧参数表获取，g/j/k 从快照参数中读取
                     g_raw = params_dict.get("g")
                     j_raw = params_dict.get("j")
                     k_raw = params_dict.get("k")
@@ -7691,17 +7745,22 @@ class TubeLayoutEditor(QMainWindow):
                             j_val = float(j_raw)
                             k_val = float(k_raw)
 
-                            # b3 = max(0.25do, 8)
+                            # b3 = max(0.25×do, 8)
                             b3 = max(0.25 * do_local, 8.0)
 
+                            # 表达式1：Di - 2×g - 2×k
                             dl_expr1 = di_local - 2 * g_val - 2 * k_val
+                            # 表达式2：Di - 2×j - 2×k
                             dl_expr2 = di_local - 2 * j_val - 2 * k_val
+                            # 表达式3：Di - 2×b3
                             dl_expr3 = di_local - 2 * b3
 
+                            # 取最小值
                             dl_value = min(dl_expr1, dl_expr2, dl_expr3)
 
                             print(
                                 "[update_tube_layout_circle_dl] h 节点特殊公式计算 DL: "
+                                f"g={g_val}, j={j_val}, k={k_val}, b3={b3:.2f}, "
                                 f"expr1 = {dl_expr1:.3f}, expr2 = {dl_expr2:.3f}, "
                                 f"expr3 = {dl_expr3:.3f}, 取 min = {dl_value:.3f}"
                             )
@@ -7712,7 +7771,7 @@ class TubeLayoutEditor(QMainWindow):
                             dl_value = _calc_dl_by_type(di_value, do_value)
                 elif str(node_name).lower() == "d":
                     # D 节点：DL = min{(Di-2×h-2×g), (Di-2×h-2×f), (Di-2×b3)}
-                    # 其中 b3 = max(0.25do, 8)
+                    # 其中：b3 = max(0.25×do, 8)
                     # Di/do 从左侧参数表获取，h/g/f 从快照参数中读取
                     h_raw = params_dict.get("h")
                     g_raw = params_dict.get("g")
@@ -7731,17 +7790,22 @@ class TubeLayoutEditor(QMainWindow):
                             g_val = float(g_raw)
                             f_val = float(f_raw)
 
-                            # b3 = max(0.25do, 8)
+                            # b3 = max(0.25×do, 8)
                             b3 = max(0.25 * do_local, 8.0)
 
+                            # 表达式1：Di - 2×h - 2×g
                             dl_expr1 = di_local - 2 * h_val - 2 * g_val
+                            # 表达式2：Di - 2×h - 2×f
                             dl_expr2 = di_local - 2 * h_val - 2 * f_val
+                            # 表达式3：Di - 2×b3
                             dl_expr3 = di_local - 2 * b3
 
+                            # 取最小值
                             dl_value = min(dl_expr1, dl_expr2, dl_expr3)
 
                             print(
                                 "[update_tube_layout_circle_dl] D 节点特殊公式计算 DL: "
+                                f"h={h_val}, g={g_val}, f={f_val}, b3={b3:.2f}, "
                                 f"expr1 = {dl_expr1:.3f}, expr2 = {dl_expr2:.3f}, "
                                 f"expr3 = {dl_expr3:.3f}, 取 min = {dl_value:.3f}"
                             )
@@ -7750,6 +7814,29 @@ class TubeLayoutEditor(QMainWindow):
                                 f"[update_tube_layout_circle_dl] D 节点计算异常，回退原逻辑: {e}"
                             )
                             dl_value = _calc_dl_by_type(di_value, do_value)
+                elif str(node_name).lower() == "a":
+                    # a 节点：DL = Di - 2×b3
+                    # 其中：b3 = max(0.25×do, 8)
+                    # Di/do 从左侧参数表获取
+                    try:
+                        di_local = float(di_value)
+                        do_local = float(do_value)
+
+                        # b3 = max(0.25×do, 8)
+                        b3 = max(0.25 * do_local, 8.0)
+
+                        # 计算 DL：Di - 2×b3
+                        dl_value = di_local - 2 * b3
+
+                        print(
+                            "[update_tube_layout_circle_dl] a 节点特殊公式计算 DL: "
+                            f"b3={b3:.2f}, DL = {di_local:.2f} - 2 × {b3:.2f} = {dl_value:.2f}"
+                        )
+                    except Exception as e:
+                        print(
+                            f"[update_tube_layout_circle_dl] a 节点计算异常，回退原逻辑: {e}"
+                        )
+                        dl_value = _calc_dl_by_type(di_value, do_value)
                 else:
                     # 非 c 节点（如 d/e），暂时回退到原有按型号逻辑
                     print(
@@ -14529,7 +14616,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 仅当为 b 型管板的 c/e/h 节点时才作为特殊情况处理
                 self.is_b_cdeh_node = (
-                    ((main_category == "b") and (node_name in ["c", "d", "e", "h"]))
+                    ((main_category == "b") and (node_name in ["c", "d", "e", "h","a"]))
                     if main_category
                     else False
                 )
