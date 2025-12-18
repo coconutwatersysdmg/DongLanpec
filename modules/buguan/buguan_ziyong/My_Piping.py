@@ -34462,6 +34462,122 @@ class TubeLayoutEditor(QMainWindow):
                         if value_text:
                             params[param_name]["default"] = value_text
 
+        # ================== 优先处理：选中“已有径向开孔”的换热管，直接转换为吊环螺钉 ==================
+        try:
+            selected_centers = getattr(self, "selected_centers", None)
+        except Exception:
+            selected_centers = None
+
+        # 将 selected_centers 转为绝对坐标（当前坐标系）
+        try:
+            actual_coords = (
+                self.selected_to_current_coords(selected_centers)
+                if selected_centers
+                else None
+            )
+        except Exception:
+            actual_coords = None
+
+        def _coord_equal(a, b, t=1e-6):
+            """比较两个绝对坐标是否相同（带容差）"""
+            try:
+                return abs(a[0] - b[0]) <= t and abs(a[1] - b[1]) <= t
+            except Exception:
+                return False
+
+        matched_coords = []
+        if (
+            actual_coords
+            and hasattr(self, "radial_hole_dict")
+            and isinstance(self.radial_hole_dict, dict)
+        ):
+            # 遍历选中的换热管坐标，查找是否已绑定径向开孔
+            for coord in actual_coords:
+                for code, info in self.radial_hole_dict.items():
+                    if not isinstance(info, dict):
+                        continue
+                    hole_coord = info.get("换热管坐标")
+                    if hole_coord is None:
+                        continue
+                    if _coord_equal(hole_coord, coord):
+                        # 找到与该换热管绑定的径向开孔：先删除其图形，再清空字典绑定
+                        try:
+                            if hasattr(self, "remove_radial_hole_graphics"):
+                                self.remove_radial_hole_graphics(hole_coord)
+                        except Exception:
+                            pass
+                        try:
+                            info["换热管坐标"] = None
+                        except Exception:
+                            pass
+                        matched_coords.append(coord)
+                        break  # 同一个换热管只会匹配一条记录，跳出内层循环
+
+        # 如果选中的换热管有径向开孔绑定，先删除径向开孔图形
+        if matched_coords:
+            # 对所有"原本有径向开孔"的换热管，直接在其位置绘制吊环螺钉，不再弹出参数弹窗
+            import math
+            import re
+
+            # 解析当前参数里的"吊环螺钉规格"得到直径数值（如 M20 -> 20）
+            spec_text = str(params["吊环螺钉规格"]["default"])
+            m = re.search(r"(\d+)", spec_text)
+            try:
+                screw_diameter = float(m.group(1)) if m else 20.0
+            except Exception:
+                screw_diameter = 20.0
+
+            for (cx, cy) in matched_coords:
+                try:
+                    distance = math.hypot(cx, cy)
+                    if distance <= 0:
+                        continue
+                    polar_deg = math.degrees(math.atan2(cy, cx))
+                    angle_deg = 90.0 - polar_deg
+                    # 这里直接复用 build_screw_ring，数据字典在其中维护
+                    self.build_screw_ring(angle_deg, distance, screw_diameter)
+                except Exception as e:
+                    print(f"[on_screw_ring_click] build_screw_ring for radial hole failed: {e}")
+
+            # 快捷转换完成后，不再弹出参数设置弹窗
+            return
+
+        # 如果选中的换热管没有径向开孔绑定，但 selected_centers 不为空，则删除换热管并绘制吊环螺钉
+        elif actual_coords:
+            # 先删除选中的换热管
+            try:
+                self.delete_huanreguan(selected_centers)
+            except Exception as e:
+                print(f"[on_screw_ring_click] delete_huanreguan failed: {e}")
+
+            # 然后在每个被删除的换热管位置绘制吊环螺钉
+            import math
+            import re
+
+            # 解析当前参数里的"吊环螺钉规格"得到直径数值（如 M20 -> 20）
+            spec_text = str(params["吊环螺钉规格"]["default"])
+            m = re.search(r"(\d+)", spec_text)
+            try:
+                screw_diameter = float(m.group(1)) if m else 20.0
+            except Exception:
+                screw_diameter = 20.0
+
+            for (cx, cy) in actual_coords:
+                try:
+                    distance = math.hypot(cx, cy)
+                    if distance <= 0:
+                        continue
+                    polar_deg = math.degrees(math.atan2(cy, cx))
+                    angle_deg = 90.0 - polar_deg
+                    # 这里直接复用 build_screw_ring，数据字典在其中维护
+                    self.build_screw_ring(angle_deg, distance, screw_diameter)
+                except Exception as e:
+                    print(f"[on_screw_ring_click] build_screw_ring for selected tube failed: {e}")
+
+            # 快捷转换完成后，不再弹出参数设置弹窗
+            return
+
+        # 如果 selected_centers 为空，则按原逻辑弹出参数弹窗
         # 创建弹窗
         dialog = QDialog(self)
         dialog.setWindowTitle("吊环螺钉参数设置")
