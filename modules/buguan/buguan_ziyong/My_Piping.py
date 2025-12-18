@@ -30547,7 +30547,6 @@ class TubeLayoutEditor(QMainWindow):
         dialog.setWindowTitle("滑道参数设置")
         dialog.setModal(True)
         dialog.resize(400, 300)
-        dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowCloseButtonHint)
         layout = QVBoxLayout(dialog)
 
         # 获取默认值
