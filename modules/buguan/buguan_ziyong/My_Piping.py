@@ -25269,19 +25269,50 @@ class TubeLayoutEditor(QMainWindow):
             """
             自由拉杆 → 吊环螺钉：
             - 在当前自由拉杆位置绘制一个吊环螺钉
-            - 吊环直径 = 换热管外径 do
+            - 吊环圆直径 = 当前“吊环螺钉规格”对应的直径（例如 M20 → 20）
             - 利用坐标反推角度/中心距，复用 build_screw_ring（会自动写入 screw_ring_dic）
             """
             from PyQt5.QtWidgets import QMessageBox
             import math
+            import re
 
-            do_str = self.get_tube_do()
+            # 从左侧参数表中读取当前的“吊环螺钉规格”文本
+            screw_spec_text = ""
             try:
-                dia_val = float(do_str) if do_str is not None else None
+                row_count_local = self.param_table.rowCount()
+                for r in range(row_count_local):
+                    name_item_local = self.param_table.item(r, 1)
+                    if not name_item_local:
+                        continue
+                    if name_item_local.text().strip() == "吊环螺钉规格":
+                        cell_w = self.param_table.cellWidget(r, 2)
+                        if isinstance(cell_w, QComboBox):
+                            screw_spec_text = cell_w.currentText().strip()
+                        else:
+                            val_item = self.param_table.item(r, 2)
+                            screw_spec_text = (
+                                val_item.text().strip() if val_item else ""
+                            )
+                        break
             except Exception:
-                dia_val = None
-            if not dia_val or dia_val <= 0:
-                QMessageBox.warning(dlg, "提示", "未找到有效的换热管外径 do，无法转换为吊环螺钉")
+                screw_spec_text = ""
+
+            # 解析规格文本，提取直径数值（参考 on_screw_ring_click 中的 parse_screw_spec）
+            screw_dia_val = None
+            if screw_spec_text:
+                match = re.search(r"(\d+)", screw_spec_text)
+                if match:
+                    try:
+                        screw_dia_val = float(match.group(1))
+                    except Exception:
+                        screw_dia_val = None
+
+            if not screw_dia_val or screw_dia_val <= 0:
+                QMessageBox.warning(
+                    dlg,
+                    "提示",
+                    "未找到有效的吊环螺钉规格，无法转换为吊环螺钉",
+                )
                 return
 
             # 取当前自由拉杆的场景坐标
@@ -25334,7 +25365,8 @@ class TubeLayoutEditor(QMainWindow):
                     continue
                 polar = math.degrees(math.atan2(scy, scx))
                 angle = 90.0 - polar
-                self.build_screw_ring(angle, dist, dia_val)
+                # 这里传入的是“吊环螺钉规格”对应的直径值，而不是拉杆直径/换热管外径
+                self.build_screw_ring(angle, dist, screw_dia_val)
 
             dlg.accept()
 
