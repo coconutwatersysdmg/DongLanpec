@@ -21594,16 +21594,27 @@ class TubeLayoutEditor(QMainWindow):
                 label.setText(f"加载图片出错: {e}")
                 label.setPixmap(QPixmap())
 
-        def update_images(baffle_type: str):
+        def update_images(baffle_type: str, cut_direction: str = None):
+            """根据折流板类型和切口方向更新图片"""
+            if cut_direction is None:
+                # 从表格中读取当前切口方向
+                cut_direction = get_param_value("折流板切口方向") or "水平上下"
+            
             if baffle_type == "单弓形":
-                load_and_set_image(image_container_1, "单弓形.png")
+                # 根据切口方向选择不同的图片
+                if cut_direction == "垂直左右":
+                    load_and_set_image(image_container_1, "单弓形垂直左右.png")
+                else:  # 默认或"水平上下"
+                    load_and_set_image(image_container_1, "单弓形.png")
                 image_container_2.setText("")
                 image_container_2.setPixmap(QPixmap())
             else:
                 load_and_set_image(image_container_1, "A.png")
                 load_and_set_image(image_container_2, "B.png")
 
-        update_images(current_baffle_type)
+        # 读取初始切口方向
+        current_cut_direction = get_param_value("折流板切口方向") or "水平上下"
+        update_images(current_baffle_type, current_cut_direction)
 
         right_layout.addWidget(image_container_1)
         right_layout.addWidget(image_container_2)
@@ -21711,31 +21722,6 @@ class TubeLayoutEditor(QMainWindow):
             for r in reversed(rows_to_remove):
                 table.removeRow(r)
 
-        # 查找折流板类型行以绑定变化事件
-        baffle_type_row = -1
-        for r in range(table.rowCount()):
-            item = table.item(r, 0)
-            if item and item.text().strip() == "折流板类型":
-                baffle_type_row = r
-                break
-
-        if baffle_type_row >= 0:
-            type_combo = table.cellWidget(baffle_type_row, 1)
-
-            def on_baffle_type_changed(text: str):
-                btype = text.strip()
-                update_images(btype)
-                if btype == "双弓形":
-                    ensure_extra_rows_exist()
-                    remove_other_rows()
-                else:
-                    remove_extra_rows()
-                    ensure_other_rows_exist()
-                table.resizeColumnsToContents()
-
-            if isinstance(type_combo, _QComboBoxForDialog):
-                type_combo.currentTextChanged.connect(on_baffle_type_changed)
-
         # ---------- 底部错误信息显示区域 ----------
         warning_label = QLabel("")
         warning_label.setStyleSheet("color: red;")
@@ -21798,6 +21784,66 @@ class TubeLayoutEditor(QMainWindow):
 
         def set_warning(text: str):
             warning_label.setText(text)
+
+        # ---------- 绑定折流板类型和切口方向变化事件 ----------
+        # 查找折流板类型行以绑定变化事件
+        baffle_type_row = find_row_by_name("折流板类型")
+        if baffle_type_row >= 0:
+            type_combo = table.cellWidget(baffle_type_row, 1)
+
+            def on_baffle_type_changed(text: str):
+                btype = text.strip()
+                # 获取当前切口方向
+                cut_dir_row = find_row_by_name("折流板切口方向")
+                current_dir = "水平上下"
+                if cut_dir_row >= 0:
+                    dir_widget = table.cellWidget(cut_dir_row, 1)
+                    if isinstance(dir_widget, _QComboBoxForDialog):
+                        current_dir = dir_widget.currentText()
+                update_images(btype, current_dir)
+                if btype == "双弓形":
+                    ensure_extra_rows_exist()
+                    remove_other_rows()
+                else:
+                    remove_extra_rows()
+                    ensure_other_rows_exist()
+                    # 重新绑定切口方向事件（因为行被重新添加）
+                    bind_cut_direction_event()
+                table.resizeColumnsToContents()
+
+            if isinstance(type_combo, _QComboBoxForDialog):
+                type_combo.currentTextChanged.connect(on_baffle_type_changed)
+        
+        def bind_cut_direction_event():
+            """绑定折流板切口方向变化事件"""
+            # 先断开之前的连接（如果存在）
+            cut_dir_row = find_row_by_name("折流板切口方向")
+            if cut_dir_row >= 0:
+                direction_combo = table.cellWidget(cut_dir_row, 1)
+                if isinstance(direction_combo, _QComboBoxForDialog):
+                    # 断开所有连接，避免重复绑定
+                    try:
+                        direction_combo.currentTextChanged.disconnect()
+                    except Exception:
+                        pass
+                    
+                    def on_cut_direction_changed(text: str):
+                        direction = text.strip()
+                        # 获取当前折流板类型
+                        btype_row = find_row_by_name("折流板类型")
+                        current_btype = "单弓形"
+                        if btype_row >= 0:
+                            btype_widget = table.cellWidget(btype_row, 1)
+                            if isinstance(btype_widget, _QComboBoxForDialog):
+                                current_btype = btype_widget.currentText()
+                        # 只在单弓形时更新图片
+                        if current_btype == "单弓形":
+                            update_images(current_btype, direction)
+                    
+                    direction_combo.currentTextChanged.connect(on_cut_direction_changed)
+        
+        # 初始绑定切口方向事件
+        bind_cut_direction_event()
 
         def validate_and_update_baffle_params(changed_name: str):
             """执行折流板参数联动计算（基于原函数的逻辑）"""
