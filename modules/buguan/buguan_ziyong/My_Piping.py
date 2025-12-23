@@ -1083,6 +1083,8 @@ class TubeLayoutEditor(QMainWindow):
     def __init__(self, line_tip=None):
         # 注意：必须在super().__init__()之前检查，避免创建不必要的窗口
         print("准备检查项目和产品状态...")
+        # 调试当前工作目录，便于定位资源/DLL加载问题
+        print(f"[DEBUG] My_Piping cwd = {os.getcwd()}")
         can_open, msg = check_project_and_product()
         if not can_open:
             # 如果检查失败，使用默认的产品ID继续
@@ -4945,6 +4947,7 @@ class TubeLayoutEditor(QMainWindow):
         print("这是DN更新标志")
         print(self.isDi_change)
         print("这是Di更新标志")
+        di_result = None  # 先初始化，避免未赋值引用
         if self.heat_exchanger in ["AEU", "BEU"]:
             di_result = qtzj.cal_qiaotineizhijing_U(
                 self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN
@@ -4953,10 +4956,22 @@ class TubeLayoutEditor(QMainWindow):
             di_result = qtzj.cal_qiaotineizhijing_S(
                 self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN
             )
+        elif self.heat_exchanger in ["NEN"]:
+            di_result = qtzj.cal_qiaotineizhijing_NEN(
+                self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN
+            )
+        else:
+            # 未覆盖的换热器类型，直接返回 None
+            print(f"未知换热器型式: {self.heat_exchanger}")
+            return None
 
         import json
 
         try:
+            if di_result is None:
+                print("未获取到圆筒内径计算结果")
+                return None
+
             # 处理数据，可能是字符串或已解析的对象
             data = di_result
             # 如果是字符串则进行解析
@@ -6712,7 +6727,6 @@ class TubeLayoutEditor(QMainWindow):
 
         # ===== 调试输出：检查相关行是否存在及其隐藏状态 =====
         try:
-            print("=== [DEBUG update_SN] 当前相关参数行可见性 ===")
             for row in range(self.param_table.rowCount()):
                 name_item = self.param_table.item(row, 1)
                 name = name_item.text().strip() if name_item else ""
@@ -6724,10 +6738,10 @@ class TubeLayoutEditor(QMainWindow):
                     hidden = self.param_table.isRowHidden(row)
                     num_item = self.param_table.item(row, 0)
                     num = num_item.text().strip() if num_item else "?"
-                    print(
-                        f"  行索引={row}, 序号={num}, 参数名={name}, hidden={hidden}"
-                    )
-            print("=== [DEBUG update_SN] 结束 ===")
+                    # print(
+                    #     f"  行索引={row}, 序号={num}, 参数名={name}, hidden={hidden}"
+                    # )
+            # print("=== [DEBUG update_SN] 结束 ===")
         except Exception as _e_dbg:
             print(f"[DEBUG update_SN] 打印可见性信息出错: {_e_dbg}")
 
@@ -8021,7 +8035,7 @@ class TubeLayoutEditor(QMainWindow):
             )
 
     def user_update_Di(self):
-        # TODO  更新壳体内直径
+        # TODO  调接口更新壳体内直径
         """
         当“是否以外径为基准”为“是”时，根据公称直径DN计算壳体内直径Di，
         并更新表格，同时执行三值一致性检查（仅触发一次）。
@@ -9506,12 +9520,12 @@ class TubeLayoutEditor(QMainWindow):
             is_outer_base = is_outer_item.text().strip() if is_outer_item else ""
 
         # 3. 如果为"是"，则不做处理
-        if is_outer_base == "是":
+        if is_outer_base == "否":
             print("'是否以外径为基准'为'是'，不更新壳体内直径")
             return
 
         # 4. 如果为"否"，则将壳体内直径设为公称直径
-        if is_outer_base == "否":
+        if is_outer_base == "是":
             # 获取公称直径DN的值
             dn_value = None
             dn_widget = self.param_table.cellWidget(dn_row, 2)
@@ -12400,6 +12414,232 @@ class TubeLayoutEditor(QMainWindow):
         finally:
             if conn and conn.open:
                 conn.close()
+
+        def is_deleted(x, y, tol=1e-6):
+            for dx, dy in deleted_coords:
+                if abs(x - dx) < tol and abs(y - dy) < tol:
+                    return True
+            return False
+
+        x_groups = defaultdict(list)  # key: X坐标，value: 对应Y坐标列表
+        y_groups = defaultdict(list)  # key: Y坐标，value: 对应X坐标列表
+
+        for x, y in coords:
+            x_groups[x].append(y)
+            y_groups[y].append(x)
+
+        print(len(coords), "coords")
+        # 计算最大Y方向间距（同一X列的Y最大值-最小值）
+        max_y_gap = 0.0
+        for x, y_list in x_groups.items():
+            numeric_y = [
+                float(y) for y in y_list if str(y).replace(".", "").isdigit()
+            ]  # 过滤非数字Y
+            if len(numeric_y) >= 2:
+                gap = max(numeric_y) - min(numeric_y)
+                max_y_gap = max(max_y_gap, gap)
+
+        # 计算最大X方向间距（同一Y行的X最大值-最小值）
+        max_x_gap = 0.0
+        for y, x_list in y_groups.items():
+            numeric_x = [
+                float(x) for x in x_list if str(x).replace(".", "").isdigit()
+            ]  # 过滤非数字X
+            if len(numeric_x) >= 2:
+                gap = max(numeric_x) - min(numeric_x)
+                max_x_gap = max(max_x_gap, gap)
+        print(max_y_gap, "max_y_gap")
+        print(max_x_gap, "max_x_gap")
+        # U型管弯曲直径：取最大X/Y间距的较大值（保留3位小数）
+        u_max_diameter = max(max_x_gap, max_y_gap) * 2
+        u_max_diameter = round(u_max_diameter, 3)
+
+        # 3.2 计算沿竖直隔板槽一侧的排管根数（基于管程程数）
+        vertical_total = 0
+        if tube_form == "2":
+            # 管程=2时，竖直隔板排管根数固定为0（原逻辑）
+            horizontal_total = 0
+            conn = create_product_connection()
+            if conn:
+                with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                    cursor.execute(
+                        """
+                            SELECT CAST(`至水平中心线行号` AS SIGNED) AS line_no,
+                                   `管孔数量（上）`, `管孔数量（下）`
+                            FROM 产品设计活动表_布管数量表_显示
+                            WHERE 产品ID = %s
+                            ORDER BY line_no ASC
+                        """,
+                        (product_id,),
+                    )
+                    qty_rows = cursor.fetchall() or []
+
+                    if qty_rows:
+                        # 逐行按升序查，找到第一个 下 管孔数量 > 0 的就用它
+                        for r in qty_rows:
+                            # 解析行号（保险起见）
+                            try:
+                                line_no = int(r.get("line_no", 0))
+                            except Exception:
+                                line_no = 0
+
+                            # 解析下值为整数（若为 None、"None"、"" 或 "0" 则视为 0）
+                            raw_down = r.get("管孔数量（下）")
+                            try:
+                                down_val = (
+                                    int(raw_down)
+                                    if (
+                                            raw_down is not None
+                                            and str(raw_down).strip() not in ("", "None")
+                                    )
+                                    else 0
+                                )
+                            except Exception:
+                                down_val = 0
+
+                            if down_val > 0:
+                                vertical_total = down_val
+                                break
+            calc_results["沿水平隔板槽一侧的排管根数"] = str(int(vertical_total))
+
+        elif tube_form == "4":
+            # 管程≠2时，从布管数量表_显示按至水平中心线行号升序查找第一个管孔数量（下）不为0的值作为 vertical_total
+            try:
+                conn = create_product_connection()
+                if conn:
+                    with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+                        cursor.execute(
+                            """
+                                SELECT CAST(`至水平中心线行号` AS SIGNED) AS line_no,
+                                       `管孔数量（上）`, `管孔数量（下）`
+                                FROM 产品设计活动表_布管数量表_显示
+                                WHERE 产品ID = %s
+                                ORDER BY line_no ASC
+                            """,
+                            (product_id,),
+                        )
+                        qty_rows = cursor.fetchall() or []
+
+                        vertical_total = 0
+                        if qty_rows:
+                            # 逐行按升序查，找到第一个 下 管孔数量 > 0 的就用它
+                            for r in qty_rows:
+                                # 解析行号（保险起见）
+                                try:
+                                    line_no = int(r.get("line_no", 0))
+                                except Exception:
+                                    line_no = 0
+
+                                # 解析下值为整数（若为 None、"None"、"" 或 "0" 则视为 0）
+                                raw_down = r.get("管孔数量（下）")
+                                try:
+                                    down_val = (
+                                        int(raw_down)
+                                        if (
+                                                raw_down is not None
+                                                and str(raw_down).strip()
+                                                not in ("", "None")
+                                        )
+                                        else 0
+                                    )
+                                except Exception:
+                                    down_val = 0
+
+                                if down_val > 0:
+                                    vertical_total = down_val
+                                    break
+                        # 如果没有任何不为0的，则 vertical_total 保持 0
+
+            except Exception as e:
+                # 根据你现有代码风格处理异常（这里示例打印）
+                print("读取布管数量表出错：", e)
+                vertical_total = 0
+            finally:
+                if conn and conn.open:
+                    conn.close()
+            calc_results["沿水平隔板槽一侧的排管根数"] = str(int(vertical_total))
+
+        elif tube_form == "6":
+            coords = []
+            for center in self.current_centers:
+                if len(center) >= 2:
+                    x = float(center[0])
+                    y = float(center[1])
+                    coords.append((x, y))
+            if not coords:
+                # QMessageBox.warning(self, "警告", "布管坐标数据为空或格式无效！")
+                return None
+            filtered_coords = [(x, y) for x, y in coords if not is_deleted(x, y)]
+
+            y_above = [y for x, y in filtered_coords if y < getiao_chicun]
+            positive_ys = [y for x, y in filtered_coords if y > 0]
+            if positive_ys:
+                target_y = min(positive_ys)
+            else:
+                all_ys = [y for x, y in filtered_coords]
+                target_y = min(all_ys) if all_ys else 0.0
+            # 筛选目标y的坐标
+            selected_coords_cross = []
+
+            # if y_above:
+            #     min_above_y = min(y_above)
+            #     selected_coords_cross.extend([
+            #         (x, y) for x, y in filtered_coords
+            #         if abs(y - min_above_y) < 1e-6
+            #     ])
+            # # 下侧：y<-getiao_chicun的最大y
+            y_below = [y for x, y in filtered_coords if y > -getiao_chicun]
+            if y_below:
+                max_below_y = min(y_below)
+                selected_coords_cross.extend(
+                    [(x, y) for x, y in filtered_coords if abs(y - max_below_y) < 1e-6]
+                )
+            # 赋值排管根数和管排1中心距
+            calc_results["沿水平隔板槽一侧的排管根数"] = str(len(selected_coords_cross))
+
+        # calc_results["沿水平隔板槽一侧的排管根数"] = str(int(vertical_total))
+        calc_results["沿竖直隔板槽一侧的排管根数"] = str(horizontal_total)
+        calc_results["水平隔板槽两侧相邻管中心距"] = str(round(snh_val, 3))
+        calc_results["垂直隔板槽两侧相邻管中心距"] = str(round(sn_val, 3))
+        calc_results["换热管中心距 S"] = str(round(s_val, 3))
+        calc_results["U型管弯曲直径"] = str(u_max_diameter)
+        calc_results["管总数 tubes_count"] = str(tubes_count)
+
+        table_name = "`产品设计活动表_布管计算结果表`"
+        sql_statements = []
+
+        # SQL转义函数：防止单引号导致的SQL注入
+        def escape_sql(value):
+            if isinstance(value, str):
+                return value.replace("'", "''")  # 单引号替换为两个单引号
+            return str(value)
+
+        delete_sql = (
+            f"DELETE FROM {table_name} "
+            f"WHERE `产品ID` = '{escape_sql(product_id)}' "
+            f"AND `产品类型` = '2'"  # U型管产品类型固定为2
+        )
+        sql_statements.append(delete_sql)
+
+        for calc_name, calc_val in calc_results.items():
+            esc_product_id = escape_sql(product_id)
+            esc_calc_name = escape_sql(calc_name)
+            esc_calc_val = escape_sql(calc_val)
+            esc_product_type = "2"
+
+            insert_sql = (
+                f"INSERT INTO {table_name} "
+                f"(`产品ID`, `计算值名称`, `计算值`, `产品类型`) "
+                f"VALUES ("
+                f"'{esc_product_id}', "
+                f"'{esc_calc_name}', "
+                f"'{esc_calc_val}', "
+                f"'{esc_product_type}'"
+                f")"
+            )
+            sql_statements.append(insert_sql)
+
+        return sql_statements
 
     def build_sql_for_screw_ring(self):
         """

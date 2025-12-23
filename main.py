@@ -759,6 +759,9 @@ import os, time
 
 if __name__ == "__main__":
 
+        # 调试当前工作目录，便于定位 DLL/资源加载问题
+        print(f"[DEBUG] cwd = {os.getcwd()}")
+
         app = QtWidgets.QApplication(sys.argv)
         window = MainWindow()
         window.show()
