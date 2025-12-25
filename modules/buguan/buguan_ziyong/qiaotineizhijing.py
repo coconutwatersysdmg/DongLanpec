@@ -199,6 +199,7 @@ def cal_qiaotineizhijing_U(product_id, isDi_change, isDN_change, user_Di, user_D
         }
 
     # ===== 预设默认值 =====
+    # TODO 实际用的是这个
     design_params = {
         "公称直径": "1000",
         "是否以外径为基准": "1",
@@ -7972,6 +7973,7 @@ def cal_qiaotineizhijing_NEN(product_id, isDi_change, isDN_change, user_Di, user
         result["ProjectName"] = "UnnamedProject"
         result["ExchangerType"] = "Unknown"
 
+        # === 替换 DictDatas 中所有模块的 "换热器类型" 为 AEU ===
         # === 替换 DictDatas 中所有模块的 "换热器类型" 为 AEU ===
         for module_data in result.get("DictDatas", {}).values():
             print(module_data)

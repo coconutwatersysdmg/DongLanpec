@@ -78,7 +78,10 @@ ENABLE_AXIAL_DESIGN_PAGE = False
 ENABLE_DANGBAN_WELDED_OPTION = True
 
 # TODO 径向开孔功能开关
-ENABLE_RADIAL_HOLES = True
+ENABLE_RADIAL_HOLES = False
+
+# TODO 吊环螺钉功能开关
+ENABLE_SCREW_RING = False
 
 edge_centers: List[Tuple[float, float]] = []
 
@@ -2282,6 +2285,8 @@ class TubeLayoutEditor(QMainWindow):
         btn7.setIcon(QIcon(icon_path7))
         btn7.setIconSize(QSize(20, 20))
         btn7.clicked.connect(self.on_screw_ring_click)
+        if not ENABLE_SCREW_RING:
+            btn7.setEnabled(False)
         self.toolbar_row1_layout.addWidget(btn7)
 
         btn8 = QPushButton("中间挡板")
@@ -6283,7 +6288,7 @@ class TubeLayoutEditor(QMainWindow):
             return False
         finally:
             conn.close()
-#TODO 重新为可见行分配连续序号
+    # TODO 重新为可见行分配连续序号
     def renumber_visible_rows(self):
         """重新为可见行分配连续序号（1,2,3...）"""
         row_count = self.param_table.rowCount()
@@ -6715,12 +6720,13 @@ class TubeLayoutEditor(QMainWindow):
 
         # 5. 分别更新"竖直"和"水平"两行的状态
         # 管程=1：竖直+水平均禁用；管程=2：仅水平禁用；其他：均可编辑
+
         update_row_status(
             sn_row, should_disable=(tube_pass == 1)
         )  # 处理分程隔板两侧相邻管中心距（竖直）
         # "水平"这一行改用专用的隐藏逻辑：需要禁用时直接隐藏该行
         update_lev_row_status(
-            lev_row, should_disable=(tube_pass == 1 or tube_pass == 2)
+            lev_row, should_disable=(tube_pass == 1 or tube_pass == 2 or self.tube_pass_form_value == "4.1")
         )  # 处理分程隔板两侧相邻管中心距（水平）
         update_w_row_status(
             w_row
@@ -7486,14 +7492,16 @@ class TubeLayoutEditor(QMainWindow):
         # 2.1 壳体内直径 Dis
         di_value = None
         if di_row != -1:
-            di_item = self.param_table.item(di_row, 2)
-            if di_item and di_item.text().strip():
-                try:
-                    di_value = float(di_item.text())
-                except ValueError:
-                    print("壳体内直径 Dis 参数值格式错误")
-                    return
-        # 如果 Dis 未获取到，使用 DN 作为回退
+            # 检查行是否隐藏，如果隐藏则不获取
+            if not self.param_table.isRowHidden(di_row):
+                di_item = self.param_table.item(di_row, 2)
+                if di_item and di_item.text().strip():
+                    try:
+                        di_value = float(di_item.text())
+                    except ValueError:
+                        print("壳体内直径 Dis 参数值格式错误")
+                        return
+        # 如果 Dis 未获取到（包括行隐藏的情况），使用 DN 作为回退
         if di_value is None or di_value <= 0:
             if dn_value is not None and dn_value > 0:
                 print(f"[update_tube_layout_circle_dl] 未获取到 Dis，使用 DN={dn_value} 作为回退")
@@ -7654,12 +7662,14 @@ class TubeLayoutEditor(QMainWindow):
                     # 检查 Dit 是否存在
                     dit_value = None
                     if dit_row != -1:
-                        dit_item = self.param_table.item(dit_row, 2)
-                        if dit_item and dit_item.text().strip():
-                            try:
-                                dit_value = float(dit_item.text())
-                            except ValueError:
-                                pass  # 格式错误时继续，尝试用 DN 回退
+                        # 检查行是否隐藏，如果隐藏则不获取
+                        if not self.param_table.isRowHidden(dit_row):
+                            dit_item = self.param_table.item(dit_row, 2)
+                            if dit_item and dit_item.text().strip():
+                                try:
+                                    dit_value = float(dit_item.text())
+                                except ValueError:
+                                    pass  # 格式错误时继续，尝试用 DN 回退
                     
                     # 如果 Dit 未获取到，使用 DN 作为回退
                     if dit_value is None or dit_value <= 0:
@@ -8192,6 +8202,15 @@ class TubeLayoutEditor(QMainWindow):
         if dn_row == -1 or di_row == -1 or dl_row == -1:
             print(
                 "[check_diameter_consistency WARN] DN/Di/DL 参数行未完全找到，跳过检查。"
+            )
+            return
+
+        # 检查是否有行被隐藏，如果隐藏则跳过一致性检查
+        if (self.param_table.isRowHidden(dn_row) or 
+            self.param_table.isRowHidden(di_row) or 
+            self.param_table.isRowHidden(dl_row)):
+            print(
+                "[check_diameter_consistency WARN] DN/Di/DL 参数行存在隐藏行，跳过检查。"
             )
             return
 
@@ -33564,6 +33583,9 @@ class TubeLayoutEditor(QMainWindow):
 
     def on_screw_ring_click(self):
         """创建吊环螺钉参数设置弹窗，从参数表获取初始值并关联更新"""
+        if not ENABLE_SCREW_RING:
+            return
+        
         from PyQt5.QtWidgets import (
             QDialog,
             QVBoxLayout,
