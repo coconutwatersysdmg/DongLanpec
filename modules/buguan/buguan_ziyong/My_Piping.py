@@ -4962,7 +4962,7 @@ class TubeLayoutEditor(QMainWindow):
             di_result = qtzj.cal_qiaotineizhijing_S(
                 self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN
             )
-        elif self.heat_exchanger in ["NEN"]:
+        elif self.heat_exchanger in ["NEN","BEM"]:
             di_result = qtzj.cal_qiaotineizhijing_NEN(
                 self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN
             )
@@ -5414,7 +5414,7 @@ class TubeLayoutEditor(QMainWindow):
         # 根据产品型式判断热交换器类型
         if product_type_str in ["AEU", "BEU"]:
             he_type = "2"  # U型管式
-        elif product_type_str == "NEN":
+        elif product_type_str in ["NEN","BEM"]:
             he_type = "1"  # 固定管板式
         elif product_type_str in ["AES", "BES"]:
             he_type = "0"  # 浮头式
@@ -5437,7 +5437,7 @@ class TubeLayoutEditor(QMainWindow):
                             # 根据产品型式判断热交换器类型
                             if product_type_str in ["AEU", "BEU"]:
                                 he_type = "2"  # U型管式
-                            elif product_type_str == "NEN":
+                            elif product_type_str in ["NEN","BEM"]:
                                 he_type = "1"  # 固定管板式
                             elif product_type_str in ["AES", "BES"]:
                                 he_type = "0"  # 浮头式
@@ -6050,7 +6050,7 @@ class TubeLayoutEditor(QMainWindow):
         # 根据产品型式判断热交换器类型
         if product_type_str in ["AEU", "BEU"]:
             he_type = "2"  # U型管式
-        elif product_type_str == "NEN":
+        elif product_type_str in ["NEN","BEM"]:
             he_type = "1"  # 固定管板式
         elif product_type_str in ["AES", "BES"]:
             he_type = "0"  # 浮头式
@@ -6073,7 +6073,7 @@ class TubeLayoutEditor(QMainWindow):
                             # 根据产品型式判断热交换器类型
                             if product_type_str in ["AEU", "BEU"]:
                                 he_type = "2"  # U型管式
-                            elif product_type_str == "NEN":
+                            elif product_type_str in ["NEN","BEM"]:
                                 he_type = "1"  # 固定管板式
                             elif product_type_str in ["AES", "BES"]:
                                 he_type = "0"  # 浮头式
@@ -27923,10 +27923,9 @@ class TubeLayoutEditor(QMainWindow):
                     tube_bridge_val = float(tube_bridge)
                     # 旁路挡板宽度（长度）按两位小数保留
                     self.side_dangban_length = round(
-                        abs(distance + tube_bridge_val - do_value), 2
+                        abs(distance - tube_bridge_val - do_value/2), 2
                     )
 
-                    print("旁路挡板长度")
                 except ValueError as e:
                     print(f"数值转换错误: {e}")
                     self.side_dangban_length = 0.0
@@ -28031,7 +28030,7 @@ class TubeLayoutEditor(QMainWindow):
                     tube_bridge_val = float(tube_bridge)
                     # 垂直方向：宽度（长度）按两位小数保留
                     self.side_dangban_length = round(
-                        abs(distance + tube_bridge_val - do_value), 2
+                        abs(distance - tube_bridge_val - do_value/2), 2
                     )
 
                     print("旁路挡板长度（垂直方向）")
