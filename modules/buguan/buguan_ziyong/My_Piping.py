@@ -34931,7 +34931,7 @@ class TubeLayoutEditor(QMainWindow):
                             and len(self.selected_centers) >= 2
                             and self.selected_centers[0][1] == self.selected_centers[1][1]
                     ):
-                        selected_centers_for_check = self.judge_linkage_y(
+                        selected_centers_for_check = self.judge_linkage_x(
                             self.selected_centers
                         )
                     else:
