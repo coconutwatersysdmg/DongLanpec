@@ -3916,6 +3916,7 @@ class TubeLayoutEditor(QMainWindow):
         self.load_initial_tube_num()
         self.update_total_holes_count()
         self.update_diameter_visibility_by_outer_flag()
+        self.user_update_Di()
         try:
             if hasattr(self, "update_lagan_standard_from_params"):
                 self.update_lagan_standard_from_params()
@@ -4963,14 +4964,56 @@ class TubeLayoutEditor(QMainWindow):
                 self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN
             )
         elif self.heat_exchanger in ["NEN","BEM"]:
+            print(1111111111111111111111111)
             di_result = qtzj.cal_qiaotineizhijing_NEN(
                 self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN
             )
+
         else:
             # 未覆盖的换热器类型，直接返回 None
             print(f"未知换热器型式: {self.heat_exchanger}")
             return None
+        conn = pymysql.connect(
+            host="localhost", user="root", password="123456",
+            database="产品设计活动库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+        )
+        cursor = conn.cursor()
+        cursor.execute("""
+                    SELECT 数值 FROM 产品设计活动表_通用数据表
+                    WHERE 产品ID = %s AND 参数名称 = '是否以外径为基准*'
+                """, (product_id,))
+        row = cursor.fetchone()
+        waijing_bool = ""
+        waijing = "0"
+        if row and "数值" in row:
+            waijing_bool = "1" if row["数值"] == "是" else "0"
+        if waijing_bool == "1":
+            cursor.execute("""
+                                SELECT 数值 FROM 产品设计活动表_通用数据表
+                                WHERE 产品ID = %s AND 参数名称 = '外径'
+                            """, (product_id,))
+            row_waijing = cursor.fetchone()
+            waijing = row_waijing["数值"]
+        if float(user_DN) > float(waijing):
+            message = f"壳体内直径无法超过用户选定外径数值"
+            try:
+                self.line_tip.setText(message)
+                self.line_tip.setStyleSheet("color: black;")
+                self.line_tip.setVisible(True)
+            except Exception as e:
+                print(f"[WARN] 设置提示信息失败: {e}")
+            from PyQt5.QtCore import QTimer
 
+            try:
+                def clear_tip_safely():
+                    try:
+                        if hasattr(self, 'line_tip') and self.line_tip is not None:
+                            self.line_tip.setText("")
+                    except Exception as e:
+                        print(f"[WARN] 清除提示信息失败: {e}")
+                QTimer.singleShot(5000, clear_tip_safely)
+            except Exception as e:
+                print(f"[WARN] 设置定时器失败: {e}")
         import json
 
         try:
@@ -7725,15 +7768,35 @@ class TubeLayoutEditor(QMainWindow):
                             q_val = float(q_raw)
                             s_deg = float(s_raw)
 
+                            print(f"\n[update_tube_layout_circle_dl] ========== e 节点计算开始 ==========")
+                            print(f"[e节点] 输入参数:")
+                            print(f"  Dit (管箱圆筒内径) = {dit:.3f}")
+                            print(f"  Dis (壳程圆筒内径) = {dis:.3f}")
+                            print(f"  do (换热管外径) = {do_local:.3f}")
+                            print(f"  e = {e_val:.3f}")
+                            print(f"  p (布管限定圆与管板倒角距离) = {p_val:.3f}")
+                            print(f"  l = {l_val:.3f}")
+                            print(f"  q = {q_val:.3f}")
+                            print(f"  s (角度) = {s_deg:.3f}°")
+
                             # b3 = max(0.25do, 8)
-                            b3 = max(0.25 * do_local, 8.0)
+                            b3_candidate1 = 0.25 * do_local
+                            b3_candidate2 = 8.0
+                            b3 = max(b3_candidate1, b3_candidate2)
+                            print(f"\n[e节点] 计算 b3:")
+                            print(f"  b3 = max(0.25×do, 8) = max(0.25×{do_local:.3f}, 8.0) = max({b3_candidate1:.3f}, {b3_candidate2:.3f}) = {b3:.3f}")
 
                             # 角度转弧度
                             s_rad = math.radians(s_deg)
+                            print(f"\n[e节点] 角度转换:")
+                            print(f"  s = {s_deg:.3f}° = {s_rad:.6f} rad")
 
                             # 防止 tan/cos 在奇异点产生异常
                             cos_s = math.cos(s_rad)
                             tan_s = math.tan(s_rad)
+                            print(f"  cos(s) = {cos_s:.6f}")
+                            print(f"  tan(s) = {tan_s:.6f}")
+                            
                             if abs(cos_s) < 1e-8 or abs(tan_s) < 1e-8:
                                 print(
                                     "[update_tube_layout_circle_dl] b_e 节点角度 s 导致 cos 或 tan 过小，回退原逻辑"
@@ -7742,28 +7805,59 @@ class TubeLayoutEditor(QMainWindow):
                             else:
                                 # 三个表达式
                                 # 公式：DL = min{(Dit-2×e-2×p), (Dis-2×[(2×l-q+l/cos s)/tan s+l]-2×p), (Dit-2×b3)}
-                                # 其中：b3 = max(0.25×do, 8)
                                 
-                                # 表达式1：Dit - 2×e - 2×p
-                                dl_expr1 = dit - 2 * e_val - 2 * p_val
+                                print(f"\n[e节点] 计算表达式1: DL1 = Dit - 2×e - 2×p")
+                                expr1_part1 = 2 * e_val
+                                expr1_part2 = 2 * p_val
+                                expr1_sub = expr1_part1 + expr1_part2
+                                dl_expr1 = dit - expr1_sub
+                                print(f"  2×e = 2×{e_val:.3f} = {expr1_part1:.3f}")
+                                print(f"  2×p = 2×{p_val:.3f} = {expr1_part2:.3f}")
+                                print(f"  2×e + 2×p = {expr1_sub:.3f}")
+                                print(f"  DL1 = {dit:.3f} - {expr1_sub:.3f} = {dl_expr1:.3f}")
                                 
-                                # 表达式2：Dis - 2×[(2×l-q+l/cos s)/tan s+l] - 2×p
+                                print(f"\n[e节点] 计算表达式2: DL2 = Dis - 2×[(2×l-q+l/cos s)/tan s+l] - 2×p")
                                 # 先计算括号内的内容：[(2×l-q+l/cos s)/tan s+l]
-                                numerator = 2 * l_val - q_val + l_val / cos_s  # (2×l-q+l/cos s)
-                                bracket_content = numerator / tan_s + l_val  # [(2×l-q+l/cos s)/tan s+l]
-                                dl_expr2 = dis - 2 * bracket_content - 2 * p_val
+                                print(f"  步骤1: 计算 (2×l - q + l/cos s)")
+                                part2_1 = 2 * l_val  # 2×l
+                                part2_2 = l_val / cos_s  # l/cos s
+                                part2_3 = part2_1 - q_val  # 2×l - q
+                                numerator = part2_3 + part2_2  # (2×l-q+l/cos s)
+                                print(f"    2×l = 2×{l_val:.3f} = {part2_1:.3f}")
+                                print(f"    l/cos s = {l_val:.3f}/{cos_s:.6f} = {part2_2:.6f}")
+                                print(f"    2×l - q = {part2_1:.3f} - {q_val:.3f} = {part2_3:.3f}")
+                                print(f"    (2×l - q + l/cos s) = {part2_3:.3f} + {part2_2:.6f} = {numerator:.6f}")
                                 
-                                # 表达式3：Dit - 2×b3
-                                dl_expr3 = dit - 2 * b3
+                                print(f"  步骤2: 计算 [(2×l-q+l/cos s)/tan s + l]")
+                                part2_4 = numerator / tan_s  # (2×l-q+l/cos s)/tan s
+                                bracket_content = part2_4 + l_val  # [(2×l-q+l/cos s)/tan s+l]
+                                print(f"    (2×l-q+l/cos s)/tan s = {numerator:.6f}/{tan_s:.6f} = {part2_4:.6f}")
+                                print(f"    [(2×l-q+l/cos s)/tan s + l] = {part2_4:.6f} + {l_val:.3f} = {bracket_content:.6f}")
+                                
+                                print(f"  步骤3: 计算 Dis - 2×[...] - 2×p")
+                                expr2_part1 = 2 * bracket_content
+                                expr2_part2 = 2 * p_val
+                                expr2_sub = expr2_part1 + expr2_part2
+                                dl_expr2 = dis - expr2_sub
+                                print(f"    2×[(2×l-q+l/cos s)/tan s+l] = 2×{bracket_content:.6f} = {expr2_part1:.6f}")
+                                print(f"    2×p = 2×{p_val:.3f} = {expr2_part2:.3f}")
+                                print(f"    2×[...] + 2×p = {expr2_sub:.6f}")
+                                print(f"    DL2 = {dis:.3f} - {expr2_sub:.6f} = {dl_expr2:.3f}")
+                                
+                                print(f"\n[e节点] 计算表达式3: DL3 = Dit - 2×b3")
+                                expr3_part = 2 * b3
+                                dl_expr3 = dit - expr3_part
+                                print(f"  2×b3 = 2×{b3:.3f} = {expr3_part:.3f}")
+                                print(f"  DL3 = {dit:.3f} - {expr3_part:.3f} = {dl_expr3:.3f}")
 
                                 dl_value = min(dl_expr1, dl_expr2, dl_expr3)
-
-                                print(
-                                    "[update_tube_layout_circle_dl] e 节点特殊公式计算 DL: "
-                                    f"e={e_val}, p={p_val}, l={l_val}, q={q_val}, s={s_deg}°, b3={b3:.2f}, "
-                                    f"expr1 = {dl_expr1:.3f}, expr2 = {dl_expr2:.3f}, "
-                                    f"expr3 = {dl_expr3:.3f}, 取 min = {dl_value:.3f}"
-                                )
+                                
+                                print(f"\n[e节点] 最终结果:")
+                                print(f"  DL1 = {dl_expr1:.3f}")
+                                print(f"  DL2 = {dl_expr2:.3f}")
+                                print(f"  DL3 = {dl_expr3:.3f}")
+                                print(f"  DL = min(DL1, DL2, DL3) = min({dl_expr1:.3f}, {dl_expr2:.3f}, {dl_expr3:.3f}) = {dl_value:.3f}")
+                                print(f"[update_tube_layout_circle_dl] ========== e 节点计算结束 ==========\n")
                         except Exception as e:
                             print(
                                 f"[update_tube_layout_circle_dl] b_e 节点计算异常，回退原逻辑: {e}"
@@ -8056,7 +8150,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 1. 判断是否以外径为基准
         is_outer_diameter_base = self.get_is_outer_diameter_base()
-
+        print(is_outer_diameter_base,"is_outer_diameter_base")
         if is_outer_diameter_base == "否":
             print("参数'是否以外径为基准'为'否'，跳过更新壳体内直径")
             return
@@ -8067,6 +8161,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 2. 获取 DN、Di 的行号
         di_row = dn_row = -1
+        dl_row = -1  # 新增：布管限定圆行号
         row_count = self.param_table.rowCount()
         for row in range(row_count):
             name_item = self.param_table.item(row, 1)
@@ -8077,6 +8172,8 @@ class TubeLayoutEditor(QMainWindow):
                 di_row = row
             elif name == "公称直径 DN":
                 dn_row = row
+            elif name == "布管限定圆 DL":  # 新增：查找布管限定圆
+                dl_row = row
 
         if di_row == -1 or dn_row == -1:
             print("[WARN] 未找到 DN/Di 参数行，无法更新。")
@@ -8121,7 +8218,39 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 original_handler = None
 
-        # 6. 更新表格中的 Di
+        # 6. 先更新布管限定圆为0（在更新壳体内直径之前）
+        try:
+            if dl_row != -1:
+                # 检查布管限定圆单元格的控件类型
+                dl_widget = self.param_table.cellWidget(dl_row, 2)
+                dl_str_value = "0"
+                if isinstance(dl_widget, QComboBox):
+                    # 查找值为0的项
+                    idx = dl_widget.findText(dl_str_value)
+                    if idx >= 0:
+                        dl_widget.setCurrentIndex(idx)
+                    else:
+                        # 可编辑 combobox 时设值
+                        try:
+                            dl_widget.setEditText(dl_str_value)
+                        except Exception:
+                            # 回退为直接替换单元格项
+                            self.param_table.setItem(dl_row, 2, QTableWidgetItem(dl_str_value))
+                else:
+                    # 非QComboBox控件
+                    dl_item = self.param_table.item(dl_row, 2)
+                    if dl_item:
+                        dl_item.setText(dl_str_value)
+                    else:
+                        self.param_table.setItem(dl_row, 2, QTableWidgetItem(dl_str_value))
+
+                print(f"[user_update_Di INFO] 布管限定圆 DL 已更新为 {dl_str_value}")
+            else:
+                print("[user_update_Di WARN] 未找到布管限定圆 DL 参数行，无法更新 DL")
+        except Exception as e:
+            print(f"[user_update_Di ERROR] 更新布管限定圆时出错: {e}")
+
+        # 7. 更新表格中的 Di
         try:
             widget = self.param_table.cellWidget(di_row, 2)
             str_value = f"{current_di:.1f}"
@@ -8155,18 +8284,18 @@ class TubeLayoutEditor(QMainWindow):
                     self.param_table.itemChanged.connect(original_handler)
                 except Exception:
                     pass
-
-        # 7. 触发一次三值一致性检查（在事件循环放行后）
-        try:
-            QCoreApplication.processEvents()
-            print(
-                "[user_update_Di DEBUG] 自动触发三值一致性检查（来源：user_update_Di）"
-            )
-            # 只触发一次（检查中会禁止重入）
-            self.check_diameter_consistency(trigger_name="user_update_Di")
-        except Exception as e:
-            print(f"[user_update_Di ERROR] 调用 check_diameter_consistency 出错: {e}")
-
+        self.update_tube_layout_circle_dl()
+        # # 8. 触发一次三值一致性检查（在事件循环放行后）
+        # try:
+        #     QCoreApplication.processEvents()
+        #     print(
+        #         "[user_update_Di DEBUG] 自动触发三值一致性检查（来源：user_update_Di）"
+        #     )
+        #     # 只触发一次（检查中会禁止重入）
+        #     self.check_diameter_consistency(trigger_name="user_update_Di")
+        # except Exception as e:
+        #     print(f"[user_update_Di ERROR] 调用 check_diameter_consistency 出错: {e}")
+    # TODO 三值检测函数
     def check_diameter_consistency(self, trigger_name=None):
         """
         检查并保证：公称直径 DN >= 壳体内直径 Dis >= 布管限定圆 DL
@@ -8206,9 +8335,9 @@ class TubeLayoutEditor(QMainWindow):
             return
 
         # 检查是否有行被隐藏，如果隐藏则跳过一致性检查
-        if (self.param_table.isRowHidden(dn_row) or 
-            self.param_table.isRowHidden(di_row) or 
-            self.param_table.isRowHidden(dl_row)):
+        if (self.param_table.isRowHidden(dn_row) or
+                self.param_table.isRowHidden(di_row) or
+                self.param_table.isRowHidden(dl_row)):
             print(
                 "[check_diameter_consistency WARN] DN/Di/DL 参数行存在隐藏行，跳过检查。"
             )
@@ -8246,11 +8375,26 @@ class TubeLayoutEditor(QMainWindow):
         # - temp2：本次用户修改后的候选值（当前表格读到的 dn/di/dl）
         # 通过：temp2 -> temp1；不通过：回写到 temp1（只回写被修改的那一个）
         # =========================================================
+        # 获取"是否以外径为基准"参数值
+        is_outer_diameter_base = self.get_is_outer_diameter_base()
+        print(f"[check_diameter_consistency] 是否以外径为基准: {is_outer_diameter_base}")
+
+        # 根据"是否以外径为基准"决定检查条件
+        if is_outer_diameter_base == "是":
+            # 以外径为基准：只检查 di >= dl，不管 dn
+            check_condition = di >= dl
+            print(f"[check_diameter_consistency] 以外径为基准模式，检查条件: Di({di}) >= DL({dl}) = {check_condition}")
+        else:
+            # 不以外径为基准：检查 dn >= di >= dl（原逻辑）
+            check_condition = dn >= di >= dl
+            print(
+                f"[check_diameter_consistency] 非以外径为基准模式，检查条件: DN({dn}) >= Di({di}) >= DL({dl}) = {check_condition}")
+
         temp1 = getattr(self, "_dn_di_dl_temp1", None)
         if isinstance(temp1, dict) and all(k in temp1 for k in ("DN", "Di", "DL")):
             self._dn_di_dl_temp2 = {"DN": dn, "Di": di, "DL": dl}
 
-            if dn >= di >= dl:
+            if check_condition:
                 # 合法：提升 temp2 为 temp1
                 self._dn_di_dl_temp1 = {"DN": dn, "Di": di, "DL": dl}
                 self._last_valid_values = dict(self._dn_di_dl_temp1)
@@ -8263,10 +8407,14 @@ class TubeLayoutEditor(QMainWindow):
                 return True
 
             # 不合法：弹窗 + 回写到 temp1
+            if is_outer_diameter_base == "是":
+                warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）"
+            else:
+                warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！"
             QMessageBox.warning(
                 self,
                 "提示",
-                "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！",
+                warning_msg,
             )
 
             # 写回函数（复用本函数的写表能力）
@@ -8339,8 +8487,8 @@ class TubeLayoutEditor(QMainWindow):
 
         # 如果尚无上次合法记录，则在当前合法时初始化
         if not hasattr(self, "_last_valid_values"):
-            # 只有在当前三值合法时才记录
-            if dn >= di >= dl:
+            # 只有在当前三值合法时才记录（根据"是否以外径为基准"决定检查条件）
+            if check_condition:
                 self._last_valid_values = {"DN": dn, "Di": di, "DL": dl}
                 # 一旦恢复合法，清除“无历史合法值”提示的去重标志
                 if hasattr(self, "_dn_di_dl_no_history_warned"):
@@ -8427,7 +8575,12 @@ class TubeLayoutEditor(QMainWindow):
                         dn2 = _read_value(dn_row)
                         di2 = _read_value(di_row)
                         dl2 = _read_value(dl_row)
-                        if None not in (dn2, di2, dl2) and dn2 >= di2 >= dl2:
+                        # 根据"是否以外径为基准"决定检查条件
+                        if is_outer_diameter_base == "是":
+                            check_condition2 = di2 >= dl2 if None not in (di2, dl2) else False
+                        else:
+                            check_condition2 = dn2 >= di2 >= dl2 if None not in (dn2, di2, dl2) else False
+                        if check_condition2:
                             self._last_valid_values = {"DN": dn2, "Di": di2, "DL": dl2}
                             self._dn_di_dl_no_history_warned = False
                             return True
@@ -8435,15 +8588,19 @@ class TubeLayoutEditor(QMainWindow):
                 # 回填失败或回填后仍不合法：弹窗（去重）
                 if not getattr(self, "_dn_di_dl_no_history_warned", False):
                     self._dn_di_dl_no_history_warned = True
+                    if is_outer_diameter_base == "是":
+                        warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）"
+                    else:
+                        warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！"
                     QMessageBox.warning(
                         self,
                         "提示",
-                        "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！",
+                        warning_msg,
                     )
                 return False
 
-        # 如果满足约束，更新 last_valid_values 并返回
-        if dn >= di >= dl:
+        # 如果满足约束，更新 last_valid_values 并返回（根据"是否以外径为基准"决定检查条件）
+        if check_condition:
             self._last_valid_values = {"DN": dn, "Di": di, "DL": dl}
             print(
                 f"[check_diameter_consistency DEBUG] 三值合法：已更新 last_valid_values -> {self._last_valid_values}"
@@ -8456,13 +8613,17 @@ class TubeLayoutEditor(QMainWindow):
             print(
                 "[check_diameter_consistency WARN] 无可用 last_valid_values，无法回滚。"
             )
-            # 同上：无历史合法值时，只弹一次，并尝试用 input_json 回填“被修改的那个值”
+            # 同上：无历史合法值时，只弹一次，并尝试用 input_json 回填"被修改的那个值"
             if not getattr(self, "_dn_di_dl_no_history_warned", False):
                 self._dn_di_dl_no_history_warned = True
+                if is_outer_diameter_base == "是":
+                    warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）"
+                else:
+                    warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！"
                 QMessageBox.warning(
                     self,
                     "提示",
-                    "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！",
+                    warning_msg,
                 )
 
             # 尝试用 self.input_json 回填“被修改的那个参数值”（同上逻辑）
@@ -8527,11 +8688,14 @@ class TubeLayoutEditor(QMainWindow):
 
         try:
             # 弹窗提示一次
+            if is_outer_diameter_base == "是":
+                warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）\n系统将把它们恢复为上一次的合法值。"
+            else:
+                warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n系统将把它们恢复为上一次的合法值。"
             QMessageBox.warning(
                 self,
                 "提示",
-                "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n"
-                "系统将把它们恢复为上一次的合法值。",
+                warning_msg,
             )
 
             print(f"[check_diameter_consistency DEBUG] 回滚到上次合法值: {last_vals}")
@@ -8597,7 +8761,12 @@ class TubeLayoutEditor(QMainWindow):
         dn2 = _safe_read_after(dn_row)
         di2 = _safe_read_after(di_row)
         dl2 = _safe_read_after(dl_row)
-        if None not in (dn2, di2, dl2) and dn2 >= di2 >= dl2:
+        # 根据"是否以外径为基准"决定检查条件
+        if is_outer_diameter_base == "是":
+            check_condition_after = di2 >= dl2 if None not in (di2, dl2) else False
+        else:
+            check_condition_after = dn2 >= di2 >= dl2 if None not in (dn2, di2, dl2) else False
+        if check_condition_after:
             self._last_valid_values = {"DN": dn2, "Di": di2, "DL": dl2}
             print(
                 f"[check_diameter_consistency DEBUG] 回滚后新的 last_valid_values={self._last_valid_values}"
@@ -9505,6 +9674,27 @@ class TubeLayoutEditor(QMainWindow):
                 except:
                     pass
 
+    def get_is_outer_diameter_base(self):
+        """获取'是否以外径为基准'参数值"""
+        row_count = self.param_table.rowCount()
+        for row in range(row_count):
+            # 获取当前行的参数名
+            name_item = self.param_table.item(row, 1)
+            if not name_item:
+                continue
+
+            if name_item.text() == "是否以外径为基准":
+                # 检查单元格是否是QComboBox控件
+                cell_widget = self.param_table.cellWidget(row, 2)
+                if isinstance(cell_widget, QComboBox):
+                    return cell_widget.currentText()
+                else:
+                    # 普通文本单元格
+                    value_item = self.param_table.item(row, 2)
+                    return value_item.text() if value_item else None
+
+        # 未找到参数时返回None
+        return None
     def update_DN_Di(self):
         """当'是否以外径为基准'为'否'时，将壳体内直径Di更新为公称直径DN"""
         # 1. 定位关键参数行：公称直径 DN、壳体内直径 Dis、是否以外径为基准
@@ -10557,9 +10747,13 @@ class TubeLayoutEditor(QMainWindow):
             # 目的：避免“非法值先触发 update_baffle_diameter/draw_baffle_plates 等重绘，回滚后图形仍保留”
             if param_name in ("公称直径 DN", "壳体内直径 Dis", "布管限定圆 DL"):
                 try:
+                    print(f"[DEBUG] 准备调用 check_diameter_consistency，参数={param_name}")
                     ok = self.check_diameter_consistency(trigger_name=param_name)
+                    print(f"[DEBUG] check_diameter_consistency 返回结果={ok}，参数={param_name}")
                 except Exception as e:
+                    import traceback
                     print(f"[on_table_item_changed] 一致性检查执行失败: {e}")
+                    print(f"[DEBUG] 异常堆栈:\n{traceback.format_exc()}")
                     ok = False
 
                 if ok is False:
@@ -10567,6 +10761,8 @@ class TubeLayoutEditor(QMainWindow):
                         f"[on_table_item_changed] DN/Dis/DL 未通过检查，已回滚（来源：{param_name}），跳过后续联动。"
                     )
                     return
+                else:
+                    print(f"[DEBUG] 一致性检查通过，继续后续操作，参数={param_name}")
 
             # 3) 目标参数联动逻辑（保持原有行为）
             try:
@@ -10581,6 +10777,7 @@ class TubeLayoutEditor(QMainWindow):
                         # user_update_Di 内部会断开/重连 itemChanged，且会再触发一致性检查一次
                         try:
                             self.user_update_Di()
+                            self.update_tube_layout_circle_dl()
                         except Exception as e:
                             print(f"[on_table_item_changed] user_update_Di 出错: {e}")
                     if param_name == "公称直径 DN":
@@ -10592,7 +10789,7 @@ class TubeLayoutEditor(QMainWindow):
                         try:
                             # 这里是更新公称直径触发的
                             self.update_divider_position_and_size()
-                            self.update_DN_Di()
+                            # self.update_DN_Di()
                         except Exception as e:
                             print(
                                 f"[on_table_item_changed] update_divider/... 出错: {e}"
@@ -10823,13 +11020,17 @@ class TubeLayoutEditor(QMainWindow):
                         print(
                             f"[on_table_item_changed] 触发一致性检查（来源：{param_name}）"
                         )
+                        print(f"[DEBUG] 准备调用 check_diameter_consistency，参数={param_name}")
                         self.check_diameter_consistency(trigger_name=param_name)
+                        print(f"[DEBUG] check_diameter_consistency 调用完成，参数={param_name}")
                     else:
                         print(
                             "[on_table_item_changed] 当前处于抑制状态，跳过一致性检查"
                         )
                 except Exception as e:
+                    import traceback
                     print(f"[on_table_item_changed] 触发一致性检查出错: {e}")
+                    print(f"[DEBUG] 异常堆栈:\n{traceback.format_exc()}")
 
         # 4. 为下拉框组件单独绑定on_combobox_changed事件
         def bind_combobox_listeners():
@@ -19387,7 +19588,7 @@ class TubeLayoutEditor(QMainWindow):
 
         for data in tube_data:
             line_num = str(data.get("参数名", ""))
-            holes_up = str(data.get("参数值", ""))
+            holes_up = str(data.get("参数值", "")).replace(" ", "")
             holes_down = data.get("单位", "")
 
             if line_num in cross_params:
@@ -36578,10 +36779,8 @@ class TubeLayoutEditor(QMainWindow):
                     distance_to_center = math.hypot(self.mouse_x, self.mouse_y)
                     in_big_circle = distance_to_center <= self.R_wai + 1e-6
 
-                # 不在大圆内：视为点击空白，清空选中（统一走 clear_selection_highlight）
+                # 不在大圆内：视为点击空白，但不取消选中（保持选中状态）
                 if not in_big_circle:
-                    if hasattr(self, "clear_selection_highlight"):
-                        self.clear_selection_highlight()
                     return super().eventFilter(obj, event)
 
                 if not hasattr(self, "full_sorted_current_centers_up"):
@@ -36638,9 +36837,7 @@ class TubeLayoutEditor(QMainWindow):
                         marker.setData(0, "marker")
                     return True
                 else:
-                    # 在大圆内但未命中任何圆心：视为点击空白，清空选中（统一走 clear_selection_highlight）
-                    if hasattr(self, "clear_selection_highlight"):
-                        self.clear_selection_highlight()
+                    # 在大圆内但未命中任何圆心：视为点击空白，但不取消选中（保持选中状态）
                     return False
 
             elif event.type() == QEvent.MouseButtonDblClick:
@@ -36763,9 +36960,7 @@ class TubeLayoutEditor(QMainWindow):
 
                         if not in_big_circle:
                             # 鼠标按下时已进入框选模式（MouseButtonPress return True），
-                            # 单击空白的清除逻辑实际发生在 Release，这里必须统一走 clear_selection_highlight
-                            if hasattr(self, "clear_selection_highlight"):
-                                self.clear_selection_highlight()
+                            # 点击空白处不取消选中（保持选中状态）
                             return True
 
                         if not hasattr(self, "full_sorted_current_centers_up"):
@@ -36842,9 +37037,7 @@ class TubeLayoutEditor(QMainWindow):
                                 marker.setData(0, "marker")
                             return True
                         else:
-                            # 在大圆内但未命中任何圆心：视为点击空白，清空选中（含拉杆）
-                            if hasattr(self, "clear_selection_highlight"):
-                                self.clear_selection_highlight()
+                            # 在大圆内但未命中任何圆心：视为点击空白，但不取消选中（保持选中状态）
                             return True
 
                     # 情况2：有有效矩形 → 按矩形范围执行框选
@@ -36952,6 +37145,15 @@ class TubeLayoutEditor(QMainWindow):
 
                         # 回写最终选中集合
                         self.selected_centers = current_labels
+                    return True
+
+            elif event.type() == QEvent.KeyPress:
+                # 处理键盘事件：按 ESC 键时取消选中
+                from PyQt5.QtGui import QKeyEvent
+                if isinstance(event, QKeyEvent) and event.key() == Qt.Key_Escape:
+                    if hasattr(self, "clear_selection_highlight"):
+                        self.clear_selection_highlight()
+                    event.accept()
                     return True
 
         return super().eventFilter(obj, event)
