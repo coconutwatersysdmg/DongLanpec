@@ -7698,7 +7698,7 @@ class TubeLayoutEditor(QMainWindow):
                         )
                 elif str(node_name).lower() == "e":
                     # b_e 节点：DL = min{(Dit - 2*e - 2*p),
-                    #                      (Dis - 2*[(2*l - q + l/cos s)/tan s + l] - 2*p),
+                    #                      (Dis - 2*[(q - l + l/cos s)/tan s + l] - 2*p),
                     #                      (Dit - 2*b3)}
                     # 其中 Dit/Dis/do 从左侧参数表获取，e,p,l,q,s 从快照参数中读取
 
@@ -7804,7 +7804,7 @@ class TubeLayoutEditor(QMainWindow):
                                 dl_value = _calc_dl_by_type(di_value, do_value)
                             else:
                                 # 三个表达式
-                                # 公式：DL = min{(Dit-2×e-2×p), (Dis-2×[(2×l-q+l/cos s)/tan s+l]-2×p), (Dit-2×b3)}
+                                # 公式：DL = min{(Dit-2×e-2×p), (Dis-2×[(q-l+l/cos s)/tan s+l]-2×p), (Dit-2×b3)}
                                 
                                 print(f"\n[e节点] 计算表达式1: DL1 = Dit - 2×e - 2×p")
                                 expr1_part1 = 2 * e_val
@@ -7816,30 +7816,28 @@ class TubeLayoutEditor(QMainWindow):
                                 print(f"  2×e + 2×p = {expr1_sub:.3f}")
                                 print(f"  DL1 = {dit:.3f} - {expr1_sub:.3f} = {dl_expr1:.3f}")
                                 
-                                print(f"\n[e节点] 计算表达式2: DL2 = Dis - 2×[(2×l-q+l/cos s)/tan s+l] - 2×p")
-                                # 先计算括号内的内容：[(2×l-q+l/cos s)/tan s+l]
-                                print(f"  步骤1: 计算 (2×l - q + l/cos s)")
-                                part2_1 = 2 * l_val  # 2×l
+                                print(f"\n[e节点] 计算表达式2: DL2 = Dis - 2×[(q-l+l/cos s)/tan s+l] - 2×p")
+                                # 先计算括号内的内容：[(q-l+l/cos s)/tan s+l]
+                                print(f"  步骤1: 计算 (q - l + l/cos s)")
+                                part2_1 = q_val - l_val  # q - l
                                 part2_2 = l_val / cos_s  # l/cos s
-                                part2_3 = part2_1 - q_val  # 2×l - q
-                                numerator = part2_3 + part2_2  # (2×l-q+l/cos s)
-                                print(f"    2×l = 2×{l_val:.3f} = {part2_1:.3f}")
+                                numerator = part2_1 + part2_2  # (q-l+l/cos s)
+                                print(f"    q - l = {q_val:.3f} - {l_val:.3f} = {part2_1:.3f}")
                                 print(f"    l/cos s = {l_val:.3f}/{cos_s:.6f} = {part2_2:.6f}")
-                                print(f"    2×l - q = {part2_1:.3f} - {q_val:.3f} = {part2_3:.3f}")
-                                print(f"    (2×l - q + l/cos s) = {part2_3:.3f} + {part2_2:.6f} = {numerator:.6f}")
+                                print(f"    (q - l + l/cos s) = {part2_1:.3f} + {part2_2:.6f} = {numerator:.6f}")
                                 
-                                print(f"  步骤2: 计算 [(2×l-q+l/cos s)/tan s + l]")
-                                part2_4 = numerator / tan_s  # (2×l-q+l/cos s)/tan s
-                                bracket_content = part2_4 + l_val  # [(2×l-q+l/cos s)/tan s+l]
-                                print(f"    (2×l-q+l/cos s)/tan s = {numerator:.6f}/{tan_s:.6f} = {part2_4:.6f}")
-                                print(f"    [(2×l-q+l/cos s)/tan s + l] = {part2_4:.6f} + {l_val:.3f} = {bracket_content:.6f}")
+                                print(f"  步骤2: 计算 [(q-l+l/cos s)/tan s + l]")
+                                part2_3 = numerator / tan_s  # (q-l+l/cos s)/tan s
+                                bracket_content = part2_3 + l_val  # [(q-l+l/cos s)/tan s+l]
+                                print(f"    (q-l+l/cos s)/tan s = {numerator:.6f}/{tan_s:.6f} = {part2_3:.6f}")
+                                print(f"    [(q-l+l/cos s)/tan s + l] = {part2_3:.6f} + {l_val:.3f} = {bracket_content:.6f}")
                                 
                                 print(f"  步骤3: 计算 Dis - 2×[...] - 2×p")
                                 expr2_part1 = 2 * bracket_content
                                 expr2_part2 = 2 * p_val
                                 expr2_sub = expr2_part1 + expr2_part2
                                 dl_expr2 = dis - expr2_sub
-                                print(f"    2×[(2×l-q+l/cos s)/tan s+l] = 2×{bracket_content:.6f} = {expr2_part1:.6f}")
+                                print(f"    2×[(q-l+l/cos s)/tan s+l] = 2×{bracket_content:.6f} = {expr2_part1:.6f}")
                                 print(f"    2×p = 2×{p_val:.3f} = {expr2_part2:.3f}")
                                 print(f"    2×[...] + 2×p = {expr2_sub:.6f}")
                                 print(f"    DL2 = {dis:.3f} - {expr2_sub:.6f} = {dl_expr2:.3f}")
