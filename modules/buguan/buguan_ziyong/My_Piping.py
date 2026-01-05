@@ -19761,7 +19761,7 @@ class TubeLayoutEditor(QMainWindow):
         #         f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
         #     )
 
-        # 公称直径写回“设计数据表”
+        # 公称直径写回产品设计活动表_设计数据表
         if cross_params["公称直径 DN"] is not None:
             design_table = "`产品设计活动表_设计数据表`"
             safe_dn_value = escape_str(cross_params["公称直径 DN"])
@@ -19769,13 +19769,13 @@ class TubeLayoutEditor(QMainWindow):
                 f"UPDATE {design_table} SET `壳程数值` = '{safe_dn_value}' "
                 f"WHERE `产品ID` = '{productID}' AND `参数名称` LIKE '公称直径%'"
             )
-        if cross_params["壳体内直径 Dis"] is not None:
-            design_table = "`产品设计活动表_设计数据表`"
-            safe_dn_value = escape_str(cross_params["壳体内直径 Dis"])
-            sql_statements.append(
-                f"UPDATE {design_table} SET `壳程数值` = '{safe_dn_value}' "
-                f"WHERE `产品ID` = '{productID}' AND `参数名称` LIKE '公称直径%'"
-            )
+        # if cross_params["壳体内直径 Dis"] is not None:
+        #     design_table = "`产品设计活动表_设计数据表`"
+        #     safe_dn_value = escape_str(cross_params["壳体内直径 Dis"])
+        #     sql_statements.append(
+        #         f"UPDATE {design_table} SET `壳程数值` = '{safe_dn_value}' "
+        #         f"WHERE `产品ID` = '{productID}' AND `参数名称` LIKE '公称直径%'"
+        #     )
 
         # 把映射参数写回/更新到【产品设计活动表_元件附加参数表】
         for tube_name, comp_name in cross_map.items():
@@ -28059,75 +28059,14 @@ class TubeLayoutEditor(QMainWindow):
                     selected_centers = self.judge_linkage(self.selected_centers)
                 else:
                     selected_centers = self.selected_centers
-                do = self.get_tube_do()
-                do_value = float(do)
-                tube_bridge = self.get_nominal_bridge_width(do_value)
-                actual_coord = self.selected_to_current_coords(selected_centers)
-
-                # 1. 找到与 selected_centers 最左边的第一个坐标
-                if not actual_coord:
+                # 计算旁路挡板宽度
+                result = self.calculate_level_side_dangban_length(selected_centers, block_height)
+                if result is None:
+                    # 用户取消了操作
+                    self.clear_selection_highlight()
                     dialog.close()
                     return
-                selected_y = actual_coord[0][1]  # 获取纵坐标
-                actual_coord = self.selected_to_current_coords(self.lagan_info)
-                centers = self.current_centers + self.lagan_info
-                same_y_points = [
-                    point
-                    for point in centers
-                    if abs(point[1] - selected_y)
-                       < 1e-6
-                       < abs(point[0] - selected_centers[0][0])
-                ]
-
-                # 按横坐标排序，找到最左边的第一个点
-                if len(same_y_points) >= 1:  # 这里也可以保持 >=2，根据实际需求决定
-                    sorted_points = sorted(same_y_points, key=lambda p: p[0])
-                    near_center = sorted_points[0]  # 最左边的第一个点
-                    n_x, n_y = near_center
-                else:
-                    n_x, n_y = selected_centers[0]  # 使用原始点作为备选
-
-                # 2. 计算 y = n_y 与折流板外径圆的交点
-                bendblock = self.get_tube_bendblock()
-                bendblock_value = float(bendblock)
-                R_bend = bendblock_value / 2.0
-
-                # 计算交点
-                if abs(n_y) <= R_bend:
-                    x_offset = math.sqrt(R_bend ** 2 - n_y ** 2)
-                    intersection1 = (x_offset, n_y)
-                    intersection2 = (-x_offset, n_y)
-                else:
-                    intersection1 = (R_bend, n_y)
-                    intersection2 = (-R_bend, n_y)
-
-                distance = abs(abs(intersection2[0]) - abs(n_x))
-
-                # 新增判断逻辑：当距离小于等于16mm时提示用户
-                if distance <= 16:
-                    reply = QMessageBox.question(
-                        self,
-                        "间距提示",
-                        "间距小于等于16mm，是否设置旁路挡板？",
-                        QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.No,
-                    )
-                    if reply == QMessageBox.No:
-                        self.clear_selection_highlight()
-                        dialog.close()
-                        return
-
-                try:
-                    block_height_val = float(block_height)
-                    tube_bridge_val = float(tube_bridge)
-                    # 旁路挡板宽度（长度）按两位小数保留
-                    self.side_dangban_length = round(
-                        abs(distance - tube_bridge_val - do_value/2), 2
-                    )
-
-                except ValueError as e:
-                    print(f"数值转换错误: {e}")
-                    self.side_dangban_length = 0.0
+                # result 是旁路挡板长度，已设置到 self.side_dangban_length
 
                 # added_count = self.build_side_dangban(selected_centers, self.side_dangban_length, block_height)
                 for center in selected_centers:
@@ -28169,73 +28108,14 @@ class TubeLayoutEditor(QMainWindow):
                     selected_centers = self.judge_linkage(self.selected_centers)
                 else:
                     selected_centers = self.selected_centers
-                do = self.get_tube_do()
-                do_value = float(do)
-                tube_bridge = self.get_nominal_bridge_width(do_value)
-                actual_coord = self.selected_to_current_coords(selected_centers)
-
-                # 1. 找到与 selected_centers 最上面的第一个坐标（同一列）
-                selected_x = actual_coord[0][0]  # 获取横坐标
-                actual_coord = self.selected_to_current_coords(self.lagan_info)
-                centers = self.current_centers + self.lagan_info
-                same_x_points = [
-                    point for point in centers if abs(point[0] - selected_x) < 1e-6
-                ]
-
-                # 按纵坐标排序，找到最上面的第一个点
-                if len(same_x_points) >= 1:
-                    sorted_points = sorted(
-                        same_x_points, key=lambda p: p[1], reverse=True
-                    )  # 从大到小，找最上面的
-                    near_center = sorted_points[0]  # 最上面的第一个点
-                    n_x, n_y = near_center
-                else:
-                    n_x, n_y = (
-                        actual_coord[0] if actual_coord else (0, 0)
-                    )  # 使用原始点作为备选
-
-                # 2. 计算 x = n_x 与折流板外径圆的交点（垂直方向）
-                bendblock = self.get_tube_bendblock()
-                bendblock_value = float(bendblock)
-                R_bend = bendblock_value / 2.0
-
-                # 计算交点（垂直方向：y = ±sqrt(R² - x²)）
-                if abs(n_x) <= R_bend:
-                    y_offset = math.sqrt(R_bend ** 2 - n_x ** 2)
-                    intersection1 = (n_x, y_offset)
-                    intersection2 = (n_x, -y_offset)
-                else:
-                    intersection1 = (n_x, R_bend)
-                    intersection2 = (n_x, -R_bend)
-
-                distance = abs(abs(intersection2[1]) - abs(n_y))
-
-                # 新增判断逻辑：当距离小于等于16mm时提示用户
-                if distance <= 16:
-                    reply = QMessageBox.question(
-                        self,
-                        "间距提示",
-                        "间距小于等于16mm，是否设置旁路挡板？",
-                        QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.No,
-                    )
-                    if reply == QMessageBox.No:
-                        self.clear_selection_highlight()
-                        dialog.close()
-                        return
-
-                try:
-                    block_height_val = float(block_height)
-                    tube_bridge_val = float(tube_bridge)
-                    # 垂直方向：宽度（长度）按两位小数保留
-                    self.side_dangban_length = round(
-                        abs(distance - tube_bridge_val - do_value/2), 2
-                    )
-
-                    print("旁路挡板长度（垂直方向）")
-                except ValueError as e:
-                    print(f"数值转换错误: {e}")
-                    self.side_dangban_length = 0.0
+                # 计算旁路挡板宽度（垂直方向）
+                result = self.calculate_vertical_side_dangban_length(selected_centers, block_height)
+                if result is None:
+                    # 用户取消了操作
+                    self.clear_selection_highlight()
+                    dialog.close()
+                    return
+                # result 是旁路挡板长度，已设置到 self.side_dangban_length
                 for center in selected_centers:
                     added_count = self.build_single_side_dangban_vertical(
                         [center], self.side_dangban_length, block_height
@@ -28269,6 +28149,406 @@ class TubeLayoutEditor(QMainWindow):
         self.confirm_btn.clicked.connect(on_confirm)
         self.close_btn.clicked.connect(on_close)
         dialog.exec_()
+    #TODO 计算水平旁路挡板宽度
+    def calculate_level_side_dangban_length(self, selected_centers, block_height):
+        """
+        计算旁路挡板宽度（长度）
+        
+        参数:
+            selected_centers: 选中的中心点列表
+            block_height: 挡板高度（用于后续处理，当前计算中未使用）
+        
+        返回:
+            float: 旁路挡板长度，如果用户取消操作则返回 None
+        """
+        import math
+        from PyQt5.QtWidgets import QMessageBox
+        
+        # 获取基础参数
+        do = self.get_tube_do()
+        do_value = float(do)
+        tube_bridge = self.get_nominal_bridge_width(do_value)
+        actual_coord = self.selected_to_current_coords(selected_centers)
+
+        # 1. 找到与 selected_centers 最左边的第一个坐标
+        if not actual_coord:
+            return None
+        selected_y = actual_coord[0][1]  # 获取纵坐标
+        actual_coord = self.selected_to_current_coords(self.lagan_info)
+        centers = self.current_centers + self.lagan_info
+        same_y_points = [
+            point
+            for point in centers
+            if abs(point[1] - selected_y)
+               < 1e-6
+               < abs(point[0] - selected_centers[0][0])
+        ]
+
+        # 按横坐标排序，找到最左边的第一个点
+        if len(same_y_points) >= 1:  # 这里也可以保持 >=2，根据实际需求决定
+            sorted_points = sorted(same_y_points, key=lambda p: p[0])
+            near_center = sorted_points[0]  # 最左边的第一个点
+            n_x, n_y = near_center
+        else:
+            n_x, n_y = selected_centers[0]  # 使用原始点作为备选
+
+        # 2. 计算 y = n_y 与折流板外径圆的交点
+        bendblock = self.get_tube_bendblock()
+        bendblock_value = float(bendblock)
+        R_bend = bendblock_value / 2.0
+
+        # 计算交点
+        if abs(n_y) <= R_bend:
+            x_offset = math.sqrt(R_bend ** 2 - n_y ** 2)
+            intersection1 = (x_offset, n_y)
+            intersection2 = (-x_offset, n_y)
+        else:
+            intersection1 = (R_bend, n_y)
+            intersection2 = (-R_bend, n_y)
+
+        distance = abs(abs(intersection2[0]) - abs(n_x))
+
+        # 新增判断逻辑：当距离小于等于16mm时提示用户
+        if distance <= 16:
+            reply = QMessageBox.question(
+                self,
+                "间距提示",
+                "间距小于等于16mm，是否设置旁路挡板？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply == QMessageBox.No:
+                return None  # 用户取消操作
+
+        try:
+            block_height_val = float(block_height)
+            tube_bridge_val = float(tube_bridge)
+            # 旁路挡板宽度（长度）按两位小数保留
+            side_dangban_length = round(
+                abs(distance - tube_bridge_val - do_value/2), 2
+            )
+            
+            print(f"\n[calculate_level_side_dangban_length] ========== 开始干涉检查 ==========")
+            print(f"[原始计算] 原始 side_dangban_length = {side_dangban_length:.3f}")
+            print(f"[原始计算] distance = {distance:.3f}, tube_bridge_val = {tube_bridge_val:.3f}, do_value = {do_value:.3f}")
+            print(f"[原始计算] n_x = {n_x:.3f}, n_y = {n_y:.3f}, R_bend = {R_bend:.3f}")
+            
+            # 检查干涉：找到上下两行的最左侧换热管圆心
+            # 1. 找到上下两行的最左侧换热管圆心
+            actual_coord_selected = self.selected_to_current_coords(selected_centers)
+            if not actual_coord_selected:
+                print(f"[干涉检查] 未找到选中坐标，跳过干涉检查")
+                self.side_dangban_length = side_dangban_length
+                return side_dangban_length
+            
+            selected_y = actual_coord_selected[0][1]  # 当前行的y坐标
+            print(f"[干涉检查] 当前选中行的 y 坐标 = {selected_y:.3f}")
+            
+            actual_coord_lagan = self.selected_to_current_coords(self.lagan_info)
+            centers = self.current_centers + self.lagan_info
+            print(f"[干涉检查] 总坐标数量 = {len(centers)}")
+            
+            # 找到上下两行的点（y坐标不同，但接近）
+            # 获取所有不同的y坐标
+            all_y_coords = sorted(set(point[1] for point in centers))
+            print(f"[干涉检查] 所有不同的 y 坐标数量 = {len(all_y_coords)}")
+            if len(all_y_coords) <= 5:
+                print(f"[干涉检查] 所有 y 坐标: {[f'{y:.3f}' for y in all_y_coords]}")
+            
+            # 找到当前行的y坐标在all_y_coords中的位置
+            current_y_idx = None
+            for idx, y_coord in enumerate(all_y_coords):
+                if abs(y_coord - selected_y) < 1e-6:
+                    current_y_idx = idx
+                    break
+            
+            print(f"[干涉检查] 当前行在 y 坐标列表中的索引 = {current_y_idx}")
+            
+            upper_row_leftmost = None
+            lower_row_leftmost = None
+            
+            if current_y_idx is not None:
+                # 找上一行（y坐标更大的，索引更小的）
+                if current_y_idx > 0:
+                    upper_y = all_y_coords[current_y_idx - 1]
+                    print(f"[干涉检查] 上一行的 y 坐标 = {upper_y:.3f}")
+                    upper_row_points = [
+                        point for point in centers 
+                        if abs(point[1] - upper_y) < 1e-6
+                    ]
+                    print(f"[干涉检查] 上一行的点数量 = {len(upper_row_points)}")
+                    if upper_row_points:
+                        upper_row_leftmost = min(upper_row_points, key=lambda p: p[0])
+                        print(f"[干涉检查] 上一行最左侧点 = ({upper_row_leftmost[0]:.3f}, {upper_row_leftmost[1]:.3f})")
+                else:
+                    print(f"[干涉检查] 当前行是第一个，没有上一行")
+                
+                # 找下一行（y坐标更小的，索引更大的）
+                if current_y_idx < len(all_y_coords) - 1:
+                    lower_y = all_y_coords[current_y_idx + 1]
+                    print(f"[干涉检查] 下一行的 y 坐标 = {lower_y:.3f}")
+                    lower_row_points = [
+                        point for point in centers 
+                        if abs(point[1] - lower_y) < 1e-6
+                    ]
+                    print(f"[干涉检查] 下一行的点数量 = {len(lower_row_points)}")
+                    if lower_row_points:
+                        lower_row_leftmost = min(lower_row_points, key=lambda p: p[0])
+                        print(f"[干涉检查] 下一行最左侧点 = ({lower_row_leftmost[0]:.3f}, {lower_row_leftmost[1]:.3f})")
+                else:
+                    print(f"[干涉检查] 当前行是最后一个，没有下一行")
+            else:
+                print(f"[干涉检查] 警告：未找到当前行在 y 坐标列表中的位置")
+            
+            # 2. 计算名义圆半径
+            nominal_circle_radius = (do_value + tube_bridge_val) / 2.0
+            print(f"\n[名义圆计算] do_value = {do_value:.3f}, tube_bridge_val = {tube_bridge_val:.3f}")
+            print(f"[名义圆计算] 名义圆半径 = (do + 名义孔桥) / 2 = ({do_value:.3f} + {tube_bridge_val:.3f}) / 2 = {nominal_circle_radius:.3f}")
+            print(f"[名义圆计算] 名义圆直径 = {nominal_circle_radius * 2:.3f}")
+            
+            # 3. 判断旁路挡板是否与名义圆干涉
+            # 旁路挡板的位置：在折流板边缘，水平方向
+            # 需要确定挡板是在左侧还是右侧
+            # 根据原逻辑，挡板在距离折流板边缘较近的一侧
+            # 这里假设挡板在左侧（n_x < 0的情况）
+            is_left_side = n_x < 0
+            print(f"\n[挡板位置] n_x = {n_x:.3f}, 挡板在 {'左侧' if is_left_side else '右侧'}")
+            
+            # 计算挡板矩形的位置
+            if is_left_side:
+                # 左挡板：左上角在折流板左边界
+                rect_x = -R_bend
+            else:
+                # 右挡板：左上角在折流板右边界减去长度
+                rect_x = R_bend - side_dangban_length
+            
+            rect_y = selected_y - block_height_val / 2.0
+            rect_width = side_dangban_length
+            rect_height = block_height_val
+            
+            print(f"[挡板矩形] 左上角 = ({rect_x:.3f}, {rect_y:.3f})")
+            print(f"[挡板矩形] 宽度 = {rect_width:.3f}, 高度 = {rect_height:.3f}")
+            print(f"[挡板矩形] 右下角 = ({rect_x + rect_width:.3f}, {rect_y + rect_height:.3f})")
+            
+            # 检查与上下两行名义圆的干涉
+            interference = False
+            interfering_circle_center = None
+            
+            print(f"\n[干涉检查] 开始检查与名义圆的干涉")
+            for i, circle_center in enumerate([upper_row_leftmost, lower_row_leftmost]):
+                row_name = "上一行" if i == 0 else "下一行"
+                if circle_center is None:
+                    print(f"[干涉检查] {row_name} 最左侧点不存在，跳过")
+                    continue
+                
+                cx, cy = circle_center
+                print(f"[干涉检查] {row_name} 名义圆圆心 = ({cx:.3f}, {cy:.3f}), 半径 = {nominal_circle_radius:.3f}")
+                
+                # 检查矩形与圆的干涉
+                # 找到矩形上距离圆心最近的点
+                closest_x = max(rect_x, min(cx, rect_x + rect_width))
+                closest_y = max(rect_y, min(cy, rect_y + rect_height))
+                
+                print(f"[干涉检查] 矩形上距离圆心最近的点 = ({closest_x:.3f}, {closest_y:.3f})")
+                
+                # 计算最近点到圆心的距离
+                dist_to_center = math.sqrt((closest_x - cx)**2 + (closest_y - cy)**2)
+                print(f"[干涉检查] 最近点到圆心的距离 = {dist_to_center:.3f}, 名义圆半径 = {nominal_circle_radius:.3f}")
+                
+                # 如果距离小于名义圆半径，则干涉
+                if dist_to_center < nominal_circle_radius - 1e-6:
+                    interference = True
+                    print(f"[干涉检查] ✓ 检测到干涉！距离 {dist_to_center:.3f} < 半径 {nominal_circle_radius:.3f}")
+                    if interfering_circle_center is None or abs(cx) > abs(interfering_circle_center[0]):
+                        interfering_circle_center = circle_center
+                        print(f"[干涉检查] 更新干涉圆心为: ({cx:.3f}, {cy:.3f})")
+                else:
+                    print(f"[干涉检查] ✗ 无干涉，距离 {dist_to_center:.3f} >= 半径 {nominal_circle_radius:.3f}")
+            
+            # 4. 如果不干涉，直接返回原值
+            if not interference:
+                print(f"[干涉检查] 结论：无干涉，使用原始 side_dangban_length = {side_dangban_length:.3f}")
+                print(f"[calculate_level_side_dangban_length] ========== 干涉检查结束 ==========\n")
+                self.side_dangban_length = side_dangban_length
+                return side_dangban_length
+            
+            # 5. 如果干涉，重新计算 side_dangban_length
+            print(f"\n[重新计算] 检测到干涉，开始重新计算 side_dangban_length")
+            
+            # 取横坐标绝对值最大的那个圆心
+            if interfering_circle_center is None:
+                print(f"[重新计算] interfering_circle_center 为 None，尝试从候选点中选择")
+                # 如果两个圆心都存在，取横坐标绝对值最大的
+                candidates = [c for c in [upper_row_leftmost, lower_row_leftmost] if c is not None]
+                print(f"[重新计算] 候选点数量 = {len(candidates)}")
+                if candidates:
+                    interfering_circle_center = max(candidates, key=lambda p: abs(p[0]))
+                    print(f"[重新计算] 选择横坐标绝对值最大的点: ({interfering_circle_center[0]:.3f}, {interfering_circle_center[1]:.3f})")
+                else:
+                    # 没有找到，直接返回原值
+                    print(f"[重新计算] 没有候选点，使用原始值")
+                    self.side_dangban_length = side_dangban_length
+                    return side_dangban_length
+            
+            cx, cy = interfering_circle_center
+            print(f"[重新计算] 使用干涉圆心: ({cx:.3f}, {cy:.3f}), 名义圆半径 = {nominal_circle_radius:.3f}")
+            
+            # 重新计算 side_dangban_length
+            # 旁路挡板矩形的一个角搭在名义圆上
+            print(f"[重新计算] 挡板在 {'左侧' if is_left_side else '右侧'}, rect_x = {rect_x:.3f}")
+            
+            if is_left_side:
+                # 左挡板：矩形的右边缘与名义圆相切
+                print(f"[重新计算] 左挡板：计算矩形右边缘与名义圆相切")
+                print(f"[重新计算] 圆心 x = {cx:.3f}, rect_x = {rect_x:.3f}")
+                
+                if cx > rect_x:
+                    # 圆心在矩形右侧
+                    new_rect_right_x = cx - nominal_circle_radius
+                    new_side_dangban_length = new_rect_right_x - rect_x
+                    print(f"[重新计算] 圆心在矩形右侧，new_rect_right_x = {cx:.3f} - {nominal_circle_radius:.3f} = {new_rect_right_x:.3f}")
+                    print(f"[重新计算] new_side_dangban_length = {new_rect_right_x:.3f} - {rect_x:.3f} = {new_side_dangban_length:.3f}")
+                else:
+                    # 圆心在矩形左侧（不太可能，但处理一下）
+                    new_rect_right_x = cx + nominal_circle_radius
+                    new_side_dangban_length = new_rect_right_x - rect_x
+                    print(f"[重新计算] 圆心在矩形左侧，new_rect_right_x = {cx:.3f} + {nominal_circle_radius:.3f} = {new_rect_right_x:.3f}")
+                    print(f"[重新计算] new_side_dangban_length = {new_rect_right_x:.3f} - {rect_x:.3f} = {new_side_dangban_length:.3f}")
+            else:
+                # 右挡板：矩形的左边缘与名义圆相切
+                print(f"[重新计算] 右挡板：计算矩形左边缘与名义圆相切")
+                print(f"[重新计算] 圆心 x = {cx:.3f}, rect_x = {rect_x:.3f}, R_bend = {R_bend:.3f}")
+                
+                if cx < rect_x:
+                    # 圆心在矩形左侧
+                    new_rect_left_x = cx + nominal_circle_radius
+                    new_side_dangban_length = R_bend - new_rect_left_x
+                    print(f"[重新计算] 圆心在矩形左侧，new_rect_left_x = {cx:.3f} + {nominal_circle_radius:.3f} = {new_rect_left_x:.3f}")
+                    print(f"[重新计算] new_side_dangban_length = {R_bend:.3f} - {new_rect_left_x:.3f} = {new_side_dangban_length:.3f}")
+                else:
+                    # 圆心在矩形右侧
+                    new_rect_left_x = cx - nominal_circle_radius
+                    new_side_dangban_length = R_bend - new_rect_left_x
+                    print(f"[重新计算] 圆心在矩形右侧，new_rect_left_x = {cx:.3f} - {nominal_circle_radius:.3f} = {new_rect_left_x:.3f}")
+                    print(f"[重新计算] new_side_dangban_length = {R_bend:.3f} - {new_rect_left_x:.3f} = {new_side_dangban_length:.3f}")
+            
+            # 确保新长度不为负
+            if new_side_dangban_length < 0:
+                print(f"[重新计算] 警告：计算出的长度 {new_side_dangban_length:.3f} < 0，设置为 0")
+                new_side_dangban_length = 0.0
+            
+            # 按两位小数保留
+            side_dangban_length = round(new_side_dangban_length, 2)
+            print(f"[重新计算] 最终 side_dangban_length = {side_dangban_length:.3f} (原始值 = {round(abs(distance - tube_bridge_val - do_value/2), 2):.3f})")
+            print(f"[calculate_level_side_dangban_length] ========== 干涉检查结束 ==========\n")
+            self.side_dangban_length = side_dangban_length
+            return side_dangban_length
+            
+        except ValueError as e:
+            print(f"数值转换错误: {e}")
+            self.side_dangban_length = 0.0
+            return 0.0
+        except Exception as e:
+            print(f"计算旁路挡板长度时发生错误: {e}")
+            import traceback
+            traceback.print_exc()
+            # 发生错误时返回原计算值
+            try:
+                block_height_val = float(block_height)
+                tube_bridge_val = float(tube_bridge)
+                side_dangban_length = round(
+                    abs(distance - tube_bridge_val - do_value/2), 2
+                )
+                self.side_dangban_length = side_dangban_length
+                return side_dangban_length
+            except:
+                self.side_dangban_length = 0.0
+                return 0.0
+    #TODO 计算垂直旁路挡板宽度
+    def calculate_vertical_side_dangban_length(self, selected_centers, block_height):
+        """
+        计算垂直方向旁路挡板宽度（长度）
+        
+        参数:
+            selected_centers: 选中的中心点列表
+            block_height: 挡板高度（用于后续处理，当前计算中未使用）
+        
+        返回:
+            float: 旁路挡板长度，如果用户取消操作则返回 None
+        """
+        import math
+        from PyQt5.QtWidgets import QMessageBox
+        
+        # 获取基础参数
+        do = self.get_tube_do()
+        do_value = float(do)
+        tube_bridge = self.get_nominal_bridge_width(do_value)
+        actual_coord = self.selected_to_current_coords(selected_centers)
+
+        # 1. 找到与 selected_centers 最上面的第一个坐标（同一列）
+        if not actual_coord:
+            return None
+        selected_x = actual_coord[0][0]  # 获取横坐标
+        actual_coord = self.selected_to_current_coords(self.lagan_info)
+        centers = self.current_centers + self.lagan_info
+        same_x_points = [
+            point for point in centers if abs(point[0] - selected_x) < 1e-6
+        ]
+
+        # 按纵坐标排序，找到最上面的第一个点
+        if len(same_x_points) >= 1:
+            sorted_points = sorted(
+                same_x_points, key=lambda p: p[1], reverse=True
+            )  # 从大到小，找最上面的
+            near_center = sorted_points[0]  # 最上面的第一个点
+            n_x, n_y = near_center
+        else:
+            n_x, n_y = (
+                actual_coord[0] if actual_coord else (0, 0)
+            )  # 使用原始点作为备选
+
+        # 2. 计算 x = n_x 与折流板外径圆的交点（垂直方向）
+        bendblock = self.get_tube_bendblock()
+        bendblock_value = float(bendblock)
+        R_bend = bendblock_value / 2.0
+
+        # 计算交点（垂直方向：y = ±sqrt(R² - x²)）
+        if abs(n_x) <= R_bend:
+            y_offset = math.sqrt(R_bend ** 2 - n_x ** 2)
+            intersection1 = (n_x, y_offset)
+            intersection2 = (n_x, -y_offset)
+        else:
+            intersection1 = (n_x, R_bend)
+            intersection2 = (n_x, -R_bend)
+
+        distance = abs(abs(intersection2[1]) - abs(n_y))
+
+        # 新增判断逻辑：当距离小于等于16mm时提示用户
+        if distance <= 16:
+            reply = QMessageBox.question(
+                self,
+                "间距提示",
+                "间距小于等于16mm，是否设置旁路挡板？",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply == QMessageBox.No:
+                return None  # 用户取消操作
+
+        try:
+            block_height_val = float(block_height)
+            tube_bridge_val = float(tube_bridge)
+            # 垂直方向：宽度（长度）按两位小数保留
+            side_dangban_length = round(
+                abs(distance - tube_bridge_val - do_value/2), 2
+            )
+            self.side_dangban_length = side_dangban_length
+            print("旁路挡板长度（垂直方向）")
+            return side_dangban_length
+        except ValueError as e:
+            print(f"数值转换错误: {e}")
+            self.side_dangban_length = 0.0
+            return 0.0
 
     def build_side_dangban(self, selected_centers, block_length, block_height):
         self.operation_order += 1
