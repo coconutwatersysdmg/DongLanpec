@@ -67,9 +67,9 @@ from modules.buguan.buguan_ziyong.component.center_dangguan import (
 )
 
 # product_id = 'PD2025092421444001'
-product_id = "PD20250929"
+# product_id = "PD20250929"
 
-# product_id = 'PD2025092509281701'
+product_id = 'PD2026011316323301'
 
 # TODO 轴向设计页面开关
 ENABLE_AXIAL_DESIGN_PAGE = False
@@ -3271,6 +3271,61 @@ class TubeLayoutEditor(QMainWindow):
                                         print(
                                             f"处理壳体内直径Di时出错: {str(e)}，使用原值: {param_value}"
                                         )
+                                elif param_name == "管箱内直径 Dit":
+                                    # 新增：保存从设计数据表读取前的原始值
+                                    design_di_value = None
+                                    try:
+                                        design_query = """
+                                            SELECT 壳程数值 
+                                            FROM 产品设计活动表_设计数据表 
+                                            WHERE 产品ID = %s AND 参数名称 = %s
+                                        """
+                                        cursor.execute(
+                                            design_query, (self.productID, "公称直径*")
+                                        )
+                                        design_data = cursor.fetchone()
+
+                                        if (
+                                                isinstance(design_data, dict)
+                                                and "壳程数值" in design_data
+                                                and design_data["壳程数值"]
+                                        ):
+                                            design_di_value = design_data["壳程数值"]
+                                            final_value = design_di_value
+                                            if param_value != final_value:
+                                                try:
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管元件表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
+
+                                                    check_query = """SELECT 1 FROM 产品设计活动表_布管管口表 WHERE 产品ID = %s LIMIT 1"""
+                                                    cursor.execute(
+                                                        check_query, (self.productID,)
+                                                    )
+                                                    if cursor.fetchone():
+                                                        delete_query = """DELETE FROM 产品设计活动表_布管管口表 WHERE 产品ID = %s"""
+                                                        cursor.execute(
+                                                            delete_query,
+                                                            (self.productID,),
+                                                        )
+
+                                                    product_conn.commit()
+
+                                                    print(
+                                                        f"已删除产品ID为{self.productID}的布管元件表所有数据"
+                                                    )
+                                                except Exception as e:
+                                                    print(
+                                                        f"删除布管元件表数据时出错: {str(e)}"
+                                                    )
+                                            print(
+                                                f"更新管箱内直径 Dit: {param_value} -> {final_value}"
+                                            )
+                                    except Exception as e:
+                                        print(
+                                            f"处理管箱内直径 Dit时出错: {str(e)}，使用原值: {param_value}"
+                                        )
 
                                 # 其他参数处理逻辑
                                 elif param_name in [
@@ -3598,6 +3653,7 @@ class TubeLayoutEditor(QMainWindow):
                                         "公称直径 DN",
                                         "是否以外径为基准",
                                         "壳体内直径 Dis",
+                                        "管箱内直径 Dit"
                                     ]:
                                         # 需要产品数据库连接来查询设计数据表
                                         product_design_conn = None
@@ -3672,6 +3728,39 @@ class TubeLayoutEditor(QMainWindow):
                                                             ]
                                                             print(
                                                                 f"更新壳体内直径 Dis: {param_value} -> {final_value}"
+                                                            )
+                                                    elif param_name == "管箱内直径 Dit":
+                                                        design_query = """
+                                                            SELECT 壳程数值 
+                                                            FROM 产品设计活动表_设计数据表 
+                                                            WHERE 产品ID = %s AND 参数名称 = %s
+                                                        """
+                                                        design_cursor.execute(
+                                                            design_query,
+                                                            (
+                                                                self.productID,
+                                                                "公称直径*",
+                                                            ),
+                                                        )
+                                                        design_data = (
+                                                            design_cursor.fetchone()
+                                                        )
+                                                        # print(design_data)
+                                                        # print("壳体内直径读了个寂寞")
+
+                                                        if (
+                                                                isinstance(
+                                                                    design_data, dict
+                                                                )
+                                                                and "壳程数值"
+                                                                in design_data
+                                                                and design_data["壳程数值"]
+                                                        ):
+                                                            final_value = design_data[
+                                                                "壳程数值"
+                                                            ]
+                                                            print(
+                                                                f"更新管箱内直径 Dit: {param_value} -> {final_value}"
                                                             )
                                                     elif (
                                                             param_name == "是否以外径为基准"
@@ -4954,6 +5043,7 @@ class TubeLayoutEditor(QMainWindow):
         print("这是DN更新标志")
         print(self.isDi_change)
         print("这是Di更新标志")
+
         di_result = None  # 先初始化，避免未赋值引用
         if self.heat_exchanger in ["AEU", "BEU"]:
             di_result = qtzj.cal_qiaotineizhijing_U(
@@ -4963,37 +5053,49 @@ class TubeLayoutEditor(QMainWindow):
             di_result = qtzj.cal_qiaotineizhijing_S(
                 self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN
             )
-        elif self.heat_exchanger in ["NEN","BEM"]:
+        elif self.heat_exchanger in ["NEN", "BEM"]:
             print(1111111111111111111111111)
             di_result = qtzj.cal_qiaotineizhijing_NEN(
                 self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN
             )
-
         else:
             # 未覆盖的换热器类型，直接返回 None
             print(f"未知换热器型式: {self.heat_exchanger}")
-            return None
+            return None, None  # 返回两个None值
+
         conn = pymysql.connect(
             host="localhost", user="root", password="123456",
             database="产品设计活动库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
         )
         cursor = conn.cursor()
+
+        # 获取产品ID
+        product_id = self.productID
+
         cursor.execute("""
-                    SELECT 数值 FROM 产品设计活动表_通用数据表
-                    WHERE 产品ID = %s AND 参数名称 = '是否以外径为基准*'
-                """, (product_id,))
+            SELECT 数值 FROM 产品设计活动表_通用数据表
+            WHERE 产品ID = %s AND 参数名称 = '是否以外径为基准*'
+        """, (product_id,))
         row = cursor.fetchone()
+
         waijing_bool = ""
         waijing = "0"
         if row and "数值" in row:
             waijing_bool = "1" if row["数值"] == "是" else "0"
+
         if waijing_bool == "1":
             cursor.execute("""
-                                SELECT 数值 FROM 产品设计活动表_通用数据表
-                                WHERE 产品ID = %s AND 参数名称 = '外径'
-                            """, (product_id,))
+                SELECT 数值 FROM 产品设计活动表_通用数据表
+                WHERE 产品ID = %s AND 参数名称 = '外径'
+            """, (product_id,))
             row_waijing = cursor.fetchone()
             waijing = row_waijing["数值"]
+
+        # 关闭数据库连接
+        cursor.close()
+        conn.close()
+
+        # 验证壳体内直径是否超过外径
         if float(user_DN) > float(waijing):
             message = f"壳体内直径无法超过用户选定外径数值"
             try:
@@ -5002,8 +5104,8 @@ class TubeLayoutEditor(QMainWindow):
                 self.line_tip.setVisible(True)
             except Exception as e:
                 print(f"[WARN] 设置提示信息失败: {e}")
-            from PyQt5.QtCore import QTimer
 
+            from PyQt5.QtCore import QTimer
             try:
                 def clear_tip_safely():
                     try:
@@ -5011,18 +5113,21 @@ class TubeLayoutEditor(QMainWindow):
                             self.line_tip.setText("")
                     except Exception as e:
                         print(f"[WARN] 清除提示信息失败: {e}")
+
                 QTimer.singleShot(5000, clear_tip_safely)
             except Exception as e:
                 print(f"[WARN] 设置定时器失败: {e}")
+
         import json
 
         try:
             if di_result is None:
                 print("未获取到圆筒内径计算结果")
-                return None
+                return None, None  # 返回两个None值
 
             # 处理数据，可能是字符串或已解析的对象
             data = di_result
+
             # 如果是字符串则进行解析
             if isinstance(data, str):
                 data = json.loads(data)
@@ -5035,13 +5140,16 @@ class TubeLayoutEditor(QMainWindow):
             if not isinstance(data, dict):
                 raise TypeError("解析后的数据不是字典类型")
 
-            # 查找圆筒内径的值
+            # 初始化两个返回值
+            shell_di = None  # 壳体内直径
+            tube_box_di = None  # 管箱内直径
+
+            # 1. 查找壳体内直径
             if (
                     "DictOutDatas" in data
                     and "壳体圆筒" in data["DictOutDatas"]
                     and "Datas" in data["DictOutDatas"]["壳体圆筒"]
             ):
-
                 for item in data["DictOutDatas"]["壳体圆筒"]["Datas"]:
                     if item.get("Name") == "圆筒内径":
                         value = item.get("Value")
@@ -5049,24 +5157,55 @@ class TubeLayoutEditor(QMainWindow):
                         try:
                             # 如果值是字符串类型的数字，尝试转换为float
                             if isinstance(value, str):
-                                return float(value)
-                            return value
+                                shell_di = float(value)
+                            else:
+                                shell_di = value
                         except (ValueError, TypeError):
-                            return value  # 返回原始值如果转换失败
+                            shell_di = value  # 返回原始值如果转换失败
 
-            # 如果未找到圆筒内径数据
-            print("未找到圆筒内径数据")
-            return None
+            # 2. 查找管箱内直径
+            if (
+                    "DictOutDatas" in data
+                    and "管箱圆筒" in data["DictOutDatas"]
+                    and "Datas" in data["DictOutDatas"]["管箱圆筒"]
+            ):
+                for item in data["DictOutDatas"]["管箱圆筒"]["Datas"]:
+                    if item.get("Name") == "圆筒内径":
+                        value = item.get("Value")
+                        # 可以根据需要将字符串转换为数值类型
+                        try:
+                            # 如果值是字符串类型的数字，尝试转换为float
+                            if isinstance(value, str):
+                                tube_box_di = float(value)
+                            else:
+                                tube_box_di = value
+                        except (ValueError, TypeError):
+                            tube_box_di = value  # 返回原始值如果转换失败
+
+            # 打印调试信息
+            print(f"壳体内直径: {shell_di}")
+            print(f"管箱内直径: {tube_box_di}")
+
+            # 如果两个值都未找到，打印提示信息
+            if shell_di is None and tube_box_di is None:
+                print("未找到壳体和管箱的圆筒内径数据")
+            elif shell_di is None:
+                print("未找到壳体的圆筒内径数据")
+            elif tube_box_di is None:
+                print("未找到管箱的圆筒内径数据")
+
+            # 返回两个值：壳体内直径, 管箱内直径
+            return shell_di, tube_box_di
 
         except json.JSONDecodeError as e:
             print(f"JSON解析错误: {str(e)}")
-            return None
+            return None, None  # 返回两个None值
         except TypeError as e:
             print(f"数据类型错误: {str(e)}")
-            return None
+            return None, None  # 返回两个None值
         except Exception as e:
             print(f"处理数据时发生错误: {str(e)}")
-            return None
+            return None, None  # 返回两个None值
 
     # TODO 布管函数
     def calculate_piping_layout(self):
@@ -8148,7 +8287,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 1. 判断是否以外径为基准
         is_outer_diameter_base = self.get_is_outer_diameter_base()
-        print(is_outer_diameter_base,"is_outer_diameter_base")
+        print(is_outer_diameter_base, "is_outer_diameter_base")
         if is_outer_diameter_base == "否":
             print("参数'是否以外径为基准'为'否'，跳过更新壳体内直径")
             return
@@ -8157,8 +8296,8 @@ class TubeLayoutEditor(QMainWindow):
             print(f"参数'是否以外径为基准'的值为'{is_outer_diameter_base}'，不符合预期")
             return
 
-        # 2. 获取 DN、Di 的行号
-        di_row = dn_row = -1
+        # 2. 获取 DN、Dis、Dit 的行号
+        dis_row = dit_row = dn_row = -1
         dl_row = -1  # 新增：布管限定圆行号
         row_count = self.param_table.rowCount()
         for row in range(row_count):
@@ -8167,18 +8306,22 @@ class TubeLayoutEditor(QMainWindow):
                 continue
             name = name_item.text().strip()
             if name == "壳体内直径 Dis":
-                di_row = row
+                dis_row = row
+            elif name == "管箱内直径 Dit":  # 新增：查找管箱内直径
+                dit_row = row
             elif name == "公称直径 DN":
                 dn_row = row
             elif name == "布管限定圆 DL":  # 新增：查找布管限定圆
                 dl_row = row
 
-        if di_row == -1 or dn_row == -1:
-            print("[WARN] 未找到 DN/Di 参数行，无法更新。")
+        if dis_row == -1 or dn_row == -1 or dit_row == -1:
+            print(f"[WARN] 未找到 DN({dn_row}), Dis({dis_row}), Dit({dit_row}) 参数行，无法更新。")
             return
 
-        # 3. 获取当前 DN、Di 值（读取函数）
+        # 3. 获取当前 DN、Dis、Dit 值（读取函数）
         def _get_value(row):
+            if row == -1:
+                return None
             widget = self.param_table.cellWidget(row, 2)
             if isinstance(widget, QComboBox):
                 val = widget.currentText().strip()
@@ -8190,22 +8333,30 @@ class TubeLayoutEditor(QMainWindow):
             except (TypeError, ValueError):
                 return None
 
-        di_value = _get_value(di_row)
+        dis_value = _get_value(dis_row)
+        dit_value = _get_value(dit_row)
         dn_value = _get_value(dn_row)
 
-        print(f"[user_update_Di DEBUG] 当前 DN={dn_value}, Di={di_value}")
+        print(f"[user_update_Di DEBUG] 当前 DN={dn_value}, Dis={dis_value}, Dit={dit_value}")
 
-        if dn_value is None or di_value is None:
-            print("[WARN] DN 或 Di 为无效值，跳过更新 Di。")
+        if dn_value is None or dis_value is None or dit_value is None:
+            print("[WARN] DN, Dis 或 Dit 为无效值，跳过更新。")
             return
 
-        # 4. 计算新的Di（你现有的 cal_di）
-        current_di = self.cal_di(di_value, dn_value)
-        if current_di is None or not isinstance(current_di, (int, float)):
-            print(f"cal_di() 返回无效值: {current_di}")
+        # 4. 计算新的Dis和Dit（调用修改后的cal_di函数）
+        current_dis, current_dit = self.cal_di(dis_value, dn_value)
+
+        if current_dis is None or not isinstance(current_dis, (int, float)):
+            print(f"cal_di() 返回的壳体内直径无效: {current_dis}")
             return
 
-        print(f"[user_update_Di INFO] 计算得到新壳体内直径 Dis = {current_di:.1f} mm")
+        if current_dit is None or not isinstance(current_dit, (int, float)):
+            print(f"cal_di() 返回的管箱内直径无效: {current_dit}")
+            # 注意：即使管箱内直径无效，仍然可以更新壳体内直径
+            # 但为了完整性，这里我们仍然返回，或者可以只更新有效的部分
+
+        print(f"[user_update_Di INFO] 计算得到新壳体内直径 Dis = {current_dis:.1f} mm")
+        print(f"[user_update_Di INFO] 计算得到新管箱内直径 Dit = {current_dit:.1f} mm")
 
         # 5. 临时断开 signal 防止重复触发
         original_handler = None
@@ -8248,10 +8399,10 @@ class TubeLayoutEditor(QMainWindow):
         except Exception as e:
             print(f"[user_update_Di ERROR] 更新布管限定圆时出错: {e}")
 
-        # 7. 更新表格中的 Di
+        # 7. 更新表格中的 Dis（壳体内直径）
         try:
-            widget = self.param_table.cellWidget(di_row, 2)
-            str_value = f"{current_di:.1f}"
+            widget = self.param_table.cellWidget(dis_row, 2)
+            str_value = f"{current_dis:.1f}"
             if isinstance(widget, QComboBox):
                 idx = widget.findText(str_value)
                 if idx >= 0:
@@ -8262,18 +8413,50 @@ class TubeLayoutEditor(QMainWindow):
                         widget.setEditText(str_value)
                     except Exception:
                         # 回退为直接替换单元格项
-                        self.param_table.setItem(di_row, 2, QTableWidgetItem(str_value))
+                        self.param_table.setItem(dis_row, 2, QTableWidgetItem(str_value))
             else:
-                item = self.param_table.item(di_row, 2)
+                item = self.param_table.item(dis_row, 2)
                 if item:
                     item.setText(str_value)
                 else:
-                    self.param_table.setItem(di_row, 2, QTableWidgetItem(str_value))
+                    self.param_table.setItem(dis_row, 2, QTableWidgetItem(str_value))
 
             print(f"[user_update_Di INFO] 壳体内直径 Dis 写回表格为 {str_value}")
 
         except Exception as e:
             print(f"[user_update_Di ERROR] 更新壳体内直径时出错: {e}")
+
+        # 8. 更新表格中的 Dit（管箱内直径） - 完全照搬Dis的更新方法
+        try:
+            widget = self.param_table.cellWidget(dit_row, 2)
+            if current_dit is not None and isinstance(current_dit, (int, float)):
+                str_value = f"{current_dit:.1f}"
+            else:
+                # 如果计算得到的Dit无效，保持原值
+                str_value = f"{dit_value:.1f}" if dit_value is not None else "0"
+
+            if isinstance(widget, QComboBox):
+                idx = widget.findText(str_value)
+                if idx >= 0:
+                    widget.setCurrentIndex(idx)
+                else:
+                    # 可编辑 combobox 时设值
+                    try:
+                        widget.setEditText(str_value)
+                    except Exception:
+                        # 回退为直接替换单元格项
+                        self.param_table.setItem(dit_row, 2, QTableWidgetItem(str_value))
+            else:
+                item = self.param_table.item(dit_row, 2)
+                if item:
+                    item.setText(str_value)
+                else:
+                    self.param_table.setItem(dit_row, 2, QTableWidgetItem(str_value))
+
+            print(f"[user_update_Di INFO] 管箱内直径 Dit 写回表格为 {str_value}")
+
+        except Exception as e:
+            print(f"[user_update_Di ERROR] 更新管箱内直径时出错: {e}")
 
         finally:
             # 恢复信号
@@ -8282,8 +8465,9 @@ class TubeLayoutEditor(QMainWindow):
                     self.param_table.itemChanged.connect(original_handler)
                 except Exception:
                     pass
+
         self.update_tube_layout_circle_dl()
-        # # 8. 触发一次三值一致性检查（在事件循环放行后）
+        # # 9. 触发一次三值一致性检查（在事件循环放行后）
         # try:
         #     QCoreApplication.processEvents()
         #     print(
@@ -10477,6 +10661,7 @@ class TubeLayoutEditor(QMainWindow):
             "非布管区域弦高（0°/180°）",
             "非布管区域弦高（90°/270°）",
             "壳体内直径 Dis",
+            "管箱内直径 Dit",
             "换热管外径 do",
             "折流板外径",
             "折流板切口与中心线间距a",
@@ -10771,19 +10956,30 @@ class TubeLayoutEditor(QMainWindow):
                             "[on_table_item_changed DEBUG] 执行 壳体内直径 Dis 相关逻辑"
                         )
                         self.isDi_change = True
-                        self.isDN_change = True
+                        self.isDN_change = False
                         # user_update_Di 内部会断开/重连 itemChanged，且会再触发一致性检查一次
                         try:
                             self.user_update_Di()
                             self.update_tube_layout_circle_dl()
                         except Exception as e:
                             print(f"[on_table_item_changed] user_update_Di 出错: {e}")
-                    if param_name == "公称直径 DN":
-                        self.isDN_change = True
+                    if param_name == "管箱内直径 Dit":
+                        print(
+                            "[on_table_item_changed DEBUG] 执行 管箱内直径 Dit 相关逻辑"
+                        )
+                        self.isDi_change = False
+                        self.isDN_change = False
+                        # user_update_Di 内部会断开/重连 itemChanged，且会再触发一致性检查一次
                         try:
                             self.user_update_Di()
                         except Exception as e:
                             print(f"[on_table_item_changed] user_update_Di 出错: {e}")
+                    if param_name == "公称直径 DN":
+                        self.isDN_change = True
+                        # try:
+                        #     self.user_update_Di()
+                        # except Exception as e:
+                        #     print(f"[on_table_item_changed] user_update_Di 出错: {e}")
                         try:
                             # 这里是更新公称直径触发的
                             self.update_divider_position_and_size()
@@ -15525,145 +15721,78 @@ class TubeLayoutEditor(QMainWindow):
         按照 x 坐标将圆心分组为列，并分为左侧（x<0）和右侧（x>=0）
         1. x坐标差值绝对值≤1的点算同一列
         2. 左右对称的列（x和-x）算同一组，放在同一行
-
-        Args:
-            centers: 圆心坐标列表 [(x, y), ...]
-            tol: 容差，用于判断是否在同一列
-
-        Returns:
-            (left_grouped, right_grouped): 左侧列列表和右侧列列表
+        3. 始终保持与满布状态相同的列数结构，缺失的列用空列表填充
         """
         from collections import defaultdict
-        import math
 
         # 获取当前管程分程形式
         is_special_layout = hasattr(
             self, "tube_pass_form_value"
         ) and self.tube_pass_form_value in ["1.1", "2.1", "4.1", "4.3", "6.1"]
 
-        print(f"[group_centers_by_x] 输入 {len(centers)} 个点")
-        print(f"[group_centers_by_x] 特殊布局: {is_special_layout}")
-
-        # 第一步：将所有点分为左侧和右侧
-        left_points = []
-        right_points = []
+        # 处理当前传入的圆心
+        left_groups = defaultdict(list)
+        right_groups = defaultdict(list)
 
         for x, y in centers:
+            x_key = int(round(abs(x) / tol))  # 使用x坐标的绝对值作为键
             if x < 0:
-                left_points.append((x, y))
+                left_groups[x_key].append((x, y))
             else:
-                right_points.append((x, y))
+                right_groups[x_key].append((x, y))
 
-        print(f"[group_centers_by_x] 左侧点: {len(left_points)}, 右侧点: {len(right_points)}")
+        # 获取满布状态的列键作为参考
+        full_keys_set = set()
 
-        # 第二步：分别对左侧和右侧进行分组（差值≤1算同一列）
-        def cluster_points_by_x(points, is_left=True):
-            """将点按x坐标聚类，差值≤1算同一列"""
-            if not points:
-                return {}
+        # 如果存在满布状态数据，获取其列键
+        if hasattr(self, "full_sorted_current_centers_left") and hasattr(
+                self, "full_sorted_current_centers_right"
+        ):
+            # 获取满布状态的列键（x坐标的绝对值）
+            for col in self.full_sorted_current_centers_left:
+                if col:  # 确保列不为空
+                    x = col[0][0]  # 取该列第一个点的x坐标
+                    full_keys_set.add(int(round(abs(x) / tol)))
 
-            # 按x坐标排序
-            sorted_points = sorted(points, key=lambda p: p[0])
+            for col in self.full_sorted_current_centers_right:
+                if col:  # 确保列不为空
+                    x = col[0][0]  # 取该列第一个点的x坐标
+                    full_keys_set.add(int(round(abs(x) / tol)))
 
-            clusters = []
-            current_cluster = [sorted_points[0]]
+        # 获取当前状态的列键
+        current_keys_set = set()
+        current_keys_set.update(left_groups.keys())
+        current_keys_set.update(right_groups.keys())
 
-            for i in range(1, len(sorted_points)):
-                current_x = sorted_points[i][0]
-                prev_x = current_cluster[-1][0]
+        # 合并满布状态和当前状态的列键
+        all_keys_set = full_keys_set.union(current_keys_set) if full_keys_set else current_keys_set
 
-                # 如果差值≤1，加入当前簇
-                if abs(current_x - prev_x) <= 1.0:
-                    current_cluster.append(sorted_points[i])
-                else:
-                    # 开始新簇
-                    clusters.append(current_cluster)
-                    current_cluster = [sorted_points[i]]
+        # 按x绝对值从小到大排序
+        sorted_keys = sorted(all_keys_set)
 
-            if current_cluster:
-                clusters.append(current_cluster)
+        # 构建结果
+        left_grouped = []
+        right_grouped = []
 
-            # 为每个簇计算代表x值（平均值）
-            result = {}
-            for cluster in clusters:
-                # 计算簇的平均x值
-                avg_x = sum(p[0] for p in cluster) / len(cluster)
-                # 对于左侧，我们关心的是-x的绝对值，因为要匹配对称列
-                if is_left:
-                    key = round(-avg_x, 1)  # 使用-x的绝对值作为键
-                else:
-                    key = round(avg_x, 1)  # 使用x值作为键
+        for key in sorted_keys:
+            # 获取对应列的左侧点和右侧点
+            left_col = left_groups.get(key, [])
+            right_col = right_groups.get(key, [])
 
-                # 按y坐标排序
-                sorted_cluster = sorted(cluster, key=lambda p: p[1])
-                result[key] = sorted_cluster
+            # 对每列按y坐标排序
+            left_col_sorted = sorted(left_col, key=lambda p: p[1])
+            right_col_sorted = sorted(right_col, key=lambda p: p[1])
 
-            return result
+            left_grouped.append(left_col_sorted)
+            right_grouped.append(right_col_sorted)
 
-        # 对左侧和右侧分别聚类
-        left_clusters = cluster_points_by_x(left_points, is_left=True)
-        right_clusters = cluster_points_by_x(right_points, is_left=False)
-
-        print(f"[group_centers_by_x] 左侧聚类: {len(left_clusters)}列")
-        for key in sorted(left_clusters.keys()):
-            points = left_clusters[key]
-            x_vals = [p[0] for p in points]
-            print(f"  列键 {key}: {len(points)}点, x范围: {min(x_vals):.3f}~{max(x_vals):.3f}")
-
-        print(f"[group_centers_by_x] 右侧聚类: {len(right_clusters)}列")
-        for key in sorted(right_clusters.keys()):
-            points = right_clusters[key]
-            x_vals = [p[0] for p in points]
-            print(f"  列键 {key}: {len(points)}点, x范围: {min(x_vals):.3f}~{max(x_vals):.3f}")
-
-        # 第三步：对于特殊布局，将左右对称的列配对
+        # 特殊布局处理
         if is_special_layout:
-            print(f"[group_centers_by_x] 开始对称列配对...")
+            # 确保中间列（key=0）只有右侧有值，左侧为空
+            if sorted_keys and sorted_keys[0] == 0:
+                left_grouped[0] = []  # 中间列左侧强制为空
 
-            # 找出所有可能的列键（基于绝对值）
-            all_keys = set()
-            all_keys.update(left_clusters.keys())
-            all_keys.update(right_clusters.keys())
-
-            sorted_keys = sorted(all_keys)
-            print(f"[group_centers_by_x] 所有列键: {sorted_keys}")
-
-            # 构建最终的分组结果
-            left_grouped = []
-            right_grouped = []
-
-            for key in sorted_keys:
-                # 左侧列：键为key，对应x≈-key的点
-                left_col = left_clusters.get(key, [])
-
-                # 右侧列：键为key，对应x≈key的点
-                right_col = right_clusters.get(key, [])
-
-                left_grouped.append(left_col)
-                right_grouped.append(right_col)
-
-                print(
-                    f"  行键 {key}: 左={len(left_col)}点, 右={len(right_col)}点, 总计={len(left_col) + len(right_col)}点")
-
-            # 对于特殊布局，中间列（key=0）只保留右侧有值，左侧为空
-            if len(left_grouped) > 0 and len(right_grouped) > 0:
-                # 第一行应该是中间列
-                left_grouped[0] = []
-                print(f"[group_centers_by_x] 特殊布局调整: 中间列（键=0）左侧置空")
-
-            return left_grouped, right_grouped
-
-        else:
-            # 非特殊布局：直接返回聚类结果
-            # 左侧按键从小到大排序（键是-x的平均值）
-            sorted_left_keys = sorted(left_clusters.keys())
-            left_grouped = [left_clusters[key] for key in sorted_left_keys]
-
-            # 右侧按键从小到大排序
-            sorted_right_keys = sorted(right_clusters.keys())
-            right_grouped = [right_clusters[key] for key in sorted_right_keys]
-
-            return left_grouped, right_grouped
+        return left_grouped, right_grouped
     def on_table_right_click(self, position):
         """处理表格右键点击事件，取消选中状态"""
         # 清除所有选中
@@ -20354,7 +20483,7 @@ class TubeLayoutEditor(QMainWindow):
                 conn.close()
 
     def update_tube_nums_y(self):
-        """更新右侧管数分布表格内容"""
+        """TODO 更新右侧管数分布表格内容（按行分布）"""
         # # 按Y坐标分组中心
         self.sorted_current_centers_up, self.sorted_current_centers_down = (
             self.group_centers_by_y(self.current_centers)
@@ -20401,7 +20530,7 @@ class TubeLayoutEditor(QMainWindow):
             right_table.setItem(i, 2, down_item)
 
     def update_tube_nums_x(self):
-        """更新右侧管数分布表格内容（按列统计）"""
+        """TODO 更新右侧管数分布表格内容（按列统计）"""
         from PyQt5.QtCore import Qt
         from PyQt5.QtWidgets import QTableWidgetItem
 
@@ -22878,7 +23007,6 @@ class TubeLayoutEditor(QMainWindow):
         if hasattr(self, "update_tube_nums"):
             self.update_tube_nums()
         elif hasattr(self, "update_tube_nums_y"):
-            self.update_tube_nums_y()
             self.update_tube_nums()
 
         # 检查被删除的换热管是否作为某个防冲板的 selected_centers，如果是则删除该防冲板
