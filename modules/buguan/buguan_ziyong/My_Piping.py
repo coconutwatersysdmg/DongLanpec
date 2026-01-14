@@ -67,9 +67,9 @@ from modules.buguan.buguan_ziyong.component.center_dangguan import (
 )
 
 # product_id = 'PD2025092421444001'
-# product_id = "PD20250929"
+product_id = "PD20250929"
 
-product_id = 'PD2026011316323301'
+# product_id = 'PD2026011316323301'
 
 # TODO 轴向设计页面开关
 ENABLE_AXIAL_DESIGN_PAGE = False
@@ -9020,6 +9020,36 @@ class TubeLayoutEditor(QMainWindow):
             dn_row, do_row, w_row = target_params.values()
             w_row_for_marking = w_row  # 保存w_row的引用
 
+            # 将公称直径 DN 的参数值单元格置为只读且显示为灰色
+            try:
+                from PyQt5.QtGui import QBrush, QColor
+                from PyQt5.QtCore import Qt
+
+                dn_widget = self.param_table.cellWidget(dn_row, 2)
+                if isinstance(dn_widget, QComboBox):
+                    # 如果是下拉框，设置为不可用
+                    dn_widget.setEnabled(False)
+                    # 设置样式使其显示为灰色
+                    dn_widget.setStyleSheet("QComboBox:disabled { color: rgb(150, 150, 150); }")
+                    print(
+                        f"[update_divider_position_and_size] 已将公称直径 DN 行 {dn_row} 的下拉框置为不可编辑且灰色显示"
+                    )
+                else:
+                    # 如果是普通单元格，设置为只读且灰色
+                    dn_item = self.param_table.item(dn_row, 2)
+                    if dn_item is not None:
+                        # 去掉可编辑标志
+                        dn_item.setFlags(dn_item.flags() & ~Qt.ItemIsEditable)
+                        # 文本颜色设为灰色，提示用户不可编辑
+                        dn_item.setForeground(QBrush(QColor(150, 150, 150)))
+                        print(
+                            f"[update_divider_position_and_size] 已将公称直径 DN 行 {dn_row} 置为只读且灰色显示"
+                        )
+            except Exception as e:
+                print(
+                    f"[update_divider_position_and_size WARN] 设置公称直径 DN 为只读/灰色时出错: {e}"
+                )
+
             # 重要：清除W行的用户修改标记，将其重置为程序更新状态
             # 因为当公称直径、管程程数、管程分程形式、换热管外径变化时，W值应该由程序自动更新
             if w_row != -1:
@@ -11421,6 +11451,7 @@ class TubeLayoutEditor(QMainWindow):
                 else:
                     combo = NoWheelComboBox()
                     is_diameter_based = param["参数名"] == "是否以外径为基准"
+                    dn_visible = param["参数名"] == "公称直径 DN"
 
                     if param["参数名"] == "是否以外径为基准":
                         combo.addItems(["是", "否"])
@@ -11588,7 +11619,7 @@ class TubeLayoutEditor(QMainWindow):
                         if not found and combo.count() > 0:
                             combo.setCurrentIndex(0)
 
-                    if is_diameter_based:
+                    if is_diameter_based or dn_visible:
                         combo.setEnabled(False)
 
                     # 为所有下拉框添加变化监听
@@ -11626,7 +11657,14 @@ class TubeLayoutEditor(QMainWindow):
                     display_value = str(param_value)
 
                 item = QTableWidgetItem(display_value)
-                item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
+                # 公称直径 DN 的参数值永远不允许编辑，且显示为灰色；其它普通参数保留可编辑
+                if param["参数名"] == "公称直径 DN":
+                    # 去掉可编辑标志
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    # 设置为灰色文字，提示用户不可编辑
+                    item.setForeground(QBrush(QColor(150, 150, 150)))
+                else:
+                    item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
                 self.original_param_values[(row, 2)] = display_value
 
                 # 为普通文本单元格添加变化监听
