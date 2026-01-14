@@ -37127,16 +37127,45 @@ class TubeLayoutEditor(QMainWindow):
         """启用图形视图的点击事件捕获"""
         self.graphics_view.setMouseTracking(True)
         self.graphics_view.viewport().installEventFilter(self)
+        # 在主窗口级别也安装 eventFilter，以便无论焦点在哪都能捕获键盘事件
+        self.installEventFilter(self)
 
     def eventFilter(self, obj, event):
         from PyQt5.QtCore import QEvent, QPointF, Qt, QRectF
-        from PyQt5.QtGui import QPen, QBrush, QColor
+        from PyQt5.QtGui import QPen, QBrush, QColor, QKeyEvent
         from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsRectItem
         import math
         import time
 
         # 确保ClickableRectItem已定义（如果在其他文件中需导入）
         # from your_module import ClickableRectItem
+
+        # 全局键盘事件处理：无论焦点在哪，Enter/Return 都触发布管计算
+        if event.type() == QEvent.KeyPress:
+            if isinstance(event, QKeyEvent):
+                key = event.key()
+                # Enter/Return：运行布管计算
+                if key in (Qt.Key_Return, Qt.Key_Enter):
+                    try:
+                        print(
+                            "[eventFilter] 捕获 Enter/Return 键，准备调用 calculate_piping_layout()"
+                        )
+                        if hasattr(self, "calculate_piping_layout"):
+                            self.calculate_piping_layout()
+                            print(
+                                "[eventFilter] 已调用 calculate_piping_layout() 完成"
+                            )
+                        else:
+                            print(
+                                "[eventFilter WARN] 对象上不存在 calculate_piping_layout 方法"
+                            )
+                    except Exception as e:
+                        print(
+                            f"[eventFilter ERROR] 调用 calculate_piping_layout 失败: {e}"
+                        )
+                    # 无论成功与否都标记事件已处理，避免重复触发
+                    event.accept()
+                    return True
 
         if not hasattr(self, "has_piped"):
             self.has_piped = False
@@ -37556,11 +37585,15 @@ class TubeLayoutEditor(QMainWindow):
             elif event.type() == QEvent.KeyPress:
                 # 处理键盘事件：按 ESC 键时取消选中
                 from PyQt5.QtGui import QKeyEvent
-                if isinstance(event, QKeyEvent) and event.key() == Qt.Key_Escape:
-                    if hasattr(self, "clear_selection_highlight"):
-                        self.clear_selection_highlight()
-                    event.accept()
-                    return True
+                if isinstance(event, QKeyEvent):
+                    key = event.key()
+
+                    # ESC：仅负责取消选中
+                    if key == Qt.Key_Escape:
+                        if hasattr(self, "clear_selection_highlight"):
+                            self.clear_selection_highlight()
+                        event.accept()
+                        return True
 
         return super().eventFilter(obj, event)
 
