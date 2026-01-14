@@ -78,10 +78,10 @@ ENABLE_AXIAL_DESIGN_PAGE = False
 ENABLE_DANGBAN_WELDED_OPTION = True
 
 # TODO 径向开孔功能开关
-ENABLE_RADIAL_HOLES = False
+ENABLE_RADIAL_HOLES = True
 
 # TODO 吊环螺钉功能开关
-ENABLE_SCREW_RING = False
+ENABLE_SCREW_RING = True
 
 edge_centers: List[Tuple[float, float]] = []
 
@@ -37130,6 +37130,28 @@ class TubeLayoutEditor(QMainWindow):
         # 在主窗口级别也安装 eventFilter，以便无论焦点在哪都能捕获键盘事件
         self.installEventFilter(self)
 
+        # 全局快捷键：无论焦点在哪，Enter/Return 都触发布管按钮入口
+        # 使用 Qt.ApplicationShortcut，避免子控件（如表格/输入框）吞掉回车导致 eventFilter 收不到
+        try:
+            from PyQt5.QtWidgets import QShortcut
+            from PyQt5.QtGui import QKeySequence
+            from PyQt5.QtCore import Qt
+
+            # Return 与 Enter 在不同键盘/小键盘上可能不同，两个都绑
+            self._shortcut_buguan_return = QShortcut(QKeySequence(Qt.Key_Return), self)
+            self._shortcut_buguan_return.setContext(Qt.ApplicationShortcut)
+            self._shortcut_buguan_return.activated.connect(self.on_buguan_bt_click)
+
+            self._shortcut_buguan_enter = QShortcut(QKeySequence(Qt.Key_Enter), self)
+            self._shortcut_buguan_enter.setContext(Qt.ApplicationShortcut)
+            self._shortcut_buguan_enter.activated.connect(self.on_buguan_bt_click)
+        except Exception as e:
+            # 快捷键初始化失败不应影响其他功能
+            try:
+                print(f"[enable_scene_click_capture WARN] 布管回车快捷键初始化失败: {e}")
+            except Exception:
+                pass
+
     def eventFilter(self, obj, event):
         from PyQt5.QtCore import QEvent, QPointF, Qt, QRectF
         from PyQt5.QtGui import QPen, QBrush, QColor, QKeyEvent
@@ -37144,24 +37166,30 @@ class TubeLayoutEditor(QMainWindow):
         if event.type() == QEvent.KeyPress:
             if isinstance(event, QKeyEvent):
                 key = event.key()
-                # Enter/Return：运行布管计算
+                # Enter/Return：触发布管按钮入口（内部会调用 calculate_piping_layout 并做保护）
                 if key in (Qt.Key_Return, Qt.Key_Enter):
                     try:
                         print(
-                            "[eventFilter] 捕获 Enter/Return 键，准备调用 calculate_piping_layout()"
+                            "[eventFilter] 捕获 Enter/Return 键，准备调用 on_buguan_bt_click()"
                         )
-                        if hasattr(self, "calculate_piping_layout"):
+                        if hasattr(self, "on_buguan_bt_click"):
+                            self.on_buguan_bt_click()
+                            print(
+                                "[eventFilter] 已调用 on_buguan_bt_click() 完成"
+                            )
+                        elif hasattr(self, "calculate_piping_layout"):
+                            # 兜底：若没有入口函数，至少触发计算
                             self.calculate_piping_layout()
                             print(
-                                "[eventFilter] 已调用 calculate_piping_layout() 完成"
+                                "[eventFilter] on_buguan_bt_click 不存在，已回退调用 calculate_piping_layout()"
                             )
                         else:
                             print(
-                                "[eventFilter WARN] 对象上不存在 calculate_piping_layout 方法"
+                                "[eventFilter WARN] 对象上不存在 on_buguan_bt_click / calculate_piping_layout 方法"
                             )
                     except Exception as e:
                         print(
-                            f"[eventFilter ERROR] 调用 calculate_piping_layout 失败: {e}"
+                            f"[eventFilter ERROR] 回车触发布管失败: {e}"
                         )
                     # 无论成功与否都标记事件已处理，避免重复触发
                     event.accept()
