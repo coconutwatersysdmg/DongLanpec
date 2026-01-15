@@ -21392,9 +21392,22 @@ class TubeLayoutEditor(QMainWindow):
                 # 使用下拉框
                 type_combo = _QComboBoxForDialog()
                 type_combo.addItems(["单弓形", "双弓形"])
+                # 暂时禁用“双弓形”选项：只显示为灰色，用户无法选中
+                idx_double = type_combo.findText("双弓形")
+                if idx_double >= 0:
+                    model = type_combo.model()
+                    item = model.item(idx_double)
+                    if item is not None:
+                        item.setEnabled(False)
+                        # 灰色显示
+                        item.setForeground(QBrush(QColor(150, 150, 150)))
                 # 设置当前值
                 if value_text in ["单弓形", "双弓形"]:
-                    type_combo.setCurrentText(value_text)
+                    # 若当前值是“双弓形”，由于该选项暂时禁用，则强制回退为“单弓形”
+                    if value_text == "双弓形":
+                        type_combo.setCurrentText("单弓形")
+                    else:
+                        type_combo.setCurrentText(value_text)
                 else:
                     type_combo.setCurrentText(current_baffle_type)
                 table.setCellWidget(row, 1, type_combo)
