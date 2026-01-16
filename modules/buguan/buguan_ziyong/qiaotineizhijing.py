@@ -68,7 +68,7 @@ def on_product_id_changed(new_id):
 product_manager.product_id_changed.connect(on_product_id_changed)
 
 
-def cal_qiaotineizhijing_U(product_id, isDi_change, isDN_change, user_Di, user_DN):
+def cal_qiaotineizhijing_U(product_id, isDi_change, isDN_change, user_Di, user_DN, user_Dit):
     import pymysql
 
     # 连接数据库
@@ -836,9 +836,7 @@ def cal_qiaotineizhijing_U(product_id, isDi_change, isDN_change, user_Di, user_D
         "指定内径":"0"
     }
     if isDi_change:
-        print("传入用户输入的值")
-        print(user_Di)
-        guanxiang_yuantong["指定内径"] = user_Di
+        guanxiang_yuantong["指定内径"] = user_Dit
     print(guanxiang_yuantong["指定内径"])
     print("最终用户传入的值")
     try:
@@ -1763,7 +1761,7 @@ def cal_qiaotineizhijing_U(product_id, isDi_change, isDN_change, user_Di, user_D
     return outputjsonstr
 
 
-def cal_qiaotineizhijing_S(product_id, isDi_change, isDN_change, user_Di, user_DN):
+def cal_qiaotineizhijing_S(product_id, isDi_change, isDN_change, user_Di, user_DN, user_Dit):
     import pymysql
     # 连接数据库
     conn = pymysql.connect(
@@ -3106,9 +3104,7 @@ def cal_qiaotineizhijing_S(product_id, isDi_change, isDN_change, user_Di, user_D
     }
     try:
         if isDi_change:
-            print("传入用户输入的值")
-            print(user_Di)
-            guanxiang_yuantong["指定内径"] = user_Di
+            guanxiang_yuantong["指定内径"] = user_Dit
         print(guanxiang_yuantong["指定内径"])
         print("最终用户传入的值")
         conn = pymysql.connect(
@@ -4058,7 +4054,7 @@ def cal_qiaotineizhijing_S(product_id, isDi_change, isDN_change, user_Di, user_D
     print(outputjsonstr)
     print("浮头式输出json")
     return outputjsonstr
-def cal_qiaotineizhijing_NEN(product_id, isDi_change, isDN_change, user_Di, user_DN):
+def cal_qiaotineizhijing_NEN(product_id, isDi_change, isDN_change, user_Di, user_DN, user_Dit):
     import pymysql
 
     # 连接数据库
@@ -5351,10 +5347,9 @@ def cal_qiaotineizhijing_NEN(product_id, isDi_change, isDN_change, user_Di, user
         "公称直径": '',
         "指定内径":"0"
     }
+    #TODO 这里要传管箱内直径
     if isDi_change:
-        print("传入用户输入的值")
-        print(user_Di)
-        guanxiang_yuantong["指定内径"] = user_Di
+        guanxiang_yuantong["指定内径"] = user_Dit
     print(guanxiang_yuantong["指定内径"])
     print("最终用户传入的值")
     try:

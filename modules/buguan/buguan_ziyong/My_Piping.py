@@ -86,6 +86,61 @@ ENABLE_SCREW_RING = True
 edge_centers: List[Tuple[float, float]] = []
 
 
+class SignalBlocker:
+    """
+    信号阻塞上下文管理器，用于临时禁用 Qt 对象的信号发射
+    
+    原理：
+    - blockSignals(True) 会临时禁用对象的所有信号发射
+    - 使用 try-finally 确保信号状态一定会被恢复
+    - 保存原始状态，避免覆盖已有的阻塞状态
+    
+    使用示例：
+        # 方式1：使用上下文管理器（推荐）
+        with SignalBlocker(self.param_table):
+            self.param_table.setItem(0, 1, QTableWidgetItem("新值"))
+            # 这里修改表格不会触发 itemChanged 信号
+        
+        # 方式2：手动控制（更灵活）
+        blocker = SignalBlocker(self.graphics_scene)
+        blocker.block()
+        try:
+            # 执行批量操作
+            self.graphics_scene.clear()
+        finally:
+            blocker.unblock()
+    """
+    
+    def __init__(self, obj):
+        """
+        初始化信号阻塞器
+        
+        Args:
+            obj: 需要阻塞信号的 Qt 对象（如 QTableWidget, QGraphicsScene 等）
+        """
+        self.obj = obj
+        self._was_blocked = None
+    
+    def __enter__(self):
+        """进入上下文时自动阻塞信号"""
+        self.block()
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """退出上下文时自动恢复信号"""
+        self.unblock()
+    
+    def block(self):
+        """阻塞信号，保存原始状态"""
+        if self.obj is not None:
+            self._was_blocked = self.obj.blockSignals(True)
+    
+    def unblock(self):
+        """恢复信号到原始状态"""
+        if self.obj is not None and self._was_blocked is not None:
+            self.obj.blockSignals(self._was_blocked)
+
+
 def on_product_id_changed(new_id):
     global product_id
     product_id = new_id
@@ -3998,14 +4053,15 @@ class TubeLayoutEditor(QMainWindow):
                         component_conn.close()
                     except Exception as e:
                         print(f"关闭组件数据库连接时出错: {str(e)}")
-
-        self.initial_operation()
-        # self.copy_tube_sheet_connection_data()
-        # self.copy_tube_sheet_form_data()
-        self.load_initial_tube_num()
-        self.update_total_holes_count()
-        self.update_diameter_visibility_by_outer_flag()
-        self.user_update_Di()
+        # TODO 加载页面的初始化
+        # 在初始化期间关闭监听开关，避免触发不必要的信号处理
+        with SignalBlocker(self.param_table):
+            self.initial_operation()
+            self.load_initial_tube_num()
+            self.update_total_holes_count()
+            self.update_diameter_visibility_by_outer_flag()
+            self.user_update_Di()
+        # 初始化完成后，监听开关自动恢复（在 with 块退出时）
         try:
             if hasattr(self, "update_lagan_standard_from_params"):
                 self.update_lagan_standard_from_params()
@@ -5035,7 +5091,7 @@ class TubeLayoutEditor(QMainWindow):
                     self.abs_coords_line3 = self._current_abs_coords.copy()
                 self.is_y_line3 = True
 
-    def cal_di(self, user_Di, user_DN):
+    def cal_di(self, user_Di, user_DN, user_Dit):
         # 调用接口获取壳体内直径数据
         print(user_DN)
         print("当前获取的公称直径")
@@ -5047,16 +5103,16 @@ class TubeLayoutEditor(QMainWindow):
         di_result = None  # 先初始化，避免未赋值引用
         if self.heat_exchanger in ["AEU", "BEU"]:
             di_result = qtzj.cal_qiaotineizhijing_U(
-                self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN
+                self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN, user_Dit
             )
         elif self.heat_exchanger in ["AES", "BES"]:
             di_result = qtzj.cal_qiaotineizhijing_S(
-                self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN
+                self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN, user_Dit
             )
         elif self.heat_exchanger in ["NEN", "BEM"]:
             print(1111111111111111111111111)
             di_result = qtzj.cal_qiaotineizhijing_NEN(
-                self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN
+                self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN, user_Dit
             )
         else:
             # 未覆盖的换热器类型，直接返回 None
@@ -8279,204 +8335,222 @@ class TubeLayoutEditor(QMainWindow):
     def user_update_Di(self):
         # TODO  调接口更新壳体内直径
         """
-        当“是否以外径为基准”为“是”时，根据公称直径DN计算壳体内直径Di，
+        当"是否以外径为基准"为"是"时，根据公称直径DN计算壳体内直径Di，
         并更新表格，同时执行三值一致性检查（仅触发一次）。
         """
         from PyQt5.QtWidgets import QTableWidgetItem, QComboBox
         from PyQt5.QtCore import QCoreApplication
 
-        # 1. 判断是否以外径为基准
-        is_outer_diameter_base = self.get_is_outer_diameter_base()
-        print(is_outer_diameter_base, "is_outer_diameter_base")
-        if is_outer_diameter_base == "否":
-            print("参数'是否以外径为基准'为'否'，跳过更新壳体内直径")
-            return
-
-        if is_outer_diameter_base != "是":
-            print(f"参数'是否以外径为基准'的值为'{is_outer_diameter_base}'，不符合预期")
-            return
-
-        # 2. 获取 DN、Dis、Dit 的行号
-        dis_row = dit_row = dn_row = -1
-        dl_row = -1  # 新增：布管限定圆行号
-        row_count = self.param_table.rowCount()
-        for row in range(row_count):
-            name_item = self.param_table.item(row, 1)
-            if not name_item:
-                continue
-            name = name_item.text().strip()
-            if name == "壳体内直径 Dis":
-                dis_row = row
-            elif name == "管箱内直径 Dit":  # 新增：查找管箱内直径
-                dit_row = row
-            elif name == "公称直径 DN":
-                dn_row = row
-            elif name == "布管限定圆 DL":  # 新增：查找布管限定圆
-                dl_row = row
-
-        if dis_row == -1 or dn_row == -1 or dit_row == -1:
-            print(f"[WARN] 未找到 DN({dn_row}), Dis({dis_row}), Dit({dit_row}) 参数行，无法更新。")
-            return
-
-        # 3. 获取当前 DN、Dis、Dit 值（读取函数）
-        def _get_value(row):
-            if row == -1:
-                return None
-            widget = self.param_table.cellWidget(row, 2)
-            if isinstance(widget, QComboBox):
-                val = widget.currentText().strip()
-            else:
-                item = self.param_table.item(row, 2)
-                val = item.text().strip() if item else None
-            try:
-                return float(val)
-            except (TypeError, ValueError):
-                return None
-
-        dis_value = _get_value(dis_row)
-        dit_value = _get_value(dit_row)
-        dn_value = _get_value(dn_row)
-
-        print(f"[user_update_Di DEBUG] 当前 DN={dn_value}, Dis={dis_value}, Dit={dit_value}")
-
-        if dn_value is None or dis_value is None or dit_value is None:
-            print("[WARN] DN, Dis 或 Dit 为无效值，跳过更新。")
-            return
-
-        # 4. 计算新的Dis和Dit（调用修改后的cal_di函数）
-        current_dis, current_dit = self.cal_di(dis_value, dn_value)
-
-        if current_dis is None or not isinstance(current_dis, (int, float)):
-            print(f"cal_di() 返回的壳体内直径无效: {current_dis}")
-            return
-
-        if current_dit is None or not isinstance(current_dit, (int, float)):
-            print(f"cal_di() 返回的管箱内直径无效: {current_dit}")
-            # 注意：即使管箱内直径无效，仍然可以更新壳体内直径
-            # 但为了完整性，这里我们仍然返回，或者可以只更新有效的部分
-
-        print(f"[user_update_Di INFO] 计算得到新壳体内直径 Dis = {current_dis:.1f} mm")
-        print(f"[user_update_Di INFO] 计算得到新管箱内直径 Dit = {current_dit:.1f} mm")
-
-        # 5. 临时断开 signal 防止重复触发
-        original_handler = None
-        if hasattr(self, "handle_param_change"):
-            try:
-                self.param_table.itemChanged.disconnect(self.handle_param_change)
-                original_handler = self.handle_param_change
-            except Exception:
-                original_handler = None
-
-        # 6. 先更新布管限定圆为0（在更新壳体内直径之前）
+        # 在函数最开始关闭监听开关
+        signal_blocker = SignalBlocker(self.param_table)
+        signal_blocker.block()
+        
         try:
-            if dl_row != -1:
-                # 检查布管限定圆单元格的控件类型
-                dl_widget = self.param_table.cellWidget(dl_row, 2)
-                dl_str_value = "0"
-                if isinstance(dl_widget, QComboBox):
-                    # 查找值为0的项
-                    idx = dl_widget.findText(dl_str_value)
-                    if idx >= 0:
-                        dl_widget.setCurrentIndex(idx)
-                    else:
-                        # 可编辑 combobox 时设值
-                        try:
-                            dl_widget.setEditText(dl_str_value)
-                        except Exception:
-                            # 回退为直接替换单元格项
-                            self.param_table.setItem(dl_row, 2, QTableWidgetItem(dl_str_value))
+            # 1. 判断是否以外径为基准
+            is_outer_diameter_base = self.get_is_outer_diameter_base()
+            print(is_outer_diameter_base, "is_outer_diameter_base")
+            if is_outer_diameter_base == "否":
+                print("参数'是否以外径为基准'为'否'，跳过更新壳体内直径")
+                return
+
+            if is_outer_diameter_base != "是":
+                print(f"参数'是否以外径为基准'的值为'{is_outer_diameter_base}'，不符合预期")
+                return
+
+            # 2. 获取 DN、Dis、Dit 的行号
+            dis_row = dit_row = dn_row = -1
+            dl_row = -1  # 新增：布管限定圆行号
+            row_count = self.param_table.rowCount()
+            for row in range(row_count):
+                name_item = self.param_table.item(row, 1)
+                if not name_item:
+                    continue
+                name = name_item.text().strip()
+                if name == "壳体内直径 Dis":
+                    dis_row = row
+                elif name == "管箱内直径 Dit":  # 新增：查找管箱内直径
+                    dit_row = row
+                elif name == "公称直径 DN":
+                    dn_row = row
+                elif name == "布管限定圆 DL":  # 新增：查找布管限定圆
+                    dl_row = row
+
+            if dis_row == -1 or dn_row == -1 or dit_row == -1:
+                print(f"[WARN] 未找到 DN({dn_row}), Dis({dis_row}), Dit({dit_row}) 参数行，无法更新。")
+                return
+
+            # 3. 获取当前 DN、Dis、Dit 值（读取函数）
+            def _get_value(row):
+                if row == -1:
+                    return None
+                widget = self.param_table.cellWidget(row, 2)
+                if isinstance(widget, QComboBox):
+                    val = widget.currentText().strip()
                 else:
-                    # 非QComboBox控件
-                    dl_item = self.param_table.item(dl_row, 2)
-                    if dl_item:
-                        dl_item.setText(dl_str_value)
-                    else:
-                        self.param_table.setItem(dl_row, 2, QTableWidgetItem(dl_str_value))
-
-                print(f"[user_update_Di INFO] 布管限定圆 DL 已更新为 {dl_str_value}")
-            else:
-                print("[user_update_Di WARN] 未找到布管限定圆 DL 参数行，无法更新 DL")
-        except Exception as e:
-            print(f"[user_update_Di ERROR] 更新布管限定圆时出错: {e}")
-
-        # 7. 更新表格中的 Dis（壳体内直径）
-        try:
-            widget = self.param_table.cellWidget(dis_row, 2)
-            str_value = f"{current_dis:.1f}"
-            if isinstance(widget, QComboBox):
-                idx = widget.findText(str_value)
-                if idx >= 0:
-                    widget.setCurrentIndex(idx)
-                else:
-                    # 可编辑 combobox 时设值
-                    try:
-                        widget.setEditText(str_value)
-                    except Exception:
-                        # 回退为直接替换单元格项
-                        self.param_table.setItem(dis_row, 2, QTableWidgetItem(str_value))
-            else:
-                item = self.param_table.item(dis_row, 2)
-                if item:
-                    item.setText(str_value)
-                else:
-                    self.param_table.setItem(dis_row, 2, QTableWidgetItem(str_value))
-
-            print(f"[user_update_Di INFO] 壳体内直径 Dis 写回表格为 {str_value}")
-
-        except Exception as e:
-            print(f"[user_update_Di ERROR] 更新壳体内直径时出错: {e}")
-
-        # 8. 更新表格中的 Dit（管箱内直径） - 完全照搬Dis的更新方法
-        try:
-            widget = self.param_table.cellWidget(dit_row, 2)
-            if current_dit is not None and isinstance(current_dit, (int, float)):
-                str_value = f"{current_dit:.1f}"
-            else:
-                # 如果计算得到的Dit无效，保持原值
-                str_value = f"{dit_value:.1f}" if dit_value is not None else "0"
-
-            if isinstance(widget, QComboBox):
-                idx = widget.findText(str_value)
-                if idx >= 0:
-                    widget.setCurrentIndex(idx)
-                else:
-                    # 可编辑 combobox 时设值
-                    try:
-                        widget.setEditText(str_value)
-                    except Exception:
-                        # 回退为直接替换单元格项
-                        self.param_table.setItem(dit_row, 2, QTableWidgetItem(str_value))
-            else:
-                item = self.param_table.item(dit_row, 2)
-                if item:
-                    item.setText(str_value)
-                else:
-                    self.param_table.setItem(dit_row, 2, QTableWidgetItem(str_value))
-
-            print(f"[user_update_Di INFO] 管箱内直径 Dit 写回表格为 {str_value}")
-
-        except Exception as e:
-            print(f"[user_update_Di ERROR] 更新管箱内直径时出错: {e}")
-
-        finally:
-            # 恢复信号
-            if original_handler:
+                    item = self.param_table.item(row, 2)
+                    val = item.text().strip() if item else None
                 try:
-                    self.param_table.itemChanged.connect(original_handler)
-                except Exception:
-                    pass
+                    return float(val)
+                except (TypeError, ValueError):
+                    return None
 
-        self.update_tube_layout_circle_dl()
-        # # 9. 触发一次三值一致性检查（在事件循环放行后）
-        # try:
-        #     QCoreApplication.processEvents()
-        #     print(
-        #         "[user_update_Di DEBUG] 自动触发三值一致性检查（来源：user_update_Di）"
-        #     )
-        #     # 只触发一次（检查中会禁止重入）
-        #     self.check_diameter_consistency(trigger_name="user_update_Di")
-        # except Exception as e:
-        #     print(f"[user_update_Di ERROR] 调用 check_diameter_consistency 出错: {e}")
+            dis_value = _get_value(dis_row)
+            dit_value = _get_value(dit_row)
+            dn_value = _get_value(dn_row)
+
+            print(f"[user_update_Di DEBUG] 当前 DN={dn_value}, Dis={dis_value}, Dit={dit_value}")
+
+            if dn_value is None or dis_value is None or dit_value is None:
+                print("[WARN] DN, Dis 或 Dit 为无效值，跳过更新。")
+                return
+
+            # 4. 计算新的Dis和Dit（调用修改后的cal_di函数）
+            current_dis, current_dit = self.cal_di(dis_value, dn_value, dit_value)
+
+            if current_dis is None or not isinstance(current_dis, (int, float)):
+                print(f"cal_di() 返回的壳体内直径无效: {current_dis}")
+                return
+
+            if current_dit is None or not isinstance(current_dit, (int, float)):
+                print(f"cal_di() 返回的管箱内直径无效: {current_dit}")
+                # 注意：即使管箱内直径无效，仍然可以更新壳体内直径
+                # 但为了完整性，这里我们仍然返回，或者可以只更新有效的部分
+
+            print(f"[user_update_Di INFO] 计算得到新壳体内直径 Dis = {current_dis:.1f} mm")
+            print(f"[user_update_Di INFO] 计算得到新管箱内直径 Dit = {current_dit:.1f} mm")
+
+            # 5. 临时断开 signal 防止重复触发
+            original_handler = None
+            if hasattr(self, "handle_param_change"):
+                try:
+                    self.param_table.itemChanged.disconnect(self.handle_param_change)
+                    original_handler = self.handle_param_change
+                except Exception:
+                    original_handler = None
+
+            # 6. 先更新布管限定圆为0（在更新壳体内直径之前）
+            try:
+                if dl_row != -1:
+                    # 检查布管限定圆单元格的控件类型
+                    dl_widget = self.param_table.cellWidget(dl_row, 2)
+                    dl_str_value = "0"
+                    if isinstance(dl_widget, QComboBox):
+                        # 阻塞 QComboBox 的信号，避免触发监听
+                        dl_was_blocked = dl_widget.blockSignals(True)
+                        try:
+                            # 查找值为0的项
+                            idx = dl_widget.findText(dl_str_value)
+                            if idx >= 0:
+                                dl_widget.setCurrentIndex(idx)
+                            else:
+                                # 可编辑 combobox 时设值
+                                try:
+                                    dl_widget.setEditText(dl_str_value)
+                                except Exception:
+                                    # 回退为直接替换单元格项
+                                    self.param_table.setItem(dl_row, 2, QTableWidgetItem(dl_str_value))
+                        finally:
+                            # 恢复 QComboBox 的信号
+                            dl_widget.blockSignals(dl_was_blocked)
+                    else:
+                        # 非QComboBox控件
+                        dl_item = self.param_table.item(dl_row, 2)
+                        if dl_item:
+                            dl_item.setText(dl_str_value)
+                        else:
+                            self.param_table.setItem(dl_row, 2, QTableWidgetItem(dl_str_value))
+
+                    print(f"[user_update_Di INFO] 布管限定圆 DL 已更新为 {dl_str_value}")
+                else:
+                    print("[user_update_Di WARN] 未找到布管限定圆 DL 参数行，无法更新 DL")
+            except Exception as e:
+                print(f"[user_update_Di ERROR] 更新布管限定圆时出错: {e}")
+
+            # 7. 更新表格中的 Dis（壳体内直径）
+            try:
+                widget = self.param_table.cellWidget(dis_row, 2)
+                str_value = f"{current_dis:.1f}"
+                if isinstance(widget, QComboBox):
+                    # 阻塞 QComboBox 的信号，避免触发监听
+                    dis_was_blocked = widget.blockSignals(True)
+                    try:
+                        idx = widget.findText(str_value)
+                        if idx >= 0:
+                            widget.setCurrentIndex(idx)
+                        else:
+                            # 可编辑 combobox 时设值
+                            try:
+                                widget.setEditText(str_value)
+                            except Exception:
+                                # 回退为直接替换单元格项
+                                self.param_table.setItem(dis_row, 2, QTableWidgetItem(str_value))
+                    finally:
+                        # 恢复 QComboBox 的信号
+                        widget.blockSignals(dis_was_blocked)
+                else:
+                    item = self.param_table.item(dis_row, 2)
+                    if item:
+                        item.setText(str_value)
+                    else:
+                        self.param_table.setItem(dis_row, 2, QTableWidgetItem(str_value))
+
+                print(f"[user_update_Di INFO] 壳体内直径 Dis 写回表格为 {str_value}")
+
+            except Exception as e:
+                print(f"[user_update_Di ERROR] 更新壳体内直径时出错: {e}")
+
+            # 8. 更新表格中的 Dit（管箱内直径） - 完全照搬Dis的更新方法
+            try:
+                widget = self.param_table.cellWidget(dit_row, 2)
+                if current_dit is not None and isinstance(current_dit, (int, float)):
+                    str_value = f"{current_dit:.1f}"
+                else:
+                    # 如果计算得到的Dit无效，保持原值
+                    str_value = f"{dit_value:.1f}" if dit_value is not None else "0"
+
+                if isinstance(widget, QComboBox):
+                    # 阻塞 QComboBox 的信号，避免触发监听
+                    dit_was_blocked = widget.blockSignals(True)
+                    try:
+                        idx = widget.findText(str_value)
+                        if idx >= 0:
+                            widget.setCurrentIndex(idx)
+                        else:
+                            # 可编辑 combobox 时设值
+                            try:
+                                widget.setEditText(str_value)
+                            except Exception:
+                                # 回退为直接替换单元格项
+                                self.param_table.setItem(dit_row, 2, QTableWidgetItem(str_value))
+                    finally:
+                        # 恢复 QComboBox 的信号
+                        widget.blockSignals(dit_was_blocked)
+                else:
+                    item = self.param_table.item(dit_row, 2)
+                    if item:
+                        item.setText(str_value)
+                    else:
+                        self.param_table.setItem(dit_row, 2, QTableWidgetItem(str_value))
+
+                print(f"[user_update_Di INFO] 管箱内直径 Dit 写回表格为 {str_value}")
+
+            except Exception as e:
+                print(f"[user_update_Di ERROR] 更新管箱内直径时出错: {e}")
+
+            finally:
+                # 恢复信号
+                if original_handler:
+                    try:
+                        self.param_table.itemChanged.connect(original_handler)
+                    except Exception:
+                        pass
+
+                self.update_tube_layout_circle_dl()
+        
+        finally:
+            # 在函数最后重新打开监听开关
+            signal_blocker.unblock()
+      
     # TODO 三值检测函数
     def check_diameter_consistency(self, trigger_name=None):
         """
@@ -10958,7 +11032,8 @@ class TubeLayoutEditor(QMainWindow):
 
             # 2.5) 关键：DN/Dis/DL 先做一致性检查（不通过就立刻回滚并停止后续联动/重绘）
             # 目的：避免“非法值先触发 update_baffle_diameter/draw_baffle_plates 等重绘，回滚后图形仍保留”
-            if param_name in ("公称直径 DN", "壳体内直径 Dis", "布管限定圆 DL"):
+            #TODO check_diameter_consistency检查，暂时取消布管限定圆 DL
+            if param_name in ("壳体内直径 Dis"):
                 try:
                     print(f"[DEBUG] 准备调用 check_diameter_consistency，参数={param_name}")
                     ok = self.check_diameter_consistency(trigger_name=param_name)
@@ -10997,7 +11072,7 @@ class TubeLayoutEditor(QMainWindow):
                         print(
                             "[on_table_item_changed DEBUG] 执行 管箱内直径 Dit 相关逻辑"
                         )
-                        self.isDi_change = False
+                        self.isDi_change = True
                         self.isDN_change = False
                         # user_update_Di 内部会断开/重连 itemChanged，且会再触发一致性检查一次
                         try:
@@ -11230,31 +11305,31 @@ class TubeLayoutEditor(QMainWindow):
             except Exception as e:
                 print(f"[on_table_item_changed] 处理联动逻辑时出错: {e}")
 
-            # 4) 最后触发三值一致性检查（确保 UI 已稳定）
-            # 如果是程序自动更新隔条位置尺寸，跳过一致性检查
-            if (
-                    self._is_programmatic_update
-                    and param_name in self._programmatic_update_params
-            ):
-                print(f"[程序自动更新] 跳过一致性检查（来源：{param_name}）")
-            else:
-                try:
-                    QCoreApplication.processEvents()
-                    if not getattr(self, "_suppress_consistency_hook", False):
-                        print(
-                            f"[on_table_item_changed] 触发一致性检查（来源：{param_name}）"
-                        )
-                        print(f"[DEBUG] 准备调用 check_diameter_consistency，参数={param_name}")
-                        self.check_diameter_consistency(trigger_name=param_name)
-                        print(f"[DEBUG] check_diameter_consistency 调用完成，参数={param_name}")
-                    else:
-                        print(
-                            "[on_table_item_changed] 当前处于抑制状态，跳过一致性检查"
-                        )
-                except Exception as e:
-                    import traceback
-                    print(f"[on_table_item_changed] 触发一致性检查出错: {e}")
-                    print(f"[DEBUG] 异常堆栈:\n{traceback.format_exc()}")
+            # # 4) 最后触发三值一致性检查（确保 UI 已稳定）
+            # # 如果是程序自动更新隔条位置尺寸，跳过一致性检查
+            # if (
+            #         self._is_programmatic_update
+            #         and param_name in self._programmatic_update_params
+            # ):
+            #     print(f"[程序自动更新] 跳过一致性检查（来源：{param_name}）")
+            # else:
+            #     try:
+            #         QCoreApplication.processEvents()
+            #         if not getattr(self, "_suppress_consistency_hook", False):
+            #             print(
+            #                 f"[on_table_item_changed] 触发一致性检查（来源：{param_name}）"
+            #             )
+            #             print(f"[DEBUG] 准备调用 check_diameter_consistency，参数={param_name}")
+            #             self.check_diameter_consistency(trigger_name=param_name)
+            #             print(f"[DEBUG] check_diameter_consistency 调用完成，参数={param_name}")
+            #         else:
+            #             print(
+            #                 "[on_table_item_changed] 当前处于抑制状态，跳过一致性检查"
+            #             )
+            #     except Exception as e:
+            #         import traceback
+            #         print(f"[on_table_item_changed] 触发一致性检查出错: {e}")
+            #         print(f"[DEBUG] 异常堆栈:\n{traceback.format_exc()}")
 
         # 4. 为下拉框组件单独绑定on_combobox_changed事件
         def bind_combobox_listeners():
@@ -19645,7 +19720,7 @@ class TubeLayoutEditor(QMainWindow):
         btns = QHBoxLayout()
         ok = QPushButton("确定")
         cancel = QPushButton("取消")
-        convert_btn = QPushButton("转换为吊环螺钉")
+        convert_btn = QPushButton("转为吊环螺钉")
         btns.addWidget(ok)
         btns.addWidget(cancel)
         btns.addWidget(convert_btn)
@@ -25031,7 +25106,7 @@ class TubeLayoutEditor(QMainWindow):
         btns = QHBoxLayout()
         ok = QPushButton("确定")
         cancel = QPushButton("取消")
-        convert_btn = QPushButton("转换为吊环螺钉")
+        convert_btn = QPushButton("转为吊环螺钉")
         btns.addWidget(ok)
         btns.addWidget(cancel)
         btns.addWidget(convert_btn)
