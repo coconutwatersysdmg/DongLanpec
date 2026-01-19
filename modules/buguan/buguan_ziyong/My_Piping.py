@@ -48,7 +48,7 @@ from modules.buguan.buguan_ziyong.database_utils import create_activity_connecti
 from modules.buguan.buguan_ziyong.variable import (
     update_axial_basic_params,
     axial_basic_params,
-    update_is_b_cdeh_node,
+    update_is_suitable_tube_sheet,
     update_tube_sheet_params_snapshot,
     tube_sheet_params_snapshot,
 )
@@ -7841,18 +7841,20 @@ class TubeLayoutEditor(QMainWindow):
             print(f"未知的换热器型号: {heat_exchanger_type_local}，使用原逻辑失败")
             return None
 
-        # b 型 c/d/e 特殊节点处理
-        if getattr(self, "is_b_cdeh_node", False):
+        # b 型/e 型管板特殊节点处理
+        if getattr(self, "is_suitable_tube_sheet", False):
             try:
                 # 注意：这里不能直接使用导入时的 tube_sheet_params_snapshot 引用，
                 # 因为在 variable.py 中是通过重新赋值更新全局字典，会导致本模块中的
                 # 引用仍然指向旧的 {}。因此改为从实例属性中读取最新快照。
                 snapshot = getattr(self, "tube_sheet_params_snapshot", {}) or {}
+                main_category = snapshot.get("main_category", "").lower() if snapshot.get("main_category") else None
                 node_name = snapshot.get("node_name")
                 params_list = snapshot.get("params", []) or []
                 params_dict = {str(k).strip(): v for k, v in params_list}
 
-                if str(node_name).lower() == "c":
+                # b 型管板的 c 节点处理
+                if main_category == "b" and str(node_name).lower() == "c":
                     # 从快照中获取 g、h、f
                     # 公式：DL = min[{Di - 2×f×[1+(1+g²)^0.5] - 2×h}, Di - 2×b3]
                     # 其中：b3 = max(0.25×do, 8)
@@ -7891,7 +7893,8 @@ class TubeLayoutEditor(QMainWindow):
                             f"g={g}, h={h}, f={f_value}, b3={b3:.2f}, "
                             f"expr1 = {dl_expr1:.2f}, expr2 = {dl_expr2:.2f}, 取 min = {dl_value:.2f}"
                         )
-                elif str(node_name).lower() == "e":
+                # b 型管板的 e 节点处理
+                elif main_category == "b" and str(node_name).lower() == "e":
                     # b_e 节点：DL = min{(Dit - 2*e - 2*p),
                     #                      (Dis - 2*[(q - l + l/cos s)/tan s + l] - 2*p),
                     #                      (Dit - 2*b3)}
@@ -8056,8 +8059,9 @@ class TubeLayoutEditor(QMainWindow):
                                 f"[update_tube_layout_circle_dl] b_e 节点计算异常，回退原逻辑: {e}"
                             )
                             dl_value = _calc_dl_by_type(di_value, do_value)
-                elif str(node_name).lower() == "h":
-                    # h 节点：DL = min{(Di-2×g-2×k), (Di-2×j-2×k), (Di-2×b3)}
+                # b 型管板的 h 节点处理
+                elif main_category == "b" and str(node_name).lower() == "h":
+                    # b_h 节点：DL = min{(Di-2×g-2×k), (Di-2×j-2×k), (Di-2×b3)}
                     # 其中：b3 = max(0.25×do, 8)
                     # k：布管限定圆与管板倒角距离，默认值3，用户可修改
                     # Di/do 从左侧参数表获取，g/j/k 从快照参数中读取
@@ -8102,8 +8106,9 @@ class TubeLayoutEditor(QMainWindow):
                                 f"[update_tube_layout_circle_dl] h 节点计算异常，回退原逻辑: {e}"
                             )
                             dl_value = _calc_dl_by_type(di_value, do_value)
-                elif str(node_name).lower() == "d":
-                    # D 节点：DL = min{(Di-2×h-2×g), (Di-2×h-2×f), (Di-2×b3)}
+                # b 型管板的 d 节点处理
+                elif main_category == "b" and str(node_name).lower() == "d":
+                    # b_d 节点：DL = min{(Di-2×h-2×g), (Di-2×h-2×f), (Di-2×b3)}
                     # 其中：b3 = max(0.25×do, 8)
                     # Di/do 从左侧参数表获取，h/g/f 从快照参数中读取
                     h_raw = params_dict.get("h")
@@ -8147,8 +8152,9 @@ class TubeLayoutEditor(QMainWindow):
                                 f"[update_tube_layout_circle_dl] D 节点计算异常，回退原逻辑: {e}"
                             )
                             dl_value = _calc_dl_by_type(di_value, do_value)
-                elif str(node_name).lower() == "a":
-                    # a 节点：DL = Di - 2×b3
+                # b 型管板的 a 节点处理
+                elif main_category == "b" and str(node_name).lower() == "a":
+                    # b_a 节点：DL = Di - 2×b3
                     # 其中：b3 = max(0.25×do, 8)
                     # Di/do 从左侧参数表获取
                     try:
@@ -8170,10 +8176,290 @@ class TubeLayoutEditor(QMainWindow):
                             f"[update_tube_layout_circle_dl] a 节点计算异常，回退原逻辑: {e}"
                         )
                         dl_value = _calc_dl_by_type(di_value, do_value)
+                # e 型管板的节点处理
+                elif main_category == "e":
+                    # e 型管板的节点（a, b, c, d, e, f）处理
+                    # 所有公式都遵循：DL = min{表达式1, (Dis - 2 * b3), (Dit - 2 * b3)}
+                    # 其中：b3 = max(0.25×do, 8)
+                    
+                    # 1. 获取 Dis 和 Dit（复用 b 型管板 e 节点的逻辑）
+                    dit_value = None
+                    if dit_row != -1:
+                        if not self.param_table.isRowHidden(dit_row):
+                            dit_item = self.param_table.item(dit_row, 2)
+                            if dit_item and dit_item.text().strip():
+                                try:
+                                    dit_value = float(dit_item.text())
+                                except ValueError:
+                                    pass
+                    
+                    # 如果 Dit 未获取到，使用 DN 作为回退
+                    if dit_value is None or dit_value <= 0:
+                        if dn_value is not None and dn_value > 0:
+                            print(f"[update_tube_layout_circle_dl] e 型管板节点未获取到 Dit，使用 DN={dn_value} 作为回退")
+                            dit_value = dn_value
+                        else:
+                            print("[update_tube_layout_circle_dl] e 型管板节点缺少 Dit 且无 DN 回退，回退到原逻辑计算 DL")
+                            dl_value = _calc_dl_by_type(di_value, do_value)
+                            return
+                    
+                    # 确保 Dis 也有值（如果之前未获取到，使用 DN 回退）
+                    if di_value is None or di_value <= 0:
+                        if dn_value is not None and dn_value > 0:
+                            print(f"[update_tube_layout_circle_dl] e 型管板节点未获取到 Dis，使用 DN={dn_value} 作为回退")
+                            di_value = dn_value
+                        else:
+                            print("[update_tube_layout_circle_dl] e 型管板节点缺少 Dis 且无 DN 回退，回退到原逻辑计算 DL")
+                            dl_value = _calc_dl_by_type(di_value, do_value)
+                            return
+                    
+                    # 2. 计算 b3 = max(0.25×do, 8)
+                    b3 = max(0.25 * do_value, 8.0)
+                    
+                    # 3. 根据节点类型实现不同的计算公式
+                    node_lower = str(node_name).lower() if node_name else ""
+                    
+                    if node_lower == "a":
+                        # e-a 节点：DL = min{(Dis - 2 * c), (Dis - 2 * b3), (Dit - 2 * b3)}
+                        # 需要参数：c
+                        c_raw = params_dict.get("c")
+                        if c_raw is None:
+                            print("[update_tube_layout_circle_dl] e-a 节点快照中缺少 c，回退到原逻辑计算 DL")
+                            dl_value = _calc_dl_by_type(di_value, do_value)
+                        else:
+                            try:
+                                dis = float(di_value)
+                                dit = float(dit_value)
+                                c_val = float(c_raw)
+                                
+                                # 计算三个表达式
+                                dl_expr1 = dis - 2 * c_val
+                                dl_expr2 = dis - 2 * b3
+                                dl_expr3 = dit - 2 * b3
+                                
+                                # 取最小值
+                                dl_value = min(dl_expr1, dl_expr2, dl_expr3)
+                                
+                                print(f"[update_tube_layout_circle_dl] e-a 节点计算 DL: c={c_val}, b3={b3:.2f}, "
+                                      f"expr1={dl_expr1:.3f}, expr2={dl_expr2:.3f}, expr3={dl_expr3:.3f}, "
+                                      f"DL={dl_value:.3f}")
+                            except Exception as e:
+                                print(f"[update_tube_layout_circle_dl] e-a 节点计算异常，回退原逻辑: {e}")
+                                dl_value = _calc_dl_by_type(di_value, do_value)
+                    
+                    elif node_lower == "b":
+                        # e-b 节点：DL = min{(Dis - 2 * b - 2 * j), (Dis - 2 * b3), (Dit - 2 * b3)}
+                        # 需要参数：b, j
+                        b_raw = params_dict.get("b")
+                        j_raw = params_dict.get("j")
+                        if b_raw is None or j_raw is None:
+                            print("[update_tube_layout_circle_dl] e-b 节点快照中缺少 b 或 j，回退到原逻辑计算 DL")
+                            dl_value = _calc_dl_by_type(di_value, do_value)
+                        else:
+                            try:
+                                dis = float(di_value)
+                                dit = float(dit_value)
+                                b_val = float(b_raw)
+                                j_val = float(j_raw)
+                                
+                                # 计算三个表达式
+                                dl_expr1 = dis - 2 * b_val - 2 * j_val
+                                dl_expr2 = dis - 2 * b3
+                                dl_expr3 = dit - 2 * b3
+                                
+                                # 取最小值
+                                dl_value = min(dl_expr1, dl_expr2, dl_expr3)
+                                
+                                print(f"[update_tube_layout_circle_dl] e-b 节点计算 DL: b={b_val}, j={j_val}, b3={b3:.2f}, "
+                                      f"expr1={dl_expr1:.3f}, expr2={dl_expr2:.3f}, expr3={dl_expr3:.3f}, "
+                                      f"DL={dl_value:.3f}")
+                            except Exception as e:
+                                print(f"[update_tube_layout_circle_dl] e-b 节点计算异常，回退原逻辑: {e}")
+                                dl_value = _calc_dl_by_type(di_value, do_value)
+                    
+                    elif node_lower == "c":
+                        # e-c 节点：DL = min{(Dis - 2 * b - 2 * j), (Dis - 2 * b3), (Dit - 2 * b3)}
+                        # 需要参数：b, j (与 e-b 相同)
+                        b_raw = params_dict.get("b")
+                        j_raw = params_dict.get("j")
+                        if b_raw is None or j_raw is None:
+                            print("[update_tube_layout_circle_dl] e-c 节点快照中缺少 b 或 j，回退到原逻辑计算 DL")
+                            dl_value = _calc_dl_by_type(di_value, do_value)
+                        else:
+                            try:
+                                dis = float(di_value)
+                                dit = float(dit_value)
+                                b_val = float(b_raw)
+                                j_val = float(j_raw)
+                                
+                                # 计算三个表达式（与 e-b 相同）
+                                dl_expr1 = dis - 2 * b_val - 2 * j_val
+                                dl_expr2 = dis - 2 * b3
+                                dl_expr3 = dit - 2 * b3
+                                
+                                # 取最小值
+                                dl_value = min(dl_expr1, dl_expr2, dl_expr3)
+                                
+                                print(f"[update_tube_layout_circle_dl] e-c 节点计算 DL: b={b_val}, j={j_val}, b3={b3:.2f}, "
+                                      f"expr1={dl_expr1:.3f}, expr2={dl_expr2:.3f}, expr3={dl_expr3:.3f}, "
+                                      f"DL={dl_value:.3f}")
+                            except Exception as e:
+                                print(f"[update_tube_layout_circle_dl] e-c 节点计算异常，回退原逻辑: {e}")
+                                dl_value = _calc_dl_by_type(di_value, do_value)
+                    
+                    elif node_lower == "d":
+                        # e-d 节点：DL = min{[Dis - 2 * ((b / cosf + c) * tanf + b) - 2 * j], (Dis - 2 * b3), (Dit - 2 * b3)}
+                        # 需要参数：b, c, j, cosf, tanf
+                        b_raw = params_dict.get("b")
+                        c_raw = params_dict.get("c")
+                        j_raw = params_dict.get("j")
+                        cosf_raw = params_dict.get("cosf")
+                        tanf_raw = params_dict.get("tanf")
+                        if b_raw is None or c_raw is None or j_raw is None or cosf_raw is None or tanf_raw is None:
+                            print("[update_tube_layout_circle_dl] e-d 节点快照中缺少 b/c/j/cosf/tanf，回退到原逻辑计算 DL")
+                            dl_value = _calc_dl_by_type(di_value, do_value)
+                        else:
+                            try:
+                                dis = float(di_value)
+                                dit = float(dit_value)
+                                b_val = float(b_raw)
+                                c_val = float(c_raw)
+                                j_val = float(j_raw)
+                                cosf_val = float(cosf_raw)
+                                tanf_val = float(tanf_raw)
+                                
+                                # 假设 cosf 和 tanf 是角度值（度），转换为弧度后计算 cos 和 tan
+                                # 如果值在 [-1, 1] 范围内，假设已经是计算好的 cos/tan 值
+                                # 否则假设是角度值（度），需要转换为弧度
+                                if abs(cosf_val) <= 1.0:
+                                    cos_f = cosf_val  # 已经是 cos 值
+                                else:
+                                    cos_f = math.cos(math.radians(cosf_val))  # 角度值，转换为弧度后计算 cos
+                                
+                                if abs(tanf_val) <= 1.0:
+                                    tan_f = tanf_val  # 已经是 tan 值
+                                else:
+                                    tanf_rad = math.radians(tanf_val)  # 角度值，转换为弧度
+                                    tan_f = math.tan(tanf_rad)  # 计算 tan
+                                
+                                # 检查除零和异常值
+                                if abs(cos_f) < 1e-8 or abs(tan_f) < 1e-8:
+                                    print("[update_tube_layout_circle_dl] e-d 节点 cosf 或 tanf 过小，回退原逻辑")
+                                    dl_value = _calc_dl_by_type(di_value, do_value)
+                                else:
+                                    # 计算表达式1：Dis - 2 * ((b / cosf + c) * tanf + b) - 2 * j
+                                    inner_part = (b_val / cos_f + c_val) * tan_f + b_val
+                                    dl_expr1 = dis - 2 * inner_part - 2 * j_val
+                                    dl_expr2 = dis - 2 * b3
+                                    dl_expr3 = dit - 2 * b3
+                                    
+                                    # 取最小值
+                                    dl_value = min(dl_expr1, dl_expr2, dl_expr3)
+                                    
+                                    print(f"[update_tube_layout_circle_dl] e-d 节点计算 DL: b={b_val}, c={c_val}, j={j_val}, "
+                                          f"cosf={cosf_val}, tanf={tanf_val}, b3={b3:.2f}, "
+                                          f"expr1={dl_expr1:.3f}, expr2={dl_expr2:.3f}, expr3={dl_expr3:.3f}, "
+                                          f"DL={dl_value:.3f}")
+                            except Exception as e:
+                                print(f"[update_tube_layout_circle_dl] e-d 节点计算异常，回退原逻辑: {e}")
+                                dl_value = _calc_dl_by_type(di_value, do_value)
+                    
+                    elif node_lower == "e":
+                        # e-e 节点：DL = min{[Dis - 2 * ((b / cosc + k) * tanc + b) - 2 * j], (Dis - 2 * b3), (Dit - 2 * b3)}
+                        # 需要参数：b, k, j, cosc, tanc
+                        b_raw = params_dict.get("b")
+                        k_raw = params_dict.get("k")
+                        j_raw = params_dict.get("j")
+                        cosc_raw = params_dict.get("cosc")
+                        tanc_raw = params_dict.get("tanc")
+                        if b_raw is None or k_raw is None or j_raw is None or cosc_raw is None or tanc_raw is None:
+                            print("[update_tube_layout_circle_dl] e-e 节点快照中缺少 b/k/j/cosc/tanc，回退到原逻辑计算 DL")
+                            dl_value = _calc_dl_by_type(di_value, do_value)
+                        else:
+                            try:
+                                dis = float(di_value)
+                                dit = float(dit_value)
+                                b_val = float(b_raw)
+                                k_val = float(k_raw)
+                                j_val = float(j_raw)
+                                cosc_val = float(cosc_raw)
+                                tanc_val = float(tanc_raw)
+                                
+                                # 假设 cosc 和 tanc 是角度值（度），转换为弧度后计算 cos 和 tan
+                                # 如果值在 [-1, 1] 范围内，假设已经是计算好的 cos/tan 值
+                                # 否则假设是角度值（度），需要转换为弧度
+                                if abs(cosc_val) <= 1.0:
+                                    cos_c = cosc_val  # 已经是 cos 值
+                                else:
+                                    cos_c = math.cos(math.radians(cosc_val))  # 角度值，转换为弧度后计算 cos
+                                
+                                if abs(tanc_val) <= 1.0:
+                                    tan_c = tanc_val  # 已经是 tan 值
+                                else:
+                                    tanc_rad = math.radians(tanc_val)  # 角度值，转换为弧度
+                                    tan_c = math.tan(tanc_rad)  # 计算 tan
+                                
+                                # 检查除零和异常值
+                                if abs(cos_c) < 1e-8 or abs(tan_c) < 1e-8:
+                                    print("[update_tube_layout_circle_dl] e-e 节点 cosc 或 tanc 过小，回退原逻辑")
+                                    dl_value = _calc_dl_by_type(di_value, do_value)
+                                else:
+                                    # 计算表达式1：Dis - 2 * ((b / cosc + k) * tanc + b) - 2 * j
+                                    inner_part = (b_val / cos_c + k_val) * tan_c + b_val
+                                    dl_expr1 = dis - 2 * inner_part - 2 * j_val
+                                    dl_expr2 = dis - 2 * b3
+                                    dl_expr3 = dit - 2 * b3
+                                    
+                                    # 取最小值
+                                    dl_value = min(dl_expr1, dl_expr2, dl_expr3)
+                                    
+                                    print(f"[update_tube_layout_circle_dl] e-e 节点计算 DL: b={b_val}, k={k_val}, j={j_val}, "
+                                          f"cosc={cosc_val}, tanc={tanc_val}, b3={b3:.2f}, "
+                                          f"expr1={dl_expr1:.3f}, expr2={dl_expr2:.3f}, expr3={dl_expr3:.3f}, "
+                                          f"DL={dl_value:.3f}")
+                            except Exception as e:
+                                print(f"[update_tube_layout_circle_dl] e-e 节点计算异常，回退原逻辑: {e}")
+                                dl_value = _calc_dl_by_type(di_value, do_value)
+                    
+                    elif node_lower == "f":
+                        # e-f 节点：DL = min{(Dis - 4 * a - 2 * e), (Dis - 2 * b3), (Dit - 2 * b3)}
+                        # 需要参数：a, e
+                        a_raw = params_dict.get("a")
+                        e_raw = params_dict.get("e")
+                        if a_raw is None or e_raw is None:
+                            print("[update_tube_layout_circle_dl] e-f 节点快照中缺少 a 或 e，回退到原逻辑计算 DL")
+                            dl_value = _calc_dl_by_type(di_value, do_value)
+                        else:
+                            try:
+                                dis = float(di_value)
+                                dit = float(dit_value)
+                                a_val = float(a_raw)
+                                e_val = float(e_raw)
+                                
+                                # 计算三个表达式
+                                dl_expr1 = dis - 4 * a_val - 2 * e_val
+                                dl_expr2 = dis - 2 * b3
+                                dl_expr3 = dit - 2 * b3
+                                
+                                # 取最小值
+                                dl_value = min(dl_expr1, dl_expr2, dl_expr3)
+                                
+                                print(f"[update_tube_layout_circle_dl] e-f 节点计算 DL: a={a_val}, e={e_val}, b3={b3:.2f}, "
+                                      f"expr1={dl_expr1:.3f}, expr2={dl_expr2:.3f}, expr3={dl_expr3:.3f}, "
+                                      f"DL={dl_value:.3f}")
+                            except Exception as e:
+                                print(f"[update_tube_layout_circle_dl] e-f 节点计算异常，回退原逻辑: {e}")
+                                dl_value = _calc_dl_by_type(di_value, do_value)
+                    else:
+                        print(
+                            f"[update_tube_layout_circle_dl] e 型管板的未知节点 {node_name}，"
+                            "回退到原逻辑计算 DL"
+                        )
+                        dl_value = _calc_dl_by_type(di_value, do_value)
                 else:
-                    # 非 c 节点（如 d/e），暂时回退到原有按型号逻辑
+                    # 其他情况，暂时回退到原有按型号逻辑
                     print(
-                        f"[update_tube_layout_circle_dl] 节点 {node_name} 暂无特殊公式，"
+                        f"[update_tube_layout_circle_dl] 管板形式 {main_category} 的节点 {node_name} 暂无特殊公式，"
                         "回退到按型号的原逻辑计算 DL"
                     )
                     dl_value = _calc_dl_by_type(di_value, do_value)
@@ -14317,16 +14603,18 @@ class TubeLayoutEditor(QMainWindow):
                     if len(parts) == 2 and parts[1]:
                         node_name = parts[1].lower()
 
-                # 仅当为 b 型管板的 c/e/h 节点时才作为特殊情况处理
-                self.is_b_cdeh_node = (
+                # 仅当为 b 型管板的 c/e/h 节点或 e 型管板的节点时才作为特殊情况处理
+                self.is_suitable_tube_sheet = (
                     ((main_category == "b") and (node_name in ["c", "d", "e", "h","a"]))
+                    or
+                    ((main_category == "e") and (node_name in ["a", "b", "c", "d","e","f","b"]))
                     if main_category
                     else False
                 )
 
-                # 每次切到布管 tab 都同步更新全局 is_b_cdeh_node
+                # 每次切到布管 tab 都同步更新全局 is_suitable_tube_sheet
                 try:
-                    update_is_b_cdeh_node(self.is_b_cdeh_node)
+                    update_is_suitable_tube_sheet(self.is_suitable_tube_sheet)
                 except Exception:
                     pass
 
@@ -14334,7 +14622,7 @@ class TubeLayoutEditor(QMainWindow):
                 #     f"[My_Piping] 当前管板类型: {plate_type if plate_type else '未获得'}，"
                 #     f"所属大类: {main_category if main_category else '未知'}，"
                 #     f"节点: {node_name if node_name else '未知'}，"
-                #     f"是否为 b 型 c/e/h 节点: {self.is_b_cdeh_node}"
+                #     f"是否为 b 型 c/e/h 节点: {self.is_suitable_tube_sheet}"
                 # )
 
                 # 调试：打印当前识别到的管板类型与节点、参数数量
@@ -14342,14 +14630,14 @@ class TubeLayoutEditor(QMainWindow):
                     print(
                         f"[My_Piping] plate_type={plate_type!r}, "
                         f"main_category={main_category!r}, node_name={node_name!r}, "
-                        f"is_b_cdeh_node={self.is_b_cdeh_node}, "
+                        f"is_suitable_tube_sheet={self.is_suitable_tube_sheet}, "
                         f"full_params_len={len(full_params) if full_params else 0}"
                     )
                 except Exception:
                     pass
 
                 # 若为 b 型管板的 c/e/h 节点，则输出当前所有管板参数，并保存快照
-                if self.is_b_cdeh_node and full_params:
+                if self.is_suitable_tube_sheet and full_params:
                     print("[My_Piping] 命中 b 型 c/d/e 节点分支，准备保存快照。")
 
                     # 构造当前管板参数快照，包含节点信息
