@@ -687,7 +687,7 @@ class ClickableRectItem(QGraphicsPathItem):
             event.accept()
         else:
             super().mousePressEvent(event)
-
+    #TODO 双击事件
     def mouseDoubleClickEvent(self, event):
         if self.is_baffle and self.editor:
             try:
@@ -20036,8 +20036,130 @@ class TubeLayoutEditor(QMainWindow):
                 pass
             dlg.accept()
 
+        def lagan_to_screw_ring():
+            """
+            普通拉杆 → 吊环螺钉：
+            - 在当前普通拉杆位置绘制一个吊环螺钉
+            - 吊环圆直径 = 当前"吊环螺钉规格"对应的直径（例如 M20 → 20）
+            - 利用坐标反推角度/中心距，复用 build_screw_ring（会自动写入 screw_ring_dic）
+            """
+            from PyQt5.QtWidgets import QMessageBox
+            import math
+            import re
+            from modules.buguan.buguan_ziyong.component.lagan import delete_selected_lagans
+
+            # 检查是否有选中的普通拉杆
+            if not hasattr(self, "selected_lagans") or not self.selected_lagans:
+                QMessageBox.warning(
+                    dlg,
+                    "提示",
+                    "未选中普通拉杆，无法转换为吊环螺钉",
+                )
+                return
+
+            # 从左侧参数表中读取当前的"吊环螺钉规格"文本
+            screw_spec_text = ""
+            try:
+                row_count_local = self.param_table.rowCount()
+                for r in range(row_count_local):
+                    name_item_local = self.param_table.item(r, 1)
+                    if not name_item_local:
+                        continue
+                    if name_item_local.text().strip() == "吊环螺钉规格":
+                        cell_w = self.param_table.cellWidget(r, 2)
+                        if isinstance(cell_w, QComboBox):
+                            screw_spec_text = cell_w.currentText().strip()
+                        else:
+                            val_item = self.param_table.item(r, 2)
+                            screw_spec_text = (
+                                val_item.text().strip() if val_item else ""
+                            )
+                        break
+            except Exception:
+                screw_spec_text = ""
+
+            # 解析规格文本，提取直径数值（参考 on_convert_to_screw_ring 中的 parse_screw_spec）
+            screw_dia_val = None
+            if screw_spec_text:
+                match = re.search(r"(\d+)", screw_spec_text)
+                if match:
+                    try:
+                        screw_dia_val = float(match.group(1))
+                    except Exception:
+                        screw_dia_val = None
+
+            if not screw_dia_val or screw_dia_val <= 0:
+                QMessageBox.warning(
+                    dlg,
+                    "提示",
+                    "未找到有效的吊环螺钉规格，无法转换为吊环螺钉",
+                )
+                return
+
+            # 收集所有选中普通拉杆的坐标
+            coords_to_convert = []
+            for lagan_item in self.selected_lagans:
+                if hasattr(lagan_item, "position") and lagan_item.position:
+                    cx, cy = lagan_item.position
+                    coords_to_convert.append((float(cx), float(cy)))
+
+            if not coords_to_convert:
+                QMessageBox.warning(
+                    dlg,
+                    "提示",
+                    "无法获取普通拉杆坐标，转换失败",
+                )
+                return
+
+            # 计算对称坐标（最多4个）
+            all_coords_to_draw = []
+            for cx, cy in coords_to_convert:
+                coords_for_this = [(cx, cy)]
+                if self.isSymmetry:
+                    coords_for_this = [
+                        (cx, cy),
+                        (-cx, -cy),
+                        (-cx, cy),
+                        (cx, -cy),
+                    ]
+                    # 去重
+                    seen = set()
+                    unique = []
+                    for coord in coords_for_this:
+                        key = (round(coord[0], 2), round(coord[1], 2))
+                        if key not in seen:
+                            seen.add(key)
+                            unique.append(coord)
+                    coords_for_this = unique
+                all_coords_to_draw.extend(coords_for_this)
+
+            # 去重所有坐标
+            seen_all = set()
+            final_coords = []
+            for coord in all_coords_to_draw:
+                key = (round(coord[0], 2), round(coord[1], 2))
+                if key not in seen_all:
+                    seen_all.add(key)
+                    final_coords.append(coord)
+
+            # 删除当前普通拉杆（含对称）
+            delete_selected_lagans(self)
+
+            # 绘制吊环螺钉（对称位置都画）
+            for scx, scy in final_coords:
+                dist = math.hypot(scx, scy)
+                if dist <= 0:
+                    continue
+                polar = math.degrees(math.atan2(scy, scx))
+                angle = 90.0 - polar
+                # 这里传入的是"吊环螺钉规格"对应的直径值，而不是拉杆直径/换热管外径
+                self.build_screw_ring(angle, dist, screw_dia_val)
+
+            dlg.accept()
+
         ok.clicked.connect(apply_and_close_only)
         cancel.clicked.connect(dlg.reject)
+        convert_btn.clicked.connect(lagan_to_screw_ring)
         dlg.exec_()
 
     def build_sql_for_tube(self, tube_data):
