@@ -30024,17 +30024,18 @@ class TubeLayoutEditor(QMainWindow):
                     y0 = all_y_coords[current_idx - 1]
                     delta_y = selected_y - y0
                     if 0 <= delta_y < tube_bridge_val:
-                        # 名义孔桥假设圆：外径/2 + 名义孔桥
-                        R_nom = (do_value / 2.0) + tube_bridge_val
-                        if abs(y0) <= R_nom:
+                        # 名义孔桥假设圆：外径/2 + 名义孔桥，再加一点安全余量
+                        nominal_circle_margin = 1.0  # mm 适当放大，避免相交
+                        R_nom = (do_value / 2.0) + tube_bridge_val + nominal_circle_margin
+                        print(f"[旁路挡板] 干涉预判: selected_y={selected_y:.3f}, y0={y0:.3f}, delta_y={delta_y:.3f}, R_nom={R_nom:.3f}")
+                        if abs(y0) <= R_nom + 1e-6:
                             import math
 
-                            x_left = -math.sqrt(R_nom * R_nom - y0 * y0)
+                            x_left = -math.sqrt(max(R_nom * R_nom - y0 * y0, 0.0))
                             # 挡板左端固定在 -R_bend，右端截到名义圆交点
                             new_length = round(max(0.0, (bendblock_value / 2.0) + x_left), 2)
-                            # 只缩短，不拉长；命中该规则后直接采用名义圆截断结果并返回
-                            if new_length < side_dangban_length:
-                                side_dangban_length = new_length
+                            # 命中干涉后直接使用名义圆截断结果并返回
+                            side_dangban_length = new_length
                             self.side_dangban_length = side_dangban_length
                             print(
                                 f"[旁路挡板] 名义孔桥干涉：delta_y={delta_y:.3f} < bridge={tube_bridge_val:.3f}, "
@@ -30116,10 +30117,11 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 print(f"[干涉检查] 警告：未找到当前行在 y 坐标列表中的位置")
             
-            # 2. 计算名义圆半径：do/2 + 名义孔桥
-            nominal_circle_radius = (do_value / 2.0) + tube_bridge_val
-            print(f"\n[名义圆计算] do_value = {do_value:.3f}, tube_bridge_val = {tube_bridge_val:.3f}")
-            print(f"[名义圆计算] 名义圆半径 = do/2 + 名义孔桥 = ({do_value:.3f}/2) + {tube_bridge_val:.3f} = {nominal_circle_radius:.3f}")
+            # 2. 计算名义圆半径：do/2 + 名义孔桥 + 适当余量
+            nominal_circle_margin = 1.0  # mm，适当放大，避免相交
+            nominal_circle_radius = (do_value / 2.0) + tube_bridge_val + nominal_circle_margin
+            print(f"\n[名义圆计算] do_value = {do_value:.3f}, tube_bridge_val = {tube_bridge_val:.3f}, margin = {nominal_circle_margin:.3f}")
+            print(f"[名义圆计算] 名义圆半径 = do/2 + 名义孔桥 + margin = ({do_value:.3f}/2) + {tube_bridge_val:.3f} + {nominal_circle_margin:.3f} = {nominal_circle_radius:.3f}")
             print(f"[名义圆计算] 名义圆直径 = {nominal_circle_radius * 2:.3f}")
             
             # 3. 判断旁路挡板是否与名义圆干涉
@@ -30149,6 +30151,7 @@ class TubeLayoutEditor(QMainWindow):
             # 检查与上下两行名义圆的干涉
             interference = False
             interfering_circle_center = None
+            interfering_y_line = None  # 记录发生干涉的行y，用于交点计算
             
             print(f"\n[干涉检查] 开始检查与名义圆的干涉")
             for i, circle_center in enumerate([upper_row_leftmost, lower_row_leftmost]):
@@ -30177,7 +30180,8 @@ class TubeLayoutEditor(QMainWindow):
                     print(f"[干涉检查] ✓ 检测到干涉！距离 {dist_to_center:.3f} < 半径 {nominal_circle_radius:.3f}")
                     if interfering_circle_center is None or abs(cx) > abs(interfering_circle_center[0]):
                         interfering_circle_center = circle_center
-                        print(f"[干涉检查] 更新干涉圆心为: ({cx:.3f}, {cy:.3f})")
+                        interfering_y_line = cy
+                        print(f"[干涉检查] 更新干涉圆心为: ({cx:.3f}, {cy:.3f})，干涉行y={interfering_y_line:.3f}")
                 else:
                     print(f"[干涉检查] ✗ 无干涉，距离 {dist_to_center:.3f} >= 半径 {nominal_circle_radius:.3f}")
             
@@ -30199,7 +30203,8 @@ class TubeLayoutEditor(QMainWindow):
                 print(f"[重新计算] 候选点数量 = {len(candidates)}")
                 if candidates:
                     interfering_circle_center = max(candidates, key=lambda p: abs(p[0]))
-                    print(f"[重新计算] 选择横坐标绝对值最大的点: ({interfering_circle_center[0]:.3f}, {interfering_circle_center[1]:.3f})")
+                    interfering_y_line = interfering_circle_center[1]
+                    print(f"[重新计算] 选择横坐标绝对值最大的点: ({interfering_circle_center[0]:.3f}, {interfering_circle_center[1]:.3f})，干涉行y={interfering_y_line:.3f}")
                 else:
                     # 没有找到，直接返回原值
                     print(f"[重新计算] 没有候选点，使用原始值")
@@ -30207,46 +30212,32 @@ class TubeLayoutEditor(QMainWindow):
                     return side_dangban_length
             
             cx, cy = interfering_circle_center
+            if interfering_y_line is None:
+                interfering_y_line = cy
             print(f"[重新计算] 使用干涉圆心: ({cx:.3f}, {cy:.3f}), 名义圆半径 = {nominal_circle_radius:.3f}")
             
             # 重新计算 side_dangban_length
             # 旁路挡板矩形的一个角搭在名义圆上
-            print(f"[重新计算] 挡板在 {'左侧' if is_left_side else '右侧'}, rect_x = {rect_x:.3f}")
+            print(f"[重新计算] 挡板在 {'左侧' if is_left_side else '右侧'}, rect_x = {rect_x:.3f}, 交点所在行 y_line = {interfering_y_line:.3f}")
             
+            # 交点按“水平线 y=y_line 与圆 (cx,cy,r)”求解：x = cx ± sqrt(r^2 - (y_line-cy)^2)
+            # 取靠近挡板一侧的交点作为新的边界
+            y_line = interfering_y_line
+            delta_y_to_line = y_line - cy
+            sqrt_term = math.sqrt(max(nominal_circle_radius ** 2 - delta_y_to_line ** 2, 0.0))
+
             if is_left_side:
-                # 左挡板：矩形的右边缘与名义圆相切
-                print(f"[重新计算] 左挡板：计算矩形右边缘与名义圆相切")
-                print(f"[重新计算] 圆心 x = {cx:.3f}, rect_x = {rect_x:.3f}")
-                
-                if cx > rect_x:
-                    # 圆心在矩形右侧
-                    new_rect_right_x = cx - nominal_circle_radius
-                    new_side_dangban_length = new_rect_right_x - rect_x
-                    print(f"[重新计算] 圆心在矩形右侧，new_rect_right_x = {cx:.3f} - {nominal_circle_radius:.3f} = {new_rect_right_x:.3f}")
-                    print(f"[重新计算] new_side_dangban_length = {new_rect_right_x:.3f} - {rect_x:.3f} = {new_side_dangban_length:.3f}")
-                else:
-                    # 圆心在矩形左侧（不太可能，但处理一下）
-                    new_rect_right_x = cx + nominal_circle_radius
-                    new_side_dangban_length = new_rect_right_x - rect_x
-                    print(f"[重新计算] 圆心在矩形左侧，new_rect_right_x = {cx:.3f} + {nominal_circle_radius:.3f} = {new_rect_right_x:.3f}")
-                    print(f"[重新计算] new_side_dangban_length = {new_rect_right_x:.3f} - {rect_x:.3f} = {new_side_dangban_length:.3f}")
+                # 左挡板：用左交点 x = cx - sqrt(...)
+                new_rect_right_x = cx - sqrt_term
+                new_side_dangban_length = new_rect_right_x - rect_x
+                print(f"[重新计算] 左挡板：交点 sqrt_term={sqrt_term:.3f}, new_rect_right_x = {cx:.3f} - {sqrt_term:.3f} = {new_rect_right_x:.3f}")
+                print(f"[重新计算] new_side_dangban_length = {new_rect_right_x:.3f} - {rect_x:.3f} = {new_side_dangban_length:.3f}")
             else:
-                # 右挡板：矩形的左边缘与名义圆相切
-                print(f"[重新计算] 右挡板：计算矩形左边缘与名义圆相切")
-                print(f"[重新计算] 圆心 x = {cx:.3f}, rect_x = {rect_x:.3f}, R_bend = {R_bend:.3f}")
-                
-                if cx < rect_x:
-                    # 圆心在矩形左侧
-                    new_rect_left_x = cx + nominal_circle_radius
-                    new_side_dangban_length = R_bend - new_rect_left_x
-                    print(f"[重新计算] 圆心在矩形左侧，new_rect_left_x = {cx:.3f} + {nominal_circle_radius:.3f} = {new_rect_left_x:.3f}")
-                    print(f"[重新计算] new_side_dangban_length = {R_bend:.3f} - {new_rect_left_x:.3f} = {new_side_dangban_length:.3f}")
-                else:
-                    # 圆心在矩形右侧
-                    new_rect_left_x = cx - nominal_circle_radius
-                    new_side_dangban_length = R_bend - new_rect_left_x
-                    print(f"[重新计算] 圆心在矩形右侧，new_rect_left_x = {cx:.3f} - {nominal_circle_radius:.3f} = {new_rect_left_x:.3f}")
-                    print(f"[重新计算] new_side_dangban_length = {R_bend:.3f} - {new_rect_left_x:.3f} = {new_side_dangban_length:.3f}")
+                # 右挡板：用右交点 x = cx + sqrt(...)
+                new_rect_left_x = cx + sqrt_term
+                new_side_dangban_length = R_bend - new_rect_left_x
+                print(f"[重新计算] 右挡板：交点 sqrt_term={sqrt_term:.3f}, new_rect_left_x = {cx:.3f} + {sqrt_term:.3f} = {new_rect_left_x:.3f}")
+                print(f"[重新计算] new_side_dangban_length = {R_bend:.3f} - {new_rect_left_x:.3f} = {new_side_dangban_length:.3f}")
             
             # 确保新长度不为负
             if new_side_dangban_length < 0:
