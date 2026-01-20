@@ -908,6 +908,73 @@ class ClickableCircleItem(QGraphicsEllipseItem):
         super().mouseDoubleClickEvent(event)
 
 
+class ClickableRadialHoleItem(QGraphicsEllipseItem):
+    """可点击的径向开孔图形项"""
+    def __init__(self, rect, center_coord, editor=None, parent=None):
+        super().__init__(rect, parent)
+        self.setAcceptHoverEvents(True)
+        try:
+            self.setAcceptedMouseButtons(Qt.LeftButton)
+        except Exception:
+            pass
+        self.is_selected = False
+        self.editor = editor
+        self.center_coord = center_coord  # 存储径向开孔的坐标
+        self.original_pen = self.pen()
+        self.original_brush = self.brush()
+        # 高亮选中样式：金色边框
+        self.selected_pen = QPen(
+            QColor(255, 215, 0), 3, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin
+        )
+        # 设置透明填充，只显示边框
+        self.setBrush(QBrush(Qt.NoBrush))
+        # 设置初始边框为透明，这样不会显示圆形
+        self.setPen(QPen(Qt.NoPen))
+        # 设置 Z 值，确保在径向开孔图形之上
+        try:
+            self.setZValue(130)
+        except Exception:
+            pass
+
+    def mousePressEvent(self, event):
+        """单击选中/取消选中"""
+        if event.button() == Qt.LeftButton:
+            # 切换选中状态
+            self.is_selected = not self.is_selected
+            # 更新边框样式
+            if self.is_selected:
+                self.setPen(self.selected_pen)
+            else:
+                self.setPen(QPen(Qt.NoPen))
+            
+            # 更新主窗口选中列表
+            if self.editor:
+                if not hasattr(self.editor, "selected_radial_holes"):
+                    self.editor.selected_radial_holes = []
+                
+                if self.is_selected:
+                    if self not in self.editor.selected_radial_holes:
+                        self.editor.selected_radial_holes.append(self)
+                else:
+                    if self in self.editor.selected_radial_holes:
+                        self.editor.selected_radial_holes.remove(self)
+            
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        """双击编辑径向开孔参数"""
+        if self.editor and hasattr(self.editor, "edit_radial_hole"):
+            try:
+                self.editor.edit_radial_hole(self)
+                event.accept()
+                return
+            except Exception:
+                pass
+        super().mouseDoubleClickEvent(event)
+
+
 # 预览对话框 -----------------------------------------------------
 from PyQt5.QtWidgets import (
     QDialog,
@@ -20009,9 +20076,11 @@ class TubeLayoutEditor(QMainWindow):
         ok = QPushButton("确定")
         cancel = QPushButton("取消")
         convert_btn = QPushButton("转为吊环螺钉")
+        convert_radial_btn = QPushButton("转为径向开孔")
         btns.addWidget(ok)
         btns.addWidget(cancel)
         btns.addWidget(convert_btn)
+        btns.addWidget(convert_radial_btn)
         main.addLayout(btns)
 
         def apply_and_close_only():
@@ -20157,9 +20226,272 @@ class TubeLayoutEditor(QMainWindow):
 
             dlg.accept()
 
+        def lagan_to_radial_holes():
+            """
+            普通拉杆 → 径向开孔：
+            - 获取普通拉杆坐标
+            - 删除普通拉杆
+            - 走完整流程（边缘管检查、删除换热管等）
+            - 弹出径向开孔对话框
+            """
+            from PyQt5.QtWidgets import QMessageBox
+            from modules.buguan.buguan_ziyong.component.lagan import delete_selected_lagans
+
+            # 检查是否有选中的普通拉杆
+            if not hasattr(self, "selected_lagans") or not self.selected_lagans:
+                QMessageBox.warning(
+                    dlg,
+                    "提示",
+                    "未选中普通拉杆，无法转换为径向开孔",
+                )
+                return
+
+            # 收集所有选中普通拉杆的坐标（绝对坐标）
+            coords_to_convert = []
+            for lagan_item in self.selected_lagans:
+                if hasattr(lagan_item, "position") and lagan_item.position:
+                    cx, cy = lagan_item.position
+                    coords_to_convert.append((float(cx), float(cy)))
+
+            if not coords_to_convert:
+                QMessageBox.warning(
+                    dlg,
+                    "提示",
+                    "无法获取普通拉杆坐标，转换失败",
+                )
+                return
+
+            # 如果选中了多个拉杆，只处理第一个
+            if len(coords_to_convert) > 1:
+                QMessageBox.information(
+                    dlg,
+                    "提示",
+                    f"选中了 {len(coords_to_convert)} 个普通拉杆，将只处理第一个",
+                )
+
+            # 删除当前普通拉杆（含对称）
+            delete_selected_lagans(self)
+
+            # 获取第一个坐标
+            first_coord = coords_to_convert[0]
+
+            # 将绝对坐标转为相对坐标（selected_centers 格式）
+            if not hasattr(self, "actual_to_selected_coords") or not callable(getattr(self, "actual_to_selected_coords", None)):
+                QMessageBox.warning(
+                    dlg,
+                    "提示",
+                    "无法进行坐标转换，转换失败",
+                )
+                return
+
+            rel_coord = self.actual_to_selected_coords(first_coord)
+            if not rel_coord:
+                QMessageBox.warning(
+                    dlg,
+                    "提示",
+                    "坐标转换失败，无法转换为径向开孔",
+                )
+                return
+
+            # 设置 selected_centers 为相对坐标
+            self.selected_centers = [rel_coord]
+
+            # 关闭当前对话框
+            dlg.accept()
+
+            # 调用完整流程（走 on_radial_holes_click 的流程）
+            self.find_edge_tube()
+            actual_selected_centers = self.selected_to_current_coords(self.selected_centers)
+
+            if len(actual_selected_centers) != 1:
+                QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
+                self.clear_selection_highlight()
+                return
+
+            sel_x, sel_y = actual_selected_centers[0]
+            tol = 1e-6
+            is_on_edge = any(
+                (abs(cx - sel_x) <= tol and abs(cy - sel_y) <= tol)
+                for cx, cy in self.edge_centers
+            )
+            if not is_on_edge:
+                QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
+                self.clear_selection_highlight()
+                return
+
+            if not getattr(self, "pipe_port_dict", None):
+                QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
+                self.clear_selection_highlight()
+                return
+
+            tube_num = self.get_tube_pass_count()
+            if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+                selected_centers = self.judge_linkage_y(self.selected_centers)
+            elif tube_num in ["4", "6"] and self.heat_exchanger in ["AEU", "BEU"]:
+                selected_centers = self.judge_linkage_y(self.selected_centers)
+            else:
+                selected_centers = self.selected_centers
+
+            # 删除对应的换热管
+            self.delete_huanreguan(selected_centers)
+
+            # 弹出径向开孔对话框（复用 on_radial_holes_click 的对话框代码）
+            from PyQt5.QtWidgets import (
+                QDialog,
+                QVBoxLayout,
+                QHBoxLayout,
+                QLabel,
+                QComboBox,
+                QDialogButtonBox,
+            )
+
+            def _coord_equal(a, b, t=1e-6):
+                try:
+                    return abs(a[0] - b[0]) <= t and abs(a[1] - b[1]) <= t
+                except Exception:
+                    return False
+
+            current_coord = actual_selected_centers[0]
+            existing_port_code = None
+            existing_direction = "壳程"
+            for code, info in self.radial_hole_dict.items():
+                if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                    if _coord_equal(info.get("换热管坐标"), current_coord):
+                        existing_port_code = code
+                        existing_direction = info.get("连通方向", "壳程")
+                        break
+
+            dialog = QDialog(self)
+            dialog.setWindowTitle("径向开孔")
+            dialog.setModal(True)
+            dialog.resize(520, 220)
+            layout = QVBoxLayout(dialog)
+            layout.setContentsMargins(24, 18, 24, 18)
+            layout.setSpacing(14)
+
+            row1 = QHBoxLayout()
+            row1.setSpacing(10)
+            row1.addWidget(QLabel("管口号："))
+            port_combo = QComboBox()
+            port_combo.setMinimumWidth(260)
+            port_codes = list(self.radial_hole_dict.keys())
+            for code in port_codes:
+                try:
+                    info = (
+                        self.radial_hole_dict.get(code)
+                        if isinstance(self.radial_hole_dict, dict)
+                        else None
+                    )
+                    assigned = isinstance(info, dict) and info.get("换热管坐标") is not None
+                except Exception:
+                    assigned = False
+                display = f"{code}（已分配）" if assigned else f"{code}"
+                port_combo.addItem(display, code)
+            if existing_port_code is not None:
+                try:
+                    idx = port_combo.findData(existing_port_code)
+                    if idx >= 0:
+                        port_combo.setCurrentIndex(idx)
+                except Exception:
+                    pass
+            row1.addWidget(port_combo)
+            layout.addLayout(row1)
+
+            row2 = QHBoxLayout()
+            row2.setSpacing(10)
+            row2.addWidget(QLabel("连通方向："))
+            dir_combo = QComboBox()
+            dir_combo.addItems(["管程", "壳程"])
+            dir_combo.setMinimumWidth(260)
+            if existing_direction in ["管程", "壳程"]:
+                dir_combo.setCurrentText(existing_direction)
+            else:
+                dir_combo.setCurrentText("壳程")
+            row2.addWidget(dir_combo)
+            layout.addLayout(row2)
+
+            btn_row = QHBoxLayout()
+            btn_row.addStretch(1)
+            buttons = QDialogButtonBox()
+            ok_btn = buttons.addButton("确认", QDialogButtonBox.AcceptRole)
+            close_btn = buttons.addButton("关闭", QDialogButtonBox.RejectRole)
+            layout.addLayout(btn_row)
+            layout.addWidget(buttons)
+            ok_btn.clicked.connect(dialog.accept)
+            close_btn.clicked.connect(dialog.reject)
+
+            result = dialog.exec_()
+            if result == QDialog.Rejected:
+                self.clear_selection_highlight()
+                return
+
+            try:
+                selected_port = port_combo.currentData()
+            except Exception:
+                selected_port = port_combo.currentText()
+            selected_direction = dir_combo.currentText() or "壳程"
+
+            if existing_port_code is not None and str(existing_port_code) != str(selected_port):
+                try:
+                    if existing_port_code in self.radial_hole_dict:
+                        old_coord = self.radial_hole_dict[existing_port_code].get("换热管坐标")
+                        self.radial_hole_dict[existing_port_code]["换热管坐标"] = None
+                        if old_coord is not None:
+                            try:
+                                self.remove_radial_hole_graphics(old_coord)
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
+            try:
+                for code, info in self.radial_hole_dict.items():
+                    if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                        if _coord_equal(info.get("换热管坐标"), current_coord):
+                            old_coord = info.get("换热管坐标")
+                            info["换热管坐标"] = None
+                            if old_coord is not None:
+                                try:
+                                    self.remove_radial_hole_graphics(old_coord)
+                                except Exception:
+                                    pass
+            except Exception:
+                pass
+
+            if selected_port not in self.radial_hole_dict:
+                QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
+                self.clear_selection_highlight()
+                return
+
+            # 若用户选择的是"已分配"的管口，先擦除该管口旧绘制并解绑旧坐标
+            try:
+                old_coord_for_selected = self.radial_hole_dict[selected_port].get("换热管坐标")
+                if old_coord_for_selected is not None and not _coord_equal(old_coord_for_selected, current_coord):
+                    try:
+                        self.remove_radial_hole_graphics(old_coord_for_selected)
+                    except Exception:
+                        pass
+                    try:
+                        self.radial_hole_dict[selected_port]["换热管坐标"] = None
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            self.radial_hole_dict[selected_port]["管口号"] = selected_port
+            self.radial_hole_dict[selected_port]["连通方向"] = selected_direction
+            self.radial_hole_dict[selected_port]["换热管坐标"] = current_coord
+
+            try:
+                self.draw_radial_hole_tangents(current_coord)
+                self.clear_selection_highlight()
+            except Exception as e:
+                print(f"绘制径向开孔切线出错: {e}")
+
         ok.clicked.connect(apply_and_close_only)
         cancel.clicked.connect(dlg.reject)
         convert_btn.clicked.connect(lagan_to_screw_ring)
+        convert_radial_btn.clicked.connect(lagan_to_radial_holes)
         dlg.exec_()
 
     def build_sql_for_tube(self, tube_data):
@@ -21683,7 +22015,216 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
-        self._radial_hole_tangent_items_by_coord[key] = [fill_item, line1, line2]
+        # 添加可点击的圆形覆盖在径向开孔位置（用于选中和编辑）
+        # 使用换热管的半径作为点击区域
+        click_radius = tube_r * 1.5  # 稍微大一点，方便点击
+        click_rect = QRectF(
+            cx - click_radius, cy - click_radius,
+            2 * click_radius, 2 * click_radius
+        )
+        clickable_item = ClickableRadialHoleItem(
+            click_rect, center_coord, editor=self
+        )
+        self.graphics_scene.addItem(clickable_item)
+
+        self._radial_hole_tangent_items_by_coord[key] = [fill_item, line1, line2, clickable_item]
+
+    def delete_selected_radial_holes(self):
+        """删除选中的径向开孔"""
+        if not hasattr(self, "selected_radial_holes") or not self.selected_radial_holes:
+            return
+        
+        for radial_hole_item in self.selected_radial_holes[:]:  # 使用切片复制，避免迭代时修改列表
+            try:
+                center_coord = radial_hole_item.center_coord
+                # 从 radial_hole_dict 中移除
+                for code, info in self.radial_hole_dict.items():
+                    if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                        def _coord_equal(a, b, t=1e-6):
+                            try:
+                                return abs(a[0] - b[0]) <= t and abs(a[1] - b[1]) <= t
+                            except Exception:
+                                return False
+                        if _coord_equal(info.get("换热管坐标"), center_coord):
+                            self.radial_hole_dict[code]["换热管坐标"] = None
+                            break
+                
+                # 删除图形
+                self.remove_radial_hole_graphics(center_coord)
+            except Exception as e:
+                print(f"删除径向开孔时出错: {e}")
+        
+        # 清空选中列表
+        self.selected_radial_holes.clear()
+        
+        # 刷新视图
+        if self.graphics_scene:
+            self.graphics_scene.update()
+        if hasattr(self, "graphics_view") and self.graphics_view:
+            self.graphics_view.viewport().update()
+
+    def edit_radial_hole(self, radial_hole_item):
+        """编辑径向开孔参数（双击时调用）"""
+        from PyQt5.QtWidgets import (
+            QDialog,
+            QVBoxLayout,
+            QHBoxLayout,
+            QLabel,
+            QComboBox,
+            QDialogButtonBox,
+            QMessageBox,
+        )
+        
+        center_coord = radial_hole_item.center_coord
+        
+        def _coord_equal(a, b, t=1e-6):
+            try:
+                return abs(a[0] - b[0]) <= t and abs(a[1] - b[1]) <= t
+            except Exception:
+                return False
+        
+        # 查找当前坐标对应的管口号
+        existing_port_code = None
+        existing_direction = "壳程"
+        for code, info in self.radial_hole_dict.items():
+            if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                if _coord_equal(info.get("换热管坐标"), center_coord):
+                    existing_port_code = code
+                    existing_direction = info.get("连通方向", "壳程")
+                    break
+        
+        if existing_port_code is None:
+            QMessageBox.warning(self, "提示", "未找到对应的径向开孔信息")
+            return
+        
+        # 创建对话框
+        dialog = QDialog(self)
+        dialog.setWindowTitle("编辑径向开孔")
+        dialog.setModal(True)
+        dialog.resize(520, 220)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(24, 18, 24, 18)
+        layout.setSpacing(14)
+
+        row1 = QHBoxLayout()
+        row1.setSpacing(10)
+        row1.addWidget(QLabel("管口号："))
+        port_combo = QComboBox()
+        port_combo.setMinimumWidth(260)
+        port_codes = list(self.radial_hole_dict.keys())
+        for code in port_codes:
+            try:
+                info = (
+                    self.radial_hole_dict.get(code)
+                    if isinstance(self.radial_hole_dict, dict)
+                    else None
+                )
+                assigned = isinstance(info, dict) and info.get("换热管坐标") is not None
+            except Exception:
+                assigned = False
+            display = f"{code}（已分配）" if assigned else f"{code}"
+            port_combo.addItem(display, code)
+        if existing_port_code is not None:
+            try:
+                idx = port_combo.findData(existing_port_code)
+                if idx >= 0:
+                    port_combo.setCurrentIndex(idx)
+            except Exception:
+                pass
+        row1.addWidget(port_combo)
+        layout.addLayout(row1)
+
+        row2 = QHBoxLayout()
+        row2.setSpacing(10)
+        row2.addWidget(QLabel("连通方向："))
+        dir_combo = QComboBox()
+        dir_combo.addItems(["管程", "壳程"])
+        dir_combo.setMinimumWidth(260)
+        if existing_direction in ["管程", "壳程"]:
+            dir_combo.setCurrentText(existing_direction)
+        else:
+            dir_combo.setCurrentText("壳程")
+        row2.addWidget(dir_combo)
+        layout.addLayout(row2)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        buttons = QDialogButtonBox()
+        ok_btn = buttons.addButton("确认", QDialogButtonBox.AcceptRole)
+        close_btn = buttons.addButton("关闭", QDialogButtonBox.RejectRole)
+        layout.addLayout(btn_row)
+        layout.addWidget(buttons)
+        ok_btn.clicked.connect(dialog.accept)
+        close_btn.clicked.connect(dialog.reject)
+
+        result = dialog.exec_()
+        if result == QDialog.Rejected:
+            return
+
+        try:
+            selected_port = port_combo.currentData()
+        except Exception:
+            selected_port = port_combo.currentText()
+        selected_direction = dir_combo.currentText() or "壳程"
+
+        # 处理旧管口的解绑
+        if existing_port_code is not None and str(existing_port_code) != str(selected_port):
+            try:
+                if existing_port_code in self.radial_hole_dict:
+                    old_coord = self.radial_hole_dict[existing_port_code].get("换热管坐标")
+                    self.radial_hole_dict[existing_port_code]["换热管坐标"] = None
+                    if old_coord is not None:
+                        try:
+                            self.remove_radial_hole_graphics(old_coord)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        # 检查是否有其他管口使用了当前坐标
+        try:
+            for code, info in self.radial_hole_dict.items():
+                if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                    if _coord_equal(info.get("换热管坐标"), center_coord):
+                        old_coord = info.get("换热管坐标")
+                        info["换热管坐标"] = None
+                        if old_coord is not None:
+                            try:
+                                self.remove_radial_hole_graphics(old_coord)
+                            except Exception:
+                                pass
+        except Exception:
+            pass
+
+        if selected_port not in self.radial_hole_dict:
+            QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
+            return
+
+        # 若用户选择的是"已分配"的管口，先擦除该管口旧绘制并解绑旧坐标
+        try:
+            old_coord_for_selected = self.radial_hole_dict[selected_port].get("换热管坐标")
+            if old_coord_for_selected is not None and not _coord_equal(old_coord_for_selected, center_coord):
+                try:
+                    self.remove_radial_hole_graphics(old_coord_for_selected)
+                except Exception:
+                    pass
+                try:
+                    self.radial_hole_dict[selected_port]["换热管坐标"] = None
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # 更新 radial_hole_dict
+        self.radial_hole_dict[selected_port]["管口号"] = selected_port
+        self.radial_hole_dict[selected_port]["连通方向"] = selected_direction
+        self.radial_hole_dict[selected_port]["换热管坐标"] = center_coord
+
+        # 重新绘制径向开孔切线
+        try:
+            self.draw_radial_hole_tangents(center_coord)
+        except Exception as e:
+            print(f"绘制径向开孔切线出错: {e}")
 
     def show_baffle_info(self):
         """折流板参数编辑弹窗：左侧可编辑参数表，右侧图片展示区。"""
@@ -22606,6 +23147,10 @@ class TubeLayoutEditor(QMainWindow):
             # 处理滑道删除
             if hasattr(self, "selected_slides") and self.selected_slides:
                 self.delete_selected_slides()
+
+            # 处理径向开孔删除
+            if hasattr(self, "selected_radial_holes") and self.selected_radial_holes:
+                self.delete_selected_radial_holes()
 
             # 处理中间导管删除
             # 确保属性存在
@@ -25517,9 +26062,11 @@ class TubeLayoutEditor(QMainWindow):
         ok = QPushButton("确定")
         cancel = QPushButton("取消")
         convert_btn = QPushButton("转为吊环螺钉")
+        convert_radial_btn = QPushButton("转为径向开孔")
         btns.addWidget(ok)
         btns.addWidget(cancel)
         btns.addWidget(convert_btn)
+        btns.addWidget(convert_radial_btn)
         main.addLayout(btns)
 
         confirmed = {"ok": False}
@@ -25650,7 +26197,215 @@ class TubeLayoutEditor(QMainWindow):
 
             dlg.accept()
 
+        def free_lagan_to_radial_holes():
+            """
+            自由拉杆 → 径向开孔：
+            - 获取自由拉杆坐标（只处理选中的这一个，不支持对称）
+            - 删除选中的自由拉杆（只删除这一个，不处理对称）
+            - 直接弹出径向开孔对话框（跳过边缘管检查、不删除换热管）
+            """
+            from PyQt5.QtWidgets import (
+                QDialog,
+                QVBoxLayout,
+                QHBoxLayout,
+                QLabel,
+                QComboBox,
+                QDialogButtonBox,
+                QMessageBox,
+            )
+
+            # 获取当前自由拉杆的场景坐标
+            try:
+                c = lagan_item.sceneBoundingRect().center()
+                cx, cy = float(c.x()), float(c.y())
+            except Exception:
+                try:
+                    local_c = lagan_item.rect().center()
+                    pos = lagan_item.scenePos() + local_c
+                    cx, cy = float(pos.x()), float(pos.y())
+                except Exception:
+                    QMessageBox.warning(dlg, "提示", "无法获取自由拉杆坐标，转换失败")
+                    return
+
+            current_coord = (cx, cy)
+
+            # 删除当前选中的自由拉杆（只删除这一个，不处理对称）
+            if lagan_item.scene() == self.graphics_scene:
+                self.graphics_scene.removeItem(lagan_item)
+            
+            # 从 red_dangban 列表中移除对应的坐标
+            if hasattr(lagan_item, "original_selected_center") and lagan_item.original_selected_center:
+                if lagan_item.original_selected_center in self.red_dangban:
+                    self.red_dangban.remove(lagan_item.original_selected_center)
+            
+            # 移除配对拉杆（如果存在）
+            if hasattr(lagan_item, "paired_rod") and lagan_item.paired_rod:
+                if lagan_item.paired_rod.scene() == self.graphics_scene:
+                    self.graphics_scene.removeItem(lagan_item.paired_rod)
+            
+            # 更新计数
+            self.update_total_lagan_count()
+            
+            # 从选中列表中移除
+            if hasattr(self, "selected_side_rods") and lagan_item in self.selected_side_rods:
+                self.selected_side_rods.remove(lagan_item)
+
+            # 检查是否有管口号字典
+            if not getattr(self, "pipe_port_dict", None):
+                QMessageBox.warning(dlg, "提示", "未获取到管板径向开孔的管口号，请确认！")
+                return
+
+            def _coord_equal(a, b, t=1e-6):
+                try:
+                    return abs(a[0] - b[0]) <= t and abs(a[1] - b[1]) <= t
+                except Exception:
+                    return False
+
+            # 检查当前坐标是否已经分配了管口号
+            existing_port_code = None
+            existing_direction = "壳程"
+            for code, info in self.radial_hole_dict.items():
+                if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                    if _coord_equal(info.get("换热管坐标"), current_coord):
+                        existing_port_code = code
+                        existing_direction = info.get("连通方向", "壳程")
+                        break
+
+            # 创建对话框
+            dialog = QDialog(dlg)
+            dialog.setWindowTitle("径向开孔")
+            dialog.setModal(True)
+            dialog.resize(520, 220)
+            layout = QVBoxLayout(dialog)
+            layout.setContentsMargins(24, 18, 24, 18)
+            layout.setSpacing(14)
+
+            row1 = QHBoxLayout()
+            row1.setSpacing(10)
+            row1.addWidget(QLabel("管口号："))
+            port_combo = QComboBox()
+            port_combo.setMinimumWidth(260)
+            port_codes = list(self.radial_hole_dict.keys())
+            for code in port_codes:
+                try:
+                    info = (
+                        self.radial_hole_dict.get(code)
+                        if isinstance(self.radial_hole_dict, dict)
+                        else None
+                    )
+                    assigned = isinstance(info, dict) and info.get("换热管坐标") is not None
+                except Exception:
+                    assigned = False
+                display = f"{code}（已分配）" if assigned else f"{code}"
+                port_combo.addItem(display, code)
+            if existing_port_code is not None:
+                try:
+                    idx = port_combo.findData(existing_port_code)
+                    if idx >= 0:
+                        port_combo.setCurrentIndex(idx)
+                except Exception:
+                    pass
+            row1.addWidget(port_combo)
+            layout.addLayout(row1)
+
+            row2 = QHBoxLayout()
+            row2.setSpacing(10)
+            row2.addWidget(QLabel("连通方向："))
+            dir_combo = QComboBox()
+            dir_combo.addItems(["管程", "壳程"])
+            dir_combo.setMinimumWidth(260)
+            if existing_direction in ["管程", "壳程"]:
+                dir_combo.setCurrentText(existing_direction)
+            else:
+                dir_combo.setCurrentText("壳程")
+            row2.addWidget(dir_combo)
+            layout.addLayout(row2)
+
+            btn_row = QHBoxLayout()
+            btn_row.addStretch(1)
+            buttons = QDialogButtonBox()
+            ok_btn = buttons.addButton("确认", QDialogButtonBox.AcceptRole)
+            close_btn = buttons.addButton("关闭", QDialogButtonBox.RejectRole)
+            layout.addLayout(btn_row)
+            layout.addWidget(buttons)
+            ok_btn.clicked.connect(dialog.accept)
+            close_btn.clicked.connect(dialog.reject)
+
+            result = dialog.exec_()
+            if result == QDialog.Rejected:
+                dlg.accept()
+                return
+
+            try:
+                selected_port = port_combo.currentData()
+            except Exception:
+                selected_port = port_combo.currentText()
+            selected_direction = dir_combo.currentText() or "壳程"
+
+            # 处理旧管口的解绑
+            if existing_port_code is not None and str(existing_port_code) != str(selected_port):
+                try:
+                    if existing_port_code in self.radial_hole_dict:
+                        old_coord = self.radial_hole_dict[existing_port_code].get("换热管坐标")
+                        self.radial_hole_dict[existing_port_code]["换热管坐标"] = None
+                        if old_coord is not None:
+                            try:
+                                self.remove_radial_hole_graphics(old_coord)
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+
+            # 检查是否有其他管口使用了当前坐标
+            try:
+                for code, info in self.radial_hole_dict.items():
+                    if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                        if _coord_equal(info.get("换热管坐标"), current_coord):
+                            old_coord = info.get("换热管坐标")
+                            info["换热管坐标"] = None
+                            if old_coord is not None:
+                                try:
+                                    self.remove_radial_hole_graphics(old_coord)
+                                except Exception:
+                                    pass
+            except Exception:
+                pass
+
+            if selected_port not in self.radial_hole_dict:
+                QMessageBox.warning(dialog, "提示", "未获取到管板径向开孔的管口号，请确认！")
+                dlg.accept()
+                return
+
+            # 若用户选择的是"已分配"的管口，先擦除该管口旧绘制并解绑旧坐标
+            try:
+                old_coord_for_selected = self.radial_hole_dict[selected_port].get("换热管坐标")
+                if old_coord_for_selected is not None and not _coord_equal(old_coord_for_selected, current_coord):
+                    try:
+                        self.remove_radial_hole_graphics(old_coord_for_selected)
+                    except Exception:
+                        pass
+                    try:
+                        self.radial_hole_dict[selected_port]["换热管坐标"] = None
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            # 更新 radial_hole_dict
+            self.radial_hole_dict[selected_port]["管口号"] = selected_port
+            self.radial_hole_dict[selected_port]["连通方向"] = selected_direction
+            self.radial_hole_dict[selected_port]["换热管坐标"] = current_coord
+
+            # 绘制径向开孔切线
+            try:
+                self.draw_radial_hole_tangents(current_coord)
+            except Exception as e:
+                print(f"绘制径向开孔切线出错: {e}")
+
+            dlg.accept()
+
         convert_btn.clicked.connect(on_convert_to_screw_ring)
+        convert_radial_btn.clicked.connect(free_lagan_to_radial_holes)
         dlg.exec_()
 
         if not confirmed["ok"]:
