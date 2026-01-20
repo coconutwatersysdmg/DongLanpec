@@ -16144,12 +16144,17 @@ class TubeLayoutEditor(QMainWindow):
     def find_edge_tube(self) -> List[Tuple[float, float]]:
         global edge_centers
 
-        if not hasattr(self, "sorted_current_centers_up") or not hasattr(
-                self, "sorted_current_centers_down"
-        ):
-            self.sorted_current_centers_up, self.sorted_current_centers_down = (
-                self.group_centers_by_y(getattr(self, "current_centers", []))
-            )
+        # if not hasattr(self, "sorted_current_centers_up") or not hasattr(
+        #         self, "sorted_current_centers_down"
+        # ):
+        #     # 获取 current_centers 和 lagan_info 的并集
+        #     current_centers = getattr(self, "current_centers", [])
+        #     lagan_info = getattr(self, "lagan_info", [])
+        #     merged_centers = list(current_centers) + list(lagan_info)
+            
+        self.sorted_current_centers_up, self.sorted_current_centers_down = (
+                self.group_centers_by_y(self.global_centers)
+        )
 
         rows = []
         for row in self.sorted_current_centers_up:
@@ -20237,12 +20242,76 @@ class TubeLayoutEditor(QMainWindow):
             from PyQt5.QtWidgets import QMessageBox
             from modules.buguan.buguan_ziyong.component.lagan import delete_selected_lagans
 
-            # 检查是否有选中的普通拉杆
-            if not hasattr(self, "selected_lagans") or not self.selected_lagans:
+            # 确保 selected_lagans 存在
+            if not hasattr(self, "selected_lagans"):
+                self.selected_lagans = []
+            
+            # 如果 selected_lagans 为空，尝试从 selected_centers 或场景中找到对应的拉杆项
+            if not self.selected_lagans:
+                # 方法1：从 selected_centers 中找到对应的拉杆项
+                if hasattr(self, "selected_centers") and self.selected_centers:
+                    try:
+                        # 将相对坐标转为绝对坐标
+                        abs_centers = self.selected_to_current_coords(self.selected_centers)
+                        if abs_centers:
+                            # 在场景中查找对应的拉杆项
+                            for item in self.graphics_scene.items():
+                                if (
+                                    hasattr(item, "__class__")
+                                    and item.__class__.__name__ == "ClickableCircleItem"
+                                    and hasattr(item, "is_lagan")
+                                    and item.is_lagan
+                                ):
+                                    try:
+                                        c = item.sceneBoundingRect().center()
+                                        cx, cy = float(c.x()), float(c.y())
+                                        # 检查是否匹配 selected_centers 中的坐标
+                                        for abs_x, abs_y in abs_centers:
+                                            if abs(abs_x - cx) < 1e-6 and abs(abs_y - cy) < 1e-6:
+                                                if item not in self.selected_lagans:
+                                                    self.selected_lagans.append(item)
+                                                break
+                                    except Exception:
+                                        continue
+                    except Exception:
+                        pass
+                
+                # 方法2：如果还是为空，从 lagan_info 中找到对应的拉杆项
+                if not self.selected_lagans and hasattr(self, "lagan_info") and self.lagan_info:
+                    try:
+                        for lagan_coord in self.lagan_info:
+                            if not isinstance(lagan_coord, (list, tuple)) or len(lagan_coord) < 2:
+                                continue
+                            try:
+                                lagan_x, lagan_y = float(lagan_coord[0]), float(lagan_coord[1])
+                                # 在场景中查找对应的拉杆项
+                                for item in self.graphics_scene.items():
+                                    if (
+                                        hasattr(item, "__class__")
+                                        and item.__class__.__name__ == "ClickableCircleItem"
+                                        and hasattr(item, "is_lagan")
+                                        and item.is_lagan
+                                    ):
+                                        try:
+                                            c = item.sceneBoundingRect().center()
+                                            cx, cy = float(c.x()), float(c.y())
+                                            if abs(cx - lagan_x) < 1e-6 and abs(cy - lagan_y) < 1e-6:
+                                                if item not in self.selected_lagans:
+                                                    self.selected_lagans.append(item)
+                                                break
+                                        except Exception:
+                                            continue
+                            except Exception:
+                                continue
+                    except Exception:
+                        pass
+            
+            # 如果还是没有找到，提示错误
+            if not self.selected_lagans:
                 QMessageBox.warning(
                     dlg,
                     "提示",
-                    "未选中普通拉杆，无法转换为径向开孔",
+                    "未找到普通拉杆，无法转换为径向开孔",
                 )
                 return
 
@@ -20269,11 +20338,31 @@ class TubeLayoutEditor(QMainWindow):
                     f"选中了 {len(coords_to_convert)} 个普通拉杆，将只处理第一个",
                 )
 
-            # 删除当前普通拉杆（含对称）
-            delete_selected_lagans(self)
-
-            # 获取第一个坐标
+            # 获取第一个坐标和对应的拉杆项
             first_coord = coords_to_convert[0]
+            first_lagan_item = self.selected_lagans[0] if self.selected_lagans else None
+            
+            # 只删除选中的那一个普通拉杆（不处理对称）
+            if first_lagan_item:
+                # 从场景中删除图形项
+                if first_lagan_item.scene() == self.graphics_scene:
+                    self.graphics_scene.removeItem(first_lagan_item)
+                
+                # 从 lagan_info 中删除坐标
+                if hasattr(self, "lagan_info") and isinstance(self.lagan_info, (list, tuple)):
+                    def _coord_equal(a, b, t=1e-6):
+                        try:
+                            return abs(a[0] - b[0]) <= t and abs(a[1] - b[1]) <= t
+                        except Exception:
+                            return False
+                    self.lagan_info = [
+                        coord for coord in self.lagan_info
+                        if not _coord_equal(coord, first_coord)
+                    ]
+                
+                # 从选中列表中移除
+                if first_lagan_item in self.selected_lagans:
+                    self.selected_lagans.remove(first_lagan_item)
 
             # 将绝对坐标转为相对坐标（selected_centers 格式）
             if not hasattr(self, "actual_to_selected_coords") or not callable(getattr(self, "actual_to_selected_coords", None)):
@@ -20324,15 +20413,11 @@ class TubeLayoutEditor(QMainWindow):
                 self.clear_selection_highlight()
                 return
 
-            tube_num = self.get_tube_pass_count()
-            if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
-                selected_centers = self.judge_linkage_y(self.selected_centers)
-            elif tube_num in ["4", "6"] and self.heat_exchanger in ["AEU", "BEU"]:
-                selected_centers = self.judge_linkage_y(self.selected_centers)
-            else:
-                selected_centers = self.selected_centers
-
-            # 删除对应的换热管
+            # 只删除选中的那一个换热管（不处理对称）
+            # 直接使用 selected_centers，不进行对称扩展
+            selected_centers = self.selected_centers
+            
+            # 删除对应的换热管（只删除选中的那一个）
             self.delete_huanreguan(selected_centers)
 
             # 弹出径向开孔对话框（复用 on_radial_holes_click 的对话框代码）
