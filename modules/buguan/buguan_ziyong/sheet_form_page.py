@@ -733,7 +733,7 @@ class SheetFormPage(QWidget):
                         parent_value = getattr(self.parent, "heat_exchanger", None)
                         print(f"[DEBUG 延迟检查] 从父窗口获取 heat_exchanger = {parent_value}")
 
-                        if parent_value in ["BEM"]:
+                        if parent_value in ["BEM","AEM"]:
                             target_index = 4  # 'e'
                         elif parent_value in ["NEN"]:
                             target_index = 1  # 'b'

@@ -223,25 +223,30 @@ class ZoomableGraphicsView(QGraphicsView):
             item = self.itemAt(event.pos())
             item_info = type(item).__name__ if item is not None else "None"
             print(
-                f"[ZoomableGraphicsView] double-click at scene=({scene_pos.x():.3f}, {scene_pos.y():.3f}), itemAt={item_info}"
+                f"[DBG][ZoomableGraphicsView] ENTER doubleClick pos=({event.pos().x()},{event.pos().y()}) scene=({scene_pos.x():.3f},{scene_pos.y():.3f}) itemAt={item_info}"
             )
+        except Exception:
+            pass
+
+        # 获取 editor 引用（在多个地方使用）
+        editor = getattr(self, "editor", None)
+        if editor is None and self.scene() is not None:
+            for it in self.scene().items():
+                try:
+                    ed = getattr(it, "editor", None)
+                    if ed is not None:
+                        editor = ed
+                        break
+                except Exception:
+                    continue
+        try:
+            print(f"[DBG][ZoomableGraphicsView] editor={type(editor).__name__ if editor else None}")
         except Exception:
             pass
 
         # 视图层优先处理：若双击位置下存在防冲板图元（is_baffle=True），
         # 则直接进入防冲板编辑，不再依赖精确命中路径上的单个 item。
         try:
-            editor = getattr(self, "editor", None)
-            if editor is None and self.scene() is not None:
-                for it in self.scene().items():
-                    try:
-                        ed = getattr(it, "editor", None)
-                        if ed is not None:
-                            editor = ed
-                            break
-                    except Exception:
-                        continue
-
             if editor is not None and hasattr(editor, "edit_baffle"):
                 # 从视图坐标反查场景中所有命中图元，优先选择 is_baffle 的图元
                 hit_items = self.items(event.pos()) or []
@@ -272,20 +277,51 @@ class ZoomableGraphicsView(QGraphicsView):
         except Exception:
             pass
 
+        # 优先检测吊环螺钉：如果双击的是吊环螺钉，打开编辑对话框
+        try:
+            if editor is not None:
+                # 获取所有命中的图元（因为吊环螺钉由多个图形项组成）
+                hit_items = self.items(event.pos()) or []
+                print(f"[DBG][ZoomableGraphicsView] screw-check hit_items count={len(hit_items)}")
+                chosen_screw_ring = None
+                screw_ring_id = None
+                for it in hit_items:
+                    try:
+                        is_screw = getattr(it, "is_screw_ring", False)
+                        print(
+                            f"[DBG][ZoomableGraphicsView] screw-check item={type(it).__name__} is_screw_ring={is_screw} screw_ring_id={getattr(it,'screw_ring_id',None)}"
+                        )
+                        if is_screw:
+                            chosen_screw_ring = it
+                            screw_ring_id = getattr(it, "screw_ring_id", None)
+                            print(f"[DBG][ZoomableGraphicsView] screw-check FOUND id={screw_ring_id}")
+                            if screw_ring_id is not None:
+                                break
+                    except Exception as e:
+                        print(f"[DBG][ZoomableGraphicsView] screw-check error checking item: {e}")
+                        continue
+                
+                if chosen_screw_ring is not None and screw_ring_id is not None:
+                    try:
+                        print(f"[DBG][ZoomableGraphicsView] CALL edit_screw_ring_params_dialog id={screw_ring_id}")
+                        if hasattr(editor, "edit_screw_ring_params_dialog"):
+                            editor.edit_screw_ring_params_dialog(screw_ring_id)
+                            event.accept()
+                            return
+                        else:
+                            print(f"[DBG][ZoomableGraphicsView] editor has NO edit_screw_ring_params_dialog()")
+                    except Exception as e:
+                        print(f"[DBG][ZoomableGraphicsView] error opening screw ring dialog: {e}")
+                        import traceback
+                        traceback.print_exc()
+        except Exception as e:
+            print(f"[DBG][ZoomableGraphicsView] error in screw ring detection: {e}")
+            import traceback
+            traceback.print_exc()
+
         # 视图层补充处理：若双击到的是一个圆（包括普通拉杆/换热管，使用 addEllipse 绘制），
         # 则判断该圆心是否在 editor.lagan_info 中；若在则仅弹出参数对话框。
         try:
-            # 获取可能的 editor 引用
-            editor = getattr(self, "editor", None)
-            if editor is None and self.scene() is not None:
-                for it in self.scene().items():
-                    try:
-                        ed = getattr(it, "editor", None)
-                        if ed is not None:
-                            editor = ed
-                            break
-                    except Exception:
-                        continue
             try:
                 print(
                     f"[ZoomableGraphicsView] resolve editor -> {'found' if editor is not None else 'none'}"
@@ -3584,7 +3620,7 @@ class TubeLayoutEditor(QMainWindow):
                                 if not self.heat_exchanger:
                                     self.heat_exchanger = "AEU"
                                 # 根据换热器型号计算DL
-                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN"]:
+                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN","AEM"]:
                                     # 计算方式1: DL = Di - 2×b₃，其中b₃ = max(0.25×do, 8mm)
                                     b3 = max(0.25 * do, 8.0)  # 取两者较大值作为b3
                                     DL = Di - 2 * b3
@@ -3990,7 +4026,7 @@ class TubeLayoutEditor(QMainWindow):
                                 print("无法计算DL：未获取到换热器型号")
                             else:
                                 # 根据换热器型号计算DL
-                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN"]:
+                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN","AEM"]:
                                     # 计算方式1: DL = Di - 2×b₃，其中b₃ = max(0.25×do, 8mm)
                                     b3 = max(0.25 * do, 8.0)  # 取两者较大值作为b3
                                     DL = Di - 2 * b3
@@ -4135,7 +4171,7 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
-        if self.heat_exchanger in ["BEM", "NEN"]:
+        if self.heat_exchanger in ["BEM", "NEN","AEM"]:
             self.header.setCurrentIndex(0)  # 管板形式页面
             self.stacked_widget.setCurrentIndex(0)
         else:
@@ -5719,7 +5755,7 @@ class TubeLayoutEditor(QMainWindow):
         # 根据产品型式判断热交换器类型
         if product_type_str in ["AEU", "BEU"]:
             he_type = "2"  # U型管式
-        elif product_type_str in ["NEN","BEM"]:
+        elif product_type_str in ["NEN","BEM","AEM"]:
             he_type = "1"  # 固定管板式
         elif product_type_str in ["AES", "BES"]:
             he_type = "0"  # 浮头式
@@ -5742,7 +5778,7 @@ class TubeLayoutEditor(QMainWindow):
                             # 根据产品型式判断热交换器类型
                             if product_type_str in ["AEU", "BEU"]:
                                 he_type = "2"  # U型管式
-                            elif product_type_str in ["NEN","BEM"]:
+                            elif product_type_str in ["NEN","BEM","AEM"]:
                                 he_type = "1"  # 固定管板式
                             elif product_type_str in ["AES", "BES"]:
                                 he_type = "0"  # 浮头式
@@ -6355,7 +6391,7 @@ class TubeLayoutEditor(QMainWindow):
         # 根据产品型式判断热交换器类型
         if product_type_str in ["AEU", "BEU"]:
             he_type = "2"  # U型管式
-        elif product_type_str in ["NEN","BEM"]:
+        elif product_type_str in ["NEN","BEM","AEM"]:
             he_type = "1"  # 固定管板式
         elif product_type_str in ["AES", "BES"]:
             he_type = "0"  # 浮头式
@@ -6378,7 +6414,7 @@ class TubeLayoutEditor(QMainWindow):
                             # 根据产品型式判断热交换器类型
                             if product_type_str in ["AEU", "BEU"]:
                                 he_type = "2"  # U型管式
-                            elif product_type_str in ["NEN","BEM"]:
+                            elif product_type_str in ["NEN","BEM","AEM"]:
                                 he_type = "1"  # 固定管板式
                             elif product_type_str in ["AES", "BES"]:
                                 he_type = "0"  # 浮头式
@@ -7862,7 +7898,7 @@ class TubeLayoutEditor(QMainWindow):
             """内部工具函数：按原逻辑根据换热器型号计算 DL。"""
             heat_exchanger_type_local = self.heat_exchanger or "AEU"
 
-            if heat_exchanger_type_local in ["AEU", "BEU", "BEM", "NEN"]:
+            if heat_exchanger_type_local in ["AEU", "BEU", "BEM", "NEN","AEM"]:
                 # 计算方式1: DL = Di - 2b₃, b₃ = max(0.25do, 8)
                 b3_local = max(0.25 * do_value_local, 8.0)
                 dl_local = di_value_local - 2 * b3_local
@@ -12221,7 +12257,7 @@ class TubeLayoutEditor(QMainWindow):
             return
 
         # 定义允许显示4.1图片的换热器类型
-        allowed_types = {"AES", "BES", "NEN", "BEM"}
+        allowed_types = {"AES", "BES", "NEN", "BEM","AEM"}
         # 检查当前换热器类型是否在允许列表中
         show_4_1 = self.heat_exchanger in allowed_types
         show_4_3 = self.heat_exchanger in allowed_types
@@ -20577,6 +20613,247 @@ class TubeLayoutEditor(QMainWindow):
         cancel.clicked.connect(dlg.reject)
         convert_btn.clicked.connect(lagan_to_screw_ring)
         convert_radial_btn.clicked.connect(lagan_to_radial_holes)
+        dlg.exec_()
+
+    def edit_screw_ring_params_dialog(self, screw_ring_id=None):
+        """
+        编辑吊环螺钉参数对话框
+        - 只显示"吊环螺钉规格"下拉框
+        - 修改规格时，统一修改所有吊环螺钉的规格
+        - 添加"转为拉杆"和"转为径向开孔"按钮
+        """
+        self.operation_order += 1
+        try:
+            print(
+                f"[DBG][edit_screw_ring_params_dialog] ENTER screw_ring_id={screw_ring_id}, operation_order={getattr(self,'operation_order',None)}"
+            )
+        except Exception:
+            pass
+        from PyQt5.QtWidgets import (
+            QDialog,
+            QVBoxLayout,
+            QHBoxLayout,
+            QLabel,
+            QComboBox,
+            QPushButton,
+            QTableWidgetItem,
+        )
+
+        def find_row_by_name(name: str):
+            rc = self.param_table.rowCount()
+            for r in range(rc):
+                it = self.param_table.item(r, 1)
+                if it and it.text().strip() == name:
+                    return r
+            return -1
+
+        def get_cell_text(row: int) -> str:
+            if row < 0:
+                return ""
+            w = self.param_table.cellWidget(row, 2)
+            if w and isinstance(w, QComboBox):
+                return w.currentText().strip()
+            it = self.param_table.item(row, 2)
+            return it.text().strip() if it else ""
+
+        def set_cell_text(row: int, text: str):
+            if row < 0:
+                return
+            w = self.param_table.cellWidget(row, 2)
+            if w and isinstance(w, QComboBox):
+                w.blockSignals(True)
+                if w.findText(text) < 0:
+                    w.addItem(text)
+                w.setEditable(False)
+                w.setCurrentText(text)
+                w.blockSignals(False)
+            else:
+                self.param_table.setItem(row, 2, QTableWidgetItem(text))
+            self.set_param_visibility(row, False)
+
+        # 获取当前吊环螺钉规格
+        row_spec = find_row_by_name("吊环螺钉规格")
+        default_spec = get_cell_text(row_spec) or "M20"
+        try:
+            print(
+                f"[DBG][edit_screw_ring_params_dialog] row_spec={row_spec}, default_spec={default_spec}"
+            )
+        except Exception:
+            pass
+
+        # 创建对话框
+        dlg = QDialog(self)
+        dlg.setWindowTitle("吊环螺钉参数设置")
+        main = QVBoxLayout(dlg)
+
+        # 吊环螺钉规格下拉框
+        line1 = QHBoxLayout()
+        line1.addWidget(QLabel("吊环螺钉规格:"))
+        spec_combo = QComboBox()
+        screw_specs = [
+            "M8",
+            "M10",
+            "M12",
+            "M16",
+            "M20",
+            "M24",
+            "M30",
+            "M36",
+            "M42",
+            "M48",
+            "M56",
+            "M64",
+            "M72×6",
+            "M80×6",
+            "M100×6",
+        ]
+        spec_combo.addItems(screw_specs)
+        idx = spec_combo.findText(default_spec)
+        if idx >= 0:
+            spec_combo.setCurrentIndex(idx)
+        else:
+            spec_combo.addItem(default_spec)
+            spec_combo.setCurrentText(default_spec)
+        line1.addWidget(spec_combo)
+        main.addLayout(line1)
+
+        # 按钮布局
+        btns = QHBoxLayout()
+        ok = QPushButton("确定")
+        cancel = QPushButton("取消")
+        convert_to_lagan_btn = QPushButton("转为拉杆")
+        convert_to_radial_btn = QPushButton("转为径向开孔")
+        btns.addWidget(ok)
+        btns.addWidget(cancel)
+        btns.addWidget(convert_to_lagan_btn)
+        btns.addWidget(convert_to_radial_btn)
+        main.addLayout(btns)
+
+        def apply_and_close():
+            """应用规格修改并关闭对话框"""
+            new_spec = spec_combo.currentText().strip()
+            if row_spec >= 0:
+                set_cell_text(row_spec, new_spec)
+                # 更新参数表数据
+                if isinstance(getattr(self, "all_params", None), list):
+                    for p in self.all_params:
+                        if p.get("参数名") == "吊环螺钉规格":
+                            p["参数值"] = new_spec
+                if isinstance(getattr(self, "output_data", None), dict):
+                    self.output_data["ScrewRingSpec"] = new_spec
+
+            # 统一修改所有吊环螺钉的规格
+            import re
+            match = re.search(r"(\d+)", new_spec)
+            new_diameter = None
+            if match:
+                try:
+                    new_diameter = float(match.group(1))
+                except Exception:
+                    pass
+
+            if new_diameter is not None and hasattr(self, "screw_ring_dic") and self.screw_ring_dic:
+                # 遍历所有吊环螺钉，更新规格
+                for ring_id, ring_info in list(self.screw_ring_dic.items()):
+                    if not isinstance(ring_info, dict):
+                        continue
+                    old_diameter = ring_info.get("diameter")
+                    if old_diameter == new_diameter:
+                        continue  # 规格相同，跳过
+                    
+                    # 更新字典中的规格
+                    ring_info["diameter"] = new_diameter
+                    
+                    # 更新图形项的直径（不重新创建，只更新大小）
+                    try:
+                        import math
+                        from PyQt5.QtGui import QPen, QColor
+                        from PyQt5.QtCore import Qt
+                        from PyQt5.QtWidgets import QGraphicsLineItem
+                        
+                        items = ring_info.get("items", [])
+                        if not items:
+                            continue
+                        
+                        # 获取圆心（从第一个图形项获取）
+                        circle_item = None
+                        for item in items:
+                            if isinstance(item, QGraphicsEllipseItem):
+                                circle_item = item
+                                break
+                        
+                        if circle_item is None:
+                            continue
+                        
+                        # 获取圆心坐标
+                        rect = circle_item.rect()
+                        cx = rect.center().x()
+                        cy = rect.center().y()
+                        
+                        # 计算新半径
+                        new_radius = new_diameter / 2.0
+                        
+                        # 更新圆形
+                        circle_item.setRect(cx - new_radius, cy - new_radius, 2 * new_radius, 2 * new_radius)
+                        
+                        # 更新内部线条
+                        line_items = [item for item in items if isinstance(item, QGraphicsLineItem)]
+                        offsets = [-new_radius / 2.0, 0.0, new_radius / 2.0]
+                        inner_r = new_radius * 0.9
+                        
+                        # 删除旧的线条
+                        for line_item in line_items:
+                            if line_item.scene():
+                                self.graphics_scene.removeItem(line_item)
+                        
+                        # 重新创建线条
+                        line_pen = QPen(QColor(0, 102, 204))
+                        line_pen.setWidth(1)
+                        line_pen.setCosmetic(True)
+                        
+                        new_line_items = []
+                        # 水平弦
+                        for dy in offsets:
+                            y = cy + dy
+                            line = QGraphicsLineItem(cx - inner_r, y, cx + inner_r, y)
+                            line.setPen(line_pen)
+                            line.setZValue(5.1)
+                            line.is_screw_ring = True
+                            line.screw_ring_id = ring_id
+                            self.graphics_scene.addItem(line)
+                            new_line_items.append(line)
+                        
+                        # 垂直弦
+                        for dx in offsets:
+                            x = cx + dx
+                            line = QGraphicsLineItem(x, cy - inner_r, x, cy + inner_r)
+                            line.setPen(line_pen)
+                            line.setZValue(5.1)
+                            line.is_screw_ring = True
+                            line.screw_ring_id = ring_id
+                            self.graphics_scene.addItem(line)
+                            new_line_items.append(line)
+                        
+                        # 更新字典中的items列表
+                        ring_info["items"] = [circle_item] + new_line_items
+                        
+                    except Exception as e:
+                        print(f"[edit_screw_ring_params_dialog] 更新吊环螺钉 {ring_id} 失败: {e}")
+
+            dlg.accept()
+
+        def screw_ring_to_lagan():
+            """转为拉杆（暂时只打印函数名）"""
+            print("screw_ring_to_lagan")
+
+        def screw_ring_to_radial_holes():
+            """转为径向开孔（暂时只打印函数名）"""
+            print("screw_ring_to_radial_holes")
+
+        ok.clicked.connect(apply_and_close)
+        cancel.clicked.connect(dlg.reject)
+        convert_to_lagan_btn.clicked.connect(screw_ring_to_lagan)
+        convert_to_radial_btn.clicked.connect(screw_ring_to_radial_holes)
         dlg.exec_()
 
     def build_sql_for_tube(self, tube_data):
@@ -35567,6 +35844,12 @@ class TubeLayoutEditor(QMainWindow):
         """创建吊环螺钉参数设置弹窗，从参数表获取初始值并关联更新"""
         if not ENABLE_SCREW_RING:
             return
+        try:
+            print(
+                f"[DBG][on_screw_ring_click] ENTER (old init dialog) operation_order={getattr(self,'operation_order',None)}"
+            )
+        except Exception:
+            pass
         
         from PyQt5.QtWidgets import (
             QDialog,
@@ -35620,6 +35903,14 @@ class TubeLayoutEditor(QMainWindow):
                     else:  # 吊环螺钉规格
                         if value_text:
                             params[param_name]["default"] = value_text
+
+        try:
+            print(
+                "[DBG][on_screw_ring_click] defaults="
+                + str({k: v.get("default") for k, v in params.items()})
+            )
+        except Exception:
+            pass
 
         # ================== 优先处理：选中“已有径向开孔”的换热管，直接转换为吊环螺钉 ==================
         try:
@@ -36214,10 +36505,34 @@ class TubeLayoutEditor(QMainWindow):
 
         items = [circle_item] + line_items
         # 为本次创建的图元打上ID和可点击属性
+        editor_ref = self  # 保存editor引用
         for it in items:
             it.screw_ring_id = screw_id
             it.setAcceptedMouseButtons(Qt.LeftButton)
             it.setFlag(QGraphicsItem.ItemIsSelectable, True)
+            # 为图形项添加双击事件处理
+            it.editor = editor_ref
+            # 创建双击事件处理方法（使用闭包确保每个item都有独立的处理函数）
+            def make_double_click_handler(item, editor, ring_id):
+                def mouseDoubleClickEvent(event):
+                    try:
+                        print(f"[ScrewRingItem] double-click detected, id={ring_id}")
+                        if editor and hasattr(editor, "edit_screw_ring_params_dialog"):
+                            editor.edit_screw_ring_params_dialog(ring_id)
+                            event.accept()
+                            return
+                    except Exception as e:
+                        print(f"[ScrewRingItem] error in double-click: {e}")
+                        import traceback
+                        traceback.print_exc()
+                    # 如果没有处理，调用父类方法
+                    from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsLineItem
+                    if isinstance(item, QGraphicsEllipseItem):
+                        QGraphicsEllipseItem.mouseDoubleClickEvent(item, event)
+                    elif isinstance(item, QGraphicsLineItem):
+                        QGraphicsLineItem.mouseDoubleClickEvent(item, event)
+                return mouseDoubleClickEvent
+            it.mouseDoubleClickEvent = make_double_click_handler(it, editor_ref, screw_id)
 
         rec = {
             "id": screw_id,
@@ -38688,11 +39003,41 @@ class TubeLayoutEditor(QMainWindow):
                 mouse_y = scene_pos.y()
 
                 items = self.graphics_scene.items(scene_pos)
+                try:
+                    print(
+                        f"[DBG][eventFilter] MouseButtonDblClick scene=({mouse_x:.3f},{mouse_y:.3f}) items={len(items) if items else 0}"
+                    )
+                    # 打印命中items预览（最多前6个）
+                    preview = []
+                    for it in (items[:6] if items else []):
+                        preview.append(
+                            {
+                                "type": type(it).__name__,
+                                "is_screw_ring": bool(
+                                    getattr(it, "is_screw_ring", False)
+                                ),
+                                "screw_ring_id": getattr(it, "screw_ring_id", None),
+                                "is_side_rod": bool(getattr(it, "is_side_rod", False)),
+                                "is_lagan": bool(getattr(it, "is_lagan", False)),
+                            }
+                        )
+                    print(f"[DBG][eventFilter] hit_preview={preview}")
+                except Exception:
+                    pass
                 # 吊环螺钉双击：打开参数弹窗
                 for item in items:
                     if getattr(item, "is_screw_ring", False):
                         try:
-                            self.on_screw_ring_click()
+                            screw_ring_id = getattr(item, "screw_ring_id", None)
+                            print(
+                                f"[DBG][eventFilter] screw ring dblclick -> route_to_edit_dialog id={screw_ring_id}"
+                            )
+                            # 新逻辑：双击吊环螺钉，只弹“规格”编辑弹窗
+                            if hasattr(self, "edit_screw_ring_params_dialog"):
+                                self.edit_screw_ring_params_dialog(screw_ring_id)
+                            else:
+                                # 兜底：若新函数不存在才走旧弹窗
+                                self.on_screw_ring_click()
                         except Exception:
                             pass
                         event.accept()
