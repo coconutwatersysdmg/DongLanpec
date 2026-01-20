@@ -30008,6 +30008,41 @@ class TubeLayoutEditor(QMainWindow):
             side_dangban_length = round(
                 abs(distance - tube_bridge_val - do_value/2), 2
             )
+            # --- 干涉预判：检查下方相邻行与名义孔桥假设圆 ---
+            try:
+                # 收集所有 y 并找到当前行及其下一行（纵坐标更小的一行）
+                centers_all = self.current_centers + self.lagan_info
+                all_y_coords = sorted(set(point[1] for point in centers_all))
+                selected_y = self.selected_to_current_coords(selected_centers)[0][1]
+                current_idx = None
+                for idx, yv in enumerate(all_y_coords):
+                    if abs(yv - selected_y) < 1e-6:
+                        current_idx = idx
+                        break
+                if current_idx is not None and current_idx > 0:
+                    # 下方（y 更小）相邻行
+                    y0 = all_y_coords[current_idx - 1]
+                    delta_y = selected_y - y0
+                    if 0 <= delta_y < tube_bridge_val:
+                        # 名义孔桥假设圆：外径/2 + 名义孔桥
+                        R_nom = (do_value / 2.0) + tube_bridge_val
+                        if abs(y0) <= R_nom:
+                            import math
+
+                            x_left = -math.sqrt(R_nom * R_nom - y0 * y0)
+                            # 挡板左端固定在 -R_bend，右端截到名义圆交点
+                            new_length = round(max(0.0, (bendblock_value / 2.0) + x_left), 2)
+                            # 只缩短，不拉长；命中该规则后直接采用名义圆截断结果并返回
+                            if new_length < side_dangban_length:
+                                side_dangban_length = new_length
+                            self.side_dangban_length = side_dangban_length
+                            print(
+                                f"[旁路挡板] 名义孔桥干涉：delta_y={delta_y:.3f} < bridge={tube_bridge_val:.3f}, "
+                                f"y0={y0:.3f}, x_left={x_left:.3f}, new_length={side_dangban_length:.3f}"
+                            )
+                            return side_dangban_length
+            except Exception as _e:
+                print(f"[旁路挡板] 干涉预判异常: {_e}")
             
             print(f"\n[calculate_level_side_dangban_length] ========== 开始干涉检查 ==========")
             print(f"[原始计算] 原始 side_dangban_length = {side_dangban_length:.3f}")
@@ -30081,10 +30116,10 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 print(f"[干涉检查] 警告：未找到当前行在 y 坐标列表中的位置")
             
-            # 2. 计算名义圆半径
-            nominal_circle_radius = (do_value + tube_bridge_val) / 2.0
+            # 2. 计算名义圆半径：do/2 + 名义孔桥
+            nominal_circle_radius = (do_value / 2.0) + tube_bridge_val
             print(f"\n[名义圆计算] do_value = {do_value:.3f}, tube_bridge_val = {tube_bridge_val:.3f}")
-            print(f"[名义圆计算] 名义圆半径 = (do + 名义孔桥) / 2 = ({do_value:.3f} + {tube_bridge_val:.3f}) / 2 = {nominal_circle_radius:.3f}")
+            print(f"[名义圆计算] 名义圆半径 = do/2 + 名义孔桥 = ({do_value:.3f}/2) + {tube_bridge_val:.3f} = {nominal_circle_radius:.3f}")
             print(f"[名义圆计算] 名义圆直径 = {nominal_circle_radius * 2:.3f}")
             
             # 3. 判断旁路挡板是否与名义圆干涉
@@ -30430,13 +30465,13 @@ class TubeLayoutEditor(QMainWindow):
             # QMessageBox.warning(self, "参数缺失", "未找到换热管外径 do，请先配置参数表")
             return 0
 
-        baffle_diameter = self.get_baffle_diameter()
-        if baffle_diameter is None:
-            # QMessageBox.warning(self, "参数错误", "未找到折流板外径参数")
+        # 使用折流板外径（或弯曲块尺寸）来限定挡板边界，保持与长度计算一致
+        bendblock = self.get_tube_bendblock()
+        try:
+            bendblock_value = float(bendblock)
+        except Exception:
             return 0
-
-        # 计算折流板半径（用于确定挡板边界）
-        R_baffle = baffle_diameter / 2.0
+        R_baffle = bendblock_value / 2.0
 
         if selected_centers:
             for selected_center in selected_centers:
@@ -30719,8 +30754,8 @@ class TubeLayoutEditor(QMainWindow):
                 # 获取选中换热管的实际坐标
                 x, y = row[col_idx]
 
-                # 计算折流板圆在当前Y坐标的左右边界（X的最大/最小值）
-                max_x = math.sqrt(R_baffle ** 2 - y ** 2)  # 右侧边界X值（正数）
+                # 计算折流板圆在当前Y坐标的左右边界（X的最大/最小值），使用 R_baffle（与长度计算一致）
+                max_x = math.sqrt(max(R_baffle ** 2 - y ** 2, 0.0))  # 右侧边界X值（正数）
                 min_x = -max_x  # 左侧边界X值（负数）
 
                 # 计算选中换热管到左右边界的距离
@@ -30740,7 +30775,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 挡板高度取用户输入与折流板圆当前Y坐标高度的最小值（避免超出圆）
                 max_block_height = 2 * math.sqrt(
-                    R_baffle ** 2 - y ** 2
+                    max(R_baffle ** 2 - y ** 2, 0.0)
                 )  # 折流板圆当前Y坐标的高度（上下边界距离）
                 actual_block_height = min(block_height, max_block_height)
                 # 当输入厚度超过几何上限时打印调试信息，方便判B：点旁路挡板按钮弹出窗口，在窗口里改厚度再点确定？断为什么看起来“没变细/没变粗”
