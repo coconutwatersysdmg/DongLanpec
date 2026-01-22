@@ -20861,8 +20861,88 @@ class TubeLayoutEditor(QMainWindow):
             dlg.accept()
 
         def screw_ring_to_lagan():
-            """转为拉杆（暂时只打印函数名）"""
-            print("screw_ring_to_lagan")
+            """转为拉杆：删除吊环螺钉，在相同位置添加拉杆"""
+            if screw_ring_id is None:
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(dlg, "提示", "未找到吊环螺钉ID")
+                return
+            
+            # 获取吊环螺钉信息
+            if not hasattr(self, "screw_ring_dic") or not isinstance(self.screw_ring_dic, dict):
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(dlg, "提示", "吊环螺钉数据字典不存在")
+                return
+            
+            ring_info = self.screw_ring_dic.get(screw_ring_id)
+            if not isinstance(ring_info, dict):
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(dlg, "提示", "未找到对应的吊环螺钉信息")
+                return
+            
+            # 获取吊环螺钉的中心坐标
+            center_coord = ring_info.get("center")
+            if not center_coord or len(center_coord) != 2:
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(dlg, "提示", "吊环螺钉坐标信息无效")
+                return
+            
+            try:
+                cx, cy = float(center_coord[0]), float(center_coord[1])
+            except (TypeError, ValueError):
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(dlg, "提示", "吊环螺钉坐标格式错误")
+                return
+            
+            # 删除吊环螺钉的图形项
+            items = ring_info.get("items", [])
+            for it in items:
+                try:
+                    if it is None:
+                        continue
+                    # 使用 try-except 包裹 scene() 调用，避免崩溃
+                    try:
+                        item_scene = it.scene()
+                    except (RuntimeError, AttributeError):
+                        # item可能已经被删除或无效，跳过
+                        continue
+                    # 只有在scene一致时才删除
+                    if item_scene is not None and item_scene == self.graphics_scene:
+                        try:
+                            self.graphics_scene.removeItem(it)
+                        except (RuntimeError, AttributeError):
+                            # 删除失败，可能item已经被删除，忽略
+                            pass
+                except Exception:
+                    # 忽略所有其他异常
+                    pass
+            
+            # 从字典中删除吊环螺钉记录
+            try:
+                del self.screw_ring_dic[screw_ring_id]
+            except Exception:
+                pass
+            
+            # 判断是普通拉杆还是特殊拉杆（根据位置）
+            # 这里先使用普通拉杆，如果需要特殊拉杆，可以根据具体位置判断
+            # 例如：如果坐标在最左或最右位置，可能需要特殊拉杆
+            is_side_rod = False  # 默认使用普通拉杆
+            
+            # 在相同位置添加拉杆
+            # build_lagan 接收 selected_centers 参数，可以是绝对坐标列表
+            try:
+                # 使用绝对坐标调用 build_lagan
+                self.build_lagan([(cx, cy)])
+                print(f"[screw_ring_to_lagan] 已将吊环螺钉 {screw_ring_id} 转换为拉杆，坐标: ({cx:.3f}, {cy:.3f})")
+            except Exception as e:
+                print(f"[screw_ring_to_lagan] 添加拉杆失败: {e}")
+                import traceback
+                traceback.print_exc()
+                from PyQt5.QtWidgets import QMessageBox
+                QMessageBox.warning(dlg, "错误", f"添加拉杆失败: {str(e)}")
+                return
+            
+            # 关闭对话框
+            dlg.accept()
 
         def screw_ring_to_radial_holes():
             """转为径向开孔（暂时只打印函数名）"""
