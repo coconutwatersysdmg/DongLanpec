@@ -16022,14 +16022,20 @@ class TubeLayoutEditor(QMainWindow):
             ]:
                 _safe_step(f"reset {attr}", setattr, self, attr, default)
 
-            # 7) 径向开孔字典：只清空每条的换热管坐标
+            # 7) 径向开孔字典：只清空字典，不清除图形项（避免访问已销毁的Qt对象导致崩溃）
+            # 图形项会在后续重新绘制时自动替换
             def _reset_radial_holes():
+                # 只清空字典中的坐标和图形项引用字典，不删除图形项本身
+                # 这样可以避免访问已销毁的Qt对象导致的访问冲突
                 if hasattr(self, "radial_hole_dict") and isinstance(self.radial_hole_dict, dict):
                     for v in self.radial_hole_dict.values():
                         if isinstance(v, dict) and "换热管坐标" in v:
                             v["换热管坐标"] = None
                 else:
                     self.radial_hole_dict = {}
+                # 清空图形项引用字典，但不删除图形项（让它们自然被后续绘制覆盖）
+                if hasattr(self, "_radial_hole_tangent_items_by_coord"):
+                    self._radial_hole_tangent_items_by_coord = {}
             _safe_step("reset radial_hole_dict", _reset_radial_holes)
 
             # 8) 吊环螺钉相关：初始化
@@ -22226,15 +22232,33 @@ class TubeLayoutEditor(QMainWindow):
         for it in items:
             try:
                 # 检查item是否在scene中，且scene一致
-                item_scene = it.scene()
-                if item_scene is not None:
-                    if item_scene == self.graphics_scene:
+                if it is None:
+                    continue
+                # 使用 try-except 包裹 scene() 调用，避免崩溃
+                try:
+                    item_scene = it.scene()
+                except (RuntimeError, AttributeError):
+                    # item可能已经被删除或无效，跳过
+                    continue
+                # 如果item的scene是None，说明已经被删除，跳过
+                if item_scene is None:
+                    continue
+                # 只有在scene一致时才删除
+                if item_scene == self.graphics_scene:
+                    try:
                         self.graphics_scene.removeItem(it)
-                    else:
-                        # item在其他scene中，从那个scene删除
+                    except (RuntimeError, AttributeError):
+                        # 删除失败，可能item已经被删除，忽略
+                        pass
+                else:
+                    # item在其他scene中，从那个scene删除
+                    try:
                         item_scene.removeItem(it)
-            except Exception as e:
-                # 忽略删除失败的情况（item可能已经被删除）
+                    except (RuntimeError, AttributeError):
+                        # 删除失败，忽略
+                        pass
+            except Exception:
+                # 忽略所有其他异常（item可能已经被删除）
                 pass
 
     def clear_all_radial_hole_graphics(self):
@@ -22249,8 +22273,34 @@ class TubeLayoutEditor(QMainWindow):
         for _k, items in list(items_by_coord.items()):
             for it in items or []:
                 try:
-                    self.graphics_scene.removeItem(it)
+                    # 检查item是否在scene中，且scene一致
+                    if it is None:
+                        continue
+                    # 使用 try-except 包裹 scene() 调用，避免崩溃
+                    try:
+                        item_scene = it.scene()
+                    except (RuntimeError, AttributeError):
+                        # item可能已经被删除或无效，跳过
+                        continue
+                    # 如果item的scene是None，说明已经被删除，跳过
+                    if item_scene is None:
+                        continue
+                    # 只有在scene一致时才删除
+                    if item_scene == self.graphics_scene:
+                        try:
+                            self.graphics_scene.removeItem(it)
+                        except (RuntimeError, AttributeError):
+                            # 删除失败，可能item已经被删除，忽略
+                            pass
+                    else:
+                        # item在其他scene中，从那个scene删除
+                        try:
+                            item_scene.removeItem(it)
+                        except (RuntimeError, AttributeError):
+                            # 删除失败，忽略
+                            pass
                 except Exception:
+                    # 忽略所有其他异常（item可能已经被删除）
                     pass
         self._radial_hole_tangent_items_by_coord = {}
 
@@ -22292,8 +22342,23 @@ class TubeLayoutEditor(QMainWindow):
         if old_items:
             for it in old_items:
                 try:
-                    self.graphics_scene.removeItem(it)
+                    if it is None:
+                        continue
+                    # 使用 try-except 包裹 scene() 调用，避免崩溃
+                    try:
+                        item_scene = it.scene()
+                    except (RuntimeError, AttributeError):
+                        # item可能已经被删除或无效，跳过
+                        continue
+                    # 只有在scene一致时才删除
+                    if item_scene is not None and item_scene == self.graphics_scene:
+                        try:
+                            self.graphics_scene.removeItem(it)
+                        except (RuntimeError, AttributeError):
+                            # 删除失败，可能item已经被删除，忽略
+                            pass
                 except Exception:
+                    # 忽略所有其他异常
                     pass
 
         try:
