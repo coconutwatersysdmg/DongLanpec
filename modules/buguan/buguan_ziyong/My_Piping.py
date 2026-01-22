@@ -20368,11 +20368,15 @@ class TubeLayoutEditor(QMainWindow):
 
             # 如果选中了多个拉杆，只处理第一个
             if len(coords_to_convert) > 1:
-                QMessageBox.information(
+                reply = QMessageBox.information(
                     dlg,
                     "提示",
                     f"选中了 {len(coords_to_convert)} 个普通拉杆，将只处理第一个",
+                    QMessageBox.Ok | QMessageBox.Cancel,
+                    QMessageBox.Ok
                 )
+                if reply == QMessageBox.Cancel:
+                    return
 
             # 获取第一个坐标和对应的拉杆项
             first_coord = coords_to_convert[0]
@@ -20380,9 +20384,17 @@ class TubeLayoutEditor(QMainWindow):
             
             # 只删除选中的那一个普通拉杆（不处理对称）
             if first_lagan_item:
-                # 从场景中删除图形项
-                if first_lagan_item.scene() == self.graphics_scene:
-                    self.graphics_scene.removeItem(first_lagan_item)
+                # 从场景中删除图形项（安全删除，检查scene是否一致）
+                try:
+                    item_scene = first_lagan_item.scene()
+                    if item_scene is not None and item_scene == self.graphics_scene:
+                        self.graphics_scene.removeItem(first_lagan_item)
+                    elif item_scene is not None:
+                        # item在其他scene中，尝试从那个scene删除
+                        item_scene.removeItem(first_lagan_item)
+                except Exception as e:
+                    print(f"[lagan_to_radial_holes] 删除拉杆图形项时出错: {e}")
+                    # 继续执行，即使删除图形失败也不影响后续逻辑
                 
                 # 从 lagan_info 中删除坐标
                 if hasattr(self, "lagan_info") and isinstance(self.lagan_info, (list, tuple)):
@@ -22213,8 +22225,16 @@ class TubeLayoutEditor(QMainWindow):
         items = items_by_coord.pop(key, None) or []
         for it in items:
             try:
-                self.graphics_scene.removeItem(it)
-            except Exception:
+                # 检查item是否在scene中，且scene一致
+                item_scene = it.scene()
+                if item_scene is not None:
+                    if item_scene == self.graphics_scene:
+                        self.graphics_scene.removeItem(it)
+                    else:
+                        # item在其他scene中，从那个scene删除
+                        item_scene.removeItem(it)
+            except Exception as e:
+                # 忽略删除失败的情况（item可能已经被删除）
                 pass
 
     def clear_all_radial_hole_graphics(self):
@@ -24107,15 +24127,15 @@ class TubeLayoutEditor(QMainWindow):
                         continue
                     print(f"[radial_hole] check code={code}, coord={coord}, key={key}")
                     if key in abs_keys:
-                        print(f"[radial_hole] match found, remove graphics for code={code}")
-                        # 删除该径向开孔的图形
+                        print(f"[radial_hole] match found, remove graphics for code={code}, coord={coord}")
+                        # 删除该径向开孔的图形（但保留坐标，以便后续重新绘制）
                         try:
                             if hasattr(self, "remove_radial_hole_graphics"):
                                 self.remove_radial_hole_graphics(coord)
                         except Exception as e:
                             print(f"[radial_hole] remove_radial_hole_graphics error: {e}")
-                        # 清空数据字典中的绑定坐标
-                        info["换热管坐标"] = None
+                        # 注意：这里不清空坐标，保留坐标以便在函数末尾重新绘制
+                        # info["换热管坐标"] = None  # 注释掉，保留坐标
         except Exception as e:
             # 径向开孔处理失败不影响后续删除换热管逻辑
             print(f"[radial_hole] exception in delete_huanreguan radial handling: {e}")
@@ -24518,6 +24538,36 @@ class TubeLayoutEditor(QMainWindow):
         if hasattr(self, "clear_selection_highlight"):
             self.clear_selection_highlight()
         self.draw_baffle_plates()
+        
+        # 重新绘制所有径向开孔（保留坐标的）
+        try:
+            if hasattr(self, "radial_hole_dict") and isinstance(self.radial_hole_dict, dict):
+                print(f"[radial_hole] 开始重新绘制所有径向开孔，字典条目数: {len(self.radial_hole_dict)}")
+                redraw_count = 0
+                for code, info in self.radial_hole_dict.items():
+                    if not isinstance(info, dict):
+                        print(f"[radial_hole] 条目 {code} 不是字典类型: {type(info)}")
+                        continue
+                    coord = info.get("换热管坐标")
+                    if coord is None:
+                        print(f"[radial_hole] 条目 {code} 的坐标为空")
+                        continue
+                    print(f"[radial_hole] 重新绘制径向开孔 {code}, 坐标={coord}, 坐标类型={type(coord)}")
+                    try:
+                        self.draw_radial_hole_tangents(coord)
+                        redraw_count += 1
+                        print(f"[radial_hole] 成功重新绘制径向开孔 {code}")
+                    except Exception as e:
+                        print(f"[radial_hole] 重新绘制径向开孔 {code} 时出错: {e}")
+                        import traceback
+                        traceback.print_exc()
+                print(f"[radial_hole] 重新绘制完成，共绘制 {redraw_count} 个径向开孔")
+            else:
+                print(f"[radial_hole] radial_hole_dict 不存在或不是字典类型")
+        except Exception as e:
+            print(f"[radial_hole] 重新绘制所有径向开孔时出错: {e}")
+            import traceback
+            traceback.print_exc()
 
     # 10/24 修改，解决管板连接页面多次查询后重复展示的问题。修改以下2个函数，加上先删除旧数据
     def copy_tube_sheet_connection_data(self):
@@ -30027,7 +30077,7 @@ class TubeLayoutEditor(QMainWindow):
                         # 名义孔桥假设圆：外径/2 + 名义孔桥，再加一点安全余量
                         nominal_circle_margin = 1.0  # mm 适当放大，避免相交
                         R_nom = (do_value / 2.0) + tube_bridge_val + nominal_circle_margin
-                        print(f"[旁路挡板] 干涉预判: selected_y={selected_y:.3f}, y0={y0:.3f}, delta_y={delta_y:.3f}, R_nom={R_nom:.3f}")
+                        print(f"[旁路挡板] 干涉预判: selected_y={selected_y: .3f}, y0={y0: .3f}, delta_y={delta_y:.3f}, R_nom={R_nom:.3f}")
                         if abs(y0) <= R_nom + 1e-6:
                             import math
 
