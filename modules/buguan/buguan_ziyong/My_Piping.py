@@ -14834,8 +14834,7 @@ class TubeLayoutEditor(QMainWindow):
                 try:
                     from pprint import pformat
 
-                    print(pformat(tube_sheet_params_snapshot))
-
+                    print("当前管板形式：\n" + pformat(tube_sheet_params_snapshot))
                     # plate_type = tube_sheet_params_snapshot.get("plate_type")
                     # main_category = tube_sheet_params_snapshot.get("main_category")
                     # node_name = tube_sheet_params_snapshot.get("node_name")  # 节点
@@ -22923,6 +22922,12 @@ class TubeLayoutEditor(QMainWindow):
             fill_item.setZValue(110)
         except Exception:
             pass
+        # 标记径向开孔图形（灰色填充），便于双击时反查
+        try:
+            fill_item.is_radial_hole_tangent = True
+            fill_item.radial_hole_center_coord = center_coord
+        except Exception:
+            pass
 
         pen = QPen(Qt.black, 2)
         pen.setStyle(Qt.SolidLine)
@@ -22931,6 +22936,17 @@ class TubeLayoutEditor(QMainWindow):
         try:
             line1.setZValue(120)
             line2.setZValue(120)
+        except Exception:
+            pass
+        # 标记径向开孔图形（切线），便于双击时反查
+        try:
+            line1.is_radial_hole_tangent = True
+            line1.radial_hole_center_coord = center_coord
+        except Exception:
+            pass
+        try:
+            line2.is_radial_hole_tangent = True
+            line2.radial_hole_center_coord = center_coord
         except Exception:
             pass
 
@@ -22944,6 +22960,11 @@ class TubeLayoutEditor(QMainWindow):
         clickable_item = ClickableRadialHoleItem(
             click_rect, center_coord, editor=self
         )
+        # 放到最上层，确保能命中（否则会被灰色填充/切线挡住）
+        try:
+            clickable_item.setZValue(130)
+        except Exception:
+            pass
         self.graphics_scene.addItem(clickable_item)
 
         self._radial_hole_tangent_items_by_coord[key] = [fill_item, line1, line2, clickable_item]
@@ -39659,6 +39680,34 @@ class TubeLayoutEditor(QMainWindow):
                             pass
                         event.accept()
                         return True
+
+                # 径向开孔双击：命中可点击圆 or 灰色填充/切线，都进入编辑弹窗
+                try:
+                    chosen_center = None
+                    chosen_item = None
+                    for it in items or []:
+                        try:
+                            if isinstance(it, ClickableRadialHoleItem):
+                                chosen_item = it
+                                chosen_center = getattr(it, "center_coord", None)
+                                break
+                            if getattr(it, "is_radial_hole_tangent", False):
+                                chosen_center = getattr(it, "radial_hole_center_coord", None)
+                                break
+                        except Exception:
+                            continue
+                    if chosen_center is not None:
+                        if chosen_item is None:
+                            class _TmpRH:
+                                pass
+                            chosen_item = _TmpRH()
+                            chosen_item.center_coord = chosen_center
+                        if hasattr(self, "edit_radial_hole"):
+                            self.edit_radial_hole(chosen_item)
+                            event.accept()
+                            return True
+                except Exception:
+                    pass
                 for item in items:
                     # 旁路挡板、防冲板等矩形：交给 ClickableRectItem 自己处理
                     if isinstance(item, ClickableRectItem):
@@ -39703,7 +39752,8 @@ class TubeLayoutEditor(QMainWindow):
                     col_label = (col + 1) * x_multiplier
                     _ = (row_label, col_label)
                     print("检测到对换热管双击操作")
-                    return True
+                    # 不吞掉双击事件，否则会阻止 scene/item 的双击（例如径向开孔编辑）
+                    return False
 
                 return super().eventFilter(obj, event)
 
