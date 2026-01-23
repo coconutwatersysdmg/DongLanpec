@@ -22606,61 +22606,6 @@ class TubeLayoutEditor(QMainWindow):
         ok_btn.clicked.connect(dialog.accept)
         close_btn.clicked.connect(dialog.reject)
 
-        def on_delete_clicked():
-            """
-            删除当前径向开孔：
-            - 逻辑参考 on_radial_holes_click 中重新绘制前的清理流程；
-            - 解绑 radial_hole_dict 中与当前坐标相关的记录；
-            - 调用 remove_radial_hole_graphics 删除图形；
-            - 不再重绘新的径向开孔，只是纯删除。
-            """
-            try:
-                # 1) 若当前坐标原本绑定在 existing_port_code 上，先解绑并删除旧图形
-                try:
-                    if existing_port_code is not None and isinstance(
-                        self.radial_hole_dict, dict
-                    ) and existing_port_code in self.radial_hole_dict:
-                        old_coord = self.radial_hole_dict[existing_port_code].get(
-                            "换热管坐标"
-                        )
-                        self.radial_hole_dict[existing_port_code]["换热管坐标"] = None
-                        if old_coord is not None:
-                            try:
-                                self.remove_radial_hole_graphics(old_coord)
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
-
-                # 2) 防御性处理：遍历所有管口，凡是坐标等于 center_coord 的统统解绑并删图形
-                try:
-                    if isinstance(self.radial_hole_dict, dict):
-                        for code, info in self.radial_hole_dict.items():
-                            if (
-                                isinstance(info, dict)
-                                and info.get("换热管坐标") is not None
-                            ):
-                                if _coord_equal(
-                                    info.get("换热管坐标"), center_coord
-                                ):
-                                    old_coord = info.get("换热管坐标")
-                                    info["换热管坐标"] = None
-                                    if old_coord is not None:
-                                        try:
-                                            self.remove_radial_hole_graphics(
-                                                old_coord
-                                            )
-                                        except Exception:
-                                            pass
-                except Exception:
-                    pass
-            finally:
-                # 不再走确认分支，只是关闭编辑窗口
-                dialog.reject()
-
-        del_btn = buttons.addButton("删除", QDialogButtonBox.DestructiveRole)
-        del_btn.clicked.connect(on_delete_clicked)
-
         result = dialog.exec_()
         if result == QDialog.Rejected:
             return
@@ -23187,6 +23132,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 3) 删除当前坐标对应的图形
                 try:
                     self.remove_radial_hole_graphics(center_coord)
+                    self.clear_selection_highlight()
                 except Exception:
                     pass
             finally:
