@@ -852,8 +852,9 @@ class ClickableCircleItem(QGraphicsEllipseItem):
                 event.accept()
             elif self.is_lagan and self.editor:
                 # 普通拉杆：行为与普通换热管一致
-                # 1）通过 selected_centers 参与选管逻辑
+                # 1）通过 selected_centers 参与选管逻辑（如果能转换为相对坐标）
                 # 2）自身显示淡蓝色实心选中效果
+                # 3）即使无法转换为相对坐标，也能通过 selected_lagans 列表被选中
                 try:
                     # 获取场景中的圆心坐标
                     try:
@@ -865,11 +866,16 @@ class ClickableCircleItem(QGraphicsEllipseItem):
                         cx, cy = float(pos.x()), float(pos.y())
 
                     editor = self.editor
+                    if not hasattr(editor, "selected_centers"):
+                        editor.selected_centers = []
+                    if not hasattr(editor, "selected_lagans"):
+                        editor.selected_lagans = []
+                    
+                    # 尝试转换为相对坐标
+                    rel_list = []
                     if hasattr(editor, "actual_to_selected_coords"):
                         rel = editor.actual_to_selected_coords((cx, cy))
-
                         # 规范化为[(row,col), ...]
-                        rel_list = []
                         if rel:
                             if (
                                     isinstance(rel, (list, tuple))
@@ -886,35 +892,47 @@ class ClickableCircleItem(QGraphicsEllipseItem):
                                     ):
                                         rel_list.append(tuple(r))
 
-                        if not hasattr(editor, "selected_centers"):
-                            editor.selected_centers = []
-                        if not hasattr(editor, "selected_lagans"):
-                            editor.selected_lagans = []
+                    # 如果能转换为相对坐标，使用 selected_centers 逻辑
+                    if rel_list:
+                        # 若已全部在 selected_centers 中，则视为取消选择；否则加入
+                        cur = list(editor.selected_centers)
+                        if all(coord in cur for coord in rel_list):
+                            # 取消选中：移除坐标 + 恢复原始画刷
+                            cur = [c for c in cur if c not in rel_list]
+                            self.setBrush(self.original_brush)
+                            # 同步普通拉杆选中列表
+                            if self in editor.selected_lagans:
+                                editor.selected_lagans.remove(self)
+                        else:
+                            # 选中：加入坐标 + 设置淡蓝色实心
+                            for coord in rel_list:
+                                if coord not in cur:
+                                    cur.append(coord)
+                            from PyQt5.QtGui import QColor, QBrush
 
-                        if rel_list:
-                            # 若已全部在 selected_centers 中，则视为取消选择；否则加入
-                            cur = list(editor.selected_centers)
-                            if all(coord in cur for coord in rel_list):
-                                # 取消选中：移除坐标 + 恢复原始画刷
-                                cur = [c for c in cur if c not in rel_list]
-                                self.setBrush(self.original_brush)
-                                # 同步普通拉杆选中列表
-                                if self in editor.selected_lagans:
-                                    editor.selected_lagans.remove(self)
-                            else:
-                                # 选中：加入坐标 + 设置淡蓝色实心
-                                for coord in rel_list:
-                                    if coord not in cur:
-                                        cur.append(coord)
-                                from PyQt5.QtGui import QColor, QBrush
-
-                                self.setBrush(QBrush(QColor(173, 216, 230)))
-                                # 同步普通拉杆选中列表
-                                if self not in editor.selected_lagans:
-                                    editor.selected_lagans.append(self)
-                            editor.selected_centers = cur
-                except Exception:
-                    pass
+                            self.setBrush(QBrush(QColor(173, 216, 230)))
+                            # 同步普通拉杆选中列表
+                            if self not in editor.selected_lagans:
+                                editor.selected_lagans.append(self)
+                        editor.selected_centers = cur
+                    else:
+                        # 无法转换为相对坐标（例如从吊环螺钉转换来的拉杆）
+                        # 直接使用 selected_lagans 列表进行选中/取消选中
+                        if self in editor.selected_lagans:
+                            # 取消选中：恢复原始画刷
+                            self.setBrush(self.original_brush)
+                            editor.selected_lagans.remove(self)
+                            print(f"[ClickableCircleItem] 普通拉杆取消选中（无法转换为相对坐标），坐标: ({cx:.3f}, {cy:.3f})")
+                        else:
+                            # 选中：设置淡蓝色实心
+                            from PyQt5.QtGui import QColor, QBrush
+                            self.setBrush(QBrush(QColor(173, 216, 230)))
+                            editor.selected_lagans.append(self)
+                            print(f"[ClickableCircleItem] 普通拉杆选中（无法转换为相对坐标），坐标: ({cx:.3f}, {cy:.3f})")
+                except Exception as e:
+                    print(f"[ClickableCircleItem] 普通拉杆选中处理出错: {e}")
+                    import traceback
+                    traceback.print_exc()
                 event.accept()
             else:
                 # 其他圆（普通换热管等）：使用父类默认行为
@@ -939,8 +957,22 @@ class ClickableCircleItem(QGraphicsEllipseItem):
                 return
             except Exception:
                 pass
-        # 其他情况（包括普通拉杆和普通换热管）：不再有任何拉杆专用双击逻辑
-        # 直接走父类默认行为，与普通换热管一致
+        # 普通拉杆双击编辑
+        if self.is_lagan and self.editor:
+            try:
+                # 检查是否有编辑对话框函数
+                if hasattr(self.editor, "edit_lagan_params_dialog_only"):
+                    print(
+                        "[ClickableCircleItem] lagan double-click -> edit_lagan_params_dialog_only()"
+                    )
+                    self.editor.edit_lagan_params_dialog_only()
+                    event.accept()
+                    return
+            except Exception as e:
+                print(f"[ClickableCircleItem] 普通拉杆双击处理出错: {e}")
+                import traceback
+                traceback.print_exc()
+        # 其他情况（普通换热管等）：直接走父类默认行为
         super().mouseDoubleClickEvent(event)
 
 
@@ -4442,6 +4474,7 @@ class TubeLayoutEditor(QMainWindow):
         del_centers = all_coords.get("del_centers", [])
         self.slide_selected_centers = all_coords.get("slide_selected_centers", [])
         # self.del_centers = del_centers
+        self.delete_huanreguan(del_centers)
         # 将字符串形式的坐标列表转换为真正的列表
         if self.slide_selected_centers and isinstance(self.slide_selected_centers, str):
             try:
@@ -4785,8 +4818,6 @@ class TubeLayoutEditor(QMainWindow):
                 pass
 
         self.build_lagan(lagan_centers)
-
-        self.delete_huanreguan(del_centers)
 
         # 读取吊环螺钉表并重建场景中的吊环螺钉
         try:
@@ -5215,6 +5246,10 @@ class TubeLayoutEditor(QMainWindow):
         elif self.heat_exchanger in ["NEN", "BEM"]:
             print(1111111111111111111111111)
             di_result = qtzj.cal_qiaotineizhijing_NEN(
+                self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN, user_Dit
+            )
+        elif self.heat_exchanger in ["AEM"]:
+            di_result = qtzj.cal_qiaotineizhijing_AEM(
                 self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN, user_Dit
             )
         else:
@@ -14173,12 +14208,12 @@ class TubeLayoutEditor(QMainWindow):
                         self.execute_sql(statement)
 
                 sql_list = self.build_sql_for_radial_holes()
-                if sql_list:
+                if sql_list and len(sql_list) >= 2:
                     try:
                         has_old = False
                         query_sql = sql_list[0]
                         delete_sql = sql_list[1]
-                        insert_sqls = sql_list[2:]
+                        insert_sqls = sql_list[2:] if len(sql_list) > 2 else []
 
                         res = self.execute_sql(query_sql, fetch=True)
                         has_old = bool(res)
@@ -14189,6 +14224,10 @@ class TubeLayoutEditor(QMainWindow):
                             self.execute_sql(s)
                     except Exception as e:
                         print(f"保存径向开孔数据失败: {e}")
+                        import traceback
+                        traceback.print_exc()
+                elif sql_list and len(sql_list) < 2:
+                    print(f"保存径向开孔数据失败: sql_list 长度不足，期望至少2个元素，实际: {len(sql_list)}")
 
                 # 当前圆心坐标
                 if self.heat_exchanger in ["AES", "BES"]:
@@ -20922,17 +20961,104 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 pass
             
-            # 判断是普通拉杆还是特殊拉杆（根据位置）
-            # 这里先使用普通拉杆，如果需要特殊拉杆，可以根据具体位置判断
-            # 例如：如果坐标在最左或最右位置，可能需要特殊拉杆
-            is_side_rod = False  # 默认使用普通拉杆
+            # 尝试将绝对坐标转换为相对坐标
+            rel_coord = None
+            if hasattr(self, "actual_to_selected_coords") and callable(getattr(self, "actual_to_selected_coords", None)):
+                rel_coord = self.actual_to_selected_coords((cx, cy))
             
-            # 在相同位置添加拉杆
-            # build_lagan 接收 selected_centers 参数，可以是绝对坐标列表
+            # 判断是普通拉杆还是侧拉杆（自由拉杆）
+            # 如果能转换为相对坐标，优先使用 build_free_form_lagan（侧拉杆/自由拉杆）
+            # 因为它会根据位置自动计算应该放在行的最左还是最右侧
             try:
-                # 使用绝对坐标调用 build_lagan
-                self.build_lagan([(cx, cy)])
-                print(f"[screw_ring_to_lagan] 已将吊环螺钉 {screw_ring_id} 转换为拉杆，坐标: ({cx:.3f}, {cy:.3f})")
+                if rel_coord:
+                    # 有相对坐标，使用 build_free_form_lagan（侧拉杆/自由拉杆）
+                    # build_free_form_lagan 需要相对坐标，会根据位置在行的最左或最右侧放置拉杆
+                    lagan_length = getattr(self, "r", 10.0) * 2  # 获取拉杆直径
+                    print(f"[screw_ring_to_lagan] 尝试转换为侧拉杆，相对坐标: {rel_coord}, 绝对坐标: ({cx:.3f}, {cy:.3f}), 拉杆长度: {lagan_length}")
+                    result = self.build_free_form_lagan([rel_coord], lagan_length)
+                    print(f"[screw_ring_to_lagan] build_free_form_lagan 返回值: {result}, 类型: {type(result)}")
+                    if result is False or result is None:
+                        # build_free_form_lagan 返回 False 或 None 表示失败
+                        # 直接使用绝对坐标创建侧拉杆（自由拉杆），而不是回退到普通拉杆
+                        print(f"[screw_ring_to_lagan] 侧拉杆创建失败（返回值: {result}），使用绝对坐标直接创建侧拉杆")
+                        from PyQt5.QtCore import QRectF
+                        from PyQt5.QtGui import QPen, QBrush, QColor
+                        from PyQt5.QtCore import Qt
+                        
+                        lagan_radius = lagan_length / 2.0
+                        lagan_rect = QRectF(
+                            cx - lagan_radius, cy - lagan_radius, lagan_length, lagan_length
+                        )
+                        lagan_rod = ClickableCircleItem(lagan_rect, is_side_rod=True, editor=self)
+                        # 明确标记为侧拉杆，确保 mousePressEvent 使用 is_side_rod 分支
+                        lagan_rod.is_side_rod = True
+                        lagan_rod.is_lagan = False
+                        red_pen = QPen(Qt.red)
+                        red_pen.setWidth(1)
+                        red_brush = QBrush(Qt.red)
+                        lagan_rod.setPen(red_pen)
+                        lagan_rod.setBrush(red_brush)
+                        lagan_rod.original_pen = red_pen
+                        lagan_rod.original_brush = red_brush
+                        lagan_rod.setZValue(20)
+                        self.graphics_scene.addItem(lagan_rod)
+                        
+                        # 更新 red_dangban（如果 rel_coord 存在）
+                        if not hasattr(self, "red_dangban"):
+                            self.red_dangban = []
+                        if rel_coord not in self.red_dangban:
+                            self.red_dangban.append(rel_coord)
+                        
+                        # 更新操作记录
+                        if not hasattr(self, "operations"):
+                            self.operations = []
+                        self.operations.append({
+                            "type": "small_block",
+                            "coord": (cx, cy),
+                            "radius": lagan_radius,
+                            "diameter": lagan_length,
+                        })
+                        self.update_total_lagan_count()
+                        print(f"[screw_ring_to_lagan] 已将吊环螺钉 {screw_ring_id} 转换为侧拉杆（自由拉杆，绝对坐标），坐标: ({cx:.3f}, {cy:.3f})")
+                    else:
+                        print(f"[screw_ring_to_lagan] 已将吊环螺钉 {screw_ring_id} 转换为侧拉杆（自由拉杆），相对坐标: {rel_coord}, 绝对坐标: ({cx:.3f}, {cy:.3f})")
+                else:
+                    # 无法转换为相对坐标，直接使用绝对坐标创建侧拉杆（自由拉杆）
+                    print(f"[screw_ring_to_lagan] 无法转换为相对坐标，使用绝对坐标创建侧拉杆: ({cx:.3f}, {cy:.3f})")
+                    from PyQt5.QtCore import QRectF
+                    from PyQt5.QtGui import QPen, QBrush, QColor
+                    from PyQt5.QtCore import Qt
+                    
+                    lagan_length = getattr(self, "r", 10.0) * 2
+                    lagan_radius = lagan_length / 2.0
+                    lagan_rect = QRectF(
+                        cx - lagan_radius, cy - lagan_radius, lagan_length, lagan_length
+                    )
+                    lagan_rod = ClickableCircleItem(lagan_rect, is_side_rod=True, editor=self)
+                    # 明确标记为侧拉杆，确保 mousePressEvent 使用 is_side_rod 分支
+                    lagan_rod.is_side_rod = True
+                    lagan_rod.is_lagan = False
+                    red_pen = QPen(Qt.red)
+                    red_pen.setWidth(1)
+                    red_brush = QBrush(Qt.red)
+                    lagan_rod.setPen(red_pen)
+                    lagan_rod.setBrush(red_brush)
+                    lagan_rod.original_pen = red_pen
+                    lagan_rod.original_brush = red_brush
+                    lagan_rod.setZValue(20)
+                    self.graphics_scene.addItem(lagan_rod)
+                    
+                    # 更新操作记录
+                    if not hasattr(self, "operations"):
+                        self.operations = []
+                    self.operations.append({
+                        "type": "small_block",
+                        "coord": (cx, cy),
+                        "radius": lagan_radius,
+                        "diameter": lagan_length,
+                    })
+                    self.update_total_lagan_count()
+                    print(f"[screw_ring_to_lagan] 已将吊环螺钉 {screw_ring_id} 转换为侧拉杆（自由拉杆，绝对坐标），坐标: ({cx:.3f}, {cy:.3f})")
             except Exception as e:
                 print(f"[screw_ring_to_lagan] 添加拉杆失败: {e}")
                 import traceback
@@ -20945,8 +21071,274 @@ class TubeLayoutEditor(QMainWindow):
             dlg.accept()
 
         def screw_ring_to_radial_holes():
-            """转为径向开孔（暂时只打印函数名）"""
-            print("screw_ring_to_radial_holes")
+            """
+            吊环螺钉 → 径向开孔：
+            - 获取吊环螺钉坐标
+            - 删除吊环螺钉
+            - 进行位置检查（边缘管检查）
+            - 删除对应的换热管
+            - 弹出径向开孔对话框
+            """
+            from PyQt5.QtWidgets import QMessageBox
+            
+            if screw_ring_id is None:
+                QMessageBox.warning(dlg, "提示", "未找到吊环螺钉ID")
+                return
+            
+            # 获取吊环螺钉信息
+            if not hasattr(self, "screw_ring_dic") or not isinstance(self.screw_ring_dic, dict):
+                QMessageBox.warning(dlg, "提示", "吊环螺钉数据字典不存在")
+                return
+            
+            ring_info = self.screw_ring_dic.get(screw_ring_id)
+            if not isinstance(ring_info, dict):
+                QMessageBox.warning(dlg, "提示", "未找到对应的吊环螺钉信息")
+                return
+            
+            # 获取吊环螺钉的中心坐标（绝对坐标）
+            center_coord = ring_info.get("center")
+            if not center_coord or len(center_coord) != 2:
+                QMessageBox.warning(dlg, "提示", "吊环螺钉坐标信息无效")
+                return
+            
+            try:
+                cx, cy = float(center_coord[0]), float(center_coord[1])
+            except (TypeError, ValueError):
+                QMessageBox.warning(dlg, "提示", "吊环螺钉坐标格式错误")
+                return
+            
+            # 删除吊环螺钉的图形项
+            items = ring_info.get("items", [])
+            for it in items:
+                try:
+                    if it is None:
+                        continue
+                    # 使用 try-except 包裹 scene() 调用，避免崩溃
+                    try:
+                        item_scene = it.scene()
+                    except (RuntimeError, AttributeError):
+                        # item可能已经被删除或无效，跳过
+                        continue
+                    # 只有在scene一致时才删除
+                    if item_scene is not None and item_scene == self.graphics_scene:
+                        try:
+                            self.graphics_scene.removeItem(it)
+                        except (RuntimeError, AttributeError):
+                            # 删除失败，可能item已经被删除，忽略
+                            pass
+                except Exception:
+                    # 忽略所有其他异常
+                    pass
+            
+            # 从字典中删除吊环螺钉记录
+            try:
+                del self.screw_ring_dic[screw_ring_id]
+            except Exception:
+                pass
+            
+            # 将绝对坐标转为相对坐标（selected_centers 格式）
+            if not hasattr(self, "actual_to_selected_coords") or not callable(getattr(self, "actual_to_selected_coords", None)):
+                QMessageBox.warning(dlg, "提示", "无法进行坐标转换，转换失败")
+                return
+            
+            rel_coord = self.actual_to_selected_coords((cx, cy))
+            if not rel_coord:
+                QMessageBox.warning(dlg, "提示", "坐标转换失败，无法转换为径向开孔")
+                return
+            
+            # 关闭当前对话框
+            dlg.accept()
+            
+            # 设置 selected_centers 为相对坐标
+            self.selected_centers = [rel_coord]
+            
+            # 调用完整流程（走 on_radial_holes_click 的流程）
+            # 1. 找到边缘管
+            self.find_edge_tube()
+            
+            # 2. 将相对坐标转为绝对坐标
+            actual_selected_centers = self.selected_to_current_coords(self.selected_centers)
+            
+            # 3. 检查是否只有一个坐标
+            if len(actual_selected_centers) != 1:
+                QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
+                self.clear_selection_highlight()
+                return
+            
+            # 4. 检查该坐标是否在边缘管列表中
+            sel_x, sel_y = actual_selected_centers[0]
+            tol = 1e-6
+            is_on_edge = any(
+                (abs(cx - sel_x) <= tol and abs(cy - sel_y) <= tol)
+                for cx, cy in self.edge_centers
+            )
+            if not is_on_edge:
+                QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
+                self.clear_selection_highlight()
+                return
+            
+            # 5. 检查 pipe_port_dict 是否存在
+            if not getattr(self, "pipe_port_dict", None):
+                QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
+                self.clear_selection_highlight()
+                return
+            
+            # 6. 删除对应的换热管（只删除选中的那一个）
+            selected_centers = self.selected_centers
+            self.delete_huanreguan(selected_centers)
+            
+            # 7. 弹出径向开孔对话框（复用 lagan_to_radial_holes 的对话框代码）
+            from PyQt5.QtWidgets import (
+                QDialog,
+                QVBoxLayout,
+                QHBoxLayout,
+                QLabel,
+                QComboBox,
+                QDialogButtonBox,
+            )
+            
+            def _coord_equal(a, b, t=1e-6):
+                try:
+                    return abs(a[0] - b[0]) <= t and abs(a[1] - b[1]) <= t
+                except Exception:
+                    return False
+            
+            current_coord = actual_selected_centers[0]
+            existing_port_code = None
+            existing_direction = "壳程"
+            for code, info in self.radial_hole_dict.items():
+                if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                    if _coord_equal(info.get("换热管坐标"), current_coord):
+                        existing_port_code = code
+                        existing_direction = info.get("连通方向", "壳程")
+                        break
+            
+            dialog = QDialog(self)
+            dialog.setWindowTitle("径向开孔")
+            dialog.setModal(True)
+            dialog.resize(520, 220)
+            layout = QVBoxLayout(dialog)
+            layout.setContentsMargins(24, 18, 24, 18)
+            layout.setSpacing(14)
+            
+            row1 = QHBoxLayout()
+            row1.setSpacing(10)
+            row1.addWidget(QLabel("管口号："))
+            port_combo = QComboBox()
+            port_combo.setMinimumWidth(260)
+            port_codes = list(self.radial_hole_dict.keys())
+            for code in port_codes:
+                try:
+                    info = (
+                        self.radial_hole_dict.get(code)
+                        if isinstance(self.radial_hole_dict, dict)
+                        else None
+                    )
+                    assigned = isinstance(info, dict) and info.get("换热管坐标") is not None
+                except Exception:
+                    assigned = False
+                display = f"{code}（已分配）" if assigned else f"{code}"
+                port_combo.addItem(display, code)
+            if existing_port_code is not None:
+                try:
+                    idx = port_combo.findData(existing_port_code)
+                    if idx >= 0:
+                        port_combo.setCurrentIndex(idx)
+                except Exception:
+                    pass
+            row1.addWidget(port_combo)
+            layout.addLayout(row1)
+            
+            row2 = QHBoxLayout()
+            row2.setSpacing(10)
+            row2.addWidget(QLabel("连通方向："))
+            dir_combo = QComboBox()
+            dir_combo.addItems(["管程", "壳程"])
+            dir_combo.setMinimumWidth(260)
+            if existing_direction in ["管程", "壳程"]:
+                dir_combo.setCurrentText(existing_direction)
+            else:
+                dir_combo.setCurrentText("壳程")
+            row2.addWidget(dir_combo)
+            layout.addLayout(row2)
+            
+            btn_row = QHBoxLayout()
+            btn_row.addStretch(1)
+            buttons = QDialogButtonBox()
+            ok_btn = buttons.addButton("确认", QDialogButtonBox.AcceptRole)
+            close_btn = buttons.addButton("关闭", QDialogButtonBox.RejectRole)
+            layout.addLayout(btn_row)
+            layout.addWidget(buttons)
+            ok_btn.clicked.connect(dialog.accept)
+            close_btn.clicked.connect(dialog.reject)
+            
+            result = dialog.exec_()
+            if result == QDialog.Rejected:
+                self.clear_selection_highlight()
+                return
+            
+            try:
+                selected_port = port_combo.currentData()
+            except Exception:
+                selected_port = port_combo.currentText()
+            selected_direction = dir_combo.currentText() or "壳程"
+            
+            if existing_port_code is not None and str(existing_port_code) != str(selected_port):
+                try:
+                    if existing_port_code in self.radial_hole_dict:
+                        old_coord = self.radial_hole_dict[existing_port_code].get("换热管坐标")
+                        self.radial_hole_dict[existing_port_code]["换热管坐标"] = None
+                        if old_coord is not None:
+                            try:
+                                self.remove_radial_hole_graphics(old_coord)
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+            
+            try:
+                for code, info in self.radial_hole_dict.items():
+                    if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                        if _coord_equal(info.get("换热管坐标"), current_coord):
+                            old_coord = info.get("换热管坐标")
+                            info["换热管坐标"] = None
+                            if old_coord is not None:
+                                try:
+                                    self.remove_radial_hole_graphics(old_coord)
+                                except Exception:
+                                    pass
+            except Exception:
+                pass
+            
+            if selected_port not in self.radial_hole_dict:
+                QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
+                self.clear_selection_highlight()
+                return
+            
+            # 若用户选择的是"已分配"的管口，先擦除该管口旧绘制并解绑旧坐标
+            try:
+                old_coord_for_selected = self.radial_hole_dict[selected_port].get("换热管坐标")
+                if old_coord_for_selected is not None and not _coord_equal(old_coord_for_selected, current_coord):
+                    try:
+                        self.remove_radial_hole_graphics(old_coord_for_selected)
+                    except Exception:
+                        pass
+                    try:
+                        self.radial_hole_dict[selected_port]["换热管坐标"] = None
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            
+            self.radial_hole_dict[selected_port]["管口号"] = selected_port
+            self.radial_hole_dict[selected_port]["连通方向"] = selected_direction
+            self.radial_hole_dict[selected_port]["换热管坐标"] = current_coord
+            
+            try:
+                self.draw_radial_hole_tangents(current_coord)
+                self.clear_selection_highlight()
+            except Exception as e:
+                print(f"绘制径向开孔切线出错: {e}")
 
         ok.clicked.connect(apply_and_close)
         cancel.clicked.connect(dlg.reject)
@@ -25507,6 +25899,8 @@ class TubeLayoutEditor(QMainWindow):
                     ellipse_item.original_pen = red_pen
                     ellipse_item.original_brush = red_brush
                     ellipse_item.position = (x, y)
+                    # 设置 Z 值，确保拉杆可以被选中（与侧拉杆一致）
+                    ellipse_item.setZValue(20)
                     self.graphics_scene.addItem(ellipse_item)
 
                     # 记录日志信息
@@ -25548,6 +25942,8 @@ class TubeLayoutEditor(QMainWindow):
                     ellipse_item.original_pen = red_pen
                     ellipse_item.original_brush = red_brush
                     ellipse_item.position = (x, y)
+                    # 设置 Z 值，确保拉杆可以被选中（与侧拉杆一致）
+                    ellipse_item.setZValue(20)
                     self.graphics_scene.addItem(ellipse_item)
 
                     # 添加操作记录
