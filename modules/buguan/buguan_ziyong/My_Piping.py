@@ -23141,6 +23141,22 @@ class TubeLayoutEditor(QMainWindow):
         del_btn = buttons.addButton("删除", QDialogButtonBox.DestructiveRole)
         del_btn.clicked.connect(on_delete_clicked)
 
+        def on_convert_to_screw_ring():
+            """调用类方法转为吊环螺钉"""
+            self.radial_holes_to_screw_ring()
+            dialog.reject()
+
+        def on_convert_to_lagan():
+            """调用类方法转为拉杆"""
+            self.radial_holes_to_lagan()
+            dialog.reject()
+
+        convert_to_screw_ring_btn = buttons.addButton("转为吊环螺钉", QDialogButtonBox.ActionRole)
+        convert_to_screw_ring_btn.clicked.connect(on_convert_to_screw_ring)
+
+        convert_to_lagan_btn = buttons.addButton("转为拉杆", QDialogButtonBox.ActionRole)
+        convert_to_lagan_btn.clicked.connect(on_convert_to_lagan)
+
         result = dialog.exec_()
         if result == QDialog.Rejected:
             return
@@ -23209,6 +23225,14 @@ class TubeLayoutEditor(QMainWindow):
             self.draw_radial_hole_tangents(center_coord)
         except Exception as e:
             print(f"绘制径向开孔切线出错: {e}")
+
+    def radial_holes_to_screw_ring(self):
+        """径向开孔转为吊环螺钉"""
+        print("radial_holes_to_screw_ring")
+
+    def radial_holes_to_lagan(self):
+        """径向开孔转为拉杆"""
+        print("radial_holes_to_lagan")
 
     def show_baffle_info(self):
         """折流板参数编辑弹窗：左侧可编辑参数表，右侧图片展示区。"""
