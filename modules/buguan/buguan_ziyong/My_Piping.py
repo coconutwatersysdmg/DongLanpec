@@ -20965,99 +20965,132 @@ class TubeLayoutEditor(QMainWindow):
             if hasattr(self, "actual_to_selected_coords") and callable(getattr(self, "actual_to_selected_coords", None)):
                 rel_coord = self.actual_to_selected_coords((cx, cy))
             
+            # 辅助函数：手动创建侧拉杆（自由拉杆）
+            def _create_side_lagan_manually(cx, cy, lagan_length):
+                """手动创建侧拉杆（自由拉杆）的辅助函数"""
+                from PyQt5.QtCore import QRectF
+                from PyQt5.QtGui import QPen, QBrush, QColor
+                from PyQt5.QtCore import Qt
+                
+                lagan_radius = lagan_length / 2.0
+                lagan_rect = QRectF(
+                    cx - lagan_radius, cy - lagan_radius, lagan_length, lagan_length
+                )
+                lagan_rod = ClickableCircleItem(lagan_rect, is_side_rod=True, editor=self)
+                # 明确标记为侧拉杆，确保 mousePressEvent 使用 is_side_rod 分支
+                lagan_rod.is_side_rod = True
+                lagan_rod.is_lagan = False
+                red_pen = QPen(Qt.red)
+                red_pen.setWidth(1)
+                red_brush = QBrush(Qt.red)
+                lagan_rod.setPen(red_pen)
+                lagan_rod.setBrush(red_brush)
+                lagan_rod.original_pen = red_pen
+                lagan_rod.original_brush = red_brush
+                lagan_rod.setZValue(20)
+                self.graphics_scene.addItem(lagan_rod)
+                
+                # 更新操作记录
+                if not hasattr(self, "operations"):
+                    self.operations = []
+                self.operations.append({
+                    "type": "small_block",
+                    "coord": (cx, cy),
+                    "radius": lagan_radius,
+                    "diameter": lagan_length,
+                })
+                self.update_total_lagan_count()
+                print(f"[screw_ring_to_lagan] 已手动创建侧拉杆（自由拉杆，绝对坐标），坐标: ({cx:.3f}, {cy:.3f})")
+            
             # 判断是普通拉杆还是侧拉杆（自由拉杆）
-            # 如果能转换为相对坐标，优先使用 build_free_form_lagan（侧拉杆/自由拉杆）
-            # 因为它会根据位置自动计算应该放在行的最左还是最右侧
+            # 如果能转换为相对坐标，使用 build_lagan（普通拉杆）
+            # 如果不能转换为相对坐标，使用 build_free_form_lagan（侧拉杆/自由拉杆）
             try:
                 if rel_coord:
-                    # 有相对坐标，使用 build_free_form_lagan（侧拉杆/自由拉杆）
-                    # build_free_form_lagan 需要相对坐标，会根据位置在行的最左或最右侧放置拉杆
-                    lagan_length = getattr(self, "r", 10.0) * 2  # 获取拉杆直径
-                    print(f"[screw_ring_to_lagan] 尝试转换为侧拉杆，相对坐标: {rel_coord}, 绝对坐标: ({cx:.3f}, {cy:.3f}), 拉杆长度: {lagan_length}")
-                    result = self.build_free_form_lagan([rel_coord], lagan_length)
-                    print(f"[screw_ring_to_lagan] build_free_form_lagan 返回值: {result}, 类型: {type(result)}")
-                    if result is False or result is None:
-                        # build_free_form_lagan 返回 False 或 None 表示失败
-                        # 直接使用绝对坐标创建侧拉杆（自由拉杆），而不是回退到普通拉杆
-                        print(f"[screw_ring_to_lagan] 侧拉杆创建失败（返回值: {result}），使用绝对坐标直接创建侧拉杆")
-                        from PyQt5.QtCore import QRectF
-                        from PyQt5.QtGui import QPen, QBrush, QColor
-                        from PyQt5.QtCore import Qt
-                        
-                        lagan_radius = lagan_length / 2.0
-                        lagan_rect = QRectF(
-                            cx - lagan_radius, cy - lagan_radius, lagan_length, lagan_length
-                        )
-                        lagan_rod = ClickableCircleItem(lagan_rect, is_side_rod=True, editor=self)
-                        # 明确标记为侧拉杆，确保 mousePressEvent 使用 is_side_rod 分支
-                        lagan_rod.is_side_rod = True
-                        lagan_rod.is_lagan = False
-                        red_pen = QPen(Qt.red)
-                        red_pen.setWidth(1)
-                        red_brush = QBrush(Qt.red)
-                        lagan_rod.setPen(red_pen)
-                        lagan_rod.setBrush(red_brush)
-                        lagan_rod.original_pen = red_pen
-                        lagan_rod.original_brush = red_brush
-                        lagan_rod.setZValue(20)
-                        self.graphics_scene.addItem(lagan_rod)
-                        
-                        # 更新 red_dangban（如果 rel_coord 存在）
-                        if not hasattr(self, "red_dangban"):
-                            self.red_dangban = []
-                        if rel_coord not in self.red_dangban:
-                            self.red_dangban.append(rel_coord)
-                        
-                        # 更新操作记录
-                        if not hasattr(self, "operations"):
-                            self.operations = []
-                        self.operations.append({
-                            "type": "small_block",
-                            "coord": (cx, cy),
-                            "radius": lagan_radius,
-                            "diameter": lagan_length,
-                        })
-                        self.update_total_lagan_count()
-                        print(f"[screw_ring_to_lagan] 已将吊环螺钉 {screw_ring_id} 转换为侧拉杆（自由拉杆，绝对坐标），坐标: ({cx:.3f}, {cy:.3f})")
+                    # 有相对坐标，使用 build_lagan（普通拉杆）
+                    print(f"[screw_ring_to_lagan] 转换为普通拉杆，相对坐标: {rel_coord}, 绝对坐标: ({cx:.3f}, {cy:.3f})")
+                    
+                    # 应用对称逻辑（参考 26491-26504 行的逻辑）
+                    if self.isSymmetry:
+                        selected_centers = self.judge_linkage([rel_coord])
                     else:
-                        print(f"[screw_ring_to_lagan] 已将吊环螺钉 {screw_ring_id} 转换为侧拉杆（自由拉杆），相对坐标: {rel_coord}, 绝对坐标: ({cx:.3f}, {cy:.3f})")
-                else:
-                    # 无法转换为相对坐标，直接使用绝对坐标创建侧拉杆（自由拉杆）
-                    print(f"[screw_ring_to_lagan] 无法转换为相对坐标，使用绝对坐标创建侧拉杆: ({cx:.3f}, {cy:.3f})")
-                    from PyQt5.QtCore import QRectF
-                    from PyQt5.QtGui import QPen, QBrush, QColor
-                    from PyQt5.QtCore import Qt
+                        if self.heat_exchanger in ["AEU", "BEU"]:
+                            tube_num = self.get_tube_pass_count()
+                            if tube_num == "2":
+                                selected_centers = self.judge_linkage_x([rel_coord])
+                            elif tube_num in ["4", "6"]:
+                                selected_centers = self.judge_linkage_y([rel_coord])
+                            else:
+                                selected_centers = [rel_coord]
+                        else:
+                            selected_centers = [rel_coord]
                     
-                    lagan_length = getattr(self, "r", 10.0) * 2
-                    lagan_radius = lagan_length / 2.0
-                    lagan_rect = QRectF(
-                        cx - lagan_radius, cy - lagan_radius, lagan_length, lagan_length
+                    # 更新分组缓存，保证 build_lagan 使用最新数据
+                    (
+                        self.full_sorted_current_centers_up,
+                        self.full_sorted_current_centers_down,
+                    ) = self.group_centers_by_y(self.global_centers)
+                    self.sorted_current_centers_up, self.sorted_current_centers_down = (
+                        self.group_centers_by_y(self.current_centers)
                     )
-                    lagan_rod = ClickableCircleItem(lagan_rect, is_side_rod=True, editor=self)
-                    # 明确标记为侧拉杆，确保 mousePressEvent 使用 is_side_rod 分支
-                    lagan_rod.is_side_rod = True
-                    lagan_rod.is_lagan = False
-                    red_pen = QPen(Qt.red)
-                    red_pen.setWidth(1)
-                    red_brush = QBrush(Qt.red)
-                    lagan_rod.setPen(red_pen)
-                    lagan_rod.setBrush(red_brush)
-                    lagan_rod.original_pen = red_pen
-                    lagan_rod.original_brush = red_brush
-                    lagan_rod.setZValue(20)
-                    self.graphics_scene.addItem(lagan_rod)
+                    updated = self.build_lagan(selected_centers)
+                    if updated is not None:
+                        self.current_centers = updated
+                    print(f"[screw_ring_to_lagan] 已将吊环螺钉 {screw_ring_id} 转换为普通拉杆，相对坐标: {rel_coord}, 对称后坐标数量: {len(selected_centers)}, 绝对坐标: ({cx:.3f}, {cy:.3f})")
+                else:
+                    # 无法转换为相对坐标，使用 build_free_form_lagan（侧拉杆/自由拉杆）
+                    print(f"[screw_ring_to_lagan] 转换为侧拉杆（自由拉杆），绝对坐标: ({cx:.3f}, {cy:.3f})")
                     
-                    # 更新操作记录
-                    if not hasattr(self, "operations"):
-                        self.operations = []
-                    self.operations.append({
-                        "type": "small_block",
-                        "coord": (cx, cy),
-                        "radius": lagan_radius,
-                        "diameter": lagan_length,
-                    })
-                    self.update_total_lagan_count()
-                    print(f"[screw_ring_to_lagan] 已将吊环螺钉 {screw_ring_id} 转换为侧拉杆（自由拉杆，绝对坐标），坐标: ({cx:.3f}, {cy:.3f})")
+                    # 计算对称位置的绝对坐标
+                    abs_coords_to_draw = [(cx, cy)]
+                    if self.isSymmetry:
+                        # 完全对称：y轴、x轴、中心对称
+                        abs_coords_to_draw.extend([
+                            (-cx, cy),   # y轴对称
+                            (cx, -cy),   # x轴对称
+                            (-cx, -cy),  # 中心对称
+                        ])
+                    else:
+                        if self.heat_exchanger in ["AEU", "BEU"]:
+                            tube_num = self.get_tube_pass_count()
+                            if tube_num == "2":
+                                # 关于x轴对称
+                                abs_coords_to_draw.append((cx, -cy))
+                            elif tube_num in ["4", "6"]:
+                                # 关于y轴对称
+                                abs_coords_to_draw.append((-cx, cy))
+                    
+                    # 去重
+                    seen = set()
+                    unique_coords = []
+                    for coord in abs_coords_to_draw:
+                        key = (round(coord[0], 2), round(coord[1], 2))
+                        if key not in seen:
+                            seen.add(key)
+                            unique_coords.append(coord)
+                    
+                    lagan_length = getattr(self, "r", 10.0) * 2  # 获取拉杆直径
+                    
+                    # 对每个对称位置创建侧拉杆
+                    for scx, scy in unique_coords:
+                        # 尝试将绝对坐标转换为相对坐标，用于 build_free_form_lagan
+                        rel_coord_for_free = None
+                        if hasattr(self, "actual_to_selected_coords") and callable(getattr(self, "actual_to_selected_coords", None)):
+                            rel_coord_for_free = self.actual_to_selected_coords((scx, scy))
+                        
+                        if rel_coord_for_free:
+                            # 有相对坐标，尝试使用 build_free_form_lagan
+                            result = self.build_free_form_lagan([rel_coord_for_free], lagan_length)
+                            if result is False or result is None:
+                                # build_free_form_lagan 失败，手动创建
+                                self._create_side_lagan_manually(scx, scy, lagan_length)
+                            else:
+                                print(f"[screw_ring_to_lagan] 已通过 build_free_form_lagan 创建侧拉杆，绝对坐标: ({scx:.3f}, {scy:.3f})")
+                        else:
+                            # 无相对坐标，直接手动创建
+                            self._create_side_lagan_manually(scx, scy, lagan_length)
+                    
+                    print(f"[screw_ring_to_lagan] 已将吊环螺钉 {screw_ring_id} 转换为侧拉杆（自由拉杆），对称后坐标数量: {len(unique_coords)}, 原始坐标: ({cx:.3f}, {cy:.3f})")
             except Exception as e:
                 print(f"[screw_ring_to_lagan] 添加拉杆失败: {e}")
                 import traceback
@@ -23092,8 +23125,6 @@ class TubeLayoutEditor(QMainWindow):
         buttons = QDialogButtonBox()
         ok_btn = buttons.addButton("确认", QDialogButtonBox.AcceptRole)
         close_btn = buttons.addButton("关闭", QDialogButtonBox.RejectRole)
-        layout.addLayout(btn_row)
-        layout.addWidget(buttons)
         ok_btn.clicked.connect(dialog.accept)
         close_btn.clicked.connect(dialog.reject)
 
@@ -23143,12 +23174,12 @@ class TubeLayoutEditor(QMainWindow):
 
         def on_convert_to_screw_ring():
             """调用类方法转为吊环螺钉"""
-            self.radial_holes_to_screw_ring()
+            self.radial_holes_to_screw_ring(center_coord)
             dialog.reject()
 
         def on_convert_to_lagan():
             """调用类方法转为拉杆"""
-            self.radial_holes_to_lagan()
+            self.radial_holes_to_lagan(center_coord)
             dialog.reject()
 
         convert_to_screw_ring_btn = buttons.addButton("转为吊环螺钉", QDialogButtonBox.ActionRole)
@@ -23156,6 +23187,9 @@ class TubeLayoutEditor(QMainWindow):
 
         convert_to_lagan_btn = buttons.addButton("转为拉杆", QDialogButtonBox.ActionRole)
         convert_to_lagan_btn.clicked.connect(on_convert_to_lagan)
+
+        layout.addLayout(btn_row)
+        layout.addWidget(buttons)
 
         result = dialog.exec_()
         if result == QDialog.Rejected:
@@ -23226,13 +23260,180 @@ class TubeLayoutEditor(QMainWindow):
         except Exception as e:
             print(f"绘制径向开孔切线出错: {e}")
 
-    def radial_holes_to_screw_ring(self):
-        """径向开孔转为吊环螺钉"""
-        print("radial_holes_to_screw_ring")
+    def radial_holes_to_screw_ring(self, center_coord):
+        """
+        径向开孔转为吊环螺钉：先删除当前径向开孔，再在该坐标处调用 build_screw_ring 绘制吊环螺钉。
+        吊环螺钉规格从参数表「吊环螺钉规格」读取，角度/中心距由坐标反推（与 lagan_to_screw_ring、on_screw_ring_click 径向开孔分支一致）。
+        """
+        import math
+        import re
+        from PyQt5.QtWidgets import QMessageBox
 
-    def radial_holes_to_lagan(self):
-        """径向开孔转为拉杆"""
-        print("radial_holes_to_lagan")
+        def _coord_equal(a, b, t=1e-6):
+            try:
+                return abs(a[0] - b[0]) <= t and abs(a[1] - b[1]) <= t
+            except Exception:
+                return False
+
+        # 1. 删除当前径向开孔：解绑 radial_hole_dict，删除图形
+        try:
+            if isinstance(self.radial_hole_dict, dict):
+                for code, info in self.radial_hole_dict.items():
+                    if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                        if _coord_equal(info.get("换热管坐标"), center_coord):
+                            info["换热管坐标"] = None
+        except Exception:
+            pass
+        try:
+            self.remove_radial_hole_graphics(center_coord)
+            self.clear_selection_highlight()
+        except Exception:
+            pass
+
+        # 2. 从参数表读取「吊环螺钉规格」，解析直径（如 M20 -> 20）
+        screw_spec_text = ""
+        try:
+            if hasattr(self, "param_table") and self.param_table is not None:
+                for r in range(self.param_table.rowCount()):
+                    name_item = self.param_table.item(r, 1)
+                    if not name_item:
+                        continue
+                    if name_item.text().strip() == "吊环螺钉规格":
+                        from PyQt5.QtWidgets import QComboBox
+                        cell_w = self.param_table.cellWidget(r, 2)
+                        if isinstance(cell_w, QComboBox):
+                            screw_spec_text = cell_w.currentText().strip()
+                        else:
+                            val_item = self.param_table.item(r, 2)
+                            screw_spec_text = (
+                                val_item.text().strip() if val_item else ""
+                            )
+                        break
+        except Exception:
+            pass
+        screw_dia_val = None
+        if screw_spec_text:
+            m = re.search(r"(\d+)", screw_spec_text)
+            if m:
+                try:
+                    screw_dia_val = float(m.group(1))
+                except Exception:
+                    screw_dia_val = None
+        if not screw_dia_val or screw_dia_val <= 0:
+            QMessageBox.warning(
+                self,
+                "提示",
+                "未找到有效的吊环螺钉规格，无法转换为吊环螺钉",
+            )
+            return
+
+        # 3. 由坐标反推角度、中心距，调用 build_screw_ring（与 on_screw_ring_click 径向开孔分支一致）
+        try:
+            cx, cy = float(center_coord[0]), float(center_coord[1])
+        except (TypeError, ValueError):
+            return
+        distance = math.hypot(cx, cy)
+        if distance <= 0:
+            return
+        polar_deg = math.degrees(math.atan2(cy, cx))
+        angle_deg = 90.0 - polar_deg
+        try:
+            self.build_screw_ring(angle_deg, distance, screw_dia_val)
+        except Exception as e:
+            print(f"[radial_holes_to_screw_ring] build_screw_ring 出错: {e}")
+
+    def radial_holes_to_lagan(self, center_coord):
+        """
+        径向开孔转为拉杆：先删除当前径向开孔，再在该坐标处调用 build_lagan 构建拉杆。
+        支持对称添加（与 screw_ring_to_lagan、26491-26504 行逻辑一致）。
+        """
+        def _coord_equal(a, b, t=1e-6):
+            try:
+                return abs(a[0] - b[0]) <= t and abs(a[1] - b[1]) <= t
+            except Exception:
+                return False
+
+        # 1. 删除当前径向开孔：解绑 radial_hole_dict，删除图形
+        try:
+            if isinstance(self.radial_hole_dict, dict):
+                for code, info in self.radial_hole_dict.items():
+                    if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                        if _coord_equal(info.get("换热管坐标"), center_coord):
+                            info["换热管坐标"] = None
+        except Exception:
+            pass
+        try:
+            self.remove_radial_hole_graphics(center_coord)
+            self.clear_selection_highlight()
+        except Exception:
+            pass
+
+        # 2. 更新分组缓存（与 on_lagan_click 一致）
+        try:
+            (
+                self.full_sorted_current_centers_up,
+                self.full_sorted_current_centers_down,
+            ) = self.group_centers_by_y(self.global_centers)
+            self.sorted_current_centers_up, self.sorted_current_centers_down = (
+                self.group_centers_by_y(self.current_centers)
+            )
+        except Exception:
+            pass
+
+        # 3. 对称逻辑：能转为相对坐标则用 judge_linkage 系列；否则用绝对坐标对称
+        try:
+            cx, cy = float(center_coord[0]), float(center_coord[1])
+        except (TypeError, ValueError):
+            return
+
+        rel_coord = None
+        if hasattr(self, "actual_to_selected_coords") and callable(
+            getattr(self, "actual_to_selected_coords", None)
+        ):
+            rel_coord = self.actual_to_selected_coords((cx, cy))
+
+        if rel_coord:
+            # 有相对坐标：应用对称逻辑（参考 26491-26504）
+            if self.isSymmetry:
+                selected_centers = self.judge_linkage([rel_coord])
+            else:
+                if self.heat_exchanger in ["AEU", "BEU"]:
+                    tube_num = self.get_tube_pass_count()
+                    if tube_num == "2":
+                        selected_centers = self.judge_linkage_x([rel_coord])
+                    elif tube_num in ["4", "6"]:
+                        selected_centers = self.judge_linkage_y([rel_coord])
+                    else:
+                        selected_centers = [rel_coord]
+                else:
+                    selected_centers = [rel_coord]
+        else:
+            # 无相对坐标：按绝对坐标计算对称位置
+            abs_coords = [(cx, cy)]
+            if self.isSymmetry:
+                abs_coords.extend([
+                    (-cx, cy),
+                    (cx, -cy),
+                    (-cx, -cy),
+                ])
+            else:
+                if self.heat_exchanger in ["AEU", "BEU"]:
+                    tube_num = self.get_tube_pass_count()
+                    if tube_num == "2":
+                        abs_coords.append((cx, -cy))
+                    elif tube_num in ["4", "6"]:
+                        abs_coords.append((-cx, cy))
+            seen = set()
+            selected_centers = []
+            for c in abs_coords:
+                key = (round(c[0], 2), round(c[1], 2))
+                if key not in seen:
+                    seen.add(key)
+                    selected_centers.append(c)
+
+        updated = self.build_lagan(selected_centers)
+        if updated is not None:
+            self.current_centers = updated
 
     def show_baffle_info(self):
         """折流板参数编辑弹窗：左侧可编辑参数表，右侧图片展示区。"""
