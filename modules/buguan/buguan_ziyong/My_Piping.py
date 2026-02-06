@@ -26553,6 +26553,70 @@ class TubeLayoutEditor(QMainWindow):
         """
         换热管点击事件入口函数：仅处理对称逻辑，然后调用实际构建函数
         """
+        # 如果当前没有换热管选中，但存在选中的吊环螺钉，则尝试用吊环螺钉位置作为目标管孔
+        if (
+                (not getattr(self, "selected_centers", None))
+                and hasattr(self, "selected_screw_ring_ids")
+                and getattr(self, "selected_screw_ring_ids", None)
+        ):
+            rel_from_screws = []
+            try:
+                for rid in list(self.selected_screw_ring_ids):
+                    # 从 screw_ring_dic 中获取吊环螺钉中心坐标
+                    ring_info = (
+                        self.screw_ring_dic.get(rid)
+                        if hasattr(self, "screw_ring_dic")
+                        and isinstance(self.screw_ring_dic, dict)
+                        else None
+                    )
+                    if not isinstance(ring_info, dict):
+                        continue
+                    center = ring_info.get("center")
+                    if (
+                            not center
+                            or not isinstance(center, (list, tuple))
+                            or len(center) != 2
+                    ):
+                        continue
+                    try:
+                        cx, cy = float(center[0]), float(center[1])
+                    except Exception:
+                        continue
+
+                    # 绝对坐标 → 相对坐标（行、列），与其它换热管逻辑保持一致
+                    if not hasattr(self, "actual_to_selected_coords"):
+                        continue
+                    rel = self.actual_to_selected_coords((cx, cy))
+                    if not rel:
+                        continue
+
+                    def _add_rel(r):
+                        if (
+                                isinstance(r, (list, tuple))
+                                and len(r) == 2
+                                and isinstance(r[0], int)
+                        ):
+                            rel_from_screws.append(tuple(r))
+
+                    # 支持单个元组或列表
+                    if isinstance(rel, list):
+                        for r in rel:
+                            _add_rel(r)
+                    else:
+                        _add_rel(rel)
+
+                if rel_from_screws:
+                    # 将吊环螺钉对应的相对坐标作为选中换热管
+                    self.selected_centers = list(rel_from_screws)
+                    # 删除这些吊环螺钉（图元 + 数据字典），实现“吊环螺钉 → 换热管”的转换
+                    try:
+                        self.delete_selected_screw_rings()
+                    except Exception:
+                        pass
+            except Exception:
+                # 任意异常都不影响后续正常的换热管逻辑
+                pass
+
         # 如果当前没有换热管选中，但存在选中的普通拉杆，则尝试用拉杆位置作为目标管孔
         if (
                 (not getattr(self, "selected_centers", None))
