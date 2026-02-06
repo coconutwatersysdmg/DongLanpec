@@ -22962,6 +22962,30 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
+        # 在被删除的换热管位置绘制黄色边缘圆，作为视觉提示
+        try:
+            highlight_pen = QPen(QColor(255, 215, 0))  # 金黄色
+            highlight_pen.setWidth(2)
+            highlight_pen.setStyle(Qt.SolidLine)
+            highlight_item = self.graphics_scene.addEllipse(
+                tube_rect,
+                highlight_pen,
+                QBrush(Qt.NoBrush),
+            )
+            try:
+                # 放在灰色填充和黑色切线之间
+                highlight_item.setZValue(115)
+            except Exception:
+                pass
+            # 同样打上径向开孔标记，便于统一清理
+            try:
+                highlight_item.is_radial_hole_tangent = True
+                highlight_item.radial_hole_center_coord = center_coord
+            except Exception:
+                pass
+        except Exception:
+            highlight_item = None
+
         pen = QPen(Qt.black, 2)
         pen.setStyle(Qt.SolidLine)
         line1 = self.graphics_scene.addLine(t1[0], t1[1], end1[0], end1[1], pen)
@@ -23000,7 +23024,10 @@ class TubeLayoutEditor(QMainWindow):
             pass
         self.graphics_scene.addItem(clickable_item)
 
-        self._radial_hole_tangent_items_by_coord[key] = [fill_item, line1, line2, clickable_item]
+        items_list = [fill_item, line1, line2, clickable_item]
+        if 'highlight_item' in locals() and highlight_item is not None:
+            items_list.append(highlight_item)
+        self._radial_hole_tangent_items_by_coord[key] = items_list
 
     def delete_selected_radial_holes(self):
         """删除选中的径向开孔"""
