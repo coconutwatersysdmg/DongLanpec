@@ -37004,9 +37004,9 @@ class TubeLayoutEditor(QMainWindow):
         count_layout.addWidget(self.count_input)
         main_layout.addLayout(count_layout)
 
-        # 错误提示标签（红色）
+        # 提示/错误标签（同一行显示，默认黑字显示最大中心距，需要时报错改为红字）
         warning_label = QLabel("")
-        warning_label.setStyleSheet("color: red;")
+        warning_label.setStyleSheet("color: black;")
         warning_label.setWordWrap(True)
         main_layout.addWidget(warning_label)
 
@@ -37049,11 +37049,33 @@ class TubeLayoutEditor(QMainWindow):
                 return float(match.group(1))
             return None
 
+        # 更新最大中心距提示（黑字）
+        def update_max_distance_hint():
+            """根据 Dit 和当前规格，在对话框中用黑字提示最大允许中心距"""
+            try:
+                dit_value = get_dit_value()
+                if dit_value is None or dit_value <= 0:
+                    warning_label.setStyleSheet("color: black;")
+                    warning_label.setText("")
+                    return
+
+                spec_text = self.spec_input.currentText().strip()
+                screw_diameter = parse_screw_spec(spec_text)
+                if screw_diameter is None:
+                    warning_label.setStyleSheet("color: black;")
+                    warning_label.setText("")
+                    return
+
+                max_distance = dit_value / 2.0 - screw_diameter / 2.0
+                warning_label.setStyleSheet("color: black;")
+                warning_label.setText(f"吊环螺钉中心距最大为 {max_distance:.2f} mm")
+            except Exception:
+                warning_label.setStyleSheet("color: black;")
+                warning_label.setText("")
+
         # 验证输入值的函数
         def validate_inputs():
             """验证输入值，返回(是否有效, 错误消息)"""
-            warning_label.setText("")  # 清空之前的提示
-            
             # 验证起始方位角
             try:
                 start_angle = float(self.start_angle_input.text())
@@ -37098,17 +37120,26 @@ class TubeLayoutEditor(QMainWindow):
         def on_angle_editing_finished():
             is_valid, error_msg = validate_inputs()
             if not is_valid:
+                warning_label.setStyleSheet("color: red;")
                 warning_label.setText(error_msg)
+            else:
+                # 恢复为最大中心距黑字提示
+                update_max_distance_hint()
         
         def on_distance_editing_finished():
             is_valid, error_msg = validate_inputs()
             if not is_valid:
+                warning_label.setStyleSheet("color: red;")
                 warning_label.setText(error_msg)
+            else:
+                update_max_distance_hint()
         
         def on_spec_changed():
-            # 当规格改变时，重新验证孔中心距
+            # 当规格改变时，先更新最大中心距提示，再重新验证孔中心距
+            update_max_distance_hint()
             is_valid, error_msg = validate_inputs()
             if not is_valid:
+                warning_label.setStyleSheet("color: red;")
                 warning_label.setText(error_msg)
         
         # 绑定事件
@@ -37253,6 +37284,9 @@ class TubeLayoutEditor(QMainWindow):
         # 绑定按钮事件
         self.confirm_screw_btn.clicked.connect(on_confirm_screw)
         self.close_screw_btn.clicked.connect(on_close_screw)
+
+        # 打开弹窗前，根据当前参数更新一次最大中心距黑字提示
+        update_max_distance_hint()
 
         # 显示弹窗
         dialog.exec_()
