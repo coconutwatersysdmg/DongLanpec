@@ -22962,11 +22962,45 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
-        # 在被删除的换热管位置绘制黄色边缘圆，作为视觉提示
+        # 在被删除的换热管位置绘制边缘圆，样式随“连通方向”变化：
+        # - 管程：实线黄色圆圈
+        # - 壳程：虚线圆圈
         try:
-            highlight_pen = QPen(QColor(255, 215, 0))  # 金黄色
+            # 从 radial_hole_dict 中反查当前坐标的连通方向
+            direction = "壳程"
+            def _coord_equal_dir(a, b, t=1e-6):
+                try:
+                    return abs(a[0] - b[0]) <= t and abs(a[1] - b[1]) <= t
+                except Exception:
+                    return False
+            try:
+                rh_dict = getattr(self, "radial_hole_dict", None)
+                if isinstance(rh_dict, dict):
+                    for _code, _info in rh_dict.items():
+                        if (
+                                isinstance(_info, dict)
+                                and _info.get("换热管坐标") is not None
+                                and _coord_equal_dir(_info.get("换热管坐标"), center_coord)
+                        ):
+                            direction = _info.get("连通方向", "壳程")
+                            break
+            except Exception:
+                pass
+
+            # 设置画笔样式
+            if direction == "管程":
+                # 管程：实线黄色圆圈
+                color = QColor(255, 215, 0)  # 金黄色
+                line_style = Qt.SolidLine
+            else:
+                # 壳程：虚线圆圈（使用红色虚线更醒目）
+                color = QColor(255, 0, 0)
+                line_style = Qt.DashLine
+
+            highlight_pen = QPen(color)
             highlight_pen.setWidth(2)
-            highlight_pen.setStyle(Qt.SolidLine)
+            highlight_pen.setStyle(line_style)
+
             highlight_item = self.graphics_scene.addEllipse(
                 tube_rect,
                 highlight_pen,
