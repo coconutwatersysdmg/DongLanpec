@@ -11456,8 +11456,9 @@ class TubeLayoutEditor(QMainWindow):
 
             # 2.5) 关键：DN/Dis/DL 先做一致性检查（不通过就立刻回滚并停止后续联动/重绘）
             # 目的：避免“非法值先触发 update_baffle_diameter/draw_baffle_plates 等重绘，回滚后图形仍保留”
-            #TODO check_diameter_consistency检查，暂时取消布管限定圆 DL
-            if param_name in ("壳体内直径 Dis"):
+            # 触发条件：壳体内直径 Dis / 布管限定圆 DL 手动修改时均需校验
+            # 以外径为基准=是：DL <= Dis；以外径为基准=否：DL <= DN（由 check_diameter_consistency 内部实现）
+            if param_name in ("壳体内直径 Dis", "布管限定圆 DL"):
                 try:
                     print(f"[DEBUG] 准备调用 check_diameter_consistency，参数={param_name}")
                     ok = self.check_diameter_consistency(trigger_name=param_name)
