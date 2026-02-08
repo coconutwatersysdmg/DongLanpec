@@ -25380,17 +25380,24 @@ class TubeLayoutEditor(QMainWindow):
                     if rel_coord not in deleted_relative_coords:
                         deleted_relative_coords.append(rel_coord)
 
-            # 收集需要删除的防冲板
+            # 收集需要删除的防冲板（删除的换热管若为某防冲板端点，则需删除该防冲板）
+            def _coord_match(a, b):
+                """兼容 (row,col) 与 [row,col] 比较"""
+                if not (isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)) and len(a) >= 2 and len(b) >= 2):
+                    return False
+                return a[0] == b[0] and a[1] == b[1]
+
             baffles_to_remove = []
             for baffle_item in self.baffle_items:
                 if (
                         hasattr(baffle_item, "original_selected_centers")
                         and baffle_item.original_selected_centers
                 ):
-                    # 检查删除的坐标是否包含在 original_selected_centers 中
-                    # original_selected_centers 是列表格式，如 [(row1, col1), (row2, col2)]
                     for deleted_coord in deleted_relative_coords:
-                        if deleted_coord in baffle_item.original_selected_centers:
+                        if any(
+                                _coord_match(deleted_coord, c)
+                                for c in baffle_item.original_selected_centers
+                        ):
                             baffles_to_remove.append(baffle_item)
                             break
 
@@ -25423,6 +25430,13 @@ class TubeLayoutEditor(QMainWindow):
                             for pair in self.impingement_plate_2
                             if pair != baffle_item.original_selected_centers
                         ]
+                # 同步从防冲板数据字典中移除
+                if hasattr(baffle_item, "impingement_plate_id") and hasattr(
+                        self, "impingement_plate_dic"
+                ):
+                    self.impingement_plate_dic.pop(
+                        getattr(baffle_item, "impingement_plate_id"), None
+                    )
 
         if hasattr(self, "clear_selection_highlight"):
             self.clear_selection_highlight()
