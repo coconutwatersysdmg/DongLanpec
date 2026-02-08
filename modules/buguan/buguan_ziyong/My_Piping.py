@@ -3346,6 +3346,18 @@ class TubeLayoutEditor(QMainWindow):
                                                     cursor.execute(
                                                         delete_query, (self.productID,)
                                                     )
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管防冲板表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管焊接式防冲板表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管旁路挡板表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
 
                                                     check_query = """SELECT 1 FROM 产品设计活动表_布管管口表 WHERE 产品ID = %s LIMIT 1"""
                                                     cursor.execute(
@@ -3360,7 +3372,7 @@ class TubeLayoutEditor(QMainWindow):
 
                                                     product_conn.commit()
                                                     print(
-                                                        f"已删除产品ID为{self.productID}的布管元件表和交叉布管表所有数据"
+                                                        f"已删除产品ID为{self.productID}的布管元件表、交叉布管表、防冲板表、焊接式防冲板表、旁路挡板表所有数据"
                                                     )
                                                 except Exception as e:
                                                     # 发生错误时回滚事务
@@ -3433,6 +3445,22 @@ class TubeLayoutEditor(QMainWindow):
                                                     cursor.execute(
                                                         delete_query, (self.productID,)
                                                     )
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管防冲板表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管焊接式防冲板表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管交叉布管表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管旁路挡板表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
 
                                                     check_query = """SELECT 1 FROM 产品设计活动表_布管管口表 WHERE 产品ID = %s LIMIT 1"""
                                                     cursor.execute(
@@ -3448,7 +3476,7 @@ class TubeLayoutEditor(QMainWindow):
                                                     product_conn.commit()
 
                                                     print(
-                                                        f"已删除产品ID为{self.productID}的布管元件表所有数据"
+                                                        f"已删除产品ID为{self.productID}的布管元件表、防冲板表、焊接式防冲板表、交叉布管表、旁路挡板表所有数据"
                                                     )
                                                 except Exception as e:
                                                     print(
@@ -3488,6 +3516,22 @@ class TubeLayoutEditor(QMainWindow):
                                                     cursor.execute(
                                                         delete_query, (self.productID,)
                                                     )
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管防冲板表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管焊接式防冲板表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管交叉布管表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管旁路挡板表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
 
                                                     check_query = """SELECT 1 FROM 产品设计活动表_布管管口表 WHERE 产品ID = %s LIMIT 1"""
                                                     cursor.execute(
@@ -3503,7 +3547,7 @@ class TubeLayoutEditor(QMainWindow):
                                                     product_conn.commit()
 
                                                     print(
-                                                        f"已删除产品ID为{self.productID}的布管元件表所有数据"
+                                                        f"已删除产品ID为{self.productID}的布管元件表、防冲板表、焊接式防冲板表、交叉布管表、旁路挡板表所有数据"
                                                     )
                                                 except Exception as e:
                                                     print(
@@ -14208,27 +14252,19 @@ class TubeLayoutEditor(QMainWindow):
                     for statement in sql:
                         self.execute_sql(statement)
 
+                # build_sql_for_radial_holes 返回 [delete_sql] 或 [delete_sql, insert1, insert2, ...]，无 query_sql
                 sql_list = self.build_sql_for_radial_holes()
-                if sql_list and len(sql_list) >= 2:
+                if sql_list:
                     try:
-                        has_old = False
-                        query_sql = sql_list[0]
-                        delete_sql = sql_list[1]
-                        insert_sqls = sql_list[2:] if len(sql_list) > 2 else []
-
-                        res = self.execute_sql(query_sql, fetch=True)
-                        has_old = bool(res)
-
-                        if has_old:
-                            self.execute_sql(delete_sql)
+                        delete_sql = sql_list[0]
+                        insert_sqls = sql_list[1:] if len(sql_list) > 1 else []
+                        self.execute_sql(delete_sql)
                         for s in insert_sqls:
                             self.execute_sql(s)
                     except Exception as e:
                         print(f"保存径向开孔数据失败: {e}")
                         import traceback
                         traceback.print_exc()
-                elif sql_list and len(sql_list) < 2:
-                    print(f"保存径向开孔数据失败: sql_list 长度不足，期望至少2个元素，实际: {len(sql_list)}")
 
                 # 当前圆心坐标
                 if self.heat_exchanger in ["AES", "BES"]:
