@@ -21703,6 +21703,19 @@ class TubeLayoutEditor(QMainWindow):
                 f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}')"
             )
 
+        # BEM 且管程分程形式为 1.1 时，将元件附加参数表中固定管板的管程侧/壳程侧分程隔板槽深度更新为 0
+        if (
+                getattr(self, "heat_exchanger", None) == "BEM"
+                and getattr(self, "tube_pass_form_value", None) == "1.1"
+        ):
+            safe_component_name = escape_str("固定管板")
+            for param_name in ("管程侧分程隔板槽深度", "壳程侧分程隔板槽深度"):
+                safe_param_name = escape_str(param_name)
+                sql_statements.append(
+                    f"UPDATE {component_table} SET `参数值` = '0' "
+                    f"WHERE `产品ID` = '{safe_productID}' AND `元件名称` = '{safe_component_name}' AND `参数名称` = '{safe_param_name}'"
+                )
+
         # 注意：防冲板宽度参数不再自动更新（保持用户输入的原值）
         # 旧逻辑：如果全局变量 impingement_plate_thick 不为0则使用全局变量的值
         # 新逻辑：防冲板宽度由用户手动输入，不自动计算和更新
