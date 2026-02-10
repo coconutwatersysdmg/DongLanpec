@@ -9120,18 +9120,17 @@ class TubeLayoutEditor(QMainWindow):
             elif name == "布管限定圆 DL":
                 dl_row = r
 
-        if dn_row == -1 or di_row == -1 or dl_row == -1:
+        # DN 和 DL 缺一不可；Di 可以在某些型号下不存在，此时仍需保证 DL <= DN
+        if dn_row == -1 or dl_row == -1:
             print(
-                "[check_diameter_consistency WARN] DN/Di/DL 参数行未完全找到，跳过检查。"
+                "[check_diameter_consistency WARN] DN 或 DL 参数行未找到，跳过检查。"
             )
             return
 
-        # 检查是否有行被隐藏，如果隐藏则跳过一致性检查
-        if (self.param_table.isRowHidden(dn_row) or
-                self.param_table.isRowHidden(di_row) or
-                self.param_table.isRowHidden(dl_row)):
+        # 检查是否有关键行被隐藏：DN 或 DL 被隐藏则无法检查；Di 隐藏时仍可检查 DL <= DN
+        if self.param_table.isRowHidden(dn_row) or self.param_table.isRowHidden(dl_row):
             print(
-                "[check_diameter_consistency WARN] DN/Di/DL 参数行存在隐藏行，跳过检查。"
+                "[check_diameter_consistency WARN] DN 或 DL 参数行被隐藏，跳过检查。"
             )
             return
 
@@ -9149,16 +9148,16 @@ class TubeLayoutEditor(QMainWindow):
                 return None
 
         dn = _read_value(dn_row)
-        di = _read_value(di_row)
+        di = _read_value(di_row) if di_row != -1 and not self.param_table.isRowHidden(di_row) else None
         dl = _read_value(dl_row)
 
         print(
             f"[check_diameter_consistency DEBUG] 触发源={trigger_name} → DN={dn}, Di={di}, DL={dl}"
         )
 
-        # 若有任一值无效，则不做强制检查（避免误判）
-        if None in (dn, di, dl):
-            print("[check_diameter_consistency WARN] 存在无效数值，跳过约束检查。")
+        # 若 DN 或 DL 无效，则不做强制检查（避免误判）；Di 允许缺失
+        if dn is None or dl is None:
+            print("[check_diameter_consistency WARN] DN 或 DL 存在无效数值，跳过约束检查。")
             return False
 
         # =========================================================
@@ -9171,16 +9170,30 @@ class TubeLayoutEditor(QMainWindow):
         is_outer_diameter_base = self.get_is_outer_diameter_base()
         print(f"[check_diameter_consistency] 是否以外径为基准: {is_outer_diameter_base}")
 
-        # 根据"是否以外径为基准"决定检查条件
+        # 始终要求：DL <= DN；在此基础上，根据"是否以外径为基准"和 Di 是否存在决定是否再加 Di 相关约束
+        cond_dn_dl = dn >= dl
         if is_outer_diameter_base == "是":
-            # 以外径为基准：只检查 di >= dl，不管 dn
-            check_condition = di >= dl
-            print(f"[check_diameter_consistency] 以外径为基准模式，检查条件: Di({di}) >= DL({dl}) = {check_condition}")
-        else:
-            # 不以外径为基准：检查 dn >= di >= dl（原逻辑）
-            check_condition = dn >= di >= dl
+            # 以外径为基准：Di 存在时要求 Di >= DL，否则只检查 DL <= DN
+            cond_di_dl = True if di is None else (di >= dl)
+            check_condition = cond_dn_dl and cond_di_dl
             print(
-                f"[check_diameter_consistency] 非以外径为基准模式，检查条件: DN({dn}) >= Di({di}) >= DL({dl}) = {check_condition}")
+                f"[check_diameter_consistency] 以外径为基准模式，检查条件: DL({dl}) <= DN({dn}) 且 "
+                f"{'略过 Di 检查 (Di 缺失)' if di is None else f'Di({di}) >= DL({dl})'} = {check_condition}"
+            )
+        else:
+            # 不以外径为基准：Di 存在时检查 DN >= Di >= DL；缺失时至少保证 DL <= DN
+            if di is not None:
+                cond_chain = dn >= di >= dl
+                check_condition = cond_dn_dl and cond_chain
+                print(
+                    f"[check_diameter_consistency] 非以外径为基准模式，检查条件: "
+                    f"DL({dl}) <= DN({dn}) 且 DN({dn}) >= Di({di}) >= DL({dl}) = {check_condition}"
+                )
+            else:
+                check_condition = cond_dn_dl
+                print(
+                    f"[check_diameter_consistency] 非以外径为基准模式 (Di 缺失)，检查条件: DL({dl}) <= DN({dn}) = {check_condition}"
+                )
 
         temp1 = getattr(self, "_dn_di_dl_temp1", None)
         if isinstance(temp1, dict) and all(k in temp1 for k in ("DN", "Di", "DL")):
