@@ -37412,28 +37412,34 @@ class TubeLayoutEditor(QMainWindow):
             # 验证孔中心距
             try:
                 center_distance = float(self.center_distance_input.text())
-                # 获取管箱内直径Dit
-                dit_value = get_dit_value()
-                if dit_value is None or dit_value <= 0:
-                    return True, ""  # 如果无法获取Dit，跳过验证
-                
-                # 获取吊环螺钉规格直径
-                spec_text = self.spec_input.currentText().strip()
-                screw_diameter = parse_screw_spec(spec_text)
-                if screw_diameter is None:
-                    return True, ""  # 如果无法解析规格，跳过验证
-                
-                # 计算最大允许值：Dit/2 - 规格/2
-                max_distance = dit_value / 2.0 - screw_diameter / 2.0
-                
-                if center_distance >= max_distance:
-                    default_distance = params["吊环螺钉孔中心距"]["default"]
-                    self.center_distance_input.setText(str(default_distance))
-                    return False, f"吊环螺钉中心距最大为{max_distance:.2f} mm，请修改！"
             except ValueError:
                 default_distance = params["吊环螺钉孔中心距"]["default"]
                 self.center_distance_input.setText(str(default_distance))
                 return False, "吊环螺钉孔中心距必须为数字，请修改！"
+
+            # 获取吊环螺钉规格直径（用于最小/最大中心距判断）
+            spec_text = self.spec_input.currentText().strip()
+            screw_diameter = parse_screw_spec(spec_text)
+            if screw_diameter is None:
+                # 无法解析规格时，不做距离约束
+                return True, ""
+
+            # 最小值：中心距不得小于 1 倍规格直径
+            if center_distance < screw_diameter:
+                default_distance = params["吊环螺钉孔中心距"]["default"]
+                self.center_distance_input.setText(str(default_distance))
+                return False, f"吊环螺钉中心距最小为{screw_diameter:.2f} mm，请修改！"
+
+            # 最大值：Dit/2 - 规格/2
+            dit_value = get_dit_value()
+            if dit_value is None or dit_value <= 0:
+                return True, ""  # 如果无法获取Dit，跳过最大值验证
+
+            max_distance = dit_value / 2.0 - screw_diameter / 2.0
+            if center_distance >= max_distance:
+                default_distance = params["吊环螺钉孔中心距"]["default"]
+                self.center_distance_input.setText(str(default_distance))
+                return False, f"吊环螺钉中心距最大为{max_distance:.2f} mm，请修改！"
             
             return True, ""
 
