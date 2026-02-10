@@ -20926,93 +20926,149 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception:
                     pass
 
+            # 若有有效的新直径：按“删除全部 → 恢复干涉管 → 按原位置用新规格重绘（含干涉检查）”的方式处理
             if new_diameter is not None and hasattr(self, "screw_ring_dic") and self.screw_ring_dic:
-                # 遍历所有吊环螺钉，更新规格
-                for ring_id, ring_info in list(self.screw_ring_dic.items()):
-                    if not isinstance(ring_info, dict):
-                        continue
-                    old_diameter = ring_info.get("diameter")
-                    if old_diameter == new_diameter:
-                        continue  # 规格相同，跳过
-                    
-                    # 更新字典中的规格
-                    ring_info["diameter"] = new_diameter
-                    
-                    # 更新图形项的直径（不重新创建，只更新大小）
+                import math
+
+                # 局部干涉检查工具：与 on_screw_ring_click 中逻辑一致（3×5 邻域）
+                def _compute_interfering_for_redraw(center_abs, center_label, screw_diameter):
+                    """
+                    :param center_abs: (cx, cy) 绝对坐标
+                    :param center_label: (row, col) 相对坐标标签
+                    :param screw_diameter: 吊环螺钉直径
+                    :return: 干涉换热管的相对坐标标签列表
+                    """
+                    # 获取换热管外径 do
+                    do_str = self.get_tube_do()
                     try:
-                        import math
-                        from PyQt5.QtGui import QPen, QColor
-                        from PyQt5.QtCore import Qt
-                        from PyQt5.QtWidgets import QGraphicsLineItem
-                        
-                        items = ring_info.get("items", [])
-                        if not items:
+                        do_value = float(do_str)
+                    except (TypeError, ValueError):
+                        return []
+                    tube_radius = do_value / 2.0
+                    ring_radius = float(screw_diameter) / 2.0 if screw_diameter else 0.0
+                    if tube_radius <= 0 or ring_radius <= 0:
+                        return []
+
+                    cx, cy = center_abs
+                    try:
+                        row0, col0 = int(center_label[0]), int(center_label[1])
+                    except Exception:
+                        return []
+
+                    interfering_labels = []
+                    centers = getattr(self, "current_centers", []) or []
+
+                    for (tx, ty) in centers:
+                        # 跳过与中心重合的那一个（本身将被吊环占据）
+                        if abs(tx - cx) < 1e-6 and abs(ty - cy) < 1e-6:
                             continue
-                        
-                        # 获取圆心（从第一个图形项获取）
-                        circle_item = None
-                        for item in items:
-                            if isinstance(item, QGraphicsEllipseItem):
-                                circle_item = item
-                                break
-                        
-                        if circle_item is None:
+                        # 将候选绝对坐标映射为相对标签
+                        try:
+                            label = None
+                            if hasattr(self, "actual_to_selected_coords") and callable(
+                                getattr(self, "actual_to_selected_coords", None)
+                            ):
+                                label = self.actual_to_selected_coords((tx, ty))
+                            if not label or len(label) != 2:
+                                continue
+                            r, c = int(label[0]), int(label[1])
+                        except Exception:
                             continue
-                        
-                        # 获取圆心坐标
-                        rect = circle_item.rect()
-                        cx = rect.center().x()
-                        cy = rect.center().y()
-                        
-                        # 计算新半径
-                        new_radius = new_diameter / 2.0
-                        
-                        # 更新圆形
-                        circle_item.setRect(cx - new_radius, cy - new_radius, 2 * new_radius, 2 * new_radius)
-                        
-                        # 更新内部线条
-                        line_items = [item for item in items if isinstance(item, QGraphicsLineItem)]
-                        offsets = [-new_radius / 2.0, 0.0, new_radius / 2.0]
-                        inner_r = new_radius * 0.9
-                        
-                        # 删除旧的线条
-                        for line_item in line_items:
-                            if line_item.scene():
-                                self.graphics_scene.removeItem(line_item)
-                        
-                        # 重新创建线条
-                        line_pen = QPen(QColor(0, 102, 204))
-                        line_pen.setWidth(1)
-                        line_pen.setCosmetic(True)
-                        
-                        new_line_items = []
-                        # 水平弦
-                        for dy in offsets:
-                            y = cy + dy
-                            line = QGraphicsLineItem(cx - inner_r, y, cx + inner_r, y)
-                            line.setPen(line_pen)
-                            line.setZValue(5.1)
-                            line.is_screw_ring = True
-                            line.screw_ring_id = ring_id
-                            self.graphics_scene.addItem(line)
-                            new_line_items.append(line)
-                        
-                        # 垂直弦
-                        for dx in offsets:
-                            x = cx + dx
-                            line = QGraphicsLineItem(x, cy - inner_r, x, cy + inner_r)
-                            line.setPen(line_pen)
-                            line.setZValue(5.1)
-                            line.is_screw_ring = True
-                            line.screw_ring_id = ring_id
-                            self.graphics_scene.addItem(line)
-                            new_line_items.append(line)
-                        
-                        # 更新字典中的items列表
-                        ring_info["items"] = [circle_item] + new_line_items
-                        
-                    except Exception as e:
-                        print(f"[edit_screw_ring_params_dialog] 更新吊环螺钉 {ring_id} 失败: {e}")
+
+                        # 仅检查上下两行、左右各 2 列的 3×5 邻域
+                        if abs(r - row0) > 1 or abs(c - col0) > 2:
+                            continue
+
+                        length = math.hypot(tx - cx, ty - cy)
+                        if length < (tube_radius + ring_radius):
+                            interfering_labels.append((r, c))
+
+                    return interfering_labels
+
+                # 1) 先记录所有现有吊环螺钉的中心坐标（绝对坐标）
+                centers_to_redraw = []
+                try:
+                    for ring_id, ring_info in list(self.screw_ring_dic.items()):
+                        if not isinstance(ring_info, dict):
+                            continue
+                        center_coord = ring_info.get("center")
+                        if (
+                            isinstance(center_coord, (list, tuple))
+                            and len(center_coord) == 2
+                        ):
+                            try:
+                                cx = float(center_coord[0])
+                                cy = float(center_coord[1])
+                                centers_to_redraw.append((cx, cy))
+                            except Exception:
+                                continue
+                except Exception:
+                    centers_to_redraw = []
+
+                # 2) 删除所有现有吊环螺钉，走统一的删除逻辑（会恢复干涉换热管）
+                try:
+                    if hasattr(self, "screw_ring_dic") and self.screw_ring_dic:
+                        if not hasattr(self, "selected_screw_ring_ids") or self.selected_screw_ring_ids is None:
+                            self.selected_screw_ring_ids = set()
+                        else:
+                            self.selected_screw_ring_ids.clear()
+                        self.selected_screw_ring_ids.update(list(self.screw_ring_dic.keys()))
+                        self.delete_selected_screw_rings()
+                except Exception as e:
+                    print(f"[edit_screw_ring_params_dialog] 删除旧吊环螺钉失败: {e}")
+
+                # 3) 使用新规格在原中心位置重新绘制吊环螺钉（并重新做干涉检查与删除）
+                try:
+                    for (cx, cy) in centers_to_redraw:
+                        try:
+                            distance = math.hypot(cx, cy)
+                            if distance <= 0:
+                                continue
+                            # 由坐标反推角度，与 on_screw_ring_click / build_screw_ring 保持一致
+                            polar_deg = math.degrees(math.atan2(-cy, cx))
+                            angle_deg = 90.0 - polar_deg
+
+                            # 计算干涉换热管（局部 3×5 邻域）
+                            center_label = None
+                            if hasattr(self, "actual_to_selected_coords") and callable(
+                                getattr(self, "actual_to_selected_coords", None)
+                            ):
+                                center_label = self.actual_to_selected_coords((cx, cy))
+                            interfering_labels = (
+                                _compute_interfering_for_redraw((cx, cy), center_label, new_diameter)
+                                if center_label
+                                else []
+                            )
+
+                            # 删除干涉换热管
+                            if interfering_labels:
+                                try:
+                                    self.delete_huanreguan(interfering_labels)
+                                except Exception as _e:
+                                    print(f"[edit_screw_ring_params_dialog] delete_huanreguan(interfering) failed: {_e}")
+
+                            # 绘制新的吊环螺钉
+                            self.build_screw_ring(angle_deg, distance, new_diameter)
+
+                            # 记录干涉/删除的换热管，供后续删除吊环时恢复
+                            try:
+                                last_id = getattr(self, "_screw_ring_auto_id", None)
+                                if (
+                                    last_id is not None
+                                    and hasattr(self, "screw_ring_dic")
+                                    and isinstance(self.screw_ring_dic, dict)
+                                    and last_id in self.screw_ring_dic
+                                ):
+                                    rec = self.screw_ring_dic[last_id]
+                                    rec["interfering_tubes"] = interfering_labels.copy()
+                                    rec["deleted_tubes"] = interfering_labels.copy()
+                                    self.screw_ring_dic[last_id] = rec
+                            except Exception:
+                                pass
+                        except Exception:
+                            continue
+                except Exception as e:
+                    print(f"[edit_screw_ring_params_dialog] 重新绘制吊环螺钉失败: {e}")
 
             dlg.accept()
 
@@ -23578,7 +23634,8 @@ class TubeLayoutEditor(QMainWindow):
         distance = math.hypot(cx, cy)
         if distance <= 0:
             return
-        polar_deg = math.degrees(math.atan2(cy, cx))
+        # Qt 坐标 y 轴向下为正，这里用 -cy 还原到数学坐标系再求角度
+        polar_deg = math.degrees(math.atan2(-cy, cx))
         angle_deg = 90.0 - polar_deg
         try:
             self.build_screw_ring(angle_deg, distance, screw_dia_val)
@@ -37142,6 +37199,64 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
+        # 小工具：根据选中换热管坐标和吊环规格，计算其局部干涉换热管（仅上下左右四个方向的相邻管）
+        def compute_interfering_tubes(center_abs, center_label, screw_diameter):
+            """
+            :param center_abs: (cx, cy) 绝对坐标
+            :param center_label: (row, col) 相对坐标标签
+            :param screw_diameter: 吊环螺钉直径
+            :return: 干涉换热管的相对坐标标签列表
+            """
+            import math
+
+            # 获取换热管外径 do
+            do_str = self.get_tube_do()
+            try:
+                do_value = float(do_str)
+            except (TypeError, ValueError):
+                return []
+            tube_radius = do_value / 2.0
+            ring_radius = float(screw_diameter) / 2.0 if screw_diameter else 0.0
+            if tube_radius <= 0 or ring_radius <= 0:
+                return []
+
+            cx, cy = center_abs
+            try:
+                row0, col0 = int(center_label[0]), int(center_label[1])
+            except Exception:
+                return []
+
+            interfering_labels = []
+            centers = getattr(self, "current_centers", []) or []
+
+            for (tx, ty) in centers:
+                # 跳过与中心重合的那一个（本身将被吊环占据）
+                if abs(tx - cx) < 1e-6 and abs(ty - cy) < 1e-6:
+                    continue
+                # 将候选绝对坐标映射为相对标签
+                try:
+                    label = None
+                    if hasattr(self, "actual_to_selected_coords") and callable(
+                        getattr(self, "actual_to_selected_coords", None)
+                    ):
+                        label = self.actual_to_selected_coords((tx, ty))
+                    if not label or len(label) != 2:
+                        continue
+                    r, c = int(label[0]), int(label[1])
+                except Exception:
+                    continue
+
+                # 只保留“上下两行内、左右各 2 列”的局部 3×5 区域：
+                # 行号在 row0-1 ~ row0+1 之间，列号在 col0-2 ~ col0+2 之间
+                if abs(r - row0) > 1 or abs(c - col0) > 2:
+                    continue
+
+                length = math.hypot(tx - cx, ty - cy)
+                if length < (tube_radius + ring_radius):
+                    interfering_labels.append((r, c))
+
+            return interfering_labels
+
         # ================== 优先处理：选中“已有径向开孔”的换热管，直接转换为吊环螺钉 ==================
         try:
             selected_centers = getattr(self, "selected_centers", None)
@@ -37212,10 +37327,46 @@ class TubeLayoutEditor(QMainWindow):
                     distance = math.hypot(cx, cy)
                     if distance <= 0:
                         continue
-                    polar_deg = math.degrees(math.atan2(cy, cx))
+                    # Qt 坐标系 y 轴向下为正，这里用 -cy 还原到数学坐标系再求角度
+                    polar_deg = math.degrees(math.atan2(-cy, cx))
                     angle_deg = 90.0 - polar_deg
-                    # 这里直接复用 build_screw_ring，数据字典在其中维护
+
+                    # 计算干涉换热管（仅上下两行，同列）
+                    center_label = None
+                    if hasattr(self, "actual_to_selected_coords") and callable(
+                        getattr(self, "actual_to_selected_coords", None)
+                    ):
+                        center_label = self.actual_to_selected_coords((cx, cy))
+                    interfering_labels = (
+                        compute_interfering_tubes((cx, cy), center_label, screw_diameter)
+                        if center_label
+                        else []
+                    )
+
+                    # 删除干涉换热管（使用已有的删除逻辑）
+                    if interfering_labels:
+                        try:
+                            self.delete_huanreguan(interfering_labels)
+                        except Exception as _e:
+                            print(f"[on_screw_ring_click] delete_huanreguan(interfering) failed: {_e}")
+
+                    # 构建吊环螺钉，并记录干涉换热管
                     self.build_screw_ring(angle_deg, distance, screw_diameter)
+                    try:
+                        last_id = getattr(self, "_screw_ring_auto_id", None)
+                        if (
+                            last_id is not None
+                            and hasattr(self, "screw_ring_dic")
+                            and isinstance(self.screw_ring_dic, dict)
+                            and last_id in self.screw_ring_dic
+                        ):
+                            rec = self.screw_ring_dic[last_id]
+                            rec["interfering_tubes"] = interfering_labels.copy()
+                            # 此分支只删除干涉换热管，中心换热管未删除
+                            rec["deleted_tubes"] = interfering_labels.copy()
+                            self.screw_ring_dic[last_id] = rec
+                    except Exception:
+                        pass
                 except Exception as e:
                     print(f"[on_screw_ring_click] build_screw_ring for radial hole failed: {e}")
 
@@ -37247,10 +37398,54 @@ class TubeLayoutEditor(QMainWindow):
                     distance = math.hypot(cx, cy)
                     if distance <= 0:
                         continue
-                    polar_deg = math.degrees(math.atan2(cy, cx))
+                    # Qt 坐标系 y 轴向下为正，这里用 -cy 还原到数学坐标系再求角度
+                    polar_deg = math.degrees(math.atan2(-cy, cx))
                     angle_deg = 90.0 - polar_deg
-                    # 这里直接复用 build_screw_ring，数据字典在其中维护
+
+                    # 计算干涉换热管（仅上下两行，同列）
+                    center_label = None
+                    if hasattr(self, "actual_to_selected_coords") and callable(
+                        getattr(self, "actual_to_selected_coords", None)
+                    ):
+                        center_label = self.actual_to_selected_coords((cx, cy))
+                    interfering_labels = (
+                        compute_interfering_tubes((cx, cy), center_label, screw_diameter)
+                        if center_label
+                        else []
+                    )
+
+                    # 删除：选中换热管 + 干涉换热管 一并删除
+                    labels_to_delete = []
+                    try:
+                        if center_label:
+                            labels_to_delete.append(center_label)
+                        if interfering_labels:
+                            labels_to_delete.extend(interfering_labels)
+                    except Exception:
+                        pass
+                    if labels_to_delete:
+                        try:
+                            self.delete_huanreguan(labels_to_delete)
+                        except Exception as _e:
+                            print(f"[on_screw_ring_click] delete_huanreguan(selected+interfering) failed: {_e}")
+
+                    # 构建吊环螺钉，并记录干涉换热管
                     self.build_screw_ring(angle_deg, distance, screw_diameter)
+                    try:
+                        last_id = getattr(self, "_screw_ring_auto_id", None)
+                        if (
+                            last_id is not None
+                            and hasattr(self, "screw_ring_dic")
+                            and isinstance(self.screw_ring_dic, dict)
+                            and last_id in self.screw_ring_dic
+                        ):
+                            rec = self.screw_ring_dic[last_id]
+                            rec["interfering_tubes"] = interfering_labels.copy()
+                            # 此分支删除了“选中的换热管 + 干涉换热管”
+                            rec["deleted_tubes"] = (labels_to_delete or []).copy()
+                            self.screw_ring_dic[last_id] = rec
+                    except Exception:
+                        pass
                 except Exception as e:
                     print(f"[on_screw_ring_click] build_screw_ring for selected tube failed: {e}")
 
@@ -37508,23 +37703,8 @@ class TubeLayoutEditor(QMainWindow):
                 if not spec:
                     raise ValueError("吊环螺钉规格不能为空")
 
-                # 重新绘制吊环螺钉：先清除旧的，再按数量等分 360° 绘制
+                # 将规格文本（如 M8、M20、M72×6）解析为直径数值
                 try:
-                    # 先删除场景中已有的吊环螺钉图元
-                    if hasattr(self, "graphics_scene") and self.graphics_scene is not None:
-                        for item in list(self.graphics_scene.items()):
-                            try:
-                                if getattr(item, "is_screw_ring", False):
-                                    self.graphics_scene.removeItem(item)
-                            except Exception:
-                                continue
-                    # 同步清空吊环数据字典和选中列表
-                    if hasattr(self, "screw_ring_dic"):
-                        self.screw_ring_dic.clear()
-                    if hasattr(self, "selected_screw_ring_ids"):
-                        self.selected_screw_ring_ids.clear()
-
-                    # 将规格文本（如 M8、M20、M72×6）解析为直径数值
                     import re
 
                     match = re.search(r"(\d+)", spec)
@@ -37532,7 +37712,7 @@ class TubeLayoutEditor(QMainWindow):
                         raise ValueError("吊环螺钉规格格式错误，无法解析直径")
                     screw_diameter = float(match.group(1))
 
-                    # 在真正绘制前，先检查所有位置是否与现有元件干涉
+                    # 在真正绘制前，先检查所有位置是否与现有元件（含已有吊环螺钉）干涉
                     import math
                     from PyQt5.QtWidgets import QMessageBox
 
@@ -37555,7 +37735,7 @@ class TubeLayoutEditor(QMainWindow):
                             )
                             return
 
-                    # 通过检查后再真正绘制
+                    # 通过检查后再真正绘制（在已有吊环螺钉基础上追加）
                     for i in range(count):
                         angle_i = start_angle + i * step  # 起始方位角偏移
                         self.build_screw_ring(angle_i, center_distance, screw_diameter)
@@ -37824,6 +38004,10 @@ class TubeLayoutEditor(QMainWindow):
             "diameter": diameter,
             "center": (cx, cy),
             "items": items,
+            # 新增：记录本吊环螺钉导致删除的干涉换热管（相对坐标标签列表）
+            "interfering_tubes": [],
+            # 新增：记录本吊环螺钉导致删除的所有换热管（包含中心管与干涉管）
+            "deleted_tubes": [],
         }
         if not hasattr(self, "screw_ring_dic") or self.screw_ring_dic is None:
             self.screw_ring_dic = {}
@@ -38032,6 +38216,15 @@ class TubeLayoutEditor(QMainWindow):
                 else None
             )
             if isinstance(rec, dict):
+                # 先根据数据字典恢复因该吊环螺钉删除的换热管（包括选中管和干涉管）
+                try:
+                    deleted = rec.get("deleted_tubes") or rec.get("interfering_tubes") or []
+                    if deleted:
+                        # 使用现有的 build_huanreguan 在对应位置恢复换热管
+                        self.build_huanreguan(deleted)
+                except Exception as _e:
+                    print(f"[delete_selected_screw_rings] restore interfered tubes failed: {_e}")
+
                 items = rec.get("items") or []
                 for it in items:
                     try:
