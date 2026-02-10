@@ -37532,7 +37532,8 @@ class TubeLayoutEditor(QMainWindow):
                         polar_deg = 90.0 - angle_i
                         polar_rad = math.radians(polar_deg)
                         cx = center_distance * math.cos(polar_rad)
-                        cy = center_distance * math.sin(polar_rad)
+                        # Qt 坐标系 y 轴向下为正，这里取反保持与方位角约定一致
+                        cy = -center_distance * math.sin(polar_rad)
                         if not self.is_screw_ring_clear(cx, cy, screw_diameter):
                             QMessageBox.warning(
                                 self,
@@ -37704,7 +37705,8 @@ class TubeLayoutEditor(QMainWindow):
         polar_deg = 90.0 - angle_deg
         polar_rad = math.radians(polar_deg)
         cx = distance * math.cos(polar_rad)
-        cy = distance * math.sin(polar_rad)
+        # Qt 坐标系 y 轴向下为正，这里取反保持与方位角约定一致（0° 在壳体上方）
+        cy = -distance * math.sin(polar_rad)
 
         # 4. 绘制蓝色空心圆
         outer_pen = QPen(QColor(0, 102, 204))  # 深一点的蓝色
