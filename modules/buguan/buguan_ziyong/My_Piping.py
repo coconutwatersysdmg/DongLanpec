@@ -2476,8 +2476,10 @@ class TubeLayoutEditor(QMainWindow):
         btn7.setIcon(QIcon(icon_path7))
         btn7.setIconSize(QSize(20, 20))
         btn7.clicked.connect(self.on_screw_ring_click)
-        if not ENABLE_SCREW_RING:
-            btn7.setEnabled(False)
+        # 吊环螺钉按钮：仅当全局开关打开且换热器型号为 AEU/BEU/AKU/BKU/AES/BES 时可用
+        self.btn_screw_ring = btn7
+        # 初始化时可能还未查询到 heat_exchanger，先根据当前值设置一次
+        self.update_screw_ring_button_state()
         self.toolbar_row1_layout.addWidget(btn7)
 
         btn8 = QPushButton("中间挡板")
@@ -2514,10 +2516,9 @@ class TubeLayoutEditor(QMainWindow):
         btn_radial_holes.setIcon(QIcon(icon_path12))
         btn_radial_holes.setIconSize(QSize(20, 20))
         btn_radial_holes.clicked.connect(self.on_radial_holes_click)
-        # 径向开孔按钮：仅当全局开关打开且换热器型号为 AEU/BEU/AKU/BKU/AES/BES 时可用
+        # 径向开孔按钮：保持一直可用（不再受型号限制）
         self.btn_radial_holes = btn_radial_holes
-        radial_holes_allowed = getattr(self, "heat_exchanger", None) in ("AEU", "BEU", "AKU", "BKU", "AES", "BES")
-        btn_radial_holes.setEnabled(bool(ENABLE_RADIAL_HOLES and radial_holes_allowed))
+        btn_radial_holes.setEnabled(True)
         self.toolbar_row2_layout.addWidget(btn_radial_holes)
 
         btn_delete = QPushButton("删除")
@@ -3048,6 +3049,24 @@ class TubeLayoutEditor(QMainWindow):
 
         return results
 
+    def update_screw_ring_button_state(self):
+        """根据当前换热器型号刷新吊环螺钉按钮的可用状态"""
+        try:
+            if not hasattr(self, "btn_screw_ring"):
+                return
+            screw_allowed = getattr(self, "heat_exchanger", None) in (
+                "AEU",
+                "BEU",
+                "AKU",
+                "BKU",
+                "AES",
+                "BES",
+            )
+            self.btn_screw_ring.setEnabled(bool(ENABLE_SCREW_RING and screw_allowed))
+        except Exception:
+            # 出错时不影响其它功能
+            pass
+
     def find_cross_pipes_info(self):
         self.coord_x_line1_2 = []
         self.coord_y_line1_2 = []
@@ -3231,6 +3250,9 @@ class TubeLayoutEditor(QMainWindow):
                     product_type = result["产品型式"]
                     if product_type is not None and product_type.strip():
                         self.heat_exchanger = product_type.strip()
+                        # 更新吊环螺钉按钮可用状态
+                        if hasattr(self, "update_screw_ring_button_state"):
+                            self.update_screw_ring_button_state()
                         # print(f"成功查询到产品型式: {self.heat_exchanger}，已赋值给self.heat_exchanger")
                     else:
                         print(f"查询到的产品型式为空值（产品ID: {self.productID}）")
@@ -5615,6 +5637,9 @@ class TubeLayoutEditor(QMainWindow):
                         if result and "产品型式" in result:
                             heat_exchanger_type = result["产品型式"].strip().upper()
                             self.heat_exchanger = heat_exchanger_type
+                            # 更新吊环螺钉按钮可用状态
+                            if hasattr(self, "update_screw_ring_button_state"):
+                                self.update_screw_ring_button_state()
             except pymysql.MySQLError as e:
                 print(f"数据库查询产品型式失败: {e}")
             finally:
