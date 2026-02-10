@@ -1304,6 +1304,7 @@ class TubeLayoutEditor(QMainWindow):
         self.del_centers = []
         self.all_params = []
         self.red_dangban = []
+        self.screw_ring_num = 0
         # 当前管板参数快照（包含节点信息），与 variable.tube_sheet_params_snapshot 对应
         self.tube_sheet_params_snapshot = {}
         self.coord_x_line1_2 = []
@@ -2513,8 +2514,10 @@ class TubeLayoutEditor(QMainWindow):
         btn_radial_holes.setIcon(QIcon(icon_path12))
         btn_radial_holes.setIconSize(QSize(20, 20))
         btn_radial_holes.clicked.connect(self.on_radial_holes_click)
-        if not ENABLE_RADIAL_HOLES:
-            btn_radial_holes.setEnabled(False)
+        # 径向开孔按钮：仅当全局开关打开且换热器型号为 AEU/BEU/AKU/BKU/AES/BES 时可用
+        self.btn_radial_holes = btn_radial_holes
+        radial_holes_allowed = getattr(self, "heat_exchanger", None) in ("AEU", "BEU", "AKU", "BKU", "AES", "BES")
+        btn_radial_holes.setEnabled(bool(ENABLE_RADIAL_HOLES and radial_holes_allowed))
         self.toolbar_row2_layout.addWidget(btn_radial_holes)
 
         btn_delete = QPushButton("删除")
@@ -3008,6 +3011,35 @@ class TubeLayoutEditor(QMainWindow):
                         coord = item.get("坐标") if isinstance(item, dict) else None
                         if elem_type in element_mapping and coord is not None:
                             results[element_mapping[elem_type]] = coord
+
+                    # 读取吊环螺钉数量（元件类型=9），写入全局变量 self.screw_ring_num
+                    try:
+                        cursor.execute(
+                            """
+                            SELECT 元件数量
+                            FROM 产品设计活动表_布管元件表
+                            WHERE 产品ID = %s AND 元件类型 = 9
+                            LIMIT 1
+                            """,
+                            (product_id,),
+                        )
+                        row = cursor.fetchone()
+                        if isinstance(row, dict):
+                            v = row.get("元件数量")
+                        elif isinstance(row, (list, tuple)) and len(row) > 0:
+                            v = row[0]
+                        else:
+                            v = None
+                        try:
+                            self.screw_ring_num = int(float(v)) if v not in (None, "") else 0
+                        except Exception:
+                            self.screw_ring_num = 0
+                    except Exception:
+                        # 查询失败不影响坐标读取
+                        try:
+                            self.screw_ring_num = 0
+                        except Exception:
+                            pass
         except Exception as e:
             print(f"批量查询布管元件表错误: {str(e)}")
         finally:
@@ -4906,7 +4938,9 @@ class TubeLayoutEditor(QMainWindow):
                     if hasattr(self, "_screw_ring_auto_id"):
                         self._screw_ring_auto_id = 0
 
-                    # 逐条重建：先写入字典，再尝试绘制（若场景可用）
+                    # 逐条重建：
+                    # - 若场景可用：仅调用 build_screw_ring()（由其统一维护 screw_ring_dic 与自增ID），避免重复入字典导致数量翻倍
+                    # - 若场景不可用：仅缓存到 screw_ring_dic（不绘制），后续可重放
                     for r in rows:
                         try:
                             angle = float(r.get("角度", 0) if isinstance(r, dict) else r[0])
@@ -4915,9 +4949,18 @@ class TubeLayoutEditor(QMainWindow):
                         except Exception as e:
                             continue
 
+                        # 如果场景已准备好，直接绘制（并由 build_screw_ring 写入字典）
+                        try:
+                            if hasattr(self, "graphics_scene") and self.graphics_scene:
+                                self.build_screw_ring(angle, distance, diameter)
+                                continue
+                        except Exception:
+                            # 绘制失败则走缓存分支
+                            pass
+
+                        # 场景不可用：仅缓存到字典（不绘制）
                         screw_id = getattr(self, "_screw_ring_auto_id", 0) + 1
                         self._screw_ring_auto_id = screw_id
-
                         rec = {
                             "id": screw_id,
                             "angle": angle,
@@ -4929,15 +4972,10 @@ class TubeLayoutEditor(QMainWindow):
                         if not hasattr(self, "screw_ring_dic") or self.screw_ring_dic is None:
                             self.screw_ring_dic = {}
                         self.screw_ring_dic[screw_id] = rec
-
-                        # 如果场景已准备好，直接绘制；否则保留在字典中，后续可重放
                         try:
-                            if hasattr(self, "graphics_scene") and self.graphics_scene:
-                                self.build_screw_ring(angle, distance, diameter)
-                            else:
-                                print("[screw_ring] graphics_scene NOT ready, cached only")
-                        except Exception as e:
-                            continue
+                            print("[screw_ring] graphics_scene NOT ready, cached only")
+                        except Exception:
+                            pass
         except Exception as e:
             print(f"读取吊环螺钉表时出错: {e}")
 
@@ -21985,6 +22023,56 @@ class TubeLayoutEditor(QMainWindow):
                             ),
                         )
 
+                # 额外存一条“吊环螺钉数量”到 产品设计活动表_布管元件表
+                # - 产品ID = self.productID
+                # - 元件类型 = 9（吊环螺钉）
+                # - 元件数量 = screw_ring_num（若无则用 screw_ring_dic 计数兜底）
+                # - 坐标置空
+                # - 是否布置滑道 与其它元件一致（slide_status）
+                # 注意：self.screw_ring_num 可能仅在打开“吊环螺钉”弹窗时更新，
+                # 保存时为了确保准确，这里以 screw_ring_dic 的实时数量为准，并同步回写 self.screw_ring_num。
+                try:
+                    screw_count = len(getattr(self, "screw_ring_dic", None) or {})
+                except Exception:
+                    screw_count = 0
+                try:
+                    self.screw_ring_num = int(screw_count)
+                except Exception:
+                    self.screw_ring_num = 0
+                screw_count_str = str(self.screw_ring_num)
+
+                comp_type = 9
+                coords_str = ""  # 坐标置空
+                check_sql = """
+                       SELECT COUNT(*) AS count
+                       FROM 产品设计活动表_布管元件表
+                       WHERE 产品ID = %s AND 元件类型 = %s
+                   """
+                cursor.execute(check_sql, (self.productID, comp_type))
+                result = cursor.fetchone()
+                has_data = result["count"] > 0 if isinstance(result, dict) and "count" in result else False
+
+                if not has_data:
+                    insert_sql = """
+                           INSERT INTO 产品设计活动表_布管元件表
+                           (产品ID, 坐标, 元件类型, 是否布置滑道, 元件数量)
+                           VALUES (%s, %s, %s, %s, %s)
+                       """
+                    cursor.execute(
+                        insert_sql,
+                        (self.productID, coords_str, comp_type, slide_status, screw_count_str),
+                    )
+                else:
+                    update_sql = """
+                           UPDATE 产品设计活动表_布管元件表
+                           SET 坐标 = %s, 是否布置滑道 = %s, 元件数量 = %s
+                           WHERE 产品ID = %s AND 元件类型 = %s
+                       """
+                    cursor.execute(
+                        update_sql,
+                        (coords_str, slide_status, screw_count_str, self.productID, comp_type),
+                    )
+
                 # 同步旁路挡板详情到 产品设计活动表_布管旁路挡板表
                 try:
                     table_bypass = "产品设计活动表_布管旁路挡板表"
@@ -22581,7 +22669,7 @@ class TubeLayoutEditor(QMainWindow):
         actual_selected_centers = self.selected_to_current_coords(self.selected_centers)
 
         if len(actual_selected_centers) != 1:
-            QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
+            QMessageBox.warning(self, "提示", "请任选1个换热管孔作为管板径向开孔的参照管!")
             self.clear_selection_highlight()
             return
 
@@ -22591,10 +22679,11 @@ class TubeLayoutEditor(QMainWindow):
             (abs(cx - sel_x) <= tol and abs(cy - sel_y) <= tol)
             for cx, cy in self.edge_centers
         )
-        if not is_on_edge:
-            QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
-            self.clear_selection_highlight()
-            return
+        # # 此处取消参照管在最外侧的限制
+        # if not is_on_edge:
+        #     QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
+        #     self.clear_selection_highlight()
+        #     return
 
         if not getattr(self, "pipe_port_dict", None):
             QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
@@ -36945,6 +37034,8 @@ class TubeLayoutEditor(QMainWindow):
         """创建吊环螺钉参数设置弹窗，从参数表获取初始值并关联更新"""
         if not ENABLE_SCREW_RING:
             return
+        # 当前吊环螺钉数量存到全局变量，供弹窗等处显示
+        self.screw_ring_num = len(getattr(self, "screw_ring_dic", None) or {})
         try:
             print(
                 f"[DBG][on_screw_ring_click] ENTER (old init dialog) operation_order={getattr(self,'operation_order',None)}"
@@ -37211,6 +37302,17 @@ class TubeLayoutEditor(QMainWindow):
         btn_layout.addWidget(self.confirm_screw_btn)
         btn_layout.addWidget(self.close_screw_btn)
         main_layout.addLayout(btn_layout)
+
+        # 底部突出显示当前吊环螺钉数量
+        try:
+            current_screw_count = getattr(
+                self, "screw_ring_num", len(getattr(self, "screw_ring_dic", None) or {})
+            )
+        except Exception:
+            current_screw_count = 0
+        screw_count_label = QLabel(f"当前吊环螺钉数量：{current_screw_count}")
+        screw_count_label.setStyleSheet("color: blue; font-weight: bold;")
+        main_layout.addWidget(screw_count_label)
 
         # 获取管箱内直径Dit的函数
         def get_dit_value():
