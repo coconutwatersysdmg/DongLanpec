@@ -3337,6 +3337,7 @@ class TubeLayoutEditor(QMainWindow):
                                             # print(final_value)
                                             # print("从设计数据表中读取的新值")
                                             if param_value != final_value:
+                                                QMessageBox.warning(self, "警告", "因更改公称直径，管束设计部分数据失效！")
                                                 try:
                                                     delete_query = """DELETE FROM 产品设计活动表_布管元件表 WHERE 产品ID = %s"""
                                                     cursor.execute(
@@ -3529,6 +3530,10 @@ class TubeLayoutEditor(QMainWindow):
                                                         delete_query, (self.productID,)
                                                     )
                                                     delete_query = """DELETE FROM 产品设计活动表_布管旁路挡板表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管中间挡板表 WHERE 产品ID = %s"""
                                                     cursor.execute(
                                                         delete_query, (self.productID,)
                                                     )
@@ -38873,7 +38878,6 @@ class TubeLayoutEditor(QMainWindow):
         # 坐标转换（标签坐标 -> 画布坐标）
         current_coords = self.selected_to_current_coords(selected_centers_list)
         if not current_coords:
-            QMessageBox.warning(self, "错误", "坐标转换失败")
             return []
 
         # 取画布坐标点
