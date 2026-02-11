@@ -20624,11 +20624,8 @@ class TubeLayoutEditor(QMainWindow):
                 self.clear_selection_highlight()
                 return
 
-            # 只删除选中的那一个换热管（不处理对称）
-            # 直接使用 selected_centers，不进行对称扩展
-            selected_centers = self.selected_centers
-            
-            # 删除对应的换热管（只删除选中的那一个）
+            # 按对称/联动规则扩展后再删除（与删除中心部件 24766-24788 一致）
+            selected_centers = self._expand_centers_by_linkage(self.selected_centers)
             self.delete_huanreguan(selected_centers)
 
             # 弹出径向开孔对话框（复用 on_radial_holes_click 的对话框代码）
@@ -20875,7 +20872,8 @@ class TubeLayoutEditor(QMainWindow):
         if hasattr(self, "selected_screw_ring_ids") and self.selected_screw_ring_ids is not None:
             self.selected_screw_ring_ids.discard(screw_ring_id)
 
-        selected_centers = self.selected_centers
+        # 按对称/联动规则扩展后再删除（与删除中心部件 24766-24788 一致）
+        selected_centers = self._expand_centers_by_linkage(self.selected_centers)
         self.delete_huanreguan(selected_centers)
 
         from PyQt5.QtWidgets import (
@@ -22782,14 +22780,8 @@ class TubeLayoutEditor(QMainWindow):
             QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
             self.clear_selection_highlight()
             return
-        tube_num = self.get_tube_pass_count()
-        if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
-            selected_centers = self.judge_linkage_y(self.selected_centers)
-        elif tube_num in ["4", "6"] and self.heat_exchanger in ["AEU", "BEU"]:
-            selected_centers = self.judge_linkage_y(self.selected_centers)
-        else:
-            selected_centers = self.selected_centers
-
+        # 按对称/联动规则扩展后再删除（与删除中心部件 24766-24788 一致）
+        selected_centers = self._expand_centers_by_linkage(self.selected_centers)
         self.delete_huanreguan(selected_centers)
 
         from PyQt5.QtWidgets import (
@@ -24762,7 +24754,7 @@ class TubeLayoutEditor(QMainWindow):
             ):
                 self.delete_selected_center_dangban()
 
-            # 处理中心部件删除
+            # 处理换热管删除
             if hasattr(self, "selected_centers") and self.selected_centers:
                 if self.isSymmetry:
                     selected_centers = list(self.judge_linkage(self.selected_centers))
