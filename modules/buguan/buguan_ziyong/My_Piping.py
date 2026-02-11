@@ -20823,32 +20823,7 @@ class TubeLayoutEditor(QMainWindow):
             QMessageBox.warning(self, "提示", "吊环螺钉坐标格式错误")
             return False
 
-        # 删除吊环螺钉的图形项
-        items = ring_info.get("items", [])
-        for it in items:
-            try:
-                if it is None:
-                    continue
-                try:
-                    item_scene = it.scene()
-                except (RuntimeError, AttributeError):
-                    continue
-                if item_scene is not None and item_scene == self.graphics_scene:
-                    try:
-                        self.graphics_scene.removeItem(it)
-                    except (RuntimeError, AttributeError):
-                        pass
-            except Exception:
-                pass
-
-        try:
-            del self.screw_ring_dic[screw_ring_id]
-        except Exception:
-            pass
-
-        if hasattr(self, "selected_screw_ring_ids") and self.selected_screw_ring_ids is not None:
-            self.selected_screw_ring_ids.discard(screw_ring_id)
-
+        # 先做全部校验，失败时不删除吊环螺钉
         if not hasattr(self, "actual_to_selected_coords") or not callable(
             getattr(self, "actual_to_selected_coords", None)
         ):
@@ -20873,6 +20848,32 @@ class TubeLayoutEditor(QMainWindow):
             QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
             self.clear_selection_highlight()
             return False
+
+        # 校验通过后再删除吊环螺钉（避免转换失败时吊环已被删）
+        items = ring_info.get("items", [])
+        for it in items:
+            try:
+                if it is None:
+                    continue
+                try:
+                    item_scene = it.scene()
+                except (RuntimeError, AttributeError):
+                    continue
+                if item_scene is not None and item_scene == self.graphics_scene:
+                    try:
+                        self.graphics_scene.removeItem(it)
+                    except (RuntimeError, AttributeError):
+                        pass
+            except Exception:
+                pass
+
+        try:
+            del self.screw_ring_dic[screw_ring_id]
+        except Exception:
+            pass
+
+        if hasattr(self, "selected_screw_ring_ids") and self.selected_screw_ring_ids is not None:
+            self.selected_screw_ring_ids.discard(screw_ring_id)
 
         selected_centers = self.selected_centers
         self.delete_huanreguan(selected_centers)
