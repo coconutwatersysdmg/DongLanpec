@@ -21029,7 +21029,7 @@ class TubeLayoutEditor(QMainWindow):
                             polar_deg = math.degrees(math.atan2(-cy, cx))
                             angle_deg = 90.0 - polar_deg
 
-                            # 计算干涉换热管（局部 3×5 邻域）
+                            # 计算干涉换热管（局部 3×5 邻域，不含中心管）
                             center_label = None
                             if hasattr(self, "actual_to_selected_coords") and callable(
                                 getattr(self, "actual_to_selected_coords", None)
@@ -21041,14 +21041,23 @@ class TubeLayoutEditor(QMainWindow):
                                 else []
                             )
 
-                            # 删除干涉换热管（按对称/联动规则扩展后再删）
+                            # 要删除 = 吊环所在中心管 + 干涉邻管（与首次添加时一致）
+                            labels_to_delete = []
+                            if center_label:
+                                labels_to_delete.append(
+                                    (int(center_label[0]), int(center_label[1]))
+                                )
                             if interfering_labels:
-                                expanded_interfering = self._expand_centers_by_linkage(interfering_labels)
+                                labels_to_delete.extend(interfering_labels)
+
+                            # 删除中心管+干涉管（按对称/联动规则扩展后再删）
+                            if labels_to_delete:
+                                expanded_to_delete = self._expand_centers_by_linkage(labels_to_delete)
                                 try:
-                                    self.delete_huanreguan(expanded_interfering)
+                                    self.delete_huanreguan(expanded_to_delete)
                                 except Exception as _e:
                                     print(f"[edit_screw_ring_params_dialog] delete_huanreguan(interfering) failed: {_e}")
-                                interfering_labels = expanded_interfering
+                                interfering_labels = expanded_to_delete
 
                             # 绘制新的吊环螺钉
                             self.build_screw_ring(angle_deg, distance, new_diameter)
@@ -21063,8 +21072,12 @@ class TubeLayoutEditor(QMainWindow):
                                     and last_id in self.screw_ring_dic
                                 ):
                                     rec = self.screw_ring_dic[last_id]
-                                    rec["interfering_tubes"] = interfering_labels.copy() if interfering_labels else []
-                                    rec["deleted_tubes"] = interfering_labels.copy() if interfering_labels else []
+                                    rec["interfering_tubes"] = (
+                                        list(interfering_labels) if interfering_labels else []
+                                    )
+                                    rec["deleted_tubes"] = (
+                                        list(interfering_labels) if interfering_labels else []
+                                    )
                                     self.screw_ring_dic[last_id] = rec
                             except Exception:
                                 pass
