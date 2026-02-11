@@ -20603,7 +20603,7 @@ class TubeLayoutEditor(QMainWindow):
             actual_selected_centers = self.selected_to_current_coords(self.selected_centers)
 
             if len(actual_selected_centers) != 1:
-                QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
+                QMessageBox.warning(self, "提示", "未选择正确换热管管孔！11")
                 self.clear_selection_highlight()
                 return
 
@@ -20613,10 +20613,11 @@ class TubeLayoutEditor(QMainWindow):
                 (abs(cx - sel_x) <= tol and abs(cy - sel_y) <= tol)
                 for cx, cy in self.edge_centers
             )
-            if not is_on_edge:
-                QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
-                self.clear_selection_highlight()
-                return
+            # 暂时不做边缘检测了
+            # if not is_on_edge:
+            #     QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
+            #     self.clear_selection_highlight()
+            #     return
 
             if not getattr(self, "pipe_port_dict", None):
                 QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
@@ -21369,7 +21370,7 @@ class TubeLayoutEditor(QMainWindow):
             
             # 3. 检查是否只有一个坐标
             if len(actual_selected_centers) != 1:
-                QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
+                QMessageBox.warning(self, "提示", "未选择正确换热管管孔！22")
                 self.clear_selection_highlight()
                 return
             
@@ -21380,10 +21381,10 @@ class TubeLayoutEditor(QMainWindow):
                 (abs(cx - sel_x) <= tol and abs(cy - sel_y) <= tol)
                 for cx, cy in self.edge_centers
             )
-            if not is_on_edge:
-                QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
-                self.clear_selection_highlight()
-                return
+            # if not is_on_edge:
+            #     QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
+            #     self.clear_selection_highlight()
+            #     return
             
             # 5. 检查 pipe_port_dict 是否存在
             if not getattr(self, "pipe_port_dict", None):
@@ -23975,6 +23976,40 @@ class TubeLayoutEditor(QMainWindow):
                 unit_item = QTableWidgetItem(unit or "")
                 unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
                 table.setItem(row, 2, unit_item)
+
+        # 一打开弹窗即根据当前数据计算“折流板切口与中心线间距a”并显示
+        if show_other_params:
+            try:
+                di_str = get_param_value("壳体内直径 Dis")
+                od_str = get_param_value("折流板外径")
+                rate_str = get_param_value("折流板要求切口率")
+                di = float(di_str) if di_str else None
+                baffle_diameter = float(od_str) if od_str else None
+                cut_rate = float(rate_str) if rate_str else None
+                if (
+                    di is not None
+                    and di > 0
+                    and baffle_diameter is not None
+                    and baffle_diameter > 0
+                    and cut_rate is not None
+                    and 0 <= cut_rate <= 50
+                ):
+                    baffle_radius = baffle_diameter / 2.0
+                    cut_size = (cut_rate / 100.0) * di
+                    new_spacing = baffle_radius - cut_size
+                    if new_spacing < 0:
+                        new_spacing = 0.0
+                    elif new_spacing > baffle_radius:
+                        new_spacing = baffle_radius
+                    for r in range(table.rowCount()):
+                        name_item = table.item(r, 0)
+                        if name_item and name_item.text().strip() == "折流板切口与中心线间距a":
+                            value_item = table.item(r, 1)
+                            if value_item:
+                                value_item.setText(f"{new_spacing:.1f}")
+                            break
+            except Exception as e:
+                print(f"[show_baffle_info] 打开时计算折流板切口与中心线间距a失败: {e}")
 
         table.resizeColumnsToContents()
         content_layout.addWidget(table, 2)
