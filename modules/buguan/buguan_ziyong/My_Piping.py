@@ -21040,17 +21040,19 @@ class TubeLayoutEditor(QMainWindow):
                                 else []
                             )
 
-                            # 删除干涉换热管
+                            # 删除干涉换热管（按对称/联动规则扩展后再删）
                             if interfering_labels:
+                                expanded_interfering = self._expand_centers_by_linkage(interfering_labels)
                                 try:
-                                    self.delete_huanreguan(interfering_labels)
+                                    self.delete_huanreguan(expanded_interfering)
                                 except Exception as _e:
                                     print(f"[edit_screw_ring_params_dialog] delete_huanreguan(interfering) failed: {_e}")
+                                interfering_labels = expanded_interfering
 
                             # 绘制新的吊环螺钉
                             self.build_screw_ring(angle_deg, distance, new_diameter)
 
-                            # 记录干涉/删除的换热管，供后续删除吊环时恢复
+                            # 记录干涉/删除的换热管（扩展后列表），供后续删除吊环时恢复
                             try:
                                 last_id = getattr(self, "_screw_ring_auto_id", None)
                                 if (
@@ -21060,8 +21062,8 @@ class TubeLayoutEditor(QMainWindow):
                                     and last_id in self.screw_ring_dic
                                 ):
                                     rec = self.screw_ring_dic[last_id]
-                                    rec["interfering_tubes"] = interfering_labels.copy()
-                                    rec["deleted_tubes"] = interfering_labels.copy()
+                                    rec["interfering_tubes"] = interfering_labels.copy() if interfering_labels else []
+                                    rec["deleted_tubes"] = interfering_labels.copy() if interfering_labels else []
                                     self.screw_ring_dic[last_id] = rec
                             except Exception:
                                 pass
@@ -26627,6 +26629,19 @@ class TubeLayoutEditor(QMainWindow):
 
         # 没有找到相同的坐标，返回 True
         return True
+
+    def _expand_centers_by_linkage(self, centers_list):
+        """按对称/联动规则扩展坐标列表，与删除中心部件时逻辑一致（24733-24755）。"""
+        if not centers_list:
+            return list(centers_list) if centers_list is not None else []
+        if self.isSymmetry:
+            return list(self.judge_linkage(centers_list))
+        tubeline_num = self.get_tube_pass_count()
+        if tubeline_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+            return list(self.judge_linkage_x(centers_list))
+        if tubeline_num in ("4", "6") and self.heat_exchanger in ["AEU", "BEU"]:
+            return list(self.judge_linkage_y(centers_list))
+        return list(centers_list)
 
     def judge_linkage(self, selected_centers):
         linkage_centers = []
@@ -37343,14 +37358,16 @@ class TubeLayoutEditor(QMainWindow):
                         else []
                     )
 
-                    # 删除干涉换热管（使用已有的删除逻辑）
+                    # 删除干涉换热管（按对称/联动规则扩展后再删，与删除中心部件一致）
                     if interfering_labels:
+                        expanded_interfering = self._expand_centers_by_linkage(interfering_labels)
                         try:
-                            self.delete_huanreguan(interfering_labels)
+                            self.delete_huanreguan(expanded_interfering)
                         except Exception as _e:
                             print(f"[on_screw_ring_click] delete_huanreguan(interfering) failed: {_e}")
+                        interfering_labels = expanded_interfering
 
-                    # 构建吊环螺钉，并记录干涉换热管
+                    # 构建吊环螺钉，并记录干涉换热管（存扩展后列表，便于删除吊环时恢复）
                     self.build_screw_ring(angle_deg, distance, screw_diameter)
                     try:
                         last_id = getattr(self, "_screw_ring_auto_id", None)
@@ -37361,9 +37378,9 @@ class TubeLayoutEditor(QMainWindow):
                             and last_id in self.screw_ring_dic
                         ):
                             rec = self.screw_ring_dic[last_id]
-                            rec["interfering_tubes"] = interfering_labels.copy()
+                            rec["interfering_tubes"] = interfering_labels.copy() if interfering_labels else []
                             # 此分支只删除干涉换热管，中心换热管未删除
-                            rec["deleted_tubes"] = interfering_labels.copy()
+                            rec["deleted_tubes"] = interfering_labels.copy() if interfering_labels else []
                             self.screw_ring_dic[last_id] = rec
                     except Exception:
                         pass
@@ -37414,7 +37431,7 @@ class TubeLayoutEditor(QMainWindow):
                         else []
                     )
 
-                    # 删除：选中换热管 + 干涉换热管 一并删除
+                    # 删除：选中换热管 + 干涉换热管，按对称/联动规则扩展后一并删除
                     labels_to_delete = []
                     try:
                         if center_label:
@@ -37424,12 +37441,14 @@ class TubeLayoutEditor(QMainWindow):
                     except Exception:
                         pass
                     if labels_to_delete:
+                        expanded_to_delete = self._expand_centers_by_linkage(labels_to_delete)
                         try:
-                            self.delete_huanreguan(labels_to_delete)
+                            self.delete_huanreguan(expanded_to_delete)
                         except Exception as _e:
                             print(f"[on_screw_ring_click] delete_huanreguan(selected+interfering) failed: {_e}")
+                        labels_to_delete = expanded_to_delete
 
-                    # 构建吊环螺钉，并记录干涉换热管
+                    # 构建吊环螺钉，并记录干涉换热管（存扩展后列表，便于删除吊环时恢复）
                     self.build_screw_ring(angle_deg, distance, screw_diameter)
                     try:
                         last_id = getattr(self, "_screw_ring_auto_id", None)
@@ -37440,8 +37459,8 @@ class TubeLayoutEditor(QMainWindow):
                             and last_id in self.screw_ring_dic
                         ):
                             rec = self.screw_ring_dic[last_id]
-                            rec["interfering_tubes"] = interfering_labels.copy()
-                            # 此分支删除了“选中的换热管 + 干涉换热管”
+                            rec["interfering_tubes"] = self._expand_centers_by_linkage(interfering_labels).copy() if interfering_labels else []
+                            # 此分支删除了“选中的换热管 + 干涉换热管”（扩展后）
                             rec["deleted_tubes"] = (labels_to_delete or []).copy()
                             self.screw_ring_dic[last_id] = rec
                     except Exception:
