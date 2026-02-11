@@ -20790,6 +20790,247 @@ class TubeLayoutEditor(QMainWindow):
         convert_radial_btn.clicked.connect(lagan_to_radial_holes)
         dlg.exec_()
 
+    def convert_screw_ring_to_radial_hole(self, screw_ring_id):
+        """
+        将指定吊环螺钉转为径向开孔（与弹窗内「转为径向开孔」同一流程）。
+        可用于：1) 编辑吊环弹窗内点击「转为径向开孔」 2) 选中吊环后点击工具栏「径向开孔」。
+        :param screw_ring_id: 吊环螺钉ID
+        :return: True 表示已执行并弹出径向开孔对话框，False 表示未执行或失败
+        """
+        from PyQt5.QtWidgets import QMessageBox
+
+        if screw_ring_id is None:
+            QMessageBox.warning(self, "提示", "未找到吊环螺钉ID")
+            return False
+
+        if not hasattr(self, "screw_ring_dic") or not isinstance(self.screw_ring_dic, dict):
+            QMessageBox.warning(self, "提示", "吊环螺钉数据字典不存在")
+            return False
+
+        ring_info = self.screw_ring_dic.get(screw_ring_id)
+        if not isinstance(ring_info, dict):
+            QMessageBox.warning(self, "提示", "未找到对应的吊环螺钉信息")
+            return False
+
+        center_coord = ring_info.get("center")
+        if not center_coord or len(center_coord) != 2:
+            QMessageBox.warning(self, "提示", "吊环螺钉坐标信息无效")
+            return False
+
+        try:
+            cx, cy = float(center_coord[0]), float(center_coord[1])
+        except (TypeError, ValueError):
+            QMessageBox.warning(self, "提示", "吊环螺钉坐标格式错误")
+            return False
+
+        # 删除吊环螺钉的图形项
+        items = ring_info.get("items", [])
+        for it in items:
+            try:
+                if it is None:
+                    continue
+                try:
+                    item_scene = it.scene()
+                except (RuntimeError, AttributeError):
+                    continue
+                if item_scene is not None and item_scene == self.graphics_scene:
+                    try:
+                        self.graphics_scene.removeItem(it)
+                    except (RuntimeError, AttributeError):
+                        pass
+            except Exception:
+                pass
+
+        try:
+            del self.screw_ring_dic[screw_ring_id]
+        except Exception:
+            pass
+
+        if hasattr(self, "selected_screw_ring_ids") and self.selected_screw_ring_ids is not None:
+            self.selected_screw_ring_ids.discard(screw_ring_id)
+
+        if not hasattr(self, "actual_to_selected_coords") or not callable(
+            getattr(self, "actual_to_selected_coords", None)
+        ):
+            QMessageBox.warning(self, "提示", "无法进行坐标转换，转换失败")
+            return False
+
+        rel_coord = self.actual_to_selected_coords((cx, cy))
+        if not rel_coord:
+            QMessageBox.warning(self, "提示", "坐标转换失败，无法转换为径向开孔")
+            return False
+
+        self.selected_centers = [rel_coord]
+        self.find_edge_tube()
+        actual_selected_centers = self.selected_to_current_coords(self.selected_centers)
+
+        if len(actual_selected_centers) != 1:
+            QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
+            self.clear_selection_highlight()
+            return False
+
+        if not getattr(self, "pipe_port_dict", None):
+            QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
+            self.clear_selection_highlight()
+            return False
+
+        selected_centers = self.selected_centers
+        self.delete_huanreguan(selected_centers)
+
+        from PyQt5.QtWidgets import (
+            QDialog,
+            QVBoxLayout,
+            QHBoxLayout,
+            QLabel,
+            QComboBox,
+            QDialogButtonBox,
+        )
+
+        def _coord_equal(a, b, t=1e-6):
+            try:
+                return abs(a[0] - b[0]) <= t and abs(a[1] - b[1]) <= t
+            except Exception:
+                return False
+
+        current_coord = actual_selected_centers[0]
+        existing_port_code = None
+        existing_direction = "壳程"
+        for code, info in self.radial_hole_dict.items():
+            if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                if _coord_equal(info.get("换热管坐标"), current_coord):
+                    existing_port_code = code
+                    existing_direction = info.get("连通方向", "壳程")
+                    break
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("径向开孔")
+        dialog.setModal(True)
+        dialog.resize(520, 220)
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(24, 18, 24, 18)
+        layout.setSpacing(14)
+
+        row1 = QHBoxLayout()
+        row1.setSpacing(10)
+        row1.addWidget(QLabel("管口号："))
+        port_combo = QComboBox()
+        port_combo.setMinimumWidth(260)
+        port_codes = list(self.radial_hole_dict.keys())
+        for code in port_codes:
+            try:
+                info = (
+                    self.radial_hole_dict.get(code)
+                    if isinstance(self.radial_hole_dict, dict)
+                    else None
+                )
+                assigned = isinstance(info, dict) and info.get("换热管坐标") is not None
+            except Exception:
+                assigned = False
+            display = f"{code}（已分配）" if assigned else f"{code}"
+            port_combo.addItem(display, code)
+        if existing_port_code is not None:
+            try:
+                idx = port_combo.findData(existing_port_code)
+                if idx >= 0:
+                    port_combo.setCurrentIndex(idx)
+            except Exception:
+                pass
+        row1.addWidget(port_combo)
+        layout.addLayout(row1)
+
+        row2 = QHBoxLayout()
+        row2.setSpacing(10)
+        row2.addWidget(QLabel("连通方向："))
+        dir_combo = QComboBox()
+        dir_combo.addItems(["管程", "壳程"])
+        dir_combo.setMinimumWidth(260)
+        if existing_direction in ["管程", "壳程"]:
+            dir_combo.setCurrentText(existing_direction)
+        else:
+            dir_combo.setCurrentText("壳程")
+        row2.addWidget(dir_combo)
+        layout.addLayout(row2)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        buttons = QDialogButtonBox()
+        ok_btn = buttons.addButton("确认", QDialogButtonBox.AcceptRole)
+        close_btn = buttons.addButton("关闭", QDialogButtonBox.RejectRole)
+        layout.addLayout(btn_row)
+        layout.addWidget(buttons)
+        ok_btn.clicked.connect(dialog.accept)
+        close_btn.clicked.connect(dialog.reject)
+
+        result = dialog.exec_()
+        if result == QDialog.Rejected:
+            self.clear_selection_highlight()
+            return True
+
+        try:
+            selected_port = port_combo.currentData()
+        except Exception:
+            selected_port = port_combo.currentText()
+        selected_direction = dir_combo.currentText() or "壳程"
+
+        if existing_port_code is not None and str(existing_port_code) != str(selected_port):
+            try:
+                if existing_port_code in self.radial_hole_dict:
+                    old_coord = self.radial_hole_dict[existing_port_code].get("换热管坐标")
+                    self.radial_hole_dict[existing_port_code]["换热管坐标"] = None
+                    if old_coord is not None:
+                        try:
+                            self.remove_radial_hole_graphics(old_coord)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        try:
+            for code, info in self.radial_hole_dict.items():
+                if isinstance(info, dict) and info.get("换热管坐标") is not None:
+                    if _coord_equal(info.get("换热管坐标"), current_coord):
+                        old_coord = info.get("换热管坐标")
+                        info["换热管坐标"] = None
+                        if old_coord is not None:
+                            try:
+                                self.remove_radial_hole_graphics(old_coord)
+                            except Exception:
+                                pass
+        except Exception:
+            pass
+
+        if selected_port not in self.radial_hole_dict:
+            QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
+            self.clear_selection_highlight()
+            return False
+
+        try:
+            old_coord_for_selected = self.radial_hole_dict[selected_port].get("换热管坐标")
+            if old_coord_for_selected is not None and not _coord_equal(
+                old_coord_for_selected, current_coord
+            ):
+                try:
+                    self.remove_radial_hole_graphics(old_coord_for_selected)
+                except Exception:
+                    pass
+                try:
+                    self.radial_hole_dict[selected_port]["换热管坐标"] = None
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        self.radial_hole_dict[selected_port]["管口号"] = selected_port
+        self.radial_hole_dict[selected_port]["连通方向"] = selected_direction
+        self.radial_hole_dict[selected_port]["换热管坐标"] = current_coord
+
+        try:
+            self.draw_radial_hole_tangents(current_coord)
+            self.clear_selection_highlight()
+        except Exception as e:
+            print(f"绘制径向开孔切线出错: {e}")
+        return True
+
     def edit_screw_ring_params_dialog(self, screw_ring_id=None):
         """
         编辑吊环螺钉参数对话框
@@ -21293,274 +21534,9 @@ class TubeLayoutEditor(QMainWindow):
             dlg.accept()
 
         def screw_ring_to_radial_holes():
-            """
-            吊环螺钉 → 径向开孔：
-            - 获取吊环螺钉坐标
-            - 删除吊环螺钉
-            - 进行位置检查（边缘管检查）
-            - 删除对应的换热管
-            - 弹出径向开孔对话框
-            """
-            from PyQt5.QtWidgets import QMessageBox
-            
-            if screw_ring_id is None:
-                QMessageBox.warning(dlg, "提示", "未找到吊环螺钉ID")
-                return
-            
-            # 获取吊环螺钉信息
-            if not hasattr(self, "screw_ring_dic") or not isinstance(self.screw_ring_dic, dict):
-                QMessageBox.warning(dlg, "提示", "吊环螺钉数据字典不存在")
-                return
-            
-            ring_info = self.screw_ring_dic.get(screw_ring_id)
-            if not isinstance(ring_info, dict):
-                QMessageBox.warning(dlg, "提示", "未找到对应的吊环螺钉信息")
-                return
-            
-            # 获取吊环螺钉的中心坐标（绝对坐标）
-            center_coord = ring_info.get("center")
-            if not center_coord or len(center_coord) != 2:
-                QMessageBox.warning(dlg, "提示", "吊环螺钉坐标信息无效")
-                return
-            
-            try:
-                cx, cy = float(center_coord[0]), float(center_coord[1])
-            except (TypeError, ValueError):
-                QMessageBox.warning(dlg, "提示", "吊环螺钉坐标格式错误")
-                return
-            
-            # 删除吊环螺钉的图形项
-            items = ring_info.get("items", [])
-            for it in items:
-                try:
-                    if it is None:
-                        continue
-                    # 使用 try-except 包裹 scene() 调用，避免崩溃
-                    try:
-                        item_scene = it.scene()
-                    except (RuntimeError, AttributeError):
-                        # item可能已经被删除或无效，跳过
-                        continue
-                    # 只有在scene一致时才删除
-                    if item_scene is not None and item_scene == self.graphics_scene:
-                        try:
-                            self.graphics_scene.removeItem(it)
-                        except (RuntimeError, AttributeError):
-                            # 删除失败，可能item已经被删除，忽略
-                            pass
-                except Exception:
-                    # 忽略所有其他异常
-                    pass
-            
-            # 从字典中删除吊环螺钉记录
-            try:
-                del self.screw_ring_dic[screw_ring_id]
-            except Exception:
-                pass
-            
-            # 将绝对坐标转为相对坐标（selected_centers 格式）
-            if not hasattr(self, "actual_to_selected_coords") or not callable(getattr(self, "actual_to_selected_coords", None)):
-                QMessageBox.warning(dlg, "提示", "无法进行坐标转换，转换失败")
-                return
-            
-            rel_coord = self.actual_to_selected_coords((cx, cy))
-            if not rel_coord:
-                QMessageBox.warning(dlg, "提示", "坐标转换失败，无法转换为径向开孔")
-                return
-            
-            # 关闭当前对话框
+            """吊环螺钉 → 径向开孔：关闭对话框后走统一转换流程。"""
             dlg.accept()
-            
-            # 设置 selected_centers 为相对坐标
-            self.selected_centers = [rel_coord]
-            
-            # 调用完整流程（走 on_radial_holes_click 的流程）
-            # 1. 找到边缘管
-            self.find_edge_tube()
-            
-            # 2. 将相对坐标转为绝对坐标
-            actual_selected_centers = self.selected_to_current_coords(self.selected_centers)
-            
-            # 3. 检查是否只有一个坐标
-            if len(actual_selected_centers) != 1:
-                QMessageBox.warning(self, "提示", "未选择正确换热管管孔！22")
-                self.clear_selection_highlight()
-                return
-            
-            # 4. 检查该坐标是否在边缘管列表中
-            sel_x, sel_y = actual_selected_centers[0]
-            tol = 1e-6
-            is_on_edge = any(
-                (abs(cx - sel_x) <= tol and abs(cy - sel_y) <= tol)
-                for cx, cy in self.edge_centers
-            )
-            # if not is_on_edge:
-            #     QMessageBox.warning(self, "提示", "未选择正确换热管管孔！")
-            #     self.clear_selection_highlight()
-            #     return
-            
-            # 5. 检查 pipe_port_dict 是否存在
-            if not getattr(self, "pipe_port_dict", None):
-                QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
-                self.clear_selection_highlight()
-                return
-            
-            # 6. 删除对应的换热管（只删除选中的那一个）
-            selected_centers = self.selected_centers
-            self.delete_huanreguan(selected_centers)
-            
-            # 7. 弹出径向开孔对话框（复用 lagan_to_radial_holes 的对话框代码）
-            from PyQt5.QtWidgets import (
-                QDialog,
-                QVBoxLayout,
-                QHBoxLayout,
-                QLabel,
-                QComboBox,
-                QDialogButtonBox,
-            )
-            
-            def _coord_equal(a, b, t=1e-6):
-                try:
-                    return abs(a[0] - b[0]) <= t and abs(a[1] - b[1]) <= t
-                except Exception:
-                    return False
-            
-            current_coord = actual_selected_centers[0]
-            existing_port_code = None
-            existing_direction = "壳程"
-            for code, info in self.radial_hole_dict.items():
-                if isinstance(info, dict) and info.get("换热管坐标") is not None:
-                    if _coord_equal(info.get("换热管坐标"), current_coord):
-                        existing_port_code = code
-                        existing_direction = info.get("连通方向", "壳程")
-                        break
-            
-            dialog = QDialog(self)
-            dialog.setWindowTitle("径向开孔")
-            dialog.setModal(True)
-            dialog.resize(520, 220)
-            layout = QVBoxLayout(dialog)
-            layout.setContentsMargins(24, 18, 24, 18)
-            layout.setSpacing(14)
-            
-            row1 = QHBoxLayout()
-            row1.setSpacing(10)
-            row1.addWidget(QLabel("管口号："))
-            port_combo = QComboBox()
-            port_combo.setMinimumWidth(260)
-            port_codes = list(self.radial_hole_dict.keys())
-            for code in port_codes:
-                try:
-                    info = (
-                        self.radial_hole_dict.get(code)
-                        if isinstance(self.radial_hole_dict, dict)
-                        else None
-                    )
-                    assigned = isinstance(info, dict) and info.get("换热管坐标") is not None
-                except Exception:
-                    assigned = False
-                display = f"{code}（已分配）" if assigned else f"{code}"
-                port_combo.addItem(display, code)
-            if existing_port_code is not None:
-                try:
-                    idx = port_combo.findData(existing_port_code)
-                    if idx >= 0:
-                        port_combo.setCurrentIndex(idx)
-                except Exception:
-                    pass
-            row1.addWidget(port_combo)
-            layout.addLayout(row1)
-            
-            row2 = QHBoxLayout()
-            row2.setSpacing(10)
-            row2.addWidget(QLabel("连通方向："))
-            dir_combo = QComboBox()
-            dir_combo.addItems(["管程", "壳程"])
-            dir_combo.setMinimumWidth(260)
-            if existing_direction in ["管程", "壳程"]:
-                dir_combo.setCurrentText(existing_direction)
-            else:
-                dir_combo.setCurrentText("壳程")
-            row2.addWidget(dir_combo)
-            layout.addLayout(row2)
-            
-            btn_row = QHBoxLayout()
-            btn_row.addStretch(1)
-            buttons = QDialogButtonBox()
-            ok_btn = buttons.addButton("确认", QDialogButtonBox.AcceptRole)
-            close_btn = buttons.addButton("关闭", QDialogButtonBox.RejectRole)
-            layout.addLayout(btn_row)
-            layout.addWidget(buttons)
-            ok_btn.clicked.connect(dialog.accept)
-            close_btn.clicked.connect(dialog.reject)
-            
-            result = dialog.exec_()
-            if result == QDialog.Rejected:
-                self.clear_selection_highlight()
-                return
-            
-            try:
-                selected_port = port_combo.currentData()
-            except Exception:
-                selected_port = port_combo.currentText()
-            selected_direction = dir_combo.currentText() or "壳程"
-            
-            if existing_port_code is not None and str(existing_port_code) != str(selected_port):
-                try:
-                    if existing_port_code in self.radial_hole_dict:
-                        old_coord = self.radial_hole_dict[existing_port_code].get("换热管坐标")
-                        self.radial_hole_dict[existing_port_code]["换热管坐标"] = None
-                        if old_coord is not None:
-                            try:
-                                self.remove_radial_hole_graphics(old_coord)
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
-            
-            try:
-                for code, info in self.radial_hole_dict.items():
-                    if isinstance(info, dict) and info.get("换热管坐标") is not None:
-                        if _coord_equal(info.get("换热管坐标"), current_coord):
-                            old_coord = info.get("换热管坐标")
-                            info["换热管坐标"] = None
-                            if old_coord is not None:
-                                try:
-                                    self.remove_radial_hole_graphics(old_coord)
-                                except Exception:
-                                    pass
-            except Exception:
-                pass
-            
-            if selected_port not in self.radial_hole_dict:
-                QMessageBox.warning(self, "提示", "未获取到管板径向开孔的管口号，请确认！")
-                self.clear_selection_highlight()
-                return
-            
-            # 若用户选择的是"已分配"的管口，先擦除该管口旧绘制并解绑旧坐标
-            try:
-                old_coord_for_selected = self.radial_hole_dict[selected_port].get("换热管坐标")
-                if old_coord_for_selected is not None and not _coord_equal(old_coord_for_selected, current_coord):
-                    try:
-                        self.remove_radial_hole_graphics(old_coord_for_selected)
-                    except Exception:
-                        pass
-                    try:
-                        self.radial_hole_dict[selected_port]["换热管坐标"] = None
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-            
-            self.radial_hole_dict[selected_port]["管口号"] = selected_port
-            self.radial_hole_dict[selected_port]["连通方向"] = selected_direction
-            self.radial_hole_dict[selected_port]["换热管坐标"] = current_coord
-            
-            try:
-                self.draw_radial_hole_tangents(current_coord)
-                self.clear_selection_highlight()
-            except Exception as e:
-                print(f"绘制径向开孔切线出错: {e}")
+            self.convert_screw_ring_to_radial_hole(screw_ring_id)
 
         ok.clicked.connect(apply_and_close)
         cancel.clicked.connect(dlg.reject)
@@ -22775,6 +22751,12 @@ class TubeLayoutEditor(QMainWindow):
 
     # TODO 径向开孔功能
     def on_radial_holes_click(self):
+        # 若当前选中的是吊环螺钉，则转为径向开孔（与弹窗内「转为径向开孔」同一流程）
+        if getattr(self, "selected_screw_ring_ids", None) and self.selected_screw_ring_ids:
+            rid = next(iter(self.selected_screw_ring_ids))
+            self.convert_screw_ring_to_radial_hole(rid)
+            return
+
         self.find_edge_tube()
         actual_selected_centers = self.selected_to_current_coords(self.selected_centers)
 
