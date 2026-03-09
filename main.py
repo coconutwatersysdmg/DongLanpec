@@ -14,7 +14,7 @@ import webbrowser
 
 from modules.Three3D.Three3D import show_dev_placeholder
 
-# 强烈建议先打开插件调试日志，便于定位（发布可注释掉）111
+# 强烈建议先打开插件调试日志，便于定位（发布可注释掉）
 os.environ["QT_DEBUG_PLUGINS"] = "1"
 
 def _force_qt_paths():
