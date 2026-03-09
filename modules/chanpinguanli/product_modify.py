@@ -1,4 +1,5 @@
 import modules.chanpinguanli.bianl as bianl
+import mysql
 import modules.chanpinguanli.product_confirm_qianzhi as product_confirm_qianzhi
 import modules.chanpinguanli.auto_edit_row as auto_edit_row
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -7,13 +8,38 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
 
 def edit_row_state():
     total_rows = bianl.product_table.rowCount()
+    
+    # 设置修改产品模式标志
+    bianl.is_modifying_products = True
+    print("进入修改产品模式，所有空白行将被设置为不可编辑")
 
     for row in range(total_rows):
         if row == total_rows - 1:
-            print("跳过最后一行（预留空行）")  # 调试信息
+            print("处理最后一行（预留空行），设置为不可编辑")  # 调试信息
+            # 关键修复：将最后一行也设置为不可编辑状态
+            product_confirm_qianzhi.set_row_editable(row, False)
             continue
+        
+        # 关键修复：检查该行是否有产品ID，只有有产品的行才能被修改
+        row_status = bianl.product_table_row_status.get(row, {})
+        print(f"【调试】第{row + 1}行状态: {row_status}")  # 调试信息
+        if not isinstance(row_status, dict):
+            print(f"第{row + 1}行状态不是字典，跳过")  # 调试信息
+            continue
+            
+        product_id = row_status.get("product_id", None)
+        print(f"【调试】第{row + 1}行产品ID: {product_id} (类型: {type(product_id)})")  # 调试信息
+
+        # 更严格的检查：product_id 必须存在且不为空字符串
+        # if not product_id or product_id == "" or product_id == "None" or product_id is None:
+        #     print(f"第{row + 1}行没有有效的产品ID，跳过修改，并设置为不可编辑")  # 调试信息
+        #     bianl.main_window.line_tip.setText(f"第{row + 1}行没有有效的产品ID，无法修改，请先保存该行产品！")
+        #     # 关键修复：将空白行设置为不可编辑状态
+        #     product_confirm_qianzhi.set_row_editable(row, False)
+        #     continue
+            
         current_status = product_confirm_qianzhi.get_status(row)
-        print(f"当前状态（第{row}行）: {current_status}")  # 调试信息
+        print(f"当前状态（第{row + 1}行）: {current_status}")  # 调试信息
         try:#改66
             if current_status == "view":
                 # 原索引：1=产品编号，2=产品名称，3=设备位号改1 改66
@@ -30,7 +56,6 @@ def edit_row_state():
                 old_number = number_item.text().strip() if number_item else ""
                 old_serial = serial_item.text().strip().zfill(
                     3) if serial_item and serial_item.text() else f"{row + 1:03d}"
-
 
                 # 新增：确保状态字典格式正确
                 if not isinstance(bianl.product_table_row_status.get(row), dict):
@@ -63,4 +88,14 @@ def edit_row_state():
             bianl.main_window.line_tip.setToolTip(f"删除失败：{e}")
             bianl.main_window.line_tip.setStyleSheet("color: black;")
             return
+
+def exit_modify_products_mode():
+    """退出修改产品模式，恢复最后一行可编辑状态"""
+    if hasattr(bianl, 'is_modifying_products') and bianl.is_modifying_products:
+        bianl.is_modifying_products = False
+        total_rows = bianl.product_table.rowCount()
+        if total_rows > 0:
+            last_row = total_rows - 1
+            print("退出修改产品模式，恢复最后一行可编辑状态")
+            product_confirm_qianzhi.set_row_editable(last_row, True)
 

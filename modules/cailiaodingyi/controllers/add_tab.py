@@ -1,6 +1,6 @@
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt, QEvent, QObject, QTimer
-from PyQt5.QtWidgets import QWidget, QToolButton, QTabWidget, QSizePolicy, QAbstractButton
+from PyQt5.QtWidgets import QWidget, QToolButton, QTabWidget, QSizePolicy, QAbstractButton, QTabBar
 
 
 class PlusTabManager(QObject):
@@ -65,21 +65,39 @@ class PlusTabManager(QObject):
     def _ensure_single_plus(self):
         """保证只存在一种形态的 '+'。"""
         if self._plus_as_tab:
+            try:
+                self.tw.setCornerWidget(None, Qt.TopRightCorner)
+            except Exception:
+                pass
             self._btn.hide()
-            # 页签里必须有 '+'
             has_plus = any(self.tw.tabText(i) == "+" for i in range(self.tw.count()))
             if not has_plus:
                 self._plus_tab_index = self.tw.addTab(QWidget(), "+")
         else:
-            # corner 形态必须移除所有 '+'
             self._remove_all_plus_tabs()
+            try:
+                self.tw.setCornerWidget(self._btn, Qt.TopRightCorner)
+            except Exception:
+                pass
             self._btn.show()
             self._btn.raise_()
 
     def _scroll_buttons_width(self):
+        """
+        仅统计滚动箭头等“额外”按钮的宽度，排除每个 tab 自己的 tabButton（例如放大按钮），
+        避免重复扣减导致误判空间不足。
+        """
+        bar = self.tw.tabBar()
+        tab_buttons = set()
+        for i in range(bar.count()):
+            for side in (QTabBar.LeftSide, QTabBar.RightSide):
+                b = bar.tabButton(i, side)
+                if b:
+                    tab_buttons.add(b)
+
         w = 0
-        for btn in self.tw.tabBar().findChildren(QtWidgets.QAbstractButton):
-            if btn.isVisible():
+        for btn in bar.findChildren(QtWidgets.QAbstractButton):
+            if (btn not in tab_buttons) and btn.isVisible():
                 w += btn.width()
         return w
 
@@ -141,7 +159,18 @@ class PlusTabManager(QObject):
         for i in range(bar.count()):
             if self._plus_as_tab and self.tw.tabText(i) == "+":
                 continue
-            total_no_plus += bar.tabSizeHint(i).width()
+            # 使用 tabRect 获取实际占用宽度（包括标签和按钮）
+            # 这比 tabSizeHint + btn.width() 更准确，因为包含了间距
+            tab_rect = bar.tabRect(i)
+            if tab_rect.width() > 0:
+                total_no_plus += tab_rect.width()
+            else:
+                # 如果 tabRect 不可用，回退到原来的方法
+                tab_width = bar.tabSizeHint(i).width()
+                btn = bar.tabButton(i, QTabBar.RightSide)
+                if btn and btn.isVisible():
+                    tab_width += btn.width()
+                total_no_plus += tab_width
 
         need_with_plus = total_no_plus + self._plus_tab_width()
 

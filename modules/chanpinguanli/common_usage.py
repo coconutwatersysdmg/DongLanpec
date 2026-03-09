@@ -56,6 +56,8 @@ from PyQt5.QtGui import QPixmap
 #         cursorclass=pymysql.cursors.DictCursor
 #     )
 
+# common_usage.py
+
 # 连接项目需求库
 def get_mysql_connection_project():
     return pymysql.connect(

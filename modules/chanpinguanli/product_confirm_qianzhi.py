@@ -12,6 +12,21 @@ import traceback
 import shutil
 
 
+# 初始化提示定时器（确保只初始化一次）
+def init_tip_timer():
+    if not hasattr(bianl, 'tip_timer'):
+        bianl.tip_timer = QTimer()
+        bianl.tip_timer.setSingleShot(True)
+        bianl.tip_timer.timeout.connect(clear_line_tip)
+
+# 清空提示信息的函数
+def clear_line_tip():
+    """5秒后自动清空line_tip的文本和样式"""
+    if hasattr(bianl.main_window, "line_tip") and bianl.main_window.line_tip:
+        bianl.main_window.line_tip.setText("")
+        bianl.main_window.line_tip.setStyleSheet("")
+        bianl.main_window.line_tip.setToolTip("")
+
 def build_pd_folder_name(serial, name, position, number):
     # 统一清洗 & 顺序：序号_产品名称_产品编号_设备位号（空值自动跳过）
     parts = [
@@ -41,17 +56,120 @@ def get_status(row):
     return val.get("status", "start") if isinstance(val, dict) else val
 
 
-def check_existing_product(product_number, product_name, device_position, project_id):
+# 1107新修改-修改产品
+def check_batch_product_conflicts(modify_list, project_id):
+    """
+    批量检查产品修改后的冲突情况
+    modify_list: 列表，每个元素是字典，包含：
+        {
+            'row': 行号,
+            'product_id': 产品ID,
+            'new_number': 新产品编号,
+            'new_name': 新产品名称,
+            'new_position': 新设备位号
+        }
+    返回: (has_conflict, conflict_rows)
+        has_conflict: bool, 是否有冲突
+        conflict_rows: list, 冲突的行号列表
+    """
+    init_tip_timer()
+    conflict_rows = []
+    
+    if not modify_list:
+        return False, []
+    
+    print(f"[check_batch_product_conflicts] 开始批量检查 {len(modify_list)} 个产品的冲突情况")
+    
+    try:
+        # 1. 检查新值之间是否有重复
+        new_value_triples = {}  # {(number, name, position): [row1, row2, ...]}
+        for item in modify_list:
+            triple = (item['new_number'], item['new_name'], item['new_position'])
+            if triple in new_value_triples:
+                new_value_triples[triple].append(item['row'])
+            else:
+                new_value_triples[triple] = [item['row']]
+        
+        # 检查新值之间的重复
+        for triple, rows in new_value_triples.items():
+            if len(rows) > 1:
+                # 新值之间有重复（多个产品改成相同的值）
+                # 只保留最小序号（最小row）的产品，其他的标记为冲突
+                min_row = min(rows)  # 找出最小的row（序号最小）
+                other_rows = [r for r in rows if r != min_row]  # 除了最小row之外的其他行
+                conflict_rows.extend(other_rows)  # 只把其他的标记为冲突
+                print(f"[check_batch_product_conflicts] 新值之间重复: {triple} 出现在行 {rows}，保留最小序号行 {min_row + 1}，冲突行: {[r + 1 for r in other_rows]}")
 
-    print(f"[check_existing_product] 检查产品是否存在: 编号={product_number}, 名称={product_name}, 设备位号={device_position} , 当前项目id={project_id}")
+        # 去重冲突行号
+        conflict_rows = list(set(conflict_rows))
+        
+        # 2. 检查新值是否与数据库中未修改的产品重复
+        # 获取所有正在修改的产品ID列表（用于排除）
+        modifying_product_ids = [item['product_id'] for item in modify_list if item.get('product_id')]
+        
+        if modifying_product_ids:
+            conn = common_usage.get_mysql_connection_product()
+            cursor = conn.cursor()
+            
+            # 检查每个新值是否与数据库中未修改的产品重复
+            for item in modify_list:
+                if item['row'] in conflict_rows:
+                    continue  # 已经检测到冲突，跳过
+                
+                # 构建SQL，排除所有正在修改的产品ID
+                placeholders = ','.join(['%s'] * len(modifying_product_ids))
+                sql = f"""
+                    SELECT 产品ID FROM 产品需求表 
+                    WHERE 产品编号 = %s AND 产品名称 = %s AND 设备位号 = %s 
+                    AND 项目ID = %s AND 产品ID NOT IN ({placeholders})
+                """
+                values = [item['new_number'], item['new_name'], item['new_position'], project_id] + modifying_product_ids
+                cursor.execute(sql, values)
+                result = cursor.fetchone()
+                
+                if result:
+                    # 与数据库中未修改的产品重复
+                    conflict_rows.append(item['row'])
+                    print(f"[check_batch_product_conflicts] 行 {item['row']} 的新值与其他产品重复")
+            
+            cursor.close()
+            conn.close()
+        
+        has_conflict = len(conflict_rows) > 0
+        print(f"[check_batch_product_conflicts] 批量检查完成，冲突: {has_conflict}, 冲突行: {conflict_rows}")
+        return has_conflict, conflict_rows
+        
+    except Exception as e:
+        log_error("[check_batch_product_conflicts] 批量检查失败", e)
+        bianl.main_window.line_tip.setText(f"批量检查产品冲突失败: {e}")
+        bianl.main_window.line_tip.setToolTip(f"批量检查产品冲突失败: {e}")
+        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        bianl.tip_timer.stop()
+        bianl.tip_timer.start(5000)
+        return True, []  # 出错时返回有冲突，阻止保存
+
+
+# 1107新修改-修改产品
+def check_existing_product(product_number, product_name, device_position, project_id, exclude_product_id=None):
+    # 初始化定时器
+    init_tip_timer()
+    print(f"[check_existing_product] 检查产品是否存在: 编号={product_number}, 名称={product_name}, 设备位号={device_position} , 当前项目id={project_id}, 排除产品ID={exclude_product_id}")
     try:
         conn = common_usage.get_mysql_connection_product()
         cursor = conn.cursor()
         # 不对要区分大小写
-        sql = """
-            SELECT * FROM 产品需求表 WHERE 产品编号 = %s AND 产品名称 = %s AND 设备位号 = %s AND 项目ID = %s
-        """
-        values = (product_number, product_name, device_position, project_id)
+        # 如果提供了exclude_product_id，则排除该产品ID（用于修改产品时排除自身）
+        if exclude_product_id:
+            sql = """
+                SELECT * FROM 产品需求表 
+                WHERE 产品编号 = %s AND 产品名称 = %s AND 设备位号 = %s AND 项目ID = %s AND 产品ID != %s
+            """
+            values = (product_number, product_name, device_position, project_id, exclude_product_id)
+        else:
+            sql = """
+                SELECT * FROM 产品需求表 WHERE 产品编号 = %s AND 产品名称 = %s AND 设备位号 = %s AND 项目ID = %s
+            """
+            values = (product_number, product_name, device_position, project_id)
         cursor.execute(sql, values)
         result = cursor.fetchone()
         cursor.close()
@@ -64,6 +182,8 @@ def check_existing_product(product_number, product_name, device_position, projec
         bianl.main_window.line_tip.setText(f"查询产品需求表失败: {e}")
         bianl.main_window.line_tip.setToolTip(f"查询产品需求表失败: {e}")
         bianl.main_window.line_tip.setStyleSheet("color: black;")
+        bianl.tip_timer.stop()
+        bianl.tip_timer.start(5000)
         # QMessageBox.critical(bianl.main_window, "数据库错误", f"查询产品需求表失败: {e}")
         return False
 #todo 把值传进来
@@ -80,7 +200,8 @@ def save_new_product(row,curr_row_serial,curr_row_product_name,curr_row_product_
     # curr_row_device_position = position_item.text().strip() if position_item else ""
     #
     # print(f"[save_new_product] 获取到：编号='{curr_row_product_number}', 名称='{curr_row_product_name}', 位号='{curr_row_device_position}', 设计阶段='{curr_row_design_stage}'")
-
+    # 初始化定时器
+    init_tip_timer()
     # 生成此时的产品id 是生成的产品id 产品ID
     curr_product_id = common_usage.get_next_product_id()
 
@@ -119,6 +240,8 @@ def save_new_product(row,curr_row_serial,curr_row_product_name,curr_row_product_
             bianl.main_window.line_tip.setText("未找到项目保存路径。")
             bianl.main_window.line_tip.setToolTip("未找到项目保存路径。")
             bianl.main_window.line_tip.setStyleSheet("color: black;")
+            bianl.tip_timer.stop()
+            bianl.tip_timer.start(5000)
             # QMessageBox.warning(bianl.main_window, "警告", "未找到项目保存路径。")
             return
     except Exception as e:
@@ -154,6 +277,9 @@ def save_new_product(row,curr_row_serial,curr_row_product_name,curr_row_product_
         template_path = os.path.join(os.path.dirname(__file__), "条件输入数据表.xlsx")
         target_path = os.path.join(folder_path, "条件输入数据表.xlsx")
         shutil.copy(template_path, target_path)
+        template_path2 = os.path.join(os.path.dirname(__file__), "管口导入模板.xlsx")
+        target_path2 = os.path.join(folder_path, "管口导入模板.xlsx")
+        shutil.copy(template_path2, target_path2)
         print(f"[save_new_product] ✅ 模板文件复制完成: {target_path}")
 
         conn_pd = common_usage.get_mysql_connection_product()
@@ -169,6 +295,26 @@ def save_new_product(row,curr_row_serial,curr_row_product_name,curr_row_product_
         conn_pd.commit()
         cursor_pd.close()
         conn_pd.close()
+
+        # 活动库：写入产品设计活动表（产品ID、项目ID、产品文件夹绝对路径）
+        folder_abs = os.path.abspath(folder_path)
+        try:
+            conn_act = common_usage.get_mysql_connection_active()
+            cursor_act = conn_act.cursor()
+            sql_act = """
+                INSERT INTO 产品设计活动表 (产品ID, 项目ID, 产品文件夹绝对路径)
+                VALUES (%s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                  项目ID = VALUES(项目ID),
+                  产品文件夹绝对路径 = VALUES(产品文件夹绝对路径)
+            """
+            cursor_act.execute(sql_act, (curr_product_id, bianl.current_project_id, folder_abs))
+            conn_act.commit()
+            cursor_act.close()
+            conn_act.close()
+            print(f"[save_new_product] ✅ 产品设计活动表已写入产品文件夹绝对路径: {folder_abs}")
+        except Exception as e_act:
+            print(f"[save_new_product] ⚠️ 写入产品设计活动表(产品文件夹绝对路径)失败: {e_act}")
 
         print("[save_new_product] ✅ 数据库插入成功")
 
@@ -193,6 +339,8 @@ def save_new_product(row,curr_row_serial,curr_row_product_name,curr_row_product_
 def update_existing_product(row, new_serial, new_name, new_number, new_position, new_design_stage,new_design_edition):
     """更新产品信息，并重命名产品文件夹"""
     # global curr_row_product_number, curr_row_product_name, curr_row_device_position, curr_row_design_stage, curr_row_design_edition
+    # 初始化定时器
+    init_tip_timer()
     try:
         # 获取旧值
         row_status = bianl.product_table_row_status.get(row, {})
@@ -231,6 +379,8 @@ def update_existing_product(row, new_serial, new_name, new_number, new_position,
             bianl.main_window.line_tip.setText("无法获取项目路径，跳过重命名文件夹。")
             bianl.main_window.line_tip.setToolTip("无法获取项目路径，跳过重命名文件夹。")
             bianl.main_window.line_tip.setStyleSheet("color: black;")
+            bianl.tip_timer.stop()
+            bianl.tip_timer.start(5000)
             # QMessageBox.warning(bianl.main_window, "警告", "无法获取项目路径，跳过重命名文件夹。")
         else:
             # 项目路径
@@ -272,6 +422,21 @@ def update_existing_product(row, new_serial, new_name, new_number, new_position,
                 else:
                     os.rename(old_folder, new_folder)
                     print("[rename] ✅ 重命名完成")
+                    # 同步更新产品设计活动表中的产品文件夹绝对路径
+                    new_folder_abs = os.path.abspath(new_folder)
+                    try:
+                        conn_act = common_usage.get_mysql_connection_active()
+                        cur_act = conn_act.cursor()
+                        cur_act.execute(
+                            "UPDATE 产品设计活动表 SET 产品文件夹绝对路径 = %s WHERE 产品ID = %s",
+                            (new_folder_abs, curr_product_id)
+                        )
+                        conn_act.commit()
+                        cur_act.close()
+                        conn_act.close()
+                        print(f"[update_existing_product] ✅ 产品设计活动表已同步路径: {new_folder_abs}")
+                    except Exception as e_act:
+                        print(f"[update_existing_product] ⚠️ 更新产品设计活动表路径失败: {e_act}")
                     # ★修改：更新 row_status 的 old_xxx 删除
                     # row_status["old_serial"] = curr_row_serial
                     # row_status["old_name"] = curr_row_product_name
@@ -309,6 +474,8 @@ def update_existing_product(row, new_serial, new_name, new_number, new_position,
         bianl.main_window.line_tip.setText("产品信息已成功更新。")
         bianl.main_window.line_tip.setToolTip("产品信息已成功更新。")
         bianl.main_window.line_tip.setStyleSheet("color: black;")
+        bianl.tip_timer.stop()
+        bianl.tip_timer.start(5000)
         #QMessageBox.information(bianl.main_window, "产品信息更新", "产品信息已成功更新。")改77
         return True
     except Exception as e:

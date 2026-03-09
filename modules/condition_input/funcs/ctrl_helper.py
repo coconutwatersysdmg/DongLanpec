@@ -8,6 +8,7 @@ from .funcs_cdt_input import (
                               handle_cross_table_triggers,
                               MultiParamComboDelegate,
                               dispatch_cell_validation,
+                              CheckableComboBox,
 )
 import re
 class UndoableItemDelegate(QStyledItemDelegate):
@@ -103,6 +104,18 @@ class SmartDelegate(QStyledItemDelegate):
         # 如果是下拉框，安装事件过滤器禁用滚轮 --新加
         if isinstance(editor, QComboBox):
             editor.installEventFilter(self)
+            # 1206新修改-在选择发生时立刻触发 commitData 并 closeEditor，把值及时写回表格，
+            # 配合联动去抖：确保只有“真实值变化”才会触发表格的itemChanged，避免仅点击或滚轮造成误联动、误弹窗。
+            try:
+                # 1212新修改-对多选下拉（CheckableComboBox）不绑定 activated->closeEditor，避免无法展开下拉弹窗
+                if not isinstance(editor, CheckableComboBox):
+                    editor.activated.connect(lambda *_: (self.commitData.emit(editor), self.closeEditor.emit(editor)))
+            except Exception:
+                pass
+            try:
+                editor.currentTextChanged.connect(lambda *_: self.commitData.emit(editor))
+            except Exception:
+                pass
         return editor
 
     def eventFilter(self, obj, event): #--新加

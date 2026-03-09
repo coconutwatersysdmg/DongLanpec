@@ -12,7 +12,25 @@ class DesignDataDelegate(QItemDelegate):
             cell_text = index.data(Qt.DisplayRole)
             if isinstance(cell_text, str) and "设计压力*" in cell_text:
                 painter.save()
-                painter.setPen(QColor(150, 150, 150))
+                
+                # 0209新修改-多工况输入标识显示
+                # ✅ 根据是否有工况2/3数据决定颜色
+                has_data = False
+                if hasattr(option.widget, "viewer"):
+                    viewer = option.widget.viewer
+                    if hasattr(viewer, "_has_multi_conditions"):
+                        has_data = viewer._has_multi_conditions
+                
+                # 有数据：深色（深蓝色），无数据：浅色（浅灰色）
+                if has_data:
+                    bg_color    = QColor(220, 235, 255)   # 浅蓝背景（你可以加深：比如 200,220,250）
+                    text_color = QColor(50, 100, 200)  # 深蓝色
+                    border_color = QColor(80, 130, 230)  # 稍浅的蓝色边框
+                else:
+                    text_color = QColor(150, 150, 150)  # 浅灰色（原色）
+                    border_color = QColor(200, 200, 200)  # 浅灰色边框（原色）
+                
+                painter.setPen(text_color)
                 font = painter.font()
                 font.setBold(False)
                 font.setPointSize(8)
@@ -23,7 +41,7 @@ class DesignDataDelegate(QItemDelegate):
                 self._badge_rect = QRect(rect.right() - 85, rect.top() + 2, 80, rect.height() - 4)
 
                 painter.drawText(self._badge_rect, Qt.AlignCenter, "多工况...")
-                painter.setPen(QColor(200, 200, 200))
+                painter.setPen(border_color)
                 painter.drawRect(self._badge_rect.adjusted(1, 1, -1, -1))
                 painter.restore()
 

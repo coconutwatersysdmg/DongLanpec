@@ -1,15 +1,50 @@
 import os
 import shutil
+
+from PyQt5.QtCore import QTimer
+
 import modules.chanpinguanli.bianl as bianl
 from PyQt5.QtWidgets import QMessageBox, QPushButton, QLineEdit
 import modules.chanpinguanli.common_usage as common_usage
 import modules.chanpinguanli.open_project as open_project
 
+# 初始化提示定时器（确保只初始化一次）
+def init_tip_timer():
+    if not hasattr(bianl, 'tip_timer'):
+        bianl.tip_timer = QTimer()
+        bianl.tip_timer.setSingleShot(True)
+        bianl.tip_timer.timeout.connect(clear_line_tip)
 
+# 清空提示信息的函数
+def clear_line_tip():
+    """5秒后自动清空line_tip的文本和样式"""
+    if hasattr(bianl.main_window, "line_tip") and bianl.main_window.line_tip:
+        bianl.main_window.line_tip.setText("")
+        bianl.main_window.line_tip.setStyleSheet("")
+        bianl.main_window.line_tip.setToolTip("")
+
+
+def show_confirm_dialog(parent, title, text):
+    """显示带有中文按钮（确认/取消）的确认对话框，返回True表示确认。"""
+    msg_box = QMessageBox(parent)
+    msg_box.setWindowTitle(title)
+    msg_box.setText(text)
+    msg_box.setIcon(QMessageBox.Question)
+
+    yes_button = QPushButton("确认")
+    no_button = QPushButton("取消")
+
+    msg_box.addButton(yes_button, QMessageBox.YesRole)
+    msg_box.addButton(no_button, QMessageBox.NoRole)
+
+    msg_box.exec_()
+    return msg_box.clickedButton() == yes_button
 
 
 def save_project_to_db():
     """根据项目状态保存项目信息到数据库，并处理文件夹操作"""
+    # 初始化定时器
+    init_tip_timer()
     owner = bianl.owner_input.text().strip()
     project_number = bianl.project_number_input.text().strip()
     project_name = bianl.project_name_input.text().strip()
@@ -65,6 +100,9 @@ def save_project_to_db():
             bianl.main_window.line_tip.setText("新建项目成功！")
             bianl.main_window.line_tip.setToolTip("新建项目成功！")
             bianl.main_window.line_tip.setStyleSheet("color: black;")
+            # ==========1014 新增：启动5秒定时器 ==========
+            bianl.tip_timer.stop()  # 先停止可能存在的旧定时器
+            bianl.tip_timer.start(5000)  # 5秒后清空
             # 删除获取的信息
             bianl.old_owner = owner
             bianl.old_project_name = project_name
@@ -121,6 +159,8 @@ def save_project_to_db():
             bianl.main_window.line_tip.setText("项目修改已保存！")
             bianl.main_window.line_tip.setToolTip("项目修改已保存！")
             bianl.main_window.line_tip.setStyleSheet("color: black;")
+            bianl.tip_timer.stop()
+            bianl.tip_timer.start(5000)
             # QMessageBox.information(bianl.main_window, "成功", "项目修改已保存")
 
         elif bianl.project_mode == "view":
@@ -143,9 +183,55 @@ def save_project_to_db():
         bianl.main_window.line_tip.setStyleSheet("color: black;")
         # QMessageBox.critical(bianl.main_window, "错误", f"保存失败: {e}")
 
+# 1112新修改 - 关闭所有产品相关界面（删除项目时使用）
+def close_all_product_related_tabs():
+    """
+    关闭所有产品相关界面（除了项目管理界面）
+    用于删除项目时关闭所有已打开的产品界面
+    """
+    try:
+        from PyQt5.QtWidgets import QApplication
+        app = QApplication.instance()
+        if not app:
+            print("[关闭界面] 无法获取应用实例")
+            return
+        
+        # 查找主窗口
+        main_window = None
+        for widget in app.topLevelWidgets():
+            if hasattr(widget, 'tab_widget') and hasattr(widget, 'close_tab'):
+                main_window = widget
+                break
+        
+        if not main_window:
+            print("[关闭界面] 无法找到主窗口")
+            return
+        
+        # 定义所有产品相关标签页名称
+        all_product_tabs = {"条件输入", "元件定义", "管口及附件定义", "管束设计", "设计运算", "图纸绘制", "文本说明生成", "模型创建"}
+        
+        # 倒序遍历标签页，关闭所有产品相关界面
+        for i in reversed(range(main_window.tab_widget.count())):
+            tab_text = main_window.tab_widget.tabText(i)
+            if tab_text in all_product_tabs:
+                widget_to_close = main_window.tab_widget.widget(i)
+                main_window.tab_widget.removeTab(i)
+                if widget_to_close:
+                    widget_to_close.deleteLater()
+                print(f"[删除项目] 关闭界面: {tab_text}")
+        
+        print("[删除项目] 已关闭所有产品相关界面")
+        
+    except Exception as e:
+        print(f"[删除项目] 关闭相关界面时出错: {e}")
+        import traceback
+        traceback.print_exc()
+
 # 删除项目
 def delete_project_and_related_data():
     """删除整个项目及其相关联的所有数据库和文件数据"""
+    # 确保定时器已初始化
+    init_tip_timer()
 
     project_id = bianl.current_project_id
     if not project_id:
@@ -155,26 +241,23 @@ def delete_project_and_related_data():
         # QMessageBox.warning(bianl.main_window, "提示", "未打开任何项目，无法删除。")
         return
 
-    # 自定义按钮文本
-    msg_box = QMessageBox(bianl.main_window)
-    msg_box.setWindowTitle("确认删除")
-    msg_box.setText("是否确认永久删除当前项目的所有数据和文件？")
-    msg_box.setIcon(QMessageBox.Question)
-
-    # 自定义按钮
-    yes_button = QPushButton("是")
-    no_button = QPushButton("否")
-
-    msg_box.addButton(yes_button, QMessageBox.YesRole)
-    msg_box.addButton(no_button, QMessageBox.NoRole)
-
-    # 显示对话框并获取结果
-    result = msg_box.exec_()
-
-    if msg_box.clickedButton() != yes_button:
+    # 确认弹窗（中文按钮）
+    if not show_confirm_dialog(bianl.main_window, "确认删除", "是否确认永久删除当前项目的所有数据和文件？"):
         return
 
+    # 1112新修改 - 删除项目前先关闭所有产品相关界面
+    close_all_product_related_tabs()
+
     try:
+        # Step 0: 在删除前，获取该项目下所有产品ID（后续用于删除活动库中仅存有“产品ID”的表数据）
+        conn_prod_query = common_usage.get_mysql_connection_product()
+        cursor_prod_query = conn_prod_query.cursor()
+        cursor_prod_query.execute("SELECT 产品ID FROM 产品需求表 WHERE 项目ID = %s", (project_id,))
+        product_rows = cursor_prod_query.fetchall()
+        product_ids = [row.get("产品ID") for row in product_rows if row.get("产品ID")]
+        cursor_prod_query.close()
+        conn_prod_query.close()
+
         # Step 1: 删除项目需求表
         conn_proj = common_usage.get_mysql_connection_project()
         cursor_proj = conn_proj.cursor()
@@ -183,7 +266,7 @@ def delete_project_and_related_data():
         cursor_proj.close()
         conn_proj.close()
 
-        # Step 2: 删除产品需求表
+        # Step 2: 删除产品需求表（按项目ID）
         conn_prod = common_usage.get_mysql_connection_product()
         cursor_prod = conn_prod.cursor()
         cursor_prod.execute("DELETE FROM 产品需求表 WHERE 项目ID = %s", (project_id,))
@@ -191,13 +274,68 @@ def delete_project_and_related_data():
         cursor_prod.close()
         conn_prod.close()
 
-        # Step 3: 删除产品设计活动表
-        conn_act = common_usage.get_mysql_connection_active()
-        cursor_act = conn_act.cursor()
-        cursor_act.execute("DELETE FROM 产品设计活动表 WHERE 项目ID = %s", (project_id,))
-        conn_act.commit()
-        cursor_act.close()
-        conn_act.close()
+        # Step 3: 删除产品设计活动库中与这些产品ID有关的所有表数据
+        if product_ids:
+            conn_act = common_usage.get_mysql_connection_active()
+            cursor_act = conn_act.cursor()
+
+            table_list = [
+                "产品设计活动表",
+                "产品设计活动表_布管参数表",
+                "产品设计活动表_布管换热管表",
+                "产品设计活动表_布管计算结果表",
+                "产品设计活动表_布管交叉布管表",
+                "产品设计活动表_布管结果表",
+                "产品设计活动表_布管拉杆表",
+                "产品设计活动表_布管输入表",
+                "产品设计活动表_布管数量表_水平",
+                "产品设计活动表_布管数量表_竖直",
+                "产品设计活动表_布管数量表_显示",
+                "产品设计活动表_布管元件表",
+                "产品设计活动表_布管坐标表",
+                "产品设计活动表_产品标准数据表",
+                "产品设计活动表_附件表",
+                "产品设计活动表_管板连接表",
+                "产品设计活动表_管板形式表",
+                "产品设计活动表_管口表",
+                "产品设计活动表_管口附加参数表",
+                "产品设计活动表_管口计算提交表",
+                "产品设计活动表_管口类别表",
+                "产品设计活动表_管口类型选择表",
+                "产品设计活动表_管口零件材料表",
+                "产品设计活动表_管口零件材料参数表",
+                "产品设计活动表_计算结果日志表",
+                "产品设计活动表_计算提交表",
+                "产品设计活动表_设计数据表",
+                "产品设计活动表_设计数据计算提交表",
+                "产品设计活动表_通用数据表",
+                "产品设计活动表_涂漆数据表",
+                "产品设计活动表_无损检测数据表",
+                "产品设计活动表_元件材料表",
+                "产品设计活动表_元件附加参数表",
+                "产品设计活动表_元件计算结果表"
+            ]
+
+            # 逐表按产品ID删除；使用参数化避免SQL注入
+            for table in table_list:
+                sql = f"DELETE FROM `{table}` WHERE 产品ID = %s"
+                for pid in product_ids:
+                    cursor_act.execute(sql, (pid,))
+
+            # 兜底：对于主表再按项目ID删一次（如果该表也包含项目ID）
+            cursor_act.execute("DELETE FROM 产品设计活动表 WHERE 项目ID = %s", (project_id,))
+
+            conn_act.commit()
+            cursor_act.close()
+            conn_act.close()
+        else:
+            # 没有产品ID时，也尝试按项目ID清理主表记录
+            conn_act = common_usage.get_mysql_connection_active()
+            cursor_act = conn_act.cursor()
+            cursor_act.execute("DELETE FROM 产品设计活动表 WHERE 项目ID = %s", (project_id,))
+            conn_act.commit()
+            cursor_act.close()
+            conn_act.close()
 
         # Step 4: 删除项目文件夹
         folder_path = os.path.join(bianl.old_project_path, f"{bianl.old_owner}_{bianl.old_project_name}")
@@ -207,6 +345,8 @@ def delete_project_and_related_data():
         bianl.main_window.line_tip.setText("项目及所有相关数据删除成功！")
         bianl.main_window.line_tip.setToolTip("项目及所有相关数据删除成功！")
         bianl.main_window.line_tip.setStyleSheet("color: black;")
+        bianl.tip_timer.stop()
+        bianl.tip_timer.start(5000)
         # QMessageBox.information(bianl.main_window, "成功", "项目及所有相关数据删除成功！")
 
         # 清空界面
@@ -230,4 +370,6 @@ def delete_project_and_related_data():
         bianl.main_window.line_tip.setText(f"删除失败：{e}")
         bianl.main_window.line_tip.setToolTip(f"删除失败：{e}")
         bianl.main_window.line_tip.setStyleSheet("color: black;")
+        bianl.tip_timer.stop()
+        bianl.tip_timer.start(5000)
         # QMessageBox.critical(bianl.main_window, "错误", f"删除失败：{e}")

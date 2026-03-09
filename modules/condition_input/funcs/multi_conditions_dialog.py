@@ -1,6 +1,6 @@
 # modules/condition_input/funcs/multi_conditions_dialog.py
 import os
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QEvent
 from PyQt5 import uic
 from PyQt5.QtWidgets import QDialog, QMessageBox, QTableWidgetItem
 from modules.condition_input.funcs.ctrl_helper import enable_full_undo
@@ -66,11 +66,25 @@ class MultiConditionsDialog(QDialog):
         self.combo_gongkuang.clear()
         for i in range(1, 4):  # 工况1~3
             self.combo_gongkuang.addItem(f"工况{i}", i)
+        # 禁用鼠标滚轮切换工况
+        self.combo_gongkuang.installEventFilter(self)
 
         # 初始化表格
         self.tableWidget.setRowCount(len(self.PARAM_NAMES))
         self.tableWidget.setColumnCount(3)
         self.tableWidget.setHorizontalHeaderLabels(["参数单位","壳程数值", "管程数值"])
+
+        # 1107新修改
+        self.tableWidget.horizontalHeader().setStyleSheet("""
+            QHeaderView::section {
+                border-top: 0px;
+                border-left: 0px;
+                border-right: 1px solid #D3D3D3;
+                border-bottom: 1px solid #D3D3D3;
+                background-color: white;
+            }
+        """)
+
         for r, name in enumerate(self.PARAM_NAMES):
             self.tableWidget.setVerticalHeaderItem(r, QTableWidgetItem(name))
 
@@ -81,6 +95,7 @@ class MultiConditionsDialog(QDialog):
                 enable_full_undo(self.tableWidget, parent_viewer, mode="design")
             except Exception as e:
                 print(f"[多工况] 安装校核代理异常: {e}")
+
 
         # 绑定事件
         self.combo_gongkuang.currentIndexChanged.connect(self.on_gongkuang_changed)
@@ -118,11 +133,21 @@ class MultiConditionsDialog(QDialog):
         self.tableWidget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
 
+
     def _make_param_field(self, param_name, gongkuang_no):
         if gongkuang_no == 1:
             return param_name
         else:
             return f"{param_name}[工况{gongkuang_no}]"
+
+    def eventFilter(self, obj, event):
+        # 屏蔽工况下拉框的滚轮，避免误切换
+        try:
+            if obj is getattr(self, "combo_gongkuang", None) and event.type() == QEvent.Wheel:
+                return True
+        except Exception:
+            pass
+        return super().eventFilter(obj, event)
 
     def load_gongkuang_data(self, gongkuang_no):
         if gongkuang_no in self._data_cache:
@@ -253,6 +278,12 @@ class MultiConditionsDialog(QDialog):
             conn.close()
             # ❌ 不再 self.accept()，保持窗口打开
             QMessageBox.information(self, "保存成功", f"工况{gongkuang_no} 已保存")
+            
+            # 0209新修改-多工况输入标识显示
+            # ✅ 通知父窗口更新多工况状态并刷新显示
+            parent = self.parent()
+            if parent and hasattr(parent, "update_multi_conditions_status"):
+                parent.update_multi_conditions_status()
         except Exception as e:
             QMessageBox.critical(self, "保存失败", f"保存工况{gongkuang_no} 数据失败：{e}")
 
@@ -316,6 +347,13 @@ class MultiConditionsDialog(QDialog):
                         """, (max_sn, self.product_id, db_field, kc_val, gc_val))
             conn.commit()
             conn.close()
+            
+            # 0209新修改-多工况输入标识显示
+            # ✅ 自动保存后也更新父窗口的多工况状态（静默更新，不弹窗）
+            if gongkuang_no in [2, 3]:  # 只有工况2/3才需要更新状态
+                parent = self.parent()
+                if parent and hasattr(parent, "update_multi_conditions_status"):
+                    parent.update_multi_conditions_status()
         except Exception as e:
             print(f"[多工况][AutoSave] 工况{gongkuang_no} 自动保存失败: {e}")
 

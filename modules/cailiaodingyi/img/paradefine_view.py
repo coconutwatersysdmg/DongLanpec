@@ -1562,13 +1562,32 @@ class DesignParameterDefineInputerViewer(QWidget):
             table_param.setHorizontalHeaderLabels(["参数名称", "参数值", "参数单位"])
 
 
+
+    #
+    # def handle_table_click_guankou(self, row, column):
+    #     # 获取当前行的“零件名称”
+    #     part_name_item = self.tableWidget_parts.item(row, 1)
+    #     if part_name_item and part_name_item.text() == "管口":
+    #         self.stackedWidget.setCurrentIndex(0)
+    #     else:
+    #         self.stackedWidget.setCurrentIndex(1)
+
     def handle_table_click_guankou(self, row, column):
-        # 获取当前行的“零件名称”
+        # 获取当前行的"零件名称"
         part_name_item = self.tableWidget_parts.item(row, 1)
-        if part_name_item and part_name_item.text() == "管口":
-            self.stackedWidget.setCurrentIndex(0)
+        if part_name_item:
+            part_name = part_name_item.text()
+
+            if part_name == "管口":
+                self.stackedWidget.setCurrentIndex(0)  # 管口页面
+            elif "固定鞍座" in part_name:  # 支持固定鞍座、滑动鞍座等
+                self.stackedWidget.setCurrentIndex(2)  # 鞍座页面 (page_3)
+            else:
+                self.stackedWidget.setCurrentIndex(1)  # 其他元件页面
         else:
-            self.stackedWidget.setCurrentIndex(1)
+            self.stackedWidget.setCurrentIndex(1)  # 默认其他元件页面
+
+
 
 
     def save_associated_data(self, template_id):

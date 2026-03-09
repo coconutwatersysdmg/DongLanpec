@@ -3,12 +3,45 @@ import modules.chanpinguanli.bianl as bianl
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
                              QComboBox, QFileDialog, QFrame, QGroupBox, QHeaderView, QDateEdit, QMessageBox)
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 import modules.chanpinguanli.common_usage as common_usage
 from openpyxl import Workbook
 import modules.chanpinguanli.product_confirm_qianzhi as product_confirm_qianzhi
 import modules.chanpinguanli.auto_edit_row as auto_edit_row
 from modules.chanpinguanli import chanpinguanli_main
+
+# 添加一个定时器变量，用于确保只有一个定时器在运行1014
+tip_timer = None
+
+
+def show_tip(message, style="color: black;"):
+    """显示提示信息并设置5秒后自动清除"""
+    global tip_timer
+
+    # 如果已有定时器在运行，先停止它
+    if tip_timer and tip_timer.isActive():
+        tip_timer.stop()
+
+    # 设置提示信息
+    bianl.main_window.line_tip.setText(message)
+    bianl.main_window.line_tip.setToolTip(message)
+    bianl.main_window.line_tip.setStyleSheet(style)
+
+    # 创建并启动新的定时器，5秒后清除提示
+    tip_timer = QTimer()
+    tip_timer.timeout.connect(clear_line_tip)
+    tip_timer.setSingleShot(True)  # 只执行一次
+    tip_timer.start(5000)  # 5000毫秒 = 5秒
+
+
+def clear_line_tip():
+    """清空line_tip的文本和样式（避免残留）"""
+    # 先判断line_tip是否存在，防止空指针错误
+    if hasattr(bianl.main_window, "line_tip") and bianl.main_window.line_tip:
+        bianl.main_window.line_tip.setText("")  # 清空提示文本
+        bianl.main_window.line_tip.setStyleSheet("")  # 恢复默认样式
+        bianl.main_window.line_tip.setToolTip("")  # 清空tooltip
+
 
 curr_row_serial = ""
 # 产品名称
@@ -16,7 +49,7 @@ curr_row_product_name = ""
 curr_row_device_position = ""
 curr_row_product_number = ""
 curr_row_design_edition = ""
-curr_row_design_stage=""
+curr_row_design_stage = ""
 
 
 # 我用这个函数的原因是因为我要把当前row的值全部获取到 让其他函数取用  问题是其他函数的判断好像需要这个全局变量进行判断进行下一步
@@ -39,8 +72,9 @@ def get_input_must_var(row):
 
         # 变量取值
         # 序号
-        curr_row_serial =curr_row_serial_item.text().strip().zfill(3) if curr_row_serial_item and curr_row_serial_item.text() else f"{row + 1:03d}"
-        #产品名称
+        curr_row_serial = curr_row_serial_item.text().strip().zfill(
+            3) if curr_row_serial_item and curr_row_serial_item.text() else f"{row + 1:03d}"
+        # 产品名称
         curr_row_product_name = curr_row_product_name_item.text().strip() if curr_row_product_name_item and curr_row_product_name_item.text() else ""
         curr_row_device_position = curr_row_device_position_item.text().strip() if curr_row_device_position_item and curr_row_device_position_item.text() else ""
         curr_row_product_number = curr_row_product_number_item.text().strip() if curr_row_product_number_item and curr_row_product_number_item.text() else ""
@@ -64,12 +98,15 @@ def get_input_must_var(row):
     return None, None, None, None, None
 
 
+# 1107新修改-修改产品
 def handle_confirm_product():
     # 只有新建 跟打开 才有项目id 通过项目id 判断此时有无项目
     if not bianl.current_project_id:
-        bianl.main_window.line_tip.setText("请先新建项目！")
-        bianl.main_window.line_tip.setToolTip("请先新建项目！")
-        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # 使用新的show_tip函数显示提示1014
+        show_tip("请先新建项目！")
+        # bianl.main_window.line_tip.setText("请先新建项目！")
+        # bianl.main_window.line_tip.setToolTip("请先新建项目！")
+        # bianl.main_window.line_tip.setStyleSheet("color: black;")
         # QMessageBox.warning(bianl.main_window, "提示", "请先新建项目！")
         # 清空输入部分
         # bianl.product_table.clearContents()
@@ -98,15 +135,19 @@ def handle_confirm_product():
 
     print(f"总行数: {total_rows}")  # 调试信息
     # ✅ 点击产品信息区的确认后的 信息的整体弹出
-    # 缺失必填项”
+    # 缺失必填项"
     missing_rows = []
     # 新建成功
     new_success = []
     # 更新成功
-    update_success = []#改77
+    update_success = []  # 改77
     cun_zai = []
     other_errors = []
-    #row 从 0 到 total_rows-1
+    
+    # ========== 第一遍遍历：收集所有要修改的产品信息 ==========
+    # 注意：modify_list 是局部变量，每次函数调用时都会重新初始化为空列表，不会影响下一次调用
+    modify_list = []  # 收集所有要修改的产品信息
+    
     for row in range(total_rows):
         print(f"\n处理第 {row + 1} 行...")  # 调试信息
         # 判断是否为最后一行
@@ -114,20 +155,22 @@ def handle_confirm_product():
             print("跳过最后一行（预留空行）")  # 调试信息
             continue
 
-        #判断此行的 产品id 应该在此拿到此行的状态 拿到此行的状态
+        # 判断此行的 产品id 应该在此拿到此行的状态 拿到此行的状态
         if row not in bianl.product_table_row_status or not isinstance(bianl.product_table_row_status[row], dict):
             bianl.product_table_row_status[row] = {}
             curr_product_id = None
         else:
             curr_product_id = bianl.product_table_row_status[row].get("product_id")
 
-        #     每一行都要进行的处理
+        #每一行都要进行的处理
         # 首先调用全局变量
         get_input_must_var(row)
         # 修改的时候不允许 必填项为空
         if curr_product_id and not (curr_row_product_name):
-            bianl.main_window.line_tip.setText(f"第 {row + 1} 行已生成产品，不允许保存为空白行。请至少输入必填项【产品名称】（或使用“删除产品”按钮来删除该产品。）")
-            bianl.main_window.line_tip.setToolTip(f"第 {row + 1} 行已生成产品，不允许保存为空白行。请至少输入必填项【产品名称】\n（或使用“删除产品”按钮来删除该产品。）")
+            bianl.main_window.line_tip.setText(
+                f"第 {row + 1} 行已生成产品，不允许保存为空白行。请至少输入必填项【产品名称】（或使用“删除产品”按钮来删除该产品。）")
+            bianl.main_window.line_tip.setToolTip(
+                f"第 {row + 1} 行已生成产品，不允许保存为空白行。请至少输入必填项【产品名称】\n（或使用“删除产品”按钮来删除该产品。）")
             bianl.main_window.line_tip.setStyleSheet("color: black;")
             # QMessageBox.warning(
             #     bianl.main_window,
@@ -197,7 +240,8 @@ def handle_confirm_product():
 
                 print("检查是否已存在该产品...")  # 调试信息
                 # 对应查的还是这三个 因为要用三个存 三个存在的时候
-                if product_confirm_qianzhi.check_existing_product(curr_row_product_number, curr_row_product_name, curr_row_device_position, bianl.current_project_id):
+                if product_confirm_qianzhi.check_existing_product(curr_row_product_number, curr_row_product_name,
+                                                                  curr_row_device_position, bianl.current_project_id):
                     print("产品已存在，弹出提示框")  # 调试信息
                     cun_zai.append(row + 1)
 
@@ -211,7 +255,9 @@ def handle_confirm_product():
                 try:
                     print("尝试保存新产品...")  # 调试信息
 
-                    product_confirm_qianzhi.save_new_product(row,curr_row_serial,curr_row_product_name,curr_row_product_number,curr_row_device_position, curr_row_design_stage,curr_row_design_edition)
+                    product_confirm_qianzhi.save_new_product(row, curr_row_serial, curr_row_product_name,
+                                                             curr_row_product_number, curr_row_device_position,
+                                                             curr_row_design_stage, curr_row_design_edition)
                     print("保存成功，更新状态为 view")  # 调试信息
                     # 变成不可编辑状态
                     auto_edit_row.update_status(row, "view")
@@ -265,8 +311,6 @@ def handle_confirm_product():
                 # t设计版次
                 new_design_stage = curr_row_design_stage
 
-
-
                 if row not in bianl.product_table_row_status or not isinstance(bianl.product_table_row_status[row],
                                                                                dict):
                     bianl.product_table_row_status[row] = {}
@@ -276,43 +320,40 @@ def handle_confirm_product():
                 #     row_status["old_number"] = new_number
                 #     row_status["old_name"] = new_name
                 #     row_status["old_position"] = new_position
-                    # row_status["old_design_stage"] = new_design_stage
-                    # row_status["old_design_edition"] = new_design_edition
-                
+                # row_status["old_design_stage"] = new_design_stage
+                # row_status["old_design_edition"] = new_design_edition
 
                 # old_design_stage = row_status.get("old_design_stage", "")
                 # old_design_edition = row_status.get("old_design_edition", "")
-                
-                # 当任何字段发生变化时都触发更新
-                if (old_number != new_number or old_name != new_name or old_position != new_position or old_serial!=new_serial):
-                    # 调用函数 update
-                    if product_confirm_qianzhi.update_existing_product(row, new_serial ,new_name,new_number, new_position,new_design_stage, new_design_edition):
-                        update_success.append(row + 1)
+
+                # 当任何字段发生变化时，收集到修改列表（第一遍遍历只收集，不更新）
+                if (
+                        old_number != new_number or old_name != new_name or old_position != new_position or old_serial != new_serial):
+                    # 收集要修改的产品信息
+                    modify_list.append({
+                        'row': row,
+                        'product_id': curr_product_id,
+                        'new_serial': new_serial,
+                        'new_number': new_number,
+                        'new_name': new_name,
+                        'new_position': new_position,
+                        'new_design_stage': new_design_stage,
+                        'new_design_edition': new_design_edition
+                    })
+                    print(f"第 {row + 1} 行收集到修改列表，将在批量检查后更新")
                 else:
-
-                    # 更新数据库信息（加入 WHERE 语句防止全表修改）
-                    conn = common_usage.get_mysql_connection_product()
-                    cursor = conn.cursor()
-                    # 根据三个相同的更新 根据产品id进行更新
-
-                    sql = """
-                                UPDATE 产品需求表
-                                SET 产品编号 = %s, 产品名称 = %s, 设备位号 = %s, 设计阶段 = %s, 设计版次 = %s
-                                WHERE 产品ID = %s
-                            """
-                    values = (
-                        new_number, new_name, new_position, new_design_stage,
-                        new_design_edition, curr_product_id
-                    )
-                    cursor.execute(sql, values)
-                    conn.commit()
-                    cursor.close()
-                    conn.close()
-                    print(f"只更新一次数据库")
-                    print(f"更新此行")
-                # ✅ 不管有没有变化，都变为不可编辑、变灰
-                auto_edit_row.update_status(row, "view")
-                product_confirm_qianzhi.set_row_editable(row, False)
+                    # 字段没有变化，但设计阶段或设计版次可能有变化，也需要更新数据库
+                    modify_list.append({
+                        'row': row,
+                        'product_id': curr_product_id,
+                        'new_serial': new_serial,
+                        'new_number': new_number,
+                        'new_name': new_name,
+                        'new_position': new_position,
+                        'new_design_stage': new_design_stage,
+                        'new_design_edition': new_design_edition,
+                        'no_field_change': True  # 标记为字段未变化，但需要更新设计阶段/版次
+                    })
             elif current_status == "view":
                 continue
 
@@ -325,6 +366,76 @@ def handle_confirm_product():
             other_errors.append(f"第{row + 1}行异常：{repr(e)}")
             # QMessageBox.critical(bianl.main_window, "错误", f"处理第 {row + 1} 行时发生错误：\n{repr(e)}")
             return
+    
+    # ========== 批量检查修改产品的冲突 ==========
+    if modify_list:
+        # 只检查字段有变化的产品（排除只更新设计阶段/版次的情况）
+        field_changed_list = [item for item in modify_list if not item.get('no_field_change', False)]
+        
+        if field_changed_list:
+            has_conflict, conflict_rows = product_confirm_qianzhi.check_batch_product_conflicts(
+                field_changed_list, bianl.current_project_id
+            )
+            
+            if has_conflict:
+                # 有冲突，记录冲突的行号
+                cun_zai.extend(sorted([row + 1 for row in conflict_rows]))#1107新修改-修改产品-按序号从小到大显示提示信息
+                # 从修改列表中移除冲突的行
+                modify_list = [item for item in modify_list if item['row'] not in conflict_rows]
+                print(f"批量检查发现冲突，冲突行: {conflict_rows}")
+    
+    # ========== 第二遍遍历：执行更新（只更新没有冲突的产品） ==========
+    for item in modify_list:
+        row = item['row']
+        try:
+            # 重新获取当前行的状态，确保数据是最新的
+            get_input_must_var(row)
+            
+            # 检查状态是否仍然是 edit（防止状态被改变）
+            current_status = product_confirm_qianzhi.get_status(row)
+            if current_status != "edit":
+                print(f"第 {row + 1} 行状态已改变，跳过更新")
+                continue
+            
+            # 执行更新
+            if item.get('no_field_change', False):
+                # 字段没有变化，只更新设计阶段/版次
+                conn = common_usage.get_mysql_connection_product()
+                cursor = conn.cursor()
+                sql = """
+                    UPDATE 产品需求表
+                    SET 产品编号 = %s, 产品名称 = %s, 设备位号 = %s, 设计阶段 = %s, 设计版次 = %s
+                    WHERE 产品ID = %s
+                """
+                values = (
+                    item['new_number'], item['new_name'], item['new_position'], 
+                    item['new_design_stage'], item['new_design_edition'], item['product_id']
+                )
+                cursor.execute(sql, values)
+                conn.commit()
+                cursor.close()
+                conn.close()
+                print(f"第 {row + 1} 行只更新设计阶段/版次")
+            else:
+                # 字段有变化，调用更新函数
+                if product_confirm_qianzhi.update_existing_product(
+                    row, item['new_serial'], item['new_name'], item['new_number'],
+                    item['new_position'], item['new_design_stage'], item['new_design_edition']
+                ):
+                    update_success.append(row + 1)
+            
+            # ✅ 不管有没有变化，都变为不可编辑、变灰
+            auto_edit_row.update_status(row, "view")
+            product_confirm_qianzhi.set_row_editable(row, False)
+            
+        except Exception as e:
+            print(f"更新第 {row + 1} 行时发生异常: {e}")
+            import traceback
+            with open("error_log.txt", "a", encoding="utf-8") as log:
+                log.write(f"更新第 {row + 1} 行时异常：\n")
+                log.write(traceback.format_exc())
+            other_errors.append(f"第{row + 1}行更新失败：{repr(e)}")
+    
     # bianl.row = bianl.product_table.rowCount() - 2
     # bianl.product_table.setCurrentCell(bianl.row, bianl.colum)
     # bianl.product_table.setFocus()
@@ -359,17 +470,19 @@ def handle_confirm_product():
     if missing_rows:
         info_msgs.append(f"序号为{'，'.join(map(str, missing_rows))}的产品存在必填项未输入")
     if cun_zai:
-        info_msgs.append(f"序号为{'，'.join(map(str, cun_zai))}的产品信息已存在，请修改")
+        info_msgs.append(f"序号为{'，'.join(map(str, cun_zai))}的产品设备名称重复，请重新输入！")
     if other_errors:
         info_msgs.append("其它错误：\n" + "\n".join(other_errors))
 
-    if update_success:#改77
+    if update_success:  # 改77
         info_msgs.append("产品信息已成功更新")
-    
+
     if info_msgs:
-        bianl.main_window.line_tip.setText(";".join(info_msgs))
-        bianl.main_window.line_tip.setToolTip("\n".join(info_msgs))
-        bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # bianl.main_window.line_tip.setText(";".join(info_msgs))
+        # bianl.main_window.line_tip.setToolTip("\n".join(info_msgs))
+        # bianl.main_window.line_tip.setStyleSheet("color: black;")
+        # 使用新的show_tip函数显示提示
+        show_tip(";".join(info_msgs))
 
     # —— lxy在 handle_confirm_product() 末尾加入（不改变你的原有逻辑）——
     stats = getattr(bianl.main_window, "stats_page_instance", None)
@@ -378,9 +491,12 @@ def handle_confirm_product():
 
         # QMessageBox.information(bianl.main_window, "处理结果", "\n".join(info_msgs))
 
-
     print("全部状态更新完成。")
     print(f"产品信息行：{bianl.row + 1},列：{bianl.colum}")
+    
+    # 退出修改产品模式，恢复最后一行可编辑状态
+    from modules.chanpinguanli.product_modify import exit_modify_products_mode
+    exit_modify_products_mode()
 
 
 

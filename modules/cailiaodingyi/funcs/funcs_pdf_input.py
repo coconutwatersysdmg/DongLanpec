@@ -1,10 +1,17 @@
 import json
+import time
+import random
 from collections import defaultdict
 
 from PyQt5.QtWidgets import QTableWidget
 
 from modules.cailiaodingyi.db_cnt import get_connection
 import pymysql
+
+
+def generate_unique_tab_id():
+    """生成唯一的Tab_ID（时间戳+随机数）"""
+    return f"TAB_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
 
 db_config_1 = {
     'host': 'localhost',
@@ -54,19 +61,70 @@ def has_product(product_id):
 def query_all_guankou_categories(product_id):
     """
     查询初始加载活动库里的多个类别
+    返回: 类别列表（为了保持向后兼容）
     """
     connection = get_connection(**db_config_1)
     try:
         with connection.cursor() as cursor:
             sql = """
+                    SELECT DISTINCT 类别, Tab_ID 
+                    FROM 产品设计活动表_管口附加参数表 
+                    WHERE 产品ID = %s AND Tab_ID IS NOT NULL
+                    ORDER BY Tab_ID
+                  """
+            cursor.execute(sql, (product_id,))
+            result = cursor.fetchall()
+            # 返回类别列表（保持向后兼容）
+            categories = [item['类别'] for item in result if '类别' in item]
+            # 如果没有Tab_ID，尝试兼容旧数据：只返回类别列表
+            if not categories:
+                sql_old = """
                     SELECT DISTINCT 类别 
                     FROM 产品设计活动表_管口附加参数表 
                     WHERE 产品ID = %s
                   """
+                cursor.execute(sql_old, (product_id,))
+                result_old = cursor.fetchall()
+                categories_old = [item['类别'] for item in result_old if '类别' in item]
+                # 为旧数据生成Tab_ID并更新数据库
+                if categories_old:
+                    for cat in categories_old:
+                        tab_id = generate_unique_tab_id()
+                        # 更新该类别下的所有记录的Tab_ID
+                        cursor.execute("""
+                            UPDATE 产品设计活动表_管口附加参数表
+                            SET Tab_ID = %s
+                            WHERE 产品ID = %s AND 类别 = %s AND (Tab_ID IS NULL OR Tab_ID = '')
+                        """, (tab_id, product_id, cat))
+                    connection.commit()
+                    # 重新查询
+                    cursor.execute(sql, (product_id,))
+                    result = cursor.fetchall()
+                    categories = [item['类别'] for item in result if '类别' in item]
+            return categories
+    finally:
+        connection.close()
+
+
+def query_all_guankou_categories_with_tab_id(product_id):
+    """
+    查询初始加载活动库里的多个类别和对应的Tab_ID
+    返回: {类别: Tab_ID} 的字典
+    """
+    connection = get_connection(**db_config_1)
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+                    SELECT DISTINCT 类别, Tab_ID 
+                    FROM 产品设计活动表_管口附加参数表 
+                    WHERE 产品ID = %s AND Tab_ID IS NOT NULL AND Tab_ID != ''
+                    ORDER BY Tab_ID
+                  """
             cursor.execute(sql, (product_id,))
             result = cursor.fetchall()
-            categories = [item['类别'] for item in result if '类别' in item]
-            return categories
+            # 返回 {类别: Tab_ID} 的字典
+            category_tab_map = {item['类别']: item['Tab_ID'] for item in result if '类别' in item and 'Tab_ID' in item}
+            return category_tab_map
     finally:
         connection.close()
 
@@ -156,6 +214,22 @@ def move_guankou_to_first(element_list):
     return element_list
 
 
+def move_guankou_attachment_to_second(element_list):
+    """将零件名称为'管口附件'的元素移动到第二行（索引1），前提是列表长度>1"""
+    if not element_list or len(element_list) <= 1:
+        return element_list
+
+    for idx, item in enumerate(element_list):
+        if item.get("零件名称") == "管口附件":
+            # 找到了管口附件，把它移到第1个（第二行）
+            element = element_list.pop(idx)
+            # 如果原来就在首行之后，则不需要特别处理，直接插入索引1
+            insert_index = 1 if len(element_list) >= 1 else 0
+            element_list.insert(insert_index, element)
+            break
+    return element_list
+
+
 def load_guankou_define_data(product_type, product_form, template_id):
     """根据产品类型、产品形式、模板ID查询管口定义表"""
     connection = get_connection(**db_config_2)
@@ -199,14 +273,13 @@ def load_guankou_material_detail(element_id):
     finally:
         connection.close()
 
-
 def insert_element_data(element_original_info, product_id, template_name):
     """将元件数据插入到活动库中"""
     connection = get_connection(**db_config_1)
     try:
         with connection.cursor() as cursor:
             # 先查看是否存在该产品ID的数据
-            cursor.execute("SELECT COUNT(*) FROM 产品设计活动表_元件材料表 WHERE 产品ID = %s", (product_id,))
+            cursor.execute("SELECT COUNT(*) FROM 产品设计活动表_元件材料表 WHERE 产品ID = %s", (product_id, ))
             result = cursor.fetchone()  # 获取查询结果
             if result['COUNT(*)'] > 0:
                 print(f"产品ID {product_id} 对应的数据已存在，跳过插入！")
@@ -301,8 +374,16 @@ def query_template_guankou_para_data(template_id):
         connection.close()
 
 
-def insert_guankou_para_data(product_id, guankou_para_info, template_name):
-    """将材料库的管口参数插入产品设计活动库中，自动删除旧数据"""
+def insert_guankou_para_data(product_id, guankou_para_info, template_name, template_id=None):
+    """将材料库的管口参数插入产品设计活动库中，自动删除旧数据
+    注意：确保至少有两个分类（管口材料分类1和管口材料分类2）
+    
+    Args:
+        product_id: 产品ID
+        guankou_para_info: 从模板库查询的管口参数数据
+        template_name: 模板名称
+        template_id: 模板ID（可选，用于查询"管口材料分类2"的数据）
+    """
     connection = get_connection(**db_config_1)
     try:
         with connection.cursor() as cursor:
@@ -313,11 +394,51 @@ def insert_guankou_para_data(product_id, guankou_para_info, template_name):
             )
             print(f"[清除] 已删除产品ID {product_id} 的旧管口参数数据")
 
+            # 按所属分类分组，为每个分类生成唯一的Tab_ID
+            category_tab_map = {}  # {所属分类: Tab_ID}
+            
+            # 收集所有出现的分类（使用set去重）
+            seen_categories = set()
             for item in guankou_para_info:
+                category = item.get('所属分类', '管口材料分类-管程')
+                seen_categories.add(category)
+            
+            # ✅ 确保至少有两个分类：管口材料分类-管程和管口材料分类-壳程
+            if "管口材料分类-管程" not in seen_categories:
+                seen_categories.add("管口材料分类-管程")
+            if "管口材料分类-壳程" not in seen_categories:
+                seen_categories.add("管口材料分类-壳程")
+            
+            # ✅ 按固定顺序生成Tab_ID：先管程，再壳程，最后是其他分类
+            # 确保"管口材料分类-管程"的Tab_ID总是最小的
+            ordered_categories = []
+            if "管口材料分类-管程" in seen_categories:
+                ordered_categories.append("管口材料分类-管程")
+            if "管口材料分类-壳程" in seen_categories:
+                ordered_categories.append("管口材料分类-壳程")
+            # 添加其他分类（按字母顺序，确保一致性）
+            other_categories = sorted([c for c in seen_categories if c not in ["管口材料分类-管程", "管口材料分类-壳程"]])
+            ordered_categories.extend(other_categories)
+            
+            # ✅ 按顺序为每个分类生成Tab_ID（确保分类1的Tab_ID更小）
+            # 为了确保字符串排序时分类1的Tab_ID更小，我们需要确保时间戳或随机数部分有差异
+            base_timestamp = int(time.time() * 1000)
+            for idx, category in enumerate(ordered_categories):
+                # 为每个分类使用递增的时间戳，确保先生成的Tab_ID更小
+                # 分类1使用base_timestamp，分类2使用base_timestamp+1，以此类推
+                timestamp = base_timestamp + idx
+                random_num = random.randint(1000, 9999)
+                category_tab_map[category] = f"TAB_{timestamp}_{random_num}"
+                print(f"[初始化] 为分类 {category} 生成Tab_ID: {category_tab_map[category]}")
+            
+            # 插入模板数据
+            for item in guankou_para_info:
+                category = item.get('所属分类', '管口材料分类-管程')
+                
                 sql = """
                     INSERT INTO 产品设计活动表_管口附加参数表
-                    (管口零件参数ID, 产品ID, 参数名称, 参数值, 参数单位, 类别, 模板名称)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s);
+                    (管口零件参数ID, 产品ID, 参数名称, 参数值, 参数单位, 类别, Tab_ID, 模板名称)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
                 """
                 cursor.execute(sql, (
                     item['管口附加参数ID'],
@@ -325,14 +446,59 @@ def insert_guankou_para_data(product_id, guankou_para_info, template_name):
                     item['参数名称'],
                     item['参数数值'],
                     item['参数单位'],
-                    item['所属分类'],
+                    category,
+                    category_tab_map[category],
                     template_name
                 ))
+            
+            # ✅ 如果模板数据中没有"管口材料分类-壳程"，从模板库查询"管口材料分类-壳程"的数据
+            if "管口材料分类-壳程" not in [item.get('所属分类', '管口材料分类-管程') for item in guankou_para_info]:
+                # 如果提供了template_id，从模板库查询"管口材料分类2"的数据
+                if template_id:
+                    # 从模板库查询"管口材料分类2"的数据
+                    connection_template = get_connection(**db_config_2)
+                    try:
+                        with connection_template.cursor() as cursor_template:
+                            sql_template = """
+                                SELECT 管口附加参数ID, 参数名称, 参数数值, 参数单位, 所属分类
+                                FROM 管口附加参数表
+                                WHERE 模板ID = %s AND 所属分类 = '管口材料分类-壳程';
+                            """
+                            cursor_template.execute(sql_template, (template_id,))
+                            category2_items = cursor_template.fetchall()
+                            
+                            if category2_items:
+                                # 插入"管口材料分类2"的数据（和分类1一样的方式）
+                                for item in category2_items:
+                                    sql = """
+                                        INSERT INTO 产品设计活动表_管口附加参数表
+                                        (管口零件参数ID, 产品ID, 参数名称, 参数值, 参数单位, 类别, Tab_ID, 模板名称)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+                                    """
+                                    cursor.execute(sql, (
+                                        item['管口附加参数ID'],
+                                        product_id,
+                                        item['参数名称'],
+                                        item['参数数值'],
+                                        item['参数单位'],
+                                    '管口材料分类-壳程',
+                                    category_tab_map['管口材料分类-壳程'],
+                                        template_name
+                                    ))
+                                print(f"[初始化] 从模板库为管口材料分类-壳程插入了 {len(category2_items)} 条数据")
+                            else:
+                                print(f"[警告] 模板库中没有找到管口材料分类-壳程的数据（模板ID: {template_id}）")
+                    finally:
+                        connection_template.close()
+                else:
+                    print(f"[警告] 未提供template_id，无法从模板库查询管口材料分类-壳程的数据")
 
             connection.commit()
-            print("✅ 管口零件参数信息已重新插入")
+            print(f"✅ 管口零件参数信息已重新插入，分类: {list(category_tab_map.keys())}")
     except pymysql.MySQLError as err:
         print(f"❌ 插入数据时出错: {err}")
+        import traceback
+        traceback.print_exc()
     finally:
         connection.close()
 
@@ -355,15 +521,14 @@ def query_template_element_para_data(template_id):
     finally:
         connection.close()
 
-
 def insert_element_para_data(product_id, guankou_para_info):
     """将从材料库的元件附加参数表读出的数据写入产品设计活动库的元件附加参数表"""
     connection = get_connection(**db_config_1)
     try:
         with connection.cursor() as cursor:
-            # 先查看是否存在该产品ID的数据
-            cursor.execute("SELECT COUNT(*) FROM 产品设计活动表_元件附加参数表 WHERE 产品ID = %s", (product_id,))
-            result = cursor.fetchone()  # 获取查询结果
+            #先查看是否存在该产品ID的数据
+            cursor.execute("SELECT COUNT(*) FROM 产品设计活动表_元件附加参数表 WHERE 产品ID = %s", (product_id, ))
+            result = cursor.fetchone()  #获取查询结果
             if result['COUNT(*)'] > 0:
                 print(f"产品ID{product_id} 对应的元件附加参数信息已存在，跳过插入")
                 return
@@ -385,7 +550,7 @@ def insert_element_para_data(product_id, guankou_para_info):
                     item['参数单位']
                 ))
 
-            # 提交事务
+            #提交事务
             connection.commit()
             print("零件附加参数信息已成功插入数据库")
     except pymysql.MySQLError as err:  # 使用 pymysql.MySQLError 来捕获异常
@@ -439,9 +604,10 @@ def select_template_id(template_name, product_form, product_type):
         connection.close()
 
 
-def insert_add_guankou_define(guankou_define_data, category_label, product_id, select_template):
+def insert_add_guankou_define(guankou_define_data, category_label, product_id, select_template, tab_id=None):
     """
     将新增的管口材料定义写入活动库
+    如果tab_id为None，会生成新的Tab_ID
     """
     connection = pymysql.connect(**db_config_1)
     try:
@@ -458,6 +624,12 @@ def insert_add_guankou_define(guankou_define_data, category_label, product_id, s
             if count == 0:
                 # print(f"未找到 产品ID={product_id} 且 模板名称='{select_template}' 的记录，跳过插入。")
                 return
+            
+            # 如果没有提供tab_id，生成新的Tab_ID
+            if tab_id is None:
+                tab_id = generate_unique_tab_id()
+                print(f"[插入管口定义] 为类别 {category_label} 生成新Tab_ID: {tab_id}")
+            
             sql = """
             INSERT INTO 产品设计活动表_管口零件材料表
             (管口零件ID, 零件名称, 材料类型, 材料牌号, 材料标准, 供货状态, 产品ID, 模板名称, 类别, 元件示意图)
@@ -478,10 +650,17 @@ def insert_add_guankou_define(guankou_define_data, category_label, product_id, s
                     row.get("元件示意图")
                 ))
             cursor.executemany(sql, values)
+            
+            # 同时更新管口附加参数表中该类别对应的Tab_ID（如果还没有的话）
+            cursor.execute("""
+                UPDATE 产品设计活动表_管口附加参数表
+                SET Tab_ID = %s
+                WHERE 产品ID = %s AND 类别 = %s AND (Tab_ID IS NULL OR Tab_ID = '')
+            """, (tab_id, product_id, category_label))
+            
         connection.commit()
     finally:
         connection.close()
-
 
 def insert_all_guankou_param(all_guankou_param_data, category_label, product_id, select_template):
     """
@@ -546,32 +725,49 @@ def load_element_info(product_id):
                 FROM 产品设计活动表_元件材料表
                 WHERE 产品ID = %s
                 """
-            cursor.execute(sql, (product_id,))
+            cursor.execute(sql, (product_id, ))
             result = cursor.fetchall()
             return result
     finally:
         connection.close()
 
 
-def query_guankou_define_data_by_category(product_id, category):
-    # 查询活动库里的管口定义信息
+def query_guankou_define_data_by_category(product_id, category_or_tab_id):
+    """
+    查询活动库里的管口定义信息
+    支持通过类别或Tab_ID查询（优先使用Tab_ID）
+    """
     connection = get_connection(**db_config_1)
     try:
         with connection.cursor() as cursor:
-            sql = """
+            # 先尝试通过Tab_ID查询（如果传入的是Tab_ID）
+            sql_by_tab_id = """
                 SELECT 
                     参数名称,
                     参数值,
                     模板名称
                 FROM 产品设计活动表_管口附加参数表
-                WHERE 产品ID = %s AND 类别 = %s
-                """
-            cursor.execute(sql, (product_id, category))
+                WHERE 产品ID = %s AND Tab_ID = %s
+            """
+            cursor.execute(sql_by_tab_id, (product_id, category_or_tab_id))
             result = cursor.fetchall()
+            
+            # 如果没有结果，尝试通过类别查询（兼容旧数据）
+            if not result:
+                sql_by_category = """
+                    SELECT 
+                        参数名称,
+                        参数值,
+                        模板名称
+                    FROM 产品设计活动表_管口附加参数表
+                    WHERE 产品ID = %s AND 类别 = %s
+                """
+                cursor.execute(sql_by_category, (product_id, category_or_tab_id))
+                result = cursor.fetchall()
+            
             return result if result else []
     finally:
         connection.close()
-
 
 def query_guankou_define_data_by_template(product_id, category, template):
     # 查询活动库里的管口定义信息
@@ -597,18 +793,34 @@ def query_guankou_define_data_by_template(product_id, category, template):
         connection.close()
 
 
-def query_guankou_param_by_product(product_id, category):
-    """根据产品ID，管口零件ID，类别从产品设计活动库中读取管口零件参数数据"""
+def query_guankou_param_by_product(product_id, category_or_tab_id):
+    """
+    根据产品ID和Tab_ID从产品设计活动库中读取管口零件参数数据
+    支持通过类别或Tab_ID查询（优先使用Tab_ID）
+    """
     connection = get_connection(**db_config_1)
     try:
         with connection.cursor() as cursor:
-            sql = """
+            # 先尝试通过Tab_ID查询（如果传入的是Tab_ID）
+            sql_by_tab_id = """
+                   SELECT * 
+                   FROM 产品设计活动表_管口附加参数表
+                   WHERE 产品ID = %s AND Tab_ID = %s
+               """
+            cursor.execute(sql_by_tab_id, (product_id, category_or_tab_id))
+            result = cursor.fetchall()
+            
+            # 如果没有结果，尝试通过类别查询（兼容旧数据）
+            if not result:
+                sql_by_category = """
                    SELECT * 
                    FROM 产品设计活动表_管口附加参数表
                    WHERE 产品ID = %s AND 类别 = %s
                """
-            cursor.execute(sql, (product_id, category))
-            return cursor.fetchall()
+                cursor.execute(sql_by_category, (product_id, category_or_tab_id))
+                result = cursor.fetchall()
+            
+            return result
     finally:
         connection.close()
 
@@ -702,7 +914,6 @@ def save_to_template_library(template_name, product_data, product_type, product_
         print("模板插入失败：", e)
     finally:
         conn.close()
-
 
 def get_template_id_by_name(template_name: str):
     """
@@ -928,7 +1139,7 @@ def get_options_for_param(param_name):
 
             return []  # 如果没有选项，返回空列表
     finally:
-        connection.close()
+            connection.close()
 
 
 def get_all_param_name():
@@ -943,69 +1154,108 @@ def get_all_param_name():
         connection.close()
 
 
-def load_guankou_param_leibie(category_label, product_id, select_template):
+def load_guankou_param_leibie(category_label_or_tab_id, product_id, select_template):
+    """
+    加载管口参数数据
+    支持通过类别或Tab_ID查询（优先使用Tab_ID）
+    """
     connection = get_connection(**db_config_1)
     try:
         with connection.cursor() as cursor:
-            sql = """
-                SELECT 管口零件参数ID, 参数名称, 参数值, 参数单位
+            # 先尝试通过Tab_ID查询（如果传入的是Tab_ID）
+            sql_by_tab_id = """
+                SELECT 管口零件参数ID, 参数名称, 参数值, 参数单位, Tab_ID
                 FROM 产品设计活动表_管口附加参数表
-                WHERE 产品ID = %s AND 类别 = %s AND 模板名称 = %s
+                WHERE 产品ID = %s AND Tab_ID = %s AND 模板名称 = %s
             """
-            cursor.execute(sql, (product_id, category_label, select_template))
+            cursor.execute(sql_by_tab_id, (product_id, category_label_or_tab_id, select_template))
             result = cursor.fetchall()
+            
+            # 如果没有结果，尝试通过类别查询（兼容旧数据）
+            if not result:
+                sql_by_category = """
+                    SELECT 管口零件参数ID, 参数名称, 参数值, 参数单位, Tab_ID
+                    FROM 产品设计活动表_管口附加参数表
+                    WHERE 产品ID = %s AND 类别 = %s AND 模板名称 = %s
+                """
+                cursor.execute(sql_by_category, (product_id, category_label_or_tab_id, select_template))
+                result = cursor.fetchall()
+            
             return result
     finally:
         connection.close()
 
 
-def insert_guankou_param_leibie(product_id, category_label, template_name, guankou_para_info, keep_values=True):
+def insert_guankou_param_leibie(product_id, category_label, template_name, guankou_para_info, keep_values=True, tab_id=None):
     """
     批量写入【产品设计活动表_管口附加参数表】。
     直接使用 load_guankou_param_leibie 返回的字典列表，并保留原 管口零件参数ID
+    如果tab_id为None，会从现有数据中查找或生成新的Tab_ID
     """
     rows = guankou_para_info or []
     if not rows:
         print(f"[写入] 类别 {category_label} 没有需要写入的参数")
         return
 
-    data_to_insert = []
-    for r in rows:
-        gid = r.get("管口零件参数ID")  # 保留原 ID
-        name = r.get("参数名称", "")
-        val = r.get("参数值", None)
-        unit = r.get("参数单位", None)
-
-        if not keep_values:
-            val = ""
-
-        data_to_insert.append((
-            gid,
-            product_id,
-            name,
-            val,
-            unit,
-            category_label,
-            template_name,
-            r.get("模板ID", None)  # 这里模板ID你可以传 None 或真实值
-        ))
-
     conn = get_connection(**db_config_1)
     try:
         with conn.cursor() as cur:
+            # 如果没有提供tab_id，尝试从现有数据中获取
+            if tab_id is None:
+                # 先查询该类别是否已有Tab_ID
+                cur.execute("""
+                    SELECT DISTINCT Tab_ID 
+                    FROM 产品设计活动表_管口附加参数表
+                    WHERE 产品ID = %s AND 类别 = %s AND Tab_ID IS NOT NULL
+                    LIMIT 1
+                """, (product_id, category_label))
+                result = cur.fetchone()
+                if result:
+                    tab_id = result['Tab_ID']
+                else:
+                    # 如果没有，生成新的Tab_ID
+                    tab_id = generate_unique_tab_id()
+                    print(f"[写入] 为类别 {category_label} 生成新Tab_ID: {tab_id}")
+
+            data_to_insert = []
+            for r in rows:
+                gid  = r.get("管口零件参数ID")  # 保留原 ID
+                name = r.get("参数名称", "")
+                val  = r.get("参数值", None)
+                unit = r.get("参数单位", None)
+
+                if not keep_values:
+                    val = ""
+
+                data_to_insert.append((
+                    gid,
+                    product_id,
+                    name,
+                    val,
+                    unit,
+                    category_label,
+                    tab_id,
+                    template_name,
+                    r.get("模板ID", None)  # 这里模板ID你可以传 None 或真实值
+                ))
+
             sql = """
                 INSERT INTO 产品设计活动表_管口附加参数表
-                (管口零件参数ID, 产品ID, 参数名称, 参数值, 参数单位, 类别, 模板名称, 模板ID)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                (管口零件参数ID, 产品ID, 参数名称, 参数值, 参数单位, 类别, Tab_ID, 模板名称, 模板ID)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                     参数值 = VALUES(参数值),
-                    参数单位 = VALUES(参数单位)
+                    参数单位 = VALUES(参数单位),
+                    Tab_ID = VALUES(Tab_ID)
             """
             cur.executemany(sql, data_to_insert)
         conn.commit()
-        print(f"[写入] 类别 {category_label} 参数写入成功，共 {len(data_to_insert)} 条")
+        print(f"[写入] 类别 {category_label} (Tab_ID: {tab_id}) 参数写入成功，共 {len(data_to_insert)} 条")
     finally:
         conn.close()
+
+
+
 
 
 def load_guankou_param_byid(category_label, product_id, select_template, guankou_param_id):
@@ -1063,20 +1313,33 @@ def delete_guankou_data_from_db(product_id, tab_name):
     try:
         connection = get_connection(**db_config_1)
         with connection.cursor() as cursor:
-            print(f"[执行删除] DELETE FROM 管口附加参数表 WHERE 产品ID = {product_id} AND 类别 = {tab_name}")
+            # 先尝试通过Tab_ID删除（如果传入的是Tab_ID）
+            # 先查询是否存在该Tab_ID
             cursor.execute("""
-                DELETE FROM 产品设计活动表_管口附加参数表
-                WHERE 产品ID = %s AND 类别 = %s
+                SELECT DISTINCT Tab_ID FROM 产品设计活动表_管口附加参数表
+                WHERE 产品ID = %s AND Tab_ID = %s
+                LIMIT 1
             """, (product_id, tab_name))
-
-            print(f"[执行删除] DELETE FROM 管口零件材料参数表 WHERE 产品ID = {product_id} AND 类别 = {tab_name}")
-            cursor.execute("""
-                DELETE FROM 产品设计活动表_管口附加参数表
-                WHERE 产品ID = %s AND 类别 = %s
-            """, (product_id, tab_name))
+            result = cursor.fetchone()
+            
+            if result:
+                # 使用Tab_ID删除
+                tab_id = result['Tab_ID']
+                print(f"[执行删除] DELETE FROM 产品设计活动表_管口附加参数表 WHERE 产品ID = {product_id} AND Tab_ID = {tab_id}")
+                cursor.execute("""
+                    DELETE FROM 产品设计活动表_管口附加参数表
+                    WHERE 产品ID = %s AND Tab_ID = %s
+                """, (product_id, tab_id))
+            else:
+                # 使用类别删除（兼容旧数据）
+                print(f"[执行删除] DELETE FROM 产品设计活动表_管口附加参数表 WHERE 产品ID = {product_id} AND 类别 = {tab_name}")
+                cursor.execute("""
+                    DELETE FROM 产品设计活动表_管口附加参数表
+                    WHERE 产品ID = %s AND 类别 = %s
+                """, (product_id, tab_name))
 
         connection.commit()
-        print(f"[成功] 删除类别 {tab_name} 相关数据")
+        print(f"[成功] 删除类别/Tab_ID {tab_name} 相关数据")
     except Exception as e:
         print(f"[错误] 删除 {tab_name} 数据失败: {e}")
     finally:
@@ -1102,16 +1365,18 @@ def clear_guankou_leibie(product_id, tab_name):
         connection.close()
 
 
+
 def update_material_category_in_db(product_id, old_label: str, new_label: str):
     """
     把‘类别标签/材料分类’从 old_label 改成 new_label
-    1) 产品设计活动表_管口零件材料参数表    (字段：类别标签)
+    注意：只更新类别字段，Tab_ID保持不变，这样即使类别改变，Tab_ID仍然可以唯一标识该tab页
+    1) 产品设计活动表_管口附加参数表    (字段：类别，Tab_ID保持不变)
     2) 产品设计活动表_管口类别表          (字段：材料分类)
     """
     conn = get_connection(**db_config_1)
     try:
         with conn.cursor() as c:
-            # 1) 参数表（右侧参数定义落库的那张）
+            # 1) 参数表（右侧参数定义落库的那张）- 只更新类别，Tab_ID保持不变
             row_param = c.execute("""
                 UPDATE 产品设计活动表_管口附加参数表
                 SET 类别 = %s
@@ -1126,10 +1391,11 @@ def update_material_category_in_db(product_id, old_label: str, new_label: str):
             """, (new_label, product_id, old_label))
 
         conn.commit()
-        print(f"[DB] 类别改名：{old_label} -> {new_label}；参数表 {row_param} 行，类别表 {row_cat} 行")
+        print(f"[DB] 类别改名：{old_label} -> {new_label}；参数表 {row_param} 行，类别表 {row_cat} 行（Tab_ID保持不变）")
         return row_param, row_cat
     finally:
         conn.close()
+
 
 
 def load_guankou_param_structure_from_db() -> list:
@@ -1161,6 +1427,9 @@ def load_guankou_param_structure_from_db() -> list:
         connection.close()
 
 
+
+
+
 def load_dropdown_options() -> dict:
     connection = pymysql.connect(**db_config_2)
     try:
@@ -1186,9 +1455,9 @@ def query_guankou_default(product_form, product_type):
     """从元件库的默认表中读取管口默认信息"""
     connection = get_connection(**db_config_3)
     try:
-        with connection.cursor() as cursor:
+        with connection.cursor(pymysql.cursors.DictCursor) as cursor:
             sql = """
-                        SELECT 管口ID, 管口代号, 管口所属元件
+                        SELECT 管口ID, 管口代号, 管口所属元件, 管口功能
                         FROM 管口默认表
                         WHERE 所属类型 = %s AND 所属型式 = %s
                     """
@@ -1198,12 +1467,27 @@ def query_guankou_default(product_form, product_type):
     finally:
         connection.close()
 
+def _component_to_material_category(component):
+    """根据管口所属元件判断材料分类：管程/管箱→管口材料分类-管程，壳程/壳体→管口材料分类-壳程"""
+    s = str(component or '')
+    if '管程' in s or '管箱' in s:
+        return '管口材料分类-管程'
+    if '壳程' in s or '壳体' in s:
+        return '管口材料分类-壳程'
+    return None
 
-def insert_guankou_info(product_id, guankou_info):
-    """将元件库的管口信息插入管口类别表中，自动删除旧数据"""
+
+def insert_guankou_info(product_id, guankou_info, product_form=None, product_type=None):
+    """将元件库/产品表的管口信息插入管口类别表中，自动删除旧数据
+
+    材料分类依据 管口所属元件（不再用管口功能）：
+      1) 优先从 产品设计活动表_管口表 读 管口代号、管口所属元件 → 材料分类
+      2) 若 1) 无，从 guankou_info 的 管口所属元件
+      3) 若仍无，且提供 product_form/product_type，从 元件库.管口默认表 读 管口所属元件
+    """
     connection = get_connection(**db_config_1)
     try:
-        with connection.cursor() as cursor:
+        with connection.cursor(pymysql.cursors.DictCursor) as cursor:
             # ✅ 先删除旧数据
             cursor.execute(
                 "DELETE FROM 产品设计活动表_管口类别表 WHERE 产品ID = %s",
@@ -1211,25 +1495,123 @@ def insert_guankou_info(product_id, guankou_info):
             )
             print(f"[清除] 已删除产品ID {product_id} 的旧管口参数数据")
 
+            guankou_code_to_category = {}  # {管口代号: 材料分类}
+
+            # A) 优先从 产品设计活动表_管口表 读取 管口代号、管口所属元件
+            try:
+                cursor.execute("""
+                    SELECT 管口代号, 管口所属元件
+                    FROM 产品设计活动表_管口表
+                    WHERE 产品ID = %s
+                """, (product_id,))
+                guankou_rows = cursor.fetchall()
+                for row in guankou_rows:
+                    code = (row.get('管口代号') or '').strip()
+                    comp = row.get('管口所属元件', '')
+                    if not code:
+                        continue
+                    cat = _component_to_material_category(comp)
+                    if cat:
+                        guankou_code_to_category[code] = cat
+                if guankou_rows:
+                    print(f"[管口分配] 从产品设计活动表_管口表(管口所属元件)查询到 {len(guankou_code_to_category)} 个管口的材料分类映射")
+            except Exception as e:
+                print(f"[警告] 查询产品设计活动表_管口表失败: {e}")
+                import traceback
+                traceback.print_exc()
+
+            # B) 若 A) 无映射，从 guankou_info 的 管口所属元件
+            if not guankou_code_to_category:
+                for item in guankou_info:
+                    if isinstance(item, dict):
+                        code = (item.get('管口代号') or '').strip()
+                        comp = item.get('管口所属元件', '')
+                    else:
+                        code = (item[1] if len(item) > 1 else '') or ''
+                        comp = (item[2] if len(item) > 2 else '') or ''
+                    if not code:
+                        continue
+                    cat = _component_to_material_category(comp)
+                    if cat:
+                        guankou_code_to_category[code] = cat
+
+            # C) 若仍无，从 元件库.管口默认表 读 管口所属元件
+            if not guankou_code_to_category and product_form and product_type:
+                try:
+                    connection_default = get_connection(**db_config_3)
+                    with connection_default.cursor(pymysql.cursors.DictCursor) as cursor_default:
+                        cursor_default.execute("""
+                            SELECT 管口代号, 管口所属元件
+                            FROM 管口默认表
+                            WHERE 所属类型 = %s AND 所属型式 = %s
+                        """, (product_form, product_type))
+                        default_rows = cursor_default.fetchall()
+                        for row in default_rows:
+                            code = (row.get('管口代号') or '').strip()
+                            comp = row.get('管口所属元件', '')
+                            if not code:
+                                continue
+                            cat = _component_to_material_category(comp)
+                            if cat:
+                                guankou_code_to_category[code] = cat
+                        print(f"[管口分配] 从管口默认表(管口所属元件)查询到 {len(guankou_code_to_category)} 个管口的材料分类映射")
+                        for row in default_rows:
+                            code = (row.get('管口代号') or '').strip()
+                            comp = row.get('管口所属元件', '')
+                            cat = guankou_code_to_category.get(code)
+                            if cat:
+                                print(f"[管口分配] {code} (管口所属元件: {comp}) → {cat}")
+                    connection_default.close()
+                except Exception as e:
+                    print(f"[警告] 查询管口默认表失败: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+            # D) 写入 管口类别表
             for item in guankou_info:
+                # 根据 item 类型获取基础字段
+                if isinstance(item, dict):
+                    guankou_id = item.get('管口ID')
+                    code = (item.get('管口代号') or '').strip()
+                    component = item.get('管口所属元件', '')
+                else:
+                    guankou_id = item[0] if len(item) > 0 else None
+                    code = (item[1] if len(item) > 1 else '') or ''
+                    component = item[2] if len(item) > 2 else ''
+
+                material_category = guankou_code_to_category.get(code)
+
+                if not material_category and code:
+                    print(f"[警告] 管口代号 {code} 未找到对应的管口所属元件映射，材料分类为 None")
+
                 sql = """
-                        INSERT INTO 产品设计活动表_管口类别表
-                        (管口ID, 产品ID, 管口代号, 管口所属元件)
-                        VALUES (%s, %s, %s, %s);
-                    """
+                    INSERT INTO 产品设计活动表_管口类别表
+                    (管口ID, 产品ID, 管口代号, 管口所属元件, 材料分类)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE 
+                        管口代号 = VALUES(管口代号),
+                        管口所属元件 = VALUES(管口所属元件),
+                        材料分类 = VALUES(材料分类)
+                """
                 cursor.execute(sql, (
-                    item['管口ID'],
+                    guankou_id,
                     product_id,
-                    item['管口代号'],
-                    item['管口所属元件']
+                    code,
+                    component,
+                    material_category
                 ))
+
+                if material_category:
+                    print(f"[管口分配] 插入 {code} → {material_category}")
 
             connection.commit()
             print("✅ 管口信息已重新插入")
+
     except pymysql.MySQLError as err:
         print(f"❌ 插入数据时出错: {err}")
     finally:
         connection.close()
+
 
 
 def query_guankou_codes_by_product(product_id) -> list:
@@ -1323,7 +1705,7 @@ def query_codes_for_tab_raw(product_id: str, tab_name: str) -> list:
           AND ( `材料分类` IS NULL OR `材料分类`='' OR `材料分类`=%s )
         ORDER BY `管口代号`
     """
-    conn = pymysql.connect(**db_config_1)  # 用你的连接配置
+    conn = pymysql.connect(**db_config_1)   # 用你的连接配置
     try:
         with conn.cursor() as cur:
             cur.execute(sql, (product_id, tab_name or ""))
@@ -1332,6 +1714,8 @@ def query_codes_for_tab_raw(product_id: str, tab_name: str) -> list:
         return [("" if r[0] is None else str(r[0])) for r in rows]
     finally:
         conn.close()
+
+
 
 
 def query_assigned_codes_by_tab(product_id: str, tab_name: str):
@@ -1360,6 +1744,7 @@ def query_assigned_codes_by_tab(product_id: str, tab_name: str):
     return result
 
 
+
 def _find_row(table, label_text: str):
     for r in range(table.rowCount()):
         it = table.item(r, 0)
@@ -1368,11 +1753,11 @@ def _find_row(table, label_text: str):
     return None
 
 
+
 def init_buguan_defaults(product_id):
     """
-    新产品初始化：
-    根据产品型式从元件库的布管参数默认表选择（浮头式 / U型管），
-    插入到 产品设计活动库.产品设计活动表_布管参数表
+    新产品初始化：将元件库的布管参数默认表数据插入到
+    产品设计活动库.产品设计活动表_布管参数表
     （仅在该产品在活动库中不存在布管参数时执行）
     """
     conn1 = get_connection("localhost", 3306, "root", "123456", "产品设计活动库")
@@ -1389,35 +1774,21 @@ def init_buguan_defaults(product_id):
             if row and row["cnt"] > 0:
                 print(f"[布管参数] 产品 {product_id} 已有布管参数，跳过初始化")
                 return
-
-            # 2. 查产品型式
             cur1.execute("""
-                SELECT 产品型式
-                FROM 产品设计活动表
-                WHERE 产品ID=%s
-            """, (product_id,))
+                           SELECT 产品型式
+                           FROM 产品设计活动表
+                           WHERE 产品ID=%s
+                       """, (product_id,))
             row = cur1.fetchone()
-            if not row or not row.get("产品型式"):
-                print(f"[布管参数] 产品 {product_id} 未找到产品型式，无法初始化")
-                return
-            pdt_type = row["产品型式"].strip().upper()
+            if row and (row["产品型式"] == "AEU" or row["产品型式"] == "BEU"):
 
-            # 3. 根据产品型式选择默认表
-            if pdt_type in ("AEU", "BEU"):
-                default_table = "布管参数默认表_u型管"
+                # 2. 从元件库读取默认布管参数
+                cur2.execute("SELECT 参数名, 参数值, 单位 FROM 布管参数默认表_u型管")
+                defaults = cur2.fetchall()
             else:
-                default_table = "布管参数默认表_浮头式"
-
-            # 4. 从元件库读取默认布管参数
-            sql = f"SELECT 参数名, 参数值, 单位 FROM {default_table}"
-            cur2.execute(sql)
-            defaults = cur2.fetchall()
-
-            if not defaults:
-                print(f"[布管参数] {default_table} 中未找到默认数据")
-                return
-
-            # 5. 插入到活动库
+                cur2.execute("SELECT 参数名, 参数值, 单位 FROM 布管参数默认表_浮头式")
+                defaults = cur2.fetchall()
+            # 3. 插入到活动库
             for d in defaults:
                 cur1.execute("""
                     INSERT INTO 产品设计活动表_布管参数表(产品ID, 参数名, 参数值, 单位)
@@ -1430,10 +1801,68 @@ def init_buguan_defaults(product_id):
                 ))
 
         conn1.commit()
-        print(f"[布管参数] 产品 {product_id} ({pdt_type}) 默认参数已初始化")
+        print(f"[布管参数] 产品 {product_id} 默认参数已初始化")
     except Exception as e:
         conn1.rollback()
         print(f"[布管参数] 初始化失败: {e}")
     finally:
         conn1.close()
         conn2.close()
+
+
+
+
+
+def query_template_element_merged_para_data(template_id, element_id):
+    """从材料库查询元件附加参数合并表模板数据"""
+    connection = get_connection(**db_config_2)
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+            SELECT
+                元件ID,
+                参数名称,
+                参数值,
+                参数单位,
+                Tab分类,
+                模板ID
+            FROM 元件附加参数合并表
+            WHERE 模板ID = %s AND 元件ID = %s
+            ORDER BY Tab分类, 参数名称
+            """
+            cursor.execute(sql, (template_id, element_id))
+            return cursor.fetchall()
+    finally:
+        connection.close()
+
+
+
+
+
+
+
+# 11.16设备法兰
+def get_fastener_param_structure_from_db() -> list:
+    connection = pymysql.connect(**db_config_2)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 参数名称, 显示结构, 控件类型, 字段前缀 FROM 设备法兰紧固件合并展示表 ORDER BY 参数ID")
+            results = cursor.fetchall()
+            return results
+    finally:
+        connection.close()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

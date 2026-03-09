@@ -17,7 +17,7 @@ from modules.cailiaodingyi.funcs.funcs_pdf_change import (
     query_template_name_by_product
 )
 from modules.cailiaodingyi.funcs.funcs_pdf_input import (
-    move_guankou_to_first, update_template_input_editable_state
+    move_guankou_to_first, move_guankou_attachment_to_second, update_template_input_editable_state
 )
 
 
@@ -294,6 +294,7 @@ def on_combo_changed(guankou_define_info, table, row, col, product_id, viewer_in
         # update_guankou_define_status(product_id, element_name)
         update_element_info = load_element_data_by_product_id(product_id)
         updated_element_info = move_guankou_to_first(update_element_info)
+        updated_element_info = move_guankou_attachment_to_second(updated_element_info)
         print(f"更新后的元件列表{updated_element_info}")
         viewer_instance.render_data_to_table(updated_element_info)
         # 存为模板

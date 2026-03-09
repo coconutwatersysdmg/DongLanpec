@@ -1,5 +1,71 @@
 # modules/cailiaodingyi/funcs/check_dianpian.py
 from modules.cailiaodingyi.db_cnt import get_connection
+from PyQt5.QtWidgets import QMessageBox
+from PyQt5 import QtWidgets
+from modules.cailiaodingyi.funcs.funcs_pdf_change import update_element_name_data, query_element_name_param_value
+
+PN_USER_INPUT_CACHE = {}
+
+def mark_pn_user_input(product_id, gasket_id):
+    try:
+        PN_USER_INPUT_CACHE[(str(product_id or ''), str(gasket_id or ''))] = True
+    except Exception:
+        pass
+
+def clear_pn_user_input(product_id, gasket_id):
+    try:
+        PN_USER_INPUT_CACHE.pop((str(product_id or ''), str(gasket_id or '')), None)
+    except Exception:
+        pass
+
+def is_pn_user_input(product_id, gasket_id):
+    try:
+        return bool(PN_USER_INPUT_CACHE.get((str(product_id or ''), str(gasket_id or '')), False))
+    except Exception:
+        return False
+
+def _norm_out(v):
+    if v is None:
+        return "程序推荐"
+    s = str(v).strip()
+    return s if s else "程序推荐"
+
+DIM_USER_INPUT_CACHE = {}
+
+def mark_dim_user_input(product_id, gasket_id, param_name):
+    try:
+        DIM_USER_INPUT_CACHE[(str(product_id or ''), str(gasket_id or ''), str(param_name or ''))] = True
+    except Exception:
+        pass
+
+def clear_dim_user_input(product_id, gasket_id, param_name):
+    try:
+        DIM_USER_INPUT_CACHE.pop((str(product_id or ''), str(gasket_id or ''), str(param_name or '')), None)
+    except Exception:
+        pass
+
+def is_dim_user_input_cached(product_id, gasket_id, param_name):
+    try:
+        return bool(DIM_USER_INPUT_CACHE.get((str(product_id or ''), str(gasket_id or ''), str(param_name or '')), False))
+    except Exception:
+        return False
+
+def is_dim_user_input(product_id, element_name, param_name):
+    return False
+
+def is_dim_user_input_any(product_id, gasket_id, element_name, param_name):
+    try:
+        return is_dim_user_input_cached(product_id, gasket_id, param_name) or is_dim_user_input(product_id, element_name, param_name)
+    except Exception:
+        return False
+
+def is_dim_weak(product_id, element_name, param_name):
+    try:
+        val = query_element_name_param_value(product_id, element_name, param_name)
+        s = str(val).strip() if val is not None else ""
+        return s == "" or s == "程序推荐"
+    except Exception:
+        return True
 
 db_config1 = {
     "host": "localhost",
@@ -132,13 +198,13 @@ def get_gasket_elements(product_id):
                 SELECT 参数名称, 管程数值, 壳程数值
                 FROM 产品设计活动表_设计数据表
                 WHERE 产品ID = %s
-                  AND 参数名称 IN ('设计压力* ', '设计温度（最高）*', '公称直径*')
+                  AND 参数名称 IN ('设计压力*', '设计温度（最高）*', '公称直径*')
             """, (product_id,))
             rows = cursor4.fetchall()
 
             for r in rows:
                 pname = r["参数名称"]
-                if pname == "设计压力* ":
+                if pname == "设计压力*":
                     design_data["管程设计压力"] = r.get("管程数值")
                     design_data["壳程设计压力"] = r.get("壳程数值")
                 elif pname == "设计温度（最高）*":
@@ -154,6 +220,131 @@ def get_gasket_elements(product_id):
     for item in result:
         item.update(design_data)
     return result
+
+def clear_all_pn_user_input_for_product(product_id):
+    items = get_gasket_elements(product_id)
+    ids = set()
+    for it in items:
+        gid = it.get("垫片元件ID")
+        if gid:
+            ids.add(gid)
+    try:
+        conn = get_connection(**db_config1)
+        with conn.cursor() as cursor:
+            for gid in ids:
+                try:
+                    cursor.execute(
+                        """
+                        SELECT 参数值 FROM 产品设计活动表_元件附加参数表
+                        WHERE 产品ID=%s AND 元件ID=%s AND 参数名称='公称压力PN'
+                        LIMIT 1
+                        """,
+                        (product_id, gid)
+                    )
+                    r0 = cursor.fetchone()
+                    cur_val = (r0.get("参数值") if isinstance(r0, dict) else (r0[0] if r0 else None))
+                    cur_text = str(cur_val).strip() if cur_val is not None else ""
+                    if cur_text == "" or cur_text == "程序推荐":
+                        clear_pn_user_input(product_id, gid)
+                except Exception:
+                    pass
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+def force_recompute_and_update_pn(product_id):
+    from modules.cailiaodingyi.funcs.funcs_pdf_change import compute_pn_for_gasket
+    items = get_gasket_elements(product_id)
+    groups = {}
+    for it in items:
+        gid = it.get("垫片元件ID")
+        gname = (it.get("垫片名称") or "").strip()
+        if gid:
+            groups[(gid, gname)] = True
+    if not groups:
+        return
+    conn = get_connection(**db_config1)
+    nonstd_names = []  # 收集非标垫片名称，统一提示
+    try:
+        with conn.cursor() as cursor:
+            for gid, gname in groups.keys():
+                current_pn_val = None
+                try:
+                    cursor.execute(
+                        """
+                        SELECT 参数值 FROM 产品设计活动表_元件附加参数表
+                        WHERE 产品ID=%s AND 元件ID=%s AND 参数名称='公称压力PN'
+                        LIMIT 1
+                        """,
+                        (product_id, gid)
+                    )
+                    r0 = cursor.fetchone()
+                    if r0:
+                        current_pn_val = (r0.get("参数值") if isinstance(r0, dict) else (r0[0] if r0 else None))
+                except Exception:
+                    current_pn_val = None
+                cur_text = str(current_pn_val).strip() if current_pn_val is not None else ""
+                is_user_manual = is_pn_user_input(product_id, gid)
+                if is_user_manual and (cur_text != "" and cur_text != "程序推荐"):
+                    pass
+                else:
+                    try:
+                        pn_inline = compute_pn_for_gasket(product_id, gname or "")
+                    except Exception:
+                        pn_inline = None
+                    val_to_write = "程序推荐" if pn_inline is None else str(pn_inline)
+                    try:
+                        cursor.execute(
+                            """
+                            UPDATE 产品设计活动表_元件附加参数表
+                            SET 参数值=%s
+                            WHERE 产品ID=%s AND 元件ID=%s AND 参数名称='公称压力PN'
+                            """,
+                            (val_to_write, product_id, gid)
+                        )
+                        conn.commit()
+                    except Exception:
+                        continue
+                    try:
+                        clear_pn_user_input(product_id, gid)
+                    except Exception:
+                        pass
+                try:
+                    from modules.cailiaodingyi.funcs.funcs_pdf_change import resolve_gasket_dimensions, query_element_name_param_value
+                    gasket_standard = query_element_name_param_value(product_id, gname, "垫片标准") or ""
+                    if str(gasket_standard).strip() == "非标垫片":
+                        # 收集非标垫片，后续统一提示
+                        nonstd_names.append(gname)
+                        continue
+                    gasket_type = query_element_name_param_value(product_id, gname, "垫片型式") or query_element_name_param_value(product_id, gname, "垫片类型") or ""
+                    spec = resolve_gasket_dimensions(product_id, gname, gasket_standard, gasket_type, pn=(cur_text if (is_user_manual and (cur_text != "" and cur_text != "程序推荐")) else str(val_to_write)))
+                    try:
+                        d_val = spec.get("外直径D")
+                        d_in = spec.get("内直径d")
+                        d1 = spec.get("环内径d1")
+                        update_element_name_data(product_id, gname, "环内径d1", _norm_out(d1))
+                        update_element_name_data(product_id, gname, "垫片名义外径D2n", _norm_out(d_val))
+                        update_element_name_data(product_id, gname, "垫片名义内径D1n", _norm_out(d_in))
+                        print(f"[条件保存后][DB] 已更新产品{product_id}, 垫片ID={gid}, D2n/D1n/d1={_norm_out(d_val)}/{_norm_out(d_in)}/{_norm_out(d1)}")
+                    except Exception as e:
+                        print(f"[条件保存后][DB] 更新D2n/D1n/d1失败: {e}")
+                except Exception as e:
+                    print(f"[条件保存后] 计算并更新垫片尺寸失败: {e}")
+        # 统一弹窗提示所有非标垫片
+        if nonstd_names:
+            try:
+                parent = QtWidgets.QApplication.activeWindow()
+                msg = f"{'、'.join(nonstd_names)}为非标垫片，无法计算内外径！"
+                box = QMessageBox(QMessageBox.Information, "提示", msg, QMessageBox.NoButton, parent)
+                ok = box.addButton("确认", QMessageBox.YesRole)
+                box.setDefaultButton(ok)
+                box.exec_()
+            except Exception:
+                pass
+    finally:
+        conn.close()
 
 def check_gasket_params(self):
     product_id = getattr(self, "last_confirmed_product_id", None)
@@ -182,7 +373,13 @@ def check_gasket_params(self):
             check_func = GASKET_CHECK_RULES.get(gasket_name)
             if check_func:
                 try:
-                    level, msg = check_func(item)   # ✅ 直接传整个 item
+                    res = check_func(item)
+                    if isinstance(res, tuple) and len(res) == 3:
+                        level, msg, pn_single = res
+                    else:
+                        level, msg = res
+                        pn_single = None
+                    item["_pn_val"] = pn_single
                     if msg:
                         all_msgs.append(f"[{level.upper()}] {msg}")
                 except Exception as inner_e:
@@ -205,6 +402,109 @@ def check_gasket_params(self):
             self.line_tip.setToolTip("所有配套法兰校验通过")
             self.line_tip.setStyleSheet("color: black;")
 
+        groups = {}
+        for it in gasket_data:
+            gid = it.get("垫片元件ID")
+            gname = (it.get("垫片名称") or "").strip()
+            groups.setdefault((gid, gname), []).append(it)
+        for (gid, gname), items in groups.items():
+            flanges = [ (it.get("配套法兰名称") or "").strip() for it in items ]
+            print(f"[垫片校验][组] 垫片ID={gid}, 名称={gname}, 配套法兰={flanges}")
+            chosen_pn = None
+            if gname == "平盖垫片":
+                pn_map = {}
+                for it2 in items:
+                    nm2 = (it2.get("配套法兰名称") or "").strip()
+                    pv2 = it2.get("_pn_val")
+                    if pv2 is not None:
+                        pn_map[nm2] = pv2
+                        print(f"[垫片校验][平盖校验] 垫片={gname}, 法兰={nm2}, PN={pv2}")
+                if "管箱法兰" in pn_map:
+                    chosen_pn = pn_map["管箱法兰"]
+                    print(f"[垫片校验][平盖选择] 垫片={gname}, 选法兰=管箱法兰, PN={chosen_pn}")
+                else:
+                    for it2 in items:
+                        nm2 = (it2.get("配套法兰名称") or "").strip()
+                        if nm2 in pn_map:
+                            chosen_pn = pn_map[nm2]
+                            print(f"[垫片校验][平盖选择] 垫片={gname}, 选法兰={nm2}, PN={chosen_pn}")
+                            break
+            else:
+                pn_vals = []
+                for it in items:
+                    pv = it.get("_pn_val")
+                    if pv is not None:
+                        pn_vals.append(pv)
+                if pn_vals:
+                    try:
+                        chosen_pn = max(pn_vals)
+                    except Exception:
+                        chosen_pn = pn_vals[-1]
+                    print(f"[垫片校验][聚合最大] 垫片={gname}, 候选PN={pn_vals} → 取最大={chosen_pn}")
+            if chosen_pn is not None:
+                try:
+                    conn = get_connection(**db_config1)
+                    with conn.cursor() as cursor:
+                        current_pn_val = None
+                        pn_source = None
+                        try:
+                            cursor.execute(
+                                """
+                                SELECT 参数值 FROM 产品设计活动表_元件附加参数表
+                                WHERE 产品ID=%s AND 元件ID=%s AND 参数名称='公称压力PN'
+                                LIMIT 1
+                                """,
+                                (product_id, gid)
+                            )
+                            r0 = cursor.fetchone()
+                            if r0:
+                                current_pn_val = (r0.get("参数值") if isinstance(r0, dict) else (r0[0] if r0 else None))
+                        except Exception:
+                            pass
+
+                        cur_text = str(current_pn_val).strip() if current_pn_val is not None else ""
+                        is_user_manual = is_pn_user_input(product_id, gid)
+
+                        if (not is_user_manual) or (cur_text == "" or cur_text == "程序推荐"):
+                            cursor.execute(
+                                """
+                                UPDATE 产品设计活动表_元件附加参数表
+                                SET 参数值=%s
+                                WHERE 产品ID=%s AND 元件ID=%s AND 参数名称='公称压力PN'
+                                """,
+                                (chosen_pn, product_id, gid)
+                            )
+                            conn.commit()
+                            try:
+                                clear_pn_user_input(product_id, gid)
+                            except Exception:
+                                pass
+                            try:
+                                from modules.cailiaodingyi.funcs.funcs_pdf_change import resolve_gasket_dimensions, query_element_name_param_value
+                                gasket_standard = query_element_name_param_value(product_id, gname, "垫片标准") or ""
+                                gasket_type = query_element_name_param_value(product_id, gname, "垫片型式") or query_element_name_param_value(product_id, gname, "垫片类型") or ""
+                                spec = resolve_gasket_dimensions(product_id, gname, gasket_standard, gasket_type, pn=str(chosen_pn))
+                                try:
+                                    d_val = spec.get("外直径D")
+                                    d_in = spec.get("内直径d")
+                                    d1 = spec.get("环内径d1")
+                                    if (not is_dim_user_input_any(product_id, gid, gname, "环内径d1")) and is_dim_weak(product_id, gname, "环内径d1"):
+                                        update_element_name_data(product_id, gname, "环内径d1", _norm_out(d1))
+                                    if (not is_dim_user_input_any(product_id, gid, gname, "垫片名义外径D2n")) and is_dim_weak(product_id, gname, "垫片名义外径D2n"):
+                                        update_element_name_data(product_id, gname, "垫片名义外径D2n", _norm_out(d_val))
+                                    if (not is_dim_user_input_any(product_id, gid, gname, "垫片名义内径D1n")) and is_dim_weak(product_id, gname, "垫片名义内径D1n"):
+                                        update_element_name_data(product_id, gname, "垫片名义内径D1n", _norm_out(d_in))
+                                    print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gid}, D2n/D1n/d1={_norm_out(d_val)}/{_norm_out(d_in)}/{_norm_out(d1)}")
+                                except Exception as e:
+                                    print(f"[垫片校验][DB] 更新D2n/D1n/d1失败: {e}")
+                            except Exception as e:
+                                print(f"[垫片校验] 计算并更新垫片尺寸失败: {e}")
+                            print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gid}, 公称压力={chosen_pn}")
+                        else:
+                            print(f"[垫片校验][DB] 保留当前PN，不覆盖推荐={chosen_pn}")
+                finally:
+                    conn.close()
+
 
     except Exception as e:
         print(f"[垫片校验] 执行出错: {e}")
@@ -220,7 +520,7 @@ def check_general_gasket(item):
     material_list = item.get("法兰材料牌号", [])
 
     if not material_list:
-        return "warn", f"[{gasket_name}] 未找到材料牌号，无法校验"
+        return "warn", f"[{gasket_name}] 未找到材料牌号，无法校验", None
 
     material = material_list[0]
     messages = []
@@ -234,36 +534,82 @@ def check_general_gasket(item):
     p_val = item.get("管程设计压力") if course_flange == "管程" else item.get("壳程设计压力")
     t_val = item.get("管程设计温度") if course_flange == "管程" else item.get("壳程设计温度")
 
+    flange_name = item["配套法兰名称"]
+    print(f"[垫片校验][逐条] 垫片={gasket_name}, 法兰={flange_name}, 侧别={course_flange}, 材料={material}, P={p_val}, T={t_val}")
     level, msg, pn_val = calc_pressure_limit(
         material, t_val, p_val,
         product_id, gasket_id,
-        gasket_name, item["配套法兰名称"]
+        gasket_name, flange_name
     )
     if msg:
         messages.append(msg)
-    if pn_val:
-        pn_candidates.append(pn_val)
-
-    # === 汇总多个法兰 → 取最大 PN ===
-    if pn_candidates:
-        max_pn = max(pn_candidates)
-        print(f"[垫片校验][汇总] 垫片={gasket_name}, 候选PN={pn_candidates} → 取最大={max_pn}")
+    pn_out = pn_val if pn_val else None
+    if pn_out is not None:
         try:
             conn = get_connection(**db_config1)
             with conn.cursor() as cursor:
-                cursor.execute("""
-                    UPDATE 产品设计活动表_元件附加参数表
-                    SET 参数值=%s
-                    WHERE 产品ID=%s AND 元件ID=%s AND 参数名称='公称压力PN'
-                """, (max_pn, product_id, gasket_id))
-                conn.commit()
-                print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, 公称压力={max_pn}")
+                current_pn_val = None
+                pn_source = None
+                try:
+                    cursor.execute(
+                        """
+                        SELECT 参数值 FROM 产品设计活动表_元件附加参数表
+                        WHERE 产品ID=%s AND 元件ID=%s AND 参数名称='公称压力PN'
+                        LIMIT 1
+                        """,
+                        (product_id, gasket_id)
+                    )
+                    r0 = cursor.fetchone()
+                    if r0:
+                        current_pn_val = (r0.get("参数值") if isinstance(r0, dict) else (r0[0] if r0 else None))
+                except Exception:
+                    pass
+
+                cur_text = str(current_pn_val).strip() if current_pn_val is not None else ""
+                is_user_manual = is_pn_user_input(product_id, gasket_id)
+
+                if (not is_user_manual) or (cur_text == "" or cur_text == "程序推荐"):
+                    cursor.execute(
+                        """
+                        UPDATE 产品设计活动表_元件附加参数表
+                        SET 参数值=%s
+                        WHERE 产品ID=%s AND 元件ID=%s AND 参数名称='公称压力PN'
+                        """,
+                        (pn_out, product_id, gasket_id)
+                    )
+                    conn.commit()
+                    try:
+                        clear_pn_user_input(product_id, gasket_id)
+                    except Exception:
+                        pass
+                    try:
+                        from modules.cailiaodingyi.funcs.funcs_pdf_change import resolve_gasket_dimensions, query_element_name_param_value
+                        gasket_standard = query_element_name_param_value(product_id, gasket_name, "垫片标准") or ""
+                        gasket_type = query_element_name_param_value(product_id, gasket_name, "垫片型式") or query_element_name_param_value(product_id, gasket_name, "垫片类型") or ""
+                        spec = resolve_gasket_dimensions(product_id, gasket_name, gasket_standard, gasket_type, pn=str(pn_out))
+                        try:
+                            d_val = spec.get("外直径D")
+                            d_in = spec.get("内直径d")
+                            d1 = spec.get("环内径d1")
+                            if (not is_dim_user_input_any(product_id, gasket_id, gasket_name, "环内径d1")) and is_dim_weak(product_id, gasket_name, "环内径d1"):
+                                update_element_name_data(product_id, gasket_name, "环内径d1", _norm_out(d1))
+                            if (not is_dim_user_input_any(product_id, gasket_id, gasket_name, "垫片名义外径D2n")) and is_dim_weak(product_id, gasket_name, "垫片名义外径D2n"):
+                                update_element_name_data(product_id, gasket_name, "垫片名义外径D2n", _norm_out(d_val))
+                            if (not is_dim_user_input_any(product_id, gasket_id, gasket_name, "垫片名义内径D1n")) and is_dim_weak(product_id, gasket_name, "垫片名义内径D1n"):
+                                update_element_name_data(product_id, gasket_name, "垫片名义内径D1n", _norm_out(d_in))
+                            print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, D2n/D1n/d1={_norm_out(d_val)}/{_norm_out(d_in)}/{_norm_out(d1)}")
+                        except Exception as e:
+                            print(f"[垫片校验][DB] 更新D2n/D1n/d1失败: {e}")
+                    except Exception as e:
+                        print(f"[垫片校验] 计算并更新垫片尺寸失败: {e}")
+                    print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, 公称压力={pn_out}")
+                else:
+                    print(f"[垫片校验][DB] 保留当前PN，不覆盖推荐={pn_out}")
         finally:
             conn.close()
-
     if messages:
-        return "warn", "；".join(messages)
-    return "ok", ""
+        return "warn", "；".join(messages), pn_out
+    return "ok", "", pn_out
 
 def check_floating_head_gasket(item):
     """
@@ -280,7 +626,7 @@ def check_floating_head_gasket(item):
     material_list = item.get("法兰材料牌号", [])
 
     if not material_list:
-        return "warn", f"[{gasket_name}-{flange_name}] 未找到材料牌号，无法校验"
+        return "warn", f"[{gasket_name}-{flange_name}] 未找到材料牌号，无法校验", None
 
     material = material_list[0]
     messages = []
@@ -346,6 +692,7 @@ def check_floating_head_gasket(item):
             messages.append(f"[{gasket_name}-{flange_name}] 设计温度超限，垫片尺寸将由程序推荐，用户可对其进行更改")
 
     # === STEP5: 设计压力校验 ===
+    print(f"[垫片校验][逐条] 垫片={gasket_name}, 法兰={flange_name}, 侧别={course_gasket}, 材料={material}, P={p_val}, T={t_val}")
     level, msg, pn_val = calc_pressure_limit(
         material, t_val, p_val,
         product_id, gasket_id,
@@ -353,29 +700,82 @@ def check_floating_head_gasket(item):
     )
     if msg:
         messages.append(msg)
-    if pn_val:
-        pn_candidates.append(pn_val)
-
-    # === 汇总多个法兰 → 取最大 PN ===
-    if pn_candidates:
-        max_pn = max(pn_candidates)
-        print(f"[垫片校验][汇总] 垫片={gasket_name}, 候选PN={pn_candidates} → 取最大={max_pn}")
+    pn_out = pn_val if pn_val else None
+    if pn_out is not None:
         try:
             conn = get_connection(**db_config1)
             with conn.cursor() as cursor:
-                cursor.execute("""
-                    UPDATE 产品设计活动表_元件附加参数表
-                    SET 参数值=%s
-                    WHERE 产品ID=%s AND 元件ID=%s AND 参数名称='公称压力PN'
-                """, (max_pn, product_id, gasket_id))
-                conn.commit()
-                print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, 公称压力={max_pn}")
+                current_pn_val = None
+                pn_source = None
+                try:
+                    cursor.execute(
+                        """
+                        SELECT 参数值 FROM 产品设计活动表_元件附加参数表
+                        WHERE 产品ID=%s AND 元件ID=%s AND 参数名称='公称压力PN'
+                        LIMIT 1
+                        """,
+                        (product_id, gasket_id)
+                    )
+                    r0 = cursor.fetchone()
+                    if r0:
+                        current_pn_val = (r0.get("参数值") if isinstance(r0, dict) else (r0[0] if r0 else None))
+                except Exception:
+                    pass
+
+                def _to_float_safe(x):
+                    try:
+                        s = str(x).strip()
+                        if s.upper().startswith("PN"):
+                            s = s[2:].strip()
+                        return float(s)
+                    except Exception:
+                        return None
+
+                cur_text = str(current_pn_val).strip() if current_pn_val is not None else ""
+                is_user_manual = is_pn_user_input(product_id, gasket_id)
+
+                if (not is_user_manual) or (cur_text == "" or cur_text == "程序推荐"):
+                    cursor.execute(
+                        """
+                        UPDATE 产品设计活动表_元件附加参数表
+                        SET 参数值=%s
+                        WHERE 产品ID=%s AND 元件ID=%s AND 参数名称='公称压力PN'
+                        """,
+                        (pn_out, product_id, gasket_id)
+                    )
+                    conn.commit()
+                    try:
+                        clear_pn_user_input(product_id, gasket_id)
+                    except Exception:
+                        pass
+                    try:
+                        from modules.cailiaodingyi.funcs.funcs_pdf_change import resolve_gasket_dimensions, query_element_name_param_value
+                        gasket_standard = query_element_name_param_value(product_id, gasket_name, "垫片标准") or ""
+                        gasket_type = query_element_name_param_value(product_id, gasket_name, "垫片型式") or query_element_name_param_value(product_id, gasket_name, "垫片类型") or ""
+                        spec = resolve_gasket_dimensions(product_id, gasket_name, gasket_standard, gasket_type, pn=str(pn_out))
+                        try:
+                            d_val = spec.get("外直径D")
+                            d_in = spec.get("内直径d")
+                            d1 = spec.get("环内径d1")
+                            if (not is_dim_user_input_any(product_id, gasket_id, gasket_name, "环内径d1")) and is_dim_weak(product_id, gasket_name, "环内径d1"):
+                                update_element_name_data(product_id, gasket_name, "环内径d1", _norm_out(d1))
+                            if (not is_dim_user_input_any(product_id, gasket_id, gasket_name, "垫片名义外径D2n")) and is_dim_weak(product_id, gasket_name, "垫片名义外径D2n"):
+                                update_element_name_data(product_id, gasket_name, "垫片名义外径D2n", _norm_out(d_val))
+                            if (not is_dim_user_input_any(product_id, gasket_id, gasket_name, "垫片名义内径D1n")) and is_dim_weak(product_id, gasket_name, "垫片名义内径D1n"):
+                                update_element_name_data(product_id, gasket_name, "垫片名义内径D1n", _norm_out(d_in))
+                            print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, D2n/D1n/d1={_norm_out(d_val)}/{_norm_out(d_in)}/{_norm_out(d1)}")
+                        except Exception as e:
+                            print(f"[垫片校验][DB] 更新D2n/D1n/d1失败: {e}")
+                    except Exception as e:
+                        print(f"[垫片校验] 计算并更新垫片尺寸失败: {e}")
+                    print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, 公称压力={pn_out}")
+                else:
+                    print(f"[垫片校验][DB] 保留当前PN，不覆盖推荐={pn_out}")
         finally:
             conn.close()
-
     if messages:
-        return "warn", "；".join(messages)
-    return "ok", ""
+        return "warn", "；".join(messages), pn_out
+    return "ok", "", pn_out
 
 
 def check_outer_head_gasket(item):
@@ -394,7 +794,7 @@ def check_outer_head_gasket(item):
     material_list = item.get("法兰材料牌号", [])
 
     if not material_list:
-        return "warn", f"[{gasket_name}-{flange_name}] 未找到材料牌号，无法校验"
+        return "warn", f"[{gasket_name}-{flange_name}] 未找到材料牌号，无法校验", None
 
     material = material_list[0]
     messages = []
@@ -486,6 +886,7 @@ def check_outer_head_gasket(item):
     else:
         p_val, t_val = None, None
 
+    print(f"[垫片校验][逐条] 垫片={gasket_name}, 法兰={flange_name}, 侧别={course_flange}, 材料={material}, P={p_val}, T={t_val}")
     level, msg, pn_val = calc_pressure_limit(
         material, t_val, p_val,
         product_id, gasket_id,
@@ -493,29 +894,72 @@ def check_outer_head_gasket(item):
     )
     if msg:
         messages.append(msg)
-    if pn_val:
-        pn_candidates.append(pn_val)
-
-    # === 汇总多个法兰 → 取最大 PN ===
-    if pn_candidates:
-        max_pn = max(pn_candidates)
-        print(f"[垫片校验][汇总] 垫片={gasket_name}, 候选PN={pn_candidates} → 取最大={max_pn}")
+    pn_out = pn_val if pn_val else None
+    if pn_out is not None:
         try:
             conn = get_connection(**db_config1)
             with conn.cursor() as cursor:
-                cursor.execute("""
-                    UPDATE 产品设计活动表_元件附加参数表
-                    SET 参数值=%s
-                    WHERE 产品ID=%s AND 元件ID=%s AND 参数名称='公称压力PN'
-                """, (max_pn, product_id, gasket_id))
-                conn.commit()
-                print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, 公称压力={max_pn}")
+                current_pn_val = None
+                try:
+                    cursor.execute(
+                        """
+                        SELECT 参数值 FROM 产品设计活动表_元件附加参数表
+                        WHERE 产品ID=%s AND 元件ID=%s AND 参数名称='公称压力PN'
+                        LIMIT 1
+                        """,
+                        (product_id, gasket_id)
+                    )
+                    r0 = cursor.fetchone()
+                    if r0:
+                        current_pn_val = (r0.get("参数值") if isinstance(r0, dict) else (r0[0] if r0 else None))
+                except Exception:
+                    pass
+
+                cur_text = str(current_pn_val).strip() if current_pn_val is not None else ""
+                is_user_manual = is_pn_user_input(product_id, gasket_id)
+
+                if (not is_user_manual) or (cur_text == "" or cur_text == "程序推荐"):
+                    cursor.execute(
+                        """
+                        UPDATE 产品设计活动表_元件附加参数表
+                        SET 参数值=%s
+                        WHERE 产品ID=%s AND 元件ID=%s AND 参数名称='公称压力PN'
+                        """,
+                        (pn_out, product_id, gasket_id)
+                    )
+                    conn.commit()
+                    try:
+                        clear_pn_user_input(product_id, gasket_id)
+                    except Exception:
+                        pass
+                    try:
+                        from modules.cailiaodingyi.funcs.funcs_pdf_change import resolve_gasket_dimensions, query_element_name_param_value
+                        gasket_standard = query_element_name_param_value(product_id, gasket_name, "垫片标准") or ""
+                        gasket_type = query_element_name_param_value(product_id, gasket_name, "垫片型式") or query_element_name_param_value(product_id, gasket_name, "垫片类型") or ""
+                        spec = resolve_gasket_dimensions(product_id, gasket_name, gasket_standard, gasket_type, pn=str(pn_out))
+                        try:
+                            d_val = spec.get("外直径D")
+                            d_in = spec.get("内直径d")
+                            d1 = spec.get("环内径d1")
+                            if (not is_dim_user_input_any(product_id, gasket_id, gasket_name, "环内径d1")) and is_dim_weak(product_id, gasket_name, "环内径d1"):
+                                update_element_name_data(product_id, gasket_name, "环内径d1", _norm_out(d1))
+                            if (not is_dim_user_input_any(product_id, gasket_id, gasket_name, "垫片名义外径D2n")) and is_dim_weak(product_id, gasket_name, "垫片名义外径D2n"):
+                                update_element_name_data(product_id, gasket_name, "垫片名义外径D2n", _norm_out(d_val))
+                            if (not is_dim_user_input_any(product_id, gasket_id, gasket_name, "垫片名义内径D1n")) and is_dim_weak(product_id, gasket_name, "垫片名义内径D1n"):
+                                update_element_name_data(product_id, gasket_name, "垫片名义内径D1n", _norm_out(d_in))
+                            print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, D2n/D1n/d1={_norm_out(d_val)}/{_norm_out(d_in)}/{_norm_out(d1)}")
+                        except Exception as e:
+                            print(f"[垫片校验][DB] 更新D2n/D1n/d1失败: {e}")
+                    except Exception as e:
+                        print(f"[垫片校验] 计算并更新垫片尺寸失败: {e}")
+                    print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, 公称压力={pn_out}")
+                else:
+                    print(f"[垫片校验][DB] 保留当前PN，不覆盖推荐={pn_out}")
         finally:
             conn.close()
-
     if messages:
-        return "warn", "；".join(messages)
-    return "ok", ""
+        return "warn", "；".join(messages), pn_out
+    return "ok", "", pn_out
 
 
 def calc_pressure_limit(material, T, P, product_id, gasket_id, gasket_name, flange_name):
@@ -523,7 +967,7 @@ def calc_pressure_limit(material, T, P, product_id, gasket_id, gasket_name, flan
     根据压力等级表计算设计压力是否超限
     返回: (level, message, pn_val)
     """
-    print(f"[设计压力校验][DEBUG] 开始校验 → 材料={material}, T={T}, P={P}")
+    print(f"[设计压力校验][DEBUG] 开始校验 → 垫片={gasket_name}, 法兰={flange_name}, 材料={material}, T={T}, P={P}")
 
     # === 空值保护 ===
     if not T or not P or str(T).strip() == "" or str(P).strip() == "" or str(P).strip() == "程序推荐":

@@ -4,15 +4,19 @@ from PyQt5.QtGui import QBrush, QColor
 
 import modules.chanpinguanli.bianl as bianl
 from PyQt5.QtWidgets import QFileDialog, QMessageBox, QTableWidgetItem, QComboBox
-from PyQt5.QtCore import QDate, Qt
+from PyQt5.QtCore import QDate, Qt, QTimer
 import modules.chanpinguanli.common_usage as common_usage
 import traceback
+# from modules.chanpinguanli.chanpinguanli_main import product_manager
 from modules.chanpinguanli.product_confirm_qianzhi import set_row_editable
 from PyQt5.QtWidgets import QComboBox
 
 from PyQt5.QtWidgets import QComboBox
 from PyQt5.QtWidgets import QLineEdit
 from PyQt5.QtWidgets import QFileDialog
+
+
+
 
 # 初始化让产品信息表格的字体的颜色是灰色的
 
@@ -25,7 +29,20 @@ from PyQt5.QtWidgets import QFileDialog
 #     except Exception as e:
 #         print("项目，文件夹写入最近路径失败", e)
 
+# 初始化提示定时器（确保只初始化一次）
+def init_tip_timer():
+    if not hasattr(bianl, 'tip_timer'):
+        bianl.tip_timer = QTimer()
+        bianl.tip_timer.setSingleShot(True)
+        bianl.tip_timer.timeout.connect(clear_line_tip)
 
+# 清空提示信息的函数
+def clear_line_tip():
+    """5秒后自动清空line_tip的文本和样式"""
+    if hasattr(bianl.main_window, "line_tip") and bianl.main_window.line_tip:
+        bianl.main_window.line_tip.setText("")
+        bianl.main_window.line_tip.setStyleSheet("")
+        bianl.main_window.line_tip.setToolTip("")
 
 def get_last_used_path():
     try:
@@ -131,9 +148,60 @@ def unlock_line_edit(line_edit: QLineEdit):
     line_edit.setReadOnly(False)
     line_edit.setStyleSheet("")
 
+# 1015
+def clear_and_lock_product_details():
+    """
+    【新增辅助函数】
+    当项目不包含任何产品时，调用此函数来清空并锁定
+    “产品定义”和“工作信息”区域的所有控件。
+    """
+    print("[清除操作] 项目不含产品，正在清空并锁定产品详情区域...")
+
+    # 1. 清空全局产品ID
+    bianl.product_id = None
+    bianl.current_product_id = None
+
+    # 2. 清空并锁定“产品定义”区域的控件
+    bianl.product_type_combo.setCurrentText("")  # 清空下拉框
+    lock_combo(bianl.product_type_combo)  # 锁定下拉框
+
+    bianl.product_form_combo.setCurrentText("")  # 清空下拉框
+    lock_combo(bianl.product_form_combo)  # 锁定下拉框
+
+    bianl.product_model_input.clear()  # 清空输入框
+    lock_line_edit(bianl.product_model_input)  # 锁定输入框
+
+    bianl.drawing_prefix_input.clear()  # 清空输入框
+    lock_line_edit(bianl.drawing_prefix_input)  # 锁定输入框
+
+    # 3. 清空并锁定“工作信息”区域的控件
+    bianl.design_input.clear()
+    lock_line_edit(bianl.design_input)
+
+    bianl.proofread_input.clear()
+    lock_line_edit(bianl.proofread_input)
+
+    bianl.review_input.clear()
+    lock_line_edit(bianl.review_input)
+
+    bianl.standardization_input.clear()
+    lock_line_edit(bianl.standardization_input)
+
+    bianl.approval_input.clear()
+    lock_line_edit(bianl.approval_input)
+
+    bianl.co_signature_input.clear()
+    lock_line_edit(bianl.co_signature_input)
+
+
+# ▲▲▲ 新函数结束 ▲▲▲
 
 
 def open_project():
+    # ▼▼▼ 在函数内部添加导入语句 ▼▼▼
+    from modules.chanpinguanli.chanpinguanli_main import product_manager
+    # 初始化定时器
+    init_tip_timer()
     try:
         default_path = get_last_used_path()
         folder_path = QFileDialog.getExistingDirectory(bianl.main_window, "选择项目文件夹", default_path)
@@ -246,7 +314,10 @@ def open_project():
                 bianl.product_table.setItem(row, 1, QTableWidgetItem(product.get("产品名称", "")))  # 列1：产品名称
                 bianl.product_table.setItem(row, 2, QTableWidgetItem(product.get("设备位号", "")))  # 列2：设备位号
                 bianl.product_table.setItem(row, 3, QTableWidgetItem(product.get("产品编号", "")))  # 列3：产品编号
-                bianl.product_table.setItem(row, 4, QTableWidgetItem(product.get("设计阶段", "")))  # 列3：产品编号
+                # 1108新修改-设计阶段左对齐显示
+                stage_item = QTableWidgetItem(product.get("设计阶段", ""))
+                stage_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # 设计阶段列左对齐
+                bianl.product_table.setItem(row, 4, stage_item)
                 bianl.product_table.setItem(row, 5, QTableWidgetItem(product.get("设计版次", "")))  # 列5：设计版次
 
                 # --- 设计阶段（重点调试）---
@@ -345,6 +416,10 @@ def open_project():
             bianl.product_id = first_product_id
             bianl.current_product_id = first_product_id
 
+            # 1016修改
+            product_manager.product_id_changed.emit(first_product_id)
+
+
             # 1) 产品定义区：来自 产品需求表
             bianl.product_type_combo.setCurrentText(first_product.get("产品类型", "") or "")
             bianl.product_form_combo.setCurrentText(first_product.get("产品型式", "") or "")
@@ -414,11 +489,17 @@ def open_project():
                 unlock_line_edit(bianl.standardization_input)
                 unlock_line_edit(bianl.approval_input)
                 unlock_line_edit(bianl.co_signature_input)
-
                 print("第 1 行产品未定义，可编辑")
-
             print(f"[open_project] 自动显示第 1 行（含工作信息）完成：产品ID={first_product_id}")
-
+        # 1015
+        else:
+            # 当项目没有任何产品时，执行清空和锁定操作
+            bianl.product_type_combo.setCurrentIndex(-1)  # 重置产品类型下拉框
+            bianl.product_form_combo.setCurrentIndex(-1)  # 重置产品形式下拉框
+            clear_and_lock_product_details()
+            # 发射信号，传递 None 来通知主窗口清空产品信息
+            product_manager.product_id_changed.emit(None)
+        # ▲▲▲ 修复结束 ▲▲▲
         bianl.product_info_group.show()
 
         print("项目和产品数据加载成功！")  # 调试信息
@@ -447,6 +528,8 @@ def open_project():
         bianl.main_window.line_tip.setText("项目和产品数据加载成功！")
         bianl.main_window.line_tip.setToolTip("项目和产品数据加载成功！")
         bianl.main_window.line_tip.setStyleSheet("color: black;")
+        bianl.tip_timer.stop()
+        bianl.tip_timer.start(5000)
         # QMessageBox.information(bianl.main_window, "成功", "项目和产品数据加载成功！")
         # 存最近打开的项目文件夹
         # parent_folder = os.path.dirname(folder_path)
