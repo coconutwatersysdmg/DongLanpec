@@ -9096,492 +9096,565 @@ class TubeLayoutEditor(QMainWindow):
         - 使用 self._last_valid_values 存放上一次被判定为合法（全部三值存在且满足约束）的值字典
         - 在恢复写回期间禁用一致性钩子与 itemChanged，避免重入和多重弹窗
         """
-        from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QComboBox
-        from PyQt5.QtCore import QCoreApplication, QSignalBlocker
+        # 全局异常捕获，确保函数执行出错时不会导致程序闪退
+        try:
+            from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QComboBox
+            from PyQt5.QtCore import QCoreApplication, QSignalBlocker
+            import traceback
 
-        # 若当前处于程序写回/回滚的抑制期，直接跳过，避免“关掉又弹”的连锁触发
-        if getattr(self, "_suppress_consistency_hook", False):
-            print(
-                f"[check_diameter_consistency DEBUG] suppress=True，跳过检查（来源：{trigger_name}）"
-            )
-            return True
-
-        # 查找三行索引
-        dn_row = di_row = dl_row = -1
-        for r in range(self.param_table.rowCount()):
-            item = self.param_table.item(r, 1)
-            if not item:
-                continue
-            name = item.text().strip()
-            if name == "公称直径 DN":
-                dn_row = r
-            elif name == "壳体内直径 Dis":
-                di_row = r
-            elif name == "布管限定圆 DL":
-                dl_row = r
-
-        # DN 和 DL 缺一不可；Di 可以在某些型号下不存在，此时仍需保证 DL <= DN
-        if dn_row == -1 or dl_row == -1:
-            print(
-                "[check_diameter_consistency WARN] DN 或 DL 参数行未找到，跳过检查。"
-            )
-            return
-
-        # 检查是否有关键行被隐藏：DN 或 DL 被隐藏则无法检查；Di 隐藏时仍可检查 DL <= DN
-        if self.param_table.isRowHidden(dn_row) or self.param_table.isRowHidden(dl_row):
-            print(
-                "[check_diameter_consistency WARN] DN 或 DL 参数行被隐藏，跳过检查。"
-            )
-            return
-
-        # 读取单元格的 float 值（支持 QComboBox 与 文本）
-        def _read_value(row):
-            widget = self.param_table.cellWidget(row, 2)
-            if isinstance(widget, QComboBox):
-                text = widget.currentText().strip()
-            else:
-                item = self.param_table.item(row, 2)
-                text = item.text().strip() if item else None
-            try:
-                return float(text)
-            except (TypeError, ValueError):
-                return None
-
-        dn = _read_value(dn_row)
-        di = _read_value(di_row) if di_row != -1 and not self.param_table.isRowHidden(di_row) else None
-        dl = _read_value(dl_row)
-
-        print(
-            f"[check_diameter_consistency DEBUG] 触发源={trigger_name} → DN={dn}, Di={di}, DL={dl}"
-        )
-
-        # 若 DN 或 DL 无效，则不做强制检查（避免误判）；Di 允许缺失
-        if dn is None or dl is None:
-            print("[check_diameter_consistency WARN] DN 或 DL 存在无效数值，跳过约束检查。")
-            return False
-
-        # =========================================================
-        # temp1/temp2 机制（优先）：每次布管 calculate_piping_layout 初始化 temp1
-        # - temp1：最后一次通过检查的基准值
-        # - temp2：本次用户修改后的候选值（当前表格读到的 dn/di/dl）
-        # 通过：temp2 -> temp1；不通过：回写到 temp1（只回写被修改的那一个）
-        # =========================================================
-        # 获取"是否以外径为基准"参数值
-        is_outer_diameter_base = self.get_is_outer_diameter_base()
-        print(f"[check_diameter_consistency] 是否以外径为基准: {is_outer_diameter_base}")
-
-        # 始终要求：DL <= DN；在此基础上，根据"是否以外径为基准"和 Di 是否存在决定是否再加 Di 相关约束
-        cond_dn_dl = dn >= dl
-        if is_outer_diameter_base == "是":
-            # 以外径为基准：Di 存在时要求 Di >= DL，否则只检查 DL <= DN
-            cond_di_dl = True if di is None else (di >= dl)
-            check_condition = cond_dn_dl and cond_di_dl
-            print(
-                f"[check_diameter_consistency] 以外径为基准模式，检查条件: DL({dl}) <= DN({dn}) 且 "
-                f"{'略过 Di 检查 (Di 缺失)' if di is None else f'Di({di}) >= DL({dl})'} = {check_condition}"
-            )
-        else:
-            # 不以外径为基准：Di 存在时检查 DN >= Di >= DL；缺失时至少保证 DL <= DN
-            if di is not None:
-                cond_chain = dn >= di >= dl
-                check_condition = cond_dn_dl and cond_chain
+            # 若当前处于程序写回/回滚的抑制期，直接跳过，避免“关掉又弹”的连锁触发
+            if getattr(self, "_suppress_consistency_hook", False):
                 print(
-                    f"[check_diameter_consistency] 非以外径为基准模式，检查条件: "
-                    f"DL({dl}) <= DN({dn}) 且 DN({dn}) >= Di({di}) >= DL({dl}) = {check_condition}"
-                )
-            else:
-                check_condition = cond_dn_dl
-                print(
-                    f"[check_diameter_consistency] 非以外径为基准模式 (Di 缺失)，检查条件: DL({dl}) <= DN({dn}) = {check_condition}"
-                )
-
-        temp1 = getattr(self, "_dn_di_dl_temp1", None)
-        if isinstance(temp1, dict) and all(k in temp1 for k in ("DN", "Di", "DL")):
-            self._dn_di_dl_temp2 = {"DN": dn, "Di": di, "DL": dl}
-
-            if check_condition:
-                # 合法：提升 temp2 为 temp1
-                self._dn_di_dl_temp1 = {"DN": dn, "Di": di, "DL": dl}
-                self._last_valid_values = dict(self._dn_di_dl_temp1)
-                self._dn_di_dl_no_history_warned = False
-                if hasattr(self, "_dn_di_dl_no_history_warned"):
-                    self._dn_di_dl_no_history_warned = False
-                print(
-                    f"[DN/Di/DL temp] 校验通过：temp2 -> temp1: {self._dn_di_dl_temp1}"
+                    f"[check_diameter_consistency DEBUG] suppress=True，跳过检查（来源：{trigger_name}）"
                 )
                 return True
 
-            # 不合法：弹窗 + 回写到 temp1
-            if is_outer_diameter_base == "是":
-                warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）"
-            else:
-                warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！"
-            QMessageBox.warning(
-                self,
-                "提示",
-                warning_msg,
-            )
+            # 查找三行索引
+            dn_row = di_row = dl_row = -1
+            for r in range(self.param_table.rowCount()):
+                item = self.param_table.item(r, 1)
+                if not item:
+                    continue
+                name = item.text().strip()
+                if name == "公称直径 DN":
+                    dn_row = r
+                elif name == "壳体内直径 Dis":
+                    di_row = r
+                elif name == "布管限定圆 DL":
+                    dl_row = r
 
-            # 写回函数（复用本函数的写表能力）
-            def _write_value(row, value):
-                widget = self.param_table.cellWidget(row, 2)
-                if value is None:
-                    return
-                str_val = str(int(value)) if float(value) == int(float(value)) else f"{float(value):.1f}"
-                if isinstance(widget, QComboBox):
-                    idx = widget.findText(str_val)
-                    if idx >= 0:
-                        widget.setCurrentIndex(idx)
-                    else:
-                        try:
-                            widget.setEditText(str_val)
-                        except Exception:
-                            self.param_table.setItem(row, 2, QTableWidgetItem(str_val))
-                else:
-                    item = self.param_table.item(row, 2)
-                    if item:
-                        item.setText(str_val)
-                    else:
-                        self.param_table.setItem(row, 2, QTableWidgetItem(str_val))
+            # DN 和 DL 缺一不可；Di 可以在某些型号下不存在，此时仍需保证 DL <= DN
+            if dn_row == -1 or dl_row == -1:
+                print(
+                    "[check_diameter_consistency WARN] DN 或 DL 参数行未找到，跳过检查。"
+                )
+                return
 
-            # “改了哪个就回写哪个”，否则回写三项
-            trigger_to_field = {
-                "公称直径 DN": ("DN", dn_row),
-                "壳体内直径 Dis": ("Di", di_row),
-                "布管限定圆 DL": ("DL", dl_row),
-                "user_update_Di": ("Di", di_row),
-            }
-            target = trigger_to_field.get(str(trigger_name), None)
+            # 检查是否有关键行被隐藏：DN 或 DL 被隐藏则无法检查；Di 隐藏时仍可检查 DL <= DN
+            if self.param_table.isRowHidden(dn_row) or self.param_table.isRowHidden(dl_row):
+                print(
+                    "[check_diameter_consistency WARN] DN 或 DL 参数行被隐藏，跳过检查。"
+                )
+                return
 
-            self._suppress_consistency_hook = True
-            original_handler = None
-            if hasattr(self, "handle_param_change"):
+            # 读取单元格的 float 值（支持 QComboBox 与 文本）
+            def _read_value(row):
                 try:
-                    self.param_table.itemChanged.disconnect(self.handle_param_change)
-                    original_handler = self.handle_param_change
-                except Exception:
-                    original_handler = None
-
-            try:
-                self.param_table.blockSignals(True)
-                if target:
-                    field, row_idx = target
-                    _write_value(row_idx, float(temp1.get(field)))
-                else:
-                    _write_value(dn_row, float(temp1.get("DN")))
-                    _write_value(di_row, float(temp1.get("Di")))
-                    _write_value(dl_row, float(temp1.get("DL")))
-                try:
-                    QCoreApplication.processEvents()
-                except Exception:
-                    pass
-            finally:
-                try:
-                    self.param_table.blockSignals(False)
-                except Exception:
-                    pass
-                if original_handler:
-                    try:
-                        self.param_table.itemChanged.connect(original_handler)
-                    except Exception:
-                        pass
-                self._suppress_consistency_hook = False
-
-            print(f"[DN/Di/DL temp] 校验不通过：已回写到 temp1: {temp1}")
-            return False
-
-        # 如果尚无上次合法记录，则在当前合法时初始化
-        if not hasattr(self, "_last_valid_values"):
-            # 只有在当前三值合法时才记录（根据"是否以外径为基准"决定检查条件）
-            if check_condition:
-                self._last_valid_values = {"DN": dn, "Di": di, "DL": dl}
-                # 一旦恢复合法，清除“无历史合法值”提示的去重标志
-                if hasattr(self, "_dn_di_dl_no_history_warned"):
-                    self._dn_di_dl_no_history_warned = False
-                print("[check_diameter_consistency DEBUG] 初始化上次合法值记录。")
-                return True
-            else:
-                # 没有历史合法值可回滚：先尝试用 self.input_json 回填“被修改的那个参数值”
-                # （若回填后已合法，则不弹窗；仅当回填失败/仍不合法时再弹窗，并保证只弹一次）
-
-                def _get_input_json_text(key):
-                    try:
-                        src = getattr(self, "input_json", None)
-                        if isinstance(src, dict):
-                            v = src.get(key, None)
-                        else:
-                            v = None
-                        if v is None:
-                            return None
-                        return str(v).strip()
-                    except Exception:
-                        return None
-
-                def _write_text(row, text):
-                    if text is None:
-                        return
                     widget = self.param_table.cellWidget(row, 2)
                     if isinstance(widget, QComboBox):
-                        idx = widget.findText(str(text))
-                        if idx >= 0:
-                            widget.setCurrentIndex(idx)
-                        else:
-                            try:
-                                widget.setEditText(str(text))
-                            except Exception:
-                                self.param_table.setItem(
-                                    row, 2, QTableWidgetItem(str(text))
-                                )
+                        text = widget.currentText().strip()
                     else:
                         item = self.param_table.item(row, 2)
-                        if item:
-                            item.setText(str(text))
-                        else:
-                            self.param_table.setItem(row, 2, QTableWidgetItem(str(text)))
+                        text = item.text().strip() if item else None
+                    return float(text) if text else None
+                except (TypeError, ValueError, Exception) as e:
+                    print(f"[check_diameter_consistency ERROR] 读取行 {row} 数值失败: {str(e)}")
+                    return None
 
-                # “改了哪个填充哪个”：优先用 trigger_name 判断
-                trigger_to_row_key = {
-                    "公称直径 DN": (dn_row, "LB_DN"),
-                    "壳体内直径 Dis": (di_row, "LB_Di"),
-                    "布管限定圆 DL": (dl_row, "LB_DL"),
-                    # programmatic trigger
-                    "user_update_Di": (di_row, "LB_Di"),
-                }
-                target = trigger_to_row_key.get(str(trigger_name), None)
-                filled = False
-                if target:
-                    target_row, json_key = target
-                    fill_text = _get_input_json_text(json_key)
-                    if fill_text is not None:
-                        # 抑制重入：写回期间屏蔽一致性检查
-                        self._suppress_consistency_hook = True
-                        try:
-                            self.param_table.blockSignals(True)
-                            widget = self.param_table.cellWidget(target_row, 2)
-                            blocker = QSignalBlocker(widget) if widget is not None else None
-                            try:
-                                _write_text(target_row, fill_text)
-                            finally:
-                                # 显式释放 blocker
-                                blocker = None
-                        finally:
-                            try:
-                                self.param_table.blockSignals(False)
-                            except Exception:
-                                pass
-                            self._suppress_consistency_hook = False
-                        filled = True
+            dn = _read_value(dn_row)
+            di = _read_value(di_row) if di_row != -1 and not self.param_table.isRowHidden(di_row) else None
+            dl = _read_value(dl_row)
 
-                        # 写回后如已满足约束，立即建立 last_valid_values
-                        try:
-                            QCoreApplication.processEvents()
-                        except Exception:
-                            pass
-                        dn2 = _read_value(dn_row)
-                        di2 = _read_value(di_row)
-                        dl2 = _read_value(dl_row)
-                        # 根据"是否以外径为基准"决定检查条件
-                        if is_outer_diameter_base == "是":
-                            check_condition2 = di2 >= dl2 if None not in (di2, dl2) else False
-                        else:
-                            check_condition2 = dn2 >= di2 >= dl2 if None not in (dn2, di2, dl2) else False
-                        if check_condition2:
-                            self._last_valid_values = {"DN": dn2, "Di": di2, "DL": dl2}
-                            self._dn_di_dl_no_history_warned = False
-                            return True
+            print(
+                f"[check_diameter_consistency DEBUG] 触发源={trigger_name} → DN={dn}, Di={di}, DL={dl}"
+            )
 
-                # 回填失败或回填后仍不合法：弹窗（去重）
-                if not getattr(self, "_dn_di_dl_no_history_warned", False):
-                    self._dn_di_dl_no_history_warned = True
-                    if is_outer_diameter_base == "是":
-                        warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）"
-                    else:
-                        warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！"
+            # 若 DN 或 DL 无效，则不做强制检查（避免误判）；Di 允许缺失
+            if dn is None or dl is None:
+                print("[check_diameter_consistency WARN] DN 或 DL 存在无效数值，跳过约束检查。")
+                return False
+
+            # =========================================================
+            # temp1/temp2 机制（优先）：每次布管 calculate_piping_layout 初始化 temp1
+            # - temp1：最后一次通过检查的基准值
+            # - temp2：本次用户修改后的候选值（当前表格读到的 dn/di/dl）
+            # 通过：temp2 -> temp1；不通过：回写到 temp1（只回写被修改的那一个）
+            # =========================================================
+            # 获取"是否以外径为基准"参数值
+            is_outer_diameter_base = self.get_is_outer_diameter_base()
+            print(f"[check_diameter_consistency] 是否以外径为基准: {is_outer_diameter_base}")
+
+            # 始终要求：DL <= DN；在此基础上，根据"是否以外径为基准"和 Di 是否存在决定是否再加 Di 相关约束
+            cond_dn_dl = dn >= dl
+            if is_outer_diameter_base == "是":
+                # 以外径为基准：Di 存在时要求 Di >= DL，否则只检查 DL <= DN
+                cond_di_dl = True if di is None else (di >= dl)
+                check_condition = cond_dn_dl and cond_di_dl
+                print(
+                    f"[check_diameter_consistency] 以外径为基准模式，检查条件: DL({dl}) <= DN({dn}) 且 "
+                    f"{'略过 Di 检查 (Di 缺失)' if di is None else f'Di({di}) >= DL({dl})'} = {check_condition}"
+                )
+            else:
+                # 不以外径为基准：Di 存在时检查 DN >= Di >= DL；缺失时至少保证 DL <= DN
+                if di is not None:
+                    cond_chain = dn >= di >= dl
+                    check_condition = cond_dn_dl and cond_chain
+                    print(
+                        f"[check_diameter_consistency] 非以外径为基准模式，检查条件: "
+                        f"DL({dl}) <= DN({dn}) 且 DN({dn}) >= Di({di}) >= DL({dl}) = {check_condition}"
+                    )
+                else:
+                    check_condition = cond_dn_dl
+                    print(
+                        f"[check_diameter_consistency] 非以外径为基准模式 (Di 缺失)，检查条件: DL({dl}) <= DN({dn}) = {check_condition}"
+                    )
+
+            temp1 = getattr(self, "_dn_di_dl_temp1", None)
+            if isinstance(temp1, dict) and all(k in temp1 for k in ("DN", "Di", "DL")):
+                self._dn_di_dl_temp2 = {"DN": dn, "Di": di, "DL": dl}
+
+                if check_condition:
+                    # 合法：提升 temp2 为 temp1
+                    self._dn_di_dl_temp1 = {"DN": dn, "Di": di, "DL": dl}
+                    self._last_valid_values = dict(self._dn_di_dl_temp1)
+                    self._dn_di_dl_no_history_warned = False
+                    if hasattr(self, "_dn_di_dl_no_history_warned"):
+                        self._dn_di_dl_no_history_warned = False
+                    print(
+                        f"[DN/Di/DL temp] 校验通过：temp2 -> temp1: {self._dn_di_dl_temp1}"
+                    )
+                    return True
+
+                # 不合法：弹窗 + 回写到 temp1
+                if is_outer_diameter_base == "是":
+                    warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）"
+                else:
+                    warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！"
+
+                # 弹窗操作也添加异常保护
+                try:
                     QMessageBox.warning(
                         self,
                         "提示",
                         warning_msg,
                     )
+                except Exception as e:
+                    print(f"[check_diameter_consistency ERROR] 弹窗提示失败: {str(e)}")
+
+                # 写回函数（复用本函数的写表能力）
+                def _write_value(row, value):
+                    try:
+                        widget = self.param_table.cellWidget(row, 2)
+                        if value is None:
+                            return
+                        str_val = str(int(value)) if float(value) == int(float(value)) else f"{float(value):.1f}"
+                        if isinstance(widget, QComboBox):
+                            idx = widget.findText(str_val)
+                            if idx >= 0:
+                                widget.setCurrentIndex(idx)
+                            else:
+                                try:
+                                    widget.setEditText(str_val)
+                                except Exception:
+                                    self.param_table.setItem(row, 2, QTableWidgetItem(str_val))
+                        else:
+                            item = self.param_table.item(row, 2)
+                            if item:
+                                item.setText(str_val)
+                            else:
+                                self.param_table.setItem(row, 2, QTableWidgetItem(str_val))
+                    except Exception as e:
+                        print(f"[check_diameter_consistency ERROR] 写回行 {row} 数值 {value} 失败: {str(e)}")
+
+                # “改了哪个就回写哪个”，否则回写三项
+                trigger_to_field = {
+                    "公称直径 DN": ("DN", dn_row),
+                    "壳体内直径 Dis": ("Di", di_row),
+                    "布管限定圆 DL": ("DL", dl_row),
+                    "user_update_Di": ("Di", di_row),
+                }
+                target = trigger_to_field.get(str(trigger_name), None)
+
+                # 写回操作的异常保护
+                try:
+                    self._suppress_consistency_hook = True
+                    original_handler = None
+                    if hasattr(self, "handle_param_change"):
+                        try:
+                            self.param_table.itemChanged.disconnect(self.handle_param_change)
+                            original_handler = self.handle_param_change
+                        except Exception as e:
+                            print(f"[check_diameter_consistency WARN] 断开 itemChanged 信号失败: {str(e)}")
+                            original_handler = None
+
+                    try:
+                        self.param_table.blockSignals(True)
+                        if target:
+                            field, row_idx = target
+                            _write_value(row_idx, float(temp1.get(field)))
+                        else:
+                            _write_value(dn_row, float(temp1.get("DN")))
+                            _write_value(di_row, float(temp1.get("Di")))
+                            _write_value(dl_row, float(temp1.get("DL")))
+                        try:
+                            QCoreApplication.processEvents()
+                        except Exception as e:
+                            print(f"[check_diameter_consistency WARN] 处理事件循环失败: {str(e)}")
+                    finally:
+                        try:
+                            self.param_table.blockSignals(False)
+                        except Exception as e:
+                            print(f"[check_diameter_consistency ERROR] 恢复表格信号失败: {str(e)}")
+                        if original_handler:
+                            try:
+                                self.param_table.itemChanged.connect(original_handler)
+                            except Exception as e:
+                                print(f"[check_diameter_consistency ERROR] 恢复 itemChanged 信号失败: {str(e)}")
+                        self._suppress_consistency_hook = False
+                except Exception as e:
+                    print(f"[check_diameter_consistency ERROR] 执行回写操作失败: {str(e)}")
+                    self._suppress_consistency_hook = False
+
+                print(f"[DN/Di/DL temp] 校验不通过：已回写到 temp1: {temp1}")
                 return False
 
-        # 如果满足约束，更新 last_valid_values 并返回（根据"是否以外径为基准"决定检查条件）
-        if check_condition:
-            self._last_valid_values = {"DN": dn, "Di": di, "DL": dl}
-            print(
-                f"[check_diameter_consistency DEBUG] 三值合法：已更新 last_valid_values -> {self._last_valid_values}"
-            )
-            return True
-
-        # 到这里说明不满足约束：需要恢复上一次合法值（严格恢复，不做推断）
-        last_vals = getattr(self, "_last_valid_values", None)
-        if not last_vals:
-            print(
-                "[check_diameter_consistency WARN] 无可用 last_valid_values，无法回滚。"
-            )
-            # 同上：无历史合法值时，只弹一次，并尝试用 input_json 回填"被修改的那个值"
-            if not getattr(self, "_dn_di_dl_no_history_warned", False):
-                self._dn_di_dl_no_history_warned = True
-                if is_outer_diameter_base == "是":
-                    warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）"
+            # 如果尚无上次合法记录，则在当前合法时初始化
+            if not hasattr(self, "_last_valid_values"):
+                # 只有在当前三值合法时才记录（根据"是否以外径为基准"决定检查条件）
+                if check_condition:
+                    self._last_valid_values = {"DN": dn, "Di": di, "DL": dl}
+                    # 一旦恢复合法，清除“无历史合法值”提示的去重标志
+                    if hasattr(self, "_dn_di_dl_no_history_warned"):
+                        self._dn_di_dl_no_history_warned = False
+                    print("[check_diameter_consistency DEBUG] 初始化上次合法值记录。")
+                    return True
                 else:
-                    warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！"
-                QMessageBox.warning(
-                    self,
-                    "提示",
-                    warning_msg,
-                )
+                    # 没有历史合法值可回滚：先尝试用 self.input_json 回填“被修改的那个参数值”
+                    # （若回填后已合法，则不弹窗；仅当回填失败/仍不合法时再弹窗，并保证只弹一次）
 
-            # 尝试用 self.input_json 回填“被修改的那个参数值”（同上逻辑）
-            try:
-                trigger_to_row_key = {
-                    "公称直径 DN": (dn_row, "LB_DN"),
-                    "壳体内直径 Dis": (di_row, "LB_Di"),
-                    "布管限定圆 DL": (dl_row, "LB_DL"),
-                    "user_update_Di": (di_row, "LB_Di"),
-                }
-                target = trigger_to_row_key.get(str(trigger_name), None)
-                if target and isinstance(getattr(self, "input_json", None), dict):
-                    target_row, json_key = target
-                    fill_text = str(self.input_json.get(json_key, "")).strip()
-                    if fill_text:
-                        self._suppress_consistency_hook = True
+                    def _get_input_json_text(key):
                         try:
-                            self.param_table.blockSignals(True)
-                            widget = self.param_table.cellWidget(target_row, 2)
+                            src = getattr(self, "input_json", None)
+                            if isinstance(src, dict):
+                                v = src.get(key, None)
+                            else:
+                                v = None
+                            if v is None:
+                                return None
+                            return str(v).strip()
+                        except Exception as e:
+                            print(f"[check_diameter_consistency ERROR] 读取 input_json 键 {key} 失败: {str(e)}")
+                            return None
+
+                    def _write_text(row, text):
+                        try:
+                            if text is None:
+                                return
+                            widget = self.param_table.cellWidget(row, 2)
                             if isinstance(widget, QComboBox):
-                                idx = widget.findText(fill_text)
+                                idx = widget.findText(str(text))
                                 if idx >= 0:
                                     widget.setCurrentIndex(idx)
                                 else:
                                     try:
-                                        widget.setEditText(fill_text)
+                                        widget.setEditText(str(text))
                                     except Exception:
+                                        self.param_table.setItem(
+                                            row, 2, QTableWidgetItem(str(text))
+                                        )
+                            else:
+                                item = self.param_table.item(row, 2)
+                                if item:
+                                    item.setText(str(text))
+                                else:
+                                    self.param_table.setItem(row, 2, QTableWidgetItem(str(text)))
+                        except Exception as e:
+                            print(f"[check_diameter_consistency ERROR] 写回文本到行 {row} 失败: {str(e)}")
+
+                    # “改了哪个填充哪个”：优先用 trigger_name 判断
+                    trigger_to_row_key = {
+                        "公称直径 DN": (dn_row, "LB_DN"),
+                        "壳体内直径 Dis": (di_row, "LB_Di"),
+                        "布管限定圆 DL": (dl_row, "LB_DL"),
+                        "user_update_Di": (di_row, "LB_Di"),
+                    }
+                    target = trigger_to_row_key.get(str(trigger_name), None)
+                    filled = False
+                    if target:
+                        target_row, json_key = target
+                        fill_text = _get_input_json_text(json_key)
+                        if fill_text is not None:
+                            # 抑制重入：写回期间屏蔽一致性检查
+                            self._suppress_consistency_hook = True
+                            try:
+                                self.param_table.blockSignals(True)
+                                widget = self.param_table.cellWidget(target_row, 2)
+                                blocker = QSignalBlocker(widget) if widget is not None else None
+                                try:
+                                    _write_text(target_row, fill_text)
+                                finally:
+                                    # 显式释放 blocker
+                                    blocker = None
+                            finally:
+                                try:
+                                    self.param_table.blockSignals(False)
+                                except Exception as e:
+                                    print(f"[check_diameter_consistency ERROR] 恢复表格信号失败: {str(e)}")
+                                self._suppress_consistency_hook = False
+                            filled = True
+
+                            # 写回后如已满足约束，立即建立 last_valid_values
+                            try:
+                                QCoreApplication.processEvents()
+                            except Exception as e:
+                                print(f"[check_diameter_consistency WARN] 处理事件循环失败: {str(e)}")
+                            dn2 = _read_value(dn_row)
+                            di2 = _read_value(di_row)
+                            dl2 = _read_value(dl_row)
+                            # 根据"是否以外径为基准"决定检查条件
+                            if is_outer_diameter_base == "是":
+                                check_condition2 = di2 >= dl2 if None not in (di2, dl2) else False
+                            else:
+                                check_condition2 = dn2 >= di2 >= dl2 if None not in (dn2, di2, dl2) else False
+                            if check_condition2:
+                                self._last_valid_values = {"DN": dn2, "Di": di2, "DL": dl2}
+                                self._dn_di_dl_no_history_warned = False
+                                return True
+
+                    # 回填失败或回填后仍不合法：弹窗（去重）
+                    if not getattr(self, "_dn_di_dl_no_history_warned", False):
+                        self._dn_di_dl_no_history_warned = True
+                        try:
+                            if is_outer_diameter_base == "是":
+                                warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）"
+                            else:
+                                warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！"
+                            QMessageBox.warning(
+                                self,
+                                "提示",
+                                warning_msg,
+                            )
+                        except Exception as e:
+                            print(f"[check_diameter_consistency ERROR] 弹窗提示失败: {str(e)}")
+                    return False
+
+            # 如果满足约束，更新 last_valid_values 并返回（根据"是否以外径为基准"决定检查条件）
+            if check_condition:
+                self._last_valid_values = {"DN": dn, "Di": di, "DL": dl}
+                print(
+                    f"[check_diameter_consistency DEBUG] 三值合法：已更新 last_valid_values -> {self._last_valid_values}"
+                )
+                return True
+
+            # 到这里说明不满足约束：需要恢复上一次合法值（严格恢复，不做推断）
+            last_vals = getattr(self, "_last_valid_values", None)
+            if not last_vals:
+                print(
+                    "[check_diameter_consistency WARN] 无可用 last_valid_values，无法回滚。"
+                )
+                # 同上：无历史合法值时，只弹一次，并尝试用 input_json 回填"被修改的那个值"
+                if not getattr(self, "_dn_di_dl_no_history_warned", False):
+                    self._dn_di_dl_no_history_warned = True
+                    try:
+                        if is_outer_diameter_base == "是":
+                            warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）"
+                        else:
+                            warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！"
+                        QMessageBox.warning(
+                            self,
+                            "提示",
+                            warning_msg,
+                        )
+                    except Exception as e:
+                        print(f"[check_diameter_consistency ERROR] 弹窗提示失败: {str(e)}")
+
+                # 尝试用 self.input_json 回填“被修改的那个参数值”（同上逻辑）
+                try:
+                    trigger_to_row_key = {
+                        "公称直径 DN": (dn_row, "LB_DN"),
+                        "壳体内直径 Dis": (di_row, "LB_Di"),
+                        "布管限定圆 DL": (dl_row, "LB_DL"),
+                        "user_update_Di": (di_row, "LB_Di"),
+                    }
+                    target = trigger_to_row_key.get(str(trigger_name), None)
+                    if target and isinstance(getattr(self, "input_json", None), dict):
+                        target_row, json_key = target
+                        fill_text = str(self.input_json.get(json_key, "")).strip()
+                        if fill_text:
+                            self._suppress_consistency_hook = True
+                            try:
+                                self.param_table.blockSignals(True)
+                                widget = self.param_table.cellWidget(target_row, 2)
+                                if isinstance(widget, QComboBox):
+                                    idx = widget.findText(fill_text)
+                                    if idx >= 0:
+                                        widget.setCurrentIndex(idx)
+                                    else:
+                                        try:
+                                            widget.setEditText(fill_text)
+                                        except Exception:
+                                            self.param_table.setItem(
+                                                target_row, 2, QTableWidgetItem(fill_text)
+                                            )
+                                else:
+                                    it = self.param_table.item(target_row, 2)
+                                    if it:
+                                        it.setText(fill_text)
+                                    else:
                                         self.param_table.setItem(
                                             target_row, 2, QTableWidgetItem(fill_text)
                                         )
-                            else:
-                                it = self.param_table.item(target_row, 2)
-                                if it:
-                                    it.setText(fill_text)
+                            finally:
+                                try:
+                                    self.param_table.blockSignals(False)
+                                except Exception as e:
+                                    print(f"[check_diameter_consistency ERROR] 恢复表格信号失败: {str(e)}")
+                                self._suppress_consistency_hook = False
+                except Exception as e:
+                    print(f"[check_diameter_consistency ERROR] 尝试回填 input_json 失败: {str(e)}")
+                return False
+
+            # 防止重入与重复弹窗：设置抑制标志并断开 itemChanged
+            if getattr(self, "_suppress_consistency_hook", False):
+                print("[check_diameter_consistency DEBUG] 当前处于抑制状态，跳过再次检查。")
+                return True
+
+            # 执行回滚操作的主逻辑（带完整异常保护）
+            try:
+                self._suppress_consistency_hook = True
+                original_handler = None
+                if hasattr(self, "handle_param_change"):
+                    try:
+                        self.param_table.itemChanged.disconnect(self.handle_param_change)
+                        original_handler = self.handle_param_change
+                    except Exception as e:
+                        print(f"[check_diameter_consistency WARN] 断开 itemChanged 信号失败: {str(e)}")
+                        original_handler = None
+
+                try:
+                    # 弹窗提示一次
+                    try:
+                        if is_outer_diameter_base == "是":
+                            warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）\n系统将把它们恢复为上一次的合法值。"
+                        else:
+                            warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n系统将把它们恢复为上一次的合法值。"
+                        QMessageBox.warning(
+                            self,
+                            "提示",
+                            warning_msg,
+                        )
+                    except Exception as e:
+                        print(f"[check_diameter_consistency ERROR] 弹窗提示失败: {str(e)}")
+
+                    print(f"[check_diameter_consistency DEBUG] 回滚到上次合法值: {last_vals}")
+
+                    # 写回上次合法值（严格按行恢复）
+                    def _write_value(row, value):
+                        try:
+                            widget = self.param_table.cellWidget(row, 2)
+                            # 格式化字符串：如果整数则无小数，否则保留一位小数
+                            if value is None:
+                                return
+                            str_val = str(int(value)) if value == int(value) else f"{value:.1f}"
+                            if isinstance(widget, QComboBox):
+                                idx = widget.findText(str_val)
+                                if idx >= 0:
+                                    widget.setCurrentIndex(idx)
                                 else:
-                                    self.param_table.setItem(
-                                        target_row, 2, QTableWidgetItem(fill_text)
-                                    )
-                        finally:
-                            try:
-                                self.param_table.blockSignals(False)
-                            except Exception:
-                                pass
-                            self._suppress_consistency_hook = False
-            except Exception:
-                pass
+                                    # 尝试设置编辑文本（如果是可编辑）
+                                    try:
+                                        widget.setEditText(str_val)
+                                    except Exception:
+                                        # 退回写表项
+                                        self.param_table.setItem(row, 2, QTableWidgetItem(str_val))
+                            else:
+                                item = self.param_table.item(row, 2)
+                                if item:
+                                    item.setText(str_val)
+                                else:
+                                    self.param_table.setItem(row, 2, QTableWidgetItem(str_val))
+                        except Exception as e:
+                            print(f"[check_diameter_consistency ERROR] 写回行 {row} 数值 {value} 失败: {str(e)}")
+
+                    _write_value(dn_row, last_vals.get("DN"))
+                    _write_value(di_row, last_vals.get("Di"))
+                    _write_value(dl_row, last_vals.get("DL"))
+
+                    # 触发一次事件循环以确保 UI 更新后再继续
+                    try:
+                        QCoreApplication.processEvents()
+                    except Exception as e:
+                        print(f"[check_diameter_consistency WARN] 处理事件循环失败: {str(e)}")
+
+                    print("[check_diameter_consistency DEBUG] 已完成回滚写回。")
+
+                finally:
+                    # 恢复信号与抑制标志
+                    if original_handler:
+                        try:
+                            self.param_table.itemChanged.connect(original_handler)
+                        except Exception as e:
+                            print(f"[check_diameter_consistency ERROR] 恢复 itemChanged 信号失败: {str(e)}")
+                    # 清除抑制标志，允许后续检查
+                    self._suppress_consistency_hook = False
+            except Exception as e:
+                print(f"[check_diameter_consistency ERROR] 执行回滚操作失败: {str(e)}")
+                self._suppress_consistency_hook = False
+
+            # 最后更新 last_valid_values（保持与UI一致）
+            # 读取当前写回后的三值并更新历史
+            def _safe_read_after(row):
+                try:
+                    widget = self.param_table.cellWidget(row, 2)
+                    if isinstance(widget, QComboBox):
+                        t = widget.currentText().strip()
+                    else:
+                        it = self.param_table.item(row, 2)
+                        t = it.text().strip() if it else None
+                    return float(t) if t else None
+                except (TypeError, ValueError, Exception) as e:
+                    print(f"[check_diameter_consistency ERROR] 回滚后读取行 {row} 数值失败: {str(e)}")
+                    return None
+
+            dn2 = _safe_read_after(dn_row)
+            di2 = _safe_read_after(di_row)
+            dl2 = _safe_read_after(dl_row)
+            # 根据"是否以外径为基准"决定检查条件
+            if is_outer_diameter_base == "是":
+                check_condition_after = di2 >= dl2 if None not in (di2, dl2) else False
+            else:
+                check_condition_after = dn2 >= di2 >= dl2 if None not in (dn2, di2, dl2) else False
+            if check_condition_after:
+                self._last_valid_values = {"DN": dn2, "Di": di2, "DL": dl2}
+                print(
+                    f"[check_diameter_consistency DEBUG] 回滚后新的 last_valid_values={self._last_valid_values}"
+                )
+            else:
+                print(
+                    "[check_diameter_consistency WARN] 回滚后仍未得到合法三值，需手动调整。"
+                )
+            # 回滚发生：对调用方而言应视为“本次输入未通过”，避免继续用非法输入触发联动/重绘
             return False
 
-        # 防止重入与重复弹窗：设置抑制标志并断开 itemChanged
-        if getattr(self, "_suppress_consistency_hook", False):
-            print("[check_diameter_consistency DEBUG] 当前处于抑制状态，跳过再次检查。")
-            return True
-
-        self._suppress_consistency_hook = True
-        original_handler = None
-        if hasattr(self, "handle_param_change"):
+        except Exception as e:
+            # 全局异常捕获，确保函数任何位置出错都不会导致程序崩溃
+            error_trace = traceback.format_exc()
+            print(f"[check_diameter_consistency FATAL ERROR] 函数执行出错: {str(e)}\n{error_trace}")
+            # 确保抑制标志被清除，避免程序卡死在抑制状态
+            if hasattr(self, "_suppress_consistency_hook"):
+                self._suppress_consistency_hook = False
+            # 尝试恢复表格信号
             try:
-                self.param_table.itemChanged.disconnect(self.handle_param_change)
-                original_handler = self.handle_param_change
-            except Exception:
-                original_handler = None
-
-        try:
-            # 弹窗提示一次
-            if is_outer_diameter_base == "是":
-                warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）\n系统将把它们恢复为上一次的合法值。"
-            else:
-                warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n系统将把它们恢复为上一次的合法值。"
-            QMessageBox.warning(
-                self,
-                "提示",
-                warning_msg,
-            )
-
-            print(f"[check_diameter_consistency DEBUG] 回滚到上次合法值: {last_vals}")
-
-            # 写回上次合法值（严格按行恢复）
-            def _write_value(row, value):
-                widget = self.param_table.cellWidget(row, 2)
-                # 格式化字符串：如果整数则无小数，否则保留一位小数
-                if value is None:
-                    return
-                str_val = str(int(value)) if value == int(value) else f"{value:.1f}"
-                if isinstance(widget, QComboBox):
-                    idx = widget.findText(str_val)
-                    if idx >= 0:
-                        widget.setCurrentIndex(idx)
-                    else:
-                        # 尝试设置编辑文本（如果是可编辑）
-                        try:
-                            widget.setEditText(str_val)
-                        except Exception:
-                            # 退回写表项
-                            self.param_table.setItem(row, 2, QTableWidgetItem(str_val))
-                else:
-                    item = self.param_table.item(row, 2)
-                    if item:
-                        item.setText(str_val)
-                    else:
-                        self.param_table.setItem(row, 2, QTableWidgetItem(str_val))
-
-            _write_value(dn_row, last_vals.get("DN"))
-            _write_value(di_row, last_vals.get("Di"))
-            _write_value(dl_row, last_vals.get("DL"))
-
-            # 触发一次事件循环以确保 UI 更新后再继续
-            QCoreApplication.processEvents()
-
-            print("[check_diameter_consistency DEBUG] 已完成回滚写回。")
-
-        finally:
-            # 恢复信号与抑制标志
-            if original_handler:
-                try:
-                    self.param_table.itemChanged.connect(original_handler)
-                except Exception:
-                    pass
-            # 清除抑制标志，允许后续检查
-            self._suppress_consistency_hook = False
-
-        # 最后更新 last_valid_values（保持与UI一致）
-        # 读取当前写回后的三值并更新历史
-        def _safe_read_after(row):
-            widget = self.param_table.cellWidget(row, 2)
-            if isinstance(widget, QComboBox):
-                t = widget.currentText().strip()
-            else:
-                it = self.param_table.item(row, 2)
-                t = it.text().strip() if it else None
+                if hasattr(self, "param_table"):
+                    self.param_table.blockSignals(False)
+                if hasattr(self, "handle_param_change") and hasattr(self, "param_table"):
+                    try:
+                        self.param_table.itemChanged.connect(self.handle_param_change)
+                    except:
+                        pass
+            except:
+                pass
+            # 弹窗提示用户发生错误，但不中断程序
             try:
-                return float(t)
-            except (TypeError, ValueError):
-                return None
-
-        dn2 = _safe_read_after(dn_row)
-        di2 = _safe_read_after(di_row)
-        dl2 = _safe_read_after(dl_row)
-        # 根据"是否以外径为基准"决定检查条件
-        if is_outer_diameter_base == "是":
-            check_condition_after = di2 >= dl2 if None not in (di2, dl2) else False
-        else:
-            check_condition_after = dn2 >= di2 >= dl2 if None not in (dn2, di2, dl2) else False
-        if check_condition_after:
-            self._last_valid_values = {"DN": dn2, "Di": di2, "DL": dl2}
-            print(
-                f"[check_diameter_consistency DEBUG] 回滚后新的 last_valid_values={self._last_valid_values}"
-            )
-        else:
-            print(
-                "[check_diameter_consistency WARN] 回滚后仍未得到合法三值，需手动调整。"
-            )
-        # 回滚发生：对调用方而言应视为“本次输入未通过”，避免继续用非法输入触发联动/重绘
-        return False
+                QMessageBox.critical(
+                    self,
+                    "错误",
+                    "直径一致性检查过程中发生异常！\n程序将继续运行，但建议检查相关参数设置。",
+                    QMessageBox.Ok
+                )
+            except:
+                pass
+            return False
 
     def update_divider_position_and_size(self):
         # TODO 更新隔条位置尺寸
