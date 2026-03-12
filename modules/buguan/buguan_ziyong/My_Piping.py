@@ -15184,6 +15184,62 @@ class TubeLayoutEditor(QMainWindow):
             header.resizeSection(i, widths[i])
 
     # TODO 表格列宽自动拉伸
+    # def resizeEvent(self, event):
+    #     """窗口大小变化时的自适应调整"""
+    #     super().resizeEvent(event)
+
+    #     # 自动调整表格列宽（仅左侧 param_table）
+    #     if hasattr(self, "param_table"):
+    #         table_width = self.param_table.viewport().width()
+    #         if table_width > 0:
+    #             col0_width = 80  # 序号
+    #             col3_width = 80  # 单位
+    #             remaining = max(0, table_width - col0_width - col3_width)
+    #             # 缩小“参数名”列宽占比，让“参数值”列更宽一些
+    #             col1_width = int(remaining * 0.55)  # 参数名
+    #             col2_width = remaining - col1_width  # 参数值
+
+    #             self.param_table.setColumnWidth(0, col0_width)
+    #             self.param_table.setColumnWidth(1, col1_width)
+    #             self.param_table.setColumnWidth(2, col2_width)
+    #             self.param_table.setColumnWidth(3, col3_width)
+
+    #     # 保持你原来的右侧表策略不变
+    #     self.hole_distribution_table.horizontalHeader().setSectionResizeMode(
+    #         QHeaderView.Stretch
+    #     )
+
+    #     # 调整图形视图
+    #     if hasattr(self, "graphics_view") and hasattr(self, "graphics_scene"):
+    #         self.graphics_view.fitInView(
+    #             self.graphics_scene.sceneRect(), Qt.KeepAspectRatio
+    #         )
+    #         # 调整工具栏图片的大小
+    #     if hasattr(self, "toolbar_label"):
+    #         # 获取当前窗口宽度
+    #         window_width = self.width()
+    #         # 设置图片的最大宽度为窗口宽度的一定比例（例如 80%）
+    #         max_width = int(window_width * 0.8)
+    #         self.toolbar_label.setMaximumWidth(max_width)
+
+    #     # 非全屏状态下，窗口尺寸变化后自动按比例调整参数表列宽
+    #     if (
+    #             hasattr(self, "param_table")
+    #             and hasattr(self, "is_fullscreen")
+    #             and not self.is_fullscreen
+    #     ):
+    #         from PyQt5.QtWidgets import QApplication
+
+    #         QApplication.processEvents()
+    #         QTimer.singleShot(50, self.restore_param_table_column_widths)
+
+    #     # 根据窗口状态（是否最大化 / 全屏）动态调整工具栏按钮布局
+    #     if (
+    #             hasattr(self, "toolbar_layout")
+    #             and hasattr(self, "toolbar_row1_layout")
+    #             and hasattr(self, "toolbar_row2_layout")
+    #     ):
+    #         self.update_toolbar_layout_mode()
     def resizeEvent(self, event):
         """窗口大小变化时的自适应调整"""
         super().resizeEvent(event)
@@ -15205,42 +15261,33 @@ class TubeLayoutEditor(QMainWindow):
                 self.param_table.setColumnWidth(3, col3_width)
 
         # 保持你原来的右侧表策略不变
-        self.hole_distribution_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Stretch
-        )
+        if hasattr(self, "hole_distribution_table"):
+            self.hole_distribution_table.horizontalHeader().setSectionResizeMode(
+                QHeaderView.Stretch
+            )
 
         # 调整图形视图
         if hasattr(self, "graphics_view") and hasattr(self, "graphics_scene"):
             self.graphics_view.fitInView(
                 self.graphics_scene.sceneRect(), Qt.KeepAspectRatio
             )
-            # 调整工具栏图片的大小
+            
+        # 调整工具栏图片的大小
         if hasattr(self, "toolbar_label"):
-            # 获取当前窗口宽度
             window_width = self.width()
-            # 设置图片的最大宽度为窗口宽度的一定比例（例如 80%）
             max_width = int(window_width * 0.8)
             self.toolbar_label.setMaximumWidth(max_width)
 
-        # 非全屏状态下，窗口尺寸变化后自动按比例调整参数表列宽
+        # 根据窗口状态动态调整工具栏按钮布局
         if (
-                hasattr(self, "param_table")
-                and hasattr(self, "is_fullscreen")
-                and not self.is_fullscreen
-        ):
-            from PyQt5.QtWidgets import QApplication
-
-            QApplication.processEvents()
-            QTimer.singleShot(50, self.restore_param_table_column_widths)
-
-        # 根据窗口状态（是否最大化 / 全屏）动态调整工具栏按钮布局
-        if (
-                hasattr(self, "toolbar_layout")
-                and hasattr(self, "toolbar_row1_layout")
-                and hasattr(self, "toolbar_row2_layout")
+            hasattr(self, "toolbar_layout")
+            and hasattr(self, "toolbar_row1_layout")
+            and hasattr(self, "toolbar_row2_layout")
         ):
             self.update_toolbar_layout_mode()
-
+    
+    # 简单的方案：移除原来的退出全屏恢复逻辑，让列宽始终自适应
+    # 这样无论在什么状态下，列宽都会根据当前窗口大小重新计算
     def update_toolbar_layout_mode(self):
         """根据窗口状态（全屏 / 最大化）动态调整工具栏布局。"""
         # 如果还没有创建工具栏按钮，直接返回
