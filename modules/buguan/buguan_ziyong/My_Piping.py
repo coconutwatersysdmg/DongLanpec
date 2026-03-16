@@ -21701,8 +21701,23 @@ class TubeLayoutEditor(QMainWindow):
         # 管程=2 时把“分程隔板两侧相邻管中心距（水平）”置 0
         is_tube_pass_two = any(
             (
-                    data.get("参数名", "").strip() == "管程程数"
-                    and str(data.get("参数值", "")).strip() == "2"
+                data.get("参数名", "").strip() == "管程程数"
+                and str(data.get("参数值", "")).strip() == "2"
+            )
+            for data in tube_data
+        )
+        # 管程=1 / 壳程=1 时，需要将元件附加参数表中固定管板的若干槽深/槽宽参数更新为 0
+        is_tube_pass_one = any(
+            (
+                data.get("参数名", "").strip() == "管程程数"
+                and str(data.get("参数值", "")).strip() == "1"
+            )
+            for data in tube_data
+        )
+        is_shell_pass_one = any(
+            (
+                data.get("参数名", "").strip() == "壳程程数"
+                and str(data.get("参数值", "")).strip() == "1"
             )
             for data in tube_data
         )
@@ -21968,6 +21983,34 @@ class TubeLayoutEditor(QMainWindow):
                 f"WHERE NOT EXISTS (SELECT 1 FROM {component_table} "
                 f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}')"
             )
+
+        # 管程=1 时，将元件附加参数表中固定管板的“管程侧分程隔板槽深度/槽宽”更新为 0
+        if is_tube_pass_one:
+            safe_component_name = escape_str("固定管板")
+            reset_params = (
+                "管程侧分程隔板槽深度",
+                "管程分程隔板槽宽",
+            )
+            for param_name in reset_params:
+                safe_param_name = escape_str(param_name)
+                sql_statements.append(
+                    f"UPDATE {component_table} SET `参数值` = '0' "
+                    f"WHERE `产品ID` = '{safe_productID}' AND `元件名称` = '{safe_component_name}' AND `参数名称` = '{safe_param_name}'"
+                )
+
+        # 壳程=1 时，将元件附加参数表中固定管板的“壳程侧分程隔板槽深度/槽宽”更新为 0
+        if is_shell_pass_one:
+            safe_component_name = escape_str("固定管板")
+            reset_params = (
+                "壳程侧分程隔板槽深度",
+                "壳程分程隔板槽宽",
+            )
+            for param_name in reset_params:
+                safe_param_name = escape_str(param_name)
+                sql_statements.append(
+                    f"UPDATE {component_table} SET `参数值` = '0' "
+                    f"WHERE `产品ID` = '{safe_productID}' AND `元件名称` = '{safe_component_name}' AND `参数名称` = '{safe_param_name}'"
+                )
 
         # BEM 且管程分程形式为 1.1 时，将元件附加参数表中固定管板的管程侧/壳程侧分程隔板槽深度更新为 0
         if (
