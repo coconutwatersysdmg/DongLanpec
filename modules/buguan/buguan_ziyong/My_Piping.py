@@ -3390,7 +3390,25 @@ class TubeLayoutEditor(QMainWindow):
                                             final_value = design_data["壳程数值"]
                                             # print(final_value)
                                             # print("从设计数据表中读取的新值")
-                                            if param_value != final_value:
+                                            # 新逻辑：不再比较 param_value 与 final_value，而是根据产品ID
+                                            # 查询“产品设计活动表_布管元件表”是否已有布管设计数据：
+                                            # - 若查到记录：提示“因更改公称直径，管束设计部分数据失效！”并清空相关布管表；
+                                            # - 若查不到记录：不提示、不删除，静默通过。
+                                            try:
+                                                check_query = """
+                                                    SELECT 1
+                                                    FROM 产品设计活动表_布管元件表
+                                                    WHERE 产品ID = %s
+                                                    LIMIT 1
+                                                """
+                                                cursor.execute(check_query, (self.productID,))
+                                                has_components = cursor.fetchone()
+                                            except Exception as e:
+                                                # 查询失败时不影响主流程，也不弹出额外提示
+                                                has_components = None
+                                                print(f"检查产品设计活动表_布管元件表时出错: {e}")
+
+                                            if has_components:
                                                 QMessageBox.warning(self, "警告", "因更改公称直径，管束设计部分数据失效！")
                                                 try:
                                                     delete_query = """DELETE FROM 产品设计活动表_布管元件表 WHERE 产品ID = %s"""
