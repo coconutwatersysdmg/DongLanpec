@@ -3390,10 +3390,11 @@ class TubeLayoutEditor(QMainWindow):
                                             final_value = design_data["壳程数值"]
                                             # print(final_value)
                                             # print("从设计数据表中读取的新值")
-                                            # 新逻辑：不再比较 param_value 与 final_value，而是根据产品ID
-                                            # 查询“产品设计活动表_布管元件表”是否已有布管设计数据：
-                                            # - 若查到记录：提示“因更改公称直径，管束设计部分数据失效！”并清空相关布管表；
-                                            # - 若查不到记录：不提示、不删除，静默通过。
+                                            # 逻辑说明：
+                                            # 1) 若“布管元件表”中尚无当前产品ID记录 → 视为首次打开，不提示、不删除；
+                                            # 2) 若已有记录，则再比较 param_value 与 final_value：
+                                            #    - 相等：不提示、不删除；
+                                            #    - 不相等：提示并清空布管相关设计表。
                                             try:
                                                 check_query = """
                                                     SELECT 1
@@ -3408,7 +3409,7 @@ class TubeLayoutEditor(QMainWindow):
                                                 has_components = None
                                                 print(f"检查产品设计活动表_布管元件表时出错: {e}")
 
-                                            if has_components:
+                                            if has_components and str(param_value).strip() != str(final_value).strip():
                                                 QMessageBox.warning(self, "警告", "因更改公称直径，管束设计部分数据失效！")
                                                 try:
                                                     delete_query = """DELETE FROM 产品设计活动表_布管元件表 WHERE 产品ID = %s"""
@@ -21986,17 +21987,35 @@ class TubeLayoutEditor(QMainWindow):
 
         # 管程=1 时，将元件附加参数表中固定管板的“管程侧分程隔板槽深度/槽宽”更新为 0
         if is_tube_pass_one:
-            safe_component_name = escape_str("固定管板")
-            reset_params = (
-                "管程侧分程隔板槽深度",
-                "管程分程隔板槽宽",
-            )
-            for param_name in reset_params:
-                safe_param_name = escape_str(param_name)
-                sql_statements.append(
-                    f"UPDATE {component_table} SET `参数值` = '0' "
-                    f"WHERE `产品ID` = '{safe_productID}' AND `元件名称` = '{safe_component_name}' AND `参数名称` = '{safe_param_name}'"
+            should_reset_fixed_tubesheet = True
+            try:
+                if getattr(self, "heat_exchanger", None) in ("AEM", "BEM", "NEN"):
+                    from PyQt5.QtWidgets import QMessageBox
+
+                    ret = QMessageBox.question(
+                        self,
+                        "提示",
+                        "当前管程数为1，是否将固定管板隔板槽宽度和深度参数值修改为0mm?",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No,
+                    )
+                    should_reset_fixed_tubesheet = ret == QMessageBox.Yes
+            except Exception:
+                # 弹窗异常时，默认不修改，避免误改元件定义参数
+                should_reset_fixed_tubesheet = False
+
+            if should_reset_fixed_tubesheet:
+                safe_component_name = escape_str("固定管板")
+                reset_params = (
+                    "管程侧分程隔板槽深度",
+                    "管程分程隔板槽宽",
                 )
+                for param_name in reset_params:
+                    safe_param_name = escape_str(param_name)
+                    sql_statements.append(
+                        f"UPDATE {component_table} SET `参数值` = '0' "
+                        f"WHERE `产品ID` = '{safe_productID}' AND `元件名称` = '{safe_component_name}' AND `参数名称` = '{safe_param_name}'"
+                    )
 
         # 壳程=1 时，将元件附加参数表中固定管板的“壳程侧分程隔板槽深度/槽宽”更新为 0
         if is_shell_pass_one:
