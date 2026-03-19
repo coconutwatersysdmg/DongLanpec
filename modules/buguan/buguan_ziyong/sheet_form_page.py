@@ -882,50 +882,28 @@ class SheetFormPage(QWidget):
 
                 # 填充表格数据
                 for row, (param_name, default_value) in enumerate(params.items()):
-                    # 参数名列 - 只读
-                    name_item = QTableWidgetItem(param_name)
-                    name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)  # 参数名不可编辑
-                    self.sheet_form_param_table.setItem(row, 0, name_item)
-
-                    # 对于 e_f、f_f 节点，如果参数名为 a，则根据公式重新计算默认值
-                    adjusted_value = default_value
-                    if param_name == "a" and selected_folder in ["e", "f"] and image_name_without_ext in ["e_f", "f_f"]:
-                        try:
-                            dl = self.DL
-                            dn = self.DN
-                            di = self.Di
-                            flag = (self.use_outer_diameter_base or "").strip()
-
-                            # 仅在 DL 和相应直径存在时才计算
-                            if flag == "否" and dl is not None and dn is not None:
-                                adjusted_value = (dn - dl) / 4.0
-                            elif flag == "是" and dl is not None and di is not None:
-                                adjusted_value = (di - dl) / 4.0
-
-                            # 将数值格式化为字符串（保留3位小数）
-                            if isinstance(adjusted_value, (int, float)):
-                                adjusted_value = f"{adjusted_value:.3f}"
-                        except Exception as calc_err:
-                            print(f"计算 a 默认值时出错: {calc_err}")
-
-                    # e_g / f_g 管板的参数 c：使用两个可编辑数字 + 固定文字 "*δ和"、"的较大值"
+                    # e_g / f_g 管板：c1 + c2 在界面上合并为参数 c（一行）
                     if (
                         selected_folder in ("e", "f")
                         and image_name_without_ext in ("e_g", "f_g")
-                        and param_name == "c"
+                        and param_name in ("c1", "c2")
                     ):
+                        # 只在遇到 c1 时生成一行 c，c2 行跳过
+                        if param_name == "c2":
+                            continue
+
                         from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLineEdit
 
-                        left_text = "1.5"
-                        right_text = "25"
-                        try:
-                            if isinstance(adjusted_value, str) and "-" in adjusted_value:
-                                l, r = adjusted_value.split("-", 1)
-                                l = l.strip() or left_text
-                                r = r.strip() or right_text
-                                left_text, right_text = l, r
-                        except Exception:
-                            pass
+                        # 参数名列显示为 "c"
+                        name_item = QTableWidgetItem("c")
+                        name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+                        self.sheet_form_param_table.setItem(row, 0, name_item)
+
+                        # 取 c1 / c2 的初始值，解析失败时使用默认 1.5 / 25
+                        c1_raw = str(params.get("c1", "1.5")).strip() or "1.5"
+                        c2_raw = str(params.get("c2", "25")).strip() or "25"
+                        left_text = c1_raw
+                        right_text = c2_raw
 
                         container = QWidget()
                         layout = QHBoxLayout(container)
@@ -953,17 +931,45 @@ class SheetFormPage(QWidget):
                         layout.addWidget(tail_label)
 
                         self.sheet_form_param_table.setCellWidget(row, 1, container)
+                        # 合并完成后继续下一条参数（不再走通用填充逻辑）
+                        continue
+
+                    # 通用逻辑：参数名列 - 只读
+                    name_item = QTableWidgetItem(param_name)
+                    name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)  # 参数名不可编辑
+                    self.sheet_form_param_table.setItem(row, 0, name_item)
+
+                    # 对于 e_f、f_f 节点，如果参数名为 a，则根据公式重新计算默认值
+                    adjusted_value = default_value
+                    if param_name == "a" and selected_folder in ["e", "f"] and image_name_without_ext in ["e_f", "f_f"]:
+                        try:
+                            dl = self.DL
+                            dn = self.DN
+                            di = self.Di
+                            flag = (self.use_outer_diameter_base or "").strip()
+
+                            # 仅在 DL 和相应直径存在时才计算
+                            if flag == "否" and dl is not None and dn is not None:
+                                adjusted_value = (dn - dl) / 4.0
+                            elif flag == "是" and dl is not None and di is not None:
+                                adjusted_value = (di - dl) / 4.0
+
+                            # 将数值格式化为字符串（保留3位小数）
+                            if isinstance(adjusted_value, (int, float)):
+                                adjusted_value = f"{adjusted_value:.3f}"
+                        except Exception as calc_err:
+                            print(f"计算 a 默认值时出错: {calc_err}")
+
+                    # 参数值列 - 根据是否为 b 类的 b_b 节点控制是否可编辑（除上面 c1/c2 特殊处理外）
+                    display_text = str(adjusted_value)
+                    value_item = QTableWidgetItem(display_text)
+                    if selected_folder == 'b' and image_name_without_ext == 'b_b':
+                        # b_b 情况下参数值不可编辑
+                        value_item.setFlags(value_item.flags() & ~Qt.ItemIsEditable & ~Qt.ItemIsEnabled)
                     else:
-                        # 参数值列 - 根据是否为 b 类的 b_b 节点控制是否可编辑
-                        display_text = str(adjusted_value)
-                        value_item = QTableWidgetItem(display_text)
-                        if selected_folder == 'b' and image_name_without_ext == 'b_b':
-                            # b_b 情况下参数值不可编辑
-                            value_item.setFlags(value_item.flags() & ~Qt.ItemIsEditable & ~Qt.ItemIsEnabled)
-                        else:
-                            # 其他情况保持可编辑
-                            value_item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
-                        self.sheet_form_param_table.setItem(row, 1, value_item)
+                        # 其他情况保持可编辑
+                        value_item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
+                    self.sheet_form_param_table.setItem(row, 1, value_item)
 
                 # 对于 e_b、e_c、f_b、f_c 节点，特殊处理最后一行为三列显示，并在表格下方添加说明文字
                 special_three_col_nodes = {
@@ -1281,7 +1287,7 @@ class SheetFormPage(QWidget):
                 param_name = name_item.text().strip()
                 raw_value = value_item.text().strip() if value_item else ""
 
-                # e_g / f_g 管板的参数 c：从单元格内的两个 QLineEdit 读取数字，拼为 "x-y"
+                # e_g / f_g 管板的参数 c：从单元格内的两个 QLineEdit 读取数字，拆成 c1 / c2 存储
                 if plate_type in ("e_g", "f_g") and param_name == "c" and value_widget:
                     from PyQt5.QtWidgets import QLineEdit
 
@@ -1289,9 +1295,18 @@ class SheetFormPage(QWidget):
                     if len(edits) >= 2:
                         left_num = edits[0].text().strip() or "1.5"
                         right_num = edits[1].text().strip() or "25"
-                        param_value = f"{left_num}-{right_num}"
+                        # c 逻辑：保存为两条独立参数 c1 / c2
+                        if param_name:
+                            full_params.append(("c1", left_num))
+                            full_params.append(("c2", right_num))
+                        # 已经添加 c1/c2，这一行不再追加下面的通用 full_params.append
+                        continue
                     else:
-                        param_value = "1.5-25"
+                        # 控件异常时回退为默认 c1=1.5, c2=25
+                        if param_name:
+                            full_params.append(("c1", "1.5"))
+                            full_params.append(("c2", "25"))
+                        continue
                 else:
                     param_value = raw_value
                 
