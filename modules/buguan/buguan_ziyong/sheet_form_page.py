@@ -684,19 +684,18 @@ class SheetFormPage(QWidget):
             self.sheet_form_param_table.horizontalHeader().setDefaultSectionSize(100)
             self.sheet_form_param_table.horizontalHeader().setMinimumSectionSize(10)
             
-            # 为各列设置不同的调整策略 - 照搬tube_sheet_connection.py
-            # 参数名列：可拉伸，占据较多空间
-            self.sheet_form_param_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-            # 参数值列：交互式调整
+            # 为各列设置不同的调整策略
+            # 这里希望“参数值”列更宽（约 3:7），且允许用户拖动调整，因此两列都用 Interactive
+            self.sheet_form_param_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
             self.sheet_form_param_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Interactive)
             
             # 设置初始列宽比例 - 照搬tube_sheet_connection.py
             def set_initial_column_widths():
                 total_width = self.sheet_form_param_table.viewport().width()
                 if total_width > 0:
-                    # 设置合理的初始比例：参数名60%，参数值40%
-                    self.sheet_form_param_table.setColumnWidth(0, int(total_width * 0.6))  # 参数名
-                    self.sheet_form_param_table.setColumnWidth(1, int(total_width * 0.4))  # 参数值
+                    # 初始比例：参数名30%，参数值70%（参数值列加宽，约 3:7）
+                    self.sheet_form_param_table.setColumnWidth(0, int(total_width * 0.3))  # 参数名
+                    self.sheet_form_param_table.setColumnWidth(1, int(total_width * 0.7))  # 参数值
             
             # 在表格显示后设置初始列宽
             self.sheet_form_param_table.showEvent = lambda event: set_initial_column_widths()
@@ -881,7 +880,7 @@ class SheetFormPage(QWidget):
                 # 设置表格行数
                 self.sheet_form_param_table.setRowCount(len(params))
 
-                # 填充表格数据 - 完全照搬tube_sheet_connection.py的方式
+                # 填充表格数据
                 for row, (param_name, default_value) in enumerate(params.items()):
                     # 参数名列 - 只读
                     name_item = QTableWidgetItem(param_name)
@@ -909,15 +908,62 @@ class SheetFormPage(QWidget):
                         except Exception as calc_err:
                             print(f"计算 a 默认值时出错: {calc_err}")
 
-                    # 参数值列 - 根据是否为 b 类的 b_b 节点控制是否可编辑
-                    value_item = QTableWidgetItem(str(adjusted_value))
-                    if selected_folder == 'b' and image_name_without_ext == 'b_b':
-                        # b_b 情况下参数值不可编辑
-                        value_item.setFlags(value_item.flags() & ~Qt.ItemIsEditable & ~Qt.ItemIsEnabled)
+                    # e_g / f_g 管板的参数 c：使用两个可编辑数字 + 固定文字 "*δ和"、"的较大值"
+                    if (
+                        selected_folder in ("e", "f")
+                        and image_name_without_ext in ("e_g", "f_g")
+                        and param_name == "c"
+                    ):
+                        from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLineEdit
+
+                        left_text = "1.5"
+                        right_text = "25"
+                        try:
+                            if isinstance(adjusted_value, str) and "-" in adjusted_value:
+                                l, r = adjusted_value.split("-", 1)
+                                l = l.strip() or left_text
+                                r = r.strip() or right_text
+                                left_text, right_text = l, r
+                        except Exception:
+                            pass
+
+                        container = QWidget()
+                        layout = QHBoxLayout(container)
+                        layout.setContentsMargins(0, 0, 0, 0)
+                        layout.setSpacing(2)
+                        layout.setAlignment(Qt.AlignLeft)
+
+                        left_edit = QLineEdit(left_text, container)
+                        left_edit.setFixedWidth(60)
+                        left_edit.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+
+                        mid_label = QLabel("*δ和", container)
+                        mid_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+
+                        right_edit = QLineEdit(right_text, container)
+                        right_edit.setFixedWidth(60)
+                        right_edit.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+
+                        tail_label = QLabel("的较大值", container)
+                        tail_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+
+                        layout.addWidget(left_edit)
+                        layout.addWidget(mid_label)
+                        layout.addWidget(right_edit)
+                        layout.addWidget(tail_label)
+
+                        self.sheet_form_param_table.setCellWidget(row, 1, container)
                     else:
-                        # 其他情况保持可编辑
-                        value_item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
-                    self.sheet_form_param_table.setItem(row, 1, value_item)
+                        # 参数值列 - 根据是否为 b 类的 b_b 节点控制是否可编辑
+                        display_text = str(adjusted_value)
+                        value_item = QTableWidgetItem(display_text)
+                        if selected_folder == 'b' and image_name_without_ext == 'b_b':
+                            # b_b 情况下参数值不可编辑
+                            value_item.setFlags(value_item.flags() & ~Qt.ItemIsEditable & ~Qt.ItemIsEnabled)
+                        else:
+                            # 其他情况保持可编辑
+                            value_item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
+                        self.sheet_form_param_table.setItem(row, 1, value_item)
 
                 # 对于 e_b、e_c、f_b、f_c 节点，特殊处理最后一行为三列显示，并在表格下方添加说明文字
                 special_three_col_nodes = {
@@ -1229,10 +1275,25 @@ class SheetFormPage(QWidget):
             name_item = self.sheet_form_param_table.item(row, 0)
             # 获取参数值（第1列）
             value_item = self.sheet_form_param_table.item(row, 1)
+            value_widget = self.sheet_form_param_table.cellWidget(row, 1)
             
-            if name_item and value_item:
+            if name_item and (value_item or value_widget):
                 param_name = name_item.text().strip()
-                param_value = value_item.text().strip()
+                raw_value = value_item.text().strip() if value_item else ""
+
+                # e_g / f_g 管板的参数 c：从单元格内的两个 QLineEdit 读取数字，拼为 "x-y"
+                if plate_type in ("e_g", "f_g") and param_name == "c" and value_widget:
+                    from PyQt5.QtWidgets import QLineEdit
+
+                    edits = value_widget.findChildren(QLineEdit)
+                    if len(edits) >= 2:
+                        left_num = edits[0].text().strip() or "1.5"
+                        right_num = edits[1].text().strip() or "25"
+                        param_value = f"{left_num}-{right_num}"
+                    else:
+                        param_value = "1.5-25"
+                else:
+                    param_value = raw_value
                 
                 if param_name:
                     full_params.append((param_name, param_value))
