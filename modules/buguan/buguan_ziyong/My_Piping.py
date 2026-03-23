@@ -24189,12 +24189,15 @@ class TubeLayoutEditor(QMainWindow):
                         new_spacing = 0.0
                     elif new_spacing > baffle_radius:
                         new_spacing = baffle_radius
+                    # 如果主参数表里已经有用户设置的 a，则不覆盖，避免出现 405 -> 404.9 这类小数重算偏移
+                    current_a_str = get_param_value("折流板切口与中心线间距a")
                     for r in range(table.rowCount()):
                         name_item = table.item(r, 0)
                         if name_item and name_item.text().strip() == "折流板切口与中心线间距a":
                             value_item = table.item(r, 1)
                             if value_item:
-                                value_item.setText(f"{new_spacing:.1f}")
+                                if not current_a_str:
+                                    value_item.setText(f"{new_spacing:.1f}")
                             break
             except Exception as e:
                 print(f"[show_baffle_info] 打开时计算折流板切口与中心线间距a失败: {e}")
@@ -24405,6 +24408,9 @@ class TubeLayoutEditor(QMainWindow):
 
         # 标记当前是否正在程序化更新，避免循环触发
         updating_linked_values = {"active": False}
+        # 记录弹窗内最后一次由用户触发（非程序化）的联动参数改动
+        # 用于点击“确定”回写主参数表时避免被另一侧联动覆盖导致小数重算
+        last_user_changed_name = {"name": None}
 
         def set_dialog_value(name: str, value: float):
             row = find_row_by_name(name)
@@ -24609,6 +24615,9 @@ class TubeLayoutEditor(QMainWindow):
                 "折流板要求切口率",
                 "折流板切口与中心线间距a",
             ]:
+                # 只有在非程序化更新时，才认为是用户修改
+                if not updating_linked_values["active"]:
+                    last_user_changed_name["name"] = changed_name
                 validate_and_update_baffle_params(changed_name)
 
             # 原有的双弓形参数联动（保持不变）
@@ -24787,6 +24796,19 @@ class TubeLayoutEditor(QMainWindow):
                     else:
                         value_item = table.item(r, 1)
                         value = value_item.text().strip() if value_item else ""
+
+                    # 避免：用户输入 a 后，写回 cut_rate 再触发主表联动把 a 按 0.1 精度重算
+                    # 规则：最后一次由用户修改的是 a，则跳过回写 cut_rate；反之亦然。
+                    if (
+                        last_user_changed_name["name"] == "折流板切口与中心线间距a"
+                        and real_name == "折流板要求切口率"
+                    ):
+                        continue
+                    if (
+                        last_user_changed_name["name"] == "折流板要求切口率"
+                        and real_name == "折流板切口与中心线间距a"
+                    ):
+                        continue
 
                     set_param_value(real_name, value)
             except Exception as e:
