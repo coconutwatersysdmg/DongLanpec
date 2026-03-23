@@ -33772,6 +33772,37 @@ class TubeLayoutEditor(QMainWindow):
 
         def on_ok():
             # 读取输入并校验角度范围提醒
+            # 滑道高度输入限制：0 < 滑道高度 <= 折流/支持板外径/2
+            height_text = input_widgets["滑道高度"].text().strip()
+            try:
+                slipway_height = float(height_text) if height_text != "" else None
+            except Exception:
+                slipway_height = None
+            baffle_od = self.get_baffle_diameter()
+            if (
+                slipway_height is None
+                or slipway_height <= 0
+                or (baffle_od is not None and baffle_od > 0 and slipway_height > baffle_od / 2.0)
+            ):
+                QMessageBox.warning(
+                    dialog,
+                    "输入错误",
+                    "您输入的数值小于0或已超限，请重新输入!",
+                )
+                # 回滚：恢复为打开弹窗前的旧值，避免保留错误输入
+                input_widgets["滑道高度"].setText(default_values.get("滑道高度", ""))
+                return
+            if baffle_od is None or baffle_od <= 0:
+                # 折流/支持板外径缺失时无法做上限校验
+                QMessageBox.warning(
+                    dialog,
+                    "输入错误",
+                    "您输入的数值小于0或已超限，请重新输入!",
+                )
+                # 回滚：恢复为打开弹窗前的旧值
+                input_widgets["滑道高度"].setText(default_values.get("滑道高度", ""))
+                return
+
             angle_text = input_widgets["滑道与竖直中心线夹角"].text()
             try:
                 angle_val = float(angle_text)
@@ -33989,6 +34020,37 @@ class TubeLayoutEditor(QMainWindow):
 
         def on_ok_clicked():
             # 验证滑道与竖直中心线夹角的范围
+            # 滑道高度输入限制：0 < 滑道高度 <= 折流/支持板外径/2
+            height_text = input_widgets["滑道高度"].text().strip()
+            try:
+                slipway_height = float(height_text) if height_text != "" else None
+            except Exception:
+                slipway_height = None
+            baffle_od = self.get_baffle_diameter()
+            if (
+                slipway_height is None
+                or slipway_height <= 0
+                or (baffle_od is not None and baffle_od > 0 and slipway_height > baffle_od / 2.0)
+            ):
+                QMessageBox.warning(
+                    dialog,
+                    "输入错误",
+                    "您输入的数值小于0或已超限，请重新输入!",
+                )
+                # 回滚：恢复为打开弹窗前的旧值，避免保留错误输入
+                input_widgets["滑道高度"].setText(default_values.get("滑道高度", ""))
+                return
+            if baffle_od is None or baffle_od <= 0:
+                # 折流/支持板外径缺失时无法做上限校验
+                QMessageBox.warning(
+                    dialog,
+                    "输入错误",
+                    "您输入的数值小于0或已超限，请重新输入!",
+                )
+                # 回滚：恢复为打开弹窗前的旧值
+                input_widgets["滑道高度"].setText(default_values.get("滑道高度", ""))
+                return
+
             angle_text = input_widgets["滑道与竖直中心线夹角"].text()
             try:
                 angle = float(angle_text)
