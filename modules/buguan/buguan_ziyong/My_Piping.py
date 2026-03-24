@@ -1420,6 +1420,10 @@ class TubeLayoutEditor(QMainWindow):
         self.full_print_cross_y_right_line3 = []
         self._is_programmatic_update = False
         self._programmatic_update_params = set()
+        # 当管程程数改为1时，记录用户是否同意将固定管板槽宽/槽深置0
+        self._reset_fixed_tubesheet_on_tube_pass_one = False
+        # 防止管程程数=1提示弹窗在同一次变更中重复弹出
+        self._tube_pass_one_prompt_shown = False
         self._box_selecting = False
         self._box_start_pos = None
         self._box_rect_item = None
@@ -12670,6 +12674,27 @@ class TubeLayoutEditor(QMainWindow):
             )  # 默认保留原 value
             print(f"当前管程分程形式: {self.tube_pass_form_value}")
 
+            # 交互前移：当管程程数改为1且型号为AEM/BEM/NEN时，立即询问是否置0固定管板槽宽/槽深
+            if str(value).strip() == "1" and getattr(self, "heat_exchanger", None) in ("AEM", "BEM", "NEN"):
+                # 同一轮值变更可能触发两次回调（text/index），这里做一次性防重
+                if not getattr(self, "_tube_pass_one_prompt_shown", False):
+                    self._tube_pass_one_prompt_shown = True
+                    try:
+                        reply = QMessageBox.question(
+                            self,
+                            "提示",
+                            "当前管程数为1，是否将固定管板隔板槽宽度和深度参数值修改为0mm?",
+                            QMessageBox.Yes | QMessageBox.No,
+                            QMessageBox.No,
+                        )
+                        self._reset_fixed_tubesheet_on_tube_pass_one = (reply == QMessageBox.Yes)
+                    except Exception:
+                        self._reset_fixed_tubesheet_on_tube_pass_one = False
+            elif str(value).strip() != "1":
+                # 只在“当前管程=1且用户同意”时生效；离开该状态即清除
+                self._reset_fixed_tubesheet_on_tube_pass_one = False
+                self._tube_pass_one_prompt_shown = False
+
             self.update_SN()
             self.update_partition_plate_center_distance()
             # 更新分程形式下拉框的图片
@@ -22019,24 +22044,11 @@ class TubeLayoutEditor(QMainWindow):
                 f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}')"
             )
 
-        # 管程=1 时，将元件附加参数表中固定管板的“管程侧分程隔板槽深度/槽宽”更新为 0
+        # 管程=1 时，仅当用户此前明确同意（改管程时弹窗）才更新固定管板的“管程侧分程隔板槽深度/槽宽”为0
         if is_tube_pass_one:
-            should_reset_fixed_tubesheet = True
-            try:
-                if getattr(self, "heat_exchanger", None) in ("AEM", "BEM", "NEN"):
-                    from PyQt5.QtWidgets import QMessageBox
-
-                    ret = QMessageBox.question(
-                        self,
-                        "提示",
-                        "当前管程数为1，是否将固定管板隔板槽宽度和深度参数值修改为0mm?",
-                        QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.No,
-                    )
-                    should_reset_fixed_tubesheet = ret == QMessageBox.Yes
-            except Exception:
-                # 弹窗异常时，默认不修改，避免误改元件定义参数
-                should_reset_fixed_tubesheet = False
+            should_reset_fixed_tubesheet = bool(
+                getattr(self, "_reset_fixed_tubesheet_on_tube_pass_one", False)
+            )
 
             if should_reset_fixed_tubesheet:
                 safe_component_name = escape_str("固定管板")
