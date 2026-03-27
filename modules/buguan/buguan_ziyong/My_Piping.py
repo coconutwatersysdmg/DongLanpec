@@ -3496,52 +3496,70 @@ class TubeLayoutEditor(QMainWindow):
 
                                 elif param_name == "壳体内直径 Dis":
                                     try:
-                                        design_query = """
-                                            SELECT 壳程数值 
-                                            FROM 产品设计活动表_设计数据表 
-                                            WHERE 产品ID = %s AND 参数名称 = %s
+                                        record_query = """
+                                            SELECT 1
+                                            FROM 产品设计活动表_布管操作记录表
+                                            WHERE 产品ID = %s
+                                            LIMIT 1
                                         """
-                                        cursor.execute(
-                                            design_query,
-                                            (self.productID, "公称直径*"),
-                                        )
-                                        design_data = cursor.fetchone()
-
-                                        if (
-                                                isinstance(design_data, dict)
-                                                and "壳程数值" in design_data
-                                                and design_data["壳程数值"]
-                                        ):
-                                            final_value = design_data["壳程数值"]
-                                            print(
-                                                f"更新壳体内直径 Dis: {param_value} -> {final_value}"
+                                        cursor.execute(record_query, (self.productID,))
+                                        record_exists = cursor.fetchone()
+                                        if not record_exists:
+                                            design_query = """
+                                                SELECT 壳程数值 
+                                                FROM 产品设计活动表_设计数据表 
+                                                WHERE 产品ID = %s AND 参数名称 = %s
+                                            """
+                                            cursor.execute(
+                                                design_query,
+                                                (self.productID, "公称直径*"),
                                             )
+                                            design_data = cursor.fetchone()
+
+                                            if (
+                                                    isinstance(design_data, dict)
+                                                    and "壳程数值" in design_data
+                                                    and design_data["壳程数值"]
+                                            ):
+                                                final_value = design_data["壳程数值"]
+                                                print(
+                                                    f"更新壳体内直径 Dis: {param_value} -> {final_value}"
+                                                )
                                     except Exception as e:
                                         print(
                                             f"处理壳体内直径 Dis时出错: {str(e)}，使用原值: {param_value}"
                                         )
                                 elif param_name == "管箱内直径 Dit":
                                     try:
-                                        design_query = """
-                                            SELECT 壳程数值 
-                                            FROM 产品设计活动表_设计数据表 
-                                            WHERE 产品ID = %s AND 参数名称 = %s
+                                        record_query = """
+                                            SELECT 1
+                                            FROM 产品设计活动表_布管操作记录表
+                                            WHERE 产品ID = %s
+                                            LIMIT 1
                                         """
-                                        cursor.execute(
-                                            design_query,
-                                            (self.productID, "公称直径*"),
-                                        )
-                                        design_data = cursor.fetchone()
-
-                                        if (
-                                                isinstance(design_data, dict)
-                                                and "壳程数值" in design_data
-                                                and design_data["壳程数值"]
-                                        ):
-                                            final_value = design_data["壳程数值"]
-                                            print(
-                                                f"更新管箱内直径 Dit: {param_value} -> {final_value}"
+                                        cursor.execute(record_query, (self.productID,))
+                                        record_exists = cursor.fetchone()
+                                        if not record_exists:
+                                            design_query = """
+                                                SELECT 壳程数值 
+                                                FROM 产品设计活动表_设计数据表 
+                                                WHERE 产品ID = %s AND 参数名称 = %s
+                                            """
+                                            cursor.execute(
+                                                design_query,
+                                                (self.productID, "公称直径*"),
                                             )
+                                            design_data = cursor.fetchone()
+
+                                            if (
+                                                    isinstance(design_data, dict)
+                                                    and "壳程数值" in design_data
+                                                    and design_data["壳程数值"]
+                                            ):
+                                                final_value = design_data["壳程数值"]
+                                                print(
+                                                    f"更新管箱内直径 Dit: {param_value} -> {final_value}"
+                                                )
                                     except Exception as e:
                                         print(
                                             f"处理管箱内直径 Dit时出错: {str(e)}，使用原值: {param_value}"
@@ -3916,67 +3934,95 @@ class TubeLayoutEditor(QMainWindow):
                                                                 f"更新公称直径 DN: {param_value} -> {final_value}"
                                                             )
                                                     elif param_name == "壳体内直径 Dis":
-                                                        design_query = """
-                                                            SELECT 壳程数值 
-                                                            FROM 产品设计活动表_设计数据表 
-                                                            WHERE 产品ID = %s AND 参数名称 = %s
+                                                        record_query = """
+                                                            SELECT 1
+                                                            FROM 产品设计活动表_布管操作记录表
+                                                            WHERE 产品ID = %s
+                                                            LIMIT 1
                                                         """
                                                         design_cursor.execute(
-                                                            design_query,
-                                                            (
-                                                                self.productID,
-                                                                "公称直径*",
-                                                            ),
+                                                            record_query,
+                                                            (self.productID,),
                                                         )
-                                                        design_data = (
+                                                        record_exists = (
                                                             design_cursor.fetchone()
                                                         )
-
-                                                        if (
-                                                                isinstance(
-                                                                    design_data, dict
-                                                                )
-                                                                and "壳程数值"
-                                                                in design_data
-                                                                and design_data["壳程数值"]
-                                                        ):
-                                                            final_value = design_data[
-                                                                "壳程数值"
-                                                            ]
-                                                            print(
-                                                                f"更新壳体内直径 Dis: {param_value} -> {final_value}"
+                                                        if not record_exists:
+                                                            design_query = """
+                                                                SELECT 壳程数值 
+                                                                FROM 产品设计活动表_设计数据表 
+                                                                WHERE 产品ID = %s AND 参数名称 = %s
+                                                            """
+                                                            design_cursor.execute(
+                                                                design_query,
+                                                                (
+                                                                    self.productID,
+                                                                    "公称直径*",
+                                                                ),
                                                             )
+                                                            design_data = (
+                                                                design_cursor.fetchone()
+                                                            )
+
+                                                            if (
+                                                                    isinstance(
+                                                                        design_data, dict
+                                                                    )
+                                                                    and "壳程数值"
+                                                                    in design_data
+                                                                    and design_data["壳程数值"]
+                                                            ):
+                                                                final_value = design_data[
+                                                                    "壳程数值"
+                                                                ]
+                                                                print(
+                                                                    f"更新壳体内直径 Dis: {param_value} -> {final_value}"
+                                                                )
                                                     elif param_name == "管箱内直径 Dit":
-                                                        design_query = """
-                                                            SELECT 壳程数值 
-                                                            FROM 产品设计活动表_设计数据表 
-                                                            WHERE 产品ID = %s AND 参数名称 = %s
+                                                        record_query = """
+                                                            SELECT 1
+                                                            FROM 产品设计活动表_布管操作记录表
+                                                            WHERE 产品ID = %s
+                                                            LIMIT 1
                                                         """
                                                         design_cursor.execute(
-                                                            design_query,
-                                                            (
-                                                                self.productID,
-                                                                "公称直径*",
-                                                            ),
+                                                            record_query,
+                                                            (self.productID,),
                                                         )
-                                                        design_data = (
+                                                        record_exists = (
                                                             design_cursor.fetchone()
                                                         )
-
-                                                        if (
-                                                                isinstance(
-                                                                    design_data, dict
-                                                                )
-                                                                and "壳程数值"
-                                                                in design_data
-                                                                and design_data["壳程数值"]
-                                                        ):
-                                                            final_value = design_data[
-                                                                "壳程数值"
-                                                            ]
-                                                            print(
-                                                                f"更新管箱内直径 Dit: {param_value} -> {final_value}"
+                                                        if not record_exists:
+                                                            design_query = """
+                                                                SELECT 壳程数值 
+                                                                FROM 产品设计活动表_设计数据表 
+                                                                WHERE 产品ID = %s AND 参数名称 = %s
+                                                            """
+                                                            design_cursor.execute(
+                                                                design_query,
+                                                                (
+                                                                    self.productID,
+                                                                    "公称直径*",
+                                                                ),
                                                             )
+                                                            design_data = (
+                                                                design_cursor.fetchone()
+                                                            )
+
+                                                            if (
+                                                                    isinstance(
+                                                                        design_data, dict
+                                                                    )
+                                                                    and "壳程数值"
+                                                                    in design_data
+                                                                    and design_data["壳程数值"]
+                                                            ):
+                                                                final_value = design_data[
+                                                                    "壳程数值"
+                                                                ]
+                                                                print(
+                                                                    f"更新管箱内直径 Dit: {param_value} -> {final_value}"
+                                                                )
                                                     elif (
                                                             param_name == "是否以外径为基准"
                                                     ):
@@ -5264,6 +5310,40 @@ class TubeLayoutEditor(QMainWindow):
         print("这是DN更新标志")
         print(self.isDi_change)
         print("这是Di更新标志")
+        # 若布管操作记录表中已存在当前产品记录，则强制置位 isDi_change
+        # （用于后续接口按“已发生Di相关操作”分支处理）
+        record_conn = None
+        record_cursor = None
+        try:
+            record_conn = pymysql.connect(
+                host="localhost",
+                user="root",
+                password="123456",
+                database="产品设计活动库",
+                charset="utf8mb4",
+                cursorclass=pymysql.cursors.DictCursor,
+            )
+            record_cursor = record_conn.cursor()
+            record_cursor.execute(
+                "SELECT `是否调过接口` FROM 产品设计活动表_布管操作记录表 WHERE 产品ID = %s LIMIT 1",
+                (self.productID,),
+            )
+            record_row = record_cursor.fetchone()
+            if record_row and str(record_row.get("是否调过接口", "")).strip() == "1":
+                self.isDi_change = True
+        except Exception as e:
+            print(f"[cal_di] 查询布管操作记录表失败: {e}")
+        finally:
+            try:
+                if record_cursor:
+                    record_cursor.close()
+            except Exception:
+                pass
+            try:
+                if record_conn:
+                    record_conn.close()
+            except Exception:
+                pass
 
         di_result = None  # 先初始化，避免未赋值引用
         if self.heat_exchanger in ["AEU", "BEU"]:
@@ -21646,6 +21726,7 @@ class TubeLayoutEditor(QMainWindow):
 
         table_name = "`产品设计活动表_布管参数表`"
         component_table = "`产品设计活动表_元件附加参数表`"
+        operation_record_table = "`产品设计活动表_布管操作记录表`"
         productID = self.productID
         sql_statements = []
 
@@ -21728,6 +21809,7 @@ class TubeLayoutEditor(QMainWindow):
             "拉杆形式": None,
             "拉杆直径": None,
         }
+        base_on_outer_diameter = None
 
         for data in tube_data:
             line_num = str(data.get("参数名", ""))
@@ -21736,6 +21818,8 @@ class TubeLayoutEditor(QMainWindow):
 
             if line_num in cross_params:
                 cross_params[line_num] = holes_up
+            if line_num == "是否以外径为基准":
+                base_on_outer_diameter = str(data.get("参数值", "")).strip()
 
             safe_line_num = escape_str(line_num)
             safe_holes_up = escape_str(holes_up)
@@ -21751,6 +21835,22 @@ class TubeLayoutEditor(QMainWindow):
                 f"VALUES ('{productID}', '{safe_line_num}', '{safe_holes_up}', {safe_holes_down})"
             )
             sql_statements.append(insert_sql)
+
+        # 记录“是否调过接口”：
+        # - 是否以外径为基准=是 -> 存 1
+        # - 是否以外径为基准=否 -> 存 0
+        if base_on_outer_diameter in ("是", "否"):
+            interface_called_flag = "1" if base_on_outer_diameter == "是" else "0"
+            sql_statements.append(
+                f"UPDATE {operation_record_table} SET `是否调过接口` = '{interface_called_flag}' "
+                f"WHERE `产品ID` = '{safe_productID}'"
+            )
+            sql_statements.append(
+                f"INSERT INTO {operation_record_table} (`产品ID`, `是否调过接口`) "
+                f"SELECT '{safe_productID}', '{interface_called_flag}' "
+                f"WHERE NOT EXISTS (SELECT 1 FROM {operation_record_table} "
+                f"WHERE `产品ID` = '{safe_productID}')"
+            )
 
         # 处理“中间挡板宽度”参数，包含单位mm
         if (
