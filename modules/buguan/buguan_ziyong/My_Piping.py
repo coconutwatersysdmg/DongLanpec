@@ -3495,8 +3495,6 @@ class TubeLayoutEditor(QMainWindow):
                                         )
 
                                 elif param_name == "壳体内直径 Dis":
-                                    # 新增：保存从设计数据表读取前的原始值
-                                    design_di_value = None
                                     try:
                                         design_query = """
                                             SELECT 壳程数值 
@@ -3504,72 +3502,25 @@ class TubeLayoutEditor(QMainWindow):
                                             WHERE 产品ID = %s AND 参数名称 = %s
                                         """
                                         cursor.execute(
-                                            design_query, (self.productID, "公称直径*")
+                                            design_query,
+                                            (self.productID, "公称直径*"),
                                         )
                                         design_data = cursor.fetchone()
-                                        # print(design_data)
-                                        # print("壳体内直径读了个寂寞读的是哪个？")
 
                                         if (
                                                 isinstance(design_data, dict)
                                                 and "壳程数值" in design_data
                                                 and design_data["壳程数值"]
                                         ):
-                                            design_di_value = design_data["壳程数值"]
-                                            final_value = design_di_value
-                                            if param_value != final_value:
-                                                try:
-                                                    delete_query = """DELETE FROM 产品设计活动表_布管元件表 WHERE 产品ID = %s"""
-                                                    cursor.execute(
-                                                        delete_query, (self.productID,)
-                                                    )
-                                                    delete_query = """DELETE FROM 产品设计活动表_布管防冲板表 WHERE 产品ID = %s"""
-                                                    cursor.execute(
-                                                        delete_query, (self.productID,)
-                                                    )
-                                                    delete_query = """DELETE FROM 产品设计活动表_布管焊接式防冲板表 WHERE 产品ID = %s"""
-                                                    cursor.execute(
-                                                        delete_query, (self.productID,)
-                                                    )
-                                                    delete_query = """DELETE FROM 产品设计活动表_布管交叉布管表 WHERE 产品ID = %s"""
-                                                    cursor.execute(
-                                                        delete_query, (self.productID,)
-                                                    )
-                                                    delete_query = """DELETE FROM 产品设计活动表_布管旁路挡板表 WHERE 产品ID = %s"""
-                                                    cursor.execute(
-                                                        delete_query, (self.productID,)
-                                                    )
-
-                                                    check_query = """SELECT 1 FROM 产品设计活动表_布管管口表 WHERE 产品ID = %s LIMIT 1"""
-                                                    cursor.execute(
-                                                        check_query, (self.productID,)
-                                                    )
-                                                    if cursor.fetchone():
-                                                        delete_query = """DELETE FROM 产品设计活动表_布管管口表 WHERE 产品ID = %s"""
-                                                        cursor.execute(
-                                                            delete_query,
-                                                            (self.productID,),
-                                                        )
-
-                                                    product_conn.commit()
-
-                                                    print(
-                                                        f"已删除产品ID为{self.productID}的布管元件表、防冲板表、焊接式防冲板表、交叉布管表、旁路挡板表所有数据"
-                                                    )
-                                                except Exception as e:
-                                                    print(
-                                                        f"删除布管元件表数据时出错: {str(e)}"
-                                                    )
+                                            final_value = design_data["壳程数值"]
                                             print(
                                                 f"更新壳体内直径 Dis: {param_value} -> {final_value}"
                                             )
                                     except Exception as e:
                                         print(
-                                            f"处理壳体内直径Di时出错: {str(e)}，使用原值: {param_value}"
+                                            f"处理壳体内直径 Dis时出错: {str(e)}，使用原值: {param_value}"
                                         )
                                 elif param_name == "管箱内直径 Dit":
-                                    # 新增：保存从设计数据表读取前的原始值
-                                    design_di_value = None
                                     try:
                                         design_query = """
                                             SELECT 壳程数值 
@@ -3577,7 +3528,8 @@ class TubeLayoutEditor(QMainWindow):
                                             WHERE 产品ID = %s AND 参数名称 = %s
                                         """
                                         cursor.execute(
-                                            design_query, (self.productID, "公称直径*")
+                                            design_query,
+                                            (self.productID, "公称直径*"),
                                         )
                                         design_data = cursor.fetchone()
 
@@ -3586,55 +3538,7 @@ class TubeLayoutEditor(QMainWindow):
                                                 and "壳程数值" in design_data
                                                 and design_data["壳程数值"]
                                         ):
-                                            design_di_value = design_data["壳程数值"]
-                                            final_value = design_di_value
-                                            if param_value != final_value:
-                                                try:
-                                                    delete_query = """DELETE FROM 产品设计活动表_布管元件表 WHERE 产品ID = %s"""
-                                                    cursor.execute(
-                                                        delete_query, (self.productID,)
-                                                    )
-                                                    delete_query = """DELETE FROM 产品设计活动表_布管防冲板表 WHERE 产品ID = %s"""
-                                                    cursor.execute(
-                                                        delete_query, (self.productID,)
-                                                    )
-                                                    delete_query = """DELETE FROM 产品设计活动表_布管焊接式防冲板表 WHERE 产品ID = %s"""
-                                                    cursor.execute(
-                                                        delete_query, (self.productID,)
-                                                    )
-                                                    delete_query = """DELETE FROM 产品设计活动表_布管交叉布管表 WHERE 产品ID = %s"""
-                                                    cursor.execute(
-                                                        delete_query, (self.productID,)
-                                                    )
-                                                    delete_query = """DELETE FROM 产品设计活动表_布管旁路挡板表 WHERE 产品ID = %s"""
-                                                    cursor.execute(
-                                                        delete_query, (self.productID,)
-                                                    )
-                                                    delete_query = """DELETE FROM 产品设计活动表_布管中间挡板表 WHERE 产品ID = %s"""
-                                                    cursor.execute(
-                                                        delete_query, (self.productID,)
-                                                    )
-
-                                                    check_query = """SELECT 1 FROM 产品设计活动表_布管管口表 WHERE 产品ID = %s LIMIT 1"""
-                                                    cursor.execute(
-                                                        check_query, (self.productID,)
-                                                    )
-                                                    if cursor.fetchone():
-                                                        delete_query = """DELETE FROM 产品设计活动表_布管管口表 WHERE 产品ID = %s"""
-                                                        cursor.execute(
-                                                            delete_query,
-                                                            (self.productID,),
-                                                        )
-
-                                                    product_conn.commit()
-
-                                                    print(
-                                                        f"已删除产品ID为{self.productID}的布管元件表、防冲板表、焊接式防冲板表、交叉布管表、旁路挡板表所有数据"
-                                                    )
-                                                except Exception as e:
-                                                    print(
-                                                        f"删除布管元件表数据时出错: {str(e)}"
-                                                    )
+                                            final_value = design_data["壳程数值"]
                                             print(
                                                 f"更新管箱内直径 Dit: {param_value} -> {final_value}"
                                             )
@@ -4012,7 +3916,6 @@ class TubeLayoutEditor(QMainWindow):
                                                                 f"更新公称直径 DN: {param_value} -> {final_value}"
                                                             )
                                                     elif param_name == "壳体内直径 Dis":
-                                                        # TODO 真是见鬼了，为啥总是第二次才能读正确
                                                         design_query = """
                                                             SELECT 壳程数值 
                                                             FROM 产品设计活动表_设计数据表 
@@ -4028,8 +3931,6 @@ class TubeLayoutEditor(QMainWindow):
                                                         design_data = (
                                                             design_cursor.fetchone()
                                                         )
-                                                        # print(design_data)
-                                                        # print("壳体内直径读了个寂寞")
 
                                                         if (
                                                                 isinstance(
@@ -4061,8 +3962,6 @@ class TubeLayoutEditor(QMainWindow):
                                                         design_data = (
                                                             design_cursor.fetchone()
                                                         )
-                                                        # print(design_data)
-                                                        # print("壳体内直径读了个寂寞")
 
                                                         if (
                                                                 isinstance(
@@ -22054,7 +21953,7 @@ class TubeLayoutEditor(QMainWindow):
                 safe_component_name = escape_str("固定管板")
                 reset_params = (
                     "管程侧分程隔板槽深度",
-                    "管程分程隔板槽宽",
+                    "管程侧分程隔板槽宽度",
                 )
                 for param_name in reset_params:
                     safe_param_name = escape_str(param_name)
@@ -22068,7 +21967,7 @@ class TubeLayoutEditor(QMainWindow):
             safe_component_name = escape_str("固定管板")
             reset_params = (
                 "壳程侧分程隔板槽深度",
-                "壳程分程隔板槽宽",
+                "壳程侧分程隔板槽宽度",
             )
             for param_name in reset_params:
                 safe_param_name = escape_str(param_name)
