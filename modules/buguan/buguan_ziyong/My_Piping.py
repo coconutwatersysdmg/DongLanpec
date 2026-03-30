@@ -6954,11 +6954,11 @@ class TubeLayoutEditor(QMainWindow):
                     return False
 
             elif param_name == "防冲板折边角度":
-                if not (30 <= value < 90):
+                if not (15 <= value <= 90):
                     QMessageBox.warning(
                         self,
                         "输入错误",
-                        f'您输入的"{param_name}"必须在30°到90°之间，请核对后重新输入！',
+                        f'您输入的"{param_name}"必须在15°到90°之间，请核对后重新输入！',
                     )
                     self.clear_selection_highlight()
                     return False
@@ -7124,11 +7124,11 @@ class TubeLayoutEditor(QMainWindow):
                     item.setText(original_value)
 
             elif param_name == "防冲板折边角度":
-                if not (30 <= value < 90):
+                if not (15 <= value <= 90):
                     QMessageBox.warning(
                         self,
                         "输入错误",
-                        f"您输入的“{param_name}”必须在30°到90°之间，请核对后重新输入！",
+                        f"您输入的“{param_name}”必须在15°到90°之间，请核对后重新输入！",
                     )
                     item.setText(original_value)
 
@@ -36570,11 +36570,9 @@ class TubeLayoutEditor(QMainWindow):
             if baffle_angle is None:
                 print("❌ 防冲板折边角度为空，无法绘制")
                 return
-            if not (30 <= baffle_angle < 90):
-                print(f"❌ 防冲板折边角度 {baffle_angle} 不在30-90度范围内")
-                QMessageBox.warning(
-                    self, "参数错误", "防冲板折边角度只能在30°到90°之间（不含90°）"
-                )
+            if not (15 <= baffle_angle <= 90):
+                print(f"❌ 防冲板折边角度 {baffle_angle} 不在15-90度范围内")
+                QMessageBox.warning(self, "参数错误", "防冲板折边角度只能在15°到90°之间")
                 return
             if tube_outer_diameter is None or tube_pitch is None:
                 print(
