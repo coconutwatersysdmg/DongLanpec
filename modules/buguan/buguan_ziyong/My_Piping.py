@@ -16685,6 +16685,157 @@ class TubeLayoutEditor(QMainWindow):
                 step_errors.append(msg)
                 return None
 
+        def _commit_param_table_edits_before_run():
+            """
+            回车触发布管时，编辑器（尤其是可编辑 QComboBox）可能还没把文本提交到表格模型。
+            这里强制把“换热管中心距 S”等正在编辑的值写回 param_table，确保后续校验读取到最新输入。
+            """
+            try:
+                from PyQt5.QtWidgets import QComboBox, QLineEdit, QApplication
+                from PyQt5.QtCore import QCoreApplication
+            except Exception:
+                return
+
+            # 1) 先让当前焦点控件失焦，触发提交（对 QLineEdit/Combo 的 lineEdit 有帮助）
+            try:
+                fw = QApplication.focusWidget()
+                if fw is not None and isinstance(fw, (QLineEdit, QComboBox)):
+                    fw.clearFocus()
+            except Exception:
+                pass
+
+            # 2) 对“换热管中心距 S”这一行：若是可编辑下拉框，显式 interpretText 提交 lineEdit 文本
+            try:
+                s_row = -1
+                for r in range(self.param_table.rowCount()):
+                    name_item = self.param_table.item(r, 1)
+                    if name_item and name_item.text().strip() == "换热管中心距 S":
+                        s_row = r
+                        break
+                if s_row >= 0:
+                    w = self.param_table.cellWidget(s_row, 2)
+                    if isinstance(w, QComboBox) and w.isEditable():
+                        try:
+                            w.interpretText()
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+            # 3) 跑一轮事件循环，让模型/委托有机会落盘
+            try:
+                QCoreApplication.processEvents()
+            except Exception:
+                pass
+
+        def _precheck_tube_center_distance_S():
+            """
+            Enter/Return 直接布管时，itemChanged 可能没触发。
+            因此在真正开始 calculate_piping_layout 之前，先做一次 S 的合规校验。
+            """
+            try:
+                from PyQt5.QtWidgets import QMessageBox, QComboBox, QTableWidgetItem
+            except Exception:
+                return True
+
+            # 读取 do
+            do_val = None
+            try:
+                do_raw = self.get_tube_do()
+                do_val = float(str(do_raw).strip()) if do_raw not in (None, "") else None
+            except Exception:
+                do_val = None
+
+            if do_val is None or do_val <= 0:
+                return True
+
+            # 读取当前表格中 "换热管中心距 S"
+            s_val = None
+            s_text_debug = ""
+            s_row = -1
+            row_count = self.param_table.rowCount()
+            for r in range(row_count):
+                name_item = self.param_table.item(r, 1)
+                if not name_item:
+                    continue
+                if name_item.text().strip() == "换热管中心距 S":
+                    s_row = r
+                    # 1) 优先：若该单元格是可编辑 QComboBox，直接读取 lineEdit 文本
+                    w = self.param_table.cellWidget(r, 2)
+                    if isinstance(w, QComboBox):
+                        try:
+                            if w.isEditable() and w.lineEdit() is not None:
+                                s_text_debug = w.lineEdit().text().strip()
+                            else:
+                                s_text_debug = w.currentText().strip()
+                        except Exception:
+                            try:
+                                s_text_debug = w.currentText().strip()
+                            except Exception:
+                                s_text_debug = ""
+                        if s_text_debug != "":
+                            try:
+                                s_val = float(s_text_debug)
+                            except Exception:
+                                s_val = None
+                    else:
+                        # 2) 普通文本单元格
+                        it = self.param_table.item(r, 2)
+                        s_text_debug = it.text().strip() if it else ""
+                        if s_text_debug != "":
+                            try:
+                                s_val = float(s_text_debug)
+                            except Exception:
+                                s_val = None
+                    break
+
+            # 调试输出：确认 on_buguan_bt_click 中实际拿到的 S 与 do
+            try:
+                print(
+                    f"[on_buguan_bt_click S 预检] 读取到换热管中心距 S 文本='{s_text_debug}', 数值={s_val}, do={do_val}"
+                )
+            except Exception:
+                pass
+
+            if s_val is None:
+                # 读不到时跳过本次 S 校验，由其他逻辑兜底
+                return True
+
+            # 触发确认逻辑：S < 1.25 * do
+            if s_val < 1.25 * do_val:
+                reply = QMessageBox.question(
+                    self,
+                    "提示",
+                    "标准推荐换热管中心距不宜小于1.25倍的换热管外径，是否继续？",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No,
+                )
+                if reply == QMessageBox.No and s_row >= 0:
+                    # 清空输入：S 无论是 combobox 还是普通文本，都尽力清空
+                    w = self.param_table.cellWidget(s_row, 2)
+                    if isinstance(w, QComboBox):
+                        try:
+                            if w.isEditable():
+                                if w.lineEdit() is not None:
+                                    w.lineEdit().setText("")
+                                w.setCurrentText("")
+                            else:
+                                w.setCurrentText("")
+                        except Exception:
+                            pass
+                    else:
+                        it = self.param_table.item(s_row, 2)
+                        if it:
+                            it.setText("")
+                        else:
+                            try:
+                                self.param_table.setItem(s_row, 2, QTableWidgetItem(""))
+                            except Exception:
+                                pass
+                return reply == QMessageBox.Yes
+
+            return True
+
         # 1) 临时断开所有 itemChanged 监听，避免布管时触发参数修改逻辑
         _safe_step(
             "断开 param_table.itemChanged",
@@ -16692,6 +16843,78 @@ class TubeLayoutEditor(QMainWindow):
         )
 
         try:
+            # 回车/快捷键触发时先提交编辑器内容，确保读取到最新 S
+            _commit_param_table_edits_before_run()
+
+            # Enter/Return 直接布管：先校验 S（避免 itemChanged 未触发导致少弹窗）
+            if not _precheck_tube_center_distance_S():
+                return
+
+            # 布管前强制清理：场景中残留的“中间挡板”图形项 + 相关缓存
+            # 仅清理 is_center_dangban 的项，避免误删其他图元
+            def _clear_center_dangban_graphics_and_cache_before_buguan():
+                try:
+                    if hasattr(self, "graphics_scene") and self.graphics_scene is not None:
+                        for item in list(self.graphics_scene.items()):
+                            try:
+                                if not getattr(item, "is_center_dangban", False):
+                                    continue
+                                # 先删附属临时图元
+                                try:
+                                    temp_items = getattr(item, "related_temp_items", None) or []
+                                    if isinstance(temp_items, list):
+                                        for t in list(temp_items):
+                                            try:
+                                                if t is not None and t.scene() == self.graphics_scene:
+                                                    self.graphics_scene.removeItem(t)
+                                            except Exception:
+                                                continue
+                                except Exception:
+                                    pass
+                                # 再删本体
+                                try:
+                                    if item.scene() == self.graphics_scene:
+                                        self.graphics_scene.removeItem(item)
+                                except Exception:
+                                    pass
+                            except Exception:
+                                continue
+                        try:
+                            self.graphics_scene.update()
+                            if hasattr(self, "graphics_view") and self.graphics_view:
+                                self.graphics_view.viewport().update()
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+                # 同步清空缓存，避免“干涉检测/重建”继续引用旧挡板
+                try:
+                    self.selected_center_dangban = []
+                except Exception:
+                    pass
+                try:
+                    self.center_dangban = []
+                except Exception:
+                    pass
+                try:
+                    self.all_center_dangban = []
+                except Exception:
+                    pass
+                try:
+                    self.center_dangban_dic = {}
+                except Exception:
+                    pass
+                try:
+                    self.center_dangban_lines = []
+                except Exception:
+                    pass
+
+            _safe_step(
+                "clear center dangban graphics/cache",
+                _clear_center_dangban_graphics_and_cache_before_buguan,
+            )
+
             # 2) 计算布管（核心）
             result = _safe_step("calculate_piping_layout", self.calculate_piping_layout)
 
@@ -39660,7 +39883,7 @@ class TubeLayoutEditor(QMainWindow):
                             and len(self.selected_centers) >= 2
                             and self.selected_centers[0][0] == self.selected_centers[1][0]
                     ):
-                        selected_centers_for_check = self.judge_linkage_x(
+                        selected_centers_for_check = self.judge_linkage_y(
                             self.selected_centers
                         )
                     elif (
@@ -39672,7 +39895,7 @@ class TubeLayoutEditor(QMainWindow):
                             self.selected_centers
                         )
                     else:
-                        selected_centers_for_check = self.judge_linkage_x(
+                        selected_centers_for_check = self.judge_linkage_y(
                             self.selected_centers
                         )
                 else:
@@ -39794,25 +40017,60 @@ class TubeLayoutEditor(QMainWindow):
             try:
                 if self.isSymmetry:
                     if tube_num_local == "2":
+                        print(
+                            f"[DEBUG 中间挡板对称] tube_num={tube_num_local}, 选点={self.selected_centers}, 路径=judge_linkage_y(左右对称)"
+                        )
                         selected_centers_local = self.judge_linkage_y(
                             self.selected_centers
                         )
                     elif tube_num_local in ["4", "6"]:
-                        if self.selected_centers[0][0] == self.selected_centers[1][0]:
-                            selected_centers_local = self.judge_linkage_x(
-                                self.selected_centers
+                        # 按已判定的 side_type 决定对称方向（按“实际布置效果”）：
+                        # horizontal(上下两点) -> 左右镜像（关于 y 轴，对应 judge_linkage_y）
+                        # vertical(左右两点)   -> 上下镜像（关于 x 轴，对应 judge_linkage_x）
+                        print(
+                            f"[DEBUG 中间挡板对称] tube_num={tube_num_local}, 选点={self.selected_centers}, side_type={mode}"
+                        )
+                        if mode == "horizontal":
+                            print(
+                                "[DEBUG 中间挡板对称] 命中分支: side_type=horizontal -> judge_linkage_y(关于y轴镜像，左右对称)"
                             )
-                        elif self.selected_centers[0][1] == self.selected_centers[1][1]:
                             selected_centers_local = self.judge_linkage_y(
                                 self.selected_centers
                             )
-                        else:
+                        elif mode == "vertical":
+                            print(
+                                "[DEBUG 中间挡板对称] 命中分支: side_type=vertical -> judge_linkage_x(关于x轴镜像，上下对称)"
+                            )
                             selected_centers_local = self.judge_linkage_x(
                                 self.selected_centers
                             )
+                        else:
+                            same_row = self.selected_centers[0][0] == self.selected_centers[1][0]
+                            same_col = self.selected_centers[0][1] == self.selected_centers[1][1]
+                            print(
+                                f"[DEBUG 中间挡板对称] side_type未知，回退旧逻辑 same_row={same_row}, same_col={same_col}"
+                            )
+                            if same_row:
+                                selected_centers_local = self.judge_linkage_x(
+                                    self.selected_centers
+                                )
+                            elif same_col:
+                                selected_centers_local = self.judge_linkage_y(
+                                    self.selected_centers
+                                )
+                            else:
+                                selected_centers_local = self.judge_linkage_x(
+                                    self.selected_centers
+                                )
                     else:
+                        print(
+                            f"[DEBUG 中间挡板对称] tube_num={tube_num_local}, 选点={self.selected_centers}, 路径=保持原选点(不做对称扩展)"
+                        )
                         selected_centers_local = self.selected_centers
                 else:
+                    print(
+                        f"[DEBUG 中间挡板对称] isSymmetry=False, 选点={self.selected_centers}, 路径=保持原选点"
+                    )
                     selected_centers_local = self.selected_centers
             except Exception:
                 selected_centers_local = self.selected_centers
@@ -41088,6 +41346,74 @@ class TubeLayoutEditor(QMainWindow):
         self.operation_order += 1
         """删除选中的中间挡板（完全照搬旁路挡板删除逻辑）"""
         try:
+            # 统一清理函数：删除图形项 + 清空缓存（避免残留）
+            def _clear_center_dangban_items_and_cache(blocks_to_remove_list=None):
+                """
+                删除场景中的中间挡板图元（含 related_temp_items），并清理所有相关缓存：
+                - center_dangban / all_center_dangban
+                - center_dangban_dic / center_dangban_lines
+                - selected_center_dangban
+                若传入 blocks_to_remove_list，则优先按该列表（含对称扩展）精准删除；否则全删。
+                """
+                # 1) 删除图形项
+                try:
+                    if hasattr(self, "graphics_scene") and self.graphics_scene is not None:
+                        items_in_scene = list(self.graphics_scene.items())
+                        for it in items_in_scene:
+                            try:
+                                if not getattr(it, "is_center_dangban", False):
+                                    continue
+                                if blocks_to_remove_list is not None and it not in blocks_to_remove_list:
+                                    continue
+                                # 先删附属临时图元
+                                temp_items = getattr(it, "related_temp_items", None) or []
+                                if isinstance(temp_items, list):
+                                    for t in list(temp_items):
+                                        try:
+                                            if t is not None and t.scene() == self.graphics_scene:
+                                                self.graphics_scene.removeItem(t)
+                                        except Exception:
+                                            continue
+                                # 再删本体
+                                try:
+                                    if it.scene() == self.graphics_scene:
+                                        self.graphics_scene.removeItem(it)
+                                except Exception:
+                                    pass
+                            except Exception:
+                                continue
+                        # 刷新
+                        try:
+                            self.graphics_scene.update()
+                            if hasattr(self, "graphics_view") and self.graphics_view:
+                                self.graphics_view.viewport().update()
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+                # 2) 清理缓存（无论图形删除是否成功都要做）
+                try:
+                    self.selected_center_dangban = []
+                except Exception:
+                    pass
+                try:
+                    self.center_dangban = []
+                except Exception:
+                    pass
+                try:
+                    self.all_center_dangban = []
+                except Exception:
+                    pass
+                try:
+                    self.center_dangban_dic = {}
+                except Exception:
+                    pass
+                try:
+                    self.center_dangban_lines = []
+                except Exception:
+                    pass
+
             if (
                     not hasattr(self, "selected_center_dangban")
                     or not self.selected_center_dangban
@@ -41239,6 +41565,19 @@ class TubeLayoutEditor(QMainWindow):
 
             # 清空选中列表
             self.selected_center_dangban = []
+
+            # 关键：同步清理干涉检测与字典缓存（防止残留）
+            try:
+                # center_dangban_lines：删除后直接重建成本次剩余挡板对应的 pairs 的做法成本高，
+                # 这里简单清空，避免残留干涉判断误判
+                self.center_dangban_lines = []
+            except Exception:
+                pass
+            try:
+                # 字典也同步清空（避免残留记录导致重绘重复）
+                self.center_dangban_dic = {}
+            except Exception:
+                pass
 
             # print(f"成功删除了 {len(removed_blocks)} 个挡板图形项")
 
