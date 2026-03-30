@@ -7917,6 +7917,7 @@ class TubeLayoutEditor(QMainWindow):
     def update_baffle_diameter(self):
         # 1. 查找参数表中各关键参数的行索引（移除布管限定圆DL的行索引查找）
         di_row = -1
+        dn_row = -1
         baffle_row = -1
         do_row = -1
         range_type_row = -1  # 换热管排列方式行索引
@@ -7931,6 +7932,8 @@ class TubeLayoutEditor(QMainWindow):
 
             if param_name == "壳体内直径 Dis":
                 di_row = row
+            elif param_name == "公称直径 DN":
+                dn_row = row
             elif param_name == "折流板外径":
                 baffle_row = row
             elif param_name == "换热管外径 do":
@@ -7951,6 +7954,20 @@ class TubeLayoutEditor(QMainWindow):
                 except ValueError:
                     print("壳体内直径 Dis 参数值格式错误")
                     return
+
+        # 2.0 公称直径 DN（表8折流/支持板外径的关联项）
+        dn_value = None
+        if dn_row != -1:
+            dn_widget = self.param_table.cellWidget(dn_row, 2)
+            if isinstance(dn_widget, QComboBox):
+                dn_text = dn_widget.currentText().strip()
+            else:
+                dn_item = self.param_table.item(dn_row, 2)
+                dn_text = dn_item.text().strip() if dn_item else ""
+            try:
+                dn_value = float(dn_text) if dn_text != "" else None
+            except Exception:
+                dn_value = None
 
         # 2.2 换热管外径 do
         do_value = None
@@ -7984,47 +8001,63 @@ class TubeLayoutEditor(QMainWindow):
                 if range_type_item and range_type_item.text().strip():
                     range_type_value = range_type_item.text()
 
-        # 检查必要参数是否存在（支撑折流板和拉杆更新逻辑）
-        if di_value is None or do_value is None or range_type_value is None:
-            print("缺少必要参数，无法进行计算")
-            return
+        # 3. 更新折流/支持板外径（折流板外径）
+        # 按表8：以 公称直径 DN 为基准确定默认值，且允许用户手动修改。
+        # 自动更新时：若用户已手动修改（该行在 modified_rows 内），则不覆盖用户输入。
+        if dn_value is not None and baffle_row != -1:
+            dn = float(dn_value)
+            if dn <= 0:
+                return
 
-        # 3. 更新折流板外径（逻辑完全保留）
-        if di_value is not None and baffle_row != -1:
-            # 假设壳体材料为钢管（实际应根据具体参数获取）
-            shell_material_type = "钢管"
-            baffle_diameter = ""
-
-            if di_value <= 400:
-                if shell_material_type == "钢管":
-                    measured_inner_diameter = di_value - 5
-                    baffle_diameter = f"{measured_inner_diameter - 2:.1f}"
-                else:
-                    baffle_diameter = f"{di_value - 2.5:.1f}"
-            elif 400 < di_value <= 500:
-                baffle_diameter = f"{di_value - 3.5:.1f}"
-            elif 500 < di_value <= 900:
-                baffle_diameter = f"{di_value - 4.5:.1f}"
-            elif 900 < di_value <= 1300:
-                baffle_diameter = f"{di_value - 6:.1f}"
-            elif 1300 < di_value <= 1700:
-                baffle_diameter = f"{di_value - 7:.1f}"
-            elif 1700 < di_value <= 2100:
-                baffle_diameter = f"{di_value - 8.5:.1f}"
-            elif 2100 < di_value <= 2300:
-                baffle_diameter = f"{di_value - 12:.1f}"
-            elif 2300 < di_value <= 2600:
-                baffle_diameter = f"{di_value - 14:.1f}"
-            elif 2600 < di_value <= 3200:
-                baffle_diameter = f"{di_value - 16:.1f}"
-            elif 3200 < di_value <= 4000:
-                baffle_diameter = f"{di_value - 18:.1f}"
+            # 表8：折流/支持板外径 = DN - offset
+            if dn < 400:
+                offset = 2.5
+            elif 400 <= dn < 500:
+                offset = 3.5
+            elif 500 <= dn < 900:
+                offset = 4.5
+            elif 900 <= dn < 1300:
+                offset = 6.0
+            elif 1300 <= dn < 1700:
+                offset = 7.0
+            elif 1700 <= dn < 2100:
+                offset = 8.5
+            elif 2100 <= dn < 2300:
+                offset = 12.0
+            elif 2300 <= dn <= 2600:
+                offset = 14.0
+            elif 2600 < dn <= 3200:
+                offset = 16.0
+            elif 3200 < dn <= 4000:
+                offset = 18.0
             else:
-                baffle_diameter = f"{di_value - 20:.1f}"  # 默认减量
+                # 表8未覆盖更大 DN：继续按 18 处理，避免出现异常大外径
+                offset = 18.0
 
-            if baffle_diameter:
-                self._update_table_cell(baffle_row, 2, baffle_diameter)
-                print(f"已更新折流板外径: {baffle_diameter}")
+            max_baffle_od = dn - offset
+            if max_baffle_od <= 0:
+                return
+
+            should_overwrite = True
+            try:
+                if hasattr(self, "modified_rows") and baffle_row in self.modified_rows:
+                    should_overwrite = False
+            except Exception:
+                pass
+
+            try:
+                cur_item = self.param_table.item(baffle_row, 2)
+                cur_text = cur_item.text().strip() if cur_item else ""
+            except Exception:
+                cur_text = ""
+
+            # 若为空值，仍允许回填默认值（即使已标记修改）
+            if cur_text == "":
+                should_overwrite = True
+
+            if should_overwrite:
+                self._update_table_cell(baffle_row, 2, f"{max_baffle_od:.1f}")
+                print(f"已更新折流板外径(按DN表8): {max_baffle_od:.1f}")
 
         # 4. 更新拉杆形式（逻辑完全保留）
         if lg_row != -1 and do_value is not None:
@@ -11472,7 +11505,9 @@ class TubeLayoutEditor(QMainWindow):
                 baffle_radius = baffle_diameter / 2
 
                 if cut_rate is not None and 0 <= cut_rate <= 50:
-                    cut_size = (cut_rate / 100) * shell_inner_diameter
+                    # 按规范：中心线间距 x = OD/2 - 切口率 * OD
+                    # 这里的 OD 取折流/支持板外径（即折流板外径 baffle_diameter），而非壳体内直径 Dis
+                    cut_size = (cut_rate / 100) * baffle_diameter
                     new_spacing = baffle_radius - cut_size
 
                     if new_spacing < 0 or new_spacing > baffle_radius:
@@ -11500,7 +11535,7 @@ class TubeLayoutEditor(QMainWindow):
                         return
 
                     new_cut_rate = (
-                                           (baffle_radius - cut_spacing) / shell_inner_diameter
+                                           (baffle_radius - cut_spacing) / baffle_diameter
                                    ) * 100
 
                     if not (0 <= new_cut_rate <= 50):
@@ -11541,7 +11576,7 @@ class TubeLayoutEditor(QMainWindow):
                         return
 
                     new_cut_rate = (
-                                           (baffle_radius - cut_spacing) / shell_inner_diameter
+                                           (baffle_radius - cut_spacing) / baffle_diameter
                                    ) * 100
 
                     if not (0 <= new_cut_rate <= 50):
@@ -11570,7 +11605,7 @@ class TubeLayoutEditor(QMainWindow):
                     )
                     return
 
-                cut_size = (cut_rate / 100) * shell_inner_diameter
+                cut_size = (cut_rate / 100) * baffle_diameter
 
                 if baffle_diameter is not None and baffle_diameter > 0:
                     baffle_radius = baffle_diameter / 2
@@ -11728,28 +11763,28 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception:
                     pass
 
-                # 读取 Di 当前值
-                di_val = None
+                # 读取 DN 当前值（表8上限的关联项）
+                dn_val = None
                 try:
-                    di_row = -1
+                    dn_row = -1
                     for r in range(self.param_table.rowCount()):
                         itn = self.param_table.item(r, 1)
-                        if itn and itn.text().strip() == "壳体内直径 Dis":
-                            di_row = r
+                        if itn and itn.text().strip() == "公称直径 DN":
+                            dn_row = r
                             break
-                    if di_row != -1:
-                        w = self.param_table.cellWidget(di_row, 2)
+                    if dn_row != -1:
+                        w = self.param_table.cellWidget(dn_row, 2)
                         if hasattr(w, "currentText"):
-                            di_text = w.currentText().strip()
+                            dn_text = w.currentText().strip()
                         else:
-                            dit = self.param_table.item(di_row, 2)
-                            di_text = dit.text().strip() if dit else ""
+                            dnt = self.param_table.item(dn_row, 2)
+                            dn_text = dnt.text().strip() if dnt else ""
                         try:
-                            di_val = float(di_text) if di_text != "" else None
+                            dn_val = float(dn_text) if dn_text != "" else None
                         except Exception:
-                            di_val = None
+                            dn_val = None
                 except Exception:
-                    di_val = None
+                    dn_val = None
 
                 # 解析当前外径数值
                 try:
@@ -11761,7 +11796,47 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception:
                     od_val = None
 
-                if di_val is not None and od_val is not None and od_val > di_val:
+                # 按表8计算折流/支持板外径上限：max_od = DN - offset
+                max_od = None
+                try:
+                    if dn_val is not None and dn_val > 0:
+                        dn = float(dn_val)
+                        if dn < 400:
+                            offset = 2.5
+                        elif 400 <= dn < 500:
+                            offset = 3.5
+                        elif 500 <= dn < 900:
+                            offset = 4.5
+                        elif 900 <= dn < 1300:
+                            offset = 6.0
+                        elif 1300 <= dn < 1700:
+                            offset = 7.0
+                        elif 1700 <= dn < 2100:
+                            offset = 8.5
+                        elif 2100 <= dn < 2300:
+                            offset = 12.0
+                        elif 2300 <= dn <= 2600:
+                            offset = 14.0
+                        elif 2600 < dn <= 3200:
+                            offset = 16.0
+                        elif 3200 < dn <= 4000:
+                            offset = 18.0
+                        else:
+                            offset = 18.0
+                        max_od = dn - offset
+                except Exception:
+                    max_od = None
+
+                invalid = False
+                if od_val is None:
+                    invalid = False
+                elif od_val <= 0:
+                    invalid = True
+                # 允许等于表8上限（“不应大于xxx”）
+                elif max_od is not None and od_val > max_od:
+                    invalid = True
+
+                if od_val is not None and invalid:
                     # 抑制标志 + 防抖时间戳
                     try:
                         self._suppress_baffle_od_warn = True
@@ -11776,11 +11851,22 @@ class TubeLayoutEditor(QMainWindow):
 
                     from PyQt5.QtWidgets import QMessageBox
 
-                    QMessageBox.warning(
-                        self, "提示", f"折流板外径不应大于壳体内直径Di {di_val:g} mm!"
-                    )
+                    if od_val <= 0:
+                        QMessageBox.warning(
+                            self, "提示", "折流/支持板的外径必须大于0 mm，请重新输入！"
+                        )
+                    else:
+                        # 按需求：xxx 为表8对应的折流/支持板外径（上限）
+                        xxx = f"{max_od:.1f}" if max_od is not None else ""
+                        QMessageBox.warning(
+                            self,
+                            "提示",
+                            f"折流/支持板的外径不应大于{xxx} mm，请重新输入！"
+                            if xxx
+                            else "折流/支持板的外径数值不正确，请重新输入！",
+                        )
 
-                    # 计算回退值：LB_BaffleOD -> original_param_values -> Di
+                    # 计算回退值：LB_BaffleOD -> original_param_values -> 表8上限
                     prev_val = None
                     try:
                         if hasattr(self, "input_json") and isinstance(
@@ -11799,8 +11885,16 @@ class TubeLayoutEditor(QMainWindow):
                                 )
                         except Exception:
                             pass
-                    if prev_val is None and di_val is not None:
-                        prev_val = f"{di_val:g}"
+                    # 若历史值不存在/不合法，则回退到表8上限
+                    try:
+                        pv_float = float(prev_val) if prev_val not in (None, "") else None
+                    except Exception:
+                        pv_float = None
+                    if max_od is not None:
+                        if pv_float is None or pv_float <= 0 or pv_float > max_od:
+                            prev_val = f"{max_od:.1f}"
+                    elif pv_float is None or pv_float <= 0:
+                        prev_val = ""
 
                     if prev_val is not None:
                         # 断开 itemChanged，避免回写再触发
@@ -24445,6 +24539,8 @@ class TubeLayoutEditor(QMainWindow):
         dialog_rows = []  # (显示名, 实际名, 单位, 默认值(可选))
         # 记录四个联动参数的初始数值，用于非法输入恢复
         initial_numeric_values = {}
+        # 记录弹窗中各参数“上一次合法值”（字符串），用于出现红色提示时回滚
+        last_valid_text_by_name = {}
         for cn, rn, unit in base_params:
             dialog_rows.append((cn, rn, unit, None))
 
@@ -24543,6 +24639,12 @@ class TubeLayoutEditor(QMainWindow):
                 unit_item = QTableWidgetItem(unit or "")
                 unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
                 table.setItem(row, 2, unit_item)
+
+                # 初始化 last_valid：对可编辑文本项记录初始值
+                try:
+                    last_valid_text_by_name[cn] = "" if value_text is None else str(value_text)
+                except Exception:
+                    last_valid_text_by_name[cn] = ""
 
         # 一打开弹窗即根据当前数据计算“折流板切口与中心线间距a”并显示
         if show_other_params:
@@ -24785,11 +24887,58 @@ class TubeLayoutEditor(QMainWindow):
                 pass
             return None
 
+        def get_nominal_dn():
+            """获取公称直径 DN（从主参数表读取，用于表8上限校验）"""
+            try:
+                text = get_param_value("公称直径 DN")
+                if text:
+                    return float(text)
+            except Exception:
+                pass
+            return None
+
+        def calc_max_baffle_od_by_table8(dn_value: float):
+            """表8：折流/支持板外径上限 = DN - offset（按区间）"""
+            if dn_value is None:
+                return None
+            try:
+                dn = float(dn_value)
+            except Exception:
+                return None
+            if dn <= 0:
+                return None
+            if dn < 400:
+                offset = 2.5
+            elif 400 <= dn < 500:
+                offset = 3.5
+            elif 500 <= dn < 900:
+                offset = 4.5
+            elif 900 <= dn < 1300:
+                offset = 6.0
+            elif 1300 <= dn < 1700:
+                offset = 7.0
+            elif 1700 <= dn < 2100:
+                offset = 8.5
+            elif 2100 <= dn < 2300:
+                offset = 12.0
+            elif 2300 <= dn <= 2600:
+                offset = 14.0
+            elif 2600 < dn <= 3200:
+                offset = 16.0
+            elif 3200 < dn <= 4000:
+                offset = 18.0
+            else:
+                offset = 18.0
+            max_od = dn - offset
+            return max_od if max_od > 0 else None
+
         # 标记当前是否正在程序化更新，避免循环触发
         updating_linked_values = {"active": False}
         # 记录弹窗内最后一次由用户触发（非程序化）的联动参数改动
         # 用于点击“确定”回写主参数表时避免被另一侧联动覆盖导致小数重算
         last_user_changed_name = {"name": None}
+        # 去重：避免同一非法值反复弹出 QMessageBox
+        last_dialog_warn_key = {"key": None}
 
         def set_dialog_value(name: str, value: float):
             row = find_row_by_name(name)
@@ -24804,6 +24953,11 @@ class TubeLayoutEditor(QMainWindow):
                 # 格式化显示，保留1位小数
                 text = f"{value:.1f}"
                 item.setText(text)
+                # 程序联动写入视为合法值，更新 last_valid
+                try:
+                    last_valid_text_by_name[name] = text
+                except Exception:
+                    pass
             finally:
                 updating_linked_values["active"] = False
 
@@ -24894,6 +25048,30 @@ class TubeLayoutEditor(QMainWindow):
                 # 折流板外径无效，无法计算
                 return
 
+            # 进入新一轮计算前，先清掉旧的红色提示，避免“上一次错误状态”残留导致后续合法输入仍被判错
+            clear_warning()
+
+            # 折流/支持板外径（折流板外径）表8上限校验：在用户输入、失焦时就检查并提示
+            dn_val = get_nominal_dn()
+            max_od = calc_max_baffle_od_by_table8(dn_val) if dn_val is not None else None
+            # 允许等于表8上限（“不应大于”）
+            if max_od is not None and (baffle_diameter <= 0 or baffle_diameter > max_od):
+                set_warning(f"折流/支持板的外径不应大于{max_od:.1f}mm，请重新输入!")
+                try:
+                    from PyQt5.QtWidgets import QMessageBox
+
+                    warn_key = ("折流板外径", f"{baffle_diameter:.3f}", f"{max_od:.3f}")
+                    if last_dialog_warn_key["key"] != warn_key:
+                        last_dialog_warn_key["key"] = warn_key
+                        QMessageBox.warning(
+                            self,
+                            "提示",
+                            f"折流/支持板的外径不应大于{max_od:.1f}mm，请重新输入!",
+                        )
+                except Exception:
+                    pass
+                return
+
             baffle_radius = baffle_diameter / 2.0
 
             try:
@@ -24903,7 +25081,7 @@ class TubeLayoutEditor(QMainWindow):
 
                     if cut_rate is not None and 0 <= cut_rate <= 50:
                         # 根据切口率计算新的切口间距
-                        cut_size = (cut_rate / 100.0) * shell_inner_diameter
+                        cut_size = (cut_rate / 100.0) * baffle_diameter
                         new_spacing = baffle_radius - cut_size
 
                         if new_spacing < 0 or new_spacing > baffle_radius:
@@ -24923,7 +25101,7 @@ class TubeLayoutEditor(QMainWindow):
                             return
 
                         new_cut_rate = (
-                                               (baffle_radius - cut_spacing) / shell_inner_diameter
+                                               (baffle_radius - cut_spacing) / baffle_diameter
                                        ) * 100.0
 
                         if not (0 <= new_cut_rate <= 50):
@@ -24947,7 +25125,7 @@ class TubeLayoutEditor(QMainWindow):
                         return
 
                     new_cut_rate = (
-                                           (baffle_radius - cut_spacing) / shell_inner_diameter
+                                           (baffle_radius - cut_spacing) / baffle_diameter
                                    ) * 100.0
 
                     if not (0 <= new_cut_rate <= 50):
@@ -24964,7 +25142,7 @@ class TubeLayoutEditor(QMainWindow):
                         set_warning("折流板要求切口率值无效，必须在0%到50%范围内")
                         return
 
-                    cut_size = (cut_rate / 100.0) * shell_inner_diameter
+                    cut_size = (cut_rate / 100.0) * baffle_diameter
                     new_spacing = baffle_radius - cut_size
 
                     if new_spacing < 0 or new_spacing > baffle_radius:
@@ -24988,6 +25166,13 @@ class TubeLayoutEditor(QMainWindow):
                 return
             changed_name = name_item.text().strip()
 
+            # 记录用户改动前的值：若本次触发后出现红色提示，则回滚该输入，避免错误数据停留在界面上
+            fallback_text = ""
+            try:
+                fallback_text = last_valid_text_by_name.get(changed_name, "")
+            except Exception:
+                fallback_text = ""
+
             # 检查是否是折流板联动参数
             if changed_name in [
                 "折流板外径",
@@ -24998,6 +25183,26 @@ class TubeLayoutEditor(QMainWindow):
                 if not updating_linked_values["active"]:
                     last_user_changed_name["name"] = changed_name
                 validate_and_update_baffle_params(changed_name)
+
+                # 若出现红色提示，立即回滚用户本次输入
+                if warning_label.text().strip():
+                    updating_linked_values["active"] = True
+                    try:
+                        item.setText(fallback_text)
+                    finally:
+                        updating_linked_values["active"] = False
+                    # 回滚后立即清掉错误状态与去重key，让后续其他参数能继续正常联动
+                    try:
+                        clear_warning()
+                        last_dialog_warn_key["key"] = None
+                    except Exception:
+                        pass
+                else:
+                    # 当前输入有效，更新 last_valid
+                    try:
+                        last_valid_text_by_name[changed_name] = item.text()
+                    except Exception:
+                        pass
 
             # 原有的双弓形参数联动（保持不变）
             elif changed_name in [
@@ -25037,7 +25242,7 @@ class TubeLayoutEditor(QMainWindow):
                         return
                     clear_warning()
                     frac = rate / 100.0
-                    a_value = Db / 2.0 - frac * Di
+                    a_value = Db / 2.0 - frac * Db
                     set_dialog_value("A型板切口与中心线间距a", a_value)
 
                 elif changed_name == "A型板切口与中心线间距a":
@@ -25067,7 +25272,7 @@ class TubeLayoutEditor(QMainWindow):
                         return
                     clear_warning()
                     # 反算弓形弦高切口率 (百分数形式)
-                    rate = (Db / 2.0 - a_val) / Di * 100.0
+                    rate = (Db / 2.0 - a_val) / Db * 100.0
                     set_dialog_value("弓形弦高切口率", rate)
 
                 elif changed_name == "内侧中心切口率":
@@ -25093,7 +25298,7 @@ class TubeLayoutEditor(QMainWindow):
                         return
                     clear_warning()
                     frac = rate / 100.0
-                    b_value = frac * Di
+                    b_value = frac * Db
                     set_dialog_value("B型板切口与中心线间距b", b_value)
 
                 elif changed_name == "B型板切口与中心线间距b":
@@ -25123,8 +25328,28 @@ class TubeLayoutEditor(QMainWindow):
                         return
                     clear_warning()
                     # 反算内侧中心切口率 (百分数形式)
-                    rate = b_val / Di * 100.0
+                    rate = b_val / Db * 100.0
                     set_dialog_value("内侧中心切口率", rate)
+
+                # 若出现红色提示，立即回滚用户本次输入（保持提示不变）
+                if warning_label.text().strip():
+                    updating_linked_values["active"] = True
+                    try:
+                        item.setText(fallback_text)
+                    finally:
+                        updating_linked_values["active"] = False
+                    # 回滚后立即清掉错误状态与去重key，让后续其他参数能继续正常联动
+                    try:
+                        clear_warning()
+                        last_dialog_warn_key["key"] = None
+                    except Exception:
+                        pass
+                else:
+                    # 当前输入有效，更新 last_valid
+                    try:
+                        last_valid_text_by_name[changed_name] = item.text()
+                    except Exception:
+                        pass
 
         # 连接表格变化事件
         table.itemChanged.connect(on_item_changed)
