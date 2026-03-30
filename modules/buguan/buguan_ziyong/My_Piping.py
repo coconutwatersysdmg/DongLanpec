@@ -11931,19 +11931,22 @@ class TubeLayoutEditor(QMainWindow):
             if param_name == "换热管中心距 S":
                 try:
                     new_s = float(str(param_value).strip())
-                    default_s = self._get_default_tube_center_distance_S()
-                    if (
-                        default_s is not None
-                        and new_s < float(default_s)
-                    ):
+
+                    # 新增校验：S 不宜小于 1.25 * do（用户手动输入过小需要确认）
+                    do_val = self.get_tube_do()
+                    try:
+                        do_val = float(str(do_val).strip()) if do_val not in (None, "") else None
+                    except Exception:
+                        do_val = None
+
+                    if do_val is not None and do_val > 0 and new_s < 1.25 * do_val:
                         from PyQt5.QtWidgets import QMessageBox
                         import time as _time
 
-                        # 去重：同一次编辑/失焦可能触发多次 itemChanged。
-                        # 只要“同一行 + 同一输入值”在很短时间内已弹过，就不再弹第二次。
+                        # 去重：同一行 + 同一输入值，在很短时间内只弹一次
                         warn_key = (row, str(param_value).strip())
-                        last_key = getattr(self, "_last_s_warn_key", None)
-                        last_t = getattr(self, "_last_s_warn_time", None)
+                        last_key = getattr(self, "_last_s_confirm_key", None)
+                        last_t = getattr(self, "_last_s_confirm_time", None)
                         now_t = _time.monotonic()
                         if (
                             last_key == warn_key
@@ -11952,30 +11955,37 @@ class TubeLayoutEditor(QMainWindow):
                         ):
                             return
 
-                        # 只提示，不回滚；同时用标志阻止 itemChanged 产生的二次弹窗
+                        # 弹窗期间抑制二次触发（避免 itemChanged 连弹）
                         self._s_center_warn_in_progress = True
                         self._suppress_s_center_warn = True
-                        self._last_s_warn_key = warn_key
-                        self._last_s_warn_time = now_t
-                        QMessageBox.warning(
+                        self._last_s_confirm_key = warn_key
+                        self._last_s_confirm_time = now_t
+
+                        ret = QMessageBox.question(
                             self,
                             "提示",
-                            f"当前输入的参数值小于默认值{default_s:.1f}mm",
+                            "标准推荐换热管中心距不宜小于1.25倍的换热管外径，是否继续？",
+                            QMessageBox.Yes | QMessageBox.No,
+                            QMessageBox.No,
                         )
-                        # 注意：同一次编辑可能触发多次 itemChanged。
-                        # 不要在弹窗后立刻清标志，否则后续紧跟的 itemChanged 仍会再次弹窗。
-                        # 用延迟清理保证“下一次信号”不会再进到同一校验分支。
+                        # 延迟清除抑制标志，避免清空/写回引发的第二次 itemChanged 仍进入弹窗逻辑
                         from PyQt5.QtCore import QTimer
 
-                        def _clear_s_warn_flag():
+                        def _clear_s_suppress_flag():
                             try:
                                 self._suppress_s_center_warn = False
                                 self._s_center_warn_in_progress = False
                             except Exception:
                                 pass
 
-                        QTimer.singleShot(600, _clear_s_warn_flag)
-                        return
+                        QTimer.singleShot(600, _clear_s_suppress_flag)
+
+                        if ret == QMessageBox.No:
+                            try:
+                                changed_item.setText("")
+                            except Exception:
+                                pass
+                            return
                 except Exception as e:
                     # S 校验失败不影响其他逻辑
                     print(f"[on_table_item_changed] 换热管中心距 S 校验失败: {e}")
