@@ -6130,7 +6130,7 @@ class TubeLayoutEditor(QMainWindow):
                 json.dumps(input_json, indent=2, ensure_ascii=False)
             )
             self.output_data = json_str
-            print(self.output_data)
+            # print(self.output_data)
             self.update_pipe_parameters()
 
             # 关键：接口返回的 json 可能缺少 parse_heat_exchanger_json() 需要的 DNs/DLs 结构。
@@ -39261,7 +39261,14 @@ class TubeLayoutEditor(QMainWindow):
 
             vertical_ok = False
             if line_num_1 == 1 and line_num_2 == 1:
-                if abs(dx - LB_SNH) <= tol_h:
+                # 主逻辑：使用参数 LB_SNH 判断相邻管中心距是否匹配
+                # 兜底逻辑：当 LB_SNH 与当前布管真实几何不一致时，
+                # 用“左右对称且左右侧”（x1*x2<0）来判断是否在竖直分程隔板两侧。
+                abs_tol_x = 1e-2
+                is_left_right = (x1 * x2) < 0
+                is_dx_match = (abs(LB_SNH) > 0) and (abs(dx - LB_SNH) <= tol_h)
+                is_symmetric_sides = is_left_right and (abs(abs(x1) - abs(x2)) <= abs_tol_x)
+                if is_dx_match or is_symmetric_sides:
                     vertical_ok = True
                     print("[DEBUG] ✅ 满足竖直分程隔板两侧规则")
 
@@ -39269,9 +39276,13 @@ class TubeLayoutEditor(QMainWindow):
                     (is_special_4_3 or is_special_6_1)
                     and (line_num_1 in (1, 2))
                     and (line_num_2 in (1, 2))
-                    and abs(dx - LB_SNH) <= tol_h
             ):
-                vertical_ok = True
+                abs_tol_x = 1e-2
+                is_left_right = (x1 * x2) < 0
+                is_dx_match = (abs(LB_SNH) > 0) and (abs(dx - LB_SNH) <= tol_h)
+                is_symmetric_sides = is_left_right and (abs(abs(x1) - abs(x2)) <= abs_tol_x)
+                if is_dx_match or is_symmetric_sides:
+                    vertical_ok = True
                 print(
                     "[DEBUG] (特殊4.3/6.1) ✅ 满足竖直分程隔板两侧规则（允许行号在{1,2}）"
                 )
