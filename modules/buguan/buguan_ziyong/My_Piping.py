@@ -16286,7 +16286,7 @@ class TubeLayoutEditor(QMainWindow):
             # "SlipWayAngle": "滑道与竖直中心线夹角",
             # "SlipWayHeight": "滑道高度",
             # "DNs": "公称直径 DN",
-            # "DLs": "布管限定圆 DL",
+            "DL": "布管限定圆 DL",
             "BPBThick": "旁路挡板厚度",
             "S": "换热管中心距 S",
             # "W": "隔条位置尺寸 W"
