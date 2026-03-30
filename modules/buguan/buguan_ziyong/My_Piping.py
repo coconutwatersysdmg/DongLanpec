@@ -3226,6 +3226,10 @@ class TubeLayoutEditor(QMainWindow):
 
         self.isBlock = False
         self.heat_exchanger = None
+        # 打开管束阶段用：操作记录表是否“有效存在”
+        # 规则：有记录 + 公称直径 DN(布管参数表) 与 壳程数值(设计数据表) 一致 => 有效存在
+        #       只要 DN 不一致 => 按“没记录”处理（从设计数据表覆盖 Dis/Dit，并允许初始化时触发 user_update_Di）
+        operation_record_exists_effective = False
         product_conn_for_type = None
         try:
             # 1. 校验产品ID是否有效
@@ -3343,6 +3347,64 @@ class TubeLayoutEditor(QMainWindow):
                         processed_params = []
                         # 新增：保存从布管参数表读取的原始Di值
                         original_di_value = None
+
+                        # ========== 关键：按“操作记录是否有效”分流 ==========
+                        # 记录存在性先查一次：只要存在任意记录就认为“有记录”
+                        operation_record_exists = False
+                        try:
+                            cursor.execute(
+                                """
+                                SELECT 1
+                                FROM 产品设计活动表_布管操作记录表
+                                WHERE 产品ID = %s
+                                LIMIT 1
+                                """,
+                                (self.productID,),
+                            )
+                            operation_record_exists = cursor.fetchone() is not None
+                        except Exception as e:
+                            print(f"[load_initial_data] 查询布管操作记录表失败: {e}")
+                            operation_record_exists = False
+
+                        # DN 两个来源：布管参数表 vs 设计数据表
+                        table_dn_value = None
+                        for p in product_params:
+                            try:
+                                if isinstance(p, dict) and p.get("参数名") == "公称直径 DN":
+                                    table_dn_value = p.get("参数值")
+                                    break
+                            except Exception:
+                                continue
+
+                        design_dn_shell_value = None
+                        try:
+                            cursor.execute(
+                                """
+                                SELECT 壳程数值
+                                FROM 产品设计活动表_设计数据表
+                                WHERE 产品ID = %s AND 参数名称 = %s
+                                """,
+                                (self.productID, "公称直径*"),
+                            )
+                            row_dn = cursor.fetchone()
+                            if isinstance(row_dn, dict):
+                                design_dn_shell_value = row_dn.get("壳程数值")
+                        except Exception as e:
+                            print(f"[load_initial_data] 查询设计数据表 DN(壳程数值)失败: {e}")
+                            design_dn_shell_value = None
+
+                        operation_record_exists_effective = operation_record_exists
+                        # 若两来源 DN 不一致，则等价于“没记录”
+                        if operation_record_exists and table_dn_value is not None and design_dn_shell_value:
+                            try:
+                                t_dn = float(table_dn_value)
+                                d_dn = float(design_dn_shell_value)
+                                if abs(t_dn - d_dn) > 1e-6:
+                                    operation_record_exists_effective = False
+                            except Exception:
+                                if str(table_dn_value).strip() != str(design_dn_shell_value).strip():
+                                    operation_record_exists_effective = False
+                        # ========== 关键：结束 ==========
 
                         for param in product_params:
                             if isinstance(param, dict) and all(
@@ -3496,15 +3558,7 @@ class TubeLayoutEditor(QMainWindow):
 
                                 elif param_name == "壳体内直径 Dis":
                                     try:
-                                        record_query = """
-                                            SELECT 1
-                                            FROM 产品设计活动表_布管操作记录表
-                                            WHERE 产品ID = %s
-                                            LIMIT 1
-                                        """
-                                        cursor.execute(record_query, (self.productID,))
-                                        record_exists = cursor.fetchone()
-                                        if not record_exists:
+                                        if not operation_record_exists_effective:
                                             design_query = """
                                                 SELECT 壳程数值 
                                                 FROM 产品设计活动表_设计数据表 
@@ -3531,15 +3585,7 @@ class TubeLayoutEditor(QMainWindow):
                                         )
                                 elif param_name == "管箱内直径 Dit":
                                     try:
-                                        record_query = """
-                                            SELECT 1
-                                            FROM 产品设计活动表_布管操作记录表
-                                            WHERE 产品ID = %s
-                                            LIMIT 1
-                                        """
-                                        cursor.execute(record_query, (self.productID,))
-                                        record_exists = cursor.fetchone()
-                                        if not record_exists:
+                                        if not operation_record_exists_effective:
                                             design_query = """
                                                 SELECT 壳程数值 
                                                 FROM 产品设计活动表_设计数据表 
@@ -4261,12 +4307,17 @@ class TubeLayoutEditor(QMainWindow):
                         print(f"关闭组件数据库连接时出错: {str(e)}")
         # TODO 加载页面的初始化
         # 在初始化期间关闭监听开关，避免触发不必要的信号处理
+
         with SignalBlocker(self.param_table):
             self.initial_operation()
             self.load_initial_tube_num()
             self.update_total_holes_count()
             self.update_diameter_visibility_by_outer_flag()
-            self.user_update_Di()
+            # 仅限“刚打开管束”这一步：
+            # - 如果布管操作记录表存在记录：不做初次重算（避免覆盖 DL）
+            # - 否则：走原逻辑重算（允许用 Dis 等值计算 DL）
+            if not operation_record_exists_effective:
+                self.user_update_Di()
         # 初始化完成后，监听开关自动恢复（在 with 块退出时）
         try:
             if hasattr(self, "update_lagan_standard_from_params"):
@@ -5512,6 +5563,28 @@ class TubeLayoutEditor(QMainWindow):
             print(f"处理数据时发生错误: {str(e)}")
             return None, None  # 返回两个None值
 
+    def _commit_param_table_open_editor(self):
+        """正在编辑参数表时，先把委托编辑器内容写入模型再读取表格。
+
+        全局 Enter 绑在布管上会先于 Qt 结束单元格编辑；否则会读到 item 里的旧值
+        （例如编辑框已是 610，item 仍为 577，一布管又写回 577）。"""
+        from PyQt5.QtWidgets import QAbstractItemView, QApplication
+
+        table = getattr(self, "param_table", None)
+        if table is None or table.state() != QAbstractItemView.EditingState:
+            return
+        idx = table.currentIndex()
+        if not idx.isValid():
+            return
+        editor = table.indexWidget(idx)
+        if editor is None:
+            editor = QApplication.focusWidget()
+        if editor is None or not table.isAncestorOf(editor):
+            return
+        delegate = table.itemDelegate(idx)
+        if delegate is not None:
+            delegate.setModelData(editor, table.model(), idx)
+
     # TODO 布管函数
     def calculate_piping_layout(self):
         self.is_x_line1 = False
@@ -5578,6 +5651,8 @@ class TubeLayoutEditor(QMainWindow):
 
         self.has_piped = True
         self.left_data_pd = []
+
+        self._commit_param_table_open_editor()
 
         # 1. 读取参数
         DL = None
@@ -6052,9 +6127,38 @@ class TubeLayoutEditor(QMainWindow):
                 json.dumps(input_json, indent=2, ensure_ascii=False)
             )
             self.output_data = json_str
-            # print(self.output_data)
+            print(self.output_data)
             self.update_pipe_parameters()
-            result = parse_heat_exchanger_json(json_str)
+
+            # 关键：接口返回的 json 可能缺少 parse_heat_exchanger_json() 需要的 DNs/DLs 结构。
+            # 从界面参数表补齐，再用“补全后的 json”去解析绘图。
+            json_str_for_parse = json_str
+            try:
+                output_dict = json.loads(json_str) if isinstance(json_str, str) else json_str
+                if isinstance(output_dict, dict):
+                    # parse_heat_exchanger_json 期望：
+                    #   data["DNs"]["R"] -> 大圆外半径依据
+                    #   data["DLs"]["R"] -> 大圆内半径依据
+                    if "DNs" not in output_dict:
+                        if DN is not None:
+                            output_dict["DNs"] = {"R": float(DN)}
+                        elif "BaffleOD" in output_dict:
+                            # 兜底：接口有外径字段时，尽量让 parse 能成功
+                            output_dict["DNs"] = {"R": float(output_dict["BaffleOD"])}
+                    if "DLs" not in output_dict:
+                        if DL is not None:
+                            output_dict["DLs"] = {"R": float(DL)}
+                        elif "DL" in output_dict:
+                            # 兜底：接口已有限定圆直径字段时，直接复用
+                            output_dict["DLs"] = {"R": float(output_dict["DL"])}
+                    json_str_for_parse = json.dumps(
+                        output_dict, indent=None, ensure_ascii=False
+                    )
+            except Exception:
+                # 补齐失败则退回原 json_str；让上层异常处理逻辑继续工作
+                json_str_for_parse = json_str
+
+            result = parse_heat_exchanger_json(json_str_for_parse)
             self.save_layout_result(product_id, result)
             # 处理计算结果
             target_list = []
@@ -6152,6 +6256,8 @@ class TubeLayoutEditor(QMainWindow):
     # 该方法只调用接口，主要是为了看W返回值
     def calculate_piping(self):
         self.left_data_pd = []
+
+        self._commit_param_table_open_editor()
 
         # 1. 读取参数
         DL = None
@@ -9104,7 +9210,9 @@ class TubeLayoutEditor(QMainWindow):
     # TODO 三值检测函数
     def check_diameter_consistency(self, trigger_name=None):
         """
-        检查并保证：公称直径 DN >= 壳体内直径 Dis >= 布管限定圆 DL
+        检查直径链（不再单独要求 布管限定圆 DL <= 公称直径 DN）：
+        - 以外径为基准=是：若存在壳体内直径 Dis，则要求 Dis >= DL
+        - 以外径为基准=否：若存在 Dis，则要求 DN >= Dis >= DL；若不存在 Dis 则不校验
         若不满足：弹窗提示一次，并将被修改的值**恢复为上次合法时的具体值**（而不是推断的“上一层级值”）。
         实现细节：
         - 使用 self._last_valid_values 存放上一次被判定为合法（全部三值存在且满足约束）的值字典
@@ -9137,14 +9245,14 @@ class TubeLayoutEditor(QMainWindow):
                 elif name == "布管限定圆 DL":
                     dl_row = r
 
-            # DN 和 DL 缺一不可；Di 可以在某些型号下不存在，此时仍需保证 DL <= DN
+            # DN 和 DL 缺一不可（用于读取数值与回滚）；不再单独校验 DL 与 DN 的大小关系
             if dn_row == -1 or dl_row == -1:
                 print(
                     "[check_diameter_consistency WARN] DN 或 DL 参数行未找到，跳过检查。"
                 )
                 return
 
-            # 检查是否有关键行被隐藏：DN 或 DL 被隐藏则无法检查；Di 隐藏时仍可检查 DL <= DN
+            # 检查是否有关键行被隐藏：DN 或 DL 被隐藏则无法检查
             if self.param_table.isRowHidden(dn_row) or self.param_table.isRowHidden(dl_row):
                 print(
                     "[check_diameter_consistency WARN] DN 或 DL 参数行被隐藏，跳过检查。"
@@ -9188,29 +9296,28 @@ class TubeLayoutEditor(QMainWindow):
             is_outer_diameter_base = self.get_is_outer_diameter_base()
             print(f"[check_diameter_consistency] 是否以外径为基准: {is_outer_diameter_base}")
 
-            # 始终要求：DL <= DN；在此基础上，根据"是否以外径为基准"和 Di 是否存在决定是否再加 Di 相关约束
-            cond_dn_dl = dn >= dl
+            # 已取消单独约束 DL <= DN；仅按“是否以外径为基准”与 Dis 是否存在做链式或 Dis/DL 关系检查
             if is_outer_diameter_base == "是":
-                # 以外径为基准：Di 存在时要求 Di >= DL，否则只检查 DL <= DN
+                # 以外径为基准：仅当存在 Dis 时要求 Dis >= DL；无 Dis 时不校验（不再比较 DL 与 DN）
                 cond_di_dl = True if di is None else (di >= dl)
-                check_condition = cond_dn_dl and cond_di_dl
+                check_condition = cond_di_dl
                 print(
-                    f"[check_diameter_consistency] 以外径为基准模式，检查条件: DL({dl}) <= DN({dn}) 且 "
-                    f"{'略过 Di 检查 (Di 缺失)' if di is None else f'Di({di}) >= DL({dl})'} = {check_condition}"
+                    f"[check_diameter_consistency] 以外径为基准模式，检查条件: "
+                    f"{'略过 (Di 缺失)' if di is None else f'Di({di}) >= DL({dl})'} = {check_condition}"
                 )
             else:
-                # 不以外径为基准：Di 存在时检查 DN >= Di >= DL；缺失时至少保证 DL <= DN
+                # 不以外径为基准：Di 存在时检查 DN >= Dis >= DL；缺失 Dis 时不校验
                 if di is not None:
                     cond_chain = dn >= di >= dl
-                    check_condition = cond_dn_dl and cond_chain
+                    check_condition = cond_chain
                     print(
                         f"[check_diameter_consistency] 非以外径为基准模式，检查条件: "
-                        f"DL({dl}) <= DN({dn}) 且 DN({dn}) >= Di({di}) >= DL({dl}) = {check_condition}"
+                        f"DN({dn}) >= Di({di}) >= DL({dl}) = {check_condition}"
                     )
                 else:
-                    check_condition = cond_dn_dl
+                    check_condition = True
                     print(
-                        f"[check_diameter_consistency] 非以外径为基准模式 (Di 缺失)，检查条件: DL({dl}) <= DN({dn}) = {check_condition}"
+                        "[check_diameter_consistency] 非以外径为基准模式 (Di 缺失)，不校验 DN/DL/Dis 链"
                     )
 
             temp1 = getattr(self, "_dn_di_dl_temp1", None)
@@ -9231,7 +9338,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 不合法：弹窗 + 回写到 temp1
                 if is_outer_diameter_base == "是":
-                    warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）"
+                    warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！"
                 else:
                     warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！"
 
@@ -11669,7 +11776,7 @@ class TubeLayoutEditor(QMainWindow):
             # 2.5) 关键：DN/Dis/DL 先做一致性检查（不通过就立刻回滚并停止后续联动/重绘）
             # 目的：避免“非法值先触发 update_baffle_diameter/draw_baffle_plates 等重绘，回滚后图形仍保留”
             # 触发条件：壳体内直径 Dis / 布管限定圆 DL 手动修改时均需校验
-            # 以外径为基准=是：DL <= Dis；以外径为基准=否：DL <= DN（由 check_diameter_consistency 内部实现）
+            # 以外径为基准=是：Dis >= DL（有 Dis 时）；以外径为基准=否：DN >= Dis >= DL（有 Dis 时）；不再单独要求 DL<=DN
             if param_name in ("壳体内直径 Dis", "布管限定圆 DL"):
                 try:
                     print(f"[DEBUG] 准备调用 check_diameter_consistency，参数={param_name}")
@@ -22061,6 +22168,16 @@ class TubeLayoutEditor(QMainWindow):
                         f"UPDATE {component_table} SET `参数值` = '0' "
                         f"WHERE `产品ID` = '{safe_productID}' AND `元件名称` = '{safe_component_name}' AND `参数名称` = '{safe_param_name}'"
                     )
+            safe_component_name = escape_str("管箱平盖")
+            reset_params = (
+                "隔板槽深度"
+            )
+            for param_name in reset_params:
+                safe_param_name = escape_str(param_name)
+                sql_statements.append(
+                    f"UPDATE {component_table} SET `参数值` = '0' "
+                    f"WHERE `产品ID` = '{safe_productID}' AND `元件名称` = '{safe_component_name}' AND `参数名称` = '{safe_param_name}'"
+                )
 
         # 壳程=1 时，将元件附加参数表中固定管板的“壳程侧分程隔板槽深度/槽宽”更新为 0
         if is_shell_pass_one:
