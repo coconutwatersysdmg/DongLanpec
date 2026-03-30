@@ -85,6 +85,9 @@ ENABLE_SCREW_RING = True
 
 edge_centers: List[Tuple[float, float]] = []
 
+# 从配置库加载的“换热管中心距 S 映射表”缓存（只读一次，避免每次联动都查询数据库）
+_TUBE_CENTER_DISTANCE_MAP_CACHE = None
+
 
 class SignalBlocker:
     """
@@ -8939,41 +8942,68 @@ class TubeLayoutEditor(QMainWindow):
             )
             return
 
-        # 4. 中心距映射表（匹配文档数据，同外径下同类排列方式中心距一致）
-        center_distance_map = {
-            (10.0, "三角形排列"): 14.0,
-            (10.0, "正方形排列"): 17.0,
-            (12.0, "三角形排列"): 16.0,
-            (12.0, "正方形排列"): 19.0,
-            (14.0, "三角形排列"): 19.0,
-            (14.0, "正方形排列"): 21.0,
-            (16.0, "三角形排列"): 22.0,
-            (16.0, "正方形排列"): 22.0,
-            (19.0, "三角形排列"): 25.0,
-            (19.0, "正方形排列"): 25.0,
-            (20.0, "三角形排列"): 26.0,
-            (20.0, "正方形排列"): 26.0,
-            (22.0, "三角形排列"): 28.0,
-            (22.0, "正方形排列"): 28.0,
-            (25.0, "三角形排列"): 32.0,
-            (25.0, "正方形排列"): 32.0,
-            (30.0, "三角形排列"): 38.0,
-            (30.0, "正方形排列"): 38.0,
-            (32.0, "三角形排列"): 40.0,
-            (32.0, "正方形排列"): 40.0,
-            (35.0, "三角形排列"): 44.0,
-            (35.0, "正方形排列"): 44.0,
-            (38.0, "三角形排列"): 48.0,
-            (38.0, "正方形排列"): 48.0,
-            (45.0, "三角形排列"): 57.0,
-            (45.0, "正方形排列"): 57.0,
-            (50.0, "三角形排列"): 64.0,
-            (50.0, "正方形排列"): 64.0,
-            (55.0, "三角形排列"): 70.0,
-            (55.0, "正方形排列"): 70.0,
-            (57.0, "三角形排列"): 72.0,
-            (57.0, "正方形排列"): 72.0,
-        }
+        # 4. 中心距映射表（从配置库 user_config 读取并缓存）
+        global _TUBE_CENTER_DISTANCE_MAP_CACHE
+        if _TUBE_CENTER_DISTANCE_MAP_CACHE is None:
+            _TUBE_CENTER_DISTANCE_MAP_CACHE = {}
+            config_value = self.get_config_value("2.10.1.1")
+            if config_value:
+                try:
+                    config_rows = (
+                        ast.literal_eval(config_value)
+                        if isinstance(config_value, str)
+                        else config_value
+                    )
+                    # 期望结构：[
+                    #   ["换热管外径d", ...do...],
+                    #   ["换热管中心距S（三角形排列）", ...S_tri...],
+                    #   ["换热管中心距S（正方形排列）", ...S_square...],
+                    #   ...（Sn 行可忽略）
+                    # ]
+                    do_row = None
+                    tri_s_row = None
+                    sq_s_row = None
+                    for r in (config_rows or []):
+                        if not r or len(r) < 2:
+                            continue
+                        name = str(r[0]).strip()
+                        if name == "换热管外径d":
+                            do_row = r
+                        elif name == "换热管中心距S（三角形排列）":
+                            tri_s_row = r
+                        elif name == "换热管中心距S（正方形排列）":
+                            sq_s_row = r
+
+                    if do_row and tri_s_row and sq_s_row:
+                        do_values = [
+                            float(x)
+                            for x in do_row[1:]
+                            if str(x).strip() != ""
+                        ]
+                        tri_values = [
+                            float(x)
+                            for x in tri_s_row[1:]
+                            if str(x).strip() != ""
+                        ]
+                        sq_values = [
+                            float(x)
+                            for x in sq_s_row[1:]
+                            if str(x).strip() != ""
+                        ]
+
+                        for i, do_value in enumerate(do_values):
+                            if i < len(tri_values):
+                                _TUBE_CENTER_DISTANCE_MAP_CACHE[
+                                    (do_value, "三角形排列")
+                                ] = tri_values[i]
+                            if i < len(sq_values):
+                                _TUBE_CENTER_DISTANCE_MAP_CACHE[
+                                    (do_value, "正方形排列")
+                                ] = sq_values[i]
+                except Exception as e:
+                    print(f"[update_tube_center_distance] 解析配置失败: {e}")
+
+        center_distance_map = _TUBE_CENTER_DISTANCE_MAP_CACHE
 
         # 5. 匹配映射关系并更新中心距
         key = (do_value, unified_range_type)
@@ -8987,6 +9017,120 @@ class TubeLayoutEditor(QMainWindow):
             print(
                 f"无匹配数据：未找到外径{do_value}mm + {unified_range_type}（对应原始排列方式：{range_type_value}）的中心距配置"
             )
+
+    def _get_default_tube_center_distance_S(self):
+        """
+        读取当前“换热管外径 do + 换热管排列方式”组合，查配置库映射得到默认中心距 S。
+
+        返回：
+            float|None：默认中心距；找不到映射时返回 None
+        """
+        global _TUBE_CENTER_DISTANCE_MAP_CACHE
+        if _TUBE_CENTER_DISTANCE_MAP_CACHE is None:
+            _TUBE_CENTER_DISTANCE_MAP_CACHE = {}
+            config_value = self.get_config_value("2.10.1.1")
+            if config_value:
+                try:
+                    config_rows = (
+                        ast.literal_eval(config_value)
+                        if isinstance(config_value, str)
+                        else config_value
+                    )
+                    do_row = None
+                    tri_s_row = None
+                    sq_s_row = None
+                    for r in (config_rows or []):
+                        if not r or len(r) < 2:
+                            continue
+                        name = str(r[0]).strip()
+                        if name == "换热管外径d":
+                            do_row = r
+                        elif name == "换热管中心距S（三角形排列）":
+                            tri_s_row = r
+                        elif name == "换热管中心距S（正方形排列）":
+                            sq_s_row = r
+
+                    if do_row and tri_s_row and sq_s_row:
+                        do_values = [
+                            float(x)
+                            for x in do_row[1:]
+                            if str(x).strip() != ""
+                        ]
+                        tri_values = [
+                            float(x)
+                            for x in tri_s_row[1:]
+                            if str(x).strip() != ""
+                        ]
+                        sq_values = [
+                            float(x)
+                            for x in sq_s_row[1:]
+                            if str(x).strip() != ""
+                        ]
+
+                        for i, do_value in enumerate(do_values):
+                            if i < len(tri_values):
+                                _TUBE_CENTER_DISTANCE_MAP_CACHE[
+                                    (do_value, "三角形排列")
+                                ] = tri_values[i]
+                            if i < len(sq_values):
+                                _TUBE_CENTER_DISTANCE_MAP_CACHE[
+                                    (do_value, "正方形排列")
+                                ] = sq_values[i]
+                except Exception:
+                    # 配置解析失败则直接认为找不到默认值
+                    pass
+
+        if not _TUBE_CENTER_DISTANCE_MAP_CACHE:
+            return None
+
+        # 1) 取当前 do
+        do_value = None
+        range_type_value = None
+        for r in range(self.param_table.rowCount()):
+            name_item = self.param_table.item(r, 1)
+            if not name_item:
+                continue
+            name = name_item.text().strip()
+            if name == "换热管外径 do":
+                w = self.param_table.cellWidget(r, 2)
+                if isinstance(w, QComboBox):
+                    do_text = w.currentText().strip()
+                else:
+                    it = self.param_table.item(r, 2)
+                    do_text = it.text().strip() if it else ""
+                try:
+                    do_value = float(do_text)
+                except Exception:
+                    do_value = None
+            elif name == "换热管排列方式":
+                w = self.param_table.cellWidget(r, 2)
+                if isinstance(w, QComboBox):
+                    range_type_value = w.currentText().strip()
+                else:
+                    it = self.param_table.item(r, 2)
+                    range_type_value = it.text().strip() if it else ""
+
+        if do_value is None or not range_type_value:
+            return None
+
+        # 2) 归类排列方式
+        if range_type_value in ["正三角形", "转角正三角形"]:
+            unified_range_type = "三角形排列"
+        elif range_type_value in ["正方形", "转角正方形"]:
+            unified_range_type = "正方形排列"
+        else:
+            return None
+
+        # 3) 查映射：尽量匹配 float key（容错到 1 位小数）
+        key_candidates = [
+            (float(f"{do_value:.1f}"), unified_range_type),
+            (do_value, unified_range_type),
+        ]
+        for key in key_candidates:
+            if key in _TUBE_CENTER_DISTANCE_MAP_CACHE:
+                return _TUBE_CENTER_DISTANCE_MAP_CACHE[key]
+
+        return None
 
     def user_update_Di(self):
         # TODO  调接口更新壳体内直径
@@ -11551,6 +11695,15 @@ class TubeLayoutEditor(QMainWindow):
                         and param_name == "折流板外径"
                 ):
                     return
+                # 抑制：回滚/程序更新期间避免触发 S 的二次弹窗
+                if getattr(self, "_suppress_s_center_warn", False) and param_name == "换热管中心距 S":
+                    return
+                # 再加一层：如果已经在“检查并回滚 S”过程中，则后续同类 itemChanged 直接忽略
+                if (
+                    getattr(self, "_s_center_warn_in_progress", False)
+                    and param_name == "换热管中心距 S"
+                ):
+                    return
             except Exception:
                 pass
 
@@ -11772,6 +11925,60 @@ class TubeLayoutEditor(QMainWindow):
                 self.validate_input(changed_item, row)
             except Exception as e:
                 print(f"[on_table_item_changed] validate_input 出错: {e}")
+
+            # 2.2) 额外校验：换热管中心距 S 不能小于默认值
+            # 默认值来源：配置库 user_config（id='2.10.1.1'）+ 当前的 do/排列方式组合查表得到
+            if param_name == "换热管中心距 S":
+                try:
+                    new_s = float(str(param_value).strip())
+                    default_s = self._get_default_tube_center_distance_S()
+                    if (
+                        default_s is not None
+                        and new_s < float(default_s)
+                    ):
+                        from PyQt5.QtWidgets import QMessageBox
+                        import time as _time
+
+                        # 去重：同一次编辑/失焦可能触发多次 itemChanged。
+                        # 只要“同一行 + 同一输入值”在很短时间内已弹过，就不再弹第二次。
+                        warn_key = (row, str(param_value).strip())
+                        last_key = getattr(self, "_last_s_warn_key", None)
+                        last_t = getattr(self, "_last_s_warn_time", None)
+                        now_t = _time.monotonic()
+                        if (
+                            last_key == warn_key
+                            and last_t is not None
+                            and (now_t - last_t) < 2.0
+                        ):
+                            return
+
+                        # 只提示，不回滚；同时用标志阻止 itemChanged 产生的二次弹窗
+                        self._s_center_warn_in_progress = True
+                        self._suppress_s_center_warn = True
+                        self._last_s_warn_key = warn_key
+                        self._last_s_warn_time = now_t
+                        QMessageBox.warning(
+                            self,
+                            "提示",
+                            f"当前输入的参数值小于默认值{default_s:.1f}mm",
+                        )
+                        # 注意：同一次编辑可能触发多次 itemChanged。
+                        # 不要在弹窗后立刻清标志，否则后续紧跟的 itemChanged 仍会再次弹窗。
+                        # 用延迟清理保证“下一次信号”不会再进到同一校验分支。
+                        from PyQt5.QtCore import QTimer
+
+                        def _clear_s_warn_flag():
+                            try:
+                                self._suppress_s_center_warn = False
+                                self._s_center_warn_in_progress = False
+                            except Exception:
+                                pass
+
+                        QTimer.singleShot(600, _clear_s_warn_flag)
+                        return
+                except Exception as e:
+                    # S 校验失败不影响其他逻辑
+                    print(f"[on_table_item_changed] 换热管中心距 S 校验失败: {e}")
 
             # 2.5) 关键：DN/Dis/DL 先做一致性检查（不通过就立刻回滚并停止后续联动/重绘）
             # 目的：避免“非法值先触发 update_baffle_diameter/draw_baffle_plates 等重绘，回滚后图形仍保留”
