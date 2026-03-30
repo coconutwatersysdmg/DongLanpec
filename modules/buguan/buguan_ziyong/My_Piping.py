@@ -24908,7 +24908,7 @@ class TubeLayoutEditor(QMainWindow):
 
                         if new_spacing < 0 or new_spacing > baffle_radius:
                             set_warning(
-                                f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)"
+                                f"计算出的间距({new_spacing:.1f}mm)不在折流板半径范围(0-{baffle_radius:.1f}mm)内"
                             )
                             return
 
@@ -24969,7 +24969,7 @@ class TubeLayoutEditor(QMainWindow):
 
                     if new_spacing < 0 or new_spacing > baffle_radius:
                         set_warning(
-                            f"计算出的间距({new_spacing:.1f}mm)超出折流板半径范围(0-{baffle_radius:.1f}mm)"
+                            f"计算出的间距({new_spacing:.1f}mm)不在折流板半径范围(0-{baffle_radius:.1f}mm)内"
                         )
                         return
 
