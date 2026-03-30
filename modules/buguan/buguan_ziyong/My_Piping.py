@@ -12035,25 +12035,26 @@ class TubeLayoutEditor(QMainWindow):
 
                     if do_val is not None and do_val > 0 and new_s < 1.25 * do_val:
                         from PyQt5.QtWidgets import QMessageBox
-                        import time as _time
+                        from PyQt5.QtCore import QTimer
 
-                        # 去重：同一行 + 同一输入值，在很短时间内只弹一次
-                        warn_key = (row, str(param_value).strip())
-                        last_key = getattr(self, "_last_s_confirm_key", None)
-                        last_t = getattr(self, "_last_s_confirm_time", None)
-                        now_t = _time.monotonic()
-                        if (
-                            last_key == warn_key
-                            and last_t is not None
-                            and (now_t - last_t) < 2.0
-                        ):
+                        # ========= 全局 bool 逻辑（按你的要求梳理后实现）=========
+                        # - 维护一个全局开关：_s_center_warn_pending
+                        # - 当用户“输入了需要提示的违规值（S < 1.25*do）且本次文本与上次不同”时 -> pending=True
+                        # - 弹窗出现后，用户点击确认/否（发生一次交互） -> pending=False
+                        # - pending=False 时，即使后续布管/失焦/联动反复触发检查，也不再弹，直到用户再次输入新的违规值
+                        cur_text = str(param_value).strip()
+                        prev_text = getattr(self, "_s_center_warn_last_text", None)
+                        # 只有“用户真的输入了不同的值”才认为是新的触发源
+                        if prev_text != cur_text:
+                            self._s_center_warn_last_text = cur_text
+                            self._s_center_warn_pending = True
+
+                        if not getattr(self, "_s_center_warn_pending", False):
                             return
 
                         # 弹窗期间抑制二次触发（避免 itemChanged 连弹）
                         self._s_center_warn_in_progress = True
                         self._suppress_s_center_warn = True
-                        self._last_s_confirm_key = warn_key
-                        self._last_s_confirm_time = now_t
 
                         ret = QMessageBox.question(
                             self,
@@ -12062,9 +12063,14 @@ class TubeLayoutEditor(QMainWindow):
                             QMessageBox.Yes | QMessageBox.No,
                             QMessageBox.No,
                         )
-                        # 延迟清除抑制标志，避免清空/写回引发的第二次 itemChanged 仍进入弹窗逻辑
-                        from PyQt5.QtCore import QTimer
 
+                        # 一旦用户完成一次交互（是/否），立刻进入“全局静默”状态
+                        try:
+                            self._s_center_warn_pending = False
+                        except Exception:
+                            pass
+
+                        # 延迟清除抑制标志，避免清空/写回引发的第二次 itemChanged 再进来
                         def _clear_s_suppress_flag():
                             try:
                                 self._suppress_s_center_warn = False
@@ -12077,6 +12083,10 @@ class TubeLayoutEditor(QMainWindow):
                         if ret == QMessageBox.No:
                             try:
                                 changed_item.setText("")
+                            except Exception:
+                                pass
+                            try:
+                                self._s_center_warn_last_text = ""
                             except Exception:
                                 pass
                             return
@@ -16803,6 +16813,19 @@ class TubeLayoutEditor(QMainWindow):
 
             # 触发确认逻辑：S < 1.25 * do
             if s_val < 1.25 * do_val:
+                # 全局 bool 逻辑：仅当“用户输入了新的违规值”时才允许弹窗
+                try:
+                    cur_text = (s_text_debug or "").strip()
+                    prev_text = getattr(self, "_s_center_warn_last_text", None)
+                    if prev_text != cur_text:
+                        self._s_center_warn_last_text = cur_text
+                        self._s_center_warn_pending = True
+                except Exception:
+                    pass
+
+                if not getattr(self, "_s_center_warn_pending", False):
+                    return True
+
                 reply = QMessageBox.question(
                     self,
                     "提示",
@@ -16810,6 +16833,11 @@ class TubeLayoutEditor(QMainWindow):
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.No,
                 )
+                # 用户已确认一次：进入全局静默
+                try:
+                    self._s_center_warn_pending = False
+                except Exception:
+                    pass
                 if reply == QMessageBox.No and s_row >= 0:
                     # 清空输入：S 无论是 combobox 还是普通文本，都尽力清空
                     w = self.param_table.cellWidget(s_row, 2)
@@ -16832,6 +16860,10 @@ class TubeLayoutEditor(QMainWindow):
                                 self.param_table.setItem(s_row, 2, QTableWidgetItem(""))
                             except Exception:
                                 pass
+                    try:
+                        self._s_center_warn_last_text = ""
+                    except Exception:
+                        pass
                 return reply == QMessageBox.Yes
 
             return True
