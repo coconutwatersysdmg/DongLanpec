@@ -34449,7 +34449,10 @@ class TubeLayoutEditor(QMainWindow):
             theta_deg = float(angle)
 
             # 获取其他必要参数
-            DL = DN = do = None
+            # 这里的 DL 变量在历史代码里承载的是“壳体内直径 Dis”
+            # 按你的要求：滑道几何计算只使用 Dis，不再使用公称直径 DN
+            DL = do = None
+            DN = None
             for row in range(self.param_table.rowCount()):
                 param_name = self.param_table.item(row, 1).text()
                 widget = self.param_table.cellWidget(row, 2)
@@ -34461,8 +34464,6 @@ class TubeLayoutEditor(QMainWindow):
 
                 if param_name == "壳体内直径 Dis":
                     DL = float(param_value)
-                elif param_name == "公称直径 DN":
-                    DN = float(param_value)
                 elif param_name == "换热管外径 do":
                     do = float(param_value)
                     self.r = do / 2
@@ -34473,13 +34474,14 @@ class TubeLayoutEditor(QMainWindow):
                 )
                 return
 
-            DN = DN or DL
+            # 滑道计算全用壳体内直径 Dis
+            DN = DL
 
             # 初始化滑道中心列表
             self.slipway_centers = []
             all_interfering_y_coords = set()  # 收集所有存在干涉的y坐标
 
-            outer_radius = DN / 2
+            outer_radius = DL / 2
             center_x, center_y = 0, 0
             theta_rad = math.radians(theta_deg)
             center_angle = math.radians(90)  # Qt坐标系向下方向
