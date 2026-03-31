@@ -11730,6 +11730,26 @@ class TubeLayoutEditor(QMainWindow):
                         and param_name == "折流板外径"
                 ):
                     return
+                if (
+                        getattr(self, "_suppress_center_thickness_warn", False)
+                        and param_name == "中间挡板厚度"
+                ):
+                    return
+                if (
+                        getattr(self, "_suppress_slipway_thickness_warn", False)
+                        and param_name == "滑道厚度"
+                ):
+                    return
+                if (
+                        getattr(self, "_suppress_tube_wall_thickness_warn", False)
+                        and param_name == "换热管壁厚 δ"
+                ):
+                    return
+                if (
+                        getattr(self, "_tube_wall_warn_in_progress", False)
+                        and param_name == "换热管壁厚 δ"
+                ):
+                    return
                 # 抑制：回滚/程序更新期间避免触发 S 的二次弹窗
                 if getattr(self, "_suppress_s_center_warn", False) and param_name == "换热管中心距 S":
                     return
@@ -11948,6 +11968,209 @@ class TubeLayoutEditor(QMainWindow):
                         except Exception:
                             pass
                     return
+
+            # 提前单独处理：中间挡板厚度下限约束（0 < thickness）
+            if param_name == "中间挡板厚度":
+                try:
+                    from PyQt5.QtWidgets import QMessageBox
+
+                    cur_text = str(param_value).strip()
+
+                    # 初始化“最近合法值”：优先当前缓存，否则取初始原值
+                    if not hasattr(self, "_last_valid_center_thickness_text"):
+                        try:
+                            self._last_valid_center_thickness_text = str(
+                                self.original_param_values.get((row, 2), "")
+                            ).strip()
+                        except Exception:
+                            self._last_valid_center_thickness_text = ""
+
+                    invalid = False
+                    if cur_text != "":
+                        try:
+                            thickness_val = float(cur_text)
+                            if thickness_val <= 0:
+                                invalid = True
+                        except Exception:
+                            invalid = True
+
+                    if invalid:
+                        QMessageBox.warning(
+                            self, "输入错误", "中间挡板厚度必须是大于0的数字!"
+                        )
+
+                        rollback_text = str(
+                            getattr(self, "_last_valid_center_thickness_text", "")
+                        ).strip()
+                        if rollback_text == "":
+                            try:
+                                rollback_text = str(
+                                    self.original_param_values.get((row, 2), "")
+                                ).strip()
+                            except Exception:
+                                rollback_text = ""
+
+                        self._suppress_center_thickness_warn = True
+                        try:
+                            changed_item.setText(rollback_text)
+                        finally:
+                            self._suppress_center_thickness_warn = False
+                        return
+
+                    # 合法输入时，更新最近合法值（空输入不覆盖）
+                    if cur_text != "":
+                        self._last_valid_center_thickness_text = cur_text
+                except Exception as e:
+                    print(f"[on_table_item_changed] 中间挡板厚度校验失败: {e}")
+
+            # 提前单独处理：滑道厚度下限约束（0 < thickness）
+            if param_name == "滑道厚度":
+                try:
+                    from PyQt5.QtWidgets import QMessageBox
+
+                    cur_text = str(param_value).strip()
+
+                    # 初始化“最近合法值”：优先当前缓存，否则取初始原值
+                    if not hasattr(self, "_last_valid_slipway_thickness_text"):
+                        try:
+                            self._last_valid_slipway_thickness_text = str(
+                                self.original_param_values.get((row, 2), "")
+                            ).strip()
+                        except Exception:
+                            self._last_valid_slipway_thickness_text = ""
+
+                    invalid = False
+                    if cur_text != "":
+                        try:
+                            thickness_val = float(cur_text)
+                            if thickness_val <= 0:
+                                invalid = True
+                        except Exception:
+                            invalid = True
+
+                    if invalid:
+                        QMessageBox.warning(
+                            self, "输入错误", "滑道厚度下限制约束\n重新输入!"
+                        )
+
+                        rollback_text = str(
+                            getattr(self, "_last_valid_slipway_thickness_text", "")
+                        ).strip()
+                        if rollback_text == "":
+                            try:
+                                rollback_text = str(
+                                    self.original_param_values.get((row, 2), "")
+                                ).strip()
+                            except Exception:
+                                rollback_text = ""
+
+                        self._suppress_slipway_thickness_warn = True
+                        try:
+                            changed_item.setText(rollback_text)
+                        finally:
+                            self._suppress_slipway_thickness_warn = False
+                        return
+
+                    # 合法输入时，更新最近合法值（空输入不覆盖）
+                    if cur_text != "":
+                        self._last_valid_slipway_thickness_text = cur_text
+                except Exception as e:
+                    print(f"[on_table_item_changed] 滑道厚度校验失败: {e}")
+
+            # 提前单独处理：换热管壁厚 δ 约束（0 < δ <= do/2）
+            if param_name == "换热管壁厚 δ":
+                try:
+                    from PyQt5.QtWidgets import QMessageBox
+                    from PyQt5.QtCore import QTimer
+
+                    cur_text = str(param_value).strip()
+
+                    # 初始化最近合法值（默认 2）
+                    if not hasattr(self, "_last_valid_tube_wall_thickness_text"):
+                        base_text = "2"
+                        try:
+                            from_orig = str(
+                                self.original_param_values.get((row, 2), "")
+                            ).strip()
+                            if from_orig != "":
+                                base_text = from_orig
+                        except Exception:
+                            pass
+                        self._last_valid_tube_wall_thickness_text = base_text
+
+                    # 读取 do，用于上限 do/2
+                    do_val = None
+                    try:
+                        do_raw = self.get_tube_do()
+                        do_val = (
+                            float(str(do_raw).strip())
+                            if do_raw not in (None, "")
+                            else None
+                        )
+                    except Exception:
+                        do_val = None
+
+                    delta_val = None
+                    if cur_text != "":
+                        try:
+                            delta_val = float(cur_text)
+                        except Exception:
+                            delta_val = None
+
+                    invalid = False
+                    if delta_val is None:
+                        invalid = True
+                    elif delta_val <= 0:
+                        invalid = True
+                    elif do_val is not None and do_val > 0 and delta_val > (do_val / 2.0):
+                        invalid = True
+
+                    if invalid:
+                        # ========= 全套仿照 S 的全局 bool 逻辑 =========
+                        prev_text = getattr(self, "_tube_wall_warn_last_text", None)
+                        if prev_text != cur_text:
+                            self._tube_wall_warn_last_text = cur_text
+                            self._tube_wall_warn_pending = True
+
+                        if not getattr(self, "_tube_wall_warn_pending", False):
+                            return
+
+                        self._tube_wall_warn_in_progress = True
+                        self._suppress_tube_wall_thickness_warn = True
+
+                        QMessageBox.warning(
+                            self, "输入错误", "您输入的数值小于0或者过大，请重新输入!"
+                        )
+
+                        try:
+                            self._tube_wall_warn_pending = False
+                        except Exception:
+                            pass
+
+                        rollback_text = str(
+                            getattr(self, "_last_valid_tube_wall_thickness_text", "2")
+                        ).strip() or "2"
+                        try:
+                            changed_item.setText(rollback_text)
+                        finally:
+                            def _clear_tube_wall_suppress_flag():
+                                try:
+                                    self._suppress_tube_wall_thickness_warn = False
+                                    self._tube_wall_warn_in_progress = False
+                                except Exception:
+                                    pass
+
+                            QTimer.singleShot(600, _clear_tube_wall_suppress_flag)
+                        return
+
+                    # 合法输入：更新最近合法值，并重置 pending
+                    self._last_valid_tube_wall_thickness_text = cur_text
+                    try:
+                        self._tube_wall_warn_pending = False
+                    except Exception:
+                        pass
+                except Exception as e:
+                    print(f"[on_table_item_changed] 换热管壁厚δ校验失败: {e}")
 
             # 如果是用户手动修改"隔条位置尺寸 W"，打印提示并调用用户更新函数
             # 注意：程序自动更新时已经在前面return了，这里只会是用户手动修改
@@ -12791,7 +13014,12 @@ class TubeLayoutEditor(QMainWindow):
 
             else:
                 param_value = param["参数值"]
-                if param_value is None:
+                if param["参数名"] == "换热管壁厚 δ" and (
+                    param_value is None or str(param_value).strip() == ""
+                ):
+                    # 需求：默认换热管壁厚 δ 为 2 mm
+                    display_value = "2"
+                elif param_value is None:
                     display_value = ""
                 else:
                     display_value = str(param_value)
@@ -16868,6 +17096,124 @@ class TubeLayoutEditor(QMainWindow):
 
             return True
 
+        def _precheck_tube_wall_thickness_delta():
+            """
+            Enter/Return 直接布管时，确保“换热管壁厚 δ”也按与 S 相同机制先校验。
+            规则：0 < δ <= do/2
+            """
+            try:
+                from PyQt5.QtWidgets import QMessageBox, QComboBox, QTableWidgetItem
+            except Exception:
+                return True
+
+            do_val = None
+            try:
+                do_raw = self.get_tube_do()
+                do_val = float(str(do_raw).strip()) if do_raw not in (None, "") else None
+            except Exception:
+                do_val = None
+
+            delta_val = None
+            delta_text_debug = ""
+            delta_row = -1
+            row_count = self.param_table.rowCount()
+            for r in range(row_count):
+                name_item = self.param_table.item(r, 1)
+                if not name_item:
+                    continue
+                if name_item.text().strip() == "换热管壁厚 δ":
+                    delta_row = r
+                    w = self.param_table.cellWidget(r, 2)
+                    if isinstance(w, QComboBox):
+                        try:
+                            if w.isEditable() and w.lineEdit() is not None:
+                                delta_text_debug = w.lineEdit().text().strip()
+                            else:
+                                delta_text_debug = w.currentText().strip()
+                        except Exception:
+                            try:
+                                delta_text_debug = w.currentText().strip()
+                            except Exception:
+                                delta_text_debug = ""
+                    else:
+                        it = self.param_table.item(r, 2)
+                        delta_text_debug = it.text().strip() if it else ""
+                    if delta_text_debug != "":
+                        try:
+                            delta_val = float(delta_text_debug)
+                        except Exception:
+                            delta_val = None
+                    break
+
+            try:
+                print(
+                    f"[on_buguan_bt_click δ预检] 读取到换热管壁厚δ 文本='{delta_text_debug}', 数值={delta_val}, do={do_val}"
+                )
+            except Exception:
+                pass
+
+            invalid = False
+            if delta_val is None:
+                invalid = True
+            elif delta_val <= 0:
+                invalid = True
+            elif do_val is not None and do_val > 0 and delta_val > (do_val / 2.0):
+                invalid = True
+
+            if not invalid:
+                try:
+                    self._last_valid_tube_wall_thickness_text = delta_text_debug
+                    self._tube_wall_warn_pending = False
+                except Exception:
+                    pass
+                return True
+
+            # 全局 bool 逻辑：仅当输入了“新的违规值”时才弹
+            try:
+                cur_text = (delta_text_debug or "").strip()
+                prev_text = getattr(self, "_tube_wall_warn_last_text", None)
+                if prev_text != cur_text:
+                    self._tube_wall_warn_last_text = cur_text
+                    self._tube_wall_warn_pending = True
+            except Exception:
+                pass
+
+            if not getattr(self, "_tube_wall_warn_pending", False):
+                return False
+
+            QMessageBox.warning(
+                self, "输入错误", "您输入的数值小于0或者过大，请重新输入!"
+            )
+            try:
+                self._tube_wall_warn_pending = False
+            except Exception:
+                pass
+
+            if delta_row >= 0:
+                rollback_text = str(
+                    getattr(self, "_last_valid_tube_wall_thickness_text", "2")
+                ).strip() or "2"
+                w = self.param_table.cellWidget(delta_row, 2)
+                if isinstance(w, QComboBox):
+                    try:
+                        if w.isEditable() and w.lineEdit() is not None:
+                            w.lineEdit().setText(rollback_text)
+                        w.setCurrentText(rollback_text)
+                    except Exception:
+                        pass
+                else:
+                    it = self.param_table.item(delta_row, 2)
+                    if it:
+                        it.setText(rollback_text)
+                    else:
+                        try:
+                            self.param_table.setItem(
+                                delta_row, 2, QTableWidgetItem(rollback_text)
+                            )
+                        except Exception:
+                            pass
+            return False
+
         # 1) 临时断开所有 itemChanged 监听，避免布管时触发参数修改逻辑
         _safe_step(
             "断开 param_table.itemChanged",
@@ -16880,6 +17226,9 @@ class TubeLayoutEditor(QMainWindow):
 
             # Enter/Return 直接布管：先校验 S（避免 itemChanged 未触发导致少弹窗）
             if not _precheck_tube_center_distance_S():
+                return
+            # Enter/Return 直接布管：也先校验换热管壁厚 δ（与 S 同机制）
+            if not _precheck_tube_wall_thickness_delta():
                 return
 
             # 布管前强制清理：场景中残留的“中间挡板”图形项 + 相关缓存
@@ -25306,11 +25655,27 @@ class TubeLayoutEditor(QMainWindow):
             # 进入新一轮计算前，先清掉旧的红色提示，避免“上一次错误状态”残留导致后续合法输入仍被判错
             clear_warning()
 
-            # 折流/支持板外径（折流板外径）表8上限校验：在用户输入、失焦时就检查并提示
+            # 折流/支持板外径（折流板外径）下限与表8上限校验：在用户输入、失焦时就检查并提示
             dn_val = get_nominal_dn()
             max_od = calc_max_baffle_od_by_table8(dn_val) if dn_val is not None else None
+            if baffle_diameter <= 0:
+                set_warning("折流板外径必须是大于0的数字!")
+                try:
+                    from PyQt5.QtWidgets import QMessageBox
+
+                    warn_key = ("折流板外径", "LE_ZERO")
+                    if last_dialog_warn_key["key"] != warn_key:
+                        last_dialog_warn_key["key"] = warn_key
+                        QMessageBox.warning(
+                            self,
+                            "提示",
+                            "折流板外径必须是大于0的数字!",
+                        )
+                except Exception:
+                    pass
+                return
             # 允许等于表8上限（“不应大于”）
-            if max_od is not None and (baffle_diameter <= 0 or baffle_diameter > max_od):
+            if max_od is not None and baffle_diameter > max_od:
                 set_warning(f"折流/支持板的外径不应大于{max_od:.1f}mm，请重新输入!")
                 try:
                     from PyQt5.QtWidgets import QMessageBox
@@ -25322,6 +25687,25 @@ class TubeLayoutEditor(QMainWindow):
                             self,
                             "提示",
                             f"折流/支持板的外径不应大于{max_od:.1f}mm，请重新输入!",
+                        )
+                except Exception:
+                    pass
+                return
+
+            # 折流/支持板间距下限校验
+            spacing_val = get_float_from_dialog("折流/支持板间距")
+            if spacing_val is not None and spacing_val <= 0:
+                set_warning("折流/支持板间距必须是大于0的数字!")
+                try:
+                    from PyQt5.QtWidgets import QMessageBox
+
+                    warn_key = ("折流/支持板间距", "LE_ZERO")
+                    if last_dialog_warn_key["key"] != warn_key:
+                        last_dialog_warn_key["key"] = warn_key
+                        QMessageBox.warning(
+                            self,
+                            "提示",
+                            "折流/支持板间距必须是大于0的数字!",
                         )
                 except Exception:
                     pass
@@ -25431,6 +25815,7 @@ class TubeLayoutEditor(QMainWindow):
             # 检查是否是折流板联动参数
             if changed_name in [
                 "折流板外径",
+                "折流/支持板间距",
                 "折流板要求切口率",
                 "折流板切口与中心线间距a",
             ]:
@@ -40028,8 +40413,10 @@ class TubeLayoutEditor(QMainWindow):
         btn_layout.addWidget(confirm_btn)
         btn_layout.addWidget(close_btn)
         layout.addLayout(btn_layout)
+        last_valid_thickness_text = str(default_thickness)
 
         def on_confirm_click():
+            nonlocal last_valid_thickness_text
             try:
                 block_thickness = float(self.thickness_input.text())
                 if block_thickness <= 0:
@@ -40038,7 +40425,12 @@ class TubeLayoutEditor(QMainWindow):
                 QMessageBox.warning(
                     dialog, "输入错误", "中间挡板厚度必须是大于0的数字！"
                 )
+                try:
+                    self.thickness_input.setText(last_valid_thickness_text)
+                except Exception:
+                    pass
                 return
+            last_valid_thickness_text = str(block_thickness)
 
             # 重新构造用于绘制的 selected_centers_local（保留原对称扩展逻辑）
             tube_num_local = (
