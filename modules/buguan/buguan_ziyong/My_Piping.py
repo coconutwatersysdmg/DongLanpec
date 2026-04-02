@@ -9515,9 +9515,9 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 不合法：弹窗 + 回写到 temp1
                 if is_outer_diameter_base == "是":
-                    warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！"
+                    warning_msg = "您输入的布管限定圆数值已超限，请重新输入！"
                 else:
-                    warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！"
+                    warning_msg = "您输入的布管限定圆数值已超限，请重新输入！"
 
                 # 弹窗操作也添加异常保护
                 try:
@@ -9714,9 +9714,9 @@ class TubeLayoutEditor(QMainWindow):
                         self._dn_di_dl_no_history_warned = True
                         try:
                             if is_outer_diameter_base == "是":
-                                warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）"
+                                warning_msg = "您输入的布管限定圆数值已超限，请重新输入！"
                             else:
-                                warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！"
+                                warning_msg = "您输入的布管限定圆数值已超限，请重新输入！"
                             QMessageBox.warning(
                                 self,
                                 "提示",
@@ -9745,9 +9745,9 @@ class TubeLayoutEditor(QMainWindow):
                     self._dn_di_dl_no_history_warned = True
                     try:
                         if is_outer_diameter_base == "是":
-                            warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）"
+                            warning_msg = "您输入的布管限定圆数值已超限，请重新输入！"
                         else:
-                            warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！"
+                            warning_msg = "您输入的布管限定圆数值已超限，请重新输入！"
                         QMessageBox.warning(
                             self,
                             "提示",
@@ -9823,9 +9823,9 @@ class TubeLayoutEditor(QMainWindow):
                     # 弹窗提示一次
                     try:
                         if is_outer_diameter_base == "是":
-                            warning_msg = "壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n（以外径为基准模式，不检查公称直径 DN）\n系统将把它们恢复为上一次的合法值。"
+                            warning_msg = "您输入的布管限定圆数值已超限，请重新输入！"
                         else:
-                            warning_msg = "公称直径 DN、壳体内直径 Dis 和布管限定圆 DL 的值不匹配！\n系统将把它们恢复为上一次的合法值。"
+                            warning_msg = "您输入的布管限定圆数值已超限，请重新输入！"
                         QMessageBox.warning(
                             self,
                             "提示",
@@ -11300,6 +11300,132 @@ class TubeLayoutEditor(QMainWindow):
                 f"不支持的换热器类型：{self.heat_exchanger}，仅支持浮头式(AES/BES)和U形管式换热器"
             )
 
+    def _get_predefined_sn_horizontal_min_value(self):
+        """
+        获取“预定义规定值”（写死的数据表）中的“分程隔板两侧相邻管中心距（水平）”最低限制。
+        用于：当用户输入 < 预定义值时触发“是否继续”的确认弹窗。
+        """
+        # 1) 浮头式/AES/BES 与 U形管式/AEU/BEU 都在这里用同一套数据表
+        aes_bes_map = {
+            10.0: {"三角形排列": 28.0, "正方形排列": 28.0},
+            12.0: {"三角形排列": 30.0, "正方形排列": 30.0},
+            14.0: {"三角形排列": 32.0, "正方形排列": 32.0},
+            16.0: {"三角形排列": 35.0, "正方形排列": 35.0},
+            19.0: {"三角形排列": 38.0, "正方形排列": 38.0},
+            20.0: {"三角形排列": 40.0, "正方形排列": 40.0},
+            22.0: {"三角形排列": 42.0, "正方形排列": 42.0},
+            25.0: {"三角形排列": 44.0, "正方形排列": 44.0},
+            30.0: {"三角形排列": 50.0, "正方形排列": 50.0},
+            32.0: {"三角形排列": 52.0, "正方形排列": 52.0},
+            35.0: {"三角形排列": 56.0, "正方形排列": 56.0},
+            38.0: {"三角形排列": 60.0, "正方形排列": 60.0},
+            45.0: {"三角形排列": 68.0, "正方形排列": 68.0},
+            50.0: {"三角形排列": 76.0, "正方形排列": 76.0},
+            55.0: {"三角形排列": 78.0, "正方形排列": 78.0},
+            57.0: {"三角形排列": 80.0, "正方形排列": 80.0},
+        }
+
+        u_tube_2pass_vertical_map = {
+            10.0: 40.0,
+            12.0: 48.0,
+            14.0: 60.0,
+            16.0: 64.0,
+            19.0: 80.0,
+            20.0: 80.0,
+            22.0: 90.0,
+            25.0: 100.0,
+            30.0: 120.0,
+            32.0: 130.0,
+            35.0: 140.0,
+            38.0: 152.0,
+            45.0: 180.0,
+            50.0: 200.0,
+            55.0: 220.0,
+            57.0: 230.0,
+        }
+
+        u_tube_horizontal_map = {
+            10.0: 40.0,
+            12.0: 48.0,
+            14.0: 60.0,
+            16.0: 64.0,
+            19.0: 80.0,
+            20.0: 80.0,
+            22.0: 90.0,
+            25.0: 100.0,
+            30.0: 120.0,
+            32.0: 130.0,
+            35.0: 140.0,
+            38.0: 152.0,
+            45.0: 180.0,
+            50.0: 200.0,
+            55.0: 220.0,
+            57.0: 230.0,
+        }
+
+        try:
+            do_raw = self.get_tube_do()
+            if do_raw in (None, ""):
+                return None
+            do_value = float(str(do_raw).strip())
+            # 表8/写死表的 key 是 1 位小数
+            do_key = round(do_value, 1)
+        except Exception:
+            return None
+
+        # 2) 管程程数
+        try:
+            tube_pass = self.get_tube_pass_count()
+            tube_pass = str(tube_pass).strip() if tube_pass is not None else ""
+        except Exception:
+            tube_pass = ""
+
+        # 3) 换热管排列方式 => 分为“三角形排列/正方形排列”
+        range_type = None
+        try:
+            range_row = -1
+            for r in range(self.param_table.rowCount()):
+                it = self.param_table.item(r, 1)
+                if it and it.text().strip() == "换热管排列方式":
+                    range_row = r
+                    break
+            if range_row != -1:
+                w = self.param_table.cellWidget(range_row, 2)
+                if w is not None and hasattr(w, "currentText"):
+                    range_type_raw = w.currentText().strip()
+                else:
+                    itv = self.param_table.item(range_row, 2)
+                    range_type_raw = itv.text().strip() if itv else ""
+            else:
+                range_type_raw = ""
+
+            if range_type_raw in ["正三角形", "转角正三角形"]:
+                range_type = "三角形排列"
+            elif range_type_raw in ["正方形", "转角正方形"]:
+                range_type = "正方形排列"
+        except Exception:
+            range_type = None
+
+        # 4) 根据换热器类型选择数据表
+        if getattr(self, "heat_exchanger", None) in ["AES", "BES"]:
+            if do_key not in aes_bes_map or range_type not in aes_bes_map[do_key]:
+                return None
+            return float(aes_bes_map[do_key][range_type])
+
+        if getattr(self, "heat_exchanger", None) in ["AEU", "BEU"]:
+            if tube_pass == "2":
+                if do_key not in u_tube_2pass_vertical_map:
+                    return None
+                # 2管程：水平中心距默认取竖直值
+                return float(u_tube_2pass_vertical_map[do_key])
+            if tube_pass in ["4", "6"]:
+                if do_key not in u_tube_horizontal_map:
+                    return None
+                return float(u_tube_horizontal_map[do_key])
+            return None
+
+        return None
+
     def set_tie_rod_diameter_to_16(self):
         """
         将拉杆直径更新为16
@@ -11746,8 +11872,23 @@ class TubeLayoutEditor(QMainWindow):
                 ):
                     return
                 if (
+                        getattr(self, "_suppress_divider_W_warn", False)
+                        and param_name == "隔条位置尺寸 W"
+                ):
+                    return
+                if (
                         getattr(self, "_tube_wall_warn_in_progress", False)
                         and param_name == "换热管壁厚 δ"
+                ):
+                    return
+                if (
+                        getattr(self, "_suppress_sn_horizontal_warn", False)
+                        and param_name == "分程隔板两侧相邻管中心距（水平）"
+                ):
+                    return
+                if (
+                        getattr(self, "_sn_horizontal_warn_in_progress", False)
+                        and param_name == "分程隔板两侧相邻管中心距（水平）"
                 ):
                     return
                 # 抑制：回滚/程序更新期间避免触发 S 的二次弹窗
@@ -12175,11 +12316,81 @@ class TubeLayoutEditor(QMainWindow):
             # 如果是用户手动修改"隔条位置尺寸 W"，打印提示并调用用户更新函数
             # 注意：程序自动更新时已经在前面return了，这里只会是用户手动修改
             if param_name == "隔条位置尺寸 W":
+                try:
+                    from PyQt5.QtWidgets import QMessageBox
+                except Exception:
+                    QMessageBox = None
+
+                cur_text = str(param_value).strip()
+
+                # 初始化“最近合法值”
+                if not hasattr(self, "_last_valid_divider_W_text"):
+                    try:
+                        self._last_valid_divider_W_text = str(
+                            self.original_param_values.get((row, 2), "")
+                        ).strip()
+                    except Exception:
+                        self._last_valid_divider_W_text = ""
+
+                # 解析用户输入 W（非数字直接走原有联动，不做本次范围校验）
+                try:
+                    w_val = float(cur_text) if cur_text != "" else None
+                except Exception:
+                    w_val = None
+
+                # 获取 DL（用于计算上限 DL/2）
+                dl_val = None
+                try:
+                    for r in range(self.param_table.rowCount()):
+                        name_item = self.param_table.item(r, 1)
+                        if name_item and name_item.text().strip() == "布管限定圆 DL":
+                            w = self.param_table.cellWidget(r, 2)
+                            if hasattr(w, "currentText"):
+                                dl_text = w.currentText().strip()
+                            else:
+                                it_dl = self.param_table.item(r, 2)
+                                dl_text = it_dl.text().strip() if it_dl else ""
+                            if dl_text != "":
+                                dl_val = float(dl_text)
+                            break
+                except Exception:
+                    dl_val = None
+
+                # 做范围校验：0 < W < DL/2
+                upper = None if dl_val is None else (dl_val / 2.0)
+                invalid = False
+                if w_val is None or upper is None or dl_val <= 0:
+                    invalid = False  # 无法计算上限时，不拦截（交给原有联动/校验）
+                else:
+                    if w_val <= 0 or w_val >= upper:
+                        invalid = True
+
+                if invalid and QMessageBox is not None:
+                    QMessageBox.warning(
+                        self,
+                        "输入错误",
+                        "您输入的数值小于0或已超限，请重新输入！",
+                    )
+                    rollback_text = str(
+                        getattr(self, "_last_valid_divider_W_text", "")
+                    ).strip()
+                    if rollback_text == "":
+                        rollback_text = ""
+                    self._suppress_divider_W_warn = True
+                    try:
+                        changed_item.setText(rollback_text)
+                    finally:
+                        self._suppress_divider_W_warn = False
+                    return
+
+                # 合法：更新最近合法值
+                if invalid is False and w_val is not None:
+                    self._last_valid_divider_W_text = cur_text
+
                 print(f"[用户手动修改] {param_name} 被修改为: '{param_value}'")
                 self.update_divider_position_and_size_user()
+
                 # 延迟调用validate_input，确保update_divider_position_and_size_user()中的信号已恢复
-                # update_divider_position_and_size_user()会断开信号并在100ms后重新连接
-                # 所以这里延迟150ms调用validate_input，确保信号已恢复
                 from PyQt5.QtCore import QTimer
 
                 def delayed_validate():
@@ -12242,6 +12453,73 @@ class TubeLayoutEditor(QMainWindow):
                 self.validate_input(changed_item, row)
             except Exception as e:
                 print(f"[on_table_item_changed] validate_input 出错: {e}")
+
+            # 2.2.1) 额外校验：分程隔板两侧相邻管中心距（水平）不得小于预定义规定值
+            if param_name == "分程隔板两侧相邻管中心距（水平）":
+                try:
+                    cur_text = str(param_value).strip()
+                    if cur_text != "":
+                        new_snh = float(cur_text)
+                    else:
+                        new_snh = None
+
+                    expected_min = self._get_predefined_sn_horizontal_min_value()
+                    if (
+                            new_snh is not None
+                            and expected_min is not None
+                            and expected_min > 0
+                            and new_snh < expected_min
+                    ):
+                        from PyQt5.QtWidgets import QMessageBox
+                        from PyQt5.QtCore import QTimer
+
+                        # 去重：只有“新的违规输入值”才允许弹窗
+                        prev_text = getattr(self, "_sn_horizontal_warn_last_text", None)
+                        if prev_text != cur_text:
+                            self._sn_horizontal_warn_last_text = cur_text
+                            self._sn_horizontal_warn_pending = True
+
+                        if not getattr(self, "_sn_horizontal_warn_pending", False):
+                            return
+
+                        self._sn_horizontal_warn_in_progress = True
+                        self._suppress_sn_horizontal_warn = True
+
+                        reply = QMessageBox.question(
+                            self,
+                            "提示",
+                            "您输入的数值小于预定义的规定，是否继续？",
+                            QMessageBox.Yes | QMessageBox.No,
+                            QMessageBox.No,
+                        )
+
+                        # 用户完成一次交互后，全局静默
+                        self._sn_horizontal_warn_pending = False
+
+                        def _clear_sn_horizontal_suppress_flag():
+                            try:
+                                self._suppress_sn_horizontal_warn = False
+                                self._sn_horizontal_warn_in_progress = False
+                            except Exception:
+                                pass
+
+                        QTimer.singleShot(600, _clear_sn_horizontal_suppress_flag)
+
+                        if reply == QMessageBox.No:
+                            try:
+                                changed_item.setText("")
+                            except Exception:
+                                pass
+                            try:
+                                self._sn_horizontal_warn_last_text = ""
+                            except Exception:
+                                pass
+                            return
+
+                except Exception as e:
+                    print(
+                        f"[on_table_item_changed] Sn(水平) 预定义下限校验失败: {e}"
+                    )
 
             # 2.2) 额外校验：换热管中心距 S 不能小于默认值
             # 默认值来源：配置库 user_config（id='2.10.1.1'）+ 当前的 do/排列方式组合查表得到
@@ -16960,6 +17238,24 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 pass
 
+            # 2.5) 对“隔条位置尺寸 W”这一行：若是可编辑下拉框，显式 interpretText 提交 lineEdit 文本
+            try:
+                w_row = -1
+                for r in range(self.param_table.rowCount()):
+                    name_item = self.param_table.item(r, 1)
+                    if name_item and name_item.text().strip() == "隔条位置尺寸 W":
+                        w_row = r
+                        break
+                if w_row >= 0:
+                    w_widget = self.param_table.cellWidget(w_row, 2)
+                    if isinstance(w_widget, QComboBox) and w_widget.isEditable():
+                        try:
+                            w_widget.interpretText()
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
             # 3) 跑一轮事件循环，让模型/委托有机会落盘
             try:
                 QCoreApplication.processEvents()
@@ -17214,6 +17510,247 @@ class TubeLayoutEditor(QMainWindow):
                             pass
             return False
 
+        def _precheck_partition_side_center_distance_Sn_horizontal():
+            """
+            Enter/Return 直接布管时，itemChanged 可能没触发。
+            因此在真正开始 calculate_piping_layout 之前，先做一次 Sn(水平) 的确认校验。
+            """
+            try:
+                from PyQt5.QtWidgets import QMessageBox, QComboBox, QTableWidgetItem
+            except Exception:
+                return True
+
+            expected_min = self._get_predefined_sn_horizontal_min_value()
+            if expected_min is None or expected_min <= 0:
+                return True
+
+            # 读取 Sn(水平)
+            sn_row = -1
+            sn_text_debug = ""
+            sn_val = None
+            for r in range(self.param_table.rowCount()):
+                name_item = self.param_table.item(r, 1)
+                if name_item and name_item.text().strip() == "分程隔板两侧相邻管中心距（水平）":
+                    sn_row = r
+                    w = self.param_table.cellWidget(r, 2)
+                    if isinstance(w, QComboBox):
+                        try:
+                            if w.isEditable() and w.lineEdit() is not None:
+                                sn_text_debug = w.lineEdit().text().strip()
+                            else:
+                                sn_text_debug = w.currentText().strip()
+                        except Exception:
+                            try:
+                                sn_text_debug = w.currentText().strip()
+                            except Exception:
+                                sn_text_debug = ""
+                    else:
+                        it = self.param_table.item(r, 2)
+                        sn_text_debug = it.text().strip() if it else ""
+
+                    if sn_text_debug != "":
+                        try:
+                            sn_val = float(sn_text_debug)
+                        except Exception:
+                            sn_val = None
+                    break
+
+            if sn_val is None:
+                return True
+
+            if sn_val < expected_min:
+                # 全局 bool：仅当“新的违规输入值”才允许弹窗
+                cur_text = (sn_text_debug or "").strip()
+                prev_text = getattr(self, "_sn_horizontal_warn_last_text", None)
+                if prev_text != cur_text:
+                    self._sn_horizontal_warn_last_text = cur_text
+                    self._sn_horizontal_warn_pending = True
+
+                if not getattr(self, "_sn_horizontal_warn_pending", False):
+                    return True
+
+                reply = QMessageBox.question(
+                    self,
+                    "提示",
+                    "您输入的数值小于预定义的规定，是否继续？",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No,
+                )
+
+                # 用户完成一次交互后全局静默
+                try:
+                    self._sn_horizontal_warn_pending = False
+                except Exception:
+                    pass
+
+                if reply == QMessageBox.No and sn_row >= 0:
+                    try:
+                        self._sn_horizontal_warn_in_progress = True
+                        self._suppress_sn_horizontal_warn = True
+                    except Exception:
+                        pass
+
+                    try:
+                        w = self.param_table.cellWidget(sn_row, 2)
+                        if isinstance(w, QComboBox):
+                            try:
+                                if w.isEditable() and w.lineEdit() is not None:
+                                    w.lineEdit().setText("")
+                                w.setCurrentText("")
+                            except Exception:
+                                pass
+                        else:
+                            it = self.param_table.item(sn_row, 2)
+                            if it:
+                                it.setText("")
+                            else:
+                                try:
+                                    self.param_table.setItem(sn_row, 2, QTableWidgetItem(""))
+                                except Exception:
+                                    pass
+                    finally:
+                        try:
+                            from PyQt5.QtCore import QTimer
+
+                            QTimer.singleShot(
+                                600,
+                                lambda: (
+                                    setattr(self, "_suppress_sn_horizontal_warn", False),
+                                    setattr(self, "_sn_horizontal_warn_in_progress", False),
+                                ),
+                            )
+                        except Exception:
+                            try:
+                                self._suppress_sn_horizontal_warn = False
+                                self._sn_horizontal_warn_in_progress = False
+                            except Exception:
+                                pass
+
+                    try:
+                        self._sn_horizontal_warn_last_text = ""
+                    except Exception:
+                        pass
+
+                    return False
+
+            return True
+
+        def _precheck_divider_position_size_W():
+            """
+            Enter/Return 直接布管时，确保“隔条位置尺寸 W”也按范围校验：
+            0 < W < DL/2
+            """
+            try:
+                from PyQt5.QtWidgets import QMessageBox, QComboBox, QTableWidgetItem
+            except Exception:
+                return True
+
+            # 读取 DL（布管限定圆 DL）
+            dl_val = None
+            for r in range(self.param_table.rowCount()):
+                name_item = self.param_table.item(r, 1)
+                if name_item and name_item.text().strip() == "布管限定圆 DL":
+                    w = self.param_table.cellWidget(r, 2)
+                    dl_text = ""
+                    if isinstance(w, QComboBox):
+                        try:
+                            dl_text = w.currentText().strip()
+                        except Exception:
+                            dl_text = ""
+                    else:
+                        it_dl = self.param_table.item(r, 2)
+                        dl_text = it_dl.text().strip() if it_dl else ""
+                    if dl_text != "":
+                        try:
+                            dl_val = float(dl_text)
+                        except Exception:
+                            dl_val = None
+                    break
+
+            if dl_val is None or dl_val <= 0:
+                return True
+
+            upper = dl_val / 2.0
+
+            # 读取 W
+            w_row = -1
+            w_text_debug = ""
+            w_val = None
+            for r in range(self.param_table.rowCount()):
+                name_item = self.param_table.item(r, 1)
+                if name_item and name_item.text().strip() == "隔条位置尺寸 W":
+                    w_row = r
+                    widget = self.param_table.cellWidget(r, 2)
+                    if isinstance(widget, QComboBox):
+                        try:
+                            if widget.isEditable() and widget.lineEdit() is not None:
+                                w_text_debug = widget.lineEdit().text().strip()
+                            else:
+                                w_text_debug = widget.currentText().strip()
+                        except Exception:
+                            try:
+                                w_text_debug = widget.currentText().strip()
+                            except Exception:
+                                w_text_debug = ""
+                    else:
+                        it_w = self.param_table.item(r, 2)
+                        w_text_debug = it_w.text().strip() if it_w else ""
+
+                    if w_text_debug != "":
+                        try:
+                            w_val = float(w_text_debug)
+                        except Exception:
+                            w_val = None
+                    break
+
+            if w_val is None:
+                return True
+
+            invalid = (w_val <= 0) or (w_val >= upper)
+            if not invalid:
+                # 更新最近合法值（供回滚使用）
+                try:
+                    self._last_valid_divider_W_text = w_text_debug
+                except Exception:
+                    pass
+                return True
+
+            # 非法：弹窗 + 回滚/重新输入
+            QMessageBox.warning(
+                self,
+                "输入错误",
+                "您输入的数值小于0或已超限，请重新输入！",
+            )
+
+            rollback_text = str(getattr(self, "_last_valid_divider_W_text", "")).strip()
+            if rollback_text == "":
+                # 兜底：尝试回退到 original_param_values
+                try:
+                    rollback_text = str(self.original_param_values.get((w_row, 2), "")).strip()
+                except Exception:
+                    rollback_text = ""
+
+            if w_row >= 0:
+                widget = self.param_table.cellWidget(w_row, 2)
+                if isinstance(widget, QComboBox):
+                    try:
+                        if widget.isEditable() and widget.lineEdit() is not None:
+                            widget.lineEdit().setText(rollback_text)
+                        widget.setCurrentText(rollback_text)
+                    except Exception:
+                        pass
+                else:
+                    it = self.param_table.item(w_row, 2)
+                    if it:
+                        it.setText(rollback_text)
+                    else:
+                        try:
+                            self.param_table.setItem(w_row, 2, QTableWidgetItem(rollback_text))
+                        except Exception:
+                            pass
+
+            return False
+
         # 1) 临时断开所有 itemChanged 监听，避免布管时触发参数修改逻辑
         _safe_step(
             "断开 param_table.itemChanged",
@@ -17229,6 +17766,14 @@ class TubeLayoutEditor(QMainWindow):
                 return
             # Enter/Return 直接布管：也先校验换热管壁厚 δ（与 S 同机制）
             if not _precheck_tube_wall_thickness_delta():
+                return
+
+            # Enter/Return 直接布管：也先校验 Sn(水平) 预定义下限
+            if not _precheck_partition_side_center_distance_Sn_horizontal():
+                return
+
+            # Enter/Return 直接布管：也先校验 隔条位置尺寸 W 范围（0 < W < DL/2）
+            if not _precheck_divider_position_size_W():
                 return
 
             # 布管前强制清理：场景中残留的“中间挡板”图形项 + 相关缓存
