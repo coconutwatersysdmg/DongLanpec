@@ -11872,6 +11872,15 @@ class TubeLayoutEditor(QMainWindow):
                 ):
                     return
                 if (
+                        getattr(self, "_suppress_nonbaffle_chord_warn", False)
+                        and param_name
+                        in [
+                            "非布管区域弦高（0°/180°）",
+                            "非布管区域弦高（90°/270°）",
+                        ]
+                ):
+                    return
+                if (
                         getattr(self, "_suppress_divider_W_warn", False)
                         and param_name == "隔条位置尺寸 W"
                 ):
@@ -12221,7 +12230,7 @@ class TubeLayoutEditor(QMainWindow):
             # 提前单独处理：换热管壁厚 δ 约束（0 < δ <= do/2）
             if param_name == "换热管壁厚 δ":
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from PyQt5.QtWidgets import QMessageBox, QComboBox
                     from PyQt5.QtCore import QTimer
 
                     cur_text = str(param_value).strip()
@@ -12453,6 +12462,88 @@ class TubeLayoutEditor(QMainWindow):
                 self.validate_input(changed_item, row)
             except Exception as e:
                 print(f"[on_table_item_changed] validate_input 出错: {e}")
+
+            # 2.2.0) 额外校验：非布管区域弦高（0°/180°）与（90°/270°）范围限制：0 <= 值 <= DL/2
+            if param_name in [
+                "非布管区域弦高（0°/180°）",
+                "非布管区域弦高（90°/270°）",
+            ]:
+                try:
+                    from PyQt5.QtWidgets import QMessageBox, QComboBox
+                    from PyQt5.QtCore import QTimer
+
+                    cur_text = str(param_value).strip()
+                    try:
+                        cur_val = float(cur_text) if cur_text != "" else None
+                    except Exception:
+                        cur_val = None
+
+                    # 读取 DL（布管限定圆 DL）
+                    dl_val = None
+                    for rr in range(self.param_table.rowCount()):
+                        it_dl_name = self.param_table.item(rr, 1)
+                        if it_dl_name and it_dl_name.text().strip() == "布管限定圆 DL":
+                            w_dl = self.param_table.cellWidget(rr, 2)
+                            if isinstance(w_dl, QComboBox):
+                                dl_txt = w_dl.currentText().strip()
+                            else:
+                                it_dl = self.param_table.item(rr, 2)
+                                dl_txt = it_dl.text().strip() if it_dl else ""
+                            if dl_txt != "":
+                                try:
+                                    dl_val = float(dl_txt)
+                                except Exception:
+                                    dl_val = None
+                            break
+
+                    if dl_val is None or dl_val <= 0 or cur_val is None:
+                        # 无法计算/解析：跳过本条校验交给原逻辑
+                        pass
+                    else:
+                        upper = dl_val / 2.0
+                        invalid = (cur_val < 0) or (cur_val > upper)
+                        if invalid:
+                            QMessageBox.warning(
+                                self,
+                                "输入错误",
+                                "您输入的数值小于0或已超限，请重新输入！",
+                            )
+
+                            if param_name == "非布管区域弦高（0°/180°）":
+                                rollback_text = getattr(
+                                    self, "_last_valid_chord_0_180_text", ""
+                                ).strip()
+                            else:
+                                rollback_text = getattr(
+                                    self, "_last_valid_chord_90_270_text", ""
+                                ).strip()
+
+                            if rollback_text == "":
+                                rollback_text = str(
+                                    self.original_param_values.get((row, 2), "")
+                                ).strip()
+                            if rollback_text == "":
+                                rollback_text = "0"
+
+                            self._suppress_nonbaffle_chord_warn = True
+                            try:
+                                changed_item.setText(rollback_text)
+                            finally:
+                                QTimer.singleShot(
+                                    150,
+                                    lambda: setattr(
+                                        self, "_suppress_nonbaffle_chord_warn", False
+                                    ),
+                                )
+                            return
+                        else:
+                            # 合法输入：更新最近合法值
+                            if param_name == "非布管区域弦高（0°/180°）":
+                                self._last_valid_chord_0_180_text = cur_text
+                            else:
+                                self._last_valid_chord_90_270_text = cur_text
+                except Exception as e:
+                    print(f"[on_table_item_changed] 弦高范围校验失败: {e}")
 
             # 2.2.1) 额外校验：分程隔板两侧相邻管中心距（水平）不得小于预定义规定值
             if param_name == "分程隔板两侧相邻管中心距（水平）":
@@ -17751,6 +17842,120 @@ class TubeLayoutEditor(QMainWindow):
 
             return False
 
+        def _precheck_nonbaffle_chord_heights():
+            """
+            Enter/Return 直接布管时，确保非布管区域弦高满足：
+            0 <= 值 <= DL/2
+            """
+            try:
+                from PyQt5.QtWidgets import QMessageBox, QComboBox, QTableWidgetItem
+            except Exception:
+                return True
+
+            # 读取 DL
+            dl_val = None
+            for r in range(self.param_table.rowCount()):
+                it_dl_name = self.param_table.item(r, 1)
+                if it_dl_name and it_dl_name.text().strip() == "布管限定圆 DL":
+                    w_dl = self.param_table.cellWidget(r, 2)
+                    dl_txt = ""
+                    if isinstance(w_dl, QComboBox):
+                        try:
+                            dl_txt = w_dl.currentText().strip()
+                        except Exception:
+                            dl_txt = ""
+                    else:
+                        it_dl = self.param_table.item(r, 2)
+                        dl_txt = it_dl.text().strip() if it_dl else ""
+                    if dl_txt != "":
+                        try:
+                            dl_val = float(dl_txt)
+                        except Exception:
+                            dl_val = None
+                    break
+
+            if dl_val is None or dl_val <= 0:
+                return True
+
+            upper = dl_val / 2.0
+
+            checks = [
+                ("非布管区域弦高（0°/180°）", "_last_valid_chord_0_180_text"),
+                ("非布管区域弦高（90°/270°）", "_last_valid_chord_90_270_text"),
+            ]
+
+            for pname, last_attr in checks:
+                p_row = -1
+                p_text = ""
+                for r in range(self.param_table.rowCount()):
+                    it_name = self.param_table.item(r, 1)
+                    if it_name and it_name.text().strip() == pname:
+                        p_row = r
+                        w_p = self.param_table.cellWidget(r, 2)
+                        if isinstance(w_p, QComboBox):
+                            try:
+                                if w_p.isEditable() and w_p.lineEdit() is not None:
+                                    p_text = w_p.lineEdit().text().strip()
+                                else:
+                                    p_text = w_p.currentText().strip()
+                            except Exception:
+                                p_text = ""
+                        else:
+                            it_p = self.param_table.item(r, 2)
+                            p_text = it_p.text().strip() if it_p else ""
+                        break
+
+                if p_row < 0 or p_text == "":
+                    continue
+
+                try:
+                    p_val = float(p_text)
+                except Exception:
+                    p_val = None
+
+                if p_val is None or p_val < 0 or p_val > upper:
+                    QMessageBox.warning(
+                        self,
+                        "输入错误",
+                        "您输入的数值小于0或已超限，请重新输入！",
+                    )
+
+                    rollback_text = str(getattr(self, last_attr, "") or "").strip()
+                    if rollback_text == "":
+                        try:
+                            rollback_text = str(
+                                self.original_param_values.get((p_row, 2), "")
+                            ).strip()
+                        except Exception:
+                            rollback_text = ""
+                    if rollback_text == "":
+                        rollback_text = "0"
+
+                    w_p = self.param_table.cellWidget(p_row, 2)
+                    if isinstance(w_p, QComboBox):
+                        try:
+                            w_p.setCurrentText(rollback_text)
+                        except Exception:
+                            try:
+                                w_p.setEditText(rollback_text)
+                            except Exception:
+                                pass
+                    else:
+                        it_p = self.param_table.item(p_row, 2)
+                        if it_p:
+                            it_p.setText(rollback_text)
+                        else:
+                            try:
+                                self.param_table.setItem(
+                                    p_row, 2, QTableWidgetItem(rollback_text)
+                                )
+                            except Exception:
+                                pass
+
+                    return False
+
+            return True
+
         # 1) 临时断开所有 itemChanged 监听，避免布管时触发参数修改逻辑
         _safe_step(
             "断开 param_table.itemChanged",
@@ -17774,6 +17979,10 @@ class TubeLayoutEditor(QMainWindow):
 
             # Enter/Return 直接布管：也先校验 隔条位置尺寸 W 范围（0 < W < DL/2）
             if not _precheck_divider_position_size_W():
+                return
+
+            # Enter/Return 直接布管：也先校验 非布管区域弦高范围（0 <= 值 <= DL/2）
+            if not _precheck_nonbaffle_chord_heights():
                 return
 
             # 布管前强制清理：场景中残留的“中间挡板”图形项 + 相关缓存
@@ -29469,10 +29678,15 @@ class TubeLayoutEditor(QMainWindow):
         if invalid_centers:
             from PyQt5.QtWidgets import QMessageBox
 
+            # QMessageBox.warning(
+            #     self,
+            #     "警告",
+            #     f"有 {len(invalid_centers)} 个拉杆位置超出折流板外径，已跳过绘制。",
+            # )
             QMessageBox.warning(
                 self,
                 "警告",
-                f"有 {len(invalid_centers)} 个拉杆位置超出折流板外径，已跳过绘制。",
+                f"剩余空间不满足自由拉杆的布置！",
             )
 
         # 擦除淡蓝色选中圆心
