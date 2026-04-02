@@ -87,6 +87,8 @@ edge_centers: List[Tuple[float, float]] = []
 
 # 从配置库加载的“换热管中心距 S 映射表”缓存（只读一次，避免每次联动都查询数据库）
 _TUBE_CENTER_DISTANCE_MAP_CACHE = None
+# 从配置库加载的“滑道高度/厚度 推荐表”缓存（id=2.14.3.1）
+_SLIDEWAY_PREDEFINED_21431_CACHE = None
 
 
 class SignalBlocker:
@@ -9165,6 +9167,79 @@ class TubeLayoutEditor(QMainWindow):
 
         return None
 
+    def _get_slideway_predefined_defaults(self):
+        """
+        从配置库 id=2.14.3.1 获取滑道“推荐厚度/推荐高度”。
+        返回:
+            dict | None: {"thickness": float, "height": float}
+        """
+        global _SLIDEWAY_PREDEFINED_21431_CACHE
+
+        if _SLIDEWAY_PREDEFINED_21431_CACHE is None:
+            _SLIDEWAY_PREDEFINED_21431_CACHE = {}
+            config_value = self.get_config_value("2.14.3.1")
+            if config_value:
+                try:
+                    rows = (
+                        ast.literal_eval(config_value)
+                        if isinstance(config_value, str)
+                        else config_value
+                    )
+                    for r in rows[1:] if isinstance(rows, list) and len(rows) > 1 else []:
+                        if not isinstance(r, (list, tuple)) or len(r) < 5:
+                            continue
+                        try:
+                            dn = float(r[0])
+                            # 默认采用“最小厚度mm: 非合金钢、低合金钢”这一列
+                            thickness = float(r[2])
+                            height = float(r[4])
+                            _SLIDEWAY_PREDEFINED_21431_CACHE[round(dn, 1)] = {
+                                "thickness": thickness,
+                                "height": height,
+                            }
+                        except Exception:
+                            continue
+                except Exception as e:
+                    print(f"[slideway predefined] 解析配置2.14.3.1失败: {e}")
+
+        if not _SLIDEWAY_PREDEFINED_21431_CACHE:
+            return None
+
+        dn_val = None
+        try:
+            for r in range(self.param_table.rowCount()):
+                name_item = self.param_table.item(r, 1)
+                if not name_item:
+                    continue
+                if name_item.text().strip() == "公称直径 DN":
+                    w = self.param_table.cellWidget(r, 2)
+                    if isinstance(w, QComboBox):
+                        txt = w.currentText().strip()
+                    else:
+                        it = self.param_table.item(r, 2)
+                        txt = it.text().strip() if it else ""
+                    if txt != "":
+                        dn_val = float(txt)
+                    break
+        except Exception:
+            dn_val = None
+
+        if dn_val is None:
+            return None
+
+        key = round(dn_val, 1)
+        if key in _SLIDEWAY_PREDEFINED_21431_CACHE:
+            return _SLIDEWAY_PREDEFINED_21431_CACHE[key]
+
+        try:
+            nearest_dn = min(
+                _SLIDEWAY_PREDEFINED_21431_CACHE.keys(),
+                key=lambda x: abs(float(x) - float(key)),
+            )
+            return _SLIDEWAY_PREDEFINED_21431_CACHE.get(nearest_dn)
+        except Exception:
+            return None
+
     def user_update_Di(self):
         # TODO  调接口更新壳体内直径
         """
@@ -11886,6 +11961,11 @@ class TubeLayoutEditor(QMainWindow):
                 ):
                     return
                 if (
+                        getattr(self, "_suppress_slideway_height_warn", False)
+                        and param_name == "滑道高度"
+                ):
+                    return
+                if (
                         getattr(self, "_tube_wall_warn_in_progress", False)
                         and param_name == "换热管壁厚 δ"
                 ):
@@ -12173,10 +12253,112 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception as e:
                     print(f"[on_table_item_changed] 中间挡板厚度校验失败: {e}")
 
-            # 提前单独处理：滑道厚度下限约束（0 < thickness）
+            # 提前单独处理：滑道高度范围约束 + 低于预定义确认
+            if param_name == "滑道高度":
+                try:
+                    from PyQt5.QtWidgets import QMessageBox
+                    from PyQt5.QtCore import QTimer
+
+                    cur_text = str(param_value).strip()
+
+                    if not hasattr(self, "_last_valid_slideway_height_text"):
+                        defaults = self._get_slideway_predefined_defaults() or {}
+                        init_val = defaults.get("height", "")
+                        self._last_valid_slideway_height_text = (
+                            str(init_val).strip() if init_val not in (None, "") else ""
+                        )
+
+                    # 当前输入
+                    try:
+                        h_val = float(cur_text) if cur_text != "" else None
+                    except Exception:
+                        h_val = None
+
+                    # 上限：折流/支持板外径/2
+                    baffle_od = self.get_baffle_diameter()
+                    upper = (
+                        (float(baffle_od) / 2.0)
+                        if baffle_od not in (None, "") and float(baffle_od) > 0
+                        else None
+                    )
+
+                    invalid = False
+                    if h_val is None:
+                        invalid = True
+                    elif h_val <= 0:
+                        invalid = True
+                    elif upper is not None and h_val > upper:
+                        invalid = True
+
+                    if invalid:
+                        QMessageBox.warning(
+                            self, "输入错误", "您输入的数值小于0或已超限，请重新输入！"
+                        )
+                        rollback_text = str(
+                            getattr(self, "_last_valid_slideway_height_text", "")
+                        ).strip()
+                        if rollback_text == "":
+                            rollback_text = ""
+                        self._suppress_slideway_height_warn = True
+                        try:
+                            changed_item.setText(rollback_text)
+                        finally:
+                            QTimer.singleShot(
+                                150,
+                                lambda: setattr(self, "_suppress_slideway_height_warn", False),
+                            )
+                        return
+
+                    # 预定义下限确认
+                    predefined = self._get_slideway_predefined_defaults() or {}
+                    pre_min = predefined.get("height", None)
+                    try:
+                        pre_min = float(pre_min) if pre_min not in (None, "") else None
+                    except Exception:
+                        pre_min = None
+
+                    if pre_min is not None and h_val < pre_min:
+                        prev_text = getattr(self, "_slideway_height_warn_last_text", None)
+                        if prev_text != cur_text:
+                            self._slideway_height_warn_last_text = cur_text
+                            self._slideway_height_warn_pending = True
+
+                        if getattr(self, "_slideway_height_warn_pending", False):
+                            self._slideway_height_warn_in_progress = True
+                            self._suppress_slideway_height_warn = True
+                            reply = QMessageBox.question(
+                                self,
+                                "提示",
+                                "你输入的数值小于预定义要求，是否继续？",
+                                QMessageBox.Yes | QMessageBox.No,
+                                QMessageBox.No,
+                            )
+                            self._slideway_height_warn_pending = False
+
+                            def _clear_slideway_height_flags():
+                                try:
+                                    self._suppress_slideway_height_warn = False
+                                    self._slideway_height_warn_in_progress = False
+                                except Exception:
+                                    pass
+
+                            QTimer.singleShot(600, _clear_slideway_height_flags)
+
+                            if reply == QMessageBox.No:
+                                changed_item.setText("")
+                                self._slideway_height_warn_last_text = ""
+                                return
+
+                    # 合法输入并通过确认，更新最近合法值
+                    self._last_valid_slideway_height_text = cur_text
+                except Exception as e:
+                    print(f"[on_table_item_changed] 滑道高度校验失败: {e}")
+
+            # 提前单独处理：滑道厚度下限约束（0 < thickness）+ 低于预定义确认
             if param_name == "滑道厚度":
                 try:
                     from PyQt5.QtWidgets import QMessageBox
+                    from PyQt5.QtCore import QTimer
 
                     cur_text = str(param_value).strip()
 
@@ -12190,6 +12372,7 @@ class TubeLayoutEditor(QMainWindow):
                             self._last_valid_slipway_thickness_text = ""
 
                     invalid = False
+                    thickness_val = None
                     if cur_text != "":
                         try:
                             thickness_val = float(cur_text)
@@ -12200,7 +12383,7 @@ class TubeLayoutEditor(QMainWindow):
 
                     if invalid:
                         QMessageBox.warning(
-                            self, "输入错误", "滑道厚度下限制约束\n重新输入!"
+                            self, "输入错误", "您输入的数值小于0，请重新输入！"
                         )
 
                         rollback_text = str(
@@ -12218,8 +12401,44 @@ class TubeLayoutEditor(QMainWindow):
                         try:
                             changed_item.setText(rollback_text)
                         finally:
-                            self._suppress_slipway_thickness_warn = False
+                            QTimer.singleShot(
+                                150,
+                                lambda: setattr(self, "_suppress_slipway_thickness_warn", False),
+                            )
                         return
+
+                    # 预定义下限确认
+                    predefined = self._get_slideway_predefined_defaults() or {}
+                    pre_min = predefined.get("thickness", None)
+                    try:
+                        pre_min = float(pre_min) if pre_min not in (None, "") else None
+                    except Exception:
+                        pre_min = None
+
+                    if pre_min is not None and thickness_val is not None and thickness_val < pre_min:
+                        prev_text = getattr(self, "_slipway_thickness_warn_last_text", None)
+                        if prev_text != cur_text:
+                            self._slipway_thickness_warn_last_text = cur_text
+                            self._slipway_thickness_warn_pending = True
+
+                        if getattr(self, "_slipway_thickness_warn_pending", False):
+                            self._suppress_slipway_thickness_warn = True
+                            reply = QMessageBox.question(
+                                self,
+                                "提示",
+                                "你输入的数值小于预定义要求，是否继续？",
+                                QMessageBox.Yes | QMessageBox.No,
+                                QMessageBox.No,
+                            )
+                            self._slipway_thickness_warn_pending = False
+                            QTimer.singleShot(
+                                600,
+                                lambda: setattr(self, "_suppress_slipway_thickness_warn", False),
+                            )
+                            if reply == QMessageBox.No:
+                                changed_item.setText("")
+                                self._slipway_thickness_warn_last_text = ""
+                                return
 
                     # 合法输入时，更新最近合法值（空输入不覆盖）
                     if cur_text != "":
@@ -13388,6 +13607,16 @@ class TubeLayoutEditor(QMainWindow):
                 ):
                     # 需求：默认换热管壁厚 δ 为 2 mm
                     display_value = "2"
+                elif param["参数名"] in ["滑道高度", "滑道厚度"] and (
+                    param_value is None or str(param_value).strip() == ""
+                ):
+                    # 滑道参数默认值：来自预定义 2.14.3.1
+                    defaults = self._get_slideway_predefined_defaults() or {}
+                    if param["参数名"] == "滑道高度":
+                        v = defaults.get("height", "")
+                    else:
+                        v = defaults.get("thickness", "")
+                    display_value = "" if v == "" else str(v)
                 elif param_value is None:
                     display_value = ""
                 else:
