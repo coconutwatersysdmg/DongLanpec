@@ -1978,68 +1978,25 @@ class TubeLayoutEditor(QMainWindow):
                 {"序号": num, "参数名": name, "参数值": value, "单位": unit}
             )
 
-    def _update_lagan_summary_description(self, std_val):
-        """根据当前左侧参数表与标准数量，更新拉杆统计表第三列的说明文字。"""
-        if not hasattr(self, "lagan_summary_table"):
-            return
-
-        # 默认占位
-        dn_text = "--"
-        lagan_text = "--"
+    def _get_lagan_required_count(self):
+        """按公称直径DN+拉杆直径查标准要求数量。"""
         try:
-            # 公称直径 DN 和拉杆直径都从左侧参数表读取
-            raw_dn = self.get_gongchengzhijing_count()
-            raw_lagan = self.get_laganzhijing_count()
+            dn = float(self.get_gongchengzhijing_count())
+            lagan_d = float(self.get_laganzhijing_count())
+        except (TypeError, ValueError):
+            return None
 
-            if raw_dn is not None and str(raw_dn).strip() != "":
-                dn_text = str(raw_dn).strip()
-            if raw_lagan is not None and str(raw_lagan).strip() != "":
-                # 若值中已包含字母 M，则只取后缀；否则直接使用数值
-                s = str(raw_lagan).strip()
-                if s.upper().startswith("M"):
-                    lagan_text = s[1:].strip() or s
-                else:
-                    lagan_text = s
-        except Exception:
-            pass
-
-        # 标准数量：优先使用传入的 std_val；若为空，则尝试使用 self.current_lagan_standard_required
-        std_display = "--"
-        if isinstance(std_val, (int, float)):
-            std_display = (
-                str(int(std_val))
-                if isinstance(std_val, int)
-                   or getattr(std_val, "is_integer", lambda: False)()
-                else str(std_val)
-            )
-        else:
-            try:
-                cur_std = getattr(self, "current_lagan_standard_required", None)
-                if isinstance(cur_std, (int, float)):
-                    std_display = (
-                        str(int(cur_std))
-                        if isinstance(cur_std, int)
-                           or getattr(cur_std, "is_integer", lambda: False)()
-                        else str(cur_std)
-                    )
-            except Exception:
-                pass
-
-        desc_text = (
-            f"当前产品公称直径为DN{dn_text}，拉杆公称直径为M{lagan_text}，"
-            f"根据标准要求，拉杆数量不应小于 {std_display} 根。"
-        )
-        try:
-            desc_text = desc_text.replace("，", "，\n").replace(",", ",\n").strip()
-        except Exception:
-            pass
-
-        item = self.lagan_summary_table.item(0, 2)
-        if item is None:
-            item = QTableWidgetItem()
-            self.lagan_summary_table.setItem(0, 2, item)
-        item.setText(desc_text)
-        item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        standard_table = {
+            10.0: [(0, 400, 4), (400, 700, 6), (700, 900, 10), (900, 1300, 12), (1300, 1500, 16), (1500, 1800, 18), (1800, 2000, 24), (2000, 2300, 32), (2300, 2600, 40), (2600, 2800, 48), (2800, 3000, 56), (3000, 3200, 64), (3200, 3400, 72), (3400, 3600, 80), (3600, 3800, 88), (3800, 4000, 98), (4000, 5000, 136), (5000, 6000, 178)],
+            12.0: [(0, 400, 4), (400, 700, 4), (700, 900, 8), (900, 1300, 10), (1300, 1500, 12), (1500, 1800, 14), (1800, 2000, 18), (2000, 2300, 24), (2300, 2600, 28), (2600, 2800, 32), (2800, 3000, 40), (3000, 3200, 44), (3200, 3400, 52), (3400, 3600, 56), (3600, 3800, 64), (3800, 4000, 68), (4000, 5000, 96), (5000, 6000, 124)],
+            16.0: [(0, 400, 4), (400, 700, 4), (700, 900, 6), (900, 1300, 6), (1300, 1500, 8), (1500, 1800, 10), (1800, 2000, 12), (2000, 2300, 14), (2300, 2600, 16), (2600, 2800, 20), (2800, 3000, 24), (3000, 3200, 26), (3200, 3400, 28), (3400, 3600, 32), (3600, 3800, 36), (3800, 4000, 40), (4000, 5000, 56), (5000, 6000, 74)],
+        }
+        if lagan_d not in standard_table:
+            return None
+        for low, high, required in standard_table[lagan_d]:
+            if low <= dn < high:
+                return required
+        return None
 
     def update_total_holes_count(self):
         """根据current_centers的长度更新总管孔数量标签"""
@@ -2081,80 +2038,22 @@ class TubeLayoutEditor(QMainWindow):
                 header_item.setToolTip(header_text)
 
     def update_total_lagan_count(self):
-        """根据 lagan_info 和 red_dangban 的长度更新总拉杆数量标签"""
+        """更新拉杆要求/已有数量显示。"""
         lagan_list = getattr(self, "lagan_info", []) or []
         red_list = getattr(self, "red_dangban", []) or []
         total = len(lagan_list) + len(red_list)
-        if hasattr(self, "total_lagan_label"):
-            # 组合标准要求提示
-            try:
-                std = getattr(self, "current_lagan_standard_required", None)
-            except Exception:
-                std = None
-
+        std = self._get_lagan_required_count()
+        self.current_lagan_standard_required = std
+        if hasattr(self, "lagan_required_label"):
             if isinstance(std, (int, float)):
-                extra = f"（当前标准数量要求为：{int(std) if isinstance(std, int) or std.is_integer() else std}）"
+                std_num = int(std) if float(std).is_integer() else std
+                if total < std:
+                    text = f"标准要求数量{std_num}/已有数量<span style='color:red;'>{total}</span>"
+                else:
+                    text = f"标准要求数量{std_num}/已有数量{total}"
             else:
-                extra = "（当前无标准要求）"
-
-            self.total_lagan_label.setText(f"总拉杆数量: {total}{extra}")
-
-        # 同步更新中间图形界面左下角的拉杆数量统计表
-        if hasattr(self, "lagan_summary_table"):
-            try:
-                if isinstance(std, (int, float)):
-                    std_val = (
-                        int(std) if isinstance(std, int) or std.is_integer() else std
-                    )
-                else:
-                    std_val = None
-
-                # 第一列固定文字：最少拉杆数量 / 已有拉杆数量 / 缺少拉杆数量
-                self.lagan_summary_table.setItem(0, 0, QTableWidgetItem("最少拉杆数量"))
-                self.lagan_summary_table.setItem(1, 0, QTableWidgetItem("已有拉杆数量"))
-                self.lagan_summary_table.setItem(2, 0, QTableWidgetItem("缺少拉杆数量"))
-
-                # 第二列数值
-                if std_val is not None:
-                    self.lagan_summary_table.setItem(
-                        0, 1, QTableWidgetItem(str(std_val))
-                    )
-                    missing = std_val - total
-                    missing_val = missing if missing > 0 else 0
-                else:
-                    self.lagan_summary_table.setItem(0, 1, QTableWidgetItem("-"))
-                    missing_val = 0
-
-                self.lagan_summary_table.setItem(1, 1, QTableWidgetItem(str(total)))
-                self.lagan_summary_table.setItem(
-                    2, 1, QTableWidgetItem(str(missing_val))
-                )
-
-                # 对齐方式参考左侧参数表：第一列居中，其余列左对齐
-                try:
-                    for r in range(3):
-                        item_col0 = self.lagan_summary_table.item(r, 0)
-                        if item_col0:
-                            item_col0.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-                    for r in range(3):
-                        item_col1 = self.lagan_summary_table.item(r, 1)
-                        if item_col1:
-                            item_col1.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-                except Exception:
-                    pass
-
-                # "缺少拉杆数量" 的数值使用红色字体突出显示
-                missing_item = self.lagan_summary_table.item(2, 1)
-                if missing_item:
-                    missing_item.setForeground(QColor(Qt.red))
-
-                # 更新第三列说明文字，使其与当前参数表和标准数量一致
-                try:
-                    self._update_lagan_summary_description(std_val)
-                except Exception:
-                    pass
-            except Exception:
-                pass
+                text = f"标准要求数量-/已有数量{total}"
+            self.lagan_required_label.setText(text)
 
     def setup_ui(self):
         # 主窗口样式
@@ -2278,94 +2177,19 @@ class TubeLayoutEditor(QMainWindow):
         )
         param_layout.addWidget(self.param_table)
 
-        # 拉杆数量统计表（左侧底部）
+        # 拉杆数量摘要（左侧底部）
         self.lagan_summary_container = QWidget(self.param_frame)
         self.lagan_summary_container.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed
         )
-
-        lagan_layout = QGridLayout(self.lagan_summary_container)
-        lagan_layout.setContentsMargins(5, 5, 5, 5)
-        lagan_layout.setSpacing(4)
-
-        self.lagan_summary_table = NoWheelTableWidget()
-        self.lagan_summary_table.setParent(self.lagan_summary_container)
-        self.lagan_summary_table.setRowCount(3)
-        self.lagan_summary_table.setColumnCount(3)
-        self.lagan_summary_table.setHorizontalHeaderLabels(["项目", "数量", "说明"])
-        self.lagan_summary_table.horizontalHeader().setVisible(False)
-        self.lagan_summary_table.verticalHeader().setVisible(False)
-        self.lagan_summary_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.lagan_summary_table.setSelectionMode(QAbstractItemView.NoSelection)
-
-        self.lagan_summary_table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.Interactive
-        )
-        self.lagan_summary_table.horizontalHeader().setDefaultSectionSize(100)
-        self.lagan_summary_table.horizontalHeader().setMinimumSectionSize(10)
-        self.lagan_summary_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.Interactive
-        )
-        self.lagan_summary_table.horizontalHeader().setSectionResizeMode(
-            1, QHeaderView.Interactive
-        )
-        self.lagan_summary_table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.Interactive
-        )
-
-        try:
-            self.lagan_summary_table.setColumnWidth(0, 220)
-        except Exception:
-            pass
-        try:
-            self.lagan_summary_table.setColumnWidth(2, 420)
-        except Exception:
-            pass
-
-        try:
-            self.lagan_summary_table.setFont(self.param_table.font())
-        except Exception:
-            pass
-        try:
-            self.lagan_summary_table.setStyleSheet(self.param_table.styleSheet())
-        except Exception:
-            self.lagan_summary_table.setStyleSheet("")
-
-        try:
-            self.lagan_summary_table.setShowGrid(self.param_table.showGrid())
-        except Exception:
-            pass
-
-        self.lagan_summary_table.setWordWrap(True)
-        self.lagan_summary_table.setTextElideMode(Qt.ElideNone)
-        self.lagan_summary_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.lagan_summary_table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-
-        # 拉杆统计表行高：要求与左侧参数表每行行高一致
-        try:
-            if hasattr(self, "param_table") and self.param_table.rowCount() > 0:
-                default_row_h = int(self.param_table.rowHeight(0))
-            else:
-                default_row_h = int(self.param_table.verticalHeader().defaultSectionSize())
-        except Exception:
-            default_row_h = 20
-
-        default_row_h = max(int(default_row_h), 1)
-        try:
-            self.lagan_summary_table.verticalHeader().setDefaultSectionSize(default_row_h)
-        except Exception:
-            pass
-        for _row in range(self.lagan_summary_table.rowCount()):
-            self.lagan_summary_table.setRowHeight(_row, default_row_h)
-
-        self.lagan_summary_table.setSpan(0, 2, 3, 1)
-        desc_item = QTableWidgetItem(
-            "当前产品公称直径为DN1800，拉杆公称直径为M16，\n根据标准要求，拉杆数量不应少于12根。"
-        )
-        desc_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self.lagan_summary_table.setItem(0, 2, desc_item)
-
-        lagan_layout.addWidget(self.lagan_summary_table, 0, 0)
+        lagan_layout = QVBoxLayout(self.lagan_summary_container)
+        lagan_layout.setContentsMargins(8, 6, 8, 6)
+        lagan_layout.setSpacing(2)
+        self.lagan_required_label = QLabel("标准要求数量-/已有数量0")
+        self.lagan_required_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.lagan_required_label.setStyleSheet("font-size: 13px; color: #222;")
+        self.lagan_required_label.setTextFormat(Qt.RichText)
+        lagan_layout.addWidget(self.lagan_required_label)
         param_layout.addWidget(self.lagan_summary_container)
 
         # 中间区域
@@ -2631,9 +2455,6 @@ class TubeLayoutEditor(QMainWindow):
         checkbox_layout.addWidget(self.symmetric_checkbox)
         self.symmetric_checkbox.stateChanged.connect(self.handle_symmetric_layout)
 
-        self.lagan_summary_table.setItem(0, 0, QTableWidgetItem("最少拉杆数量"))
-        self.lagan_summary_table.setItem(1, 0, QTableWidgetItem("已有拉杆数量"))
-        self.lagan_summary_table.setItem(2, 0, QTableWidgetItem("缺少拉杆数量"))
         try:
             self.update_total_lagan_count()
         except Exception:
@@ -14317,112 +14138,14 @@ class TubeLayoutEditor(QMainWindow):
     def update_lagan_standard_from_params(self):
         """
         根据当前参数表中的公称直径 DN 和拉杆直径，计算标准拉杆最少数量，
-        写入 self.current_lagan_standard_required，并刷新总拉杆数量和左下角统计表。
+        写入 self.current_lagan_standard_required，并刷新左下角摘要。
         """
-        # 1. 从参数表取公称直径和拉杆直径
         try:
-            gongcheng_zhijing = self.get_gongchengzhijing_count()
-            lagan_zhijing = self.get_laganzhijing_count()
+            self.current_lagan_standard_required = self._get_lagan_required_count()
         except Exception:
-            gongcheng_zhijing = None
-            lagan_zhijing = None
+            self.current_lagan_standard_required = None
 
-        # 2. 基本合法性检查
-        try:
-            gongcheng_zhijing = float(gongcheng_zhijing)
-            lagan_zhijing = float(lagan_zhijing)
-        except (TypeError, ValueError):
-            # 参数无效：认为无标准要求，但也要刷新一下显示
-            try:
-                self.current_lagan_standard_required = None
-            except Exception:
-                pass
-            try:
-                if hasattr(self, "update_total_lagan_count"):
-                    self.update_total_lagan_count()
-            except Exception:
-                pass
-            return
-
-        # 3. 标准对照表（与 check_before_save 逻辑保持一致）
-        standard_table = {
-            10.0: [
-                (0, 400, 4),
-                (400, 700, 6),
-                (700, 900, 10),
-                (900, 1300, 12),
-                (1300, 1500, 16),
-                (1500, 1800, 18),
-                (1800, 2000, 24),
-                (2000, 2300, 32),
-                (2300, 2600, 40),
-                (2600, 2800, 48),
-                (2800, 3000, 56),
-                (3000, 3200, 64),
-                (3200, 3400, 72),
-                (3400, 3600, 80),
-                (3600, 3800, 88),
-                (3800, 4000, 98),
-                (4000, 5000, 136),
-                (5000, 6000, 178),
-            ],
-            12.0: [
-                (0, 400, 4),
-                (400, 700, 4),
-                (700, 900, 8),
-                (900, 1300, 10),
-                (1300, 1500, 12),
-                (1500, 1800, 14),
-                (1800, 2000, 18),
-                (2000, 2300, 24),
-                (2300, 2600, 28),
-                (2600, 2800, 32),
-                (2800, 3000, 40),
-                (3000, 3200, 44),
-                (3200, 3400, 52),
-                (3400, 3600, 56),
-                (3600, 3800, 64),
-                (3800, 4000, 68),
-                (4000, 5000, 96),
-                (5000, 6000, 124),
-            ],
-            16.0: [
-                (0, 400, 4),
-                (400, 700, 4),
-                (700, 900, 6),
-                (900, 1300, 6),
-                (1300, 1500, 8),
-                (1500, 1800, 10),
-                (1800, 2000, 12),
-                (2000, 2300, 14),
-                (2300, 2600, 16),
-                (2600, 2800, 20),
-                (2800, 3000, 24),
-                (3000, 3200, 26),
-                (3200, 3400, 28),
-                (3400, 3600, 32),
-                (3600, 3800, 36),
-                (3800, 4000, 40),
-                (4000, 5000, 56),
-                (5000, 6000, 74),
-            ],
-        }
-
-        # 4. 查表算最少拉杆数量
-        min_required = None
-        if lagan_zhijing in standard_table:
-            for low, high, required in standard_table[lagan_zhijing]:
-                if low <= gongcheng_zhijing < high:
-                    min_required = required
-                    break
-
-        # 5. 写入当前标准要求数量
-        try:
-            self.current_lagan_standard_required = min_required
-        except Exception:
-            pass
-
-        # 6. 用最新标准刷新“总拉杆数量”标签 + 左下角统计表
+        # 用最新标准刷新左下角摘要
         try:
             if hasattr(self, "update_total_lagan_count"):
                 self.update_total_lagan_count()
@@ -14443,13 +14166,14 @@ class TubeLayoutEditor(QMainWindow):
             lagan_zhijing = self.get_laganzhijing_count()
             lagan_info = getattr(self, "lagan_info", None)
 
-            # === 2️⃣ 计算拉杆数量 ===
+            # === 2️⃣ 计算已有拉杆数量 ===
+            red_list = getattr(self, "red_dangban", []) or []
             if isinstance(lagan_info, (list, tuple)):
-                lagan_count = len(lagan_info)
+                lagan_count = len(lagan_info) + len(red_list)
             elif isinstance(lagan_info, int):
-                lagan_count = lagan_info
+                lagan_count = int(lagan_info) + len(red_list)
             else:
-                lagan_count = 0
+                lagan_count = len(red_list)
 
             # === 3️⃣ 类型转换并验证有效性 ===
             try:
@@ -14459,91 +14183,20 @@ class TubeLayoutEditor(QMainWindow):
                 print("[警告] 参数值无效，跳过检查。")
                 return True
 
-            # === 4️⃣ 标准对照表 ===
-            standard_table = {
-                10: [
-                    (0, 400, 4),
-                    (400, 700, 6),
-                    (700, 900, 10),
-                    (900, 1300, 12),
-                    (1300, 1500, 16),
-                    (1500, 1800, 18),
-                    (1800, 2000, 24),
-                    (2000, 2300, 32),
-                    (2300, 2600, 40),
-                    (2600, 2800, 48),
-                    (2800, 3000, 56),
-                    (3000, 3200, 64),
-                    (3200, 3400, 72),
-                    (3400, 3600, 80),
-                    (3600, 3800, 88),
-                    (3800, 4000, 98),
-                    (4000, 5000, 136),
-                    (5000, 6000, 178),
-                ],
-                12: [
-                    (0, 400, 4),
-                    (400, 700, 4),
-                    (700, 900, 8),
-                    (900, 1300, 10),
-                    (1300, 1500, 12),
-                    (1500, 1800, 14),
-                    (1800, 2000, 18),
-                    (2000, 2300, 24),
-                    (2300, 2600, 28),
-                    (2600, 2800, 32),
-                    (2800, 3000, 40),
-                    (3000, 3200, 44),
-                    (3200, 3400, 52),
-                    (3400, 3600, 56),
-                    (3600, 3800, 64),
-                    (3800, 4000, 68),
-                    (4000, 5000, 96),
-                    (5000, 6000, 124),
-                ],
-                16: [
-                    (0, 400, 4),
-                    (400, 700, 4),
-                    (700, 900, 6),
-                    (900, 1300, 6),
-                    (1300, 1500, 8),
-                    (1500, 1800, 10),
-                    (1800, 2000, 12),
-                    (2000, 2300, 14),
-                    (2300, 2600, 16),
-                    (2600, 2800, 20),
-                    (2800, 3000, 24),
-                    (3000, 3200, 26),
-                    (3200, 3400, 28),
-                    (3400, 3600, 32),
-                    (3600, 3800, 36),
-                    (3800, 4000, 40),
-                    (4000, 5000, 56),
-                    (5000, 6000, 74),
-                ],
-            }
-
-            # === 5️⃣ 查找标准要求 ===
-            if lagan_zhijing not in standard_table:
-                return True
-
-            min_required = None
-            for low, high, required in standard_table[lagan_zhijing]:
-                if low <= gongcheng_zhijing < high:
-                    min_required = required
-                    break
+            # === 4️⃣ 查找标准要求 ===
+            min_required = self._get_lagan_required_count()
 
             if min_required is None:
                 return True
 
-            # === 6️⃣ 弹窗提示判断 ===
+            # === 5️⃣ 弹窗提示判断 ===
             if lagan_count < min_required:
                 msg_box = QMessageBox()
                 msg_box.setWindowTitle("提示")
                 msg_box.setText(
-                    f"当前产品公称直径为 {gongcheng_zhijing} mm，\n"
-                    f"拉杆直径为 {lagan_zhijing} mm。\n"
-                    f"根据标准要求，拉杆数量不应小于 {min_required} 根，是否继续？"
+                    f"当前产品公称直径DN为{int(gongcheng_zhijing) if float(gongcheng_zhijing).is_integer() else gongcheng_zhijing}mm，"
+                    f"拉杆直径为{int(lagan_zhijing) if float(lagan_zhijing).is_integer() else lagan_zhijing}mm。"
+                    f"根据标准要求，拉杆数量不应小于{min_required}根，是否继续保存？"
                 )
                 # 设置按钮
                 yes_button = QPushButton("是")
