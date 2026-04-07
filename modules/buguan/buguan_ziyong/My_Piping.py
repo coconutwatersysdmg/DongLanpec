@@ -951,13 +951,10 @@ class ClickableCircleItem(QGraphicsEllipseItem):
             )
         except Exception:
             pass
-        # 自由拉杆（最左最右拉杆）双击编辑
-        if self.is_side_rod and self.editor and hasattr(self.editor, "edit_free_lagan"):
+        # 自由拉杆（最左最右拉杆）双击编辑已禁用
+        if self.is_side_rod:
             try:
-                print(
-                    "[ClickableCircleItem] side_rod double-click -> edit_free_lagan()"
-                )
-                self.editor.edit_free_lagan(self)
+                print("[ClickableCircleItem] side_rod double-click ignored (popup disabled)")
                 event.accept()
                 return
             except Exception:
@@ -5911,7 +5908,7 @@ class TubeLayoutEditor(QMainWindow):
             elif 25 <= od_val <= 32:
                 input_json["LB_TieRodD"] = "16"
             elif 32 < od_val <= 57:
-                input_json["LB_TieRodD"] = "20"
+                input_json["LB_TieRodD"] = "27"
             else:
                 input_json["LB_TieRodD"] = "12"
         input_json["LB_ClapboardType"] = "2"
@@ -6584,7 +6581,7 @@ class TubeLayoutEditor(QMainWindow):
             elif 25 <= od_val <= 32:
                 input_json["LB_TieRodD"] = "16"
             elif 32 < od_val <= 57:
-                input_json["LB_TieRodD"] = "20"
+                input_json["LB_TieRodD"] = "27"
             else:
                 input_json["LB_TieRodD"] = "12"
         input_json["LB_ClapboardType"] = "2"
@@ -7542,6 +7539,7 @@ class TubeLayoutEditor(QMainWindow):
                 "14",
                 "16",
                 "19",
+                "20",
                 "22",
                 "25",
                 "30",
@@ -7614,7 +7612,11 @@ class TubeLayoutEditor(QMainWindow):
                         # 添加与换热管外径相同的选项
                         lg_diameter_widget.addItems(do_options)
                         # 设置默认值为do的值
-                        target_value = f"{do_value}"
+                        target_value = (
+                            str(int(do_value))
+                            if float(do_value).is_integer()
+                            else str(do_value)
+                        )
                         lg_diameter_widget.setCurrentText(target_value)
                         print(f"焊接拉杆直径已设置为: {target_value}")
 
@@ -7639,7 +7641,7 @@ class TubeLayoutEditor(QMainWindow):
                     lg_diameter_widget = self.param_table.cellWidget(lg_diameter_row, 2)
 
                     # 定义螺纹拉杆直径选项
-                    thread_options = ["10", "12", "16", "20"]
+                    thread_options = ["10", "12", "16", "27"]
 
                     # 确定基于换热管外径的默认值（保留原逻辑）
                     if 25 > do_value >= 19:
@@ -7647,7 +7649,7 @@ class TubeLayoutEditor(QMainWindow):
                     elif do_value <= 32:
                         default_value = "16"
                     else:
-                        default_value = "20"
+                        default_value = "27"
                     print(
                         f"根据换热管外径 {do_value} 计算的默认螺纹拉杆直径: {default_value}"
                     )
@@ -7791,7 +7793,7 @@ class TubeLayoutEditor(QMainWindow):
         elif 25 <= do_value <= 32:
             result = "16"
         elif 32 < do_value <= 57:
-            result = "20"
+            result = "27"
         else:
             result = do_value
 
@@ -13428,6 +13430,7 @@ class TubeLayoutEditor(QMainWindow):
                                 "14",
                                 "16",
                                 "19",
+                                "20",
                                 "25",
                                 "27",
                                 "30",
@@ -13523,6 +13526,20 @@ class TubeLayoutEditor(QMainWindow):
                     param_value_str = (
                         str(param["参数值"]) if param["参数值"] is not None else ""
                     )
+                    # 拉杆形式默认规则：do >= 19 -> 螺纹拉杆；do < 19 -> 焊接拉杆
+                    if param["参数名"] == "拉杆形式" and param_value_str.strip() == "":
+                        do_default = None
+                        try:
+                            for _p in params:
+                                if _p.get("参数名") == "换热管外径 do":
+                                    v = _p.get("参数值")
+                                    if v not in (None, ""):
+                                        do_default = float(str(v).strip())
+                                    break
+                        except Exception:
+                            do_default = None
+                        if do_default is not None:
+                            param_value_str = "螺纹拉杆" if do_default >= 19 else "焊接拉杆"
 
                     try:
                         if param_value_str:
@@ -13637,6 +13654,11 @@ class TubeLayoutEditor(QMainWindow):
         self.setup_combobox_modification_detection()
         self.is_loading_data = False
         self.update_all_row_backgrounds()
+        # 初始化后按“换热管外径do + 拉杆形式”规则刷新拉杆直径默认值
+        try:
+            self.update_lagan()
+        except Exception as e:
+            print(f"[setup_parameters] 初始化调用 update_lagan 失败: {e}")
         # self.update_partition_plate_center_distance()
 
     def on_param_table_item_changed(self, item):
@@ -13852,9 +13874,11 @@ class TubeLayoutEditor(QMainWindow):
 
             self.update_baffle_diameter()
             self.update_tube_center_distance()
-            # self.update_lagan()
+            self.update_lagan()
             self.update_partition_plate_center_distance()
             self.update_divider_position_and_size()
+        elif param_name == "拉杆形式":
+            self.update_lagan()
         elif param_name == "换热管排列方式":
             # 获取当前选中的值
             do_widget = self.param_table.cellWidget(row, 2)
@@ -21620,7 +21644,7 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             default_dia = 12.0
 
-        # 管外径（供焊接拉杆可选“与管外径一致”）
+        # 管外径（用于计算焊接拉杆默认直径）
         try:
             tube_do = float(get_cell_text(row_do)) if row_do != -1 else None
         except Exception:
@@ -21635,20 +21659,27 @@ class TubeLayoutEditor(QMainWindow):
             elif 25 <= tube_do <= 32:
                 default_dia = 16.0
             elif 32 < tube_do <= 57:
-                default_dia = 20.0
+                default_dia = 27.0
 
         # 直径选项表
-        THREAD_OPTIONS = ["10", "12", "16", "20"]  # 螺纹拉杆固定选项
+        THREAD_OPTIONS = ["10", "12", "16", "27"]  # 螺纹拉杆固定选项
         WELD_OPTIONS = [
+            "10",
             "12",
             "14",
             "16",
             "19",
+            "20",
+            "22",
             "25",
-            "27",
             "30",
             "32",
-            "36",
+            "35",
+            "38",
+            "45",
+            "50",
+            "55",
+            "57",
         ]  # 焊接拉杆常见选项
 
         # 标准要求拉杆数量提示（使用当前参数表中的公称直径和拉杆直径）
@@ -21768,10 +21799,7 @@ class TubeLayoutEditor(QMainWindow):
                 opts = THREAD_OPTIONS[:]
             else:  # 焊接拉杆
                 opts = WELD_OPTIONS[:]
-                if tube_do is not None:
-                    opts = [f"与换热管外径一致 (do={int(tube_do)})"] + opts
-
-            # 预选：若当前值刚好在选项里，直接选中；不在就把“当前值”加到顶部
+            # 预选：若当前值在选项里，直接选中；不在则回退到默认值
             keep_txt = f"{keep_value:g}"
             found = False
             for i, t in enumerate(opts):
@@ -21780,21 +21808,13 @@ class TubeLayoutEditor(QMainWindow):
                     dia_combo.setCurrentIndex(i)
                     found = True
             if not found:
-                dia_combo.insertItem(0, f"当前值 {keep_txt}")
-                dia_combo.setCurrentIndex(0)
+                fallback_idx = dia_combo.findText(f"{default_dia:g}")
+                dia_combo.setCurrentIndex(fallback_idx if fallback_idx >= 0 else 0)
 
             dia_combo.blockSignals(False)
 
         def parse_dia_from_choice(choice: str) -> float:
             s = choice.strip()
-            if s.startswith("与管外径一致") and tube_do is not None:
-                return float(tube_do)
-            if s.startswith("当前值"):
-                # 形如 “当前值 14” -> 14
-                try:
-                    return float(s.split()[-1])
-                except Exception:
-                    return default_dia
             try:
                 return float(s)
             except Exception:
@@ -22277,10 +22297,13 @@ class TubeLayoutEditor(QMainWindow):
             elif 25 <= tube_do <= 32:
                 default_dia = 16.0
             elif 32 < tube_do <= 57:
-                default_dia = 20.0
+                default_dia = 27.0
 
-        THREAD_OPTIONS = ["10", "12", "16", "20"]
-        WELD_OPTIONS = ["12", "14", "16", "19", "25", "27", "30", "32", "36"]
+        THREAD_OPTIONS = ["10", "12", "16", "27"]
+        WELD_OPTIONS = [
+            "10", "12", "14", "16", "19", "20", "22", "25",
+            "30", "32", "35", "38", "45", "50", "55", "57"
+        ]
 
         dlg = QDialog(self)
         dlg.setWindowTitle("拉杆参数设置")
@@ -22311,8 +22334,6 @@ class TubeLayoutEditor(QMainWindow):
                 opts = THREAD_OPTIONS[:]
             else:
                 opts = WELD_OPTIONS[:]
-                if tube_do is not None:
-                    opts = [f"与换热管外径一致 (do={int(tube_do)})"] + opts
             keep_txt = f"{keep_value:g}"
             found = False
             for i, t in enumerate(opts):
@@ -22321,19 +22342,12 @@ class TubeLayoutEditor(QMainWindow):
                     dia_combo.setCurrentIndex(i)
                     found = True
             if not found:
-                dia_combo.insertItem(0, f"当前值 {keep_txt}")
-                dia_combo.setCurrentIndex(0)
+                fallback_idx = dia_combo.findText(f"{default_dia:g}")
+                dia_combo.setCurrentIndex(fallback_idx if fallback_idx >= 0 else 0)
             dia_combo.blockSignals(False)
 
         def parse_dia_from_choice(choice: str) -> float:
             s = choice.strip()
-            if s.startswith("与管外径一致") and tube_do is not None:
-                return float(tube_do)
-            if s.startswith("当前值"):
-                try:
-                    return float(s.split()[-1])
-                except Exception:
-                    return default_dia
             try:
                 return float(s)
             except Exception:
@@ -29558,20 +29572,27 @@ class TubeLayoutEditor(QMainWindow):
             elif 25 <= tube_do <= 32:
                 default_dia = 16.0
             elif 32 < tube_do <= 57:
-                default_dia = 20.0
+                default_dia = 27.0
 
         # 直径选项
-        THREAD_OPTIONS = ["10", "12", "16", "20"]  # 螺纹拉杆
+        THREAD_OPTIONS = ["10", "12", "16", "27"]  # 螺纹拉杆
         WELD_OPTIONS = [
+            "10",
             "12",
             "14",
             "16",
             "19",
+            "20",
+            "22",
             "25",
-            "27",
             "30",
             "32",
-            "36",
+            "35",
+            "38",
+            "45",
+            "50",
+            "55",
+            "57",
         ]  # 焊接拉杆
 
         # 标准要求拉杆数量提示（使用当前参数表中的公称直径和拉杆直径）
@@ -29657,6 +29678,76 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
+        # ---------- 无弹窗模式（自由拉杆） ----------
+        try:
+            lagan_length = float(get_cell_text(row_dia)) if get_cell_text(row_dia) else float(default_dia)
+        except Exception:
+            lagan_length = float(default_dia)
+
+        if not hasattr(self, "selected_centers") or not self.selected_centers:
+            return
+
+        if self.isSymmetry:
+            selected_centers = list(self.judge_linkage(self.selected_centers))
+        else:
+            tubeline_num = self.get_tube_pass_count()
+            if tubeline_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
+                selected_centers = list(self.judge_linkage_x(self.selected_centers))
+            elif tubeline_num in ["4", "6"] and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
+                selected_centers = list(self.judge_linkage_y(self.selected_centers))
+            else:
+                selected_centers = list(self.selected_centers)
+
+        self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = (
+            self.group_centers_by_y(self.global_centers)
+        )
+        self.sorted_current_centers_up, self.sorted_current_centers_down = (
+            self.group_centers_by_y(self.current_centers)
+        )
+
+        print(
+            f"[on_free_form_lagan_click] 无弹窗模式，直径={lagan_length}，准备逐点构建自由拉杆，选中个数={len(selected_centers)}"
+        )
+        invalid_centers = []
+        for center in selected_centers:
+            okflag = self.build_free_form_lagan([center], lagan_length)
+            if okflag is False:
+                invalid_centers.append(center)
+
+        if invalid_centers:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "警告",
+                f"剩余空间不满足自由拉杆的布置！",
+            )
+
+        target_color = QColor(173, 216, 230)
+        for row_label, col_label in self.selected_centers:
+            try:
+                if row_label > 0:
+                    centers_group = self.full_sorted_current_centers_up
+                    row_idx = row_label - 1
+                else:
+                    centers_group = self.full_sorted_current_centers_down
+                    row_idx = -row_label - 1
+                col_idx = abs(col_label) - 1
+                x, y = centers_group[row_idx][col_idx]
+                click_point = QPointF(x, y)
+                for item in self.graphics_scene.items(click_point):
+                    if (
+                            isinstance(item, QGraphicsEllipseItem)
+                            and item.brush().color() == target_color
+                    ):
+                        self.graphics_scene.removeItem(item)
+            except Exception as e:
+                print(f"擦除淡蓝色圆心失败: {e}，坐标: ({row_label}, {col_label})")
+                continue
+
+        self.selected_centers = []
+        self.clear_selection_highlight()
+        return
+
         # ---------- 弹窗 ----------
         dlg = QDialog(self)
         dlg.setWindowTitle("侧拉杆参数设置")
@@ -29689,9 +29780,6 @@ class TubeLayoutEditor(QMainWindow):
                 opts = THREAD_OPTIONS[:]
             else:
                 opts = WELD_OPTIONS[:]
-                if tube_do is not None:
-                    opts = [f"与管外径一致 (do={int(tube_do)})"] + opts
-
             keep_txt = f"{keep_value:g}"
             found = False
             for i, t in enumerate(opts):
@@ -29701,21 +29789,13 @@ class TubeLayoutEditor(QMainWindow):
                     dia_combo.setCurrentIndex(i)
                     found = True
             if not found:
-                # 不在可选项里则插一个“当前值”占位，避免弹窗一开就被刷到 10
-                dia_combo.insertItem(0, f"当前值 {keep_txt}")
-                dia_combo.setCurrentIndex(0)
+                fallback_idx = dia_combo.findText(f"{default_dia:g}")
+                dia_combo.setCurrentIndex(fallback_idx if fallback_idx >= 0 else 0)
 
             dia_combo.blockSignals(False)
 
         def parse_dia_from_choice(choice: str) -> float:
             s = choice.strip()
-            if s.startswith("与管外径一致") and tube_do is not None:
-                return float(tube_do)
-            if s.startswith("当前值"):
-                try:
-                    return float(s.split()[-1])
-                except Exception:
-                    return default_dia
             try:
                 return float(s)
             except Exception:
@@ -30011,10 +30091,13 @@ class TubeLayoutEditor(QMainWindow):
             elif 25 <= tube_do <= 32:
                 default_dia = 16.0
             elif 32 < tube_do <= 57:
-                default_dia = 20.0
+                default_dia = 27.0
 
-        THREAD_OPTIONS = ["10", "12", "16", "20"]
-        WELD_OPTIONS = ["12", "14", "16", "19", "25", "27", "30", "32", "36"]
+        THREAD_OPTIONS = ["10", "12", "16", "27"]
+        WELD_OPTIONS = [
+            "10", "12", "14", "16", "19", "20", "22", "25",
+            "30", "32", "35", "38", "45", "50", "55", "57"
+        ]
 
         # 弹窗
         dlg = QDialog(self)
@@ -30046,9 +30129,6 @@ class TubeLayoutEditor(QMainWindow):
                 opts = THREAD_OPTIONS[:]
             else:
                 opts = WELD_OPTIONS[:]
-                if tube_do is not None:
-                    opts = [f"与管外径一致 (do={int(tube_do)})"] + opts
-
             keep_txt = f"{keep_value:g}"
             found = False
             for i, t in enumerate(opts):
@@ -30057,19 +30137,12 @@ class TubeLayoutEditor(QMainWindow):
                     dia_combo.setCurrentIndex(i)
                     found = True
             if not found:
-                dia_combo.insertItem(0, f"当前值 {keep_txt}")
-                dia_combo.setCurrentIndex(0)
+                fallback_idx = dia_combo.findText(f"{default_dia:g}")
+                dia_combo.setCurrentIndex(fallback_idx if fallback_idx >= 0 else 0)
             dia_combo.blockSignals(False)
 
         def parse_dia_from_choice(choice: str) -> float:
             s = choice.strip()
-            if s.startswith("与管外径一致") and tube_do is not None:
-                return float(tube_do)
-            if s.startswith("当前值"):
-                try:
-                    return float(s.split()[-1])
-                except Exception:
-                    return default_dia
             try:
                 return float(s)
             except Exception:
