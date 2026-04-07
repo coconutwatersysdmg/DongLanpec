@@ -11946,6 +11946,11 @@ class TubeLayoutEditor(QMainWindow):
                 ):
                     return
                 if (
+                        getattr(self, "_suppress_side_baffle_thickness_warn", False)
+                        and param_name == "旁路挡板厚度"
+                ):
+                    return
+                if (
                         getattr(self, "_tube_wall_warn_in_progress", False)
                         and param_name == "换热管壁厚 δ"
                 ):
@@ -12232,6 +12237,55 @@ class TubeLayoutEditor(QMainWindow):
                         self._last_valid_center_thickness_text = cur_text
                 except Exception as e:
                     print(f"[on_table_item_changed] 中间挡板厚度校验失败: {e}")
+
+            # 提前单独处理：旁路挡板厚度下限约束（thickness > 0）
+            if param_name == "旁路挡板厚度":
+                try:
+                    from PyQt5.QtWidgets import QMessageBox
+
+                    cur_text = str(param_value).strip()
+                    if not hasattr(self, "_last_valid_side_baffle_thickness_text"):
+                        try:
+                            self._last_valid_side_baffle_thickness_text = str(
+                                self.original_param_values.get((row, 2), "")
+                            ).strip()
+                        except Exception:
+                            self._last_valid_side_baffle_thickness_text = ""
+
+                    invalid = False
+                    if cur_text != "":
+                        try:
+                            thickness_val = float(cur_text)
+                            if thickness_val <= 0:
+                                invalid = True
+                        except Exception:
+                            invalid = True
+
+                    if invalid:
+                        QMessageBox.warning(
+                            self, "输入错误", "您输入的数值小于0或已超限，请重新输入！"
+                        )
+                        rollback_text = str(
+                            getattr(self, "_last_valid_side_baffle_thickness_text", "")
+                        ).strip()
+                        if rollback_text == "":
+                            try:
+                                rollback_text = str(
+                                    self.original_param_values.get((row, 2), "")
+                                ).strip()
+                            except Exception:
+                                rollback_text = ""
+                        self._suppress_side_baffle_thickness_warn = True
+                        try:
+                            changed_item.setText(rollback_text)
+                        finally:
+                            self._suppress_side_baffle_thickness_warn = False
+                        return
+
+                    if cur_text != "":
+                        self._last_valid_side_baffle_thickness_text = cur_text
+                except Exception as e:
+                    print(f"[on_table_item_changed] 旁路挡板厚度校验失败: {e}")
 
             # 提前单独处理：滑道高度范围约束 + 低于预定义确认
             if param_name == "滑道高度":
@@ -31135,11 +31189,13 @@ class TubeLayoutEditor(QMainWindow):
         red_pen = QPen(Qt.red)
         red_pen.setWidth(1)
         red_brush = QBrush(Qt.red)
-        lagan_radius = lagan_length / 2.0
+        # 按需求：自由拉杆“绘制尺寸”使用换热管外径 do；参数中的拉杆直径值仍保持原逻辑
+        draw_diameter = float(do)
+        lagan_radius = draw_diameter / 2.0
 
         # 创建拉杆圆（使用ClickableCircleItem）
         lagan_rect = QRectF(
-            lagan_x - lagan_radius, lagan_y - lagan_radius, lagan_length, lagan_length
+            lagan_x - lagan_radius, lagan_y - lagan_radius, draw_diameter, draw_diameter
         )
         lagan_rod = ClickableCircleItem(lagan_rect, is_side_rod=True, editor=self)
         # 明确标记为侧拉杆，确保 mousePressEvent 使用 is_side_rod 分支
@@ -33727,8 +33783,20 @@ class TubeLayoutEditor(QMainWindow):
             try:
                 block_height = float(self.thickness_input.text())
             except ValueError:
-                # QMessageBox.warning(dialog, "输入错误", "请输入有效的数字")
-                dialog.close()
+                QMessageBox.warning(
+                    dialog, "输入错误", "您输入的数值小于0或已超限，请重新输入！"
+                )
+                self.thickness_input.setText(str(default_thickness))
+                self.thickness_input.setFocus()
+                self.thickness_input.selectAll()
+                return
+            if block_height <= 0:
+                QMessageBox.warning(
+                    dialog, "输入错误", "您输入的数值小于0或已超限，请重新输入！"
+                )
+                self.thickness_input.setText(str(default_thickness))
+                self.thickness_input.setFocus()
+                self.thickness_input.selectAll()
                 return
             try:
                 print(
@@ -35778,8 +35846,20 @@ class TubeLayoutEditor(QMainWindow):
             try:
                 block_height = float(thickness_edit.text())
             except Exception:
-                QMessageBox.warning(self, "输入错误", "请输入有效的数字")
-                dialog.close()
+                QMessageBox.warning(
+                    dialog, "输入错误", "您输入的数值小于0或已超限，请重新输入！"
+                )
+                thickness_edit.setText(str(default_thickness))
+                thickness_edit.setFocus()
+                thickness_edit.selectAll()
+                return
+            if block_height <= 0:
+                QMessageBox.warning(
+                    dialog, "输入错误", "您输入的数值小于0或已超限，请重新输入！"
+                )
+                thickness_edit.setText(str(default_thickness))
+                thickness_edit.setFocus()
+                thickness_edit.selectAll()
                 return
 
             try:
