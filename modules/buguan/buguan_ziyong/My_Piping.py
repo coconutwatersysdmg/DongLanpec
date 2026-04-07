@@ -11204,7 +11204,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 4. 按换热器类型+管程数更新中心距
         # 4.1 浮头式换热器（AES、BES）
-        if self.heat_exchanger in ["AES", "BES"]:
+        if self.heat_exchanger in ["AES", "BES", "NEN", "BEM"]:
             # 获取浮头式对应的中心距（竖直/水平一致）
             if do_value not in aes_bes_map or range_type not in aes_bes_map[do_value]:
                 print(
@@ -11883,6 +11883,15 @@ class TubeLayoutEditor(QMainWindow):
                     return
                 if (
                         getattr(self, "_suppress_nonbaffle_chord_warn", False)
+                        and param_name
+                        in [
+                            "非布管区域弦高（0°/180°）",
+                            "非布管区域弦高（90°/270°）",
+                        ]
+                ):
+                    return
+                if (
+                        getattr(self, "_nonbaffle_chord_warn_in_progress", False)
                         and param_name
                         in [
                             "非布管区域弦高（0°/180°）",
@@ -12687,6 +12696,15 @@ class TubeLayoutEditor(QMainWindow):
                         upper = dl_val / 2.0
                         invalid = (cur_val < 0) or (cur_val > upper)
                         if invalid:
+                            # 防重：同一轮回调中仅弹一次，避免 itemChanged/combobox 级联导致重复弹窗
+                            current_key = f"{param_name}@{row}:{cur_text}"
+                            if current_key == getattr(self, "_nonbaffle_chord_warn_last_key", ""):
+                                return
+                            if getattr(self, "_nonbaffle_chord_warn_pending", False):
+                                return
+                            self._nonbaffle_chord_warn_pending = True
+                            self._nonbaffle_chord_warn_in_progress = True
+                            self._nonbaffle_chord_warn_last_key = current_key
                             try:
                                 print(
                                     f"[RANGE_WARN DEBUG] 来源=非布管弦高, param_name={param_name}, row={row}, "
@@ -12720,10 +12738,17 @@ class TubeLayoutEditor(QMainWindow):
                             try:
                                 changed_item.setText(rollback_text)
                             finally:
+                                self._nonbaffle_chord_warn_pending = False
                                 QTimer.singleShot(
                                     150,
                                     lambda: setattr(
                                         self, "_suppress_nonbaffle_chord_warn", False
+                                    ),
+                                )
+                                QTimer.singleShot(
+                                    1200,
+                                    lambda: setattr(
+                                        self, "_nonbaffle_chord_warn_in_progress", False
                                     ),
                                 )
                             return
