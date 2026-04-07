@@ -12224,6 +12224,13 @@ class TubeLayoutEditor(QMainWindow):
                         invalid = True
 
                     if invalid:
+                        try:
+                            print(
+                                f"[RANGE_WARN DEBUG] 来源=滑道高度, param_name={param_name}, row={row}, "
+                                f"cur_text='{cur_text}', h_val={h_val}, upper={upper}"
+                            )
+                        except Exception:
+                            pass
                         QMessageBox.warning(
                             self, "输入错误", "您输入的数值小于0或已超限，请重新输入！"
                         )
@@ -12382,7 +12389,7 @@ class TubeLayoutEditor(QMainWindow):
             # 提前单独处理：换热管壁厚 δ 约束（0 < δ <= do/2）
             if param_name == "换热管壁厚 δ":
                 try:
-                    from PyQt5.QtWidgets import QMessageBox, QComboBox
+                    from PyQt5.QtWidgets import QMessageBox
                     from PyQt5.QtCore import QTimer
 
                     cur_text = str(param_value).strip()
@@ -12477,6 +12484,16 @@ class TubeLayoutEditor(QMainWindow):
             # 如果是用户手动修改"隔条位置尺寸 W"，打印提示并调用用户更新函数
             # 注意：程序自动更新时已经在前面return了，这里只会是用户手动修改
             if param_name == "隔条位置尺寸 W":
+                # 若当前处于其它参数（如管程程数）触发的联动级联中，
+                # W 可能会被程序临时写成 0.00；此时不应按“手动输入”弹范围警告。
+                if getattr(self, "_in_on_combobox_cascade", False):
+                    try:
+                        print(
+                            f"[W VALIDATION DEBUG] 检测到联动级联写入，跳过W手动弹窗校验。row={row}, value='{param_value}'"
+                        )
+                    except Exception:
+                        pass
+                    return
                 try:
                     from PyQt5.QtWidgets import QMessageBox
                 except Exception:
@@ -12527,6 +12544,13 @@ class TubeLayoutEditor(QMainWindow):
                         invalid = True
 
                 if invalid and QMessageBox is not None:
+                    try:
+                        print(
+                            f"[RANGE_WARN DEBUG] 来源=隔条位置尺寸W, param_name={param_name}, row={row}, "
+                            f"cur_text='{cur_text}', w_val={w_val}, dl_val={dl_val}, upper={upper}"
+                        )
+                    except Exception:
+                        pass
                     QMessageBox.warning(
                         self,
                         "输入错误",
@@ -12605,9 +12629,15 @@ class TubeLayoutEditor(QMainWindow):
 
             # 1) 触发通用的下拉框逻辑（若适用）
             try:
+                self._in_on_combobox_cascade = True
                 self.on_combobox_changed(row, param_value)
             except Exception as e:
                 print(f"[on_table_item_changed] 调用 on_combobox_changed 出错: {e}")
+            finally:
+                try:
+                    self._in_on_combobox_cascade = False
+                except Exception:
+                    pass
 
             # 2) 验证输入合法性（你的现有函数）
             try:
@@ -12621,7 +12651,7 @@ class TubeLayoutEditor(QMainWindow):
                 "非布管区域弦高（90°/270°）",
             ]:
                 try:
-                    from PyQt5.QtWidgets import QMessageBox, QComboBox
+                    from PyQt5.QtWidgets import QMessageBox
                     from PyQt5.QtCore import QTimer
 
                     cur_text = str(param_value).strip()
@@ -12655,6 +12685,13 @@ class TubeLayoutEditor(QMainWindow):
                         upper = dl_val / 2.0
                         invalid = (cur_val < 0) or (cur_val > upper)
                         if invalid:
+                            try:
+                                print(
+                                    f"[RANGE_WARN DEBUG] 来源=非布管弦高, param_name={param_name}, row={row}, "
+                                    f"cur_text='{cur_text}', cur_val={cur_val}, dl_val={dl_val}, upper={upper}"
+                                )
+                            except Exception:
+                                pass
                             QMessageBox.warning(
                                 self,
                                 "输入错误",
@@ -13854,12 +13891,41 @@ class TubeLayoutEditor(QMainWindow):
                             QMessageBox.No,
                         )
                         self._reset_fixed_tubesheet_on_tube_pass_one = (reply == QMessageBox.Yes)
+                        # 用户确认后立刻执行后续“槽宽/槽深置0”动作（前移，不再等保存）
+                        if reply == QMessageBox.Yes:
+                            try:
+                                ok_now = self._apply_fixed_tubesheet_slots_zero_immediately()
+                                # 已前移执行，避免保存阶段重复按旧flag再执行一遍
+                                self._reset_fixed_tubesheet_on_tube_pass_one = False
+                                if ok_now and hasattr(self, "line_tip") and self.line_tip is not None:
+                                    msg = "已按1管程要求将固定管板相关槽深/槽宽参数更新为0"
+                                    self.line_tip.setText(msg)
+                                    self.line_tip.setStyleSheet("color: black;")
+                                    self.line_tip.setVisible(True)
+                            except Exception:
+                                pass
                     except Exception:
                         self._reset_fixed_tubesheet_on_tube_pass_one = False
             elif str(value).strip() != "1":
                 # 只在“当前管程=1且用户同意”时生效；离开该状态即清除
                 self._reset_fixed_tubesheet_on_tube_pass_one = False
                 self._tube_pass_one_prompt_shown = False
+
+            # 管程程数切换会触发 W 的联动重算（中间可能短暂写入 0.00），
+            # 这里临时抑制 W 的“手动输入范围弹窗”，避免误弹/重复弹。
+            try:
+                from PyQt5.QtCore import QTimer
+                self._suppress_divider_W_warn = True
+
+                def _clear_w_warn_suppress_after_tube_pass_change():
+                    try:
+                        self._suppress_divider_W_warn = False
+                    except Exception:
+                        pass
+
+                QTimer.singleShot(1800, _clear_w_warn_suppress_after_tube_pass_change)
+            except Exception:
+                pass
 
             self.update_SN()
             self.update_partition_plate_center_distance()
@@ -13890,6 +13956,68 @@ class TubeLayoutEditor(QMainWindow):
             if isinstance(do_widget, QComboBox):
                 selected_value = do_widget.currentText()
             self.draw_baffle_plates()
+
+    def _apply_fixed_tubesheet_slots_zero_immediately(self):
+        """管程切到1并确认后，立即将固定管板相关槽参数置0。"""
+        try:
+            product_id = getattr(self, "productID", None)
+            if not product_id:
+                return False
+
+            conn = create_product_connection()
+            if not conn:
+                return False
+
+            try:
+                with conn.cursor() as cursor:
+                    for pname in ("管程侧分程隔板槽深度", "管程侧分程隔板槽宽度"):
+                        cursor.execute(
+                            """
+                            UPDATE 产品设计活动表_元件附加参数表
+                            SET 参数值 = '0'
+                            WHERE 产品ID = %s AND 元件名称 = %s AND 参数名称 = %s
+                            """,
+                            (product_id, "固定管板", pname),
+                        )
+
+                    cursor.execute(
+                        """
+                        UPDATE 产品设计活动表_元件附加参数表
+                        SET 参数值 = '0'
+                        WHERE 产品ID = %s AND 元件名称 = %s AND 参数名称 = %s
+                        """,
+                        (product_id, "管箱平盖", "隔板槽深度"),
+                    )
+
+                    if (
+                        getattr(self, "heat_exchanger", None) == "BEM"
+                        and getattr(self, "tube_pass_form_value", None) == "1.1"
+                    ):
+                        for pname in ("管程侧分程隔板槽深度", "壳程侧分程隔板槽深度"):
+                            cursor.execute(
+                                """
+                                UPDATE 产品设计活动表_元件附加参数表
+                                SET 参数值 = '0'
+                                WHERE 产品ID = %s AND 元件名称 = %s AND 参数名称 = %s
+                                """,
+                                (product_id, "固定管板", pname),
+                            )
+
+                conn.commit()
+                return True
+            except Exception:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+                return False
+            finally:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        except Exception:
+            return False
 
     def none_tube(self, height_0_180, height_90_270, Di, do, centers):
 
