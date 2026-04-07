@@ -357,13 +357,79 @@ class SheetFormPage(QWidget):
         """仅在页面第一次真正显示时，让图片下拉框处于弹出状态。"""
         super().showEvent(event)
         try:
+            # 页面显示时先按 heat_exchanger 规则刷新一次“管板型式可编辑性”
+            self._apply_plate_type_rule()
             if (not self._sheet_form_combo_popup_done
                     and hasattr(self, 'sheet_form_connection_type_combo')
-                    and self.sheet_form_connection_type_combo is not None):
+                    and self.sheet_form_connection_type_combo is not None
+                    and self.sheet_form_connection_type_combo.isEnabled()):
                 self.sheet_form_connection_type_combo.showPopup()
                 self._sheet_form_combo_popup_done = True
         except Exception:
             pass
+
+    def _resolve_plate_type_rule(self, heat_exchanger):
+        """根据产品型式返回(默认管板型式, 是否允许用户修改)。"""
+        hx = str(heat_exchanger or "").strip().upper()
+        # 默认：a型，可修改（兜底）
+        default_type = "a"
+        allow_modify = True
+
+        # 固定 a 型，不允许修改
+        if hx in {"AES", "BES", "AKU", "BKU"}:
+            return "a", False
+        # a 型，允许修改
+        if hx in {"AEU", "BEU"}:
+            return "a", True
+        # 固定 b 型，不允许修改
+        if hx in {"NEN"}:
+            return "b", False
+        # 固定 e 型，不允许修改
+        if hx in {"AEM", "BEM"}:
+            return "e", False
+
+        return default_type, allow_modify
+
+    def _apply_plate_type_rule(self, saved_plate_type=None):
+        """按 heat_exchanger 规则设置下拉框默认值及可编辑性。"""
+        try:
+            if not hasattr(self, "sheet_form_connection_type_combo") or self.sheet_form_connection_type_combo is None:
+                return
+
+            connection_type_images = ['a', 'b', 'c', 'd', 'e', 'f']
+            parent_value = getattr(self.parent, "heat_exchanger", None)
+            target_type, allow_modify = self._resolve_plate_type_rule(parent_value)
+
+            # 可修改时：优先已保存值；不可修改时：强制规则值
+            selected_type = target_type
+            if allow_modify:
+                if saved_plate_type and saved_plate_type in connection_type_images:
+                    selected_type = saved_plate_type
+
+            if selected_type not in connection_type_images:
+                selected_type = target_type if target_type in connection_type_images else "a"
+
+            target_index = connection_type_images.index(selected_type)
+
+            self.sheet_form_connection_type_combo.blockSignals(True)
+            self.sheet_form_connection_type_combo.setCurrentIndex(target_index)
+            self.sheet_form_connection_type_combo.blockSignals(False)
+
+            # 不允许修改时禁用下拉框，防止用户修改管板型式
+            self.sheet_form_connection_type_combo.setEnabled(allow_modify)
+            if not allow_modify:
+                self._sheet_form_combo_popup_done = True
+
+            # 同步刷新图片区域
+            self.sheet_form_updates_image_path(target_index)
+
+            print(
+                f"[sheet_form_page] 规则应用: heat_exchanger={parent_value}, "
+                f"target_type={target_type}, selected_type={selected_type}, allow_modify={allow_modify}"
+            )
+        except Exception as e:
+            print(f"[sheet_form_page] 应用管板型式规则失败: {e}")
+            traceback.print_exc()
 
     def _get_saved_plate_type(self):
         """从产品设计活动表_管板形式表中，根据产品ID查询已保存的管板类型"""
@@ -718,35 +784,8 @@ class SheetFormPage(QWidget):
                     # 1. 优先从产品设计活动表_管板形式表中获取已保存的管板类型
                     saved_plate_type = self._get_saved_plate_type()
                     print(f"[DEBUG 延迟检查] 已保存的管板类型: {saved_plate_type}")
-
-                    # 下拉框对应的类型编码
-                    connection_type_images = ['a', 'b', 'c', 'd', 'e', 'f']
-                    target_index = None
-
-                    if saved_plate_type and saved_plate_type in connection_type_images:
-                        # 有已保存的管板类型，按已保存的来
-                        target_index = connection_type_images.index(saved_plate_type)
-                        print(f"[DEBUG 延迟检查] 使用已保存管板类型，索引 = {target_index}")
-                    else:
-                        # 2. 没有保存记录，回退到原来的 heat_exchanger 逻辑
-                        parent_value = getattr(self.parent, "heat_exchanger", None)
-                        print(f"[DEBUG 延迟检查] 从父窗口获取 heat_exchanger = {parent_value}")
-
-                        if parent_value in ["BEM","AEM"]:
-                            target_index = 4  # 'e'
-                        elif parent_value in ["NEN"]:
-                            target_index = 1  # 'b'
-                        else:
-                            target_index = 0  # 'a'
-
-                    if target_index is None:
-                        return
-
-                    # 3. 设置下拉框索引并加载该类型图片
-                    self.sheet_form_connection_type_combo.blockSignals(True)
-                    self.sheet_form_connection_type_combo.setCurrentIndex(target_index)
-                    self.sheet_form_connection_type_combo.blockSignals(False)
-                    self.sheet_form_updates_image_path(target_index)
+                    # 2. 依据 heat_exchanger 规则设置默认管板型式及可编辑性
+                    self._apply_plate_type_rule(saved_plate_type=saved_plate_type)
 
                     # 4. 如果当前有图片，优先根据已保存节点模拟点击，自动加载参数
                     if self.sheet_form_current_images and len(self.sheet_form_image_labels) > 0:

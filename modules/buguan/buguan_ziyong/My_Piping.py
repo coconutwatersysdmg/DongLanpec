@@ -1497,7 +1497,60 @@ class TubeLayoutEditor(QMainWindow):
                     else 0
                 )
                 # 当选中数量为2时，仅显示两孔间距提示，不再显示数量提示
-                if count != 2:
+                if count == 1:
+                    # 只选中一个换热管孔：在底部提示该孔绝对坐标
+                    # 绝对坐标取 self.selected_to_current_coords 的结果（与 global_centers 同源的当前坐标系）
+                    abs_x = None
+                    abs_y = None
+                    try:
+                        coords = self.selected_to_current_coords(self.selected_centers)
+                        if isinstance(coords, tuple) and len(coords) == 2:
+                            abs_x, abs_y = coords
+                        elif (
+                            isinstance(coords, list)
+                            and len(coords) == 1
+                            and isinstance(coords[0], (tuple, list))
+                            and len(coords[0]) == 2
+                        ):
+                            abs_x, abs_y = coords[0]
+                    except Exception:
+                        abs_x = None
+                        abs_y = None
+
+                    if abs_x is not None and abs_y is not None:
+                        # 说明：当前用于计算/绘制的坐标系与肉眼象限显示的 y 方向相反
+                        # 所以这里做 y 取反，保证用户看到的“第一/第二/三/四象限”与提示一致。
+                        try:
+                            abs_y_display = -float(abs_y)
+                        except Exception:
+                            abs_y_display = abs_y
+                        message = (
+                            f"您当前选中的换热管孔坐标为 ({float(abs_x):.4f}, {abs_y_display:.4f})"
+                        )
+                    else:
+                        # 坐标取不到时退回数量提示，避免无提示
+                        message = f"您当前选中的换热管孔的数量为{count}个"
+
+                    if hasattr(self, "line_tip") and self.line_tip is not None:
+                        self.line_tip.setText(message)
+                        self.line_tip.setStyleSheet("color: black;")
+                        self.line_tip.setVisible(True)
+
+                        from PyQt5.QtCore import QTimer
+
+                        expected_text = message
+
+                        def _clear_if_same():
+                            try:
+                                if self.line_tip and self.line_tip.text() == expected_text:
+                                    self.line_tip.setText("")
+                            except Exception:
+                                pass
+
+                        QTimer.singleShot(5000, _clear_if_same)
+                    else:
+                        print(message)
+                elif count != 2:
                     message = f"您当前选中的换热管孔的数量为{count}个"
                     if hasattr(self, "line_tip") and self.line_tip is not None:
                         self.line_tip.setText(message)
@@ -1506,7 +1559,16 @@ class TubeLayoutEditor(QMainWindow):
 
                         from PyQt5.QtCore import QTimer
 
-                        QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
+                        expected_text = message
+
+                        def _clear_if_same():
+                            try:
+                                if self.line_tip and self.line_tip.text() == expected_text:
+                                    self.line_tip.setText("")
+                            except Exception:
+                                pass
+
+                        QTimer.singleShot(5000, _clear_if_same)
                     else:
                         print(message)
             except Exception:
@@ -1551,7 +1613,16 @@ class TubeLayoutEditor(QMainWindow):
                 self.line_tip.setVisible(True)
                 from PyQt5.QtCore import QTimer
 
-                QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
+                expected_text = message
+
+                def _clear_if_same():
+                    try:
+                        if self.line_tip and self.line_tip.text() == expected_text:
+                            self.line_tip.setText("")
+                    except Exception:
+                        pass
+
+                QTimer.singleShot(5000, _clear_if_same)
             except Exception:
                 pass
 
@@ -1854,7 +1925,16 @@ class TubeLayoutEditor(QMainWindow):
                 self.line_tip.setVisible(True)
                 from PyQt5.QtCore import QTimer
 
-                QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
+                expected_text = message
+
+                def _clear_if_same():
+                    try:
+                        if self.line_tip and self.line_tip.text() == expected_text:
+                            self.line_tip.setText("")
+                    except Exception:
+                        pass
+
+                QTimer.singleShot(5000, _clear_if_same)
             except AttributeError:
                 print(message)
         except Exception:
@@ -1999,11 +2079,43 @@ class TubeLayoutEditor(QMainWindow):
         return None
 
     def update_total_holes_count(self):
-        """根据current_centers的长度更新总管孔数量标签"""
-        total = len(self.current_centers)
-        # 处理初始值：如果未布管且current_centers为空，显示980
-        if not self.has_piped and total == 0:
+        """更新“总管孔数量”提示。
+
+        布管完成后：优先使用接口返回的满布总数（self.output_data['TubesCount']）
+        替代 current_centers 的长度（因为 current_centers 可能已经扣除了非布管区域）。
+        """
+        total = None
+        try:
+            total = len(getattr(self, "current_centers", []) or [])
+        except Exception:
+            total = 0
+
+        # 布管完成后：优先读取满布状态总换热管数量
+        if getattr(self, "has_piped", False):
+            try:
+                import json
+
+                output_obj = getattr(self, "output_data", None)
+                # 兼容你描述的命名：如果项目里有人存过 self.outputdata
+                if output_obj is None:
+                    output_obj = getattr(self, "outputdata", None)
+
+                if isinstance(output_obj, str):
+                    output_obj = json.loads(output_obj)
+
+                if isinstance(output_obj, dict):
+                    # 接口字段名：TubesCount（见 TubeDistributionCore 输出）
+                    tc = output_obj.get("TubesCount", None)
+                    if tc is not None and str(tc) != "":
+                        total = int(float(tc))
+            except Exception:
+                # 读取失败时，保持 total 走下面的兜底
+                pass
+
+        # 处理初始值：如果未布管且 current_centers 为空，显示 980
+        if not getattr(self, "has_piped", False) and total == 0:
             total = 980
+
         self.total_holes_label.setText(f"总管孔数量: {total}")
 
     def toggle_arrange_text(self):
@@ -2187,7 +2299,7 @@ class TubeLayoutEditor(QMainWindow):
         lagan_layout.setSpacing(2)
         self.lagan_required_label = QLabel("标准要求数量-/已有数量0")
         self.lagan_required_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self.lagan_required_label.setStyleSheet("font-size: 13px; color: #222;")
+        self.lagan_required_label.setStyleSheet("font-size: 18px; color: #222;")
         self.lagan_required_label.setTextFormat(Qt.RichText)
         lagan_layout.addWidget(self.lagan_required_label)
         param_layout.addWidget(self.lagan_summary_container)
@@ -3572,7 +3684,7 @@ class TubeLayoutEditor(QMainWindow):
                                 if not self.heat_exchanger:
                                     self.heat_exchanger = "AEU"
                                 # 根据换热器型号计算DL
-                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN","AEM"]:
+                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN","AEM", "AKU", "BKU"]:
                                     # 计算方式1: DL = Di - 2×b₃，其中b₃ = max(0.25×do, 8mm)
                                     b3 = max(0.25 * do, 8.0)  # 取两者较大值作为b3
                                     DL = Di - 2 * b3
@@ -3719,7 +3831,7 @@ class TubeLayoutEditor(QMainWindow):
                 if component_conn:
                     with component_conn.cursor() as cursor:
                         # 组件库仅从自身的布管参数默认表加载，不涉及产品库的设计数据表
-                        if self.heat_exchanger in ["AEU", "BEU"]:
+                        if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                             cursor.execute(
                                 "SELECT 参数名, 参数值, 单位 FROM 布管参数默认表_U型管"
                             )
@@ -4001,7 +4113,7 @@ class TubeLayoutEditor(QMainWindow):
                                 print("无法计算DL：未获取到换热器型号")
                             else:
                                 # 根据换热器型号计算DL
-                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN","AEM"]:
+                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN","AEM", "AKU", "BKU"]:
                                     # 计算方式1: DL = Di - 2×b₃，其中b₃ = max(0.25×do, 8mm)
                                     b3 = max(0.25 * do, 8.0)  # 取两者较大值作为b3
                                     DL = Di - 2 * b3
@@ -4307,7 +4419,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 后续计算和元素构建逻辑保持不变
         try:
-            if self.heat_exchanger in ["AEU", "BEU"] and self.DN == "1200":
+            if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"] and self.DN == "1200":
                 print("初始设置的值")
 
             tube_result = self.calculate_piping_layout()
@@ -5223,7 +5335,7 @@ class TubeLayoutEditor(QMainWindow):
                 pass
 
         di_result = None  # 先初始化，避免未赋值引用
-        if self.heat_exchanger in ["AEU", "BEU"]:
+        if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
             di_result = qtzj.cal_qiaotineizhijing_U(
                 self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN, user_Dit
             )
@@ -5809,7 +5921,7 @@ class TubeLayoutEditor(QMainWindow):
         product_type_str = heat_exchanger_type  # 用于存储产品型式字符串
         self.heat_exchanger = product_type_str
         # 根据产品型式判断热交换器类型
-        if product_type_str in ["AEU", "BEU"]:
+        if product_type_str in ["AEU", "BEU", "AKU", "BKU"]:
             he_type = "2"  # U型管式
         elif product_type_str in ["NEN","BEM","AEM"]:
             he_type = "1"  # 固定管板式
@@ -5832,7 +5944,7 @@ class TubeLayoutEditor(QMainWindow):
                             self.heat_exchanger = product_type_str
 
                             # 根据产品型式判断热交换器类型
-                            if product_type_str in ["AEU", "BEU"]:
+                            if product_type_str in ["AEU", "BEU", "AKU", "BKU"]:
                                 he_type = "2"  # U型管式
                             elif product_type_str in ["NEN","BEM","AEM"]:
                                 he_type = "1"  # 固定管板式
@@ -5904,7 +6016,7 @@ class TubeLayoutEditor(QMainWindow):
             conn = create_component_connection()
             if conn:
                 with conn.cursor() as cursor:
-                    if self.heat_exchanger in ["AEU", "BEU"]:
+                    if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                         cursor.execute(
                             "SELECT 参数名, 参数值 FROM 布管参数默认表_U型管"
                         )
@@ -6054,7 +6166,7 @@ class TubeLayoutEditor(QMainWindow):
 
             # 如果找到按钮，根据产品型式设置可用状态
             if cross_pipe_btn is not None:
-                if product_type_str not in ["AEU", "BEU"]:
+                if product_type_str not in ["AEU", "BEU", "AKU", "BKU"]:
                     cross_pipe_btn.setEnabled(False)
                     cross_pipe_btn.setToolTip("浮头式产品不支持交叉布管功能")
                 else:
@@ -6063,7 +6175,7 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 print("警告：未找到交叉布管按钮")
             if cross_pipe_del_btn is not None:
-                if product_type_str not in ["AEU", "BEU"]:
+                if product_type_str not in ["AEU", "BEU", "AKU", "BKU"]:
                     cross_pipe_del_btn.setEnabled(False)
                     cross_pipe_del_btn.setToolTip("浮头式产品不支持交叉布管功能")
                 else:
@@ -6482,7 +6594,7 @@ class TubeLayoutEditor(QMainWindow):
         product_type_str = heat_exchanger_type  # 用于存储产品型式字符串
         self.heat_exchanger = product_type_str
         # 根据产品型式判断热交换器类型
-        if product_type_str in ["AEU", "BEU"]:
+        if product_type_str in ["AEU", "BEU", "AKU", "BKU"]:
             he_type = "2"  # U型管式
         elif product_type_str in ["NEN","BEM","AEM"]:
             he_type = "1"  # 固定管板式
@@ -6505,7 +6617,7 @@ class TubeLayoutEditor(QMainWindow):
                             self.heat_exchanger = product_type_str
 
                             # 根据产品型式判断热交换器类型
-                            if product_type_str in ["AEU", "BEU"]:
+                            if product_type_str in ["AEU", "BEU", "AKU", "BKU"]:
                                 he_type = "2"  # U型管式
                             elif product_type_str in ["NEN","BEM","AEM"]:
                                 he_type = "1"  # 固定管板式
@@ -6577,7 +6689,7 @@ class TubeLayoutEditor(QMainWindow):
             conn = create_component_connection()
             if conn:
                 with conn.cursor() as cursor:
-                    if self.heat_exchanger in ["AEU", "BEU"]:
+                    if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                         cursor.execute(
                             "SELECT 参数名, 参数值 FROM 布管参数默认表_U型管"
                         )
@@ -8024,7 +8136,7 @@ class TubeLayoutEditor(QMainWindow):
             """内部工具函数：按原逻辑根据换热器型号计算 DL。"""
             heat_exchanger_type_local = self.heat_exchanger or "AEU"
 
-            if heat_exchanger_type_local in ["AEU", "BEU", "BEM", "NEN","AEM"]:
+            if heat_exchanger_type_local in ["AEU", "BEU", "BEM", "NEN","AEM", "AKU", "BKU"]:
                 # 计算方式1: DL = Di - 2b₃, b₃ = max(0.25do, 8)
                 b3_local = max(0.25 * do_value_local, 8.0)
                 dl_local = di_value_local - 2 * b3_local
@@ -11121,7 +11233,7 @@ class TubeLayoutEditor(QMainWindow):
                     )
 
         # 4.2 U形管式换热器
-        elif self.heat_exchanger in ["AEU", "BEU"]:
+        elif self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
             # 2管程：使用U形管专用竖直中心距数据
             if tube_pass == "2":
                 if do_value not in u_tube_2pass_vertical_map:
@@ -11308,7 +11420,7 @@ class TubeLayoutEditor(QMainWindow):
                 return None
             return float(aes_bes_map[do_key][range_type])
 
-        if getattr(self, "heat_exchanger", None) in ["AEU", "BEU"]:
+        if getattr(self, "heat_exchanger", None) in ["AEU", "BEU", "AKU", "BKU"]:
             if tube_pass == "2":
                 if do_key not in u_tube_2pass_vertical_map:
                     return None
@@ -13252,7 +13364,7 @@ class TubeLayoutEditor(QMainWindow):
                             str(param["参数值"]) if param["参数值"] is not None else ""
                         )
 
-                        if self.heat_exchanger in ["AEU", "BEU"]:
+                        if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                             combo.addItems(["2", "4", "6", "8", "10", "12"])
                         elif self.heat_exchanger in ["AES", "BES"]:
                             combo.addItems(["2", "4", "6", "8", "10", "12"])
@@ -14899,7 +15011,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 判断使用哪个表
         use_vertical_table = False
-        if self.heat_exchanger in ["AEU", "BEU"]:
+        if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
             # AEU/BEU型号：2管程用水平表，其他管程用竖直表
             if tube_num != "2":
                 use_vertical_table = True
@@ -15370,7 +15482,7 @@ class TubeLayoutEditor(QMainWindow):
                     if sql:
                         for statement in sql:
                             self.execute_sql(statement)
-                elif self.heat_exchanger in ["AEU", "BEU"]:
+                elif self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                     self.update_buguan_quantity()
                     sql = piping_calculations.build_sql_for_u_tube_calc(
                         self, create_product_connection
@@ -15546,7 +15658,7 @@ class TubeLayoutEditor(QMainWindow):
         # 判断使用哪个表（与build_sql_for_tube_hole逻辑一致）
         tube_num = self.get_tube_pass_count()
         use_vertical_table = False
-        if self.heat_exchanger in ["AEU", "BEU"]:
+        if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
             if tube_num != "2":
                 use_vertical_table = True
 
@@ -17163,6 +17275,9 @@ class TubeLayoutEditor(QMainWindow):
         self._buguan_in_progress = True
 
         step_errors = []
+        # 布管前置预检弹窗太频繁时，用该开关先静默处理。
+        # 静默模式下：跳过 QMessageBox 弹窗，但仍会尽量回滚到最后合法值（若有）。
+        suppress_precheck_dialogs = True
 
         def _safe_step(step_name, fn, *args, **kwargs):
             try:
@@ -17323,6 +17438,14 @@ class TubeLayoutEditor(QMainWindow):
                 if not getattr(self, "_s_center_warn_pending", False):
                     return True
 
+                if suppress_precheck_dialogs:
+                    # 静默：不弹对话框，直接允许继续布管
+                    try:
+                        self._s_center_warn_pending = False
+                    except Exception:
+                        pass
+                    return True
+
                 reply = QMessageBox.question(
                     self,
                     "提示",
@@ -17437,6 +17560,38 @@ class TubeLayoutEditor(QMainWindow):
                     pass
                 return True
 
+            if suppress_precheck_dialogs:
+                # 静默：跳过弹窗，直接回滚到最后合法值（或默认 2），继续布管
+                try:
+                    self._tube_wall_warn_pending = False
+                except Exception:
+                    pass
+
+                if delta_row >= 0:
+                    rollback_text = str(
+                        getattr(self, "_last_valid_tube_wall_thickness_text", "2")
+                    ).strip() or "2"
+                    w = self.param_table.cellWidget(delta_row, 2)
+                    if isinstance(w, QComboBox):
+                        try:
+                            if w.isEditable() and w.lineEdit() is not None:
+                                w.lineEdit().setText(rollback_text)
+                            w.setCurrentText(rollback_text)
+                        except Exception:
+                            pass
+                    else:
+                        it = self.param_table.item(delta_row, 2)
+                        if it:
+                            it.setText(rollback_text)
+                        else:
+                            try:
+                                self.param_table.setItem(
+                                    delta_row, 2, QTableWidgetItem(rollback_text)
+                                )
+                            except Exception:
+                                pass
+                return True
+
             # 全局 bool 逻辑：仅当输入了“新的违规值”时才弹
             try:
                 cur_text = (delta_text_debug or "").strip()
@@ -17540,6 +17695,14 @@ class TubeLayoutEditor(QMainWindow):
                     self._sn_horizontal_warn_pending = True
 
                 if not getattr(self, "_sn_horizontal_warn_pending", False):
+                    return True
+
+                if suppress_precheck_dialogs:
+                    # 静默：不弹对话框，直接允许继续布管
+                    try:
+                        self._sn_horizontal_warn_pending = False
+                    except Exception:
+                        pass
                     return True
 
                 reply = QMessageBox.question(
@@ -17689,11 +17852,12 @@ class TubeLayoutEditor(QMainWindow):
                 return True
 
             # 非法：弹窗 + 回滚/重新输入
-            QMessageBox.warning(
-                self,
-                "输入错误",
-                "您输入的数值小于0或已超限，请重新输入！",
-            )
+            if not suppress_precheck_dialogs:
+                QMessageBox.warning(
+                    self,
+                    "输入错误",
+                    "您输入的数值小于0或已超限，请重新输入！",
+                )
 
             rollback_text = str(getattr(self, "_last_valid_divider_W_text", "")).strip()
             if rollback_text == "":
@@ -17722,7 +17886,8 @@ class TubeLayoutEditor(QMainWindow):
                         except Exception:
                             pass
 
-            return False
+            # 静默模式：跳过弹窗后仍允许继续布管（因为已回滚到最近合法值）
+            return suppress_precheck_dialogs
 
         def _precheck_nonbaffle_chord_heights():
             """
@@ -17796,11 +17961,12 @@ class TubeLayoutEditor(QMainWindow):
                     p_val = None
 
                 if p_val is None or p_val < 0 or p_val > upper:
-                    QMessageBox.warning(
-                        self,
-                        "输入错误",
-                        "您输入的数值小于0或已超限，请重新输入！",
-                    )
+                    if not suppress_precheck_dialogs:
+                        QMessageBox.warning(
+                            self,
+                            "输入错误",
+                            "您输入的数值小于0或已超限，请重新输入！",
+                        )
 
                     rollback_text = str(getattr(self, last_attr, "") or "").strip()
                     if rollback_text == "":
@@ -17834,7 +18000,7 @@ class TubeLayoutEditor(QMainWindow):
                             except Exception:
                                 pass
 
-                    return False
+                    return True
 
             return True
 
@@ -17934,6 +18100,54 @@ class TubeLayoutEditor(QMainWindow):
 
             # 2) 计算布管（核心）
             result = _safe_step("calculate_piping_layout", self.calculate_piping_layout)
+
+            # 2.5) 布管完成后，在下方 line_tip 提示一次满布状态总换热管数量
+            try:
+                # 调试输出一次 output_data 结构，便于确认总管数的实际字段名
+                try:
+                    print("[DEBUG][on_buguan_bt_click] output_data =", getattr(self, "output_data", None))
+                except Exception:
+                    pass
+
+                import json
+                total_tubes = None
+                output_obj = getattr(self, "output_data", None)
+                # 兼容可能存在的别名 self.outputdata
+                if output_obj is None:
+                    output_obj = getattr(self, "outputdata", None)
+                if isinstance(output_obj, str):
+                    output_obj = json.loads(output_obj)
+                if isinstance(output_obj, dict):
+                    # 接口里实际字段：TubesCount
+                    tc = output_obj.get("TubesCount", None)
+                    if tc is not None and str(tc) != "":
+                        total_tubes = int(float(tc))
+
+                if (
+                    total_tubes is not None
+                    and hasattr(self, "line_tip")
+                    and self.line_tip is not None
+                ):
+                    message = f"满布状态总换热管数量为 {total_tubes} 个"
+                    self.line_tip.setText(message)
+                    self.line_tip.setStyleSheet("color: black;")
+                    self.line_tip.setVisible(True)
+
+                    from PyQt5.QtCore import QTimer
+
+                    expected_text = message
+
+                    def _clear_if_same():
+                        try:
+                            if self.line_tip and self.line_tip.text() == expected_text:
+                                self.line_tip.setText("")
+                        except Exception:
+                            pass
+
+                    QTimer.singleShot(5000, _clear_if_same)
+            except Exception:
+                # 读取/提示失败不影响布管主流程
+                pass
 
             # 3) 绘制折流板（可能依赖 result/参数齐全）
             _safe_step("draw_baffle_plates", self.draw_baffle_plates)
@@ -21622,9 +21836,9 @@ class TubeLayoutEditor(QMainWindow):
                 selected = list(self.judge_linkage(self.selected_centers))
             else:
                 tubeline = self.get_tube_pass_count()
-                if tubeline == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+                if tubeline == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                     selected = list(self.judge_linkage_x(self.selected_centers))
-                elif tubeline in ["4", "6"] and self.heat_exchanger in ["AEU", "BEU"]:
+                elif tubeline in ["4", "6"] and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                     selected = list(self.judge_linkage_y(self.selected_centers))
                 else:
                     selected = list(self.selected_centers)
@@ -23279,7 +23493,7 @@ class TubeLayoutEditor(QMainWindow):
                     if self.isSymmetry:
                         selected_centers = self.judge_linkage([rel_coord])
                     else:
-                        if self.heat_exchanger in ["AEU", "BEU"]:
+                        if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                             tube_num = self.get_tube_pass_count()
                             if tube_num == "2":
                                 selected_centers = self.judge_linkage_x([rel_coord])
@@ -23316,7 +23530,7 @@ class TubeLayoutEditor(QMainWindow):
                             (-cx, -cy),  # 中心对称
                         ])
                     else:
-                        if self.heat_exchanger in ["AEU", "BEU"]:
+                        if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                             tube_num = self.get_tube_pass_count()
                             if tube_num == "2":
                                 # 关于x轴对称
@@ -23580,7 +23794,7 @@ class TubeLayoutEditor(QMainWindow):
             tube_num = self.get_tube_pass_count()
 
             # 根据heat_exchanger和tube_num设置默认值
-            if self.heat_exchanger in ["AEU", "BEU"]:
+            if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                 if tube_num == "2":
                     self.tube_pass_form_value = "2.1"
                 elif tube_num == "4":
@@ -25601,7 +25815,7 @@ class TubeLayoutEditor(QMainWindow):
             if self.isSymmetry:
                 selected_centers = self.judge_linkage([rel_coord])
             else:
-                if self.heat_exchanger in ["AEU", "BEU"]:
+                if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                     tube_num = self.get_tube_pass_count()
                     if tube_num == "2":
                         selected_centers = self.judge_linkage_x([rel_coord])
@@ -25621,7 +25835,7 @@ class TubeLayoutEditor(QMainWindow):
                     (-cx, -cy),
                 ])
             else:
-                if self.heat_exchanger in ["AEU", "BEU"]:
+                if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                     tube_num = self.get_tube_pass_count()
                     if tube_num == "2":
                         abs_coords.append((cx, -cy))
@@ -26862,15 +27076,15 @@ class TubeLayoutEditor(QMainWindow):
                     selected_centers = list(self.judge_linkage(self.selected_centers))
                 else:
                     tubeline_num = self.get_tube_pass_count()
-                    if tubeline_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+                    if tubeline_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                         selected_centers = list(
                             self.judge_linkage_x(self.selected_centers)
                         )
-                    elif tubeline_num == "4" and self.heat_exchanger in ["AEU", "BEU"]:
+                    elif tubeline_num == "4" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                         selected_centers = list(
                             self.judge_linkage_y(self.selected_centers)
                         )
-                    elif tubeline_num == "6" and self.heat_exchanger in ["AEU", "BEU"]:
+                    elif tubeline_num == "6" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                         selected_centers = list(
                             self.judge_linkage_y(self.selected_centers)
                         )
@@ -27065,13 +27279,13 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 pass
             tube_num = self.get_tube_pass_count()
-            if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+            if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                 tubes_to_restore = self.judge_linkage(tubes_to_restore)
                 self.build_huanreguan(tubes_to_restore)
-            elif tube_num == "4" and self.heat_exchanger in ["AEU", "BEU"]:
+            elif tube_num == "4" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                 tubes_to_restore = self.judge_linkage(tubes_to_restore)
                 self.build_huanreguan(tubes_to_restore)
-            elif tube_num == "6" and self.heat_exchanger in ["AEU", "BEU"]:
+            elif tube_num == "6" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                 tubes_to_restore = self.judge_linkage(tubes_to_restore)
                 self.build_huanreguan(tubes_to_restore)
             else:
@@ -28762,9 +28976,9 @@ class TubeLayoutEditor(QMainWindow):
         if self.isSymmetry:
             return list(self.judge_linkage(centers_list))
         tubeline_num = self.get_tube_pass_count()
-        if tubeline_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+        if tubeline_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
             return list(self.judge_linkage_x(centers_list))
-        if tubeline_num in ("4", "6") and self.heat_exchanger in ["AEU", "BEU"]:
+        if tubeline_num in ("4", "6") and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
             return list(self.judge_linkage_y(centers_list))
         return list(centers_list)
 
@@ -29126,7 +29340,7 @@ class TubeLayoutEditor(QMainWindow):
         if self.isSymmetry:
             selected_centers = self.judge_linkage(self.selected_centers)
         else:
-            if self.heat_exchanger in ["AEU", "BEU"]:
+            if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                 tube_num = self.get_tube_pass_count()
                 if tube_num == "2":
                     selected_centers = self.judge_linkage_x(self.selected_centers)
@@ -29530,9 +29744,9 @@ class TubeLayoutEditor(QMainWindow):
             selected_centers = list(self.judge_linkage(self.selected_centers))
         else:
             tubeline_num = self.get_tube_pass_count()
-            if tubeline_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+            if tubeline_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                 selected_centers = list(self.judge_linkage_x(self.selected_centers))
-            elif tubeline_num in ["4", "6"] and self.heat_exchanger in ["AEU", "BEU"]:
+            elif tubeline_num in ["4", "6"] and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                 selected_centers = list(self.judge_linkage_y(self.selected_centers))
             else:
                 selected_centers = list(self.selected_centers)
@@ -32217,9 +32431,9 @@ class TubeLayoutEditor(QMainWindow):
                     return
 
         if self.isSymmetry:
-            if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+            if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                 selected_centers = self.judge_linkage_y(self.selected_centers)
-            elif tube_num in ["4", "6"] and self.heat_exchanger in ["AEU", "BEU"]:
+            elif tube_num in ["4", "6"] and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                 selected_centers = self.judge_linkage_y(self.selected_centers)
             else:
                 selected_centers = self.selected_centers
@@ -36040,11 +36254,11 @@ class TubeLayoutEditor(QMainWindow):
             processed_coord2 = self.actual_to_selected_coords(coord)
             self.build_huanreguan([processed_coord2])
         tube_num = self.get_tube_pass_count()
-        if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+        if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
             all_centers = self.judge_linkage_x(self.slide_selected_centers)
             self.build_huanreguan(all_centers)
         elif (
-                tube_num == "4" or tube_num == "6" and self.heat_exchanger in ["AEU", "BEU"]
+                tube_num == "4" or tube_num == "6" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]
         ):
             all_centers = self.judge_linkage_y(self.slide_selected_centers)
             self.build_huanreguan(all_centers)
@@ -36487,7 +36701,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 执行删除（保留原逻辑不变）
                 if centers:
                     tube_num = self.get_tube_pass_count()
-                    if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+                    if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                         all_centers = self.judge_linkage_x(centers)
                         # print("滑道干涉删除换热管")
                         # print(all_centers)
@@ -36909,7 +37123,7 @@ class TubeLayoutEditor(QMainWindow):
 
         if not interfering_centers:
             return
-        if self.heat_exchanger in ["AEU", "BEU"]:
+        if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
             tube_num = self.get_tube_pass_count()
             selected_interfering_centers = []
             for pt in interfering_centers:
@@ -37979,13 +38193,13 @@ class TubeLayoutEditor(QMainWindow):
                 self.impingement_plate_del_centers.extend(centers)
 
                 tube_num = self.get_tube_pass_count()
-                if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+                if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                     all_centers = self.judge_linkage_x(centers)
                     self.delete_huanreguan(all_centers)
-                elif tube_num == "4" and self.heat_exchanger in ["AEU", "BEU"]:
+                elif tube_num == "4" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                     all_centers = self.judge_linkage_y(centers)
                     self.delete_huanreguan(all_centers)
-                elif tube_num == "6" and self.heat_exchanger in ["AEU", "BEU"]:
+                elif tube_num == "6" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                     all_centers = self.judge_linkage_y(centers)
                     self.delete_huanreguan(all_centers)
 
@@ -38432,13 +38646,13 @@ class TubeLayoutEditor(QMainWindow):
 
                 tube_num = self.get_tube_pass_count()
 
-                if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU"]:
+                if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                     all_centers = self.judge_linkage_x(centers)
                     self.delete_huanreguan(all_centers)
-                elif tube_num == "4" and self.heat_exchanger in ["AEU", "BEU"]:
+                elif tube_num == "4" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                     all_centers = self.judge_linkage_y(centers)
                     self.delete_huanreguan(all_centers)
-                elif tube_num == "6" and self.heat_exchanger in ["AEU", "BEU"]:
+                elif tube_num == "6" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                     all_centers = self.judge_linkage_y(centers)
                     self.delete_huanreguan(all_centers)
                 else:
