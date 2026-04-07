@@ -5,7 +5,7 @@ import os
 import traceback
 # 导入 QTimer
 from PyQt5.QtCore import Qt, QSize, QTimer, QRect
-from PyQt5.QtGui import QPixmap, QFont, QIcon, QPainter, QColor
+from PyQt5.QtGui import QPixmap, QFont, QIcon, QPainter, QColor, QBrush
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
                              QGridLayout, QFrame, QListWidget, QListWidgetItem, QLineEdit, QComboBox, QSizePolicy,
                              QTableWidget, QTableWidgetItem, QHeaderView, QDialog, QApplication)
@@ -348,6 +348,8 @@ class SheetFormPage(QWidget):
         self.Di = None  # 初始化全局变量：壳体内直径 Dis
         self.use_outer_diameter_base = None  # "是否以外径为基准"的当前值
         self.DL = None  # 布管限定圆 DL
+        # 参数表程序化更新保护：避免初始化/联动时误判为“手动修改”
+        self._sheet_form_programmatic_update = False
         self.setup_ui()
         # 确保布局已初始化
         if self.sheet_form_param_layout is None:
@@ -430,6 +432,35 @@ class SheetFormPage(QWidget):
         except Exception as e:
             print(f"[sheet_form_page] 应用管板型式规则失败: {e}")
             traceback.print_exc()
+
+    def _mark_sheet_form_value_blue(self, row, col=1):
+        """将参数值单元格标记为蓝色（仿 My_Piping 的手动修改高亮）。"""
+        try:
+            if not hasattr(self, "sheet_form_param_table") or self.sheet_form_param_table is None:
+                return
+            item = self.sheet_form_param_table.item(row, col)
+            if item:
+                item.setForeground(QBrush(QColor(70, 130, 180)))
+        except Exception:
+            pass
+
+    def _on_sheet_form_param_item_changed(self, item):
+        """参数表手动改值后高亮蓝色。"""
+        try:
+            if getattr(self, "_sheet_form_programmatic_update", False):
+                return
+            if not item:
+                return
+            # 仅处理“参数值列”
+            if item.column() != 1:
+                return
+            # 仅处理可编辑项
+            flags = item.flags()
+            if not (flags & Qt.ItemIsEditable):
+                return
+            self._mark_sheet_form_value_blue(item.row(), 1)
+        except Exception:
+            pass
 
     def _get_saved_plate_type(self):
         """从产品设计活动表_管板形式表中，根据产品ID查询已保存的管板类型"""
@@ -765,6 +796,8 @@ class SheetFormPage(QWidget):
             
             # 在表格显示后设置初始列宽
             self.sheet_form_param_table.showEvent = lambda event: set_initial_column_widths()
+            # 参数值手动修改后高亮蓝色（仿 My_Piping）
+            self.sheet_form_param_table.itemChanged.connect(self._on_sheet_form_param_item_changed)
             
             self.sheet_form_param_layout.addWidget(self.sheet_form_param_table)
             body_layout.addWidget(self.sheet_form_param_frame, 1)
@@ -919,131 +952,121 @@ class SheetFormPage(QWidget):
                 # 设置表格行数
                 self.sheet_form_param_table.setRowCount(len(params))
 
-                # 填充表格数据
-                for row, (param_name, default_value) in enumerate(params.items()):
-                    # e_g / f_g 管板：c1 + c2 在界面上合并为参数 c（一行）
-                    if (
-                        selected_folder in ("e", "f")
-                        and image_name_without_ext in ("e_g", "f_g")
-                        and param_name in ("c1", "c2")
-                    ):
-                        # 只在遇到 c1 时生成一行 c，c2 行跳过
-                        if param_name == "c2":
+                # 填充表格数据（程序化更新期间不触发“手动修改变蓝”）
+                self._sheet_form_programmatic_update = True
+                try:
+                    for row, (param_name, default_value) in enumerate(params.items()):
+                        # e_g / f_g 管板：c1 + c2 在界面上合并为参数 c（一行）
+                        if (
+                            selected_folder in ("e", "f")
+                            and image_name_without_ext in ("e_g", "f_g")
+                            and param_name in ("c1", "c2")
+                        ):
+                            # 只在遇到 c1 时生成一行 c，c2 行跳过
+                            if param_name == "c2":
+                                continue
+
+                            name_item = QTableWidgetItem("c")
+                            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+                            self.sheet_form_param_table.setItem(row, 0, name_item)
+
+                            c1_raw = str(params.get("c1", "1.5")).strip() or "1.5"
+                            c2_raw = str(params.get("c2", "25")).strip() or "25"
+                            container = QWidget()
+                            layout = QHBoxLayout(container)
+                            layout.setContentsMargins(0, 0, 0, 0)
+                            layout.setSpacing(2)
+                            layout.setAlignment(Qt.AlignLeft)
+
+                            left_edit = QLineEdit(c1_raw, container)
+                            left_edit.setFixedWidth(60)
+                            left_edit.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+                            mid_label = QLabel("*δ和", container)
+                            mid_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+                            right_edit = QLineEdit(c2_raw, container)
+                            right_edit.setFixedWidth(60)
+                            right_edit.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+                            tail_label = QLabel("的较大值", container)
+                            tail_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
+
+                            layout.addWidget(left_edit)
+                            layout.addWidget(mid_label)
+                            layout.addWidget(right_edit)
+                            layout.addWidget(tail_label)
+
+                            # 用户手动编辑 c1/c2 时，改为蓝色
+                            left_edit.textEdited.connect(
+                                lambda _txt, le=left_edit: le.setStyleSheet("color: rgb(70,130,180);")
+                            )
+                            right_edit.textEdited.connect(
+                                lambda _txt, re=right_edit: re.setStyleSheet("color: rgb(70,130,180);")
+                            )
+
+                            self.sheet_form_param_table.setCellWidget(row, 1, container)
                             continue
 
-                        from PyQt5.QtWidgets import QWidget, QHBoxLayout, QLineEdit
-
-                        # 参数名列显示为 "c"
-                        name_item = QTableWidgetItem("c")
+                        # 通用逻辑：参数名列 - 只读
+                        name_item = QTableWidgetItem(param_name)
                         name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
                         self.sheet_form_param_table.setItem(row, 0, name_item)
 
-                        # 取 c1 / c2 的初始值，解析失败时使用默认 1.5 / 25
-                        c1_raw = str(params.get("c1", "1.5")).strip() or "1.5"
-                        c2_raw = str(params.get("c2", "25")).strip() or "25"
-                        left_text = c1_raw
-                        right_text = c2_raw
+                        # 对于 e_f、f_f 节点，如果参数名为 a，则根据公式重新计算默认值
+                        adjusted_value = default_value
+                        if (
+                            param_name == "a"
+                            and selected_folder in ["e", "f"]
+                            and image_name_without_ext in ["e_f", "f_f"]
+                        ):
+                            try:
+                                dl = self.DL
+                                dn = self.DN
+                                di = self.Di
+                                flag = (self.use_outer_diameter_base or "").strip()
+                                if flag == "否" and dl is not None and dn is not None:
+                                    adjusted_value = (dn - dl) / 4.0
+                                elif flag == "是" and dl is not None and di is not None:
+                                    adjusted_value = (di - dl) / 4.0
+                                if isinstance(adjusted_value, (int, float)):
+                                    adjusted_value = f"{adjusted_value:.3f}"
+                            except Exception as calc_err:
+                                print(f"计算 a 默认值时出错: {calc_err}")
 
-                        container = QWidget()
-                        layout = QHBoxLayout(container)
-                        layout.setContentsMargins(0, 0, 0, 0)
-                        layout.setSpacing(2)
-                        layout.setAlignment(Qt.AlignLeft)
+                        # 参数值列
+                        display_text = str(adjusted_value)
+                        value_item = QTableWidgetItem(display_text)
+                        if selected_folder == 'b' and image_name_without_ext == 'b_b':
+                            value_item.setFlags(value_item.flags() & ~Qt.ItemIsEditable & ~Qt.ItemIsEnabled)
+                        else:
+                            value_item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
+                        value_item.setForeground(QBrush(QColor(0, 0, 0)))
+                        self.sheet_form_param_table.setItem(row, 1, value_item)
 
-                        left_edit = QLineEdit(left_text, container)
-                        left_edit.setFixedWidth(60)
-                        left_edit.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
-
-                        mid_label = QLabel("*δ和", container)
-                        mid_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
-
-                        right_edit = QLineEdit(right_text, container)
-                        right_edit.setFixedWidth(60)
-                        right_edit.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
-
-                        tail_label = QLabel("的较大值", container)
-                        tail_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
-
-                        layout.addWidget(left_edit)
-                        layout.addWidget(mid_label)
-                        layout.addWidget(right_edit)
-                        layout.addWidget(tail_label)
-
-                        self.sheet_form_param_table.setCellWidget(row, 1, container)
-                        # 合并完成后继续下一条参数（不再走通用填充逻辑）
-                        continue
-
-                    # 通用逻辑：参数名列 - 只读
-                    name_item = QTableWidgetItem(param_name)
-                    name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)  # 参数名不可编辑
-                    self.sheet_form_param_table.setItem(row, 0, name_item)
-
-                    # 对于 e_f、f_f 节点，如果参数名为 a，则根据公式重新计算默认值
-                    adjusted_value = default_value
-                    if param_name == "a" and selected_folder in ["e", "f"] and image_name_without_ext in ["e_f", "f_f"]:
-                        try:
-                            dl = self.DL
-                            dn = self.DN
-                            di = self.Di
-                            flag = (self.use_outer_diameter_base or "").strip()
-
-                            # 仅在 DL 和相应直径存在时才计算
-                            if flag == "否" and dl is not None and dn is not None:
-                                adjusted_value = (dn - dl) / 4.0
-                            elif flag == "是" and dl is not None and di is not None:
-                                adjusted_value = (di - dl) / 4.0
-
-                            # 将数值格式化为字符串（保留3位小数）
-                            if isinstance(adjusted_value, (int, float)):
-                                adjusted_value = f"{adjusted_value:.3f}"
-                        except Exception as calc_err:
-                            print(f"计算 a 默认值时出错: {calc_err}")
-
-                    # 参数值列 - 根据是否为 b 类的 b_b 节点控制是否可编辑（除上面 c1/c2 特殊处理外）
-                    display_text = str(adjusted_value)
-                    value_item = QTableWidgetItem(display_text)
-                    if selected_folder == 'b' and image_name_without_ext == 'b_b':
-                        # b_b 情况下参数值不可编辑
-                        value_item.setFlags(value_item.flags() & ~Qt.ItemIsEditable & ~Qt.ItemIsEnabled)
-                    else:
-                        # 其他情况保持可编辑
-                        value_item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
-                    self.sheet_form_param_table.setItem(row, 1, value_item)
-
-                # 对于 e_b、e_c、f_b、f_c 节点，特殊处理最后一行为三列显示，并在表格下方添加说明文字
-                special_three_col_nodes = {
-                    'e': ['e_b', 'e_c'],
-                    'f': ['f_b', 'f_c']
-                }
-
-                if (
-                    selected_folder in special_three_col_nodes
-                    and image_name_without_ext in special_three_col_nodes[selected_folder]
-                    and self.sheet_form_param_table.rowCount() > 0
-                ):
-                    total_rows = self.sheet_form_param_table.rowCount()
-
-                    # 将表格扩展为3列
-                    self.sheet_form_param_table.setColumnCount(3)
-
-                    # 为除最后一行外的所有行合并第1、2两列，使其看起来仍是两列
-                    for row in range(total_rows - 1):
-                        self.sheet_form_param_table.setSpan(row, 1, 1, 2)
-
-                    # 最后一行单独设置第三列内容为"*δ"，且只读不可编辑
-                    last_row = total_rows - 1
-                    third_item = QTableWidgetItem("*δ")
-                    third_item.setFlags(third_item.flags() & ~Qt.ItemIsEditable)
-                    self.sheet_form_param_table.setItem(last_row, 2, third_item)
-
-                    # 在参数表格下方添加说明文字
-                    note_label = QLabel(
-                        "注：x的默认取值为：\n1.当δ≤12mm时，x=1.0；\n2.当δ>12mm时，x=0.75；"
-                    )
-                    note_label.setWordWrap(True)
-                    # 再调大字号以便更加清晰
-                    note_label.setStyleSheet("color: #555555; font-size: 20px;")
-                    self.sheet_form_param_layout.addWidget(note_label)
+                    # 对于 e_b、e_c、f_b、f_c 节点，特殊处理最后一行为三列显示，并在表格下方添加说明文字
+                    special_three_col_nodes = {
+                        'e': ['e_b', 'e_c'],
+                        'f': ['f_b', 'f_c']
+                    }
+                    if (
+                        selected_folder in special_three_col_nodes
+                        and image_name_without_ext in special_three_col_nodes[selected_folder]
+                        and self.sheet_form_param_table.rowCount() > 0
+                    ):
+                        total_rows = self.sheet_form_param_table.rowCount()
+                        self.sheet_form_param_table.setColumnCount(3)
+                        for r in range(total_rows - 1):
+                            self.sheet_form_param_table.setSpan(r, 1, 1, 2)
+                        last_row = total_rows - 1
+                        third_item = QTableWidgetItem("*δ")
+                        third_item.setFlags(third_item.flags() & ~Qt.ItemIsEditable)
+                        self.sheet_form_param_table.setItem(last_row, 2, third_item)
+                        note_label = QLabel(
+                            "注：x的默认取值为：\n1.当δ≤12mm时，x=1.0；\n2.当δ>12mm时，x=0.75；"
+                        )
+                        note_label.setWordWrap(True)
+                        note_label.setStyleSheet("color: #555555; font-size: 20px;")
+                        self.sheet_form_param_layout.addWidget(note_label)
+                finally:
+                    self._sheet_form_programmatic_update = False
 
                 # 点击图片后同步更新父窗口的sheet_form_param_layout
                 if self.parent:
