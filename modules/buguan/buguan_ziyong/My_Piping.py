@@ -2158,11 +2158,11 @@ class TubeLayoutEditor(QMainWindow):
             if isinstance(std, (int, float)):
                 std_num = int(std) if float(std).is_integer() else std
                 if total < std:
-                    text = f"标准要求数量{std_num}/已有数量<span style='color:red;'>{total}</span>"
+                    text = f"拉杆标准要求数量{std_num}/已有数量<span style='color:red;'>{total}</span>"
                 else:
-                    text = f"标准要求数量{std_num}/已有数量{total}"
+                    text = f"拉杆标准要求数量{std_num}/已有数量{total}"
             else:
-                text = f"标准要求数量-/已有数量{total}"
+                text = f"拉杆标准要求数量-/已有数量{total}"
             self.lagan_required_label.setText(text)
 
     def setup_ui(self):
@@ -2295,7 +2295,7 @@ class TubeLayoutEditor(QMainWindow):
         lagan_layout = QVBoxLayout(self.lagan_summary_container)
         lagan_layout.setContentsMargins(8, 6, 8, 6)
         lagan_layout.setSpacing(2)
-        self.lagan_required_label = QLabel("标准要求数量-/已有数量0")
+        self.lagan_required_label = QLabel("拉杆标准要求数量-/已有数量0")
         self.lagan_required_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.lagan_required_label.setStyleSheet("font-size: 18px; color: #222;")
         self.lagan_required_label.setTextFormat(Qt.RichText)
@@ -3236,6 +3236,7 @@ class TubeLayoutEditor(QMainWindow):
             "滑道与竖直中心线夹角",
             "旁路挡板厚度",
             "防冲板形式",
+            "放置位置",
             "防冲板厚度",
             "防冲板折边角度",
             "防冲板宽度",
@@ -3561,6 +3562,7 @@ class TubeLayoutEditor(QMainWindow):
                                 elif param_name in [
                                     "旁路挡板厚度",
                                     "防冲板形式",
+                                    "放置位置",
                                     "防冲板厚度",
                                     "滑道定位",
                                     "滑道高度",
@@ -4728,6 +4730,72 @@ class TubeLayoutEditor(QMainWindow):
         self.initial_center_dangban()
 
         try:
+            import ast
+            # 从防冲板详情表读取“放置位置”（仅平板形有效），用于恢复绘制方式
+            placement_by_pair = {}
+            try:
+                product_conn_ip = None
+                if hasattr(self, "productID") and self.productID:
+                    product_conn_ip = create_product_connection()
+                if product_conn_ip and hasattr(product_conn_ip, "open") and product_conn_ip.open:
+                    cursor_ip = product_conn_ip.cursor()
+                    query_ip = (
+                        "SELECT 坐标, 防冲板类型, 放置位置 "
+                        "FROM 产品设计活动表_布管防冲板表 WHERE 产品ID = %s"
+                    )
+                    cursor_ip.execute(query_ip, (self.productID,))
+                    rows_ip = cursor_ip.fetchall() or []
+
+                    def _pair_key(pair):
+                        try:
+                            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                                return None
+                            p1 = pair[0]
+                            p2 = pair[1]
+                            if not (
+                                isinstance(p1, (list, tuple))
+                                and isinstance(p2, (list, tuple))
+                                and len(p1) == 2
+                                and len(p2) == 2
+                            ):
+                                return None
+                            a = (int(p1[0]), int(p1[1]))
+                            b = (int(p2[0]), int(p2[1]))
+                            return tuple(sorted([a, b]))
+                        except Exception:
+                            return None
+
+                    for rec_ip in rows_ip:
+                        try:
+                            if not isinstance(rec_ip, dict):
+                                continue
+                            ptype = str(rec_ip.get("防冲板类型", "")).strip()
+                            # 仅平板形记录读取放置位置
+                            if ptype not in ("1", "平板式", "平板形"):
+                                continue
+                            coord_raw = rec_ip.get("坐标")
+                            if not coord_raw:
+                                continue
+                            coord_val = ast.literal_eval(coord_raw) if isinstance(coord_raw, str) else coord_raw
+                            k = _pair_key(coord_val)
+                            if k is None:
+                                continue
+                            placement_raw = rec_ip.get("放置位置")
+                            placement_text = "参照管中心连线"
+                            if str(placement_raw).strip() in ("2", "参照管顶部连线"):
+                                placement_text = "参照管顶部连线"
+                            placement_by_pair[k] = placement_text
+                        except Exception:
+                            continue
+            except Exception as e:
+                print(f"读取防冲板放置位置失败: {e}")
+            finally:
+                try:
+                    if product_conn_ip and hasattr(product_conn_ip, "open") and product_conn_ip.open:
+                        product_conn_ip.close()
+                except Exception:
+                    pass
+
             if impingement_plate_1_centers:
                 import ast
 
@@ -4749,6 +4817,23 @@ class TubeLayoutEditor(QMainWindow):
                     )
                     for pair in centers_list:
                         if isinstance(pair, list) and len(pair) == 2:
+                            pair_key = None
+                            try:
+                                pair_key = tuple(
+                                    sorted(
+                                        [
+                                            (int(pair[0][0]), int(pair[0][1])),
+                                            (int(pair[1][0]), int(pair[1][1])),
+                                        ]
+                                    )
+                                )
+                            except Exception:
+                                pair_key = None
+                            placement_text = (
+                                placement_by_pair.get(pair_key, "参照管中心连线")
+                                if isinstance(placement_by_pair, dict)
+                                else "参照管中心连线"
+                            )
                             self.build_impingement_plate(
                                 pair,
                                 "平板形",
@@ -4759,6 +4844,7 @@ class TubeLayoutEditor(QMainWindow):
                                 0,
                                 tube_outer_diameter,
                                 tube_pitch,
+                                placement_text,
                             )
                         else:
                             print(f"无效的平板式防冲板坐标对: {pair}")
@@ -4770,6 +4856,23 @@ class TubeLayoutEditor(QMainWindow):
                     for i in range(0, len(centers_list), 2):
                         if i + 1 < len(centers_list):
                             pair = [centers_list[i], centers_list[i + 1]]
+                            pair_key = None
+                            try:
+                                pair_key = tuple(
+                                    sorted(
+                                        [
+                                            (int(pair[0][0]), int(pair[0][1])),
+                                            (int(pair[1][0]), int(pair[1][1])),
+                                        ]
+                                    )
+                                )
+                            except Exception:
+                                pair_key = None
+                            placement_text = (
+                                placement_by_pair.get(pair_key, "参照管中心连线")
+                                if isinstance(placement_by_pair, dict)
+                                else "参照管中心连线"
+                            )
                             self.build_impingement_plate(
                                 pair,
                                 "平板形",
@@ -4780,6 +4883,7 @@ class TubeLayoutEditor(QMainWindow):
                                 0,
                                 tube_outer_diameter,
                                 tube_pitch,
+                                placement_text,
                             )
                         else:
                             print(f"平板式防冲板坐标列表索引{i + 1}超出范围，跳过")
@@ -6992,6 +7096,7 @@ class TubeLayoutEditor(QMainWindow):
     def on_baffle_type_changed(self, index):
 
         baffle_type_row = self.baffle_param_rows["防冲板形式"]
+        place_row = self.baffle_param_rows.get("放置位置", None)
         thickness_row = self.baffle_param_rows["防冲板厚度"]
         angle_row = self.baffle_param_rows["防冲板折边角度"]
         width_row = self.baffle_param_rows["防冲板宽度"]
@@ -7010,6 +7115,8 @@ class TubeLayoutEditor(QMainWindow):
             return
 
         if current_type == "平板形":
+            if place_row is not None:
+                self.set_param_visibility(place_row, True)
             self.set_param_visibility(thickness_row, True)
             self.set_param_visibility(angle_row, False)
             self.set_param_visibility(width_row, False)
@@ -7017,6 +7124,8 @@ class TubeLayoutEditor(QMainWindow):
             self.set_param_visibility(distance_row, False)
 
         elif current_type == "圆弧形":
+            if place_row is not None:
+                self.set_param_visibility(place_row, False)
             self.set_param_visibility(thickness_row, True)
             self.set_param_visibility(angle_row, True)
             self.set_param_visibility(width_row, False)
@@ -7024,6 +7133,8 @@ class TubeLayoutEditor(QMainWindow):
             self.set_param_visibility(distance_row, False)
 
         elif current_type == "焊接式":
+            if place_row is not None:
+                self.set_param_visibility(place_row, False)
             self.set_param_visibility(thickness_row, True)
             self.set_param_visibility(angle_row, True)
             self.set_param_visibility(width_row, True)
@@ -13485,6 +13596,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 导轨类型：仅 AKU/BKU 显示，但参数本身需要存在以便保存/联动
                 _add_if_missing("导轨类型", "支撑导轨1", "")
                 _add_if_missing("圆钢规格", "12", "mm")
+                _add_if_missing("放置位置", "参照管中心连线", "")
         except Exception:
             pass
         print(params)
@@ -13546,6 +13658,7 @@ class TubeLayoutEditor(QMainWindow):
                 "折流板切口方向",
                 "管程分程形式",
                 "防冲板形式",
+                "放置位置",
                 "换热管外径 do",
                 "管程程数",
                 "换热管布置方式",
@@ -13667,6 +13780,8 @@ class TubeLayoutEditor(QMainWindow):
                         combo.addItems(["板式滑道", "圆钢条式滑道"])
                     elif param["参数名"] == "导轨类型":
                         combo.addItems(["支撑导轨1", "支撑导轨2"])
+                    elif param["参数名"] == "放置位置":
+                        combo.addItems(["参照管中心连线", "参照管顶部连线"])
                     elif param["参数名"] == "管程程数":
                         tube_pass = self.get_tube_pass_count()
                         if tube_pass == "2":
@@ -13939,6 +14054,10 @@ class TubeLayoutEditor(QMainWindow):
         # 初始化滑道相关可见性（滑道形式/导轨类型/圆钢规格 与 滑道高度/厚度/角度）
         try:
             self._apply_slipway_form_and_guide_visibility()
+        except Exception:
+            pass
+        try:
+            self._apply_baffle_placement_visibility()
         except Exception:
             pass
         # self.update_partition_plate_center_distance()
@@ -14243,6 +14362,11 @@ class TubeLayoutEditor(QMainWindow):
             # 更新分程形式下拉框的图片
             if hasattr(self, "tube_pass_form_combo") and self.tube_pass_form_combo:
                 self.load_tube_pass_images(self.tube_pass_form_combo, value)
+        elif param_name == "防冲板形式":
+            try:
+                self._apply_baffle_placement_visibility()
+            except Exception:
+                pass
 
         elif param_name == "管程分程形式":
             # 获取当前下拉框的索引
@@ -14700,6 +14824,47 @@ class TubeLayoutEditor(QMainWindow):
         try:
             if hasattr(self, "update_total_lagan_count"):
                 self.update_total_lagan_count()
+        except Exception:
+            pass
+
+    def _apply_baffle_placement_visibility(self):
+        """防冲板放置位置仅在防冲板形式=平板形时显示。"""
+        try:
+            if not hasattr(self, "param_table") or self.param_table is None:
+                return
+        except Exception:
+            return
+
+        def _find_row(name: str) -> int:
+            try:
+                for r in range(self.param_table.rowCount()):
+                    it = self.param_table.item(r, 1)
+                    if it and it.text().strip() == name:
+                        return r
+            except Exception:
+                pass
+            return -1
+
+        type_row = _find_row("防冲板形式")
+        place_row = _find_row("放置位置")
+        if place_row == -1:
+            return
+
+        current_type = ""
+        try:
+            if type_row != -1:
+                w = self.param_table.cellWidget(type_row, 2)
+                if isinstance(w, QComboBox):
+                    current_type = (w.currentText() or "").strip()
+                else:
+                    it = self.param_table.item(type_row, 2)
+                    current_type = (it.text() if it else "").strip()
+        except Exception:
+            current_type = ""
+
+        show_place = current_type == "平板形"
+        try:
+            self.set_param_visibility(place_row, show_place, force=True)
         except Exception:
             pass
 
@@ -16561,6 +16726,7 @@ class TubeLayoutEditor(QMainWindow):
             "滑道与竖直中心线夹角",
             "旁路挡板厚度",
             "防冲板形式",
+            "放置位置",
             "防冲板厚度",
             "防冲板折边角度",
             "防冲板宽度",
@@ -24077,6 +24243,7 @@ class TubeLayoutEditor(QMainWindow):
             "旁路挡板宽度": "旁路挡板宽度",
             "防冲板折边角度": "防冲板折边角度",
             "防冲板形式": "防冲板形式",
+            "放置位置": "放置位置",
             "防冲板厚度": "防冲板厚度",
             "防冲板宽度": "防冲板宽度",
             "滑道定位": "滑道定位",
@@ -24094,6 +24261,7 @@ class TubeLayoutEditor(QMainWindow):
             "旁路挡板厚度": None,
             "旁路挡板宽度": None,
             "防冲板形式": None,
+            "放置位置": None,
             "防冲板厚度": None,
             "防冲板折边角度": None,
             "防冲板宽度": None,
@@ -24867,8 +25035,8 @@ class TubeLayoutEditor(QMainWindow):
                             cursor.execute(delete_sql, (self.productID,))
 
                         insert_sql = (
-                            f"INSERT INTO {table_ip} (产品ID, 坐标, 宽度, 操作顺序, 防冲板类型) "
-                            f"VALUES (%s, %s, %s, %s, %s)"
+                            f"INSERT INTO {table_ip} (产品ID, 坐标, 宽度, 操作顺序, 防冲板类型, 放置位置) "
+                            f"VALUES (%s, %s, %s, %s, %s, %s)"
                         )
 
                         # 将内部数值类型(1/2/3)映射为中文名称后写入数据库
@@ -24891,10 +25059,24 @@ class TubeLayoutEditor(QMainWindow):
                                 width = rec.get("width", "")
                                 order_v = rec.get("order", 1)
                                 ptype = rec.get("type", "")
+                                placement_raw = rec.get("placement", None)
                                 coord_str = str(coord)
                                 width_str = f"{float(width):.2f}"
                                 order_str = str(order_v)
                                 type_str = _baffle_type_to_cn(ptype)
+                                placement_str = None
+                                try:
+                                    ptype_int = int(ptype)
+                                except Exception:
+                                    ptype_int = None
+                                if ptype_int == 1:
+                                    # 平板形才写放置位置：1=参照管中心连线，2=参照管顶部连线
+                                    if str(placement_raw).strip() in ("2", "参照管顶部连线"):
+                                        placement_str = "2"
+                                    else:
+                                        placement_str = "1"
+                                else:
+                                    placement_str = None
                                 cursor.execute(
                                     insert_sql,
                                     (
@@ -24903,6 +25085,7 @@ class TubeLayoutEditor(QMainWindow):
                                         width_str,
                                         order_str,
                                         type_str,
+                                        placement_str,
                                     ),
                                 )
                             except Exception:
@@ -38123,6 +38306,7 @@ class TubeLayoutEditor(QMainWindow):
         # print("防冲板宽度")
         slide_params = [
             "防冲板形式",
+            "放置位置",
             "防冲板厚度",
             "防冲板折边角度",
             "防冲板宽度",
@@ -38177,6 +38361,19 @@ class TubeLayoutEditor(QMainWindow):
                 self.param_widgets["防冲板厚度"] = thickness_edit
                 form_layout.addWidget(thickness_edit, row_idx, 1)
                 form_layout.addWidget(QLabel("mm"), row_idx, 2)
+                row_idx += 1
+
+                # 放置位置（仅平板形显示）
+                placement_label = QLabel("放置位置:")
+                form_layout.addWidget(placement_label, row_idx, 0)
+                placement_combo = QComboBox()
+                placement_combo.addItems(["参照管中心连线", "参照管顶部连线"])
+                placement_combo.setCurrentText(
+                    self.params.get("放置位置", "参照管中心连线")
+                )
+                self.param_widgets["放置位置_label"] = placement_label
+                self.param_widgets["放置位置"] = placement_combo
+                form_layout.addWidget(placement_combo, row_idx, 1)
                 row_idx += 1
 
                 # 防冲板折边角度
@@ -38258,6 +38455,8 @@ class TubeLayoutEditor(QMainWindow):
                 """新增：根据防冲板形式更新宽度、方位角、至圆筒内壁距离的编辑状态"""
                 # 定义需要控制的参数名称列表
                 special_params = ["防冲板宽度", "防冲板方位角", "至圆筒内壁距离"]
+                placement_widget = self.param_widgets.get("放置位置")
+                placement_label = self.param_widgets.get("放置位置_label")
                 # 判定条件：当形式为平板形或圆弧形时，禁用参数
                 if baffle_type in ["平板形", "圆弧形"]:
                     for param_name in special_params:
@@ -38272,11 +38471,17 @@ class TubeLayoutEditor(QMainWindow):
                         widget = self.param_widgets[param_name]
                         widget.setEnabled(True)
                         widget.setStyleSheet("")  # 清除灰显样式
+                if placement_widget is not None:
+                    # 放置位置仅在平板形时显示
+                    placement_widget.setVisible(baffle_type == "平板形")
+                if placement_label is not None:
+                    placement_label.setVisible(baffle_type == "平板形")
 
             def get_params(self):
                 """获取弹窗中的参数值（原有逻辑保留）"""
                 return {
                     "防冲板形式": self.param_widgets["防冲板形式"].currentText(),
+                    "放置位置": self.param_widgets["放置位置"].currentText(),
                     "防冲板厚度": self.param_widgets["防冲板厚度"].text().strip(),
                     "防冲板折边角度": self.param_widgets["防冲板折边角度"]
                     .text()
@@ -38389,6 +38594,7 @@ class TubeLayoutEditor(QMainWindow):
         baffle_params_list = []
         for param_name in [
             "防冲板形式",
+            "放置位置",
             "防冲板厚度",
             "防冲板折边角度",
             "防冲板宽度",
@@ -38499,6 +38705,7 @@ class TubeLayoutEditor(QMainWindow):
                     try:
                         coord = rec.get("coord")
                         plate_type = rec.get("type")
+                        rec_placement = rec.get("placement", "参照管中心连线")
                         if not coord or len(coord) != 2:
                             continue
 
@@ -38530,6 +38737,7 @@ class TubeLayoutEditor(QMainWindow):
                             baffle_distance=baffle_distance,
                             tube_outer_diameter=tube_outer_diameter,
                             tube_pitch=tube_pitch,
+                            baffle_placement=rec_placement,
                         )
                     except Exception:
                         continue
@@ -38623,6 +38831,7 @@ class TubeLayoutEditor(QMainWindow):
             baffle_distance=baffle_distance,
             tube_outer_diameter=tube_outer_diameter,
             tube_pitch=tube_pitch,
+            baffle_placement=current_params.get("放置位置", "参照管中心连线"),
         )
 
     # TODO 防冲板函数
@@ -38637,6 +38846,7 @@ class TubeLayoutEditor(QMainWindow):
             baffle_distance,
             tube_outer_diameter,
             tube_pitch,
+            baffle_placement=None,
     ):
         self.operation_order += 1
 
@@ -38859,6 +39069,119 @@ class TubeLayoutEditor(QMainWindow):
                 self.selected_centers = []
                 return
 
+            # 按“放置位置”规则重算平板形防冲板的绘制端点
+            # Ⅰ 参照管中心连线：长度 = 两参照管中心连线长度 - 1*do，线段位于两参照管之间
+            # Ⅱ 参照管顶部连线：长度 = 两参照管中心连线长度，线段整体上移 do/2
+            placement_mode = str(baffle_placement or "参照管中心连线").strip()
+
+            def _parse_float_from_text(text):
+                try:
+                    if text is None:
+                        return None
+                    s = str(text).strip()
+                    if not s:
+                        return None
+                    try:
+                        return float(s)
+                    except Exception:
+                        pass
+                    cleaned = []
+                    dot_seen = False
+                    sign_allowed = True
+                    digit_seen = False
+                    for ch in s:
+                        if sign_allowed and ch in "+-":
+                            cleaned.append(ch)
+                            sign_allowed = False
+                            continue
+                        sign_allowed = False
+                        if ch.isdigit():
+                            cleaned.append(ch)
+                            digit_seen = True
+                            continue
+                        if ch == "." and not dot_seen:
+                            cleaned.append(ch)
+                            dot_seen = True
+                            continue
+                        if digit_seen:
+                            break
+                        cleaned = []
+                        dot_seen = False
+                        sign_allowed = True
+                    num_s = "".join(cleaned).strip()
+                    if num_s in ("", "+", "-", ".", "+.", "-."):
+                        return None
+                    return float(num_s)
+                except Exception:
+                    return None
+
+            do_value = None
+            try:
+                do_value = _parse_float_from_text(tube_outer_diameter)
+            except Exception:
+                do_value = None
+            if do_value is None:
+                try:
+                    for r in range(self.param_table.rowCount()):
+                        n_item = self.param_table.item(r, 1)
+                        if n_item and n_item.text().strip() == "换热管外径 do":
+                            w = self.param_table.cellWidget(r, 2)
+                            txt = w.currentText().strip() if isinstance(w, QComboBox) else (self.param_table.item(r, 2).text().strip() if self.param_table.item(r, 2) else "")
+                            do_value = _parse_float_from_text(txt)
+                            break
+                except Exception:
+                    do_value = None
+
+            p1x, p1y = points[0]
+            p2x, p2y = points[1]
+            dx = p2x - p1x
+            dy = p2y - p1y
+            center_len = math.hypot(dx, dy)
+            if center_len <= 0:
+                self.selected_centers = []
+                return
+
+            ux = dx / center_len
+            uy = dy / center_len
+
+            draw_p1 = (p1x, p1y)
+            draw_p2 = (p2x, p2y)
+
+            if "顶部" in placement_mode:
+                # 与参照管中心连线平行，并沿法向平移到“上方”
+                shift = (do_value / 2.0) if isinstance(do_value, (int, float)) and do_value > 0 else 0.0
+                # 候选法向量：(-uy, ux) 与其反向 (uy, -ux)
+                n1x, n1y = -uy, ux
+                n2x, n2y = uy, -ux
+                # 选择更“向上”(y分量更小)的方向
+                if n1y <= n2y:
+                    nx, ny = n1x, n1y
+                else:
+                    nx, ny = n2x, n2y
+                draw_p1 = (p1x + nx * shift, p1y + ny * shift)
+                draw_p2 = (p2x + nx * shift, p2y + ny * shift)
+            else:
+                shrink = do_value if isinstance(do_value, (int, float)) and do_value > 0 else 0.0
+                if center_len <= shrink:
+                    QMessageBox.warning(
+                        self,
+                        "提示",
+                        "两参照管中心距小于或等于换热管外径 do，无法按“参照管中心连线”方式绘制防冲板！",
+                    )
+                    self.clear_selection_highlight()
+                    return
+                half_shrink = shrink / 2.0
+                draw_p1 = (p1x + ux * half_shrink, p1y + uy * half_shrink)
+                draw_p2 = (p2x - ux * half_shrink, p2y - uy * half_shrink)
+
+            points = [draw_p1, draw_p2]
+            try:
+                print(
+                    f"[平板防冲板] 放置位置={placement_mode}, do={do_value}, 中心线长={center_len:.3f}, 绘制端点={points}"
+                )
+            except Exception:
+                pass
+
             # 检查两个端点是否超出壳体内直径大圆范围
             Di = None
             for row in range(self.param_table.rowCount()):
@@ -38996,6 +39319,7 @@ class TubeLayoutEditor(QMainWindow):
                     "width": width_value,
                     "type": plate_type,
                     "order": self.operation_order,
+                    "placement": placement_mode,
                 }
                 setattr(baffle_item, "impingement_plate_id", new_id)
             except Exception:
@@ -39917,6 +40241,7 @@ class TubeLayoutEditor(QMainWindow):
         # 构建初始参数：优先使用参数表（保持“上一次确认”的值），不再从图元属性或画笔宽度读取
         initial_params = {
             "防冲板形式": get_param_value("防冲板形式"),
+            "放置位置": get_param_value("放置位置") or "参照管中心连线",
             "防冲板厚度": get_param_value("防冲板厚度"),
             "防冲板折边角度": get_param_value("防冲板折边角度"),
             "防冲板宽度": get_param_value("防冲板宽度"),
@@ -40000,37 +40325,49 @@ class TubeLayoutEditor(QMainWindow):
                 form_layout.addWidget(thickness_edit, 1, 1)
                 form_layout.addWidget(QLabel("mm"), 1, 2)
 
+                # 放置位置
+                placement_label = QLabel("放置位置:")
+                form_layout.addWidget(placement_label, 2, 0)
+                placement_combo = QComboBox()
+                placement_combo.addItems(["参照管中心连线", "参照管顶部连线"])
+                placement_combo.setCurrentText(
+                    self.params.get("放置位置", "参照管中心连线")
+                )
+                self.param_widgets["放置位置_label"] = placement_label
+                self.param_widgets["放置位置"] = placement_combo
+                form_layout.addWidget(placement_combo, 2, 1)
+
                 # 防冲板折边角度
-                form_layout.addWidget(QLabel("防冲板折边角度:"), 2, 0)
+                form_layout.addWidget(QLabel("防冲板折边角度:"), 3, 0)
                 angle_edit = QLineEdit()
                 angle_edit.setText(str(self.params.get("防冲板折边角度", "")))
                 self.param_widgets["防冲板折边角度"] = angle_edit
-                form_layout.addWidget(angle_edit, 2, 1)
-                form_layout.addWidget(QLabel("°"), 2, 2)
+                form_layout.addWidget(angle_edit, 3, 1)
+                form_layout.addWidget(QLabel("°"), 3, 2)
 
                 # 防冲板宽度
-                form_layout.addWidget(QLabel("防冲板宽度:"), 3, 0)
+                form_layout.addWidget(QLabel("防冲板宽度:"), 4, 0)
                 width_edit = QLineEdit()
                 width_edit.setText(str(self.params.get("防冲板宽度", "")))
                 self.param_widgets["防冲板宽度"] = width_edit
-                form_layout.addWidget(width_edit, 3, 1)
-                form_layout.addWidget(QLabel("mm"), 3, 2)
+                form_layout.addWidget(width_edit, 4, 1)
+                form_layout.addWidget(QLabel("mm"), 4, 2)
 
                 # 防冲板方位角
-                form_layout.addWidget(QLabel("防冲板方位角:"), 4, 0)
+                form_layout.addWidget(QLabel("防冲板方位角:"), 5, 0)
                 azimuth_edit = QLineEdit()
                 azimuth_edit.setText(str(self.params.get("防冲板方位角", "")))
                 self.param_widgets["防冲板方位角"] = azimuth_edit
-                form_layout.addWidget(azimuth_edit, 4, 1)
-                form_layout.addWidget(QLabel("°"), 4, 2)
+                form_layout.addWidget(azimuth_edit, 5, 1)
+                form_layout.addWidget(QLabel("°"), 5, 2)
 
                 # 至圆筒内壁距离
-                form_layout.addWidget(QLabel("至圆筒内壁距离:"), 5, 0)
+                form_layout.addWidget(QLabel("至圆筒内壁距离:"), 6, 0)
                 distance_edit = QLineEdit()
                 distance_edit.setText(str(self.params.get("至圆筒内壁距离", "")))
                 self.param_widgets["至圆筒内壁距离"] = distance_edit
-                form_layout.addWidget(distance_edit, 5, 1)
-                form_layout.addWidget(QLabel("mm"), 5, 2)
+                form_layout.addWidget(distance_edit, 6, 1)
+                form_layout.addWidget(QLabel("mm"), 6, 2)
 
                 layout.addLayout(form_layout)
 
@@ -40056,6 +40393,8 @@ class TubeLayoutEditor(QMainWindow):
 
                 def update_special_params_state(baffle_type):
                     special_params = ["防冲板宽度", "防冲板方位角", "至圆筒内壁距离"]
+                    placement_widget = self.param_widgets.get("放置位置")
+                    placement_label = self.param_widgets.get("放置位置_label")
                     if baffle_type in ["平板形", "圆弧形"]:
                         for pname in special_params:
                             w = self.param_widgets[pname]
@@ -40068,6 +40407,10 @@ class TubeLayoutEditor(QMainWindow):
                             w = self.param_widgets[pname]
                             w.setEnabled(True)
                             w.setStyleSheet("")
+                    if placement_widget is not None:
+                        placement_widget.setVisible(baffle_type == "平板形")
+                    if placement_label is not None:
+                        placement_label.setVisible(baffle_type == "平板形")
 
                 # 初始联动
                 current_type = baffle_type_combo.currentText()
@@ -40084,6 +40427,7 @@ class TubeLayoutEditor(QMainWindow):
             def get_params(self):
                 return {
                     "防冲板形式": self.param_widgets["防冲板形式"].currentText(),
+                    "放置位置": self.param_widgets["放置位置"].currentText(),
                     "防冲板厚度": self.param_widgets["防冲板厚度"].text().strip(),
                     "防冲板折边角度": self.param_widgets["防冲板折边角度"]
                     .text()
@@ -40164,6 +40508,7 @@ class TubeLayoutEditor(QMainWindow):
         baffle_params_list = []
         for pname in [
             "防冲板形式",
+            "放置位置",
             "防冲板厚度",
             "防冲板折边角度",
             "防冲板宽度",
@@ -40180,6 +40525,7 @@ class TubeLayoutEditor(QMainWindow):
         try:
             writeback_names = [
                 "防冲板形式",
+                "放置位置",
                 "防冲板厚度",
                 "防冲板折边角度",
                 "防冲板宽度",
@@ -40246,6 +40592,11 @@ class TubeLayoutEditor(QMainWindow):
                     rec = self.impingement_plate_dic.get(plate_id)
                     if isinstance(rec, dict):
                         rec["type"] = new_type_val
+                        # 仅平板形记录放置位置；圆弧/焊接置空，避免“统一规格”污染其它记录
+                        if new_type_val == 1:
+                            rec["placement"] = current_params.get("放置位置", "参照管中心连线")
+                        else:
+                            rec["placement"] = None
                         self.impingement_plate_dic[plate_id] = rec
         except Exception:
             # 更新失败时不影响后续逻辑，仍按原有方式尝试重建
@@ -40318,6 +40669,7 @@ class TubeLayoutEditor(QMainWindow):
                     try:
                         coord = rec.get("coord")
                         plate_type_val = rec.get("type")
+                        rec_placement = rec.get("placement", "参照管中心连线")
                         if not coord or len(coord) != 2:
                             continue
 
@@ -40351,6 +40703,7 @@ class TubeLayoutEditor(QMainWindow):
                             baffle_distance=baffle_distance,
                             tube_outer_diameter=tube_outer_diameter,
                             tube_pitch=tube_pitch,
+                            baffle_placement=rec_placement,
                         )
                     except Exception:
                         continue
@@ -40384,6 +40737,7 @@ class TubeLayoutEditor(QMainWindow):
                     baffle_distance=baffle_distance,
                     tube_outer_diameter=tube_outer_diameter,
                     tube_pitch=tube_pitch,
+                    baffle_placement=current_params.get("放置位置", "参照管中心连线"),
                 )
             else:
                 # 焊接式防冲板：几何完全由参数 (thickness/angle/width/azimuth/distance) 决定，
@@ -40398,6 +40752,7 @@ class TubeLayoutEditor(QMainWindow):
                     baffle_distance=baffle_distance,
                     tube_outer_diameter=tube_outer_diameter,
                     tube_pitch=tube_pitch,
+                    baffle_placement=current_params.get("放置位置", "参照管中心连线"),
                 )
 
     def on_screw_ring_click(self):
