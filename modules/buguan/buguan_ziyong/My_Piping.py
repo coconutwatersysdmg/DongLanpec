@@ -24083,21 +24083,8 @@ class TubeLayoutEditor(QMainWindow):
                 if rel_coord:
                     # 有相对坐标，使用 build_lagan（普通拉杆）
                     print(f"[screw_ring_to_lagan] 转换为普通拉杆，相对坐标: {rel_coord}, 绝对坐标: ({cx:.3f}, {cy:.3f})")
-                    
-                    # 应用对称逻辑（参考 26491-26504 行的逻辑）
-                    if self.isSymmetry:
-                        selected_centers = self.judge_linkage([rel_coord])
-                    else:
-                        if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
-                            tube_num = self.get_tube_pass_count()
-                            if tube_num == "2":
-                                selected_centers = self.judge_linkage_x([rel_coord])
-                            elif tube_num in ["4", "6"]:
-                                selected_centers = self.judge_linkage_y([rel_coord])
-                            else:
-                                selected_centers = [rel_coord]
-                        else:
-                            selected_centers = [rel_coord]
+                    # 转拉杆不做对称扩展，仅转换当前选中的一个
+                    selected_centers = [rel_coord]
                     
                     # 更新分组缓存，保证 build_lagan 使用最新数据
                     (
@@ -24114,25 +24101,8 @@ class TubeLayoutEditor(QMainWindow):
                 else:
                     # 无法转换为相对坐标，使用 build_free_form_lagan（侧拉杆/自由拉杆）
                     print(f"[screw_ring_to_lagan] 转换为侧拉杆（自由拉杆），绝对坐标: ({cx:.3f}, {cy:.3f})")
-                    
-                    # 计算对称位置的绝对坐标
+                    # 转拉杆不做对称扩展，仅转换当前选中的一个
                     abs_coords_to_draw = [(cx, cy)]
-                    if self.isSymmetry:
-                        # 完全对称：y轴、x轴、中心对称
-                        abs_coords_to_draw.extend([
-                            (-cx, cy),   # y轴对称
-                            (cx, -cy),   # x轴对称
-                            (-cx, -cy),  # 中心对称
-                        ])
-                    else:
-                        if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
-                            tube_num = self.get_tube_pass_count()
-                            if tube_num == "2":
-                                # 关于x轴对称
-                                abs_coords_to_draw.append((cx, -cy))
-                            elif tube_num in ["4", "6"]:
-                                # 关于y轴对称
-                                abs_coords_to_draw.append((-cx, cy))
                     
                     # 去重
                     seen = set()
@@ -24157,12 +24127,12 @@ class TubeLayoutEditor(QMainWindow):
                             result = self.build_free_form_lagan([rel_coord_for_free], lagan_length)
                             if result is False or result is None:
                                 # build_free_form_lagan 失败，手动创建
-                                self._create_side_lagan_manually(scx, scy, lagan_length)
+                                _create_side_lagan_manually(scx, scy, lagan_length)
                             else:
                                 print(f"[screw_ring_to_lagan] 已通过 build_free_form_lagan 创建侧拉杆，绝对坐标: ({scx:.3f}, {scy:.3f})")
                         else:
                             # 无相对坐标，直接手动创建
-                            self._create_side_lagan_manually(scx, scy, lagan_length)
+                            _create_side_lagan_manually(scx, scy, lagan_length)
                     
                     print(f"[screw_ring_to_lagan] 已将吊环螺钉 {screw_ring_id} 转换为侧拉杆（自由拉杆），对称后坐标数量: {len(unique_coords)}, 原始坐标: ({cx:.3f}, {cy:.3f})")
             except Exception as e:
