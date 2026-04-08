@@ -67,12 +67,12 @@ from modules.buguan.buguan_ziyong.component.center_dangguan import (
 )
 
 # product_id = 'PD2025092421444001'
-product_id = "PD20250929"
+product_id = "PD202509291"
 
 # product_id = 'PD2026011316323301'
 
 # TODO 轴向设计页面开关
-ENABLE_AXIAL_DESIGN_PAGE = False
+ENABLE_AXIAL_DESIGN_PAGE = True
 
 # TODO 防冲板形式“焊接式”选项开关
 ENABLE_DANGBAN_WELDED_OPTION = True
@@ -3228,6 +3228,9 @@ class TubeLayoutEditor(QMainWindow):
         # 定义全局隐藏参数列表（存储为实例变量）
         self.hidden_params = [
             "滑道定位",
+            "滑道形式",
+            "导轨类型",
+            "圆钢规格",
             "滑道高度",
             "滑道厚度",
             "滑道与竖直中心线夹角",
@@ -5793,6 +5796,9 @@ class TubeLayoutEditor(QMainWindow):
             "分程隔板放置型式": ("LB_ClapboardType", None),
             "管程分程形式": ("LB_Tubeform", None),
             "滑道高度": ("LB_SlipWayHeight", None),
+            "滑道形式": ("LB_SlipWayForm", None),
+            "导轨类型": ("LB_GuideRailType", None),
+            "圆钢规格": ("LB_RoundSteelSpec", None),
             "拉杆直径": ("LB_TieRodD", None),
             "管程程数": ("LB_TubePassCount", None),
             "壳程程数": ("Shell_NumberOfPasses", None),
@@ -7048,6 +7054,88 @@ class TubeLayoutEditor(QMainWindow):
             # 强制刷新行高
             # self.param_table.setRowHeight(row, self.param_table.rowHeight(row))
             # self.renumber_visible_rows()
+
+    def _apply_slipway_form_and_guide_visibility(self):
+        """
+        注释规则联动：
+        ① 滑道形式=板式滑道 -> 隐藏“圆钢规格”
+        ② 滑道形式=圆钢条式滑道 -> 隐藏“滑道高度/滑道厚度/滑道与竖直中心线夹角”
+        ③ heat_exchanger=AKU/BKU -> 显示“导轨类型”，默认值“支撑导轨1”
+        ④ 其他型式 -> 隐藏“导轨类型”
+        """
+        try:
+            if not hasattr(self, "param_table") or self.param_table is None:
+                return
+        except Exception:
+            return
+
+        def _find_row(name: str) -> int:
+            try:
+                for r in range(self.param_table.rowCount()):
+                    it = self.param_table.item(r, 1)
+                    if it and it.text().strip() == name:
+                        return r
+            except Exception:
+                pass
+            return -1
+
+        form_row = _find_row("滑道形式")
+        form_val = ""
+        try:
+            if form_row != -1:
+                w = self.param_table.cellWidget(form_row, 2)
+                if isinstance(w, QComboBox):
+                    form_val = w.currentText().strip()
+                else:
+                    itv = self.param_table.item(form_row, 2)
+                    form_val = itv.text().strip() if itv else ""
+        except Exception:
+            form_val = ""
+
+        is_round = form_val.strip() == "圆钢条式滑道"
+
+        # 圆钢规格
+        rs_row = _find_row("圆钢规格")
+        if rs_row != -1:
+            self.set_param_visibility(rs_row, visible=bool(is_round), force=True)
+
+        # 滑道高度/厚度/夹角
+        h_row = _find_row("滑道高度")
+        t_row = _find_row("滑道厚度")
+        a_row = _find_row("滑道与竖直中心线夹角")
+        if is_round:
+            if h_row != -1:
+                self.set_param_visibility(h_row, visible=False, force=True)
+            if t_row != -1:
+                self.set_param_visibility(t_row, visible=False, force=True)
+            if a_row != -1:
+                self.set_param_visibility(a_row, visible=False, force=True)
+        else:
+            if h_row != -1:
+                self.set_param_visibility(h_row, visible=True, force=True)
+            if t_row != -1:
+                self.set_param_visibility(t_row, visible=True, force=True)
+            if a_row != -1:
+                self.set_param_visibility(a_row, visible=True, force=True)
+
+        # 导轨类型（按产品型式）
+        gr_row = _find_row("导轨类型")
+        he = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
+        is_kettle = (he in ("AKU", "BKU")) or he.endswith("KU")
+        if gr_row != -1:
+            self.set_param_visibility(gr_row, visible=bool(is_kettle), force=True)
+            if is_kettle:
+                try:
+                    w = self.param_table.cellWidget(gr_row, 2)
+                    if isinstance(w, QComboBox):
+                        if w.currentText().strip() == "":
+                            idx = w.findText("支撑导轨1")
+                            if idx >= 0:
+                                w.setCurrentIndex(idx)
+                            else:
+                                w.setCurrentText("支撑导轨1")
+                except Exception:
+                    pass
 
     def validate_baffle_parameter(self, param_name):
         """验证防冲板参数的输入合法性"""
@@ -11951,6 +12039,11 @@ class TubeLayoutEditor(QMainWindow):
                 ):
                     return
                 if (
+                        getattr(self, "_suppress_round_steel_spec_warn", False)
+                        and param_name == "圆钢规格"
+                ):
+                    return
+                if (
                         getattr(self, "_tube_wall_warn_in_progress", False)
                         and param_name == "换热管壁厚 δ"
                 ):
@@ -12286,6 +12379,48 @@ class TubeLayoutEditor(QMainWindow):
                         self._last_valid_side_baffle_thickness_text = cur_text
                 except Exception as e:
                     print(f"[on_table_item_changed] 旁路挡板厚度校验失败: {e}")
+
+            # 提前单独处理：圆钢规格下限约束（0 < spec）
+            if param_name == "圆钢规格":
+                try:
+                    from PyQt5.QtWidgets import QMessageBox
+
+                    cur_text = str(param_value).strip()
+                    if not hasattr(self, "_last_valid_round_steel_spec_text"):
+                        try:
+                            self._last_valid_round_steel_spec_text = str(
+                                self.original_param_values.get((row, 2), "12")
+                            ).strip() or "12"
+                        except Exception:
+                            self._last_valid_round_steel_spec_text = "12"
+
+                    invalid = False
+                    if cur_text != "":
+                        try:
+                            v = float(cur_text)
+                            if v <= 0:
+                                invalid = True
+                        except Exception:
+                            invalid = True
+
+                    if invalid:
+                        QMessageBox.warning(
+                            self, "输入错误", "您输入的数值小于0，请重新输入！"
+                        )
+                        rollback_text = str(
+                            getattr(self, "_last_valid_round_steel_spec_text", "12")
+                        ).strip() or "12"
+                        self._suppress_round_steel_spec_warn = True
+                        try:
+                            changed_item.setText(rollback_text)
+                        finally:
+                            self._suppress_round_steel_spec_warn = False
+                        return
+
+                    if cur_text != "":
+                        self._last_valid_round_steel_spec_text = cur_text
+                except Exception as e:
+                    print(f"[on_table_item_changed] 圆钢规格校验失败: {e}")
 
             # 提前单独处理：滑道高度范围约束 + 低于预定义确认
             if param_name == "滑道高度":
@@ -13329,6 +13464,29 @@ class TubeLayoutEditor(QMainWindow):
         self.param_table.itemChanged.connect(on_table_item_changed)
 
     def setup_parameters(self, params, setup_listeners=True):
+        # ---- 补齐“滑道新增参数”（元件库默认表可能尚未配置）----
+        # 确保左侧参数表一定存在这三项，才能做显示/隐藏联动与保存链路。
+        try:
+            if isinstance(params, list):
+                existing_names = set()
+                for _p in params:
+                    try:
+                        if isinstance(_p, dict) and _p.get("参数名"):
+                            existing_names.add(str(_p.get("参数名")).strip())
+                    except Exception:
+                        continue
+
+                def _add_if_missing(name: str, default_value: str, unit: str):
+                    if name not in existing_names:
+                        params.append({"参数名": name, "参数值": default_value, "单位": unit})
+                        existing_names.add(name)
+
+                _add_if_missing("滑道形式", "板式滑道", "")
+                # 导轨类型：仅 AKU/BKU 显示，但参数本身需要存在以便保存/联动
+                _add_if_missing("导轨类型", "支撑导轨1", "")
+                _add_if_missing("圆钢规格", "12", "mm")
+        except Exception:
+            pass
         print(params)
         self.all_params = params
         self.is_loading_data = True
@@ -13505,6 +13663,10 @@ class TubeLayoutEditor(QMainWindow):
                         combo.addItems(["焊接拉杆", "螺纹拉杆"])
                     elif param["参数名"] == "滑道定位":
                         combo.addItems(["滑道与管板焊接", "滑道与第一块折流板焊接"])
+                    elif param["参数名"] == "滑道形式":
+                        combo.addItems(["板式滑道", "圆钢条式滑道"])
+                    elif param["参数名"] == "导轨类型":
+                        combo.addItems(["支撑导轨1", "支撑导轨2"])
                     elif param["参数名"] == "管程程数":
                         tube_pass = self.get_tube_pass_count()
                         if tube_pass == "2":
@@ -13774,6 +13936,11 @@ class TubeLayoutEditor(QMainWindow):
             self.update_lagan()
         except Exception as e:
             print(f"[setup_parameters] 初始化调用 update_lagan 失败: {e}")
+        # 初始化滑道相关可见性（滑道形式/导轨类型/圆钢规格 与 滑道高度/厚度/角度）
+        try:
+            self._apply_slipway_form_and_guide_visibility()
+        except Exception:
+            pass
         # self.update_partition_plate_center_distance()
 
     def on_param_table_item_changed(self, item):
@@ -14068,6 +14235,11 @@ class TubeLayoutEditor(QMainWindow):
 
             self.update_SN()
             self.update_partition_plate_center_distance()
+        elif param_name == "滑道形式":
+            try:
+                self._apply_slipway_form_and_guide_visibility()
+            except Exception:
+                pass
             # 更新分程形式下拉框的图片
             if hasattr(self, "tube_pass_form_combo") and self.tube_pass_form_combo:
                 self.load_tube_pass_images(self.tube_pass_form_combo, value)
@@ -36306,6 +36478,9 @@ class TubeLayoutEditor(QMainWindow):
         # 读取当前参数表默认值
         default_values = {
             "滑道定位": "滑道与管板焊接",
+            "滑道形式": "板式滑道",
+            "导轨类型": "支撑导轨1",
+            "圆钢规格": "12",
             "滑道高度": "",
             "滑道厚度": "",
             "滑道与竖直中心线夹角": "",
@@ -36331,19 +36506,29 @@ class TubeLayoutEditor(QMainWindow):
         dialog = QDialog(self)
         dialog.setWindowTitle("滑道参数设置")
         dialog.setModal(True)
+        dialog.setMinimumWidth(420)
         layout = QVBoxLayout(dialog)
 
         input_widgets = {}
         slide_location_options = ["滑道与管板焊接", "滑道与第一块折流板焊接"]
+        slipway_form_options = ["板式滑道", "圆钢条式滑道"]
+        guide_rail_options = ["支撑导轨1", "支撑导轨2"]
+        row_containers = {}
         for param in [
             "滑道定位",
+            "滑道形式",
+            "导轨类型",
+            "圆钢规格",
             "滑道高度",
             "滑道厚度",
             "滑道与竖直中心线夹角",
             "切边长度 L1",
             "切边高度 h",
         ]:
-            row_layout = QHBoxLayout()
+            container = QWidget()
+            row_layout = QHBoxLayout(container)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            container.setFixedHeight(34)
             row_layout.addWidget(QLabel(f"{param}:"))
             if param == "滑道定位":
                 combo = QComboBox()
@@ -36352,11 +36537,71 @@ class TubeLayoutEditor(QMainWindow):
                     combo.setCurrentText(default_values[param])
                 input_widgets[param] = combo
                 row_layout.addWidget(combo)
+            elif param == "滑道形式":
+                combo = QComboBox()
+                combo.addItems(slipway_form_options)
+                if default_values.get(param, "") in slipway_form_options:
+                    combo.setCurrentText(default_values[param])
+                input_widgets[param] = combo
+                row_layout.addWidget(combo)
+            elif param == "导轨类型":
+                combo = QComboBox()
+                combo.addItems(guide_rail_options)
+                if default_values.get(param, "") in guide_rail_options:
+                    combo.setCurrentText(default_values[param])
+                input_widgets[param] = combo
+                row_layout.addWidget(combo)
             else:
                 edit = QLineEdit(default_values.get(param, ""))
                 input_widgets[param] = edit
                 row_layout.addWidget(edit)
-            layout.addLayout(row_layout)
+            row_containers[param] = container
+            layout.addWidget(container)
+
+        def _apply_dialog_visibility():
+            try:
+                form = input_widgets["滑道形式"].currentText().strip()
+            except Exception:
+                form = ""
+            is_round = form == "圆钢条式滑道"
+            # 圆钢规格：仅圆钢条式显示
+            try:
+                c = row_containers.get("圆钢规格")
+                if c is not None:
+                    c.setVisible(bool(is_round))
+            except Exception:
+                pass
+            # 高/厚/角：圆钢条式隐藏
+            for k in ["滑道高度", "滑道厚度", "滑道与竖直中心线夹角"]:
+                try:
+                    c = row_containers.get(k)
+                    if c is not None:
+                        c.setVisible(not bool(is_round))
+                except Exception:
+                    pass
+            # 导轨类型：仅 AKU/BKU 显示
+            try:
+                he = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
+                is_kettle = (he in ("AKU", "BKU")) or he.endswith("KU")
+                c = row_containers.get("导轨类型")
+                w = input_widgets.get("导轨类型")
+                if c is not None:
+                    c.setVisible(bool(is_kettle))
+                    if is_kettle and hasattr(w, "currentText") and w.currentText().strip() == "":
+                        w.setCurrentText("支撑导轨1")
+            except Exception:
+                pass
+            # 隐藏/显示后重新计算对话框尺寸，避免界面畸形
+            try:
+                dialog.adjustSize()
+            except Exception:
+                pass
+
+        try:
+            _apply_dialog_visibility()
+            input_widgets["滑道形式"].currentTextChanged.connect(lambda _t: _apply_dialog_visibility())
+        except Exception:
+            pass
 
         btns = QHBoxLayout()
         ok_btn = QPushButton("确定")
@@ -36585,13 +36830,16 @@ class TubeLayoutEditor(QMainWindow):
         dialog = QDialog(self)
         dialog.setWindowTitle("滑道参数设置")
         dialog.setModal(True)
-        dialog.resize(400, 300)
+        dialog.setMinimumWidth(420)
         layout = QVBoxLayout(dialog)
 
         # 获取默认值
         default_values = {}
         param_names = [
             "滑道定位",
+            "滑道形式",
+            "导轨类型",
+            "圆钢规格",
             "滑道高度",
             "滑道厚度",
             "滑道与竖直中心线夹角",
@@ -36613,9 +36861,15 @@ class TubeLayoutEditor(QMainWindow):
         input_widgets = {}
         # 定义滑道定位的选项列表
         slide_location_options = ["滑道与管板焊接", "滑道与第一块折流板焊接"]
+        slipway_form_options = ["板式滑道", "圆钢条式滑道"]
+        guide_rail_options = ["支撑导轨1", "支撑导轨2"]
 
+        row_containers = {}
         for param in param_names:
-            row_layout = QHBoxLayout()
+            container = QWidget()
+            row_layout = QHBoxLayout(container)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            container.setFixedHeight(34)
             label = QLabel(f"{param}:")
 
             # 为"滑道定位"创建下拉框，其他参数保持输入框
@@ -36628,6 +36882,22 @@ class TubeLayoutEditor(QMainWindow):
                 input_widgets[param] = combo
                 row_layout.addWidget(label)
                 row_layout.addWidget(combo)
+            elif param == "滑道形式":
+                combo = QComboBox()
+                combo.addItems(slipway_form_options)
+                if default_values.get(param, "") in slipway_form_options:
+                    combo.setCurrentText(default_values[param])
+                input_widgets[param] = combo
+                row_layout.addWidget(label)
+                row_layout.addWidget(combo)
+            elif param == "导轨类型":
+                combo = QComboBox()
+                combo.addItems(guide_rail_options)
+                if default_values.get(param, "") in guide_rail_options:
+                    combo.setCurrentText(default_values[param])
+                input_widgets[param] = combo
+                row_layout.addWidget(label)
+                row_layout.addWidget(combo)
             else:
                 edit = QLineEdit()
                 edit.setText(default_values.get(param, ""))
@@ -36635,12 +36905,73 @@ class TubeLayoutEditor(QMainWindow):
                 row_layout.addWidget(edit)
                 input_widgets[param] = edit
 
-            layout.addLayout(row_layout)
+            row_containers[param] = container
+            layout.addWidget(container)
+
+        def _apply_dialog_visibility():
+            try:
+                form = input_widgets["滑道形式"].currentText().strip()
+            except Exception:
+                form = ""
+            is_round = form == "圆钢条式滑道"
+            try:
+                c = row_containers.get("圆钢规格")
+                if c is not None:
+                    c.setVisible(bool(is_round))
+            except Exception:
+                pass
+            for k in ["滑道高度", "滑道厚度", "滑道与竖直中心线夹角"]:
+                try:
+                    c = row_containers.get(k)
+                    if c is not None:
+                        c.setVisible(not bool(is_round))
+                except Exception:
+                    pass
+            try:
+                he = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
+                is_kettle = (he in ("AKU", "BKU")) or he.endswith("KU")
+                c = row_containers.get("导轨类型")
+                w = input_widgets.get("导轨类型")
+                if c is not None:
+                    c.setVisible(bool(is_kettle))
+                    if is_kettle and hasattr(w, "currentText") and w.currentText().strip() == "":
+                        w.setCurrentText("支撑导轨1")
+            except Exception:
+                pass
+            # 隐藏/显示后重新计算对话框尺寸，避免界面畸形
+            try:
+                dialog.adjustSize()
+            except Exception:
+                pass
+
+        try:
+            _apply_dialog_visibility()
+            input_widgets["滑道形式"].currentTextChanged.connect(lambda _t: _apply_dialog_visibility())
+        except Exception:
+            pass
 
         button_layout = QHBoxLayout()
         ok_btn = QPushButton("确定")
 
         def on_ok_clicked():
+            # 圆钢规格输入限制：0 < 圆钢规格
+            try:
+                rs_text = str(input_widgets.get("圆钢规格").text()).strip()
+                rs_val = float(rs_text) if rs_text != "" else None
+            except Exception:
+                rs_val = None
+            if rs_val is None or rs_val <= 0:
+                QMessageBox.warning(
+                    dialog,
+                    "输入错误",
+                    "您输入的数值小于0，请重新输入！",
+                )
+                try:
+                    input_widgets["圆钢规格"].setText(default_values.get("圆钢规格", "12"))
+                except Exception:
+                    pass
+                return
+
             # 验证滑道与竖直中心线夹角的范围
             # 滑道高度输入限制：0 < 滑道高度 <= 折流/支持板外径/2
             height_text = input_widgets["滑道高度"].text().strip()

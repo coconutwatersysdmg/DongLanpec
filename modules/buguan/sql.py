@@ -25,7 +25,8 @@ def fetch_params_from_db(product_id):
         with connection.cursor() as cursor:
             param_names = [
                 '防冲板形式', '防冲板厚度', '防冲板折边角度',
-                '滑道高度', '滑道厚度', '滑道与竖直中心线夹角'
+                '滑道高度', '滑道厚度', '滑道与竖直中心线夹角',
+                '滑道形式', '导轨类型', '圆钢规格'
             ]
             in_clause = ','.join(['%s'] * len(param_names))
             sql = f'''
