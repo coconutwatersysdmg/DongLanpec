@@ -19390,7 +19390,7 @@ class TubeLayoutEditor(QMainWindow):
             table.itemSelectionChanged.connect(self.on_col_selection_changed)
 
     def clear_selection_highlight(self):
-        from PyQt5.QtCore import QPointF
+        from PyQt5.QtCore import QPointF, Qt
         from PyQt5.QtWidgets import QGraphicsEllipseItem
         # ⚠️ 原生层闪退(0xC0000005)规避：
         # 布管/重建场景期间，Qt 可能正处于图元批量增删与重绘过程中。
@@ -30133,6 +30133,7 @@ class TubeLayoutEditor(QMainWindow):
             lagan_length = float(default_dia)
 
         if not hasattr(self, "selected_centers") or not self.selected_centers:
+            QMessageBox.warning(self, "提示", "请先选中一个换热管孔作为参照管！")
             return
 
         # 仅允许单个参照管
@@ -30145,13 +30146,18 @@ class TubeLayoutEditor(QMainWindow):
         arrange_mode = "row"
         mode_dlg = QDialog(self)
         mode_dlg.setWindowTitle("请选择自由拉杆布置方式")
+        mode_dlg.setWindowFlag(Qt.WindowContextHelpButtonHint, False)
+        mode_dlg.setModal(True)
+        mode_dlg.setMinimumWidth(360)
         mode_layout = QVBoxLayout(mode_dlg)
-        mode_layout.addWidget(QLabel("请选择自由拉杆布置方式"))
+        mode_layout.addWidget(QLabel("请选择自由拉杆布置方式："))
         mode_btn_layout = QHBoxLayout()
         row_btn = QPushButton("按行布置")
         col_btn = QPushButton("按列布置")
+        cancel_btn = QPushButton("取消")
         mode_btn_layout.addWidget(row_btn)
         mode_btn_layout.addWidget(col_btn)
+        mode_btn_layout.addWidget(cancel_btn)
         mode_layout.addLayout(mode_btn_layout)
 
         def _choose_row():
@@ -30166,8 +30172,8 @@ class TubeLayoutEditor(QMainWindow):
 
         row_btn.clicked.connect(_choose_row)
         col_btn.clicked.connect(_choose_col)
+        cancel_btn.clicked.connect(mode_dlg.reject)
         if mode_dlg.exec_() != QDialog.Accepted:
-            self.clear_selection_highlight()
             return
 
         # 对称分布：按四象限扩展；非对称：只处理单个
