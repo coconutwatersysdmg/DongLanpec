@@ -927,7 +927,7 @@ class AxialDesignPage(QWidget):
 
         right_rect = None
         # AEU / BEU 只绘制左侧矩形，其余情况绘制左右两个矩形
-        if hex_type in ["AEU", "BEU"]:
+        if hex_type in ["AEU", "BEU", "AKU", "BKU"]:
             left_rect = self.graphics_scene.addRect(
                 x_left_center - rect_width / 2.0,
                 y_center - rect_height / 2.0,

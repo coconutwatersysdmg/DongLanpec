@@ -13734,24 +13734,9 @@ class TubeLayoutEditor(QMainWindow):
                         lambda text: update_original_value(text, row)
                     )
 
-                    # 为下拉框添加变化监听
-                    def on_combo_changed():
-                        # 使用sender()获取发送信号的对象，避免闭包捕获导致的对象已删除问题
-                        sender_combo = self.sender()
-                        if sender_combo is not None:
-                            try:
-                                current_text = sender_combo.currentText()
-                                self.on_combobox_changed(row, current_text)
-                            except RuntimeError:
-                                # 对象已被删除，忽略错误
-                                pass
-
-                    combo.currentTextChanged.connect(on_combo_changed)
-                    combo.currentIndexChanged.connect(
-                        lambda idx, r=row, p=param["参数名"]: self.on_combobox_changed(
-                            r, p
-                        )
-                    )
+                    # 注意：此处不额外绑定 currentTextChanged/currentIndexChanged。
+                    # 统一由 setup_parameter_listeners() 内的 bind_combobox_listeners() 做一次性绑定，
+                    # 避免闭包 row 捕获错误/重复触发/错行联动（会导致分程形式图不刷新等问题）。
                     self.param_table.setCellWidget(row, 2, combo)
                     current_value = (
                         combo.currentText() if isinstance(combo, QComboBox) else ""
@@ -13952,26 +13937,9 @@ class TubeLayoutEditor(QMainWindow):
                     if is_diameter_based or dn_visible:
                         combo.setEnabled(False)
 
-                    # 为所有下拉框添加变化监听
-                    def on_combo_changed():
-                        # 使用sender()获取发送信号的对象，避免闭包捕获导致的对象已删除问题
-                        sender_combo = self.sender()
-                        if sender_combo is not None:
-                            try:
-                                current_text = sender_combo.currentText()
-                                self.on_combobox_changed(row, current_text)
-                            except RuntimeError:
-                                # 对象已被删除，忽略错误
-                                pass
-
-                    combo.currentTextChanged.connect(on_combo_changed)
-
-                    # 原有的索引变化监听
-                    combo.currentIndexChanged.connect(
-                        lambda idx, r=row, p=param["参数名"]: self.on_combobox_changed(
-                            r, p
-                        )
-                    )
+                    # 注意：此处不额外绑定 currentTextChanged/currentIndexChanged。
+                    # 统一由 setup_parameter_listeners() 内的 bind_combobox_listeners() 做一次性绑定，
+                    # 避免闭包 row 捕获错误/重复触发/错行联动。
 
                     self.param_table.setCellWidget(row, 2, combo)
                     param_value_str = (
@@ -14136,6 +14104,10 @@ class TubeLayoutEditor(QMainWindow):
     # TODO 管程分程形式加载函数
     def load_tube_pass_images(self, combo, tube_pass):
         """加载管程分程形式的图片到下拉框，关联具体标识"""
+        try:
+            print(f"[load_tube_pass_images] tube_pass={tube_pass!r}, heat_exchanger={getattr(self,'heat_exchanger',None)}")
+        except Exception:
+            pass
         # 清空现有项
         combo.clear()
         if self.input_json:
@@ -14151,8 +14123,9 @@ class TubeLayoutEditor(QMainWindow):
             print(f"错误：图片基础目录不存在 - {base_path}")
             return
 
-        # 定义允许显示4.1图片的换热器类型
-        allowed_types = {"AES", "BES", "NEN", "BEM","AEM"}
+        # 定义允许显示 4.1/4.3/6.1 图片的换热器类型
+        # 说明：这些型号在工程上需要显示对应的分程形式图片（含 AKU/BKU 等釜式重沸器）。
+        allowed_types = {"AES", "BES", "NEN", "BEM", "AEM", "AEU", "BEU", "AKU", "BKU"}
         # 检查当前换热器类型是否在允许列表中
         show_4_1 = self.heat_exchanger in allowed_types
         show_4_3 = self.heat_exchanger in allowed_types
@@ -14194,6 +14167,25 @@ class TubeLayoutEditor(QMainWindow):
             if combo.count() > 0:
                 combo.setCurrentIndex(0)
                 self.tube_pass_form_value = combo.itemData(0, Qt.UserRole)
+
+        # 强制刷新（QTableWidget 内的 QComboBox 有时不会立即重绘 icon）
+        try:
+            combo.update()
+            combo.repaint()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "param_table") and self.param_table is not None:
+                self.param_table.viewport().update()
+                self.param_table.updateGeometry()
+        except Exception:
+            pass
+        try:
+            print(
+                f"[load_tube_pass_images] loaded_count={combo.count()}, currentIndex={combo.currentIndex()}, current_id={combo.itemData(combo.currentIndex(), Qt.UserRole) if combo.currentIndex()>=0 else None}"
+            )
+        except Exception:
+            pass
 
     def on_tube_pass_changed(self, index):
         """当管程程数变化时，更新分程形式下拉框的图片"""
@@ -14291,19 +14283,30 @@ class TubeLayoutEditor(QMainWindow):
             # self.update_lagan()
             self.update_partition_plate_center_distance()
         elif param_name == "管程程数":
+            # 管程程数变化：此处的 value 可能来自不同回调，有时会是“参数名”而非选中值。
+            # 统一从该行下拉框读取当前选中值，避免图不刷新。
+            tube_pass_text = ""
+            try:
+                w = self.param_table.cellWidget(row, 2)
+                if isinstance(w, QComboBox):
+                    tube_pass_text = w.currentText().strip()
+                else:
+                    itv = self.param_table.item(row, 2)
+                    tube_pass_text = itv.text().strip() if itv else ""
+            except Exception:
+                tube_pass_text = str(value).strip()
+
             # 管程程数变化：更新管程分程形式值及对应图片
             self.tube_pass_form_value = {
                 "1": "1.1",
                 "2": "2.1",
                 "4": "4.1",
                 "6": "6.1",
-            }.get(
-                value, self.tube_pass_form_value
-            )  # 默认保留原 value
+            }.get(tube_pass_text, self.tube_pass_form_value)
             print(f"当前管程分程形式: {self.tube_pass_form_value}")
 
             # 交互前移：当管程程数改为1且型号为AEM/BEM/NEN时，立即询问是否置0固定管板槽宽/槽深
-            if str(value).strip() == "1" and getattr(self, "heat_exchanger", None) in ("AEM", "BEM", "NEN"):
+            if str(tube_pass_text).strip() == "1" and getattr(self, "heat_exchanger", None) in ("AEM", "BEM", "NEN"):
                 # 同一轮值变更可能触发两次回调（text/index），这里做一次性防重
                 if not getattr(self, "_tube_pass_one_prompt_shown", False):
                     self._tube_pass_one_prompt_shown = True
@@ -14331,7 +14334,7 @@ class TubeLayoutEditor(QMainWindow):
                                 pass
                     except Exception:
                         self._reset_fixed_tubesheet_on_tube_pass_one = False
-            elif str(value).strip() != "1":
+            elif str(tube_pass_text).strip() != "1":
                 # 只在“当前管程=1且用户同意”时生效；离开该状态即清除
                 self._reset_fixed_tubesheet_on_tube_pass_one = False
                 self._tube_pass_one_prompt_shown = False
@@ -14354,14 +14357,27 @@ class TubeLayoutEditor(QMainWindow):
 
             self.update_SN()
             self.update_partition_plate_center_distance()
+            # 刷新“管程分程形式”下拉框的图片（切换管程程数时必须同步）
+            try:
+                form_row = -1
+                for rr in range(self.param_table.rowCount()):
+                    itn = self.param_table.item(rr, 1)
+                    if itn and itn.text().strip() == "管程分程形式":
+                        form_row = rr
+                        break
+                form_combo = (
+                    self.param_table.cellWidget(form_row, 2) if form_row != -1 else None
+                )
+                if isinstance(form_combo, QComboBox):
+                    self.tube_pass_form_combo = form_combo
+                    self.load_tube_pass_images(form_combo, tube_pass_text)
+            except Exception as _e:
+                print(f"[管程程数] 刷新管程分程形式图片失败: {_e}")
         elif param_name == "滑道形式":
             try:
                 self._apply_slipway_form_and_guide_visibility()
             except Exception:
                 pass
-            # 更新分程形式下拉框的图片
-            if hasattr(self, "tube_pass_form_combo") and self.tube_pass_form_combo:
-                self.load_tube_pass_images(self.tube_pass_form_combo, value)
         elif param_name == "防冲板形式":
             try:
                 self._apply_baffle_placement_visibility()
