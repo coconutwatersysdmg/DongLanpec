@@ -497,7 +497,17 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
             )
             row = cursor.fetchone()
             tube_form = row["参数值"].strip() if (row and row.get("参数值")) else None
-
+            cursor.execute(
+                """
+                    SELECT 参数值 
+                    FROM 产品设计活动表_布管参数表
+                    WHERE 产品ID = %s AND 参数名 = '折流板类型'
+                    LIMIT 1
+                """,
+                (product_id,),
+            )
+            row = cursor.fetchone()
+            type_zheliuban = row["参数值"].strip() if (row and row.get("参数值")) else None
             cursor.execute(
                 """
                     SELECT 参数值 
@@ -597,6 +607,213 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
         return False
 
     filtered_coords = [(x, y) for x, y in coords if not is_deleted(x, y)]
+    # ================== NX / NY / NXA / NYA 计算 ==================
+    try:
+        conn = create_product_connection()
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            cursor.execute(
+                """
+                    SELECT 参数值 
+                    FROM 产品设计活动表_布管参数表
+                    WHERE 产品ID = %s AND 参数名 = 'A型板切口与中心线间距a'
+                    LIMIT 1
+                """,
+                (product_id,),
+            )
+            row = cursor.fetchone()
+            a_val = float(row["参数值"]) if row and row.get("参数值") else None
+
+            cursor.execute(
+                """
+                    SELECT 参数值 
+                    FROM 产品设计活动表_布管参数表
+                    WHERE 产品ID = %s AND 参数名 = 'B型板切口与中心线间距b'
+                    LIMIT 1
+                """,
+                (product_id,),
+            )
+            row = cursor.fetchone()
+            b_val = float(row["参数值"]) if row and row.get("参数值") else None
+
+        def calc_double_bow_NX_NY(coords, a_val, b_val):
+            from collections import defaultdict
+
+            def calc_N_and_NA(coords, r, tol=1.0):
+                if r is None:
+                    return 0, 0
+
+                # ===== 按 x 分组，并允许 x 坐标误差在 1 以内 =====
+                centers = []
+                x_groups = {}
+
+                for x, y in coords:
+                    try:
+                        x_val = float(x)
+                        y_val = float(y)
+                    except Exception:
+                        continue
+
+                    best_idx = None
+                    best_dist = None
+
+                    for i, c in enumerate(centers):
+                        dist = abs(x_val - c)
+                        if best_dist is None or dist < best_dist:
+                            best_dist = dist
+                            best_idx = i
+
+                    if best_dist is not None and best_dist <= tol:
+                        old_c = centers[best_idx]
+                        ys = x_groups.pop(old_c)
+                        ys.append(y_val)
+
+                        new_c = (old_c * (len(ys) - 1) + x_val) / len(ys)
+                        centers[best_idx] = new_c
+                        x_groups[new_c] = ys
+                    else:
+                        centers.append(x_val)
+                        x_groups[x_val] = [y_val]
+
+                # ===== 分别统计正侧 / 负侧 =====
+                pos_groups = {x: ys for x, ys in x_groups.items() if x > r}
+                neg_groups = {x: ys for x, ys in x_groups.items() if x < -r}
+
+                pos_N = sum(len(ys) for ys in pos_groups.values())
+                neg_N = sum(len(ys) for ys in neg_groups.values())
+
+                # ===== 只取一侧：哪一侧更多就取哪一侧 =====
+                if pos_N >= neg_N:
+                    N = pos_N
+                    if pos_groups:
+                        closest_pos_x = min(pos_groups.keys(), key=lambda x: abs(x - r))
+                        NA = len(pos_groups[closest_pos_x])
+                    else:
+                        NA = 0
+                else:
+                    N = neg_N
+                    if neg_groups:
+                        closest_neg_x = min(neg_groups.keys(), key=lambda x: abs(x + r))
+                        NA = len(neg_groups[closest_neg_x])
+                    else:
+                        NA = 0
+
+                return N, NA
+
+            Na, NAa = calc_N_and_NA(coords, a_val)
+            Nb, NAb = calc_N_and_NA(coords, b_val)
+
+            # 这里保持你原来的双弓形逻辑不变
+            if Na >= Nb:
+                NX = Na
+                NXA = NAa
+                NY = Nb
+                NYA = NAb
+            else:
+                NX = Nb
+                NXA = NAb
+                NY = Na
+                NYA = NAa
+
+            return NX, NXA, NY, NYA
+
+        def calc_single_bow_NX_NY(coords, a_val, cut_dir):
+            from collections import defaultdict
+
+            def calc_N_and_NA(coords, r, use_x=True, tol=1.0):
+                if r is None:
+                    return 0, 0
+
+                centers = []
+                groups = {}
+
+                for x, y in coords:
+                    try:
+                        key_val = float(x) if use_x else float(y)
+                        other_val = float(y) if use_x else float(x)
+                    except Exception:
+                        continue
+
+                    best_idx = None
+                    best_dist = None
+
+                    for i, c in enumerate(centers):
+                        dist = abs(key_val - c)
+                        if best_dist is None or dist < best_dist:
+                            best_dist = dist
+                            best_idx = i
+
+                    if best_dist is not None and best_dist <= tol:
+                        old_c = centers[best_idx]
+                        vals = groups.pop(old_c)
+                        vals.append(other_val)
+
+                        new_c = (old_c * (len(vals) - 1) + key_val) / len(vals)
+                        centers[best_idx] = new_c
+                        groups[new_c] = vals
+                    else:
+                        centers.append(key_val)
+                        groups[key_val] = [other_val]
+
+                pos_groups = {k: vs for k, vs in groups.items() if k > r}
+                neg_groups = {k: vs for k, vs in groups.items() if k < -r}
+
+                pos_N = sum(len(vs) for vs in pos_groups.values())
+                neg_N = sum(len(vs) for vs in neg_groups.values())
+
+                if pos_N >= neg_N:
+                    N = pos_N
+                    if pos_groups:
+                        closest_pos = min(pos_groups.keys(), key=lambda k: abs(k - r))
+                        NA = len(pos_groups[closest_pos])
+                    else:
+                        NA = 0
+                else:
+                    N = neg_N
+                    if neg_groups:
+                        closest_neg = min(neg_groups.keys(), key=lambda k: abs(k + r))
+                        NA = len(neg_groups[closest_neg])
+                    else:
+                        NA = 0
+
+                return N, NA
+
+            # 单弓形：
+            # 垂直左右 -> 按 x
+            # 水平上下 -> 按 y
+            use_x = cut_dir not in ("水平上下", "水平")
+
+            NX, NXA = calc_N_and_NA(coords, a_val, use_x=use_x)
+            NY, NYA = 0, 0
+
+            return NX, NXA, NY, NYA
+        # ===== 分类型计算 =====
+        if type_zheliuban in ("双弓形折流板", "双弓型折流板", "双弓形"):
+            NX, NXA, NY, NYA = calc_double_bow_NX_NY(filtered_coords, a_val, b_val)
+
+        elif type_zheliuban in ("单弓形折流板", "单弓型折流板", "单弓形"):
+            NX, NXA, NY, NYA = calc_single_bow_NX_NY(filtered_coords, a_val, cut_dir)
+
+        else:
+            NX, NXA, NY, NYA = 0, 0, 0, 0
+
+        print("NX =", NX, "NXA =", NXA)
+        print("NY =", NY, "NYA =", NYA)
+
+        calc_results["换热管数量NX"] = str(NX)
+        calc_results["换热管数量NXA"] = str(NXA)
+        calc_results["换热管数量NY"] = str(NY)
+        calc_results["换热管数量NYA"] = str(NYA)
+
+    except Exception as e:
+        calc_results["换热管数量NX"] = "0"
+        calc_results["换热管数量NXA"] = "0"
+        calc_results["换热管数量NY"] = "0"
+        calc_results["换热管数量NYA"] = "0"
+
+
+
+
+
 
     def calc_distance(x1, y1, x2, y2):
         return ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5

@@ -15037,6 +15037,73 @@ class TubeLayoutEditor(QMainWindow):
             if conn and conn.open:
                 conn.close()
 
+    def build_sql_for_u_tube_calculation_results(
+        self,
+        product_id=None,
+        tube_form=None,
+        max_x_gap=0.0,
+        max_y_gap=0.0,
+        horizontal_total=0,
+        snh_val=0.0,
+        sn_val=0.0,
+        s_val=0.0,
+        tubes_count=0,
+        getiao_chicun=0.0,
+        is_deleted=None,
+    ):
+        """
+        生成 U 型管布管计算结果表（产品设计活动表_布管计算结果表）的 SQL 语句。
+
+        说明：
+        - 这段逻辑之前误落在 build_sql_for_screw_ring() 的 return 之后，导致 IDE 视为不可达（变灰）。
+        - 现在抽成独立函数，供需要时显式调用，保证可达且不影响“吊环螺钉保存”流程。
+        """
+        # --- 参数兜底/初始化（避免未定义变量导致 IDE 灰显/运行错误）---
+        if product_id is None:
+            product_id = getattr(self, "productID", None)
+        if tube_form is None:
+            try:
+                tube_form = str(self.get_tube_pass_count()).strip()
+            except Exception:
+                tube_form = ""
+        if not callable(is_deleted):
+            is_deleted = lambda x, y: False
+
+        calc_results = {}
+
+        try:
+            max_x_gap = float(max_x_gap or 0.0)
+        except Exception:
+            max_x_gap = 0.0
+        try:
+            max_y_gap = float(max_y_gap or 0.0)
+        except Exception:
+            max_y_gap = 0.0
+        try:
+            horizontal_total = int(horizontal_total or 0)
+        except Exception:
+            horizontal_total = 0
+        try:
+            snh_val = float(snh_val or 0.0)
+        except Exception:
+            snh_val = 0.0
+        try:
+            sn_val = float(sn_val or 0.0)
+        except Exception:
+            sn_val = 0.0
+        try:
+            s_val = float(s_val or 0.0)
+        except Exception:
+            s_val = 0.0
+        try:
+            tubes_count = int(float(tubes_count or 0))
+        except Exception:
+            tubes_count = 0
+        try:
+            getiao_chicun = float(getiao_chicun or 0.0)
+        except Exception:
+            getiao_chicun = 0.0
+
         # U型管弯曲直径：取最大X/Y间距的较大值（保留3位小数）
         u_max_diameter = max(max_x_gap, max_y_gap) * 2
         u_max_diameter = round(u_max_diameter, 3)
@@ -18742,6 +18809,10 @@ class TubeLayoutEditor(QMainWindow):
                     # 接口里实际字段：TubesCount
                     tc = output_obj.get("TubesCount", None)
                     if tc is not None and str(tc) != "":
+                        try:
+                            print(f"[on_buguan_bt_click] TubesCount = {tc}")
+                        except Exception:
+                            pass
                         total_tubes = int(float(tc))
 
                 if (
@@ -18749,7 +18820,7 @@ class TubeLayoutEditor(QMainWindow):
                     and hasattr(self, "line_tip")
                     and self.line_tip is not None
                 ):
-                    message = f"满布状态总换热管数量为 {total_tubes} 个"
+                    message = f"满布状态总换热管孔数量为 {total_tubes} 个"
                     self.line_tip.setText(message)
                     self.line_tip.setStyleSheet("color: black;")
                     self.line_tip.setVisible(True)
