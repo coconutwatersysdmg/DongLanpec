@@ -468,7 +468,10 @@ class DynamicOptionsDelegate(ComboDelegate):
         if field == '材料类型':
             opts = self._all_material_types()
         else:
-            all_options = get_filtered_material_options(selected) or {}
+            # 供货状态/材料标准/材料牌号：过滤条件不包含当前字段本身，否则会只返回当前选中值（如选正火后下拉只显示正火）
+            # 参照普通元件 datamanager 中 basis_stat 的写法：供货状态选项基于 材料类型+牌号+标准，不包含供货状态
+            basis = {k: v for k, v in selected.items() if k != field and v}
+            all_options = get_filtered_material_options(basis) or {}
             opts = all_options.get(field, [])
 
         if not opts or opts[0] != "":
@@ -579,7 +582,9 @@ class BulkFillDynamicOptionsDelegate(DynamicOptionsDelegate):
                     all_map = get_filtered_material_options({}) or {}
                     opts = list(dict.fromkeys(all_map.get('材料类型', [])))
                 else:
-                    filtered = get_filtered_material_options(cur_vals) or {}
+                    # 供货状态等：过滤条件不包含当前字段本身
+                    basis = {k: v for k, v in cur_vals.items() if k != sender_field and v}
+                    filtered = get_filtered_material_options(basis) or {}
                     opts = filtered.get(sender_field, []) or []
 
                 # 保留你之前的“首个空项”习惯
@@ -832,7 +837,7 @@ class MultiSelectDynamicOptionsDelegate(DynamicOptionsDelegate):
                     it = self.table.item(rr, cc) if rr is not None else None
                     cur_vals[k] = (it.text().strip() if it else "")
 
-                # 候选生成逻辑：材料牌号只看“类型”，其余照旧
+                # 候选生成逻辑：材料牌号只看“类型”，供货状态/材料标准不包含自身
                 if sender_field == '材料类型':
                     all_map = get_filtered_material_options({}) or {}
                     opts = list(dict.fromkeys(all_map.get('材料类型', [])))
@@ -841,7 +846,8 @@ class MultiSelectDynamicOptionsDelegate(DynamicOptionsDelegate):
                         filtered = get_filtered_material_options({'材料类型': cur_vals['材料类型']}) or {}
                         opts = filtered.get('材料牌号', []) or []
                     else:
-                        filtered = get_filtered_material_options(cur_vals) or {}
+                        basis = {k: v for k, v in cur_vals.items() if k != sender_field and v}
+                        filtered = get_filtered_material_options(basis) or {}
                         opts = filtered.get(sender_field, []) or []
 
                 if not opts or (opts and opts[0] != ""):

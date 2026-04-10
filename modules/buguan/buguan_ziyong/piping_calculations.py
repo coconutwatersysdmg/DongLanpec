@@ -254,20 +254,42 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
         y_groups[y].append(x)
 
     max_y_gap = 0.0
+    min_y_gap = float("inf")
+    if tube_form == "2":
+        # 以 x 轴为参考 → 用 y
+        axis_values = [abs(float(y)) for x, y in coords]
+    elif tube_form in ("4", "6"):
+        # 以 y 轴为参考 → 用 x
+        axis_values = [abs(float(x)) for x, y in coords]
+    else:
+        raise ValueError(f"Unsupported tube_form: {tube_form}")
+
     for _, y_list in x_groups.items():
         numeric_y = [float(y) for y in y_list if str(y).replace(".", "").isdigit()]
         if len(numeric_y) >= 2:
             gap = max(numeric_y) - min(numeric_y)
-            max_y_gap = max(max_y_gap, gap)
+            if gap > 0:
+                max_y_gap = max(max_y_gap, gap)
+                min_y_gap = min(min_y_gap, gap)
 
     max_x_gap = 0.0
+    min_x_gap = float("inf")
+
     for _, x_list in y_groups.items():
         numeric_x = [float(x) for x in x_list if str(x).replace(".", "").isdigit()]
         if len(numeric_x) >= 2:
             gap = max(numeric_x) - min(numeric_x)
-            max_x_gap = max(max_x_gap, gap)
+            if gap > 0:
+                max_x_gap = max(max_x_gap, gap)
+                min_x_gap = min(min_x_gap, gap)
 
-    u_max_diameter = round(max(max_x_gap, max_y_gap) * 2, 3)
+    u_min_radius = round(min(axis_values), 3)
+    u_max_diameter = round(2 * max(axis_values), 3)
+
+    print("coords", coords)
+    print(u_min_radius, "u_min_radius")
+    print(u_max_diameter, "u_max_diameter")
+
 
     vertical_total = 0
     if tube_form == "2":
@@ -394,6 +416,9 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
     calc_results["垂直隔板槽两侧相邻管中心距"] = str(round(sn_val, 3))
     calc_results["换热管中心距 S"] = str(round(s_val, 3))
     calc_results["U型管弯曲直径"] = str(u_max_diameter)
+    calc_results["弯管段的最小弯曲半径"] = str(u_min_radius)
+
+
     calc_results["管总数 tubes_count"] = str(tubes_count)
 
     table_name = "`产品设计活动表_布管计算结果表`"

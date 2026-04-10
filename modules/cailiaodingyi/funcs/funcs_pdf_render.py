@@ -16,6 +16,7 @@ from modules.cailiaodingyi.controllers.combo import ComboDelegate, ComboPopupEve
 from modules.cailiaodingyi.funcs.funcs_pdf_change import get_filtered_material_options, get_fastener_bolt_type_options, \
     get_fastener_component_options_by_template_id, load_updated_fastener_define_data, \
     get_fastener_root_series_options
+from modules.condition_input.funcs.funcs_cdt_input import get_opening_weld_joint_default
 from modules.cailiaodingyi.funcs.funcs_pdf_input import load_guankou_param_structure_from_db, load_dropdown_options, \
     query_unassigned_codes, query_codes_for_tab_raw,get_fastener_param_structure_from_db
 from modules.cailiaodingyi.controllers.tooltip_utils import ensure_table_tooltip_updater
@@ -888,6 +889,7 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
     install_selection_debug(table)
     table.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 关键：禁用默认触发
     table.setProperty("user_edited_corrosion", False)
+    table.setProperty("user_edited_opening_weld_joint_coeff", False)
 
     # 安装我们的过滤器（持有引用避免被 GC）
     flt = ComboPopupEventFilter(table)
@@ -1029,6 +1031,28 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
                     self.highlight_row(r)
                 return
 
+            # 针对“所属元件开孔处焊接接头系数”：强制用户输入值 >= 默认值 D（存放在 UserRole+1 中）
+            if (self.pname or "") == "所属元件开孔处焊接接头系数" and self.table:
+                d_val = None
+                try:
+                    it = self.table.item(r, c)
+                    if it is not None:
+                        d = it.data(Qt.UserRole + 1)
+                        if d is not None and str(d).strip() != "":
+                            d_val = float(d)
+                except Exception:
+                    d_val = None
+
+                if d_val is not None and v < d_val:
+                    show_tip(f"参数“{self.pname}”的值应不小于默认值 {d_val}！")
+                    model.setData(index, "")
+                    self._restore_item_text(model, index, "")
+                    if self.table:
+                        self.table.setCurrentCell(r, c)
+                        self.highlight_row(r)
+                    return
+
+
             # 先写回当前格
             model.setData(index, txt)
             self._restore_item_text(model, index, txt)
@@ -1067,6 +1091,7 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
                 self.table.setCurrentCell(r, c)
                 self.highlight_row(r)
             try:
+                # 标记“接管腐蚀裕量”被用户编辑过
                 if "腐蚀裕量" in (self.pname or "") and self.table:
                     self.table.setProperty("user_edited_corrosion", True)
                     v = getattr(self, "viewer", None)
@@ -1079,12 +1104,17 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
                                 setattr(v, "_corrosion_user_override_tabs", set())
                                 s = getattr(v, "_corrosion_user_override_tabs")
                             s.add(name)
+
+                # 标记“所属元件开孔处焊接接头系数”被用户编辑过
+                if (self.pname or "") == "所属元件开孔处焊接接头系数" and self.table:
+                    self.table.setProperty("user_edited_opening_weld_joint_coeff", True)
             except Exception:
                 pass
 
     # 这几个是你要改成数值输入的行名（可按需要继续加）
     NUM_GE0 = {
         "接管腐蚀裕量(mm)",
+        "所属元件开孔处焊接接头系数",
         "接管焊缝金属截面积(mm²)",
         "接管覆层厚度(mm)",
         "接管法兰覆层厚度(mm)",
@@ -1148,8 +1178,26 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
                     table.setItemDelegateForRow(row, CheckComboDelegate(options, table, enable_select_all=enable_select_all))
 
             elif control_type == "empty":
-                item = QTableWidgetItem("")
+                # 2列+empty 类型：如果活动库里已有值（如“所属元件开孔处焊接接头系数”），这里要把值渲染出来
+                item = QTableWidgetItem(str(value))
+                item.setTextAlignment(Qt.AlignCenter)
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+
+                # 为“所属元件开孔处焊接接头系数”写入默认值到 UserRole+1，供数值校验使用
+                if param_name == "所属元件开孔处焊接接头系数":
+                    try:
+                        product_id = getattr(viewer_instance, "product_id", None)
+                        cur_tab = None
+                        tw = getattr(viewer_instance, "guankou_tabWidget", None)
+                        if product_id and tw and tw.currentIndex() >= 0 and tw.tabText(tw.currentIndex()) != "+":
+                            cur_tab = tw.tabText(tw.currentIndex())
+                        if product_id and cur_tab:
+                            default_val = get_opening_weld_joint_default(product_id, cur_tab)
+                            if default_val is not None:
+                                item.setData(Qt.UserRole + 1, float(default_val))
+                    except Exception as e:
+                        print(f"[警告] 设置所属元件开孔处焊接接头系数默认值失败: {e}")
+
                 table.setItem(row, 1, item)
 
         elif structure == "4列":
@@ -1216,6 +1264,11 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
     for r, rule, pname in numeric_rows:
         if r in found_set:
             continue
+        # 确保该行对应的数值单元格是可编辑的（包括 2列/4列 结构）
+        for c in (1, 2, 3):
+            it = table.item(r, c)
+            if it:
+                it.setFlags(it.flags() | Qt.ItemIsEditable | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
         table.setItemDelegateForRow(r, NumericDelegate(rule, pname, table, viewer_instance))
 
 

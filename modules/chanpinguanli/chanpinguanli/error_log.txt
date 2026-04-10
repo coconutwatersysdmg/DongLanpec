@@ -1,0 +1,270 @@
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qbtn.py", line 69, in handle_confirm_product
+    product_confirm_qianzhi.save_new_product(row)
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qianzhi.py", line 72, in save_new_product
+    bianl.current_product_id = common_usage.get_next_product_id()
+  File "D:\gongye\PPM(haode)\PPM\common_usage.py", line 82, in get_next_product_id
+    last_id = result[0]
+KeyError: 0
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qbtn.py", line 69, in handle_confirm_product
+    product_confirm_qianzhi.save_new_product(row)
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qianzhi.py", line 72, in save_new_product
+    bianl.current_product_id = common_usage.get_next_product_id()
+  File "D:\gongye\PPM(haode)\PPM\common_usage.py", line 82, in get_next_product_id
+    last_id = result[0]
+KeyError: 0
+保存新产品出错
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qbtn.py", line 74, in handle_confirm_product
+    product_confirm_qianzhi.save_new_product(row)
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qianzhi.py", line 75, in save_new_product
+    bianl.current_product_id = common_usage.get_next_product_id()
+  File "D:\gongye\PPM(haode)\PPM\common_usage.py", line 82, in get_next_product_id
+    last_id = result[0]
+KeyError: 0
+
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\open_project.py", line 86, in open_project
+    bianl.product_table.setItem(row, 1, QTableWidgetItem(product.get("产品编号", "")))
+AttributeError: 'tuple' object has no attribute 'get'
+
+
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\open_project.py", line 86, in open_project
+    bianl.product_table.setItem(row, 1, QTableWidgetItem(product.get("产品编号", "")))
+AttributeError: 'tuple' object has no attribute 'get'
+
+
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\open_project.py", line 63, in open_project
+    common_usage.set_project_inputs_editable(False)
+AttributeError: module 'common_usage' has no attribute 'set_project_inputs_editable'
+
+
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qbtn.py", line 68, in handle_confirm_product
+    product_confirm_qianzhi.save_new_product(row)
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qianzhi.py", line 80, in save_new_product
+    conn = common_usage.get_mysql_connection()
+AttributeError: module 'common_usage' has no attribute 'get_mysql_connection'
+[save_new_product] 查询项目路径失败
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qianzhi.py", line 86, in save_new_product
+    project_path_pd = result[0] if result else None
+KeyError: 0
+
+[save_new_product] 查询项目路径失败
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qianzhi.py", line 86, in save_new_product
+    project_path_pd = result[0] if result else None
+KeyError: 0
+
+处理第 1 行时异常：
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qbtn.py", line 83, in handle_confirm_product
+    old_product_number = product_confirm_qianzhi.curr_row_product_number.text().strip()
+AttributeError: module 'product_confirm_qianzhi' has no attribute 'curr_row_product_number'
+处理第 1 行时异常：
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qbtn.py", line 52, in handle_confirm_product
+    old_product_number = product_confirm_qianzhi.curr_row_product_number.text().strip()
+AttributeError: module 'product_confirm_qianzhi' has no attribute 'curr_row_product_number'
+处理第 1 行时异常：
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qbtn.py", line 52, in handle_confirm_product
+    old_product_number = product_confirm_qianzhi.curr_row_product_number.text().strip()
+AttributeError: module 'product_confirm_qianzhi' has no attribute 'curr_row_product_number'
+处理第 1 行时异常：
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qbtn.py", line 52, in handle_confirm_product
+    old_product_number = product_confirm_qianzhi.curr_row_product_number.text().strip()
+AttributeError: module 'product_confirm_qianzhi' has no attribute 'curr_row_product_number'
+处理第 1 行时异常：
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qbtn.py", line 52, in handle_confirm_product
+    old_product_number = product_confirm_qianzhi.curr_row_product_number.text().strip()
+AttributeError: module 'product_confirm_qianzhi' has no attribute 'curr_row_product_number'
+[update_existing_product] 更新失败：\nTraceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\product_confirm_qianzhi.py", line 216, in update_existing_product
+    QMessageBox.critical(bianl.main_window, "产品信息更新完成")
+TypeError: critical(parent: Optional[QWidget], title: Optional[str], text: Optional[str], buttons: Union[QMessageBox.StandardButtons, QMessageBox.StandardButton] = QMessageBox.Ok, defaultButton: QMessageBox.StandardButton = QMessageBox.NoButton): not enough arguments
+\nTraceback (most recent call last):
+  File "D:\download\python\python3.8\lib\site-packages\pymysql\connections.py", line 649, in connect
+    sock = socket.create_connection(
+  File "D:\download\python\python3.8\lib\socket.py", line 808, in create_connection
+    raise err
+  File "D:\download\python\python3.8\lib\socket.py", line 796, in create_connection
+    sock.connect(sa)
+socket.timeout: timed out
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\open_project.py", line 33, in open_project
+    conn_project = common_usage.get_mysql_connection_project()
+  File "D:\gongye\PPM(haode)\PPM\common_usage.py", line 8, in get_mysql_connection_project
+    return pymysql.connect(
+  File "D:\download\python\python3.8\lib\site-packages\pymysql\connections.py", line 361, in __init__
+    self.connect()
+  File "D:\download\python\python3.8\lib\site-packages\pymysql\connections.py", line 716, in connect
+    raise exc
+pymysql.err.OperationalError: (2003, "Can't connect to MySQL server on 'localhost' (timed out)")
+
+
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\open_project.py", line 33, in open_project
+    conn_project = common_usage.get_mysql_connection_project()
+  File "D:\gongye\PPM(haode)\PPM\common_usage.py", line 45, in get_mysql_connection_project
+    return pymysql.connect(
+  File "D:\download\python\python3.8\lib\site-packages\pymysql\connections.py", line 361, in __init__
+    self.connect()
+  File "D:\download\python\python3.8\lib\site-packages\pymysql\connections.py", line 669, in connect
+    self._request_authentication()
+  File "D:\download\python\python3.8\lib\site-packages\pymysql\connections.py", line 979, in _request_authentication
+    auth_packet = _auth.caching_sha2_password_auth(self, auth_packet)
+  File "D:\download\python\python3.8\lib\site-packages\pymysql\_auth.py", line 267, in caching_sha2_password_auth
+    data = sha2_rsa_encrypt(conn.password, conn.salt, conn.server_public_key)
+  File "D:\download\python\python3.8\lib\site-packages\pymysql\_auth.py", line 144, in sha2_rsa_encrypt
+    raise RuntimeError(
+RuntimeError: 'cryptography' package is required for sha256_password or caching_sha2_password auth methods
+
+
+Traceback (most recent call last):
+  File "D:\gongye\PPM(haode)\PPM\open_project.py", line 33, in open_project
+    conn_project = common_usage.get_mysql_connection_project()
+  File "D:\gongye\PPM(haode)\PPM\common_usage.py", line 45, in get_mysql_connection_project
+    return pymysql.connect(
+  File "D:\download\python\python3.8\lib\site-packages\pymysql\connections.py", line 361, in __init__
+    self.connect()
+  File "D:\download\python\python3.8\lib\site-packages\pymysql\connections.py", line 669, in connect
+    self._request_authentication()
+  File "D:\download\python\python3.8\lib\site-packages\pymysql\connections.py", line 979, in _request_authentication
+    auth_packet = _auth.caching_sha2_password_auth(self, auth_packet)
+  File "D:\download\python\python3.8\lib\site-packages\pymysql\_auth.py", line 267, in caching_sha2_password_auth
+    data = sha2_rsa_encrypt(conn.password, conn.salt, conn.server_public_key)
+  File "D:\download\python\python3.8\lib\site-packages\pymysql\_auth.py", line 144, in sha2_rsa_encrypt
+    raise RuntimeError(
+RuntimeError: 'cryptography' package is required for sha256_password or caching_sha2_password auth methods
+
+
+Traceback (most recent call last):
+  File "C:\Users\zifeng qi\Desktop\PPM(haode)10\PPM(haode)\chanpinguanli_main.py", line 633, in confirm_product_definition
+    design_cursor.execute(insert_sql, insert_values)
+  File "D:\python3.9\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "D:\python3.9\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 563, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 825, in _read_query_result
+    result.read()
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 1199, in read
+    first_packet = self.connection._read_packet()
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 775, in _read_packet
+    packet.raise_for_error()
+  File "D:\python3.9\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "D:\python3.9\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+pymysql.err.ProgrammingError: (1064, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ')\n            VALUES ('PD20250515003', '管壳式热交换器', 'BEU', '方案è®' at line 1")
+Traceback (most recent call last):
+  File "C:\Users\zifeng qi\Desktop\PPM(haode)10\PPM(haode)\chanpinguanli_main.py", line 614, in confirm_product_definition
+    cursor.execute(sql, values)
+  File "D:\python3.9\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "D:\python3.9\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 563, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 825, in _read_query_result
+    result.read()
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 1199, in read
+    first_packet = self.connection._read_packet()
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 775, in _read_packet
+    packet.raise_for_error()
+  File "D:\python3.9\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "D:\python3.9\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+pymysql.err.DataError: (1366, "Incorrect integer value: 'None' for column '设计版次' at row 1")
+Traceback (most recent call last):
+  File "C:\Users\zifeng qi\Desktop\PPM(haode)10\PPM(haode)\chanpinguanli_main.py", line 633, in confirm_product_definition
+    design_cursor.execute(insert_sql, insert_values)
+  File "D:\python3.9\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "D:\python3.9\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 563, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 825, in _read_query_result
+    result.read()
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 1199, in read
+    first_packet = self.connection._read_packet()
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 775, in _read_packet
+    packet.raise_for_error()
+  File "D:\python3.9\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "D:\python3.9\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+pymysql.err.OperationalError: (1054, "Unknown column '产品形式' in 'field list'")
+Traceback (most recent call last):
+  File "C:\Users\zifeng qi\Desktop\PPM(haode)10\PPM(haode)\chanpinguanli_main.py", line 633, in confirm_product_definition
+    design_cursor.execute(insert_sql, insert_values)
+  File "D:\python3.9\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "D:\python3.9\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 563, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 825, in _read_query_result
+    result.read()
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 1199, in read
+    first_packet = self.connection._read_packet()
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 775, in _read_packet
+    packet.raise_for_error()
+  File "D:\python3.9\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "D:\python3.9\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+pymysql.err.IntegrityError: (1062, "Duplicate entry 'PD20' for key '产品设计活动表.PRIMARY'")
+Traceback (most recent call last):
+  File "C:\Users\zifeng qi\Desktop\PPM(haode)10\PPM(haode)\chanpinguanli_main.py", line 633, in confirm_product_definition
+    design_cursor.execute(insert_sql, insert_values)
+  File "D:\python3.9\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "D:\python3.9\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 563, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 825, in _read_query_result
+    result.read()
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 1199, in read
+    first_packet = self.connection._read_packet()
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 775, in _read_packet
+    packet.raise_for_error()
+  File "D:\python3.9\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "D:\python3.9\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+pymysql.err.IntegrityError: (1062, "Duplicate entry 'PD20' for key '产品设计活动表.PRIMARY'")
+Traceback (most recent call last):
+  File "C:\Users\zifeng qi\Desktop\PPM(haode)10\PPM(haode)\chanpinguanli_main.py", line 637, in confirm_product_definition
+    design_cursor.execute(insert_sql, insert_values)
+  File "D:\python3.9\lib\site-packages\pymysql\cursors.py", line 153, in execute
+    result = self._query(query)
+  File "D:\python3.9\lib\site-packages\pymysql\cursors.py", line 322, in _query
+    conn.query(q)
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 563, in query
+    self._affected_rows = self._read_query_result(unbuffered=unbuffered)
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 825, in _read_query_result
+    result.read()
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 1199, in read
+    first_packet = self.connection._read_packet()
+  File "D:\python3.9\lib\site-packages\pymysql\connections.py", line 775, in _read_packet
+    packet.raise_for_error()
+  File "D:\python3.9\lib\site-packages\pymysql\protocol.py", line 219, in raise_for_error
+    err.raise_mysql_exception(self._data)
+  File "D:\python3.9\lib\site-packages\pymysql\err.py", line 150, in raise_mysql_exception
+    raise errorclass(errno, errval)
+pymysql.err.ProgrammingError: (1064, "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 6")

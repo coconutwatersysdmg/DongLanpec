@@ -3225,6 +3225,13 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception as close_e:
                     print(f"关闭产品型式查询连接时出错: {str(close_e)}")
 
+        # 设计数据表取值列：AKU/BKU 取“管程数值”，其他取“壳程数值”
+        design_data_value_col = (
+            "管程数值"
+            if str(getattr(self, "heat_exchanger", "")).strip() in ("AKU", "BKU")
+            else "壳程数值"
+        )
+
         # 定义全局隐藏参数列表（存储为实例变量）
         self.hidden_params = [
             "滑道定位",
@@ -3327,7 +3334,7 @@ class TubeLayoutEditor(QMainWindow):
                         try:
                             cursor.execute(
                                 """
-                                SELECT 壳程数值
+                                SELECT 壳程数值, 管程数值
                                 FROM 产品设计活动表_设计数据表
                                 WHERE 产品ID = %s AND 参数名称 = %s
                                 """,
@@ -3335,9 +3342,9 @@ class TubeLayoutEditor(QMainWindow):
                             )
                             row_dn = cursor.fetchone()
                             if isinstance(row_dn, dict):
-                                design_dn_shell_value = row_dn.get("壳程数值")
+                                design_dn_shell_value = row_dn.get(design_data_value_col)
                         except Exception as e:
-                            print(f"[load_initial_data] 查询设计数据表 DN(壳程数值)失败: {e}")
+                            print(f"[load_initial_data] 查询设计数据表 DN({design_data_value_col})失败: {e}")
                             design_dn_shell_value = None
 
                         operation_record_exists_effective = operation_record_exists
@@ -3360,6 +3367,17 @@ class TubeLayoutEditor(QMainWindow):
                                 param_name = param["参数名"]
                                 param_value = param["参数值"]
                                 unit = param["单位"]
+
+                                # 规范化：去掉DB/表格里的多余空格，避免出现 " " 导致 float 转换失败
+                                try:
+                                    if isinstance(param_name, str):
+                                        param_name = param_name.strip()
+                                    if isinstance(param_value, str):
+                                        param_value = param_value.strip()
+                                    if isinstance(unit, str):
+                                        unit = unit.strip()
+                                except Exception:
+                                    pass
 
                                 if param_value is None:
                                     print(f"参数'{param_name}'的值为空，使用默认处理")
@@ -3386,7 +3404,7 @@ class TubeLayoutEditor(QMainWindow):
                                     try:
                                         # 从产品库的设计数据表查询（符合实际表结构）
                                         design_query = """
-                                            SELECT 壳程数值 
+                                            SELECT 壳程数值, 管程数值
                                             FROM 产品设计活动表_设计数据表 
                                             WHERE 产品ID = %s AND 参数名称 = %s
                                         """
@@ -3397,10 +3415,9 @@ class TubeLayoutEditor(QMainWindow):
 
                                         if (
                                                 isinstance(design_data, dict)
-                                                and "壳程数值" in design_data
-                                                and design_data["壳程数值"]
+                                                and design_data.get(design_data_value_col) not in (None, "")
                                         ):
-                                            final_value = design_data["壳程数值"]
+                                            final_value = design_data.get(design_data_value_col)
                                             # print(final_value)
                                             # print("从设计数据表中读取的新值")
                                             # 逻辑说明：
@@ -3505,54 +3522,138 @@ class TubeLayoutEditor(QMainWindow):
 
                                 elif param_name == "壳体内直径 Dis":
                                     try:
-                                        if not operation_record_exists_effective:
+                                        # AKU/BKU：Dis 应以设计数据表管程数值为准（不受“有效操作记录”门控限制）
+                                        force_override_for_ku = (
+                                            str(getattr(self, "heat_exchanger", "")).strip() in ("AKU", "BKU")
+                                        )
+                                        if (not operation_record_exists_effective) or force_override_for_ku:
                                             design_query = """
-                                                SELECT 壳程数值 
+                                                SELECT 壳程数值, 管程数值
                                                 FROM 产品设计活动表_设计数据表 
                                                 WHERE 产品ID = %s AND 参数名称 = %s
                                             """
-                                            cursor.execute(
-                                                design_query,
-                                                (self.productID, "公称直径*"),
-                                            )
-                                            design_data = cursor.fetchone()
+                                            design_data = None
+                                            used_param_name = None
+                                            # 关键：AKU/BKU 下 Dis/Dit 与 DN 同源（都取“公称直径*”的管程数值）
+                                            if str(getattr(self, "heat_exchanger", "")).strip() in ("AKU", "BKU"):
+                                                _candidate_names = ("公称直径*",)
+                                            else:
+                                                _candidate_names = ("壳体内直径*", "壳体内直径 Dis*")
 
-                                            if (
-                                                    isinstance(design_data, dict)
-                                                    and "壳程数值" in design_data
-                                                    and design_data["壳程数值"]
-                                            ):
-                                                final_value = design_data["壳程数值"]
+                                            for _candidate_name in _candidate_names:
+                                                cursor.execute(
+                                                    design_query,
+                                                    (self.productID, _candidate_name),
+                                                )
+                                                design_data = cursor.fetchone()
+                                                if isinstance(design_data, dict) and design_data.get(design_data_value_col) not in (
+                                                    None,
+                                                    "",
+                                                ):
+                                                    used_param_name = _candidate_name
+                                                    break
+
+                                            _raw_v = None
+                                            if isinstance(design_data, dict):
+                                                _raw_v = design_data.get(design_data_value_col)
+                                                if isinstance(_raw_v, str):
+                                                    _raw_v = _raw_v.strip()
+
+                                            if isinstance(design_data, dict) and _raw_v not in (None, ""):
+                                                final_value = _raw_v
                                                 print(
                                                     f"更新壳体内直径 Dis: {param_value} -> {final_value}"
+                                                    f"（来源: 设计数据表 {used_param_name or '壳体内直径*'}[{design_data_value_col}]）"
                                                 )
+                                            else:
+                                                try:
+                                                    print(
+                                                        "[load_initial_data][override]"
+                                                        f" Dis 未覆盖（设计数据表无值）"
+                                                        f" param_name_tried={used_param_name or '壳体内直径*'}"
+                                                        f" col={design_data_value_col}"
+                                                        f" row={design_data}"
+                                                        f" 保留={param_value}"
+                                                    )
+                                                except Exception:
+                                                    pass
+                                        else:
+                                            try:
+                                                print(
+                                                    "[load_initial_data][override]"
+                                                    f" Dis 不允许覆盖（effective=True）保留={param_value}"
+                                                )
+                                            except Exception:
+                                                pass
                                     except Exception as e:
                                         print(
                                             f"处理壳体内直径 Dis时出错: {str(e)}，使用原值: {param_value}"
                                         )
                                 elif param_name == "管箱内直径 Dit":
                                     try:
-                                        if not operation_record_exists_effective:
+                                        # AKU/BKU：Dit 应以设计数据表管程数值为准（不受“有效操作记录”门控限制）
+                                        force_override_for_ku = (
+                                            str(getattr(self, "heat_exchanger", "")).strip() in ("AKU", "BKU")
+                                        )
+                                        if (not operation_record_exists_effective) or force_override_for_ku:
                                             design_query = """
-                                                SELECT 壳程数值 
+                                                SELECT 壳程数值, 管程数值
                                                 FROM 产品设计活动表_设计数据表 
                                                 WHERE 产品ID = %s AND 参数名称 = %s
                                             """
-                                            cursor.execute(
-                                                design_query,
-                                                (self.productID, "公称直径*"),
-                                            )
-                                            design_data = cursor.fetchone()
+                                            design_data = None
+                                            used_param_name = None
+                                            # 关键：AKU/BKU 下 Dis/Dit 与 DN 同源（都取“公称直径*”的管程数值）
+                                            if str(getattr(self, "heat_exchanger", "")).strip() in ("AKU", "BKU"):
+                                                _candidate_names = ("公称直径*",)
+                                            else:
+                                                _candidate_names = ("管箱内直径*", "管箱内直径 Dit*")
 
-                                            if (
-                                                    isinstance(design_data, dict)
-                                                    and "壳程数值" in design_data
-                                                    and design_data["壳程数值"]
-                                            ):
-                                                final_value = design_data["壳程数值"]
+                                            for _candidate_name in _candidate_names:
+                                                cursor.execute(
+                                                    design_query,
+                                                    (self.productID, _candidate_name),
+                                                )
+                                                design_data = cursor.fetchone()
+                                                if isinstance(design_data, dict) and design_data.get(design_data_value_col) not in (
+                                                    None,
+                                                    "",
+                                                ):
+                                                    used_param_name = _candidate_name
+                                                    break
+
+                                            _raw_v = None
+                                            if isinstance(design_data, dict):
+                                                _raw_v = design_data.get(design_data_value_col)
+                                                if isinstance(_raw_v, str):
+                                                    _raw_v = _raw_v.strip()
+
+                                            if isinstance(design_data, dict) and _raw_v not in (None, ""):
+                                                final_value = _raw_v
                                                 print(
                                                     f"更新管箱内直径 Dit: {param_value} -> {final_value}"
+                                                    f"（来源: 设计数据表 {used_param_name or '管箱内直径*'}[{design_data_value_col}]）"
                                                 )
+                                            else:
+                                                try:
+                                                    print(
+                                                        "[load_initial_data][override]"
+                                                        f" Dit 未覆盖（设计数据表无值）"
+                                                        f" param_name_tried={used_param_name or '管箱内直径*'}"
+                                                        f" col={design_data_value_col}"
+                                                        f" row={design_data}"
+                                                        f" 保留={param_value}"
+                                                    )
+                                                except Exception:
+                                                    pass
+                                        else:
+                                            try:
+                                                print(
+                                                    "[load_initial_data][override]"
+                                                    f" Dit 不允许覆盖（effective=True）保留={param_value}"
+                                                )
+                                            except Exception:
+                                                pass
                                     except Exception as e:
                                         print(
                                             f"处理管箱内直径 Dit时出错: {str(e)}，使用原值: {param_value}"
@@ -3616,6 +3717,13 @@ class TubeLayoutEditor(QMainWindow):
                                         )
 
                                 # 将处理后的参数添加到结果列表
+                                # 追加前再做一次规范化（final_value 可能来自查询结果）
+                                try:
+                                    if isinstance(final_value, str):
+                                        final_value = final_value.strip()
+                                except Exception:
+                                    pass
+
                                 processed_params.append(
                                     {
                                         "参数名": param_name,
@@ -3639,9 +3747,9 @@ class TubeLayoutEditor(QMainWindow):
                                     )  # 强制类型转换，避免字符串计算错误
                                 except (ValueError, TypeError) as e:
                                     print(f"壳体内直径 Dis 转换失败: {str(e)}")
-                            elif param["参数名"] == "换热管外径 do" and param["参数值"]:
+                            elif param["参数名"] == "换热管外径 do" and str(param["参数值"]).strip():
                                 try:
-                                    do = float(param["参数值"])  # 强制类型转换
+                                    do = float(str(param["参数值"]).strip())  # 强制类型转换
                                 except (ValueError, TypeError) as e:
                                     print(f"换热管外径 do 转换失败: {str(e)}")
                             elif param["参数名"] == "公称直径 DN" and param["参数值"]:
@@ -3898,7 +4006,7 @@ class TubeLayoutEditor(QMainWindow):
                                                     if param_name == "公称直径 DN":
 
                                                         design_query = """
-                                                            SELECT 壳程数值 
+                                                            SELECT 壳程数值, 管程数值
                                                             FROM 产品设计活动表_设计数据表 
                                                             WHERE 产品ID = %s AND 参数名称 = %s
                                                         """
@@ -3917,12 +4025,10 @@ class TubeLayoutEditor(QMainWindow):
                                                                 isinstance(
                                                                     design_data, dict
                                                                 )
-                                                                and "壳程数值"
-                                                                in design_data
-                                                                and design_data["壳程数值"]
+                                                                and design_data.get(design_data_value_col) not in (None, "")
                                                         ):
                                                             final_value = design_data[
-                                                                "壳程数值"
+                                                                design_data_value_col
                                                             ]
                                                             print(
                                                                 f"更新公称直径 DN: {param_value} -> {final_value}"
@@ -3943,7 +4049,7 @@ class TubeLayoutEditor(QMainWindow):
                                                         )
                                                         if not record_exists:
                                                             design_query = """
-                                                                SELECT 壳程数值 
+                                                                SELECT 壳程数值, 管程数值
                                                                 FROM 产品设计活动表_设计数据表 
                                                                 WHERE 产品ID = %s AND 参数名称 = %s
                                                             """
@@ -3962,12 +4068,10 @@ class TubeLayoutEditor(QMainWindow):
                                                                     isinstance(
                                                                         design_data, dict
                                                                     )
-                                                                    and "壳程数值"
-                                                                    in design_data
-                                                                    and design_data["壳程数值"]
+                                                                    and design_data.get(design_data_value_col) not in (None, "")
                                                             ):
                                                                 final_value = design_data[
-                                                                    "壳程数值"
+                                                                    design_data_value_col
                                                                 ]
                                                                 print(
                                                                     f"更新壳体内直径 Dis: {param_value} -> {final_value}"
@@ -3988,7 +4092,7 @@ class TubeLayoutEditor(QMainWindow):
                                                         )
                                                         if not record_exists:
                                                             design_query = """
-                                                                SELECT 壳程数值 
+                                                                SELECT 壳程数值, 管程数值
                                                                 FROM 产品设计活动表_设计数据表 
                                                                 WHERE 产品ID = %s AND 参数名称 = %s
                                                             """
@@ -4007,12 +4111,10 @@ class TubeLayoutEditor(QMainWindow):
                                                                     isinstance(
                                                                         design_data, dict
                                                                     )
-                                                                    and "壳程数值"
-                                                                    in design_data
-                                                                    and design_data["壳程数值"]
+                                                                    and design_data.get(design_data_value_col) not in (None, "")
                                                             ):
                                                                 final_value = design_data[
-                                                                    "壳程数值"
+                                                                    design_data_value_col
                                                                 ]
                                                                 print(
                                                                     f"更新管箱内直径 Dit: {param_value} -> {final_value}"
@@ -5475,8 +5577,12 @@ class TubeLayoutEditor(QMainWindow):
                 pass
 
         di_result = None  # 先初始化，避免未赋值引用
-        if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
+        if self.heat_exchanger in ["AEU", "BEU"]:
             di_result = qtzj.cal_qiaotineizhijing_U(
+                self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN, user_Dit
+            )
+        elif self.heat_exchanger in ["AKU", "BKU"]:
+            di_result = qtzj.cal_qiaotineizhijing_KU(
                 self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN, user_Dit
             )
         elif self.heat_exchanger in ["AES", "BES"]:
@@ -18791,12 +18897,6 @@ class TubeLayoutEditor(QMainWindow):
 
             # 2.5) 布管完成后，在下方 line_tip 提示一次满布状态总换热管数量
             try:
-                # 调试输出一次 output_data 结构，便于确认总管数的实际字段名
-                try:
-                    print("[DEBUG][on_buguan_bt_click] output_data =", getattr(self, "output_data", None))
-                except Exception:
-                    pass
-
                 import json
                 total_tubes = None
                 output_obj = getattr(self, "output_data", None)

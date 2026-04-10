@@ -19,6 +19,7 @@ from modules.cailiaodingyi.funcs.funcs_pdf_change import (
 from modules.cailiaodingyi.funcs.funcs_pdf_input import (
     move_guankou_to_first, move_guankou_attachment_to_second, update_template_input_editable_state
 )
+from modules.condition_input.funcs.funcs_cdt_input import clear_manual_flags_for_product
 
 
 
@@ -39,6 +40,9 @@ def handle_template_change(viewer_instance, index):
     if not pid:
         viewer_instance.show_error_message("提示", "未检测到产品ID，无法切换模板")
         return
+
+    # 切换模板等同于“重新按模板初始化”，清空该产品下的手动修改标志（仅内存态）
+    clear_manual_flags_for_product(pid)
 
     # ✅ 先尝试从数据库取
     old_template = query_template_name_by_product(pid)

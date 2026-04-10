@@ -35,8 +35,36 @@ _GASKET_DIM_CACHE = {}
 _FLANGE_MATERIAL_CACHE = {}
 _COMPUTE_PN_CACHE = {}
 
+def get_program_recommend_reset_param_names() -> Set[str]:
+    """
+    读取材料库新建表 `参数程序推荐置回表`：
+    哪些“参数名称”的默认值是“程序推荐”，用户把它清空后保存时应置回“程序推荐”。
+    """
+    conn = get_connection(**db_config_2)
+    try:
+        with conn.cursor() as cursor:
+            # 只取参数名称，允许该参数跨所有元件复用
+            cursor.execute("SELECT 参数名称 FROM 参数程序推荐置回表")
+            rows = cursor.fetchall() or []
+
+        out: Set[str] = set()
+        for row in rows:
+            if isinstance(row, dict):
+                v = row.get("参数名称", "")
+            else:
+                v = row[0] if row else ""
+            v = str(v).strip()
+            if v:
+                out.add(v)
+        return out
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 def load_element_additional_data(template_id, element_id):
+
     """根据元件ID和模板ID查询元件附加参数表"""
     connection = get_connection(**db_config_2)
     try:
@@ -57,6 +85,7 @@ def load_element_additional_data(template_id, element_id):
         connection.close()
 
 
+#元件附加参数UI显示排序错误
 def load_element_additional_data_by_product(product_id, element_id):
     """从产品活动库中根据产品ID和元件ID查询右侧参数信息"""
     connection = get_connection(**db_config_1)
@@ -69,6 +98,7 @@ def load_element_additional_data_by_product(product_id, element_id):
                 参数单位
             FROM 产品设计活动表_元件附加参数表
             WHERE 产品ID = %s AND 元件ID = %s
+            ORDER BY 元件附加参数ID
             """
             cursor.execute(sql, (product_id, element_id))
             return cursor.fetchall()
@@ -104,7 +134,6 @@ def load_guankou_define_data(product_id, category_label=None):
     finally:
         connection.close()
 
-
 def load_guankou_para_data(guankou_id, product_id, category_label=None):
     """根据模板ID查询管口参数定义表"""
     connection = get_connection(**db_config_1)
@@ -135,7 +164,7 @@ def insert_or_update_element_data(element_original_info, product_id, template_na
                 SELECT COUNT(*) 
                 FROM 产品设计活动表_元件材料表 
                 WHERE 产品ID = %s AND 模板名称 = %s
-            """, (product_id, template_name,))
+            """, (product_id, template_name, ))
             result = cursor.fetchone()  # 获取查询结果
             print(f"更换模板后的零件列表{result['COUNT(*)']}")
 
@@ -149,7 +178,7 @@ def insert_or_update_element_data(element_original_info, product_id, template_na
                 cursor.execute("""
                     DELETE FROM 产品设计活动表_元件材料表 
                     WHERE 产品ID = %s
-                """, (product_id,))
+                """, (product_id, ))
                 print(f"已删除产品ID为:{product_id}的零件列表信息")
 
             for item in element_original_info:
@@ -191,8 +220,7 @@ def insert_or_update_guankou_material_data(material_info, product_id, template_n
         with connection.cursor() as cursor:
             # 查询管口材料表中是否存在该产品ID对应的模板
             print(f"当前模板名称{template_name}")
-            cursor.execute("SELECT COUNT(*) FROM 产品设计活动表_管口零件材料表 WHERE 产品ID = %s AND 模板名称 = %s",
-                           (product_id, template_name,))
+            cursor.execute("SELECT COUNT(*) FROM 产品设计活动表_管口零件材料表 WHERE 产品ID = %s AND 模板名称 = %s", (product_id, template_name, ))
             result = cursor.fetchone()  # 获取查询结果
             print(f"管口零件数{result['COUNT(*)']}")
 
@@ -242,7 +270,7 @@ def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_n
     """根据产品ID判断是否更新数据，如果存在模板名称不同则删除原记录并插入新数据
     注意：保留现有的Tab_ID，如果不存在则生成新的Tab_ID
     确保至少有两个分类（管口材料分类1和管口材料分类2）
-
+    
     Args:
         product_id: 产品ID
         guankou_para_info: 从模板库查询的管口参数数据
@@ -250,7 +278,7 @@ def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_n
         template_id: 模板ID（可选，用于查询"管口材料分类2"的数据）
     """
     from modules.cailiaodingyi.funcs.funcs_pdf_input import generate_unique_tab_id
-
+    
     connection = get_connection(**db_config_1)
     try:
         with connection.cursor() as cursor:
@@ -262,7 +290,7 @@ def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_n
             """, (product_id,))
             existing_tab_map = {row['类别']: row['Tab_ID'] for row in cursor.fetchall()}
             print(f"[切换模板] 查询到现有Tab_ID映射: {existing_tab_map}")
-
+            
             # ✅ 调试：打印模板数据中的分类信息
             categories_in_guankou_para_info = set()
             for item in guankou_para_info:
@@ -270,10 +298,10 @@ def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_n
                 categories_in_guankou_para_info.add(category)
             print(f"[切换模板] 模板数据(guankou_para_info)中的分类: {categories_in_guankou_para_info}")
             print(f"[切换模板] 模板数据总数: {len(guankou_para_info)}")
-
+            
             # 查询管口材料参数数据表中是否存在该产品ID对应的管口材料参数信息
             cursor.execute("SELECT COUNT(*) FROM 产品设计活动表_管口附加参数表 WHERE 产品ID = %s ", (product_id,))
-            result = cursor.fetchone()  # 获取查询结果
+            result = cursor.fetchone() # 获取查询结果
 
             # 如果找到该产品ID对应的管口材料参数信息,进行删除操作
             if result['COUNT(*)'] > 0:
@@ -283,7 +311,7 @@ def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_n
                                     WHERE 产品ID = %s
                                 """, (product_id,))
                 print(f"已删除产品ID:{product_id}的管口零件")
-                # ⚠️ 注意：既然已经把当前产品的管口参数记录全部清空，
+            # ⚠️ 注意：既然已经把当前产品的管口参数记录全部清空，
                 # 之前查询到的 existing_tab_map（来自旧数据）就不再可靠。
                 # 如果继续“保留壳程的旧 Tab_ID、只为管程生成新 Tab_ID”，
                 # 在你刚才描述的场景（先删管程 tab，再切换模板）下，
@@ -294,29 +322,28 @@ def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_n
 
             # 按所属分类分组，为每个分类保留或生成Tab_ID
             category_tab_map = {}  # {所属分类: Tab_ID}
-
+            
             # ✅ 先收集所有分类，确保"管口材料分类1"和"管口材料分类2"都有Tab_ID
             categories_in_data = set()
             for item in guankou_para_info:
                 category = item.get('所属分类', '管口材料分类-管程')
                 categories_in_data.add(category)
-
+            
             # ✅ 确保至少有两个分类：管口材料分类-管程和管口材料分类-壳程
             if "管口材料分类-管程" not in categories_in_data:
                 categories_in_data.add("管口材料分类-管程")
             if "管口材料分类-壳程" not in categories_in_data:
                 categories_in_data.add("管口材料分类-壳程")
-
+            
             # ✅ 按固定顺序生成Tab_ID：先管程，再壳程，最后是其他分类
             ordered_categories = []
             if "管口材料分类-管程" in categories_in_data:
                 ordered_categories.append("管口材料分类-管程")
             if "管口材料分类-壳程" in categories_in_data:
                 ordered_categories.append("管口材料分类-壳程")
-            other_categories = sorted(
-                [c for c in categories_in_data if c not in ["管口材料分类-管程", "管口材料分类-壳程"]])
+            other_categories = sorted([c for c in categories_in_data if c not in ["管口材料分类-管程", "管口材料分类-壳程"]])
             ordered_categories.extend(other_categories)
-
+            
             # ✅ 按顺序为每个分类生成Tab_ID（确保分类1的Tab_ID更小）
             import time
             import random
@@ -331,7 +358,7 @@ def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_n
                     random_num = random.randint(1000, 9999)
                     category_tab_map[category] = f"TAB_{timestamp}_{random_num}"
                     print(f"[切换模板] 为类别 {category} 生成新Tab_ID: {category_tab_map[category]}")
-
+            
             # ✅ 插入模板数据（guankou_para_info已经包含了模板库中该模板ID下的所有数据）
             # 先插入所有从模板库查询到的数据（包括"管口材料分类1"和"管口材料分类2"）
             # 统计模板数据中的分类
@@ -340,10 +367,10 @@ def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_n
                 category = item.get('所属分类', '管口材料分类-管程')
                 categories_in_template.add(category)
             print(f"[切换模板] 模板数据中的分类: {categories_in_template}")
-
+            
             for item in guankou_para_info:
                 category = item.get('所属分类', '管口材料分类-管程')
-
+                
                 # 插入当前模板对应的管口零件参数信息
                 sql = """
                         INSERT INTO 产品设计活动表_管口附加参数表
@@ -360,12 +387,12 @@ def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_n
                     category_tab_map[category],
                     template_name
                 ))
-
+            
             # ✅ 检查是否已经插入了"管口材料分类-壳程"的数据
             # guankou_para_info是从query_template_guankou_para_data查询的，应该包含模板库中该模板ID下的所有数据
             has_category2_in_template = "管口材料分类-壳程" in categories_in_template
             print(f"[切换模板] 模板数据中是否包含管口材料分类-壳程: {has_category2_in_template}")
-
+            
             # ✅ 如果模板数据中没有"管口材料分类-壳程"，说明模板库中确实没有这个分类的数据
             # 此时需要从模板库再次查询确认，如果确实没有，则从"管口材料分类-管程"复制参数结构（参数值为空）
             if not has_category2_in_template:
@@ -394,7 +421,7 @@ def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_n
                                 connection_template.close()
                             except Exception as e:
                                 print(f"[警告] 关闭模板库连接时出错: {e}")
-
+                    
                     if category2_items:
                         # 插入"管口材料分类-壳程"的数据（和管程一样的方式，使用模板库中的实际数据）
                         for item in category2_items:
@@ -417,9 +444,8 @@ def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_n
                     else:
                         # ✅ 如果模板库中确实没有"管口材料分类-壳程"，从"管口材料分类-管程"复制参数结构（参数值为空）
                         print(f"[切换模板] 模板库中没有找到管口材料分类-壳程的数据，从管口材料分类-管程复制参数结构")
-                        category1_items = [item for item in guankou_para_info if
-                                           item.get('所属分类', '管口材料分类-管程') == '管口材料分类-管程']
-
+                        category1_items = [item for item in guankou_para_info if item.get('所属分类', '管口材料分类-管程') == '管口材料分类-管程']
+                        
                         if category1_items:
                             # 获取当前已插入的最大管口零件参数ID
                             cursor.execute("""
@@ -429,10 +455,10 @@ def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_n
                             """, (product_id,))
                             max_id_result = cursor.fetchone()
                             max_id = max_id_result['max_id'] if max_id_result and max_id_result['max_id'] else 0
-
+                            
                             # 从max_id+1开始生成新的ID
                             next_param_id = max_id + 1
-
+                            
                             for item in category1_items:
                                 sql = """
                                     INSERT INTO 产品设计活动表_管口附加参数表
@@ -450,11 +476,10 @@ def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_n
                                     template_name
                                 ))
                                 next_param_id += 1
-                            print(
-                                f"[切换模板] 为管口材料分类-壳程创建了 {len(category1_items)} 条空数据记录（从管程复制结构）")
+                            print(f"[切换模板] 为管口材料分类-壳程创建了 {len(category1_items)} 条空数据记录（从管程复制结构）")
                 else:
                     print(f"[警告] 未提供template_id，无法从模板库查询管口材料分类-壳程的数据")
-
+            
             # 提交事务
             connection.commit()
             print(f"✅ 管口零件参数信息已成功插入数据库（保留Tab_ID映射: {category_tab_map}）")
@@ -502,7 +527,7 @@ def insert_or_update_element_para_data(product_id, element_para_info):
             row_result = cursor.fetchone()
             if row_result and "数值" in row_result:
                 is_outer_base = str(row_result["数值"]).strip()
-
+            
             # 从封头类型代号联动参数表获取默认值（第一个选项）
             default_head_type_code = None
             if is_outer_base and is_outer_base.strip():
@@ -537,29 +562,28 @@ def insert_or_update_element_para_data(product_id, element_para_info):
                         conn.close()
                 except:
                     pass
-
+            
             for item in element_para_info:
                 param_name = str(item.get('参数名称', '') or '').strip()
                 param_value = item.get('参数数值', '') or ''
-
+                
                 # 如果是封头类型代号，根据"是否以外径为基准*"的值直接使用联动表的第一个选项
                 if param_name == "封头类型代号" and is_outer_base and is_outer_base.strip() and default_head_type_code:
                     param_value_str = str(param_value).strip() if param_value else ""
                     # 直接使用从联动参数表获取的第一个选项作为默认值（不管以前是什么值）
                     param_value = default_head_type_code
-                    print(
-                        f"[封头类型代号联动] 切换模板时调整: {param_value_str} -> {param_value} (是否以外径为基准*={is_outer_base})")
-
+                    print(f"[封头类型代号联动] 切换模板时调整: {param_value_str} -> {param_value} (是否以外径为基准*={is_outer_base})")
+                
                 # 确保所有字段都不为None，并转换为字符串
                 element_para_id = item.get('元件附加参数ID')
                 if element_para_id is None:
                     continue
-
+                
                 element_id = str(item.get('元件ID') or '').strip()
                 element_name = str(item.get('元件名称', '') or '').strip()
                 param_value_str = str(param_value).strip() if param_value is not None else ''
                 param_unit = str(item.get('参数单位', '') or '').strip()
-
+                
                 # 插入当前模板对应的元件附加参数信息
                 sql = """
                         INSERT INTO 产品设计活动表_元件附加参数表
@@ -584,11 +608,16 @@ def insert_or_update_element_para_data(product_id, element_para_info):
     finally:
         connection.close()
 
-
 def update_param_table_data(table: QTableWidget, product_id: int, element_id: int):
     """
     将右侧除管口外的参数定义表格中的内容更新到数据库（仅更新已存在的记录，不做插入）
     """
+    # 读取“哪些参数默认是程序推荐”；用于保存时把用户清空的值置回“程序推荐”
+    try:
+        program_recommend_params = get_program_recommend_reset_param_names()
+    except Exception as e:
+        print(f"[程序推荐置回] 读取材料库参数失败：{e}")
+        program_recommend_params = set()
 
     def get_cell_value(row, col):
         widget = table.cellWidget(row, col)
@@ -599,7 +628,6 @@ def update_param_table_data(table: QTableWidget, product_id: int, element_id: in
         else:
             item = table.item(row, col)
             return item.text().strip() if item else ""
-
     connection = get_connection(**db_config_1)
     try:
         with connection.cursor() as cursor:
@@ -607,6 +635,69 @@ def update_param_table_data(table: QTableWidget, product_id: int, element_id: in
                 param_name = get_cell_value(row, 0)
                 param_value = get_cell_value(row, 1)
                 param_unit = get_cell_value(row, 2)
+
+                # 垫片尺寸三参数：空值入库统一为"程序推荐"
+                if param_name in {"垫片名义内径D1n", "垫片名义外径D2n", "环内径d1"} and (param_value or "").strip() == "":
+                    param_value = "程序推荐"
+                    # 同步表格显示，避免出现“数据库是程序推荐，但UI仍为空”
+                    table.blockSignals(True)
+                    try:
+                        cell_item = table.item(row, 1)
+                        if cell_item is None:
+                            cell_item = QTableWidgetItem("")
+                            table.setItem(row, 1, cell_item)
+                        cell_item.setText("程序推荐")
+                    finally:
+                        table.blockSignals(False)
+
+                # 垫片公称压力PN：空值保存时统一置回"程序推荐"（与垫片尺寸保持一致）
+                if param_name == "公称压力PN" and (param_value or "").strip() == "":
+                    param_value = "程序推荐"
+                    # 同步表格显示，避免出现“数据库是程序推荐，但UI仍为空”
+                    table.blockSignals(True)
+                    try:
+                        w = table.cellWidget(row, 1)
+                        if isinstance(w, QComboBox):
+                            if w.findText("程序推荐") < 0:
+                                w.addItem("程序推荐")
+                            w.setCurrentText("程序推荐")
+                        elif isinstance(w, QLineEdit):
+                            w.setText("程序推荐")
+                        else:
+                            cell_item = table.item(row, 1)
+                            if cell_item is None:
+                                cell_item = QTableWidgetItem("")
+                                table.setItem(row, 1, cell_item)
+                            cell_item.setText("程序推荐")
+                    finally:
+                        table.blockSignals(False)
+
+                # 普通元件：空值保存时按“参数程序推荐置回表”置回“程序推荐”
+                if (
+                    param_name in program_recommend_params
+                    and (param_value or "").strip() == ""
+                    and param_name not in {"垫片名义内径D1n", "垫片名义外径D2n", "环内径d1"}  # 不动垫片相关逻辑
+                ):
+                    param_value = "程序推荐"
+
+                    # 同步右侧表格该单元格显示（支持 QComboBox / QLineEdit / item 三种）
+                    w = table.cellWidget(row, 1)
+                    table.blockSignals(True)
+                    try:
+                        if isinstance(w, QComboBox):
+                            if w.findText("程序推荐") < 0:
+                                w.addItem("程序推荐")
+                            w.setCurrentText("程序推荐")
+                        elif isinstance(w, QLineEdit):
+                            w.setText("程序推荐")
+                        else:
+                            cell_item = table.item(row, 1)
+                            if cell_item is None:
+                                cell_item = QTableWidgetItem("")
+                                table.setItem(row, 1, cell_item)
+                            cell_item.setText("程序推荐")
+                    finally:
+                        table.blockSignals(False)
 
                 print(f"[更新] 参数名: {param_name}, 值: {param_value}, 单位: {param_unit}")
 
@@ -622,7 +713,6 @@ def update_param_table_data(table: QTableWidget, product_id: int, element_id: in
     except Exception as e:
         connection.rollback()
         print("参数更新失败：", e)
-
 
 def is_defined_by_required_list(param_table: QTableWidget, required_names: set) -> bool:
     def cell_value(r: int) -> str:
@@ -664,11 +754,18 @@ def is_defined_by_required_list(param_table: QTableWidget, required_names: set) 
     return True
 
 
-def update_left_table_db_from_param_table(param_table: QTableWidget, product_id: int, element_id: int, part_name: str,
-                                          viewer_instance=None):
+
+
+
+
+
+
+
+
+def update_left_table_db_from_param_table(param_table: QTableWidget, product_id: int, element_id: int, part_name: str, viewer_instance=None):
     """
     将右侧表格（除管口外的零件）的更新同步到左侧；集成"元件已定义参数表(逗号分隔)"判断。
-
+    
     Args:
         param_table: 参数表格
         product_id: 产品ID
@@ -719,7 +816,7 @@ def update_left_table_db_from_param_table(param_table: QTableWidget, product_id:
     # === 以下保持你的原有写库逻辑 ===
     is_gasket = "垫片" in part_name
     is_fixed_tube_sheet = (part_name == "固定管板")
-
+    
     print(f"[update_left_table_db_from_param_table] 准备更新数据库")
     print(f"[update_left_table_db_from_param_table] 零件名称={part_name}, 定义状态={define_status}")
     print(f"[update_left_table_db_from_param_table] 产品ID={product_id}, 元件ID={element_id}")
@@ -738,26 +835,24 @@ def update_left_table_db_from_param_table(param_table: QTableWidget, product_id:
                 print(f"[update_left_table_db_from_param_table] 垫片定义状态更新完成")
 
             else:
-                material_type = get_param("材料类型")
-                material_brand = get_param("材料牌号")
-                supply_status = get_param("供货状态")
+                material_type     = get_param("材料类型")
+                material_brand    = get_param("材料牌号")
+                supply_status     = get_param("供货状态")
                 material_standard = get_param("材料标准")
 
                 # 固定管板：管/壳侧任一覆层=是 => 有覆层
                 if is_fixed_tube_sheet:
                     guancheng_covering = get_param("管程侧是否添加覆层")
-                    kecheng_covering = get_param("壳程侧是否添加覆层")
+                    kecheng_covering   = get_param("壳程侧是否添加覆层")
                     has_coating = "有覆层" if (guancheng_covering == "是" or kecheng_covering == "是") else "无覆层"
                 else:
                     has_coating = "有覆层" if get_param("是否添加覆层") == "是" else "无覆层"
 
                 print(f"[update_left_table_db_from_param_table] 准备执行UPDATE，零件名称={part_name}")
-                print(
-                    f"[update_left_table_db_from_param_table] 材料类型={material_type}, 材料牌号={material_brand}, 供货状态={supply_status}")
-                print(
-                    f"[update_left_table_db_from_param_table] 材料标准={material_standard}, 有无覆层={has_coating}, 定义状态={define_status}")
+                print(f"[update_left_table_db_from_param_table] 材料类型={material_type}, 材料牌号={material_brand}, 供货状态={supply_status}")
+                print(f"[update_left_table_db_from_param_table] 材料标准={material_standard}, 有无覆层={has_coating}, 定义状态={define_status}")
                 print(f"[update_left_table_db_from_param_table] 产品ID={product_id}, 元件ID={element_id}")
-
+                
                 cursor.execute("""
                     UPDATE 产品设计活动表_元件材料表
                        SET 材料类型=%s,
@@ -769,9 +864,9 @@ def update_left_table_db_from_param_table(param_table: QTableWidget, product_id:
                      WHERE 产品ID=%s AND 元件ID=%s
                 """, (material_type, material_brand, supply_status, material_standard,
                       has_coating, define_status, product_id, element_id))
-
+                
                 print(f"[update_left_table_db_from_param_table] UPDATE执行完成，影响行数: {cursor.rowcount}")
-
+                
                 # 验证更新结果
                 cursor.execute("""
                     SELECT 元件名称, 定义状态 FROM 产品设计活动表_元件材料表
@@ -779,8 +874,7 @@ def update_left_table_db_from_param_table(param_table: QTableWidget, product_id:
                 """, (product_id, element_id))
                 verify_result = cursor.fetchone()
                 if verify_result:
-                    print(
-                        f"[update_left_table_db_from_param_table] 验证更新: 元件名称={verify_result['元件名称']}, 定义状态={verify_result['定义状态']}")
+                    print(f"[update_left_table_db_from_param_table] 验证更新: 元件名称={verify_result['元件名称']}, 定义状态={verify_result['定义状态']}")
                 else:
                     print(f"[update_left_table_db_from_param_table] 验证更新: 未找到记录")
 
@@ -819,14 +913,13 @@ def update_guankou_define_data(product_id, new_value, field_name, guankou_id, ca
         connection.close()
 
 
-def update_guankou_define_status(product_id, element_name, define_status):  # 已修改
+def update_guankou_define_status(product_id, element_name, define_status): #已修改
     connection = get_connection(**db_config_1)
 
     try:
         cursor = connection.cursor()
 
-        print(
-            f"[DEBUG] update_guankou_define_status(): product_id={product_id}, element_name={element_name}, define_status={define_status}")
+        print(f"[DEBUG] update_guankou_define_status(): product_id={product_id}, element_name={element_name}, define_status={define_status}")
 
         update_query = """
             UPDATE 产品设计活动表_元件材料表
@@ -853,6 +946,8 @@ def update_guankou_define_status(product_id, element_name, define_status):  # �
 
     finally:
         connection.close()
+
+
 
 
 def toggle_covering_fields(table, combo, control_field):
@@ -902,6 +997,8 @@ def toggle_covering_fields(table, combo, control_field):
             #             item.setText("")
 
 
+
+
 def load_element_data_by_product_id(product_id):
     """
     根据产品ID从产品活动库中读取已更新的元件信息（用于刷新左侧表格）
@@ -934,6 +1031,7 @@ def load_element_data_by_product_id(product_id):
         connection.close()
 
 
+#元件附加参数UI显示排序错误
 def load_update_element_data(product_id):
     """根据产品ID查询产品设计活动库中的元件附加参数表"""
     connection = get_connection(**db_config_1)
@@ -949,6 +1047,7 @@ def load_update_element_data(product_id):
                     参数单位
                 FROM 产品设计活动表_元件附加参数表
                 WHERE 产品ID = %s
+                ORDER BY 元件ID, 元件附加参数ID
                 """
             cursor.execute(sql, (product_id,))
             result = cursor.fetchall()
@@ -957,6 +1056,30 @@ def load_update_element_data(product_id):
     finally:
         connection.close()
 
+
+def load_update_element_merged_para_data(product_id):
+    """
+    根据产品ID查询产品设计活动库中的元件附加参数合并表。
+    返回字段用于写入材料库的 `元件附加参数合并表`。
+    """
+    connection = get_connection(**db_config_1)
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT
+                    元件ID,
+                    参数名称,
+                    参数值,
+                    参数单位,
+                    Tab分类
+                FROM 产品设计活动表_元件附加参数合并表
+                WHERE 产品ID = %s
+                ORDER BY 元件ID, Tab分类, 参数名称
+            """
+            cursor.execute(sql, (product_id,))
+            return cursor.fetchall()
+    finally:
+        connection.close()
 
 def load_updated_guankou_define_data(product_id, category_label=None):
     connection = get_connection(**db_config_1)
@@ -981,6 +1104,67 @@ def load_updated_guankou_define_data(product_id, category_label=None):
     finally:
         connection.close()
 
+
+def load_update_guankou_attachment_para_data(product_id):
+    """
+    根据产品ID查询产品设计活动库中的管口附件附加参数表，并做模板化归一。
+
+    归一规则：
+    1) 模板库的 `管口附件附加参数表` 需要用“附件类型”来匹配；
+    2) 如果同一附件类型存在多个 Tab 实例（例如 + 复制出的 tab2/tab3），
+       只保留最早 Tab_ID 对应的参数值（避免模板加载时重复插入）。
+    """
+    connection = get_connection(**db_config_1)
+    try:
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT
+                    Tab分类,
+                    附件类型,
+                    标题分组,
+                    参数名称,
+                    参数数值,
+                    参数单位,
+                    Tab_ID,
+                    参数ID
+                FROM 产品设计活动表_管口附件附加参数表
+                WHERE 产品ID = %s
+                ORDER BY 附件类型, Tab_ID, 参数ID
+            """
+            cursor.execute(sql, (product_id,))
+            rows = cursor.fetchall() or []
+
+        # key: (附件类型, 标题分组, 参数名称)
+        # Tab分类在模板中用于匹配“附件类型”，因此这里统一填入附件类型。
+        seen = set()
+        normalized = []
+        for r in rows:
+            attachment_type = str(r.get("附件类型") or "").strip()
+            if not attachment_type:
+                continue
+
+            title_group = str(r.get("标题分组") or "").strip()
+            param_name = str(r.get("参数名称") or "").strip()
+            if not param_name:
+                continue
+
+            key = (attachment_type, title_group, param_name)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            normalized.append({
+                "Tab分类": attachment_type,  # 让模板加载能用“附件类型”匹配
+                "附件类型": attachment_type,
+                "标题分组": title_group,
+                "参数名称": param_name,
+                "参数数值": r.get("参数数值") or "",
+                "参数单位": r.get("参数单位") or "",
+            })
+
+        return normalized
+    finally:
+        connection.close()
 
 def load_update_guankou_para_data(product_id):
     """根据产品ID查询产品设计活动库中的管口材料参数表"""
@@ -1091,7 +1275,6 @@ def load_updated_guankou_param_data(product_id, guankou_id, category_label):
             return result
     finally:
         connection.close()
-
 
 def load_guankou_para_data_leibie(guankou_id, category_label):
     """根据模板ID查询管口参数定义表"""
@@ -1211,6 +1394,7 @@ def is_all_guankou_parts_defined(product_id: int) -> bool:
         connection.close()
 
 
+
 def get_filtered_material_options(selected: dict) -> dict:
     """根据当前已选字段，查询数据库，返回所有材料字段的可选项"""
     material_fields = ['材料类型', '材料牌号', '材料标准', '供货状态']
@@ -1241,6 +1425,10 @@ def get_filtered_material_options(selected: dict) -> dict:
 
 
 def save_image(component_id, image_path, product_id):
+    image_path = (str(image_path).strip() if image_path is not None else "")
+    if not image_path:
+        print(f"[save_image] 空路径，跳过更新: component_id={component_id}, product_id={product_id}")
+        return
     conn = get_connection(**db_config_1)
     try:
         with conn.cursor() as cursor:
@@ -1249,7 +1437,7 @@ def save_image(component_id, image_path, product_id):
                     SET 元件示意图=%s
                     WHERE 产品ID=%s AND 元件ID=%s
                 """, (
-                image_path, product_id, component_id))
+             image_path, product_id, component_id))
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -1259,6 +1447,7 @@ def save_image(component_id, image_path, product_id):
 
 
 def query_image_from_database(template_name, element_id, has_covering):
+
     connection = get_connection(**db_config_2)
     try:
         with connection.cursor() as cursor:
@@ -1377,15 +1566,16 @@ def get_dependency_mapping_from_db():
             rows1 = cur.fetchall() or []
             for r in rows1:
                 mname = (r["主参数名称"] or "").strip()
-                mval = (r["主参数值"] or "").strip()
+                mval  = (r["主参数值"] or "").strip()
                 dname = (r["被联动参数名称"] or "").strip()
-                opts = _to_list(r["联动选项"])
+                opts  = _to_list(r["联动选项"])
 
                 if not (mname and mval and dname):
-                    continue
+                     continue
                 mapping.setdefault(mname, {})
                 mapping[mname].setdefault(mval, {})
                 mapping[mname][mval][dname] = opts
+
 
             # 2) 复合字段（名称里带 +）
             sql2 = """
@@ -1399,20 +1589,25 @@ def get_dependency_mapping_from_db():
             for r in rows2:
                 mnames = [s.strip() for s in re.split(r"[+＋]", (r["主参数名称"] or "")) if s.strip()]
                 # 约定"主参数值"用 | 或 ｜ 分隔成与 mnames 对应的取值
-                mvals = [s.strip() for s in re.split(r"[|｜]", (r["主参数值"] or "")) if s.strip()]
-                dname = (r["被联动参数名称"] or "").strip()
-                opts = _to_list(r["联动选项"])
+                mvals  = [s.strip() for s in re.split(r"[|｜]", (r["主参数值"] or "")) if s.strip()]
+                dname  = (r["被联动参数名称"] or "").strip()
+                opts   = _to_list(r["联动选项"])
 
                 if not (mnames and mvals and dname) or len(mnames) != len(mvals):
-                    continue
+                     continue
 
                 masters = list(zip(mnames, mvals))
                 rules.append({"masters": masters, "dependent": dname, "options": opts})
+
 
             mapping["_compound_rules"] = rules
             return mapping
     finally:
         conn.close()
+
+
+
+
 
 
 def toggle_dependent_fields(table, trigger_combo, trigger_value: str, target_field_names: list, logic="=="):
@@ -1482,6 +1677,7 @@ def toggle_dependent_fields_complex(table, conditions: dict, target_fields: list
 
     except Exception as e:
         print(f"[toggle_dependent_fields_complex 错误] {e}")
+
 
 
 def query_param_by_component_id(component_id, product_id):
@@ -1558,9 +1754,197 @@ def get_design_params_from_db(product_id):
         conn.close()
 
 
+def get_shell_nominal_diameter_mm(product_id) -> Optional[float]:
+    """
+    条件输入「产品设计活动表_设计数据表」中参数「公称直径*」的壳程数值，单位按 mm 解析。
+    解析失败或为空则返回 None。
+    """
+    if not product_id:
+        return None
+    conn = get_connection(**db_config_1)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 壳程数值 FROM 产品设计活动表_设计数据表
+                WHERE 产品ID = %s AND 参数名称 = %s
+                LIMIT 1
+                """,
+                (product_id, "公称直径*"),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            v = row.get("壳程数值")
+            if v is None:
+                return None
+            s = str(v).strip()
+            if not s:
+                return None
+            s = s.replace("，", ",")
+            m = re.search(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", s)
+            if not m:
+                return None
+            return float(m.group(0))
+    except Exception as e:
+        print(f"[壳程公称直径] 读取失败: {e}")
+        return None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def get_tube_nominal_diameter_mm(product_id) -> Optional[float]:
+    """
+    条件输入「产品设计活动表_设计数据表」中参数「公称直径*」的管程数值，单位按 mm 解析。
+    解析失败或为空则返回 None。
+    """
+    if not product_id:
+        return None
+    conn = get_connection(**db_config_1)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 管程数值 FROM 产品设计活动表_设计数据表
+                WHERE 产品ID = %s AND 参数名称 = %s
+                LIMIT 1
+                """,
+                (product_id, "公称直径*"),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            v = row.get("管程数值")
+            if v is None:
+                return None
+            s = str(v).strip()
+            if not s:
+                return None
+            s = s.replace("，", ",")
+            m = re.search(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", s)
+            if not m:
+                return None
+            return float(m.group(0))
+    except Exception as e:
+        print(f"[管程公称直径] 读取失败: {e}")
+        return None
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def get_yanban_height_auto_fill_context(product_id) -> Dict[str, Optional[float]]:
+    """
+    返回堰板高度规则上下文：
+    - shell_dn: 壳程公称直径
+    - tube_dn: 管程公称直径
+    - auto_h: 自动推荐高度(管程+100)，无管程时为 None
+    - overflow: auto_h 是否超过 shell_dn（仅当二者都有值时可为 True）
+    """
+    shell_dn = get_shell_nominal_diameter_mm(product_id)
+    tube_dn = get_tube_nominal_diameter_mm(product_id)
+    auto_h = (tube_dn + 100.0) if tube_dn is not None else None
+    overflow = bool(
+        auto_h is not None and shell_dn is not None and auto_h > (shell_dn + 1e-9)
+    )
+    return {
+        "shell_dn": shell_dn,
+        "tube_dn": tube_dn,
+        "auto_h": auto_h,
+        "overflow": overflow,
+    }
+
+
+def sync_yanban_height_if_exceeds_shell_dn(product_id) -> None:
+    """
+    条件输入保存后，同步「堰板高度h」到元件附加参数表：
+    - 已有值且 h>a(壳程公称直径) -> 清空；
+    - 当前为空且管程公称直径有值 -> 先算(tube+100)：
+        * 若 tube+100<=a -> 自动写入；
+        * 若 tube+100>a -> 保持为空。
+    """
+    if not product_id:
+        return
+    ctx = get_yanban_height_auto_fill_context(product_id)
+    a = ctx["shell_dn"]
+    auto_h = ctx["auto_h"]
+    overflow = bool(ctx["overflow"])
+    conn = None
+    try:
+        conn = get_connection(**db_config_1)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 元件ID, 参数值 FROM 产品设计活动表_元件附加参数表
+                WHERE 产品ID = %s AND 元件名称 = %s AND 参数名称 = %s
+                """,
+                (product_id, "堰板", "堰板高度h"),
+            )
+            rows = cur.fetchall() or []
+        updates = []  # (value, eid)
+        for r in rows:
+            eid = r.get("元件ID")
+            val = r.get("参数值")
+            if eid is None:
+                continue
+            text = "" if val is None else str(val).strip()
+
+            # 1) 已有值时，只做上限校验：h>a 则清空
+            if text != "":
+                if a is None:
+                    continue
+                try:
+                    s = text.replace("，", ",")
+                    m = re.search(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", s)
+                    if not m:
+                        continue
+                    h = float(m.group(0))
+                except Exception:
+                    continue
+                if h > a + 1e-9:
+                    updates.append(("", eid))
+                continue
+
+            # 2) 当前为空时，按“管程+100”写入或留空
+            if auto_h is None:
+                continue
+            if overflow:
+                # 超过壳程上限：保持空
+                continue
+            h_text = str(int(auto_h)) if abs(auto_h - round(auto_h)) < 1e-9 else str(auto_h)
+            updates.append((h_text, eid))
+
+        if not updates:
+            return
+        with conn.cursor() as cur:
+            for new_val, eid in updates:
+                cur.execute(
+                    """
+                    UPDATE 产品设计活动表_元件附加参数表
+                    SET 参数值 = %s
+                    WHERE 产品ID = %s AND 元件ID = %s AND 参数名称 = %s
+                    """,
+                    (new_val, product_id, eid, "堰板高度h"),
+                )
+        conn.commit()
+    except Exception as e:
+        print(f"[堰板高度同步] 失败: {e}")
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 def map_pn_interval(pn: float) -> float:
-    print("pn:", pn)
-    print("pn_type", type(pn))
+    print("pn:",pn)
+    print("pn_type",type(pn))
     """将实际 PN 值映射为数据库中存储的标准 PN 值"""
     if pn <= 1:
         return 1
@@ -1627,7 +2011,6 @@ def get_corrosion_allowance_from_db(product_id):
     finally:
         conn.close()
 
-
 def _split_base_and_index_simple(name: str):
     """
     仅用于 DB 字段名：判断是否带 1/2/3 后缀。
@@ -1639,7 +2022,6 @@ def _split_base_and_index_simple(name: str):
     if m:
         return m.group(1), int(m.group(2))
     return s, None
-
 
 def _existing_multi_indices_db(conn, product_id: str, base_name: str, tab_name: str = None):
     """
@@ -1672,6 +2054,7 @@ def _existing_multi_indices_db(conn, product_id: str, base_name: str, tab_name: 
             got.add(val)
 
     return [i for i in (1, 2, 3) if f"{base_name}{i}" in got]
+
 
 
 def update_guankou_param_flex_db(product_id: str,
@@ -1728,6 +2111,7 @@ def update_guankou_param_flex_db(product_id: str,
         conn.close()
 
 
+
 def get_design_params_by_product_id(product_id):
     """
     根据产品ID获取设计数据表中的参数
@@ -1775,6 +2159,7 @@ def insert_or_update_guankou_param(product_id, guankou_id, param_name, param_val
         conn.commit()
     finally:
         conn.close()
+
 
 
 def query_template_id(template_name):
@@ -1828,6 +2213,8 @@ def update_element_name_data(product_id, element_name, param_name, param_value):
         conn.commit()
     finally:
         conn.close()
+
+
 
 
 def update_guankou_category_for_tab(product_id, category_label, selected_codes: list):
@@ -1913,6 +2300,7 @@ def query_template_codes(product_id):
         connection.close()
 
 
+
 def query_extra_param_value(product_id, param_name):
     """从 `产品设计活动表_元件附加参数表` 读取换热管外径"""
     conn = get_connection(**db_config_1)
@@ -1928,6 +2316,8 @@ def query_extra_param_value(product_id, param_name):
             return None if not row else row.get("参数值")
     finally:
         conn.close()
+
+
 
 
 def update_guankou_params_bulk(rows: Iterable[Tuple[str, str, str, Any]],
@@ -1968,6 +2358,10 @@ def update_guankou_params_bulk(rows: Iterable[Tuple[str, str, str, Any]],
     return {"updated": updated, "missing": missing}
 
 
+
+
+
+
 def get_numeric_rules() -> Tuple[
     Set[str],
     Set[str],
@@ -1995,7 +2389,7 @@ def get_numeric_rules() -> Tuple[
         s = str(rt).strip().lower()
         # 常见写法统一
         s = (s.replace("＞", ">").replace("＜", "<").replace("＝", "=")
-             .replace("～", "~").replace("－", "-"))
+               .replace("～", "~").replace("－", "-"))
         if s in {"gt0", ">0", "大于0"}:
             return "gt0"
         if s in {"ge0", ">=0", "≥0", "大于等于0"}:
@@ -2019,12 +2413,12 @@ def get_numeric_rules() -> Tuple[
 
         for row in rows:
             # --- 全部按列名取值 ---
-            name = (row.get("参数名称") or "").strip()
+            name      = (row.get("参数名称") or "").strip()
             rtype_raw = row.get("规则类型")
-            lo_raw = row.get("最小值")
-            hi_raw = row.get("最大值")
-            lo_inc = row.get("含下限")
-            hi_inc = row.get("含上限")
+            lo_raw    = row.get("最小值")
+            hi_raw    = row.get("最大值")
+            lo_inc    = row.get("含下限")
+            hi_inc    = row.get("含上限")
             allow_txt = row.get("允许字面值")
 
             if not name:
@@ -2068,6 +2462,8 @@ def get_numeric_rules() -> Tuple[
             pass
 
     return gt0_set, ge0_set, range_map, dict(allowed_map)
+
+
 
 
 def clear_guankou_category(product_id, category_label):
@@ -2136,7 +2532,7 @@ def evaluate_visibility_rules_from_db(element_name: str,
             # 先尝试使用完整名称查询
             cursor.execute(sql_main, (element_name,))
             rows = cursor.fetchall() or []
-
+            
             # 如果查询失败，尝试去除"前端"或"后端"前缀后再查询
             # 适用于"前端管箱吊耳"、"后端管箱吊耳"等场景
             if not rows:
@@ -2145,7 +2541,7 @@ def evaluate_visibility_rules_from_db(element_name: str,
                     normalized_name = normalized_name[2:]  # 去除"前端"两个字符
                 elif normalized_name.startswith("后端"):
                     normalized_name = normalized_name[2:]  # 去除"后端"两个字符
-
+                
                 # 如果名称发生了变化，再次尝试查询
                 if normalized_name != element_name:
                     cursor.execute(sql_main, (normalized_name,))
@@ -2179,9 +2575,8 @@ def evaluate_visibility_rules_from_db(element_name: str,
     def _hit_extras(rule_id: int) -> bool:
         conds = extras.get(rule_id, [])
         for c in conds:
-            src = c["src"];
-            name = str(c["name"]).strip()
-            op = (c["op"] or "EQ").upper()
+            src = c["src"]; name = str(c["name"]).strip()
+            op  = (c["op"] or "EQ").upper()
             raw = (c["val"] or "")
             if src == "ENV":
                 cur = env.get(name, "")
@@ -2211,20 +2606,18 @@ def evaluate_visibility_rules_from_db(element_name: str,
     return effects
 
 
-_WHITES = " \t\r\n\u00A0\u3000"  # 半角/全角空白
-_QUOTES = "\"'"  # 中英引号
-
+_WHITES = " \t\r\n\u00A0\u3000"      # 半角/全角空白
+_QUOTES = "\"'"                 # 中英引号
 
 def _norm_name(s: str) -> str:
     if s is None:
         return ""
     s = str(s)
-    s = re.sub(r"[：:]\s*$", "", s)  # 去末尾冒号
-    s = re.sub(r"[（(].*?[)）]\s*$", "", s)  # 去末尾括号（常见单位/说明）
+    s = re.sub(r"[：:]\s*$", "", s)           # 去末尾冒号
+    s = re.sub(r"[（(].*?[)）]\s*$", "", s)   # 去末尾括号（常见单位/说明）
     s = s.strip(_WHITES + _QUOTES)
     s = re.sub(rf"[{re.escape(_WHITES)}]+", "", s)  # 折叠并去掉全/半角空白
     return s
-
 
 def _cell_text(t: QTableWidget, r: int, c: int) -> str:
     w = t.cellWidget(r, c)
@@ -2234,7 +2627,6 @@ def _cell_text(t: QTableWidget, r: int, c: int) -> str:
         return (w.text() or "").strip()
     it = t.item(r, c)
     return (it.text().strip() if it else "")
-
 
 def _is_empty(val: str) -> bool:
     if val is None:
@@ -2272,6 +2664,7 @@ def query_required_paramlist_csv(part_name: str) -> set:
         conn.close()
 
 
+
 def query_guankou_affiliation(product_id, guankou_code):
     """安全查询管口归属"""
     affiliation = None
@@ -2292,7 +2685,7 @@ def query_guankou_affiliation(product_id, guankou_code):
                 elem_type = (raw_elem or "").strip().lower()
                 if "管" in elem_type:
                     affiliation = "管程"
-                elif "壳" in elem_type or "外头盖" in elem_type:  # 加上外头盖，取壳程数值，是AES和BES新加的
+                elif "壳" in elem_type or "外头盖" in elem_type:      # 加上外头盖，取壳程数值，是AES和BES新加的
                     affiliation = "壳程"
                 print(f"[调试] 产品ID={product_id}, 管口={guankou_code}, 数据库值='{raw_elem}', 归类='{affiliation}'")
             else:
@@ -2300,11 +2693,168 @@ def query_guankou_affiliation(product_id, guankou_code):
     except Exception as e:
         print(f"[异常] 查询管口 {guankou_code} 归属失败: {e}")
     finally:
-        try:
-            conn.close()
-        except:
-            pass
+        try: conn.close()
+        except: pass
     return affiliation
+
+
+def update_guankou_corrosion_to_category_table(product_id: str, code_to_value: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    将“接管腐蚀裕量1/2/3”按【管口代号】逐个写入 产品设计活动表_管口类别表。
+
+    说明：
+    - 该表通常已存在每个管口代号的行（由管口定义/材料定义插入）。
+    - 这里仅做 UPDATE；若用户尚未在库里新增字段“接管腐蚀裕量1/2/3”，会捕获异常并打印警告，不影响主流程。
+
+    Args:
+        product_id: 产品ID
+        code_to_value: {管口代号: 接管腐蚀裕量(字符串或可转字符串)}，会同时写入 1/2/3 三列。
+
+    Returns:
+        {"updated": int, "requested": int}
+    """
+    if not product_id or not code_to_value:
+        return {"updated": 0, "requested": 0}
+
+    conn = None
+    updated = 0
+    try:
+        conn = pymysql.connect(**db_config_1)
+        with conn.cursor() as cursor:
+            # 说明：
+            # - 对于“条件输入 → 初次写入/覆盖”的场景，会传入完整的三列值，此时希望三列都被覆盖；
+            # - 对于“元件界面只改了部分列”的场景，会传入类似 (3,"","")，
+            #   此时我们只想更新非空列，空字符串代表“保持原值”。
+            sql = """
+                UPDATE 产品设计活动表_管口类别表
+                SET 接管腐蚀裕量1 = CASE
+                        WHEN %s = '' OR %s IS NULL THEN 接管腐蚀裕量1
+                        ELSE %s
+                    END,
+                    接管腐蚀裕量2 = CASE
+                        WHEN %s = '' OR %s IS NULL THEN 接管腐蚀裕量2
+                        ELSE %s
+                    END,
+                    接管腐蚀裕量3 = CASE
+                        WHEN %s = '' OR %s IS NULL THEN 接管腐蚀裕量3
+                        ELSE %s
+                    END
+                WHERE 产品ID=%s AND 管口代号=%s
+            """
+            # 逐个更新，避免拼接 IN + CASE 的复杂性；数据量通常很小（管口数）
+            for code, v in code_to_value.items():
+                nozzle_code = (code or "").strip()
+                if not nozzle_code:
+                    continue
+
+                # 支持三种写法：
+                # 1) 单值：v="3"            → 三列都写 3
+                # 2) 序列：v=("3","4","5")  → 分别写入 1/2/3 列
+                # 3) 字典：v={1:"3",2:"4",3:"5"} 或 {"1":"3",...}
+                val1 = val2 = val3 = ""
+                if isinstance(v, (list, tuple)) and len(v) >= 3:
+                    val1 = "" if v[0] is None else str(v[0])
+                    val2 = "" if v[1] is None else str(v[1])
+                    val3 = "" if v[2] is None else str(v[2])
+                elif isinstance(v, dict):
+                    def _pick(d, k1, k2):
+                        if k1 in d:
+                            return "" if d[k1] is None else str(d[k1])
+                        if k2 in d:
+                            return "" if d[k2] is None else str(d[k2])
+                        return ""
+                    val1 = _pick(v, 1, "1")
+                    val2 = _pick(v, 2, "2")
+                    val3 = _pick(v, 3, "3")
+                else:
+                    val = "" if v is None else str(v)
+                    val1 = val2 = val3 = val
+
+                # 注意：SQL 中每列用了两次占位符（判断是否为空 + 实际写入），因此需要按顺序传 3*3 + 2 个参数
+                cursor.execute(
+                    sql,
+                    (
+                        val1, val1, val1,
+                        val2, val2, val2,
+                        val3, val3, val3,
+                        product_id, nozzle_code,
+                    ),
+                )
+                # rowcount：0=未命中（可能该管口行不存在）
+                if cursor.rowcount and cursor.rowcount > 0:
+                    updated += 1
+        conn.commit()
+        return {"updated": updated, "requested": len(code_to_value)}
+    except Exception as e:
+        # 兼容：字段未新增/权限不足/库结构不同 → 不阻断保存
+        try:
+            if conn:
+                conn.rollback()
+        except Exception:
+            pass
+        print(f"[警告] 写入产品设计活动表_管口类别表.接管腐蚀裕量失败: {e}")
+        return {"updated": 0, "requested": len(code_to_value)}
+    finally:
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
+
+
+def update_guankou_opening_weld_joint_coeff_to_category_table(product_id: str,
+                                                             code_to_value: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    将“所属元件开孔处焊接接头系数”按【管口代号】逐个写入 产品设计活动表_管口类别表。
+
+    说明：
+    - 该表通常已存在每个管口代号的行（由管口定义/材料定义插入）。
+    - 这里仅做 UPDATE；若字段不存在/权限不足，会捕获异常并打印警告，不影响主流程。
+
+    Args:
+        product_id: 产品ID
+        code_to_value: {管口代号: 系数(字符串或可转字符串)}
+
+    Returns:
+        {"updated": int, "requested": int}
+    """
+    if not product_id or not code_to_value:
+        return {"updated": 0, "requested": 0}
+
+    conn = None
+    updated = 0
+    try:
+        conn = pymysql.connect(**db_config_1)
+        with conn.cursor() as cursor:
+            sql = """
+                UPDATE 产品设计活动表_管口类别表
+                SET 所属元件开孔处焊接接头系数 = %s
+                WHERE 产品ID=%s AND 管口代号=%s
+            """
+            for code, v in code_to_value.items():
+                nozzle_code = (code or "").strip()
+                if not nozzle_code:
+                    continue
+                val = "" if v is None else str(v)
+                cursor.execute(sql, (val, product_id, nozzle_code))
+                if cursor.rowcount and cursor.rowcount > 0:
+                    updated += 1
+        conn.commit()
+        return {"updated": updated, "requested": len(code_to_value)}
+    except Exception as e:
+        try:
+            if conn:
+                conn.rollback()
+        except Exception:
+            pass
+        print(f"[警告] 写入产品设计活动表_管口类别表.所属元件开孔处焊接接头系数失败: {e}")
+        return {"updated": 0, "requested": len(code_to_value)}
+    finally:
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
 
 
 def query_guankou_codes(product_id, category_label):
@@ -2413,7 +2963,7 @@ def diff_product_vs_template(prod_map: dict, tpl_map: dict) -> list:
     返回差异列表：[{name, field, old, new}, ...]
     """
     diffs = []
-    FIELDS = ("材料类型", "材料牌号", "材料标准", "供货状态", "是否覆层")
+    FIELDS = ("材料类型","材料牌号","材料标准","供货状态","是否覆层")
 
     # 以"产品当前已存在的元件"为主做对比
     for name, pvals in prod_map.items():
@@ -2427,7 +2977,6 @@ def diff_product_vs_template(prod_map: dict, tpl_map: dict) -> list:
             if pv != tv:
                 diffs.append({"name": name, "field": f, "old": pv, "new": tv})
     return diffs
-
 
 def query_template_name_by_product(product_id: str) -> str:
     """
@@ -2451,6 +3000,7 @@ def query_template_name_by_product(product_id: str) -> str:
         conn.close()
 
 
+
 def _normalize_seg(s: str) -> str:
     if not s: return ""
     s = str(s).strip()
@@ -2470,7 +3020,6 @@ def _normalize_seg(s: str) -> str:
     # 去掉所有空格
     s = re.sub(r'\s+', '', s)
     return s
-
 
 def _parse_range_text_to_bounds(txt: str):
     """
@@ -2509,21 +3058,19 @@ def _parse_range_text_to_bounds(txt: str):
     mL = re.fullmatch(r'(>=|>|<=|<)?(-?\d+(\.\d+)?)', left)
     if not mL:
         return (None, None, True, True)
-    opL = mL.group(1) or '>='  # 缺省 >=
-    nL = float(mL.group(2))
+    opL = mL.group(1) or '>='   # 缺省 >=
+    nL  = float(mL.group(2))
 
     # 解析右段
     mR = re.fullmatch(r'(>=|>|<=|<)?(-?\d+(\.\d+)?)', right)
     if not mR:
         return (None, None, True, True)
-    opR = mR.group(1) or '<='  # 缺省 <=
-    nR = float(mR.group(2))
+    opR = mR.group(1) or '<='   # 缺省 <=
+    nR  = float(mR.group(2))
 
     # 左端
-    if opL == '>=':
-        lo, lo_inc = nL, True
-    elif opL == '>':
-        lo, lo_inc = nL, False
+    if opL == '>=': lo, lo_inc = nL, True
+    elif opL == '>': lo, lo_inc = nL, False
     elif opL == '<=':  # 少见，但给出合理解释：x <= nL … 与右端一起由 _in_range 处理
         lo, lo_inc = None, True
         # 这种写法通常是笔误，这里不强行抛错
@@ -2533,10 +3080,8 @@ def _parse_range_text_to_bounds(txt: str):
         lo, lo_inc = nL, True
 
     # 右端
-    if opR == '<=':
-        hi, hi_inc = nR, True
-    elif opR == '<':
-        hi, hi_inc = nR, False
+    if opR == '<=': hi, hi_inc = nR, True
+    elif opR == '<': hi, hi_inc = nR, False
     elif opR == '>=':
         hi, hi_inc = None, True
     elif opR == '>':
@@ -2547,13 +3092,14 @@ def _parse_range_text_to_bounds(txt: str):
     return (lo, hi, lo_inc, hi_inc)
 
 
+
 def _in_range(x: float, lo, hi, lo_inc: bool, hi_inc: bool) -> bool:
     if lo is not None:
         if lo_inc and not (x >= lo): return False
-        if not lo_inc and not (x > lo): return False
+        if not lo_inc and not (x >  lo): return False
     if hi is not None:
         if hi_inc and not (x <= hi): return False
-        if not hi_inc and not (x < hi): return False
+        if not hi_inc and not (x <  hi): return False
     return True
 
 
@@ -2584,7 +3130,7 @@ def query_tube_specs_by_level_and_od(bundle_level: str, tube_od_mm: float) -> di
                     if not isinstance(v, str): return False
                     s = v.strip()
                     # 兼容 -, ~, ～, 至 以及全/半角比较符
-                    return any(ch in s for ch in ['≤', '≥', '<', '>', '-', '~', '～', '至']) and len(s) <= 24
+                    return any(ch in s for ch in ['≤','≥','<','>','-','~','～','至']) and len(s) <= 24
 
                 # 优先用"分档条序"列名；没有则自动识别
                 range_col = "分档条序" if "分档条序" in cols else None
@@ -2592,8 +3138,7 @@ def query_tube_specs_by_level_and_od(bundle_level: str, tube_od_mm: float) -> di
                     for c in cand_cols:
                         vv = str(rows[0].get(c) or "")
                         if looks_like_range(vv):
-                            range_col = c;
-                            break
+                            range_col = c; break
                     if not range_col and cand_cols:
                         range_col = cand_cols[0]
 
@@ -2638,7 +3183,6 @@ def _first_nonempty(*vals):
             return str(v).strip()
     return ""
 
-
 def _normalize_dn(s):
     if not s: return ""
     try:
@@ -2647,7 +3191,6 @@ def _normalize_dn(s):
     except Exception:
         return s
 
-
 def get_dn_by_side(product_id: str, side: str) -> str:
     """
     DN 从《产品设计活动表_设计数据表》读取：
@@ -2655,7 +3198,7 @@ def get_dn_by_side(product_id: str, side: str) -> str:
       side: '管程'取管程数值，'壳程'取壳程数值，其他 -> 先管程、空则壳程
     """
     dn_names = ("公称直径DN", "公称直径*", "公称直径")
-    prefer_tube = "管程" in (side or "")
+    prefer_tube  = "管程" in (side or "")
     prefer_shell = "壳程" in (side or "")
 
     conn = get_connection(**db_config_1)
@@ -2670,7 +3213,7 @@ def get_dn_by_side(product_id: str, side: str) -> str:
     finally:
         conn.close()
 
-    idx = {(r.get("参数名称") or "").strip(): (r.get("管程数值"), r.get("壳程数值")) for r in rows}
+    idx = { (r.get("参数名称") or "").strip(): (r.get("管程数值"), r.get("壳程数值")) for r in rows }
     for nm in dn_names:
         if nm in idx:
             tube, shell = idx[nm]
@@ -2684,8 +3227,7 @@ def get_dn_by_side(product_id: str, side: str) -> str:
     return ""
 
 
-def query_gasket_material_options_by_type_std(gasket_type: str, gasket_standard: str,
-                                              gasket_material: str = "") -> dict:
+def query_gasket_material_options_by_type_std(gasket_type: str, gasket_standard: str, gasket_material: str = "") -> dict:
     """
     返回:
     {
@@ -2714,8 +3256,7 @@ def query_gasket_material_options_by_type_std(gasket_type: str, gasket_standard:
                     ORDER BY 垫片材料
                 """
                 cur.execute(sql_mats, (t, st, f"%{st}%"))
-                mats = [(row.get("垫片材料") or "").strip() for row in cur.fetchall() if
-                        (row.get("垫片材料") or "").strip()]
+                mats = [ (row.get("垫片材料") or "").strip() for row in cur.fetchall() if (row.get("垫片材料") or "").strip() ]
 
             # 取 y/m（优先精确命中当前材料；未命中则回退类型+标准）
             ym = {}
@@ -2771,6 +3312,10 @@ def query_gasket_material_options_by_type_std(gasket_type: str, gasket_standard:
         conn.close()
 
 
+
+
+
+
 # [性能优化] 设计压力行集查询结果按产品ID进行进程内缓存
 def _fetch_design_rows(product_id: str):
     key = product_id
@@ -2793,21 +3338,19 @@ def _fetch_design_rows(product_id: str):
     finally:
         conn.close()
 
-
 _PN_NAME_CANDIDATES = ("设计压力*", "设计压力", "公称压力PN", "公称压力", "压力等级PN", "压力等级")
-
 
 def get_design_pressure_side(product_id: str, side: str) -> str:
     """
     侧别：'管程'取管程值，'壳程'取壳程值，其他 -> 先管程空则壳程
     参数名按 _PN_NAME_CANDIDATES 的优先级依次尝试。
     """
-    prefer_tube = "管程" in (side or "")
+    prefer_tube  = "管程" in (side or "")
     prefer_shell = "壳程" in (side or "")
 
     rows = _fetch_design_rows(product_id)
     # 建一个 name -> (tube, shell) 的索引
-    idx = {(r.get("参数名称") or "").strip(): (r.get("管程数值"), r.get("壳程数值")) for r in rows}
+    idx = { (r.get("参数名称") or "").strip(): (r.get("管程数值"), r.get("壳程数值")) for r in rows }
 
     for nm in _PN_NAME_CANDIDATES:
         if nm in idx:
@@ -2819,13 +3362,12 @@ def get_design_pressure_side(product_id: str, side: str) -> str:
             return _first_nonempty(tube, shell)
     return ""
 
-
 def get_design_pressure_max(product_id: str) -> str:
     """
     浮头法兰/钩圈：两侧取最大；读不到时按"先管程空则壳程"。
     """
     rows = _fetch_design_rows(product_id)
-    idx = {(r.get("参数名称") or "").strip(): (r.get("管程数值"), r.get("壳程数值")) for r in rows}
+    idx = { (r.get("参数名称") or "").strip(): (r.get("管程数值"), r.get("壳程数值")) for r in rows }
 
     for nm in _PN_NAME_CANDIDATES:
         if nm in idx:
@@ -2839,6 +3381,8 @@ def get_design_pressure_max(product_id: str) -> str:
             # 解析失败就按非空优先返回
             return _first_nonempty(tube, shell)
     return ""
+
+
 
 
 def get_dn_for_outer_head_cylinder(product_id: str) -> str:
@@ -2882,6 +3426,9 @@ def get_dn_for_outer_head_cylinder(product_id: str) -> str:
         conn.close()
 
 
+
+
+
 # [性能优化] 垫片-法兰映射按垫片名称缓存，减少重复读取
 def get_gasket_mapping(gasket_name: str) -> dict:
     """
@@ -2906,7 +3453,7 @@ def get_gasket_mapping(gasket_name: str) -> dict:
             """, (gasket_name.strip(),))
             row = cur.fetchone()
             if row:
-                res["flange"] = (row.get("配套法兰") or "").strip()
+                res["flange"]      = (row.get("配套法兰") or "").strip()
                 res["flange_side"] = (row.get("法兰管壳程") or "").strip()
                 res["gasket_side"] = (row.get("垫片管壳程") or "").strip()
     finally:
@@ -2970,13 +3517,14 @@ def get_pn_for_gasket(product_id: str, gasket_name: str) -> str:
       - 否则 -> 按"法兰管壳程"取对应侧《设计压力*》
     """
     m = get_gasket_mapping(gasket_name or "")
-    flange = m.get("flange", "")
+    flange      = m.get("flange", "")
     flange_side = m.get("flange_side", "")
     print(f"f{flange}")
 
     if flange in {"浮头法兰", "钩圈"}:
         return get_design_pressure_max(product_id)
     return get_design_pressure_side(product_id, flange_side)
+
 
 
 # [性能优化] 垫片类型到代号的映射按类型缓存
@@ -3008,11 +3556,10 @@ def map_gasket_type_code_from_db(gasket_type: str) -> str:
 _GASKET_NAME_CODE_MAP = {
     "管箱垫片": "G-T-C",
     "平盖垫片": "G-T-C",
-    "管箱侧垫片": "G-T-C",  # 示例
+    "管箱侧垫片": "G-T-C",   # 示例
     "浮头垫片": "F",
     "外头盖垫片": "W"
 }
-
 
 def map_gasket_name_code(gasket_name: str) -> str:
     """
@@ -3021,12 +3568,11 @@ def map_gasket_name_code(gasket_name: str) -> str:
     return _GASKET_NAME_CODE_MAP.get((gasket_name or "").strip(), "")
 
 
+
+
 # 《垫片尺寸》主表
 _GSK_TBL_SIZE = "垫片尺寸"
-
-
 def _like(tok: str) -> str: return f"%{tok}%" if tok else "%"
-
 
 # [性能优化] 《垫片尺寸》检索按(DN, PN, CS, ST, GP)组合键缓存
 def query_gasket_D_d_d1_from_size(*, dn: str, pn: str, cs_code: str, st_abbr: str, gp_code: str) -> dict:
@@ -3068,8 +3614,8 @@ def query_gasket_D_d_d1_from_size(*, dn: str, pn: str, cs_code: str, st_abbr: st
             row = cur.fetchone()
             if row:
                 spec = {
-                    "外直径D": "" if row.get("外直径D") is None else str(row.get("外直径D")),
-                    "内直径d": "" if row.get("内直径d") is None else str(row.get("内直径d")),
+                    "外直径D":  "" if row.get("外直径D")  is None else str(row.get("外直径D")),
+                    "内直径d":  "" if row.get("内直径d")  is None else str(row.get("内直径d")),
                     "环内径d1": "" if row.get("环内径d1") is None else str(row.get("环内径d1")),
                     "nonstd": False, "msg": ""
                 }
@@ -3089,8 +3635,8 @@ def query_gasket_D_d_d1_from_size(*, dn: str, pn: str, cs_code: str, st_abbr: st
             row = cur.fetchone()
             if row:
                 spec = {
-                    "外直径D": "" if row.get("外直径D") is None else str(row.get("外直径D")),
-                    "内直径d": "" if row.get("内直径d") is None else str(row.get("内直径d")),
+                    "外直径D":  "" if row.get("外直径D")  is None else str(row.get("外直径D")),
+                    "内直径d":  "" if row.get("内直径d")  is None else str(row.get("内直径d")),
                     "环内径d1": "" if row.get("环内径d1") is None else str(row.get("环内径d1")),
                     "nonstd": False,
                     "msg": f"未找到PN={pn}的记录，已取大于它的最小PN={row.get('压力等级PN')}"
@@ -3107,6 +3653,7 @@ def query_gasket_D_d_d1_from_size(*, dn: str, pn: str, cs_code: str, st_abbr: st
             return spec
     finally:
         conn.close()
+
 
 
 def query_element_name_param_value(product_id: str, element_name: str, param_name: str):
@@ -3127,7 +3674,6 @@ def query_element_name_param_value(product_id: str, element_name: str, param_nam
     finally:
         conn.close()
 
-
 def invalidate_caches_for_product(product_id: str):
     try:
         _DESIGN_ROWS_CACHE.pop(product_id, None)
@@ -3147,7 +3693,6 @@ def invalidate_caches_for_product(product_id: str):
                 _FLANGE_MATERIAL_CACHE.pop(k, None)
     except Exception:
         pass
-
 
 # [性能优化] 推荐PN按(产品ID, 垫片名称)缓存计算结果
 def compute_pn_for_gasket(product_id: str, gasket_name: str):
@@ -3180,8 +3725,7 @@ def compute_pn_for_gasket(product_id: str, gasket_name: str):
             side_print = side
         material = _get_flange_material_by_name(product_id, flange_name)
         pv = _compute_pn_inline(material, T, P)
-        print(
-            f"[垫片尺寸PN][逐条] 垫片={gasket_name}, 法兰={flange_name}, 侧别={side_print}, 材料={material}, P={P}, T={T}, 计算PN={pv if pv is not None else 'None'}")
+        print(f"[垫片尺寸PN][逐条] 垫片={gasket_name}, 法兰={flange_name}, 侧别={side_print}, 材料={material}, P={P}, T={T}, 计算PN={pv if pv is not None else 'None'}")
         if pv is not None:
             pn_map[flange_name] = pv
             pn_vals.append(pv)
@@ -3207,13 +3751,12 @@ def compute_pn_for_gasket(product_id: str, gasket_name: str):
     _COMPUTE_PN_CACHE[key] = pn_inline
     return pn_inline
 
-
 def resolve_gasket_dimensions(
-        product_id: str,
-        gasket_name: str,  # 页面"垫片名称"（没有就用元件名）
-        gasket_standard: str,  # ★ 页面"垫片标准"，直接作为 ST 使用
-        gasket_type: str,  # 页面"垫片型式/垫片类型"
-        pn: str = None  # ★ 优先使用界面/调用传入的公称压力PN；为空则按材料/温度/压力即时计算
+    product_id: str,
+    gasket_name: str,      # 页面"垫片名称"（没有就用元件名）
+    gasket_standard: str,  # ★ 页面"垫片标准"，直接作为 ST 使用
+    gasket_type: str,      # 页面"垫片型式/垫片类型"
+    pn: str = None         # ★ 优先使用界面/调用传入的公称压力PN；为空则按材料/温度/压力即时计算
 ) -> dict:
     """
     流程：
@@ -3261,7 +3804,6 @@ def resolve_gasket_dimensions(
         pass
     return spec
 
-
 def _get_design_temperature_side(product_id: str, side: str) -> str:
     prefer_tube = "管程" in (side or "")
     prefer_shell = "壳程" in (side or "")
@@ -3277,7 +3819,7 @@ def _get_design_temperature_side(product_id: str, side: str) -> str:
                 (product_id,)
             )
             rows = cur.fetchall() or []
-            idx = {(r.get("参数名称") or "").strip(): (r.get("管程数值"), r.get("壳程数值")) for r in rows}
+            idx = { (r.get("参数名称") or "").strip(): (r.get("管程数值"), r.get("壳程数值")) for r in rows }
             tube, shell = idx.get("设计温度（最高）*", (None, None))
             if prefer_tube:
                 return _first_nonempty(tube, shell)
@@ -3286,7 +3828,6 @@ def _get_design_temperature_side(product_id: str, side: str) -> str:
             return _first_nonempty(tube, shell)
     finally:
         conn.close()
-
 
 # [性能优化] 法兰材料牌号按(产品ID, 法兰名称)缓存
 def _get_flange_material_by_name(product_id: str, flange_name: str) -> str:
@@ -3331,7 +3872,6 @@ def _get_flange_material_by_name(product_id: str, flange_name: str) -> str:
     finally:
         conn.close()
 
-
 def _compute_pn_inline(material: str, T: str, P: str):
     try:
         if not material:
@@ -3351,7 +3891,6 @@ def _compute_pn_inline(material: str, T: str, P: str):
         conn.close()
     if not rows:
         return None
-
     def _get_col(row, temp):
         for k in row.keys():
             try:
@@ -3360,7 +3899,6 @@ def _compute_pn_inline(material: str, T: str, P: str):
             except Exception:
                 continue
         return None
-
     temp_cols = [float(k) for k in rows[0].keys() if k not in ("Name", "PN", "DNmin", "DNmax", "Tmin", "Tmax")]
     temp_cols.sort()
     candidate = None
@@ -3401,7 +3939,6 @@ def update_extra_param_value_by_name(product_id: str, param_name: str, value: st
     finally:
         conn.close()
 
-
 def sync_baffle_thickness_to_db(product_id: str, names: set, value: str):
     """把同一个值写入同一产品下 names 里所有'厚度'参数。"""
     if not product_id or not names:
@@ -3428,10 +3965,10 @@ def update_spacer_tube_status_to_undefined(product_id: str):
     """
     if not product_id:
         return
-
+    
     # 定距管相关元件名称
     spacer_tube_components = ["挡管", "堵板", "滑道"]  # 可以根据实际需要调整
-
+    
     conn = get_connection(**db_config_1)
     try:
         with conn.cursor() as cur:
@@ -3441,10 +3978,10 @@ def update_spacer_tube_status_to_undefined(product_id: str):
                 SET 定义状态 = '未定义' 
                 WHERE 产品ID = %s AND 元件名称 IN ({})
             """.format(','.join(['%s'] * len(spacer_tube_components)))
-
+            
             params = [product_id] + spacer_tube_components
             cur.execute(sql, params)
-
+            
         conn.commit()
     except Exception as e:
         print(f"[定距管状态更新失败] {e}")
@@ -3460,10 +3997,10 @@ def restore_spacer_tube_status_to_defined(product_id: str):
     """
     if not product_id:
         return
-
+    
     # 定距管相关元件名称
     spacer_tube_components = ["挡管", "堵板", "滑道"]  # 可以根据实际需要调整
-
+    
     conn = get_connection(**db_config_1)
     try:
         with conn.cursor() as cur:
@@ -3473,18 +4010,19 @@ def restore_spacer_tube_status_to_defined(product_id: str):
                 SET 定义状态 = '已定义' 
                 WHERE 产品ID = %s AND 元件名称 IN ({})
             """.format(','.join(['%s'] * len(spacer_tube_components)))
-
+            
             params = [product_id] + spacer_tube_components
             cur.execute(sql, params)
-
+            
             print(f"[定距管状态恢复] 产品 {product_id} 的定距管元件已恢复为已定义: {spacer_tube_components}")
-
+            
         conn.commit()
     except Exception as e:
         print(f"[定距管状态恢复失败] {e}")
         conn.rollback()
     finally:
         conn.close()
+
 
 
 def get_template_merged_para_element_ids(template_id):
@@ -3502,6 +4040,8 @@ def get_template_merged_para_element_ids(template_id):
             return [row['元件ID'] for row in result]
     finally:
         connection.close()
+
+
 
 
 def insert_or_update_element_merged_para_data(product_id, element_id, merged_para_info, template_name):
@@ -3548,6 +4088,9 @@ def insert_or_update_element_merged_para_data(product_id, element_id, merged_par
         connection.close()
 
 
+
+
+
 def batch_insert_element_merged_para_data(product_id, template_id, template_name):
     """批量处理模板中所有有附加参数合并表的元件"""
     # 获取所有需要处理的元件ID
@@ -3572,6 +4115,8 @@ def batch_insert_element_merged_para_data(product_id, template_id, template_name
             continue
 
     print(f"[批量处理] 完成所有元件的附加参数合并表数据处理")
+
+
 
 
 # 11.16设备法兰
@@ -3622,8 +4167,7 @@ def get_fastener_component_options_by_template_id(template_id):
                     (form_val,)
                 )
                 rows = cur.fetchall()
-                vals = [str(r.get("元件所属选项") or "").strip() for r in rows if
-                        str(r.get("元件所属选项") or "").strip()]
+                vals = [str(r.get("元件所属选项") or "").strip() for r in rows if str(r.get("元件所属选项") or "").strip()]
                 if vals:
                     import re
                     parsed = None
@@ -3633,7 +4177,7 @@ def get_fastener_component_options_by_template_id(template_id):
                         j = s2.rfind("]")
                         if i != -1 and j != -1 and i < j:
                             try:
-                                arr = json.loads(s2[i:j + 1])
+                                arr = json.loads(s2[i:j+1])
                                 if isinstance(arr, list):
                                     parsed = [str(x).strip() for x in arr if str(x).strip()]
                                     break
