@@ -1451,7 +1451,6 @@ class TubeLayoutEditor(QMainWindow):
     def current_centers(self, value):
         self._current_centers = value
         self.update_total_holes_count()
-        self.update_tube_nums()
 
         # 每次 current_centers 变化时，更新 R 值和最小非0 R值
         # 确保 hole_distribution_table 已经创建（避免初始化时出错）
@@ -2115,6 +2114,13 @@ class TubeLayoutEditor(QMainWindow):
             total = 980
 
         self.total_holes_label.setText(f"总管孔数量: {total}")
+        # 右侧管孔数量分布表必须随“当前数据”同步更新：
+        # 许多操作会原地修改 self._current_centers（不触发 setter），但会调用 update_total_holes_count。
+        try:
+            if hasattr(self, "hole_distribution_table") and self.hole_distribution_table is not None:
+                self.update_tube_nums()
+        except Exception:
+            pass
 
     def toggle_arrange_text(self):
         """切换按钮文字（按行排列 <-> 按列排列）并更新表格数据"""
@@ -3923,6 +3929,112 @@ class TubeLayoutEditor(QMainWindow):
                             )
                             self.hide_specific_params(hidden_params)
                             self.update_leftpad_params()
+                            # 强制把关键行文本写回表格，避免旧值残留（例如仍显示200）
+                            try:
+                                _critical = {}
+                                for _p in processed_params:
+                                    if not isinstance(_p, dict):
+                                        continue
+                                    _n = str(_p.get("参数名", "")).strip()
+                                    if _n in ("公称直径 DN", "壳体内直径 Dis", "管箱内直径 Dit"):
+                                        _v = _p.get("参数值", "")
+                                        _critical[_n] = "" if _v is None else str(_v).strip()
+
+                                for _row in range(self.param_table.rowCount()):
+                                    name_item = self.param_table.item(_row, 1)
+                                    if not name_item:
+                                        continue
+                                    _n = name_item.text().strip()
+                                    if _n not in _critical:
+                                        continue
+                                    w = self.param_table.cellWidget(_row, 2)
+                                    if isinstance(w, QComboBox):
+                                        idx = w.findText(_critical[_n])
+                                        if idx >= 0:
+                                            w.setCurrentIndex(idx)
+                                        else:
+                                            # 某些下拉框不可编辑时 setEditText 不生效：直接插入并选中
+                                            try:
+                                                w.addItem(_critical[_n])
+                                                w.setCurrentIndex(w.count() - 1)
+                                            except Exception:
+                                                w.setEditText(_critical[_n])
+                                    else:
+                                        it = self.param_table.item(_row, 2)
+                                        if it is None:
+                                            it = QTableWidgetItem()
+                                            self.param_table.setItem(_row, 2, it)
+                                        it.setText(_critical[_n])
+
+                                self.param_table.viewport().update()
+                                self.param_table.updateGeometry()
+                            except Exception:
+                                pass
+
+                            # DN 可能已从设计数据表覆盖，而 Dis 仍保留布管参数表旧值；「否」时应与 DN 对齐
+                            try:
+                                self.update_DN_Di()
+                            except Exception as _ud_e:
+                                print(f"[load_initial_data] update_DN_Di: {_ud_e}")
+
+                            # 定位输出：读回界面上实际显示的 DN/Dis/Dit（立即 + 延迟一拍）
+                            try:
+                                def _read_display(name: str):
+                                    for _r in range(self.param_table.rowCount()):
+                                        ni = self.param_table.item(_r, 1)
+                                        if ni and ni.text().strip() == name:
+                                            cw = self.param_table.cellWidget(_r, 2)
+                                            if isinstance(cw, QComboBox):
+                                                return cw.currentText()
+                                            it = self.param_table.item(_r, 2)
+                                            return it.text() if it else None
+                                    return None
+
+                                print(
+                                    "[DN刷新检查][立即] "
+                                    f"DN={_read_display('公称直径 DN')}, "
+                                    f"Dis={_read_display('壳体内直径 Dis')}, "
+                                    f"Dit={_read_display('管箱内直径 Dit')}"
+                                )
+                                from PyQt5.QtCore import QTimer
+
+                                def _later():
+                                    try:
+                                        print(
+                                            "[DN刷新检查][延迟] "
+                                            f"DN={_read_display('公称直径 DN')}, "
+                                            f"Dis={_read_display('壳体内直径 Dis')}, "
+                                            f"Dit={_read_display('管箱内直径 Dit')}"
+                                        )
+                                    except Exception:
+                                        pass
+
+                                QTimer.singleShot(0, _later)
+                            except Exception:
+                                pass
+                            # 同步到轴向设计页的全局参数缓存，避免显示旧DN（例如仍显示800）
+                            try:
+                                _sync = {}
+                                for _p in processed_params:
+                                    if not isinstance(_p, dict):
+                                        continue
+                                    n = str(_p.get("参数名", "")).strip()
+                                    v = _p.get("参数值", "")
+                                    v = "" if v is None else str(v).strip()
+                                    if n in (
+                                        "公称直径 DN",
+                                        "壳体内直径 Dis",
+                                        "管箱内直径 Dit",
+                                        "换热管外径 do",
+                                        "换热管公称长度 LN",
+                                        "折流板外径",
+                                        "折流板切口方向",
+                                        "折流板要求切口率",
+                                    ):
+                                        _sync[n] = v
+                                update_axial_basic_params(_sync)
+                            except Exception:
+                                pass
                             product_params_loaded = True
                         else:
                             print("没有有效的处理后参数，无法设置参数")
@@ -4736,8 +4848,6 @@ class TubeLayoutEditor(QMainWindow):
 
         # 如果有超出范围的坐标，统一提示一次
         if invalid_centers:
-            from PyQt5.QtWidgets import QMessageBox
-
             count = len(invalid_centers)
             # QMessageBox.warning(
             #     self,
@@ -5838,6 +5948,12 @@ class TubeLayoutEditor(QMainWindow):
 
         self._commit_param_table_open_editor()
 
+        # 初始加载后可能出现：DN 已由设计数据表覆盖，Dis 才由 update_DN_Di 对齐；若此处不先同步则下面读到的仍是旧 Dis
+        try:
+            self.update_DN_Di()
+        except Exception as _ud_e:
+            print(f"[calculate_piping_layout] update_DN_Di: {_ud_e}")
+
         # 1. 读取参数
         DL = None
         do = None
@@ -5907,6 +6023,36 @@ class TubeLayoutEditor(QMainWindow):
                 if conn and conn.open:
                     conn.close()
 
+        # Dis 变化后表中 DL 常仍为上一壳径下的值（如 1128），会导致 draw_layout 中 DL 圆大于 Dis 圆；先按当前 Dis/do 重算再读回
+        try:
+            self.update_tube_layout_circle_dl()
+        except Exception as _dl_sync_e:
+            print(f"[calculate_piping_layout] update_tube_layout_circle_dl: {_dl_sync_e}")
+
+        dl_text_after_sync = None
+        for row in range(table.rowCount()):
+            pname = table.item(row, 1).text() if table.item(row, 1) else ""
+            if pname != "布管限定圆 DL":
+                continue
+            pv = table.cellWidget(row, 2)
+            if pv and isinstance(pv, QComboBox):
+                dl_text_after_sync = pv.currentText().strip()
+            else:
+                it = table.item(row, 2)
+                dl_text_after_sync = (it.text().strip() if it else "") or None
+            if dl_text_after_sync:
+                try:
+                    DL = float(dl_text_after_sync)
+                except (ValueError, TypeError):
+                    pass
+            break
+
+        for rec in self.left_data_pd:
+            if isinstance(rec, dict) and rec.get("参数名") == "布管限定圆 DL":
+                if dl_text_after_sync:
+                    rec["参数值"] = dl_text_after_sync
+                break
+
         # 更新参数表中的DL值
         dl_row = -1
         row_count = self.param_table.rowCount()
@@ -5916,7 +6062,7 @@ class TubeLayoutEditor(QMainWindow):
                 dl_row = row
                 break
 
-        if dl_row != -1:
+        if dl_row != -1 and DL is not None:
             # 临时断开信号避免循环触发
             original_handler = None
             if hasattr(self, "handle_param_change"):
@@ -5926,7 +6072,7 @@ class TubeLayoutEditor(QMainWindow):
                 except:
                     pass
 
-            # 更新布管限定圆 DL
+            # 与 input_json / draw_layout 使用的 DL 数值对齐写回表格（格式统一）
             dl_item = self.param_table.item(dl_row, 2)
             if dl_item:
                 dl_item.setText(f"{DL: .1f}")
@@ -5973,6 +6119,10 @@ class TubeLayoutEditor(QMainWindow):
                 "折流板外径",
                 "折流板切口方向",
                 "折流板要求切口率",
+                "公称直径 DN",
+                "壳体内直径 Dis",
+                "管箱内直径 Dit",
+                "换热管外径 do",
             ]
             for name in params_to_fetch:
                 try:
@@ -6006,9 +6156,8 @@ class TubeLayoutEditor(QMainWindow):
             "分程隔板放置型式": ("LB_ClapboardType", None),
             "管程分程形式": ("LB_Tubeform", None),
             "滑道高度": ("LB_SlipWayHeight", None),
-            "滑道形式": ("LB_SlipWayForm", None),
-            "导轨类型": ("LB_GuideRailType", None),
-            "圆钢规格": ("LB_RoundSteelSpec", None),
+            # 与 calculate_piping 一致：不向布管接口传 滑道形式/导轨类型/圆钢规格（行在 hidden_params 中，
+            # 从隐藏行读入会混入与 calculate_piping 不同的多余字段，接口以精简 input 为准）
             "拉杆直径": ("LB_TieRodD", None),
             "管程程数": ("LB_TubePassCount", None),
             "壳程程数": ("Shell_NumberOfPasses", None),
@@ -11286,13 +11435,13 @@ class TubeLayoutEditor(QMainWindow):
             is_outer_item = self.param_table.item(is_outer_base_row, 2)
             is_outer_base = is_outer_item.text().strip() if is_outer_item else ""
 
-        # 3. 如果为"是"，则不做处理
-        if is_outer_base == "否":
-            print("'是否以外径为基准'为'是'，不更新壳体内直径")
+        # 3. 「是」= 以外径为基准：不强制把壳体内直径改成等于 DN（由接口/其它逻辑维护）
+        if is_outer_base == "是":
+            print("'是否以外径为基准'为'是'，不将壳体内直径强制同步为公称直径 DN")
             return
 
-        # 4. 如果为"否"，则将壳体内直径设为公称直径
-        if is_outer_base == "是":
+        # 4. 「否」：将壳体内直径 Dis 与公称直径 DN 对齐（与函数说明一致）
+        if is_outer_base == "否":
             # 获取公称直径DN的值
             dn_value = None
             dn_widget = self.param_table.cellWidget(dn_row, 2)
@@ -13403,7 +13552,7 @@ class TubeLayoutEditor(QMainWindow):
                         try:
                             # 这里是更新公称直径触发的
                             self.update_divider_position_and_size()
-                            # self.update_DN_Di()
+                            self.update_DN_Di()
                         except Exception as e:
                             print(
                                 f"[on_table_item_changed] update_divider/... 出错: {e}"
@@ -13705,7 +13854,7 @@ class TubeLayoutEditor(QMainWindow):
                 _add_if_missing("放置位置", "参照管中心连线", "")
         except Exception:
             pass
-        print(params)
+        # 避免启动/加载时刷屏输出大量参数
         self.all_params = params
         self.is_loading_data = True
 
@@ -18906,13 +19055,17 @@ class TubeLayoutEditor(QMainWindow):
                 if isinstance(output_obj, str):
                     output_obj = json.loads(output_obj)
                 if isinstance(output_obj, dict):
-                    # 接口里实际字段：TubesCount
+                    try:
+                        _tc_only = output_obj.get("TubesCount", None)
+                        if _tc_only is not None and str(_tc_only).strip() != "":
+                            print(f"[on_buguan_bt_click] TubesCount = {_tc_only}")
+                    except Exception:
+                        pass
+                    # 满管数量：优先 TubesCount，缺省兼容旧字段 DL
                     tc = output_obj.get("TubesCount", None)
+                    if tc is None or str(tc).strip() == "":
+                        tc = output_obj.get("DL", None)
                     if tc is not None and str(tc) != "":
-                        try:
-                            print(f"[on_buguan_bt_click] TubesCount = {tc}")
-                        except Exception:
-                            pass
                         total_tubes = int(float(tc))
 
                 if (
@@ -24632,14 +24785,14 @@ class TubeLayoutEditor(QMainWindow):
         #         f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
         #     )
 
-        # 公称直径写回产品设计活动表_设计数据表
-        if cross_params["公称直径 DN"] is not None:
-            design_table = "`产品设计活动表_设计数据表`"
-            safe_dn_value = escape_str(cross_params["公称直径 DN"])
-            sql_statements.append(
-                f"UPDATE {design_table} SET `壳程数值` = '{safe_dn_value}' "
-                f"WHERE `产品ID` = '{productID}' AND `参数名称` LIKE '公称直径%'"
-            )
+        # # 公称直径写回产品设计活动表_设计数据表
+        # if cross_params["公称直径 DN"] is not None:
+        #     design_table = "`产品设计活动表_设计数据表`"
+        #     safe_dn_value = escape_str(cross_params["公称直径 DN"])
+        #     sql_statements.append(
+        #         f"UPDATE {design_table} SET `壳程数值` = '{safe_dn_value}' "
+        #         f"WHERE `产品ID` = '{productID}' AND `参数名称` LIKE '公称直径%'"
+        #     )
         # if cross_params["壳体内直径 Dis"] is not None:
         #     design_table = "`产品设计活动表_设计数据表`"
         #     safe_dn_value = escape_str(cross_params["壳体内直径 Dis"])
@@ -30386,7 +30539,6 @@ class TubeLayoutEditor(QMainWindow):
                 invalid_centers.append(center)
 
         if invalid_centers:
-            from PyQt5.QtWidgets import QMessageBox
             QMessageBox.warning(
                 self,
                 "警告",
@@ -30651,8 +30803,6 @@ class TubeLayoutEditor(QMainWindow):
                 invalid_centers.append(center)
 
         if invalid_centers:
-            from PyQt5.QtWidgets import QMessageBox
-
             # QMessageBox.warning(
             #     self,
             #     "警告",
