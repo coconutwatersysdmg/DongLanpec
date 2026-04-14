@@ -2078,36 +2078,14 @@ class TubeLayoutEditor(QMainWindow):
     def update_total_holes_count(self):
         """更新“总管孔数量”提示。
 
-        布管完成后：优先使用接口返回的满布总数（self.output_data['TubesCount']）
-        替代 current_centers 的长度（因为 current_centers 可能已经扣除了非布管区域）。
+        统一按当前界面上的实际换热管数量（current_centers）更新，
+        避免接口返回值与当前画面状态不一致。
         """
         total = None
         try:
             total = len(getattr(self, "current_centers", []) or [])
         except Exception:
             total = 0
-
-        # 布管完成后：优先读取满布状态总换热管数量
-        if getattr(self, "has_piped", False):
-            try:
-                import json
-
-                output_obj = getattr(self, "output_data", None)
-                # 兼容你描述的命名：如果项目里有人存过 self.outputdata
-                if output_obj is None:
-                    output_obj = getattr(self, "outputdata", None)
-
-                if isinstance(output_obj, str):
-                    output_obj = json.loads(output_obj)
-
-                if isinstance(output_obj, dict):
-                    # 接口字段名：TubesCount（见 TubeDistributionCore 输出）
-                    tc = output_obj.get("TubesCount", None)
-                    if tc is not None and str(tc) != "":
-                        total = int(float(tc))
-            except Exception:
-                # 读取失败时，保持 total 走下面的兜底
-                pass
 
         # 处理初始值：如果未布管且 current_centers 为空，显示 980
         if not getattr(self, "has_piped", False) and total == 0:
@@ -19044,36 +19022,20 @@ class TubeLayoutEditor(QMainWindow):
             # 2) 计算布管（核心）
             result = _safe_step("calculate_piping_layout", self.calculate_piping_layout)
 
-            # 2.5) 布管完成后，在下方 line_tip 提示一次满布状态总换热管数量
+            # 2.5) 布管完成后，在下方 line_tip 提示一次当前状态总换热管数量
             try:
-                import json
-                total_tubes = None
-                output_obj = getattr(self, "output_data", None)
-                # 兼容可能存在的别名 self.outputdata
-                if output_obj is None:
-                    output_obj = getattr(self, "outputdata", None)
-                if isinstance(output_obj, str):
-                    output_obj = json.loads(output_obj)
-                if isinstance(output_obj, dict):
-                    try:
-                        _tc_only = output_obj.get("TubesCount", None)
-                        if _tc_only is not None and str(_tc_only).strip() != "":
-                            print(f"[on_buguan_bt_click] TubesCount = {_tc_only}")
-                    except Exception:
-                        pass
-                    # 满管数量：优先 TubesCount，缺省兼容旧字段 DL
-                    tc = output_obj.get("TubesCount", None)
-                    if tc is None or str(tc).strip() == "":
-                        tc = output_obj.get("DL", None)
-                    if tc is not None and str(tc) != "":
-                        total_tubes = int(float(tc))
+                total_tubes = len(getattr(self, "current_centers", []) or [])
+                try:
+                    print(f"[on_buguan_bt_click] current_centers count = {total_tubes}")
+                except Exception:
+                    pass
 
                 if (
                     total_tubes is not None
                     and hasattr(self, "line_tip")
                     and self.line_tip is not None
                 ):
-                    message = f"满布状态总换热管孔数量为 {total_tubes} 个"
+                    message = f"当前状态总换热管孔数量为 {total_tubes} 个"
                     self.line_tip.setText(message)
                     self.line_tip.setStyleSheet("color: black;")
                     self.line_tip.setVisible(True)
