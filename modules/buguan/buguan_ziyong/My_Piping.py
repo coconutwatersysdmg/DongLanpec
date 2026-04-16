@@ -15192,28 +15192,32 @@ class TubeLayoutEditor(QMainWindow):
     def save_data(self):
         current_page_index = self.header.currentIndex()
 
-        # 根据当前页面设置不同的逻辑
+        # 统一逻辑：不论在哪个界面点“保存”，都尝试把多个页面的“当前数据”落库
+        # 说明：
+        # - 各页面数据可能为空/未编辑，此时对应保存逻辑会自行跳过或写入空集（按原实现）
+        # - 布管页面若尚未布管(has_piped=False)：静默跳过，避免在其他页面保存时弹窗打断
+        # - 若当前就在布管页面：仍执行原有的保存前检查
         if current_page_index == 1:
-            # 🟢 先进行拉杆检查
             if not self.check_before_save():
-                # 检查未通过，直接中断保存
                 return
-            # 检查通过后再保存
-            self.actual_save_operation(current_page_index)
-            message = "数据保存成功！"
 
-        elif current_page_index == 0 and self.has_piped:
-            self.actual_save_operation(current_page_index)
-            self.clear_modification_marks()
-            message = "数据保存成功！"
+        # 保存顺序：先管板形式(0) → 布管(1) → 管-板连接(2) → 轴向设计(3)
+        # 其中 1/3 的分支内部会有自身的“空数据直接返回”逻辑
+        for idx in (0, 1, 2, 3):
+            try:
+                # 非布管页触发的全量保存：布管未布管时不弹窗
+                silent = (idx == 1 and current_page_index != 1)
+                self.actual_save_operation(idx, silent=silent)
+            except Exception as e:
+                print(f"[save_data] 保存 page_index={idx} 失败: {e}")
 
-        elif current_page_index == 0 and not self.has_piped:
-            self.actual_save_operation(current_page_index)
-            message = "数据保存成功！"
+        if current_page_index == 0:
+            try:
+                self.clear_modification_marks()
+            except Exception:
+                pass
 
-        else:
-            self.actual_save_operation(current_page_index)
-            message = "数据保存成功！"
+        message = "数据保存成功！"
 
         # ✅ 通用提示信息
         try:
@@ -16182,10 +16186,43 @@ class TubeLayoutEditor(QMainWindow):
         print(f"🔍 [调试] 最终SQL语句数量: {len(sql_statements)}")
         return sql_statements
 
-    def actual_save_operation(self, page_index):
+    def save_current_centers_to_product_json(self):
+        """
+        将当前 self.current_centers 保存到 `modules/buguan/buguan_ziyong/coords/{productID}.json`。
+        - 若文件存在：直接覆盖写入（等价于清空后写入）
+        - 若文件不存在：创建新文件写入
+        """
+        try:
+            product_id = getattr(self, "productID", None)
+        except Exception:
+            product_id = None
+        if product_id is None or str(product_id).strip() == "":
+            product_id = "unknown"
+        product_id = str(product_id).strip()
+
+        coords_dir = os.path.join(os.path.dirname(__file__), "coords")
+        os.makedirs(coords_dir, exist_ok=True)
+        output_path = os.path.join(coords_dir, f"{product_id}.json")
+
+        centers = getattr(self, "current_centers", None) or []
+        # 统一为 JSON 友好的二维数组，避免 tuple/非数值导致序列化异常
+        safe_centers = []
+        for c in centers:
+            try:
+                if isinstance(c, (list, tuple)) and len(c) >= 2:
+                    safe_centers.append([float(c[0]), float(c[1])])
+            except Exception:
+                continue
+
+        # 覆盖写入（存在则截断，不存在则新建）
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(safe_centers, f, ensure_ascii=False, indent=2)
+
+    def actual_save_operation(self, page_index, silent: bool = False):
         if page_index == 1:  # 布管页面
             if not self.has_piped:
-                QMessageBox.warning(self, "提示", "还未布管", QMessageBox.Ok)
+                if not silent:
+                    QMessageBox.warning(self, "提示", "还未布管", QMessageBox.Ok)
             else:
                 slipway_set = set(self.slipway_centers)
                 # 暂时取消管口检查
@@ -16247,6 +16284,12 @@ class TubeLayoutEditor(QMainWindow):
                             f.write(data_to_write)
                 except Exception as e:
                     print(f"保存 .current_centers.json 失败: {e}")
+
+                # 额外保存：按产品ID落盘当前 self.current_centers
+                try:
+                    self.save_current_centers_to_product_json()
+                except Exception as e:
+                    print(f"[actual_save_operation] 保存 productID.json 失败: {e}")
                 # 径向开孔
                 sql_list = self.build_sql_for_radial_holes()
                 if sql_list:
