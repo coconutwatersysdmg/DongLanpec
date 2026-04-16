@@ -2018,16 +2018,33 @@ class TubeLayoutEditor(QMainWindow):
         except (TypeError, ValueError):
             return None
 
+        try:
+            print(f"[lagan标准查表] DN={dn}, 拉杆直径={lagan_d}")
+        except Exception:
+            pass
+
         standard_table = {
             10.0: [(0, 400, 4), (400, 700, 6), (700, 900, 10), (900, 1300, 12), (1300, 1500, 16), (1500, 1800, 18), (1800, 2000, 24), (2000, 2300, 32), (2300, 2600, 40), (2600, 2800, 48), (2800, 3000, 56), (3000, 3200, 64), (3200, 3400, 72), (3400, 3600, 80), (3600, 3800, 88), (3800, 4000, 98), (4000, 5000, 136), (5000, 6000, 178)],
             12.0: [(0, 400, 4), (400, 700, 4), (700, 900, 8), (900, 1300, 10), (1300, 1500, 12), (1500, 1800, 14), (1800, 2000, 18), (2000, 2300, 24), (2300, 2600, 28), (2600, 2800, 32), (2800, 3000, 40), (3000, 3200, 44), (3200, 3400, 52), (3400, 3600, 56), (3600, 3800, 64), (3800, 4000, 68), (4000, 5000, 96), (5000, 6000, 124)],
             16.0: [(0, 400, 4), (400, 700, 4), (700, 900, 6), (900, 1300, 6), (1300, 1500, 8), (1500, 1800, 10), (1800, 2000, 12), (2000, 2300, 14), (2300, 2600, 16), (2600, 2800, 20), (2800, 3000, 24), (3000, 3200, 26), (3200, 3400, 28), (3400, 3600, 32), (3600, 3800, 36), (3800, 4000, 40), (4000, 5000, 56), (5000, 6000, 74)],
         }
         if lagan_d not in standard_table:
+            try:
+                print(f"[lagan标准查表] 拉杆直径={lagan_d} 不在标准表(10/12/16)中，返回None")
+            except Exception:
+                pass
             return None
         for low, high, required in standard_table[lagan_d]:
             if low <= dn < high:
+                try:
+                    print(f"[lagan标准查表] 命中区间: [{low},{high}) -> {required}")
+                except Exception:
+                    pass
                 return required
+        try:
+            print("[lagan标准查表] 未命中任何DN区间，返回None")
+        except Exception:
+            pass
         return None
 
     def update_total_holes_count(self):
@@ -12384,6 +12401,16 @@ class TubeLayoutEditor(QMainWindow):
                 f"[on_table_item_changed] 行 {row} 参数 '{param_name}' 被改为: '{param_value}'"
             )
 
+            # 拉杆直径变化：实时刷新左下角“标准要求数量/已有数量”
+            if param_name == "拉杆直径":
+                try:
+                    if hasattr(self, "update_lagan_standard_from_params"):
+                        self.update_lagan_standard_from_params()
+                    elif hasattr(self, "update_total_lagan_count"):
+                        self.update_total_lagan_count()
+                except Exception as e:
+                    print(f"[on_table_item_changed] 刷新拉杆标准摘要失败: {e}")
+
             # 提前单独处理：折流板外径（避免后续分支重复校验与弹窗）
             if param_name == "折流板外径":
                 try:
@@ -14458,10 +14485,35 @@ class TubeLayoutEditor(QMainWindow):
             self.update_baffle_diameter()
             self.update_tube_center_distance()
             self.update_lagan()
+            # 外径 do 变化可能联动改变拉杆直径 → 需要实时刷新左下角“标准要求数量/已有数量”
+            try:
+                if hasattr(self, "update_lagan_standard_from_params"):
+                    self.update_lagan_standard_from_params()
+                elif hasattr(self, "update_total_lagan_count"):
+                    self.update_total_lagan_count()
+            except Exception as e:
+                print(f"[on_combobox_changed] do变更后刷新拉杆标准摘要失败: {e}")
             self.update_partition_plate_center_distance()
             self.update_divider_position_and_size()
         elif param_name == "拉杆形式":
             self.update_lagan()
+            # 拉杆形式会影响拉杆直径选项/默认值，联动刷新标准要求
+            try:
+                if hasattr(self, "update_lagan_standard_from_params"):
+                    self.update_lagan_standard_from_params()
+                elif hasattr(self, "update_total_lagan_count"):
+                    self.update_total_lagan_count()
+            except Exception as e:
+                print(f"[on_combobox_changed] 刷新拉杆标准摘要失败: {e}")
+        elif param_name == "拉杆直径":
+            # 拉杆直径变化：实时刷新左下角“标准要求数量/已有数量”
+            try:
+                if hasattr(self, "update_lagan_standard_from_params"):
+                    self.update_lagan_standard_from_params()
+                elif hasattr(self, "update_total_lagan_count"):
+                    self.update_total_lagan_count()
+            except Exception as e:
+                print(f"[on_combobox_changed] 刷新拉杆标准摘要失败: {e}")
         elif param_name == "换热管排列方式":
             # 获取当前选中的值
             do_widget = self.param_table.cellWidget(row, 2)
@@ -22284,6 +22336,10 @@ class TubeLayoutEditor(QMainWindow):
         row_dia = find_row_by_name("拉杆直径")
         row_do = find_row_by_name("换热管外径 do")
 
+        # 记录原值：用于弹窗取消时回滚（弹窗内会实时联动写回参数表）
+        original_type_text = get_cell_text(row_type)
+        original_dia_text = get_cell_text(row_dia)
+
         default_type = get_cell_text(row_type) or "焊接拉杆"
         # 直径默认：尽量从表里拿，否则兜底 12
         txt_d = get_cell_text(row_dia)
@@ -22569,18 +22625,39 @@ class TubeLayoutEditor(QMainWindow):
 
             standard_label.setText(text)
 
+        def _sync_lagan_params_and_summary():
+            """弹窗内实时同步：拉杆形式/直径 -> 参数表 -> 左下角摘要。"""
+            try:
+                new_type_local = type_combo.currentText().strip()
+                new_dia_local = parse_dia_from_choice(dia_combo.currentText())
+                set_cell_text(row_type, new_type_local)
+                set_cell_text(row_dia, f"{new_dia_local:g}")
+            except Exception:
+                pass
+            try:
+                if hasattr(self, "update_lagan_standard_from_params"):
+                    self.update_lagan_standard_from_params()
+                elif hasattr(self, "update_total_lagan_count"):
+                    self.update_total_lagan_count()
+            except Exception:
+                pass
+
         # 首次构建直径列表
         rebuild_dia_options(type_combo.currentText(), default_dia)
         update_standard_tip()
+        _sync_lagan_params_and_summary()
 
         # 形式变化 → 重建直径列表（尽量保持当前值），并更新提示
         def on_type_changed(_):
             cur_keep = parse_dia_from_choice(dia_combo.currentText())
             rebuild_dia_options(type_combo.currentText(), cur_keep)
             update_standard_tip()
+            _sync_lagan_params_and_summary()
 
         type_combo.currentTextChanged.connect(on_type_changed)
-        dia_combo.currentTextChanged.connect(lambda _text: update_standard_tip())
+        dia_combo.currentTextChanged.connect(
+            lambda _text: (update_standard_tip(), _sync_lagan_params_and_summary())
+        )
 
         # 按钮（普通拉杆：只有"确定 / 取消"）
         btns = QHBoxLayout()
@@ -22660,6 +22737,21 @@ class TubeLayoutEditor(QMainWindow):
         def on_cancel_clicked():
             try:
                 self.clear_selection_highlight()
+            except Exception:
+                pass
+            # 回滚到弹窗打开前的值
+            try:
+                if original_type_text:
+                    set_cell_text(row_type, original_type_text)
+                if original_dia_text:
+                    set_cell_text(row_dia, original_dia_text)
+            except Exception:
+                pass
+            try:
+                if hasattr(self, "update_lagan_standard_from_params"):
+                    self.update_lagan_standard_from_params()
+                elif hasattr(self, "update_total_lagan_count"):
+                    self.update_total_lagan_count()
             except Exception:
                 pass
             dlg.reject()
@@ -23037,7 +23129,7 @@ class TubeLayoutEditor(QMainWindow):
                         (1300, 1500, 12),
                         (1500, 1800, 14),
                         (1800, 2000, 18),
-                        (2000, 230, 24),
+                        (2000, 2300, 24),
                         (2300, 2600, 28),
                         (2600, 2800, 32),
                         (2800, 3000, 40),
@@ -23096,6 +23188,14 @@ class TubeLayoutEditor(QMainWindow):
                         p["参数值"] = f"{new_dia:g}"
             if isinstance(getattr(self, "output_data", None), dict):
                 self.output_data["TieRodD"] = f"{new_dia:g}"
+            # 同步刷新左下角“标准要求/已有数量”
+            try:
+                if hasattr(self, "update_lagan_standard_from_params"):
+                    self.update_lagan_standard_from_params()
+                elif hasattr(self, "update_total_lagan_count"):
+                    self.update_total_lagan_count()
+            except Exception:
+                pass
 
         rebuild_dia_options(type_combo.currentText(), default_dia)
         apply_current_to_params()
