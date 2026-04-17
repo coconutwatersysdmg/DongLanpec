@@ -5898,6 +5898,13 @@ class TubeLayoutEditor(QMainWindow):
 
         self._commit_param_table_open_editor()
 
+        # 每次布管前，强制按“do+排列方式→S 对应表(2.10.1.1)”刷新一次 S，
+        # 防止历史流程（如旧 output_data 回写）遗留的 S 被带入本次接口入参。
+        try:
+            self.update_tube_center_distance()
+        except Exception as _us_e:
+            print(f"[calculate_piping_layout] update_tube_center_distance: {_us_e}")
+
         # 初始加载后可能出现：DN 已由设计数据表覆盖，Dis 才由 update_DN_Di 对齐；若此处不先同步则下面读到的仍是旧 Dis
         try:
             self.update_DN_Di()
@@ -6181,6 +6188,79 @@ class TubeLayoutEditor(QMainWindow):
                         input_json[json_key] = "0"
                     else:
                         input_json[json_key] = param_value
+
+        # 请求前强制按 do+排列方式映射修正 LB_S，避免异步联动时带入历史值（如 do=25 但 S=72）
+        try:
+            global _TUBE_CENTER_DISTANCE_MAP_CACHE
+            if _TUBE_CENTER_DISTANCE_MAP_CACHE is None:
+                _TUBE_CENTER_DISTANCE_MAP_CACHE = {}
+                config_value = self.get_config_value("2.10.1.1")
+                if config_value:
+                    try:
+                        config_rows = (
+                            ast.literal_eval(config_value)
+                            if isinstance(config_value, str)
+                            else config_value
+                        )
+                        do_row_cfg = None
+                        tri_s_row_cfg = None
+                        sq_s_row_cfg = None
+                        for r_cfg in (config_rows or []):
+                            if not r_cfg or len(r_cfg) < 2:
+                                continue
+                            name_cfg = str(r_cfg[0]).strip()
+                            if name_cfg == "换热管外径d":
+                                do_row_cfg = r_cfg
+                            elif name_cfg == "换热管中心距S（三角形排列）":
+                                tri_s_row_cfg = r_cfg
+                            elif name_cfg == "换热管中心距S（正方形排列）":
+                                sq_s_row_cfg = r_cfg
+                        if do_row_cfg and tri_s_row_cfg and sq_s_row_cfg:
+                            do_values_cfg = [
+                                float(x) for x in do_row_cfg[1:] if str(x).strip() != ""
+                            ]
+                            tri_values_cfg = [
+                                float(x) for x in tri_s_row_cfg[1:] if str(x).strip() != ""
+                            ]
+                            sq_values_cfg = [
+                                float(x) for x in sq_s_row_cfg[1:] if str(x).strip() != ""
+                            ]
+                            for i_cfg, d_cfg in enumerate(do_values_cfg):
+                                if i_cfg < len(tri_values_cfg):
+                                    _TUBE_CENTER_DISTANCE_MAP_CACHE[(d_cfg, "三角形排列")] = tri_values_cfg[i_cfg]
+                                if i_cfg < len(sq_values_cfg):
+                                    _TUBE_CENTER_DISTANCE_MAP_CACHE[(d_cfg, "正方形排列")] = sq_values_cfg[i_cfg]
+                    except Exception as _s_cfg_e:
+                        print(f"[calculate_piping_layout] 解析S映射配置失败: {_s_cfg_e}")
+
+            do_for_s = None
+            try:
+                do_for_s = float(str(input_json.get("LB_TubeD", "")).strip())
+            except Exception:
+                do_for_s = None
+            range_code = str(input_json.get("LB_RangeType", "")).strip()
+            range_type_for_s = None
+            if range_code in ("0", "1"):
+                range_type_for_s = "三角形排列"
+            elif range_code in ("2", "3"):
+                range_type_for_s = "正方形排列"
+
+            if do_for_s is not None and range_type_for_s:
+                mapped_s = _TUBE_CENTER_DISTANCE_MAP_CACHE.get((do_for_s, range_type_for_s))
+                if mapped_s is not None:
+                    mapped_s_text = f"{float(mapped_s):.1f}"
+                    input_json["LB_S"] = mapped_s_text
+                    # 同步回参数表，确保界面值与接口入参一致
+                    for r in range(self.param_table.rowCount()):
+                        n_item = self.param_table.item(r, 1)
+                        if n_item and n_item.text().strip() == "换热管中心距 S":
+                            self._update_table_cell(r, 2, mapped_s_text)
+                            break
+                    print(
+                        f"[calculate_piping_layout] 强制修正LB_S: do={do_for_s}, range={range_code}({range_type_for_s}) -> {mapped_s_text}"
+                    )
+        except Exception as _force_s_e:
+            print(f"[calculate_piping_layout] 强制修正LB_S失败: {_force_s_e}")
 
         # 确保使用计算后的DL值
         input_json["LB_DL"] = f"{DL: .1f}"
@@ -6731,6 +6811,73 @@ class TubeLayoutEditor(QMainWindow):
                         input_json[json_key] = "0"
                     else:
                         input_json[json_key] = param_value
+
+        # 请求前强制按 do+排列方式映射修正 LB_S，避免异步联动时带入历史值
+        try:
+            global _TUBE_CENTER_DISTANCE_MAP_CACHE
+            if _TUBE_CENTER_DISTANCE_MAP_CACHE is None:
+                _TUBE_CENTER_DISTANCE_MAP_CACHE = {}
+                config_value = self.get_config_value("2.10.1.1")
+                if config_value:
+                    try:
+                        config_rows = (
+                            ast.literal_eval(config_value)
+                            if isinstance(config_value, str)
+                            else config_value
+                        )
+                        do_row_cfg = None
+                        tri_s_row_cfg = None
+                        sq_s_row_cfg = None
+                        for r_cfg in (config_rows or []):
+                            if not r_cfg or len(r_cfg) < 2:
+                                continue
+                            name_cfg = str(r_cfg[0]).strip()
+                            if name_cfg == "换热管外径d":
+                                do_row_cfg = r_cfg
+                            elif name_cfg == "换热管中心距S（三角形排列）":
+                                tri_s_row_cfg = r_cfg
+                            elif name_cfg == "换热管中心距S（正方形排列）":
+                                sq_s_row_cfg = r_cfg
+                        if do_row_cfg and tri_s_row_cfg and sq_s_row_cfg:
+                            do_values_cfg = [
+                                float(x) for x in do_row_cfg[1:] if str(x).strip() != ""
+                            ]
+                            tri_values_cfg = [
+                                float(x) for x in tri_s_row_cfg[1:] if str(x).strip() != ""
+                            ]
+                            sq_values_cfg = [
+                                float(x) for x in sq_s_row_cfg[1:] if str(x).strip() != ""
+                            ]
+                            for i_cfg, d_cfg in enumerate(do_values_cfg):
+                                if i_cfg < len(tri_values_cfg):
+                                    _TUBE_CENTER_DISTANCE_MAP_CACHE[(d_cfg, "三角形排列")] = tri_values_cfg[i_cfg]
+                                if i_cfg < len(sq_values_cfg):
+                                    _TUBE_CENTER_DISTANCE_MAP_CACHE[(d_cfg, "正方形排列")] = sq_values_cfg[i_cfg]
+                    except Exception as _s_cfg_e:
+                        print(f"[calculate_piping] 解析S映射配置失败: {_s_cfg_e}")
+
+            do_for_s = None
+            try:
+                do_for_s = float(str(input_json.get("LB_TubeD", "")).strip())
+            except Exception:
+                do_for_s = None
+            range_code = str(input_json.get("LB_RangeType", "")).strip()
+            range_type_for_s = None
+            if range_code in ("0", "1"):
+                range_type_for_s = "三角形排列"
+            elif range_code in ("2", "3"):
+                range_type_for_s = "正方形排列"
+
+            if do_for_s is not None and range_type_for_s:
+                mapped_s = _TUBE_CENTER_DISTANCE_MAP_CACHE.get((do_for_s, range_type_for_s))
+                if mapped_s is not None:
+                    mapped_s_text = f"{float(mapped_s):.1f}"
+                    input_json["LB_S"] = mapped_s_text
+                    print(
+                        f"[calculate_piping] 强制修正LB_S: do={do_for_s}, range={range_code}({range_type_for_s}) -> {mapped_s_text}"
+                    )
+        except Exception as _force_s_e:
+            print(f"[calculate_piping] 强制修正LB_S失败: {_force_s_e}")
 
         # 确保使用计算后的DL值
         input_json["LB_DL"] = f"{DL: .1f}"
@@ -9288,8 +9435,6 @@ class TubeLayoutEditor(QMainWindow):
         print(f"当前换热器型号: {self.heat_exchanger}")
 
     def update_tube_center_distance(self):
-        # 临时关闭：按当前需求不触发“换热管中心距 S”自动联动计算
-        return
         # 1. 定位关键参数行（换热管外径、排列方式、中心距）
         target_params = {
             "换热管外径 do": -1,
@@ -9421,7 +9566,7 @@ class TubeLayoutEditor(QMainWindow):
         key = (do_value, unified_range_type)
         if key in center_distance_map:
             center_distance = center_distance_map[key]
-            self._update_table_cell(center_distance_row, 2, f"{center_distance: .1f}")
+            self._update_table_cell(center_distance_row, 2, f"{center_distance:.1f}")
             print(
                 f"更新成功：外径{do_value}mm + {range_type_value}（归为{unified_range_type}）→ 中心距{center_distance:.1f}mm"
             )
@@ -12218,14 +12363,37 @@ class TubeLayoutEditor(QMainWindow):
         if isinstance(widget, QLineEdit):
             widget.setText(value)
         elif isinstance(widget, QComboBox):
-            # 尝试在组合框中匹配值
+            # 尝试在组合框中匹配值（先精确，再数值等价）
+            target_text = str(value).strip()
+            matched_index = -1
             for i in range(widget.count()):
-                if widget.itemText(i) == value:
-                    widget.setCurrentIndex(i)
+                if widget.itemText(i).strip() == target_text:
+                    matched_index = i
                     break
+
+            if matched_index < 0:
+                try:
+                    target_num = float(target_text)
+                    for i in range(widget.count()):
+                        txt = widget.itemText(i).strip()
+                        try:
+                            if abs(float(txt) - target_num) < 1e-9:
+                                matched_index = i
+                                break
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+
+            if matched_index >= 0:
+                widget.setCurrentIndex(matched_index)
             else:
-                # 如果没有匹配项，设置为当前文本
-                widget.setEditText(value)
+                # 没有匹配项：可编辑则直接输入；不可编辑则补充新项后选中
+                if widget.isEditable():
+                    widget.setEditText(target_text)
+                else:
+                    widget.addItem(target_text)
+                    widget.setCurrentIndex(widget.count() - 1)
         else:
             # 如果没有widget，直接设置item
             item = self.param_table.item(row, column)
@@ -18066,6 +18234,7 @@ class TubeLayoutEditor(QMainWindow):
             # "DNs": "公称直径 DN",
             "DL": "布管限定圆 DL",
             "BPBThick": "旁路挡板厚度",
+            # 按需求：S 仅按 do+排列方式 对应表联动，不使用后端 output_data 回写覆盖
             "S": "换热管中心距 S",
             # "W": "隔条位置尺寸 W"
         }
