@@ -8783,14 +8783,25 @@ class TubeLayoutEditor(QMainWindow):
                 params_list = snapshot.get("params", []) or []
                 params_dict = {str(k).strip(): v for k, v in params_list}
 
+                def _get_any(*keys):
+                    for kk in keys:
+                        if kk is None:
+                            continue
+                        k2 = str(kk).strip()
+                        if not k2:
+                            continue
+                        if k2 in params_dict and params_dict.get(k2) is not None:
+                            return params_dict.get(k2)
+                    return None
+
                 # b 型管板的 c 节点处理
                 if main_category == "b" and str(node_name).lower() == "c":
-                    # 从快照中获取 g、h、f
+                    # 从快照中获取 n、e、R（历史兼容：g/h/f）
                     # 公式：DL = min[{Di - 2×f×[1+(1+g²)^0.5] - 2×h}, Di - 2×b3]
                     # 其中：b3 = max(0.25×do, 8)
-                    g_raw = params_dict.get("g")
-                    h_raw = params_dict.get("h")
-                    f_raw = params_dict.get("f")
+                    g_raw = _get_any("n", "g")
+                    h_raw = _get_any("e", "h")
+                    f_raw = _get_any("R", "f")
                     
                     if g_raw is None or h_raw is None:
                         print(
@@ -8866,12 +8877,14 @@ class TubeLayoutEditor(QMainWindow):
                             dl_value = _calc_dl_by_type(di_value, do_value)
                             return  # 无法计算，直接返回
                     
-                    # 继续执行 e 节点的计算
-                    e_raw = params_dict.get("e")
-                    p_raw = params_dict.get("p")
-                    l_raw = params_dict.get("l")
-                    q_raw = params_dict.get("q")
-                    s_raw = params_dict.get("s")
+                    # 继续执行 e 节点的计算（已按你确认的对照表固定映射）
+                    # b_e 对照：l->R4, q->d2, s->α, p(倒角距离)->e
+                    # 兼容读取旧键仅用于过渡（p/l/q/s）
+                    e_raw = _get_any("R2", "e")
+                    p_raw = _get_any("e", "p")
+                    l_raw = _get_any("R4", "l")
+                    q_raw = _get_any("d2", "q")
+                    s_raw = _get_any("α", "s")
 
                     if (
                             e_raw is None
@@ -8995,9 +9008,10 @@ class TubeLayoutEditor(QMainWindow):
                     # 其中：b3 = max(0.25×do, 8)
                     # k：布管限定圆与管板倒角距离，默认值3，用户可修改
                     # Di/do 从左侧参数表获取，g/j/k 从快照参数中读取
-                    g_raw = params_dict.get("g")
-                    j_raw = params_dict.get("j")
-                    k_raw = params_dict.get("k")
+                    # 全改名后：g/j/k → R3/R5/e（历史兼容：g/j/k）
+                    g_raw = _get_any("R3", "g")
+                    j_raw = _get_any("R5", "j")
+                    k_raw = _get_any("e", "k")
 
                     if g_raw is None or j_raw is None or k_raw is None:
                         print(
@@ -9041,9 +9055,10 @@ class TubeLayoutEditor(QMainWindow):
                     # b_d 节点：DL = min{(Di-2×h-2×g), (Di-2×h-2×f), (Di-2×b3)}
                     # 其中：b3 = max(0.25×do, 8)
                     # Di/do 从左侧参数表获取，h/g/f 从快照参数中读取
-                    h_raw = params_dict.get("h")
-                    g_raw = params_dict.get("g")
-                    f_raw = params_dict.get("f")
+                    # 全改名后：h/g/f → e/R3/R2（历史兼容：h/g/f）
+                    h_raw = _get_any("e", "h")
+                    g_raw = _get_any("R3", "g")
+                    f_raw = _get_any("R2", "f")
 
                     if h_raw is None or g_raw is None or f_raw is None:
                         print(
@@ -9152,7 +9167,7 @@ class TubeLayoutEditor(QMainWindow):
                     if node_lower == "a":
                         # e-a 节点：DL = min{(Dis - 2 * c), (Dis - 2 * b3), (Dit - 2 * b3)}
                         # 需要参数：c
-                        c_raw = params_dict.get("c")
+                        c_raw = _get_any("d3", "c")
                         if c_raw is None:
                             print("[update_tube_layout_circle_dl] e-a 节点快照中缺少 c，回退到原逻辑计算 DL")
                             dl_value = _calc_dl_by_type(di_value, do_value)
@@ -9180,8 +9195,8 @@ class TubeLayoutEditor(QMainWindow):
                     elif node_lower == "b":
                         # e-b 节点：DL = min{(Dis - 2 * b - 2 * j), (Dis - 2 * b3), (Dit - 2 * b3)}
                         # 需要参数：b, j
-                        b_raw = params_dict.get("b")
-                        j_raw = params_dict.get("j")
+                        b_raw = _get_any("b", "d")
+                        j_raw = _get_any("e", "j")
                         if b_raw is None or j_raw is None:
                             print("[update_tube_layout_circle_dl] e-b 节点快照中缺少 b 或 j，回退到原逻辑计算 DL")
                             dl_value = _calc_dl_by_type(di_value, do_value)
@@ -9210,8 +9225,8 @@ class TubeLayoutEditor(QMainWindow):
                     elif node_lower == "c":
                         # e-c 节点：DL = min{(Dis - 2 * b - 2 * j), (Dis - 2 * b3), (Dit - 2 * b3)}
                         # 需要参数：b, j (与 e-b 相同)
-                        b_raw = params_dict.get("b")
-                        j_raw = params_dict.get("j")
+                        b_raw = _get_any("b", "d")
+                        j_raw = _get_any("e", "j")
                         if b_raw is None or j_raw is None:
                             print("[update_tube_layout_circle_dl] e-c 节点快照中缺少 b 或 j，回退到原逻辑计算 DL")
                             dl_value = _calc_dl_by_type(di_value, do_value)
@@ -9240,9 +9255,9 @@ class TubeLayoutEditor(QMainWindow):
                     elif node_lower == "d":
                         # e-d 节点：DL = min{[Dis - 2 * ((b / cosf + c) * tanf + b) - 2 * j], (Dis - 2 * b3), (Dit - 2 * b3)}
                         # 需要参数：b, c, j, cosf, tanf
-                        b_raw = params_dict.get("b")
-                        c_raw = params_dict.get("c")
-                        j_raw = params_dict.get("j")
+                        b_raw = _get_any("b", "d")
+                        c_raw = _get_any("d1", "c")
+                        j_raw = _get_any("e", "j")
                         cosf_raw = params_dict.get("cosf")
                         tanf_raw = params_dict.get("tanf")
                         if b_raw is None or c_raw is None or j_raw is None or cosf_raw is None or tanf_raw is None:
@@ -9297,9 +9312,9 @@ class TubeLayoutEditor(QMainWindow):
                     elif node_lower == "e":
                         # e-e 节点：DL = min{[Dis - 2 * ((b / cosc + k) * tanc + b) - 2 * j], (Dis - 2 * b3), (Dit - 2 * b3)}
                         # 需要参数：b, k, j, cosc, tanc
-                        b_raw = params_dict.get("b")
-                        k_raw = params_dict.get("k")
-                        j_raw = params_dict.get("j")
+                        b_raw = _get_any("b", "e")
+                        k_raw = _get_any("d2", "k")
+                        j_raw = _get_any("e", "j")
                         cosc_raw = params_dict.get("cosc")
                         tanc_raw = params_dict.get("tanc")
                         if b_raw is None or k_raw is None or j_raw is None or cosc_raw is None or tanc_raw is None:
@@ -9354,8 +9369,8 @@ class TubeLayoutEditor(QMainWindow):
                     elif node_lower == "f":
                         # e-f 节点：DL = min{(Dis - 4 * a - 2 * e), (Dis - 2 * b3), (Dit - 2 * b3)}
                         # 需要参数：a, e
-                        a_raw = params_dict.get("a")
-                        e_raw = params_dict.get("e")
+                        a_raw = _get_any("R1", "a")
+                        e_raw = _get_any("e", "p")
                         if a_raw is None or e_raw is None:
                             print("[update_tube_layout_circle_dl] e-f 节点快照中缺少 a 或 e，回退到原逻辑计算 DL")
                             dl_value = _calc_dl_by_type(di_value, do_value)
@@ -15941,7 +15956,6 @@ class TubeLayoutEditor(QMainWindow):
         # print(f"🔍 [调试] 过滤后的参数数量: {len(filtered_params)}")
         # print(f"🔍 [调试] 过滤后的参数内容: {filtered_params}")
         if not filtered_params:
-            print("❌ [调试] 过滤后参数为空，返回None")
             return None
 
         # 生成SQL语句列表
@@ -15975,14 +15989,8 @@ class TubeLayoutEditor(QMainWindow):
                 f");"
             )
             sql_statements.append(insert_sql)
-            print(f"✅ [调试] 添加INSERT语句: {insert_sql}")
-
-        print(f"🔍 [调试] 最终生成的SQL语句数量: {len(sql_statements)}")
-        for i, sql in enumerate(sql_statements):
-            print(f"🔍 [调试] SQL语句{i + 1}: {sql}")
 
         result = "; ".join(sql_statements) if sql_statements else None
-        print(f"🔍 [调试] 最终返回结果: {result}")
         return result
 
     def build_sql_for_tube_hole(self, tube_hole_data):
@@ -16267,7 +16275,6 @@ class TubeLayoutEditor(QMainWindow):
     def build_sql_for_tube_form(self):
         """构建管板形式表的SQL语句，处理元组列表格式的参数"""
         if not self.tube_form_data:
-            print("❌ [调试] 管板形式数据为空")
             return None
 
         table_name = "`产品设计活动表_管板形式表`"
@@ -16279,9 +16286,6 @@ class TubeLayoutEditor(QMainWindow):
                 return value.replace("'", "''")
             return value
 
-        print(f"🔍 [调试] 获取到的tube_form_data类型: {type(self.tube_form_data)}")
-        print(f"🔍 [调试] 获取到的tube_form_data内容: {self.tube_form_data}")
-        print(f"🔍 [调试] tube_form_data长度: {len(self.tube_form_data)}")
 
         # 解析参数，获取管板类型
         plate_type = ""
@@ -16291,10 +16295,7 @@ class TubeLayoutEditor(QMainWindow):
                 break
 
         if not plate_type:
-            print("❌ [调试] 未找到管板类型参数")
             return None
-
-        print(f"🔍 [调试] 找到管板类型: '{plate_type}'")
 
         # 构建图片路径
         try:
@@ -16309,9 +16310,8 @@ class TubeLayoutEditor(QMainWindow):
             image_path = os.path.join(image_base_path, first_char, image_name)
             # 转换为绝对路径
             image_path = os.path.abspath(image_path)
-            print(f"🔍 [调试] 图片路径: '{image_path}'")
         except Exception as e:
-            print(f"❌ [调试] 路径计算失败: {e}")
+            print(f"路径计算失败: {e}")
             return None
 
         # 转义路径
@@ -16326,7 +16326,6 @@ class TubeLayoutEditor(QMainWindow):
             f"DELETE FROM {table_name} WHERE " f"`产品ID` = '{safe_product_id}';"
         )
         sql_statements.append(delete_sql)
-        print(f"✅ [调试] 添加DELETE语句: {delete_sql}")
 
         # 再插入当前这次的所有管板形式参数（跳过管板类型参数）
         for param in self.tube_form_data:
@@ -16339,8 +16338,6 @@ class TubeLayoutEditor(QMainWindow):
             safe_symbol = escape_str(param_name)
             safe_value = escape_str(param_value)
 
-            print(f"🔍 [调试] 处理参数: '{param_name}' = '{param_value}'")
-
             insert_sql = (
                 f"INSERT INTO {table_name} ("
                 f"`产品ID`, `管板形式示意图`, `管板类型`, `参数符号`, `管板形式更改状态`, `默认值`"
@@ -16349,9 +16346,6 @@ class TubeLayoutEditor(QMainWindow):
                 f");"
             )
             sql_statements.append(insert_sql)
-            print(f"✅ [调试] 添加INSERT语句: {insert_sql}")
-
-        print(f"🔍 [调试] 最终SQL语句数量: {len(sql_statements)}")
         return sql_statements
 
     def save_current_centers_to_product_json(self):
@@ -19262,6 +19256,24 @@ class TubeLayoutEditor(QMainWindow):
 
             # 6) 重置大量状态（这些字段会影响后续交互；逐块保护）
             _safe_step("reset selected_centers", setattr, self, "selected_centers", [])
+
+            # 6.1) 先清理场景中普通拉杆图元（包括可视区外“幽灵拉杆”），避免后续保存误写回数据库
+            def _clear_lagan_items_from_scene():
+                if not hasattr(self, "graphics_scene") or self.graphics_scene is None:
+                    return
+                to_remove = []
+                for it in list(self.graphics_scene.items()):
+                    try:
+                        if getattr(it, "is_lagan", False) and not getattr(it, "is_side_rod", False):
+                            to_remove.append(it)
+                    except Exception:
+                        continue
+                for it in to_remove:
+                    try:
+                        self.graphics_scene.removeItem(it)
+                    except Exception:
+                        pass
+            _safe_step("clear lagan items from scene", _clear_lagan_items_from_scene)
 
             # 其余状态清零（尽量不触发 setter）
             for attr, default in [
@@ -23149,16 +23161,16 @@ class TubeLayoutEditor(QMainWindow):
                     if hasattr(self, "graphics_scene") and self.graphics_scene is not None:
                         self.graphics_scene.addItem(lagan_rod)
 
-                    # 把拉杆的绝对坐标加入 self.lagan_info（用于数量统计和参数编辑判定）
+                    # 自由拉杆（side_rod）只记录到 red_dangban_abs，不写入普通拉杆 lagan_info
                     try:
-                        if not hasattr(self, "lagan_info") or self.lagan_info is None:
-                            self.lagan_info = []
+                        if not hasattr(self, "red_dangban_abs") or self.red_dangban_abs is None:
+                            self.red_dangban_abs = []
                         coord_pair = (cx, cy)
-                        if coord_pair not in self.lagan_info:
-                            self.lagan_info.append(coord_pair)
+                        if coord_pair not in self.red_dangban_abs:
+                            self.red_dangban_abs.append(coord_pair)
                     except Exception as e:
                         print(
-                            f"[convert_center_dangguan_to_free_lagan] 写入 self.lagan_info 失败: {e}"
+                            f"[convert_center_dangguan_to_free_lagan] 写入 self.red_dangban_abs 失败: {e}"
                         )
 
                     print(
@@ -25176,13 +25188,28 @@ class TubeLayoutEditor(QMainWindow):
             return
         try:
             with conn.cursor() as cursor:
-                # 在函数开头对 lagan_info 进行去重处理
-                lagan_info = getattr(self, "lagan_info", None)
-                if lagan_info is not None:
-                    # 使用集合去重，因为坐标是元组，是可哈希的
-                    lagan_info_unique = list(set(lagan_info))
-                    # 更新去重后的数据到实例变量
-                    setattr(self, "lagan_info", lagan_info_unique)
+                # 保存前从场景图元重建普通拉杆坐标，避免内存残留“幽灵拉杆”写回数据库
+                # 规则：只采集 is_lagan=True 且非 is_side_rod 的图元
+                refreshed_lagan = []
+                try:
+                    if hasattr(self, "graphics_scene") and self.graphics_scene:
+                        for it in list(self.graphics_scene.items()):
+                            try:
+                                if getattr(it, "is_lagan", False) and not getattr(it, "is_side_rod", False):
+                                    r = it.rect()
+                                    cx = float(r.center().x())
+                                    cy = float(r.center().y())
+                                    refreshed_lagan.append((cx, cy))
+                            except Exception:
+                                continue
+                except Exception:
+                    refreshed_lagan = []
+
+                # 去重并回写；场景中没有普通拉杆时明确置空
+                try:
+                    self.lagan_info = list(dict.fromkeys(refreshed_lagan))
+                except Exception:
+                    self.lagan_info = refreshed_lagan if refreshed_lagan else []
 
                 # 定义元件映射和数量计算规则
                 component_mappings = [
@@ -25244,7 +25271,12 @@ class TubeLayoutEditor(QMainWindow):
                             except Exception:
                                 pass
                         else:
-                            comp_data = getattr(self, "red_dangban_abs", []) or []
+                            # 场景无自由拉杆时必须清空，避免历史脏坐标被回写
+                            comp_data = []
+                            try:
+                                self.red_dangban_abs = []
+                            except Exception:
+                                pass
 
                     # 使用str()而非json.dumps()来保持元组格式
                     coords_str = str(comp_data) if comp_data is not None else str([])

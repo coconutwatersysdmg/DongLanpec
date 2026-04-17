@@ -117,7 +117,6 @@ def get_plate_form_params(image_name, product_id=None):
     plate_type = os.path.splitext(image_name)[0]
     plate_type = f"{plate_type}"  # 直接构建管板类型，不进行额外拆分
     
-    print(f"🔍 [调试] 查询管板形式参数，管板类型: '{plate_type}', 产品ID: '{product_id}'")
     
     # 步骤1：优先从产品设计活动库读取（如果有product_id）
     if product_id:
@@ -134,7 +133,6 @@ def get_plate_form_params(image_name, product_id=None):
                     params = cursor.fetchall()
                     
                     if params:
-                        print(f"✅ [调试] 从产品设计活动库找到 {len(params)} 个参数")
                         # 处理查询结果 - 去重处理
                         param_dict = {}
                         seen_params = set()  # 用于去重
@@ -149,23 +147,22 @@ def get_plate_form_params(image_name, product_id=None):
                                 param_dict[param_symbol] = str(param_value) if param_value is not None else ""
                                 # print(f"✅ [调试] 添加参数: '{param_symbol}' = '{param_dict[param_symbol]}'")
                             elif param_symbol in seen_params:
-                                print(f"🔄 [调试] 跳过重复参数: '{param_symbol}' = '{param_value}'")
+                                continue
                             else:
-                                print(f"❌ [调试] 跳过空参数符号")
+                                continue
                         
                         # print(f"🔍 [调试] 最终参数字典包含 {len(param_dict)} 个参数")
                         return param_dict
                     else:
-                        print(f"🔍 [调试] 产品设计活动库中没有找到参数，将查询元件库")
+                        pass
             except pymysql.Error as e:
-                print(f"❌ [调试] 产品设计活动库查询错误: {e}")
+                print(f"产品设计活动库查询错误: {e}")
             finally:
                 prod_conn.close()
     
     # 步骤2：如果产品库没有，从元件库读取
     comp_conn = create_component_connection()
     if not comp_conn:
-        print(f"❌ [调试] 无法连接元件库")
         return {}
     
     try:
@@ -178,26 +175,21 @@ def get_plate_form_params(image_name, product_id=None):
             cursor.execute(query, (plate_type,))
             params = cursor.fetchall()
             
-            print(f"🔍 [调试] 从元件库找到 {len(params)} 个参数")
-            
             # 处理查询结果
             param_dict = {}
             for param in params:
                 param_symbol = param['参数符号']
                 param_value = param['默认值']
-                print(f"🔍 [调试] 处理参数: '{param_symbol}' = '{param_value}' (类型: {type(param_value)})")
                 
                 # 只检查参数符号不为空，默认值可以为空字符串
                 if param_symbol:
                     param_dict[param_symbol] = str(param_value) if param_value is not None else ""
-                    print(f"✅ [调试] 添加参数: '{param_symbol}' = '{param_dict[param_symbol]}'")
                 else:
-                    print(f"❌ [调试] 跳过空参数符号")
+                    continue
             
-            print(f"🔍 [调试] 最终参数字典包含 {len(param_dict)} 个参数")
             return param_dict
     except pymysql.Error as e:
-        print(f"❌ [调试] 元件库查询错误: {e}")
+        print(f"元件库查询错误: {e}")
         return {}
     finally:
         comp_conn.close()
@@ -943,6 +935,37 @@ class SheetFormPage(QWidget):
             product_id = self.get_product_id()
             params = get_plate_form_params(clicked_image, product_id)
             if params:
+                # 全改名模式：数据库与产品活动库均使用“新代号”存储，这里按节点给出固定顺序的参数清单
+                _lookup = {str(k).strip(): v for k, v in params.items()}
+                param_items = list(params.items())
+                if selected_folder == "b" and image_name_without_ext == "b_a":
+                    param_items = [("x1", _lookup.get("x1", "")), ("x2", _lookup.get("x2", "")), ("α", _lookup.get("α", ""))]
+                elif selected_folder == "b" and image_name_without_ext == "b_b":
+                    param_items = [("R1", _lookup.get("R1", "")), ("p", _lookup.get("p", "")), ("α", _lookup.get("α", "")), ("b", _lookup.get("b", "2")), ("R2", _lookup.get("R2", "12"))]
+                elif selected_folder == "b" and image_name_without_ext == "b_c":
+                    param_items = [("α1", _lookup.get("α1", "")), ("b", _lookup.get("b", "")), ("p1", _lookup.get("p1", "")), ("d1", _lookup.get("d1", "")), ("α2", _lookup.get("α2", "")), ("R", _lookup.get("R", "")), ("n", _lookup.get("n", "")), ("e", _lookup.get("e", "")), ("p2", _lookup.get("p2", "2")), ("d2", _lookup.get("d2", "1"))]
+                elif selected_folder == "b" and image_name_without_ext == "b_d":
+                    param_items = [("β1", _lookup.get("β1", "")), ("β2", _lookup.get("β2", "")), ("p1", _lookup.get("p1", "")), ("R1", _lookup.get("R1", "")), ("b1", _lookup.get("b1", "")), ("R2", _lookup.get("R2", "")), ("R3", _lookup.get("R3", "")), ("e", _lookup.get("e", "")), ("β3", _lookup.get("β3", "")), ("β4", _lookup.get("β4", "")), ("p2", _lookup.get("p2", "")), ("R4", _lookup.get("R4", "")), ("b2", _lookup.get("b2", "1.5"))]
+                elif selected_folder == "b" and image_name_without_ext == "b_e":
+                    param_items = [("β1", _lookup.get("β1", "")), ("p1", _lookup.get("p1", "")), ("b1", _lookup.get("b1", "")), ("R1", _lookup.get("R1", "")), ("R2", _lookup.get("R2", "")), ("H", _lookup.get("H", "")), ("R3", _lookup.get("R3", "")), ("β2", _lookup.get("β2", "")), ("d1", _lookup.get("d1", "")), ("β3", _lookup.get("β3", "")), ("b2", _lookup.get("b2", "")), ("R4", _lookup.get("R4", "")), ("R5", _lookup.get("R5", "")), ("p2", _lookup.get("p2", "")), ("α", _lookup.get("α", "")), ("e", _lookup.get("e", "")), ("d2", _lookup.get("d2", "")), ("d3", _lookup.get("d3", ""))]
+                elif selected_folder == "b" and image_name_without_ext == "b_h":
+                    param_items = [("β1", _lookup.get("β1", "")), ("p1", _lookup.get("p1", "")), ("R1", _lookup.get("R1", "")), ("R2", _lookup.get("R2", "")), ("b1", _lookup.get("b1", "")), ("b2", _lookup.get("b2", "")), ("R3", _lookup.get("R3", "")), ("β2", _lookup.get("β2", "")), ("R4", _lookup.get("R4", "")), ("R5", _lookup.get("R5", "")), ("e", _lookup.get("e", "")), ("p2", _lookup.get("p2", ""))]
+                elif selected_folder == "e" and image_name_without_ext == "e_a":
+                    param_items = [("d1", _lookup.get("d1", "")), ("d2", _lookup.get("d2", "")), ("d3", _lookup.get("d3", "")), ("p", _lookup.get("p", "")), ("α1", _lookup.get("α1", "")), ("α2", _lookup.get("α2", ""))]
+                elif selected_folder == "e" and image_name_without_ext == "e_b":
+                    param_items = [("R1", _lookup.get("R1", "")), ("d1", _lookup.get("d1", "")), ("d2", _lookup.get("d2", "")), ("b", _lookup.get("b", "")), ("p", _lookup.get("p", "")), ("R2", _lookup.get("R2", "")), ("d3", _lookup.get("d3", "")), ("α", _lookup.get("α", "")), ("e", _lookup.get("e", "")), ("K", _lookup.get("K", ""))]
+                elif selected_folder == "e" and image_name_without_ext == "e_c":
+                    param_items = [("p1", _lookup.get("p1", "")), ("d1", _lookup.get("d1", "")), ("R1", _lookup.get("R1", "")), ("d2", _lookup.get("d2", "")), ("b", _lookup.get("b", "")), ("R2", _lookup.get("R2", "")), ("d3", _lookup.get("d3", "")), ("α", _lookup.get("α", "")), ("e", _lookup.get("e", "")), ("p2", _lookup.get("p2", "")), ("K", _lookup.get("K", ""))]
+                elif selected_folder == "e" and image_name_without_ext == "e_d":
+                    param_items = [("R1", _lookup.get("R1", "")), ("R2", _lookup.get("R2", "")), ("d1", _lookup.get("d1", "")), ("b", _lookup.get("b", "")), ("α1", _lookup.get("α1", "")), ("α2", _lookup.get("α2", "")), ("p", _lookup.get("p", "")), ("h", _lookup.get("h", "")), ("e", _lookup.get("e", ""))]
+                elif selected_folder == "e" and image_name_without_ext == "e_e":
+                    param_items = [("R1", _lookup.get("R1", "")), ("R2", _lookup.get("R2", "")), ("α1", _lookup.get("α1", "")), ("d1", _lookup.get("d1", "")), ("b", _lookup.get("b", "")), ("α2", _lookup.get("α2", "")), ("p", _lookup.get("p", "")), ("h", _lookup.get("h", "")), ("e", _lookup.get("e", "")), ("d2", _lookup.get("d2", ""))]
+                elif selected_folder == "e" and image_name_without_ext == "e_f":
+                    param_items = [("R1", _lookup.get("R1", "")), ("h", _lookup.get("h", "")), ("α", _lookup.get("α", "")), ("p", _lookup.get("p", "")), ("e", _lookup.get("e", ""))]
+                elif selected_folder == "e" and image_name_without_ext == "e_g":
+                    # h 使用 h1/h2 两行（后续合并显示）
+                    param_items = [("R1", _lookup.get("R1", "")), ("R2", _lookup.get("R2", "")), ("h1", _lookup.get("h1", "1.5")), ("h2", _lookup.get("h2", "25")), ("α", _lookup.get("α", "")), ("p", _lookup.get("p", "")), ("e", _lookup.get("e", ""))]
+
                 # 每次填充前清除单元格合并状态
                 self.sheet_form_param_table.clearSpans()
 
@@ -950,40 +973,62 @@ class SheetFormPage(QWidget):
                 self.sheet_form_param_table.setColumnCount(2)
 
                 # 设置表格行数
-                self.sheet_form_param_table.setRowCount(len(params))
+                # e_g / f_g 节点会把 h1+h2 合并为一行 h，因此显示行数需减 1，避免尾部空行
+                display_row_count = len(param_items)
+                if selected_folder in ("e", "f") and image_name_without_ext in ("e_g", "f_g"):
+                    keys = [str(k).strip() for k, _ in param_items]
+                    if "h1" in keys and "h2" in keys:
+                        display_row_count -= 1
+                self.sheet_form_param_table.setRowCount(max(display_row_count, 0))
 
                 # 填充表格数据（程序化更新期间不触发“手动修改变蓝”）
                 self._sheet_form_programmatic_update = True
                 try:
-                    for row, (param_name, default_value) in enumerate(params.items()):
-                        # e_g / f_g 管板：c1 + c2 在界面上合并为参数 c（一行）
+                    display_row = 0
+                    for row, (param_name, default_value) in enumerate(param_items):
+                        # e_g / f_g 管板：h1 + h2 在界面上合并为参数 h（一行）
                         if (
                             selected_folder in ("e", "f")
                             and image_name_without_ext in ("e_g", "f_g")
-                            and param_name in ("c1", "c2")
+                            and param_name in ("h1", "h2")
                         ):
-                            # 只在遇到 c1 时生成一行 c，c2 行跳过
-                            if param_name == "c2":
+                            # 只在遇到 h1 时生成一行 h，h2 行跳过
+                            if param_name == "h2":
                                 continue
 
-                            name_item = QTableWidgetItem("c")
-                            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-                            self.sheet_form_param_table.setItem(row, 0, name_item)
+                            merged_display = "h"
+                            merged_internal = "h"
 
-                            c1_raw = str(params.get("c1", "1.5")).strip() or "1.5"
-                            c2_raw = str(params.get("c2", "25")).strip() or "25"
+                            name_item = QTableWidgetItem(merged_display)
+                            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+                            # 标记内部键，确保后续 get_current_tube_form_data 仍按 h 逻辑拆分为 h1/h2
+                            try:
+                                name_item.setData(Qt.UserRole, merged_internal)
+                            except Exception:
+                                pass
+                            # 斜体显示（只影响界面）
+                            try:
+                                fnt = name_item.font()
+                                fnt.setItalic(True)
+                                name_item.setFont(fnt)
+                            except Exception:
+                                pass
+                            self.sheet_form_param_table.setItem(display_row, 0, name_item)
+
+                            h1_raw = str(params.get("h1", "1.5")).strip() or "1.5"
+                            h2_raw = str(params.get("h2", "25")).strip() or "25"
                             container = QWidget()
                             layout = QHBoxLayout(container)
                             layout.setContentsMargins(0, 0, 0, 0)
                             layout.setSpacing(2)
                             layout.setAlignment(Qt.AlignLeft)
 
-                            left_edit = QLineEdit(c1_raw, container)
+                            left_edit = QLineEdit(h1_raw, container)
                             left_edit.setFixedWidth(60)
                             left_edit.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
                             mid_label = QLabel("*δ和", container)
                             mid_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
-                            right_edit = QLineEdit(c2_raw, container)
+                            right_edit = QLineEdit(h2_raw, container)
                             right_edit.setFixedWidth(60)
                             right_edit.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
                             tail_label = QLabel("的较大值", container)
@@ -994,7 +1039,7 @@ class SheetFormPage(QWidget):
                             layout.addWidget(right_edit)
                             layout.addWidget(tail_label)
 
-                            # 用户手动编辑 c1/c2 时，改为蓝色
+                            # 用户手动编辑 h1/h2 时，改为蓝色
                             left_edit.textEdited.connect(
                                 lambda _txt, le=left_edit: le.setStyleSheet("color: rgb(70,130,180);")
                             )
@@ -1002,13 +1047,27 @@ class SheetFormPage(QWidget):
                                 lambda _txt, re=right_edit: re.setStyleSheet("color: rgb(70,130,180);")
                             )
 
-                            self.sheet_form_param_table.setCellWidget(row, 1, container)
+                            self.sheet_form_param_table.setCellWidget(display_row, 1, container)
+                            display_row += 1
                             continue
 
-                        # 通用逻辑：参数名列 - 只读
-                        name_item = QTableWidgetItem(param_name)
+                        # 通用逻辑：参数名列 - 只读（全改名后，param_name 即新代号）
+                        display_param_name = str(param_name).strip()
+                        name_item = QTableWidgetItem(display_param_name)
                         name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-                        self.sheet_form_param_table.setItem(row, 0, name_item)
+                        # 全改名模式：UserRole 保存新代号，用于后续保存/计算取参
+                        try:
+                            name_item.setData(Qt.UserRole, display_param_name)
+                        except Exception:
+                            pass
+                        # 斜体显示（只影响界面）——全改名后，所有符号统一斜体
+                        try:
+                            f = name_item.font()
+                            f.setItalic(True)
+                            name_item.setFont(f)
+                        except Exception:
+                            pass
+                        self.sheet_form_param_table.setItem(display_row, 0, name_item)
 
                         # 对于 e_f、f_f 节点，如果参数名为 a，则根据公式重新计算默认值
                         adjusted_value = default_value
@@ -1039,7 +1098,8 @@ class SheetFormPage(QWidget):
                         else:
                             value_item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
                         value_item.setForeground(QBrush(QColor(0, 0, 0)))
-                        self.sheet_form_param_table.setItem(row, 1, value_item)
+                        self.sheet_form_param_table.setItem(display_row, 1, value_item)
+                        display_row += 1
 
                     # 对于 e_b、e_c、f_b、f_c 节点，特殊处理最后一行为三列显示，并在表格下方添加说明文字
                     special_three_col_nodes = {
@@ -1346,28 +1406,38 @@ class SheetFormPage(QWidget):
             value_widget = self.sheet_form_param_table.cellWidget(row, 1)
             
             if name_item and (value_item or value_widget):
-                param_name = name_item.text().strip()
+                # 全改名模式：参数名以 UserRole/显示内容为准（两者一致）
+                internal_name = ""
+                try:
+                    internal_name = name_item.data(Qt.UserRole)
+                except Exception:
+                    internal_name = ""
+                param_name = (
+                    str(internal_name).strip()
+                    if internal_name is not None and str(internal_name).strip() != ""
+                    else name_item.text().strip()
+                )
                 raw_value = value_item.text().strip() if value_item else ""
 
-                # e_g / f_g 管板的参数 c：从单元格内的两个 QLineEdit 读取数字，拆成 c1 / c2 存储
-                if plate_type in ("e_g", "f_g") and param_name == "c" and value_widget:
+                # e_g / f_g 管板的参数 h：从单元格内的两个 QLineEdit 读取数字，拆成 h1 / h2 存储
+                if plate_type in ("e_g", "f_g") and param_name == "h" and value_widget:
                     from PyQt5.QtWidgets import QLineEdit
 
                     edits = value_widget.findChildren(QLineEdit)
                     if len(edits) >= 2:
                         left_num = edits[0].text().strip() or "1.5"
                         right_num = edits[1].text().strip() or "25"
-                        # c 逻辑：保存为两条独立参数 c1 / c2
+                        # h 逻辑：保存为两条独立参数 h1 / h2
                         if param_name:
-                            full_params.append(("c1", left_num))
-                            full_params.append(("c2", right_num))
-                        # 已经添加 c1/c2，这一行不再追加下面的通用 full_params.append
+                            full_params.append(("h1", left_num))
+                            full_params.append(("h2", right_num))
+                        # 已经添加 h1/h2，这一行不再追加下面的通用 full_params.append
                         continue
                     else:
-                        # 控件异常时回退为默认 c1=1.5, c2=25
+                        # 控件异常时回退为默认 h1=1.5, h2=25
                         if param_name:
-                            full_params.append(("c1", "1.5"))
-                            full_params.append(("c2", "25"))
+                            full_params.append(("h1", "1.5"))
+                            full_params.append(("h2", "25"))
                         continue
                 else:
                     param_value = raw_value
@@ -1375,7 +1445,6 @@ class SheetFormPage(QWidget):
                 if param_name:
                     full_params.append((param_name, param_value))
 
-        print(f"🔍 [调试] 管板形式参数数量: {len(full_params)}")
         return full_params
 
     def get_DN_and_Di_from_parent(self):

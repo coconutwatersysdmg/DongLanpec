@@ -7,15 +7,20 @@ import pymysql
 
 
 def build_sql_for_u_tube_calc(editor, create_product_connection):
+    from collections import defaultdict as _dd
+
     """
     构建U型管布管计算结果的SQL语句列表。
     这里保留原有逻辑，只是从My_Piping.py中抽离，传入editor实例和数据库连接创建函数。
     """
     if not hasattr(editor, "current_centers") or not isinstance(
-        editor.current_centers, (list, set, tuple)
+            editor.current_centers, (list, set, tuple)
     ):
         return None
-
+    if not hasattr(editor, "global_centers") or not isinstance(
+            editor.global_centers, (list, set, tuple)
+    ):
+        return None
     try:
         coords = []
         for center in editor.current_centers:
@@ -27,7 +32,18 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
             return None
     except (ValueError, TypeError):
         return None
-
+    try:
+        global_coords = []
+        for global_coord in editor.global_centers:
+            if len(global_coord) >= 2:
+                x = float(global_coord[0])
+                y = float(global_coord[1])
+                global_coords.append((x, y))
+        print(global_coords,"global")
+        if not global_coords:
+            return None
+    except (ValueError, TypeError):
+        return None
     calc_results = {
         "沿水平隔板槽一侧的排管根数": "0",
         "沿竖直隔板槽一侧的排管根数": "0",
@@ -233,7 +249,39 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
             else:
                 tubes_count = 0
                 horizontal_total = 0
-
+            cursor.execute(
+                """
+                    SELECT 参数值 
+                    FROM 产品设计活动表_布管参数表
+                    WHERE 产品ID = %s AND 参数名 = '换热管外径 do'
+                    LIMIT 1
+                """,
+                (product_id,),
+            )
+            row = cursor.fetchone()
+            if row and row.get("参数值"):
+                do_value = float(row["参数值"].strip())
+            else:
+                do_value = 25.0
+            cursor.execute(
+                """
+                    SELECT 参数值 
+                    FROM 产品设计活动表_布管参数表
+                    WHERE 产品ID = %s AND 参数名 = '折流板切口方向'
+                    LIMIT 1
+                """,
+                (product_id,),
+            )
+            row = cursor.fetchone()
+            mapped_val = row["参数值"].strip() if (row and row.get("参数值")) else ""
+            if mapped_val in {"水平上下"}:
+                cut_dir = "水平"
+            elif mapped_val in {"左右", "垂直左右"}:
+                cut_dir = "垂直"
+            elif mapped_val in {"上下"}:
+                cut_dir = "竖直"
+            else:
+                cut_dir = mapped_val
     except pymysql.Error:
         return None
     finally:
@@ -245,6 +293,8 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
             if abs(x - dx) < tol and abs(y - dy) < tol:
                 return True
         return False
+
+    filtered_coords = [(x, y) for x, y in coords if not is_deleted(x, y)]
 
     x_groups = defaultdict(list)
     y_groups = defaultdict(list)
@@ -290,7 +340,6 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
     print(u_min_radius, "u_min_radius")
     print(u_max_diameter, "u_max_diameter")
 
-
     vertical_total = 0
     if tube_form == "2":
         horizontal_total = 0
@@ -321,8 +370,8 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
                             down_val = (
                                 int(raw_down)
                                 if (
-                                    raw_down is not None
-                                    and str(raw_down).strip() not in ("", "None")
+                                        raw_down is not None
+                                        and str(raw_down).strip() not in ("", "None")
                                 )
                                 else 0
                             )
@@ -364,8 +413,8 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
                                 down_val = (
                                     int(raw_down)
                                     if (
-                                        raw_down is not None
-                                        and str(raw_down).strip() not in ("", "None")
+                                            raw_down is not None
+                                            and str(raw_down).strip() not in ("", "None")
                                     )
                                     else 0
                                 )
@@ -418,9 +467,81 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
     calc_results["U型管弯曲直径"] = str(u_max_diameter)
     calc_results["弯管段的最小弯曲半径"] = str(u_min_radius)
 
-
     calc_results["管总数 tubes_count"] = str(tubes_count)
 
+    def calc_distance(x1, y1, x2, y2):
+        return ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
+
+    def get_max_distance(coord_list):
+        max_dist = 0.0
+        if len(coord_list) >= 2:
+            for i in range(len(coord_list)):
+                x1, y1 = coord_list[i]
+                for j in range(i + 1, len(coord_list)):
+                    x2, y2 = coord_list[j]
+                    dist = calc_distance(x1, y1, x2, y2)
+                    if dist > max_dist:
+                        max_dist = dist
+        return round(max_dist, 3)
+
+    if global_coords:
+        max_radius = max(math.hypot(x, y) for x, y in global_coords)
+        calc_results["实际布管区域最大直径"] = str(round(max_radius * 2 + do_value, 3))
+
+        max_height = 0.0
+        max_width = 0.0
+
+        if cut_dir == "竖直左右":
+            # 同一排：y 相同，统计这一排的 x 跨度 -> 宽度
+            y_groups = _dd(list)
+            # 同一列：x 相同，统计这一列的 y 跨度 -> 高度
+            x_groups = _dd(list)
+
+            for x, y in global_coords:
+                y_groups[round(y, 6)].append(x)
+                x_groups[round(x, 6)].append(y)
+
+            if y_groups:
+                row_spans = [max(x_list) - min(x_list) for x_list in y_groups.values()]
+                max_width = (max(row_spans) if row_spans else 0.0) + do_value
+
+            if x_groups:
+                col_spans = [max(y_list) - min(y_list) for y_list in x_groups.values()]
+                max_height = (max(col_spans) if col_spans else 0.0) + do_value
+
+        elif cut_dir == "水平上下":
+            # 这里按你原来的思路，方向旋转后，排/列统计交换
+            x_groups = _dd(list)
+            y_groups = _dd(list)
+
+            for x, y in coords:
+                x_groups[round(x, 6)].append(y)
+                y_groups[round(y, 6)].append(x)
+
+            # 水平上下时，按你原业务习惯：
+            # 宽度改为看“同一列中的 x 方向展开”
+            if y_groups:
+                row_spans = [max(x_list) - min(x_list) for x_list in y_groups.values()]
+                max_width = (max(row_spans) if row_spans else 0.0) + do_value
+
+            # 高度改为看“同一列中的 y 方向展开”
+            if x_groups:
+                col_spans = [max(y_list) - min(y_list) for y_list in x_groups.values()]
+                max_height = (max(col_spans) if col_spans else 0.0) + do_value
+
+        else:
+            x_values = [x for x, _ in global_coords]
+            y_values = [y for _, y in global_coords]
+            max_width = (max(x_values) - min(x_values)) + do_value
+            max_height = (max(y_values) - min(y_values)) + do_value
+
+        calc_results["实际布管区域最大宽度"] = str(round(max_width, 3))
+        calc_results["实际布管区域最大高度"] = str(round(max_height, 3))
+
+    else:
+        calc_results["实际布管区域最大直径"] = "0.0"
+        calc_results["实际布管区域最大宽度"] = "0.0"
+        calc_results["实际布管区域最大高度"] = "0.0"
     table_name = "`产品设计活动表_布管计算结果表`"
     sql_statements = []
 
@@ -464,7 +585,7 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
     from collections import defaultdict as _dd
 
     if not hasattr(editor, "current_centers") or not isinstance(
-        editor.current_centers, (list, set, tuple)
+            editor.current_centers, (list, set, tuple)
     ):
         return None
 
@@ -480,6 +601,23 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
     except (ValueError, TypeError):
         return None
 
+    if not hasattr(editor, "global_centers") or not isinstance(
+            editor.global_centers, (list, set, tuple)
+    ):
+        return None
+
+    try:
+        global_coords = []
+        for global_coord in editor.global_centers:
+            if len(global_coord) >= 2:
+                x = float(global_coord[0])
+                y = float(global_coord[1])
+                global_coords.append((x, y))
+        print(global_coords,"global")
+        if not global_coords:
+            return None
+    except (ValueError, TypeError):
+        return None
     calc_results = {
         "'十字'交叉沿水平隔板槽单侧的排管根数": "0",
         "沿竖直隔板槽单侧的排管根数": "0",
@@ -811,6 +949,7 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
             NY, NYA = 0, 0
 
             return NX, NXA, NY, NYA
+
         # ===== 分类型计算 =====
         if type_zheliuban in ("双弓形折流板", "双弓型折流板", "双弓形"):
             NX, NXA, NY, NYA = calc_double_bow_NX_NY(filtered_coords, a_val, b_val)
@@ -835,11 +974,6 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
         calc_results["换热管数量NY"] = "0"
         calc_results["换热管数量NYA"] = "0"
 
-
-
-
-
-
     def calc_distance(x1, y1, x2, y2):
         return ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** 0.5
 
@@ -855,40 +989,63 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
                         max_dist = dist
         return round(max_dist, 3)
 
-    if filtered_coords:
-        max_radius = max(math.hypot(x, y) for x, y in filtered_coords)
+    if global_coords:
+        max_radius = max(math.hypot(x, y) for x, y in global_coords)
         calc_results["实际布管区域最大直径"] = str(round(max_radius * 2 + do_value, 3))
 
         max_height = 0.0
+        max_width = 0.0
 
         if cut_dir == "竖直左右":
+            # 同一排：y 相同，统计这一排的 x 跨度 -> 宽度
             y_groups = _dd(list)
-            for x, y in filtered_coords:
-                y_groups[y].append(x)
+            # 同一列：x 相同，统计这一列的 y 跨度 -> 高度
+            x_groups = _dd(list)
+
+            for x, y in global_coords:
+                y_groups[round(y, 6)].append(x)
+                x_groups[round(x, 6)].append(y)
+
             if y_groups:
                 row_spans = [max(x_list) - min(x_list) for x_list in y_groups.values()]
-                max_row_span = max(row_spans) if row_spans else 0
-                max_height = (
-                    max_row_span + (max(y_groups.keys()) - min(y_groups.keys())) + do_value
-                )
-        elif cut_dir == "水平上下":
-            x_groups = _dd(list)
-            for x, y in filtered_coords:
-                x_groups[x].append(y)
+                max_width = (max(row_spans) if row_spans else 0.0) + do_value
+
             if x_groups:
                 col_spans = [max(y_list) - min(y_list) for y_list in x_groups.values()]
-                max_col_span = max(col_spans) if col_spans else 0
-                max_height = (
-                    max_col_span + (max(x_groups.keys()) - min(x_groups.keys())) + do_value
-                )
+                max_height = (max(col_spans) if col_spans else 0.0) + do_value
+
+        elif cut_dir == "水平上下":
+            # 这里按你原来的思路，方向旋转后，排/列统计交换
+            x_groups = _dd(list)
+            y_groups = _dd(list)
+
+            for x, y in coords:
+                x_groups[round(x, 6)].append(y)
+                y_groups[round(y, 6)].append(x)
+
+            # 水平上下时，按你原业务习惯：
+            # 宽度改为看“同一列中的 x 方向展开”
+            if y_groups:
+                row_spans = [max(x_list) - min(x_list) for x_list in y_groups.values()]
+                max_width = (max(row_spans) if row_spans else 0.0) + do_value
+
+            # 高度改为看“同一列中的 y 方向展开”
+            if x_groups:
+                col_spans = [max(y_list) - min(y_list) for y_list in x_groups.values()]
+                max_height = (max(col_spans) if col_spans else 0.0) + do_value
+
         else:
-            y_values = [y for _, y in filtered_coords]
+            x_values = [x for x, _ in global_coords]
+            y_values = [y for _, y in global_coords]
+            max_width = (max(x_values) - min(x_values)) + do_value
             max_height = (max(y_values) - min(y_values)) + do_value
 
+        calc_results["实际布管区域最大宽度"] = str(round(max_width, 3))
         calc_results["实际布管区域最大高度"] = str(round(max_height, 3))
 
     else:
         calc_results["实际布管区域最大直径"] = "0.0"
+        calc_results["实际布管区域最大宽度"] = "0.0"
         calc_results["实际布管区域最大高度"] = "0.0"
 
     fenchengxingshi = tube_form if tube_form else ""
@@ -896,7 +1053,7 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
         fenchengxingshi = "2.1"
 
     need_two_rows = (cut_dir == "垂直" and tube_arr == "正三角形") or (
-        cut_dir == "水平" and tube_arr == "转角正三角形"
+            cut_dir == "水平" and tube_arr == "转角正三角形"
     )
 
     selected_coords_cross = []
@@ -981,7 +1138,7 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
                 selected_coords_vertical.extend(first_column_coords)
 
                 if (cut_dir == "水平" and tube_arr == "正三角形") or (
-                    cut_dir == "垂直" and tube_arr == "转角正三角形"
+                        cut_dir == "垂直" and tube_arr == "转角正三角形"
                 ):
                     second_candidates = [
                         p for p in candidates if abs(p[1]) > abs(first_y)
@@ -1013,7 +1170,7 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
         try:
             strange_tube_result = editor.calculate_strange_tube()
             if isinstance(strange_tube_result, (list, tuple)) and len(
-                strange_tube_result
+                    strange_tube_result
             ) >= 4:
                 calc_results["'丁字'交叉沿水平隔板槽连续侧的排管根数"] = str(
                     strange_tube_result[1]
@@ -1136,4 +1293,3 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
         sql_statements.append(insert_sql)
 
     return sql_statements
-
