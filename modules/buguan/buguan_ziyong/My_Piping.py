@@ -16350,9 +16350,10 @@ class TubeLayoutEditor(QMainWindow):
 
     def save_current_centers_to_product_json(self):
         """
-        将当前 self.current_centers 保存到 `modules/buguan/buguan_ziyong/coords/{productID}.json`。
-        - 若文件存在：直接覆盖写入（等价于清空后写入）
-        - 若文件不存在：创建新文件写入
+        将当前 self.current_centers 保存到 `{目标目录}/{productID}.json`。
+        目标目录规则：
+        1) 优先查询产品设计活动表中的“产品文件夹绝对路径”
+        2) 若未查到、为空或不可用，则回退到 `modules/buguan/buguan_ziyong/coords`
         """
         try:
             product_id = getattr(self, "productID", None)
@@ -16362,9 +16363,50 @@ class TubeLayoutEditor(QMainWindow):
             product_id = "unknown"
         product_id = str(product_id).strip()
 
-        coords_dir = os.path.join(os.path.dirname(__file__), "coords")
-        os.makedirs(coords_dir, exist_ok=True)
-        output_path = os.path.join(coords_dir, f"{product_id}.json")
+        fallback_dir = os.path.join(os.path.dirname(__file__), "coords")
+        target_dir = None
+
+        # 优先从产品设计活动表读取“产品文件夹绝对路径”
+        conn = None
+        try:
+            conn = create_product_connection()
+            if conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        SELECT 产品文件夹绝对路径
+                        FROM 产品设计活动表
+                        WHERE 产品ID = %s
+                        LIMIT 1
+                        """,
+                        (product_id,),
+                    )
+                    row = cursor.fetchone()
+                    if row and isinstance(row, dict):
+                        db_dir = row.get("产品文件夹绝对路径")
+                        if db_dir is not None:
+                            db_dir = str(db_dir).strip()
+                            if db_dir:
+                                target_dir = db_dir
+        except Exception:
+            target_dir = None
+        finally:
+            try:
+                if conn and conn.open:
+                    conn.close()
+            except Exception:
+                pass
+
+        # 目录可用性兜底：目标目录异常时回退到原 coords 目录
+        if not target_dir:
+            target_dir = fallback_dir
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+        except Exception:
+            target_dir = fallback_dir
+            os.makedirs(target_dir, exist_ok=True)
+
+        output_path = os.path.join(target_dir, f"{product_id}.json")
 
         centers = getattr(self, "current_centers", None) or []
         # 统一为 JSON 友好的二维数组，避免 tuple/非数值导致序列化异常
