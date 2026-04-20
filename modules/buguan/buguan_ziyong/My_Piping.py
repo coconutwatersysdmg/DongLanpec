@@ -12551,11 +12551,8 @@ class TubeLayoutEditor(QMainWindow):
                         and param_name == "分程隔板两侧相邻管中心距（水平）"
                 ):
                     return
-                if (
-                        getattr(self, "_sn_horizontal_warn_in_progress", False)
-                        and param_name == "分程隔板两侧相邻管中心距（水平）"
-                ):
-                    return
+                # 重要：Sn(水平) 的非法值回滚必须始终执行。
+                # 这里不再用 *_in_progress 直接 return（否则连续非法输入会出现“不弹窗也不回滚”，继而联动卡顿）。
                 # 抑制：回滚/程序更新期间避免触发 S 的二次弹窗
                 if getattr(self, "_suppress_s_center_warn", False) and param_name == "换热管中心距 S":
                     return
@@ -13241,6 +13238,92 @@ class TubeLayoutEditor(QMainWindow):
                         pass
                 except Exception as e:
                     print(f"[on_table_item_changed] 换热管壁厚δ校验失败: {e}")
+
+            # 提前单独处理：分程隔板两侧相邻管中心距（竖直/水平）约束（> 0）
+            if param_name in [
+                "分程隔板两侧相邻管中心距（竖直）",
+                "分程隔板两侧相邻管中心距（水平）",
+            ]:
+                try:
+                    from PyQt5.QtWidgets import QMessageBox
+                    from PyQt5.QtCore import QTimer, QSignalBlocker
+
+                    cur_text = str(param_value).strip()
+
+                    # 为两个参数分别维护“最近合法值”
+                    if param_name == "分程隔板两侧相邻管中心距（竖直）":
+                        last_attr = "_last_valid_sn_vertical_text"
+                        time_attr = "_last_sn_vertical_nonpos_warn_time"
+                    else:
+                        last_attr = "_last_valid_sn_horizontal_text"
+                        time_attr = "_last_sn_horizontal_nonpos_warn_time"
+
+                    if not hasattr(self, last_attr):
+                        base_text = "1"
+                        try:
+                            from_orig = str(
+                                self.original_param_values.get((row, 2), "")
+                            ).strip()
+                            if from_orig != "":
+                                base_text = from_orig
+                        except Exception:
+                            pass
+                        setattr(self, last_attr, base_text)
+
+                    new_val = None
+                    if cur_text != "":
+                        try:
+                            new_val = float(cur_text)
+                        except Exception:
+                            new_val = None
+
+                    invalid = new_val is None or new_val <= 0
+                    if invalid:
+                        # 弹窗限频：只限弹窗不限回滚
+                        try:
+                            import time as _time
+
+                            now = _time.monotonic()
+                            last = float(getattr(self, time_attr, 0.0) or 0.0)
+                        except Exception:
+                            now = None
+                            last = 0.0
+
+                        msg = f"您输入的“{param_name}”必须大于0，请重新输入！"
+
+                        def _show_warn_once():
+                            try:
+                                QMessageBox.warning(self, "输入错误", msg)
+                            except Exception:
+                                pass
+
+                        if now is None or (now - last) > 0.8:
+                            try:
+                                setattr(self, time_attr, now if now is not None else 0.0)
+                            except Exception:
+                                pass
+                            try:
+                                QTimer.singleShot(0, _show_warn_once)
+                            except Exception:
+                                _show_warn_once()
+
+                        rollback_text = str(getattr(self, last_attr, "1")).strip() or "1"
+
+                        blocker = None
+                        try:
+                            blocker = QSignalBlocker(self.param_table)
+                        except Exception:
+                            blocker = None
+                        try:
+                            changed_item.setText(rollback_text)
+                        finally:
+                            blocker = None
+                        return
+
+                    # 合法输入：更新最近合法值
+                    setattr(self, last_attr, cur_text)
+                except Exception as e:
+                    print(f"[on_table_item_changed] Sn(竖直/水平) >0 校验失败: {e}")
 
             # 如果是用户手动修改"隔条位置尺寸 W"，打印提示并调用用户更新函数
             # 注意：程序自动更新时已经在前面return了，这里只会是用户手动修改
