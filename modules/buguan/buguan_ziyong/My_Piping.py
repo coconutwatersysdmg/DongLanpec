@@ -38244,10 +38244,14 @@ class TubeLayoutEditor(QMainWindow):
             theta_deg = float(angle)
 
             # 获取其他必要参数
-            # 这里的 DL 变量在历史代码里承载的是“壳体内直径 Dis”
-            # 按你的要求：滑道几何计算只使用 Dis，不再使用公称直径 DN
-            DL = do = None
-            DN = None
+            # 规则：
+            # - 是否以外径为基准=是：滑道底部应抵在“壳体内直径 Dis”绘制的大圆上
+            # - 是否以外径为基准≠是（通常为否）：按原逻辑优先抵在“公称直径 DN”绘制的大圆上（DN缺失时回退用Dis）
+            dis_val = None
+            dn_val = None
+            do = None
+            base_circle_diameter = None
+            DN = None  # 兼容旧字段：用于 operations 记录
             for row in range(self.param_table.rowCount()):
                 param_name = self.param_table.item(row, 1).text()
                 widget = self.param_table.cellWidget(row, 2)
@@ -38258,25 +38262,60 @@ class TubeLayoutEditor(QMainWindow):
                     param_value = item.text() if item else ""
 
                 if param_name == "壳体内直径 Dis":
-                    DL = float(param_value)
+                    try:
+                        dis_val = float(param_value)
+                    except Exception:
+                        dis_val = None
+                elif param_name == "公称直径 DN":
+                    try:
+                        dn_val = float(param_value)
+                    except Exception:
+                        dn_val = None
                 elif param_name == "换热管外径 do":
-                    do = float(param_value)
-                    self.r = do / 2
+                    try:
+                        do = float(param_value)
+                        self.r = do / 2
+                    except Exception:
+                        do = None
 
-            if None in (DL, do):
-                QMessageBox.warning(
-                    self, "提示", "缺少必要参数：壳体内直径 Dis 或换热管外径 do"
-                )
+            if do is None or do <= 0:
+                QMessageBox.warning(self, "提示", "缺少必要参数：换热管外径 do")
                 return
 
-            # 滑道计算全用壳体内直径 Dis
-            DN = DL
+            # 读取“是否以外径为基准”
+            try:
+                flag = str(self.get_is_outer_diameter_base() or "").strip()
+            except Exception:
+                flag = ""
+
+            if flag == "是":
+                # 必须贴 Dis 圆
+                if dis_val is None or dis_val <= 0:
+                    QMessageBox.warning(
+                        self, "提示", "缺少必要参数：壳体内直径 Dis（以外径为基准=是时必填）"
+                    )
+                    return
+                base_circle_diameter = dis_val
+            else:
+                # 按原逻辑优先贴 DN 圆；DN 缺失时回退用 Dis
+                if dn_val is not None and dn_val > 0:
+                    base_circle_diameter = dn_val
+                elif dis_val is not None and dis_val > 0:
+                    base_circle_diameter = dis_val
+                else:
+                    QMessageBox.warning(
+                        self, "提示", "缺少必要参数：公称直径 DN（或壳体内直径 Dis）"
+                    )
+                    return
+
+            # 兼容旧字段：后续 operations 里仍记录 DN，这里用“实际绘制基准圆直径”代替
+            DN = base_circle_diameter
 
             # 初始化滑道中心列表
             self.slipway_centers = []
             all_interfering_y_coords = set()  # 收集所有存在干涉的y坐标
 
-            outer_radius = DL / 2
+            outer_radius = base_circle_diameter / 2
             center_x, center_y = 0, 0
             theta_rad = math.radians(theta_deg)
             center_angle = math.radians(90)  # Qt坐标系向下方向
