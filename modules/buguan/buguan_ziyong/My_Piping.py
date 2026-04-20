@@ -6339,7 +6339,7 @@ class TubeLayoutEditor(QMainWindow):
             elif 25 <= od_val <= 32:
                 input_json["LB_TieRodD"] = "16"
             elif 32 < od_val <= 57:
-                input_json["LB_TieRodD"] = "27"
+                input_json["LB_TieRodD"] = "20"
             else:
                 input_json["LB_TieRodD"] = "12"
         input_json["LB_ClapboardType"] = "2"
@@ -7079,7 +7079,7 @@ class TubeLayoutEditor(QMainWindow):
             elif 25 <= od_val <= 32:
                 input_json["LB_TieRodD"] = "16"
             elif 32 < od_val <= 57:
-                input_json["LB_TieRodD"] = "27"
+                input_json["LB_TieRodD"] = "20"
             else:
                 input_json["LB_TieRodD"] = "12"
         input_json["LB_ClapboardType"] = "2"
@@ -8228,7 +8228,7 @@ class TubeLayoutEditor(QMainWindow):
                     lg_diameter_widget = self.param_table.cellWidget(lg_diameter_row, 2)
 
                     # 定义螺纹拉杆直径选项
-                    thread_options = ["10", "12", "16", "27"]
+                    thread_options = ["10", "12", "16", "20"]
 
                     # 确定基于换热管外径的默认值（保留原逻辑）
                     if 25 > do_value >= 19:
@@ -8236,7 +8236,7 @@ class TubeLayoutEditor(QMainWindow):
                     elif do_value <= 32:
                         default_value = "16"
                     else:
-                        default_value = "27"
+                        default_value = "20"
                     print(
                         f"根据换热管外径 {do_value} 计算的默认螺纹拉杆直径: {default_value}"
                     )
@@ -8380,7 +8380,7 @@ class TubeLayoutEditor(QMainWindow):
         elif 25 <= do_value <= 32:
             result = "16"
         elif 32 < do_value <= 57:
-            result = "27"
+            result = "20"
         else:
             result = do_value
 
@@ -22629,10 +22629,10 @@ class TubeLayoutEditor(QMainWindow):
             elif 25 <= tube_do <= 32:
                 default_dia = 16.0
             elif 32 < tube_do <= 57:
-                default_dia = 27.0
+                default_dia = 20.0
 
         # 直径选项表
-        THREAD_OPTIONS = ["10", "12", "16", "27"]  # 螺纹拉杆固定选项
+        THREAD_OPTIONS = ["10", "12", "16", "20"]  # 螺纹拉杆固定选项
         WELD_OPTIONS = [
             "10",
             "12",
@@ -23303,9 +23303,9 @@ class TubeLayoutEditor(QMainWindow):
             elif 25 <= tube_do <= 32:
                 default_dia = 16.0
             elif 32 < tube_do <= 57:
-                default_dia = 27.0
+                default_dia = 20.0
 
-        THREAD_OPTIONS = ["10", "12", "16", "27"]
+        THREAD_OPTIONS = ["10", "12", "16", "20"]
         WELD_OPTIONS = [
             "10", "12", "14", "16", "19", "20", "22", "25",
             "30", "32", "35", "38", "45", "50", "55", "57"
@@ -30739,10 +30739,10 @@ class TubeLayoutEditor(QMainWindow):
             elif 25 <= tube_do <= 32:
                 default_dia = 16.0
             elif 32 < tube_do <= 57:
-                default_dia = 27.0
+                default_dia = 20.0
 
         # 直径选项
-        THREAD_OPTIONS = ["10", "12", "16", "27"]  # 螺纹拉杆
+        THREAD_OPTIONS = ["10", "12", "16", "20"]  # 螺纹拉杆
         WELD_OPTIONS = [
             "10",
             "12",
@@ -31291,9 +31291,9 @@ class TubeLayoutEditor(QMainWindow):
             elif 25 <= tube_do <= 32:
                 default_dia = 16.0
             elif 32 < tube_do <= 57:
-                default_dia = 27.0
+                default_dia = 20.0
 
-        THREAD_OPTIONS = ["10", "12", "16", "27"]
+        THREAD_OPTIONS = ["10", "12", "16", "20"]
         WELD_OPTIONS = [
             "10", "12", "14", "16", "19", "20", "22", "25",
             "30", "32", "35", "38", "45", "50", "55", "57"

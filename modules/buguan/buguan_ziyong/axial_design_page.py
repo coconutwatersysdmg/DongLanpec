@@ -960,11 +960,9 @@ class AxialDesignPage(QWidget):
                                                          beam_height)
                 self._draw_innermost_heat_exchange_tubes(x_left_center, x_right_center, y_center - 50, beam_length,
                                                          beam_height)
-                # 将两根内侧换热管在水平方向向右各延长 semi_radius
-                self._extend_innermost_tube_to_right(x_left_center, x_right_center, y_center + 50,
-                                                     beam_length, beam_height, semi_radius)
-                self._extend_innermost_tube_to_right(x_left_center, x_right_center, y_center - 50,
-                                                     beam_length, beam_height, semi_radius)
+                # U型管在4/6管程下仍保持U型端部表现（半圆），不切换为直管视觉
+                self._draw_innermost_semi_circle(x_left_center, x_right_center, y_center, 50)
+                self._draw_innermost_semi_circle(x_left_center, x_right_center, y_center, semi_radius)
             else:
                 # 最外侧换热管，2个
                 self._draw_outermost_heat_exchange_tubes(x_left_center, x_right_center, y_center,
