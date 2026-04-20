@@ -353,6 +353,11 @@ class SheetFormPage(QWidget):
         try:
             # 页面显示时先按 heat_exchanger 规则刷新一次“管板型式可编辑性”
             self._apply_plate_type_rule()
+            # 对于锁死型式（例如 NEN）：页面一打开就强制固定到指定节点并加载参数
+            try:
+                self._force_fixed_node_on_open()
+            except Exception:
+                pass
             if (not self._sheet_form_combo_popup_done
                     and hasattr(self, 'sheet_form_connection_type_combo')
                     and self.sheet_form_connection_type_combo is not None
@@ -384,6 +389,39 @@ class SheetFormPage(QWidget):
 
         return default_type, allow_modify
 
+    def _get_heat_exchanger_from_product_db(self, product_id: str):
+        """优先从产品设计活动表查询真实“产品型式”，避免父窗口 heat_exchanger 被临时兜底值污染。"""
+        pid = str(product_id or "").strip()
+        if not pid:
+            return None
+        conn = create_product_connection()
+        if not conn:
+            return None
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT 产品型式
+                    FROM 产品设计活动表
+                    WHERE 产品ID = %s
+                    LIMIT 1
+                    """,
+                    (pid,),
+                )
+                row = cursor.fetchone()
+                if row and isinstance(row, dict):
+                    hx = row.get("产品型式")
+                    hx = str(hx).strip().upper() if hx is not None else ""
+                    return hx or None
+        except Exception:
+            return None
+        finally:
+            try:
+                if conn and conn.open:
+                    conn.close()
+            except Exception:
+                pass
+
     def _apply_plate_type_rule(self, saved_plate_type=None):
         """按 heat_exchanger 规则设置下拉框默认值及可编辑性。"""
         try:
@@ -392,7 +430,22 @@ class SheetFormPage(QWidget):
 
             connection_type_images = ['a', 'b', 'c', 'd', 'e', 'f']
             parent_value = getattr(self.parent, "heat_exchanger", None)
-            target_type, allow_modify = self._resolve_plate_type_rule(parent_value)
+            # 关键：规则判定优先使用数据库中的真实产品型式
+            hx_for_rule = None
+            try:
+                hx_for_rule = self._get_heat_exchanger_from_product_db(self.get_product_id())
+            except Exception:
+                hx_for_rule = None
+            if not hx_for_rule:
+                hx_for_rule = parent_value
+
+            # 保存一份本页实际使用的型式判定值，供后续锁节点/锁编辑使用
+            try:
+                self._sheet_form_hx_for_rule = str(hx_for_rule or "").strip().upper()
+            except Exception:
+                self._sheet_form_hx_for_rule = None
+
+            target_type, allow_modify = self._resolve_plate_type_rule(hx_for_rule)
 
             # 可修改时：优先已保存值；不可修改时：强制规则值
             selected_type = target_type
@@ -418,12 +471,92 @@ class SheetFormPage(QWidget):
             self.sheet_form_updates_image_path(target_index)
 
             print(
-                f"[sheet_form_page] 规则应用: heat_exchanger={parent_value}, "
+                f"[sheet_form_page] 规则应用: heat_exchanger={parent_value}, hx_for_rule={hx_for_rule}, "
                 f"target_type={target_type}, selected_type={selected_type}, allow_modify={allow_modify}"
             )
         except Exception as e:
             print(f"[sheet_form_page] 应用管板型式规则失败: {e}")
             traceback.print_exc()
+
+    def _is_node_and_param_edit_locked(self):
+        """是否锁死节点切换与参数编辑（例如 NEN 固定 b_a 且不允许修改任何参数）。"""
+        try:
+            hx = str(getattr(self, "_sheet_form_hx_for_rule", "") or "").strip().upper()
+        except Exception:
+            hx = ""
+        return hx in {"NEN", "AES", "BES", "AKU", "BKU", "AEM", "BEM"}
+
+    def _get_forced_node_for_hx(self):
+        """返回需要强制选中的节点名（不含扩展名），如 NEN -> b_a。"""
+        try:
+            hx = str(getattr(self, "_sheet_form_hx_for_rule", "") or "").strip().upper()
+        except Exception:
+            hx = ""
+        if hx == "NEN":
+            return "b_a"
+        if hx in {"AEM", "BEM"}:
+            return "e_a"
+        return None
+
+    def _force_fixed_node_on_open(self):
+        """
+        锁死型式（如 NEN）进入页面后：自动选中强制节点并加载参数。
+        由于图片列表可能异步刷新，这里带轻量重试，直到就绪为止。
+        """
+        if not self._is_node_and_param_edit_locked():
+            return
+        forced = self._get_forced_node_for_hx()
+        if not forced:
+            return
+
+        # 防止重复重试占用：同一轮 showEvent 只启动一次
+        if getattr(self, "_force_node_retry_running", False):
+            return
+        self._force_node_retry_running = True
+
+        def _try_force(attempt=0):
+            try:
+                # 只要成功一次就结束
+                idx = self._find_node_index_in_current_images(forced)
+                if idx is not None:
+                    self._handle_image_click(None, idx)
+                    return
+            except Exception:
+                pass
+
+            # 重试（最多约 1s）
+            if attempt >= 20:
+                return
+            QTimer.singleShot(50, lambda: _try_force(attempt + 1))
+
+        def _done_clear_flag():
+            try:
+                self._force_node_retry_running = False
+            except Exception:
+                pass
+
+        # 启动重试，并在最后清标志（给下一次 showEvent 留机会）
+        try:
+            _try_force(0)
+        finally:
+            QTimer.singleShot(1200, _done_clear_flag)
+
+    def _find_node_index_in_current_images(self, node_name_without_ext: str):
+        """在当前图片列表里按文件名（不含扩展名）查找节点索引。找不到返回 None。"""
+        name = str(node_name_without_ext or "").strip()
+        if not name:
+            return None
+        imgs = getattr(self, "sheet_form_current_images", None) or []
+        if not imgs:
+            return None
+        for idx, img_path in enumerate(imgs):
+            try:
+                base = os.path.splitext(os.path.basename(str(img_path)))[0]
+                if base == name:
+                    return idx
+            except Exception:
+                continue
+        return None
 
     def _mark_sheet_form_value_blue(self, row, col=1):
         """将参数值单元格标记为蓝色（仿 My_Piping 的手动修改高亮）。"""
@@ -814,8 +947,14 @@ class SheetFormPage(QWidget):
 
                     # 4. 如果当前有图片，优先根据已保存节点模拟点击，自动加载参数
                     if self.sheet_form_current_images and len(self.sheet_form_image_labels) > 0:
-                        target_node = self._get_saved_plate_node()
-                        print(f"[DEBUG 延迟检查] 已保存的管板节点: {target_node}")
+                        forced_node = None
+                        try:
+                            forced_node = self._get_forced_node_for_hx()
+                        except Exception:
+                            forced_node = None
+
+                        target_node = forced_node or self._get_saved_plate_node()
+                        print(f"[DEBUG 延迟检查] 已保存的管板节点: {self._get_saved_plate_node()}, forced_node={forced_node}, use_node={target_node}")
 
                         click_index = 0
                         if target_node:
@@ -864,6 +1003,18 @@ class SheetFormPage(QWidget):
     def _handle_image_click(self, event, index):
         # 方法内容保持不变
         try:
+            # 对于固定型式（例如 NEN）：锁死节点切换，只允许强制节点（b_a）
+            try:
+                if self._is_node_and_param_edit_locked():
+                    forced = self._get_forced_node_for_hx()
+                    if forced and 0 <= index < len(self.sheet_form_current_images):
+                        base = os.path.splitext(os.path.basename(str(self.sheet_form_current_images[index])))[0]
+                        if base != forced:
+                            # 忽略用户切换节点
+                            return
+            except Exception:
+                pass
+
             # 每次点击图片前，尝试从父窗口刷新一次关键参数（DN、Di、是否以外径为基准、DL）
             try:
                 self.get_DN_and_Di_from_parent()
@@ -1093,7 +1244,10 @@ class SheetFormPage(QWidget):
                         # 参数值列
                         display_text = str(adjusted_value)
                         value_item = QTableWidgetItem(display_text)
-                        if selected_folder == 'b' and image_name_without_ext == 'b_b':
+                        # NEN/AES/BES/AKU/BKU/AEM/BEM 等：不允许用户修改任何管板参数值
+                        if self._is_node_and_param_edit_locked():
+                            value_item.setFlags(value_item.flags() & ~Qt.ItemIsEditable & ~Qt.ItemIsEnabled)
+                        elif selected_folder == 'b' and image_name_without_ext == 'b_b':
                             value_item.setFlags(value_item.flags() & ~Qt.ItemIsEditable & ~Qt.ItemIsEnabled)
                         else:
                             value_item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
