@@ -7468,7 +7468,8 @@ class TubeLayoutEditor(QMainWindow):
 
         if current_type == "平板形":
             if place_row is not None:
-                self.set_param_visibility(place_row, True)
+                # 平板形：放置位置参数保持隐藏（不在左侧参数列表中展示）
+                self.set_param_visibility(place_row, False)
             self.set_param_visibility(thickness_row, True)
             self.set_param_visibility(angle_row, False)
             self.set_param_visibility(width_row, False)
