@@ -1296,6 +1296,8 @@ class TubeLayoutEditor(QMainWindow):
         self.selected_side_blocks = []  # 选中的旁路挡板，用于删除
         self.interfering_tubes1 = []  # 左侧滑道干涉换热管
         self.interfering_tubes2 = []  # 右侧滑道干涉换热管
+        # 防冲板/滑道等功能使用：干涉换热管绝对坐标列表（若计算函数未写入也不能崩）
+        self.interfering_centers = []
         self.side_dangban_thick = None
         self.slide_selected_centers = []
         self.sdangban_selected_centers = []
@@ -40031,7 +40033,14 @@ class TubeLayoutEditor(QMainWindow):
 
             if "顶部" in placement_mode:
                 # 与参照管中心连线平行，并沿法向平移到“上方”
-                shift = (do_value / 2.0) if isinstance(do_value, (int, float)) and do_value > 0 else 0.0
+                r_tube = (do_value / 2.0) if isinstance(do_value, (int, float)) and do_value > 0 else 0.0
+                # 平板形防冲板的“厚度”会影响与换热管的重合：需要保证线段整体在两管外切圆之上
+                thk_plate = 0.0
+                try:
+                    thk_plate = float(baffle_thickness) if baffle_thickness not in (None, "") else 0.0
+                except Exception:
+                    thk_plate = 0.0
+                margin = 0.5  # mm，少量安全余量，避免视觉重叠/浮点误差
                 # 候选法向量：(-uy, ux) 与其反向 (uy, -ux)
                 n1x, n1y = -uy, ux
                 n2x, n2y = uy, -ux
@@ -40040,6 +40049,21 @@ class TubeLayoutEditor(QMainWindow):
                     nx, ny = n1x, n1y
                 else:
                     nx, ny = n2x, n2y
+                # 计算最小平移量：确保新线段在两管“上方”（Qt坐标系 y 越小越上）
+                required_y_up = r_tube + (thk_plate / 2.0) + margin
+                shift = r_tube  # 保留原逻辑基准（至少 do/2）
+                try:
+                    if ny < -1e-6:
+                        # ny 为负表示确实向上。保证 ny*shift <= -required_y_up
+                        shift = max(shift, required_y_up / (-ny))
+                    else:
+                        # 极端情况：法向几乎不带 y 分量（例如两管近似竖直连线）
+                        # 直接按“向上”移动 required_y_up
+                        nx, ny = 0.0, -1.0
+                        shift = max(shift, required_y_up)
+                except Exception:
+                    pass
+
                 draw_p1 = (p1x + nx * shift, p1y + ny * shift)
                 draw_p2 = (p2x + nx * shift, p2y + ny * shift)
             else:
@@ -40211,10 +40235,9 @@ class TubeLayoutEditor(QMainWindow):
             self.calculate_and_update_interfering_tubes(points, baffle_thickness)
             # 这个函数得到了干涉换热管坐标，为绝对坐标，更新的需求为不要删除选中的俩坐标，所以在这里做一下过滤
             actual_centers = self.selected_to_current_coords(selected_centers)
+            _raw_interfering = getattr(self, "interfering_centers", None) or []
             self.interfering_centers = [
-                coord
-                for coord in self.interfering_centers
-                if coord not in actual_centers
+                coord for coord in _raw_interfering if coord not in actual_centers
             ]
 
             if hasattr(self, "interfering_centers"):
@@ -40651,10 +40674,9 @@ class TubeLayoutEditor(QMainWindow):
                 A, P, Q, B, baffle_thickness
             )
             actual_centers = self.selected_to_current_coords(selected_centers)
+            _raw_interfering = getattr(self, "interfering_centers", None) or []
             self.interfering_centers = [
-                coord
-                for coord in self.interfering_centers
-                if coord not in actual_centers
+                coord for coord in _raw_interfering if coord not in actual_centers
             ]
             if hasattr(self, "interfering_centers"):
                 centers = [
