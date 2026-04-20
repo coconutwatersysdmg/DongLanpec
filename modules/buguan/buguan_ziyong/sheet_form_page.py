@@ -8,8 +8,53 @@ from PyQt5.QtCore import Qt, QSize, QTimer, QRect
 from PyQt5.QtGui import QPixmap, QFont, QIcon, QPainter, QColor, QBrush
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
                              QGridLayout, QFrame, QListWidget, QListWidgetItem, QLineEdit, QComboBox, QSizePolicy,
-                             QTableWidget, QTableWidgetItem, QHeaderView, QDialog, QApplication)
+                             QTableWidget, QTableWidgetItem, QHeaderView, QDialog, QApplication, QStyledItemDelegate)
 import pymysql
+
+
+class _ItalicColumnDelegate(QStyledItemDelegate):
+    """强制指定列斜体渲染，避免全局样式表覆盖 item 字体。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def paint(self, painter, option, index):
+        try:
+            opt = option
+            # QStyleOptionViewItem 是可变对象，直接改 opt.font 即可
+            opt.font.setItalic(True)
+            option = opt
+        except Exception:
+            pass
+        return super().paint(painter, option, index)
+
+
+_SUBSCRIPT_DIGITS = str.maketrans(
+    {
+        "0": "₀",
+        "1": "₁",
+        "2": "₂",
+        "3": "₃",
+        "4": "₄",
+        "5": "₅",
+        "6": "₆",
+        "7": "₇",
+        "8": "₈",
+        "9": "₉",
+    }
+)
+
+
+def _display_with_subscript_digits(text: str) -> str:
+    """
+    仅用于界面显示：把所有数字替换为 Unicode 下标数字。
+    例如：α1 -> α₁, R12 -> R₁₂
+    存储/内部键仍使用原始字符串（如 α1）。
+    """
+    try:
+        return ("" if text is None else str(text)).translate(_SUBSCRIPT_DIGITS)
+    except Exception:
+        return "" if text is None else str(text)
 
 class ImagePreviewDialog(QDialog):
     """显示可缩放大图的弹窗，支持 Ctrl+滚轮缩放"""
@@ -897,6 +942,13 @@ class SheetFormPage(QWidget):
             # 创建参数表格 - 完全照搬tube_sheet_connection.py的样式
             self.sheet_form_param_table = NoWheelTableWidget()
             self.sheet_form_param_table.setColumnCount(2)
+            # 强制“参数名列”斜体显示（避免 main.py 全局样式覆盖）
+            try:
+                self.sheet_form_param_table.setItemDelegateForColumn(
+                    0, _ItalicColumnDelegate(self.sheet_form_param_table)
+                )
+            except Exception:
+                pass
             # 注释掉表头
             self.sheet_form_param_table.verticalHeader().setVisible(False)
             self.sheet_form_param_table.horizontalHeader().setVisible(False)  # 隐藏水平表头
@@ -1203,8 +1255,10 @@ class SheetFormPage(QWidget):
                             continue
 
                         # 通用逻辑：参数名列 - 只读（全改名后，param_name 即新代号）
+                        # 显示时把数字做成“下标”样式（仅影响界面，存储仍用原符号）
                         display_param_name = str(param_name).strip()
-                        name_item = QTableWidgetItem(display_param_name)
+                        display_text = _display_with_subscript_digits(display_param_name)
+                        name_item = QTableWidgetItem(display_text)
                         name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
                         # 全改名模式：UserRole 保存新代号，用于后续保存/计算取参
                         try:
