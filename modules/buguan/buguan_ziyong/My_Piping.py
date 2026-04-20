@@ -40402,9 +40402,26 @@ class TubeLayoutEditor(QMainWindow):
                 return
 
             print(f"✓ 获取到2个有效坐标点: {points}")
-            # 计算折边式防冲板的坐标点
-            point1 = QPointF(points[0][0], points[0][1])
-            point2 = QPointF(points[1][0], points[1][1])
+            # 计算折边式防冲板的基准点：
+            # 要求“搭在换热管上方”，因此把参照管中心整体上移 (r + 防冲板半厚度)
+            tube_r_for_top = 0.0
+            try:
+                tube_r_for_top = float(do_value) / 2.0 if isinstance(do_value, (int, float)) and do_value > 0 else 0.0
+            except Exception:
+                tube_r_for_top = 0.0
+            if tube_r_for_top <= 0:
+                try:
+                    tube_r_for_top = float(getattr(self, "r", 0.0) or 0.0)
+                except Exception:
+                    tube_r_for_top = 0.0
+            try:
+                plate_half_thk = (float(baffle_thickness) / 2.0) if baffle_thickness not in (None, "") else 0.0
+            except Exception:
+                plate_half_thk = 0.0
+            up_shift = max(0.0, tube_r_for_top + plate_half_thk)
+
+            point1 = QPointF(points[0][0], points[0][1] - up_shift)
+            point2 = QPointF(points[1][0], points[1][1] - up_shift)
 
             print(
                 f"[防冲板] 输入点: point1=({point1.x(): .2f}, {point1.y(): .2f}), point2=({point2.x(): .2f}, {point2.y(): .2f})"
@@ -40462,62 +40479,21 @@ class TubeLayoutEditor(QMainWindow):
                 f"✓ 防冲板参数计算完成: baffle_height={baffle_height}, top_length={top_length}"
             )
 
-            # 确定y_axis方向，使P、Q距离圆心比A、B远
-            # 计算两个候选y_axis方向（逆时针90°和顺时针90°）
+            # 确定 y_axis 方向：圆弧形防冲板应搭在所选换热管“上方”
+            # Qt 坐标系中 y 越小越靠上，因此选择 y 分量更小（更负）的法向
+            # 计算两个候选 y_axis 方向（互为反向）
             y_axis1 = QPointF(-x_axis.y(), x_axis.x())  # 逆时针90°
             y_axis2 = QPointF(x_axis.y(), -x_axis.x())  # 顺时针90°（反向）
-
-            # 计算A、B到原点的距离平方
-            dist_A_sq = A.x() ** 2 + A.y() ** 2
-            dist_B_sq = B.x() ** 2 + B.y() ** 2
-            max_AB_dist_sq = max(dist_A_sq, dist_B_sq)
-
-            # 分别计算使用两个y_axis方向的P点
-            P1 = (
+            y_axis = y_axis1 if y_axis1.y() <= y_axis2.y() else y_axis2
+            P = (
                     A
                     + x_axis * (incline_length * math.cos(angle_rad))
-                    + y_axis1 * (incline_length * math.sin(angle_rad))
-            )
-            P2 = (
-                    A
-                    + x_axis * (incline_length * math.cos(angle_rad))
-                    + y_axis2 * (incline_length * math.sin(angle_rad))
-            )
-
-            # 计算P1、P2到原点的距离平方
-            dist_P1_sq = P1.x() ** 2 + P1.y() ** 2
-            dist_P2_sq = P2.x() ** 2 + P2.y() ** 2
-
-            print(
-                f"[防冲板] 距离比较: A距离={math.sqrt(dist_A_sq):.2f}, B距离={math.sqrt(dist_B_sq): .2f}"
+                    + y_axis * (incline_length * math.sin(angle_rad))
             )
             print(
-                f"[防冲板] P1距离={math.sqrt(dist_P1_sq):.2f}, P2距离={math.sqrt(dist_P2_sq): .2f}"
+                f"[防冲板] 选择上方方向: y_axis=({y_axis.x():.4f}, {y_axis.y():.4f}), "
+                f"P=({P.x():.2f}, {P.y():.2f})"
             )
-
-            # 选择使P距离原点更远的y_axis，且确保P距离大于A和B
-            if dist_P1_sq > dist_P2_sq and dist_P1_sq > max_AB_dist_sq:
-                y_axis = y_axis1
-                P = P1
-                print(f"✓ 选择y_axis1（逆时针90°），P距离={math.sqrt(dist_P1_sq): .2f}")
-            elif dist_P2_sq > max_AB_dist_sq:
-                y_axis = y_axis2
-                P = P2
-                print(f"✓ 选择y_axis2（顺时针90°），P距离={math.sqrt(dist_P2_sq): .2f}")
-            else:
-                # 如果两个方向都不满足P距离大于A和B，选择距离更远的那个
-                if dist_P1_sq > dist_P2_sq:
-                    y_axis = y_axis1
-                    P = P1
-                    print(
-                        f"⚠ 选择y_axis1（距离更远），P距离={math.sqrt(dist_P1_sq): .2f}"
-                    )
-                else:
-                    y_axis = y_axis2
-                    P = P2
-                    print(
-                        f"⚠ 选择y_axis2（距离更远），P距离={math.sqrt(dist_P2_sq): .2f}"
-                    )
 
             # 计算Q点
             Q = P + x_axis * top_length
