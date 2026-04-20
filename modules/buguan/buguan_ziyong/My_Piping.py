@@ -35016,19 +35016,39 @@ class TubeLayoutEditor(QMainWindow):
                     selected_centers = self.judge_linkage(self.selected_centers)
                 else:
                     selected_centers = self.selected_centers
-                # 计算旁路挡板宽度
-                result = self.calculate_level_side_dangban_length(selected_centers, block_height)
+                # 多选时：每个旁路挡板宽度应分别计算（厚度一致、宽度可能不同）
+                # 先用第一个点触发一次提示确认（若需要），避免循环里多次弹窗
+                first_center = selected_centers[0] if selected_centers else None
+                if first_center is None:
+                    self.clear_selection_highlight()
+                    dialog.close()
+                    return
+                result = self.calculate_level_side_dangban_length(
+                    [first_center], block_height, prompt_user=True
+                )
                 if result is None:
                     # 用户取消了操作
                     self.clear_selection_highlight()
                     dialog.close()
                     return
-                # result 是旁路挡板长度，已设置到 self.side_dangban_length
+                # 维持旧行为：全局推荐值仍写入 self.side_dangban_length（用于参数区显示/保存“宽度”参数）
+                try:
+                    self.side_dangban_length = result
+                except Exception:
+                    pass
 
                 # added_count = self.build_side_dangban(selected_centers, self.side_dangban_length, block_height)
                 for center in selected_centers:
+                    try:
+                        length_each = self.calculate_level_side_dangban_length(
+                            [center], block_height, prompt_user=False
+                        )
+                    except Exception:
+                        length_each = None
+                    if length_each is None:
+                        continue
                     added_count = self.build_single_side_dangban(
-                        [center], self.side_dangban_length, block_height
+                        [center], length_each, block_height
                     )
 
                 # 清除选中状态及淡蓝色涂层
@@ -35065,17 +35085,35 @@ class TubeLayoutEditor(QMainWindow):
                     selected_centers = self.judge_linkage(self.selected_centers)
                 else:
                     selected_centers = self.selected_centers
-                # 计算旁路挡板宽度（垂直方向）
-                result = self.calculate_vertical_side_dangban_length(selected_centers, block_height)
+                # 多选时：每个旁路挡板宽度应分别计算（垂直方向）
+                first_center = selected_centers[0] if selected_centers else None
+                if first_center is None:
+                    self.clear_selection_highlight()
+                    dialog.close()
+                    return
+                result = self.calculate_vertical_side_dangban_length(
+                    [first_center], block_height, prompt_user=True
+                )
                 if result is None:
                     # 用户取消了操作
                     self.clear_selection_highlight()
                     dialog.close()
                     return
-                # result 是旁路挡板长度，已设置到 self.side_dangban_length
+                try:
+                    self.side_dangban_length = result
+                except Exception:
+                    pass
                 for center in selected_centers:
+                    try:
+                        length_each = self.calculate_vertical_side_dangban_length(
+                            [center], block_height, prompt_user=False
+                        )
+                    except Exception:
+                        length_each = None
+                    if length_each is None:
+                        continue
                     added_count = self.build_single_side_dangban_vertical(
-                        [center], self.side_dangban_length, block_height
+                        [center], length_each, block_height
                     )
 
                 # 清除选中状态及淡蓝色涂层（使用left/right分组）
@@ -35107,7 +35145,7 @@ class TubeLayoutEditor(QMainWindow):
         self.close_btn.clicked.connect(on_close)
         dialog.exec_()
     #TODO 计算水平旁路挡板宽度
-    def calculate_level_side_dangban_length(self, selected_centers, block_height):
+    def calculate_level_side_dangban_length(self, selected_centers, block_height, prompt_user: bool = True):
         """
         计算旁路挡板宽度（长度）
         
@@ -35165,8 +35203,8 @@ class TubeLayoutEditor(QMainWindow):
 
         distance = abs(abs(intersection2[0]) - abs(n_x))
 
-        # 新增判断逻辑：当距离小于等于16mm时提示用户
-        if distance <= 16:
+        # 新增判断逻辑：当距离小于等于16mm时提示用户（多选循环时可关闭提示，避免多次弹窗）
+        if prompt_user and distance <= 16:
             reply = QMessageBox.question(
                 self,
                 "间距提示",
@@ -35448,7 +35486,7 @@ class TubeLayoutEditor(QMainWindow):
                 self.side_dangban_length = 0.0
                 return 0.0
     #TODO 计算垂直旁路挡板宽度
-    def calculate_vertical_side_dangban_length(self, selected_centers, block_height):
+    def calculate_vertical_side_dangban_length(self, selected_centers, block_height, prompt_user: bool = True):
         """
         计算垂直方向旁路挡板宽度（长度）
         
@@ -35506,8 +35544,8 @@ class TubeLayoutEditor(QMainWindow):
 
         distance = abs(abs(intersection2[1]) - abs(n_y))
 
-        # 新增判断逻辑：当距离小于等于16mm时提示用户
-        if distance <= 16:
+        # 新增判断逻辑：当距离小于等于16mm时提示用户（多选循环时可关闭提示，避免多次弹窗）
+        if prompt_user and distance <= 16:
             reply = QMessageBox.question(
                 self,
                 "间距提示",
