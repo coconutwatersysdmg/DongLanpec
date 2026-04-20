@@ -12544,11 +12544,8 @@ class TubeLayoutEditor(QMainWindow):
                         and param_name == "圆钢规格"
                 ):
                     return
-                if (
-                        getattr(self, "_tube_wall_warn_in_progress", False)
-                        and param_name == "换热管壁厚 δ"
-                ):
-                    return
+                # 重要：换热管壁厚 δ 的非法回滚必须始终执行。
+                # 这里不再用 *_in_progress 直接 return（会导致第二次非法输入不弹窗也不回滚，随后联动逻辑卡顿）。
                 if (
                         getattr(self, "_suppress_sn_horizontal_warn", False)
                         and param_name == "分程隔板两侧相邻管中心距（水平）"
@@ -13137,7 +13134,7 @@ class TubeLayoutEditor(QMainWindow):
             if param_name == "换热管壁厚 δ":
                 try:
                     from PyQt5.QtWidgets import QMessageBox
-                    from PyQt5.QtCore import QTimer
+                    from PyQt5.QtCore import QTimer, QSignalBlocker
 
                     cur_text = str(param_value).strip()
 
@@ -13182,41 +13179,58 @@ class TubeLayoutEditor(QMainWindow):
                         invalid = True
 
                     if invalid:
-                        # ========= 全套仿照 S 的全局 bool 逻辑 =========
-                        prev_text = getattr(self, "_tube_wall_warn_last_text", None)
-                        if prev_text != cur_text:
-                            self._tube_wall_warn_last_text = cur_text
-                            self._tube_wall_warn_pending = True
-
-                        if not getattr(self, "_tube_wall_warn_pending", False):
-                            return
-
-                        self._tube_wall_warn_in_progress = True
-                        self._suppress_tube_wall_thickness_warn = True
-
-                        QMessageBox.warning(
-                            self, "输入错误", "您输入的数值小于0或者过大，请重新输入!"
-                        )
-
+                        # 弹窗限频：避免连续非法输入导致 UI 卡顿；但回滚必须立即执行
                         try:
-                            self._tube_wall_warn_pending = False
+                            import time as _time
+
+                            now = _time.monotonic()
+                            last = float(getattr(self, "_last_tube_wall_warn_time", 0.0) or 0.0)
                         except Exception:
-                            pass
+                            now = None
+                            last = 0.0
+
+                        def _show_warn_once():
+                            try:
+                                QMessageBox.warning(
+                                    self, "输入错误", "您输入的数值小于0或者过大，请重新输入!"
+                                )
+                            except Exception:
+                                pass
+
+                        # 0.8s 内不重复弹窗（只抑制弹窗，不抑制回滚）
+                        if now is None or (now - last) > 0.8:
+                            try:
+                                self._last_tube_wall_warn_time = now if now is not None else 0.0
+                            except Exception:
+                                pass
+                            # 异步弹窗：避免在 itemChanged 里同步阻塞/重入导致卡顿
+                            try:
+                                QTimer.singleShot(0, _show_warn_once)
+                            except Exception:
+                                _show_warn_once()
 
                         rollback_text = str(
                             getattr(self, "_last_valid_tube_wall_thickness_text", "2")
                         ).strip() or "2"
+                        # 回滚时屏蔽信号，避免递归触发 itemChanged 引发“越回滚越卡”
+                        try:
+                            self._suppress_tube_wall_thickness_warn = True
+                        except Exception:
+                            pass
+                        blocker = None
+                        try:
+                            blocker = QSignalBlocker(self.param_table)
+                        except Exception:
+                            blocker = None
                         try:
                             changed_item.setText(rollback_text)
                         finally:
-                            def _clear_tube_wall_suppress_flag():
-                                try:
-                                    self._suppress_tube_wall_thickness_warn = False
-                                    self._tube_wall_warn_in_progress = False
-                                except Exception:
-                                    pass
-
-                            QTimer.singleShot(600, _clear_tube_wall_suppress_flag)
+                            blocker = None
+                            # 立即解除抑制（下一次非法输入仍能及时处理），仅保留弹窗限频即可
+                            try:
+                                self._suppress_tube_wall_thickness_warn = False
+                            except Exception:
+                                pass
                         return
 
                     # 合法输入：更新最近合法值，并重置 pending
