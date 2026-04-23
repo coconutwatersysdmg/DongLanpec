@@ -6,6 +6,7 @@ from collections import defaultdict
 from PyQt5.QtWidgets import QTableWidget
 
 from modules.cailiaodingyi.db_cnt import get_connection
+from modules.cailiaodingyi.funcs.funcs_pdf_change import DEBUG_VERBOSE_DEFINE_UI
 import pymysql
 
 
@@ -1168,30 +1169,6 @@ def get_grouped(product_id):
         connection.close()
 
 
-def update_material_category_in_db(port_codes, material_category):
-    """
-    将数据库中指定的管口代号，对应的材料分类字段更新为指定分类
-    """
-    if not port_codes:
-        print("[DB] 空 port_codes，跳过更新")
-        return
-
-    conn = get_connection(**db_config_1)
-    try:
-        with conn.cursor() as cursor:
-            # 构造 SQL：UPDATE 表 SET 材料分类=xxx WHERE 管口代号 IN (...)
-            format_strings = ','.join(['%s'] * len(port_codes))
-            sql = f"""
-                UPDATE 产品设计活动表_管口类别表
-                SET 材料分类 = %s
-                WHERE 管口代号 IN ({format_strings})
-            """
-            cursor.execute(sql, [material_category] + port_codes)
-        conn.commit()
-    finally:
-        conn.close()
-
-
 def get_options_for_param(param_name):
     """根据参数名称从数据库中获取对应的选项列表"""
     excluded_numeric_params = {
@@ -1212,18 +1189,19 @@ def get_options_for_param(param_name):
 
             if result:
                 # 假设查询到的 '参数值' 字段是一个 JSON 字符串，我们将其解析为列表
+                # 假设查询到的 '参数值' 字段是一个 JSON 字符串，我们将其解析为列表
                 options_str = result.get('参数值', '')
                 if options_str:
-                    options = json.loads(options_str)  # 解析 JSON 字符串为 Python 列表
+                    options = json.loads(options_str)
                     return options
                 else:
                     print(f"[警告] 参数 '{param_name}' 没有选项！")
             else:
                 print(f"[警告] 未找到参数 '{param_name}' 的数据！")
 
-            return []  # 如果没有选项，返回空列表
+            return []
     finally:
-            connection.close()
+        connection.close()
 
 
 def get_all_param_name():
@@ -1866,7 +1844,7 @@ def init_buguan_defaults(product_id):
                            WHERE 产品ID=%s
                        """, (product_id,))
             row = cur1.fetchone()
-            if row and (row["产品型式"] == "AEU" or row["产品型式"] == "BEU"):
+            if row and (row["产品型式"] in ["AEU", "BEU", "AKU", "BKU"]):
 
                 # 2. 从元件库读取默认布管参数
                 cur2.execute("SELECT 参数名, 参数值, 单位 FROM 布管参数默认表_u型管")

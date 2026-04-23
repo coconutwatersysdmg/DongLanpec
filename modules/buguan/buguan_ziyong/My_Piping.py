@@ -8801,6 +8801,29 @@ class TubeLayoutEditor(QMainWindow):
                 params_list = snapshot.get("params", []) or []
                 params_dict = {str(k).strip(): v for k, v in params_list}
 
+                # 兼容新旧参数名：统一键名后再检索（大小写/空白/下标数字等）
+                _SUB_TO_NORMAL = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
+
+                def _norm_key(k):
+                    s = "" if k is None else str(k)
+                    s = s.strip().translate(_SUB_TO_NORMAL)
+                    return s.lower()
+
+                _norm_params_dict = {}
+                for _k, _v in params_dict.items():
+                    _norm_params_dict[_norm_key(_k)] = _v
+
+                # 新旧命名下常见别名（仅做兼容，不改变现有公式语义）
+                _alias_map = {
+                    "α": ["s"],
+                    "s": ["α"],
+                    "alpha": ["α", "s"],
+                    "cosf": ["cos(f)"],
+                    "tanf": ["tan(f)"],
+                    "cosc": ["cos(c)"],
+                    "tanc": ["tan(c)"],
+                }
+
                 def _get_any(*keys):
                     for kk in keys:
                         if kk is None:
@@ -8808,8 +8831,20 @@ class TubeLayoutEditor(QMainWindow):
                         k2 = str(kk).strip()
                         if not k2:
                             continue
+                        # 1) 先查原始键
                         if k2 in params_dict and params_dict.get(k2) is not None:
                             return params_dict.get(k2)
+                        # 2) 再查规范化键
+                        nk = _norm_key(k2)
+                        if nk in _norm_params_dict and _norm_params_dict.get(nk) is not None:
+                            return _norm_params_dict.get(nk)
+                        # 3) 最后查别名
+                        for ak in _alias_map.get(k2, []):
+                            if ak in params_dict and params_dict.get(ak) is not None:
+                                return params_dict.get(ak)
+                            nak = _norm_key(ak)
+                            if nak in _norm_params_dict and _norm_params_dict.get(nak) is not None:
+                                return _norm_params_dict.get(nak)
                     return None
 
                 # b 型管板的 c 节点处理
@@ -9276,8 +9311,8 @@ class TubeLayoutEditor(QMainWindow):
                         b_raw = _get_any("b", "d")
                         c_raw = _get_any("d1", "c")
                         j_raw = _get_any("e", "j")
-                        cosf_raw = params_dict.get("cosf")
-                        tanf_raw = params_dict.get("tanf")
+                        cosf_raw = _get_any("cosf")
+                        tanf_raw = _get_any("tanf")
                         if b_raw is None or c_raw is None or j_raw is None or cosf_raw is None or tanf_raw is None:
                             print("[update_tube_layout_circle_dl] e-d 节点快照中缺少 b/c/j/cosf/tanf，回退到原逻辑计算 DL")
                             dl_value = _calc_dl_by_type(di_value, do_value)
@@ -9333,8 +9368,8 @@ class TubeLayoutEditor(QMainWindow):
                         b_raw = _get_any("b", "e")
                         k_raw = _get_any("d2", "k")
                         j_raw = _get_any("e", "j")
-                        cosc_raw = params_dict.get("cosc")
-                        tanc_raw = params_dict.get("tanc")
+                        cosc_raw = _get_any("cosc")
+                        tanc_raw = _get_any("tanc")
                         if b_raw is None or k_raw is None or j_raw is None or cosc_raw is None or tanc_raw is None:
                             print("[update_tube_layout_circle_dl] e-e 节点快照中缺少 b/k/j/cosc/tanc，回退到原逻辑计算 DL")
                             dl_value = _calc_dl_by_type(di_value, do_value)
@@ -14822,6 +14857,12 @@ class TubeLayoutEditor(QMainWindow):
             if isinstance(do_widget, QComboBox):
                 selected_value = do_widget.currentText()
                 print(f"选中的换热管外径: {selected_value}")
+
+            # 外径变化时，S 的手动覆盖标记必须失效，确保按新 do 重新推荐
+            try:
+                self._user_override_tube_center_distance = False
+            except Exception:
+                pass
 
             self.update_baffle_diameter()
             self.update_tube_center_distance()
@@ -39890,6 +39931,14 @@ class TubeLayoutEditor(QMainWindow):
         from PyQt5.QtWidgets import QMessageBox, QGraphicsEllipseItem
         import math
         import ast
+
+        # 统一初始化 do_value，避免不同分支下被静态分析误判“未定义”
+        do_value = None
+        try:
+            if tube_outer_diameter not in (None, ""):
+                do_value = float(str(tube_outer_diameter).strip())
+        except Exception:
+            do_value = None
 
         # 初始化防冲板选中列表和存储列表
         if not hasattr(self, "selected_baffles"):

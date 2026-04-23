@@ -2,7 +2,11 @@
 from modules.cailiaodingyi.db_cnt import get_connection
 from PyQt5.QtWidgets import QMessageBox
 from PyQt5 import QtWidgets
-from modules.cailiaodingyi.funcs.funcs_pdf_change import update_element_name_data, query_element_name_param_value
+from modules.cailiaodingyi.funcs.funcs_pdf_change import (
+    DEBUG_VERBOSE_DEFINE_UI,
+    query_element_name_param_value,
+    update_element_name_data,
+)
 
 PN_USER_INPUT_CACHE = {}
 
@@ -327,7 +331,8 @@ def force_recompute_and_update_pn(product_id):
                         update_element_name_data(product_id, gname, "环内径d1", _norm_out(d1))
                         update_element_name_data(product_id, gname, "垫片名义外径D2n", _norm_out(d_val))
                         update_element_name_data(product_id, gname, "垫片名义内径D1n", _norm_out(d_in))
-                        print(f"[条件保存后][DB] 已更新产品{product_id}, 垫片ID={gid}, D2n/D1n/d1={_norm_out(d_val)}/{_norm_out(d_in)}/{_norm_out(d1)}")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[条件保存后][DB] 已更新产品{product_id}, 垫片ID={gid}, D2n/D1n/d1={_norm_out(d_val)}/{_norm_out(d_in)}/{_norm_out(d1)}")
                     except Exception as e:
                         print(f"[条件保存后][DB] 更新D2n/D1n/d1失败: {e}")
                 except Exception as e:
@@ -390,14 +395,16 @@ def check_gasket_params(self):
         if all_msgs:
             # 汇总结果
             msg_text = "；".join(all_msgs)
-            print("[垫片校验][汇总] 检查结果：\n  " + "\n  ".join(all_msgs))
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print("[垫片校验][汇总] 检查结果：\n  " + "\n  ".join(all_msgs))
 
             # 输出到界面 line_tip
             self.line_tip.setText(msg_text)
             self.line_tip.setToolTip(msg_text)
             self.line_tip.setStyleSheet("color: black;")
         else:
-            print("[垫片校验][汇总] 所有配套法兰校验通过")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print("[垫片校验][汇总] 所有配套法兰校验通过")
             self.line_tip.setText("所有配套法兰校验通过")
             self.line_tip.setToolTip("所有配套法兰校验通过")
             self.line_tip.setStyleSheet("color: black;")
@@ -409,7 +416,8 @@ def check_gasket_params(self):
             groups.setdefault((gid, gname), []).append(it)
         for (gid, gname), items in groups.items():
             flanges = [ (it.get("配套法兰名称") or "").strip() for it in items ]
-            print(f"[垫片校验][组] 垫片ID={gid}, 名称={gname}, 配套法兰={flanges}")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[垫片校验][组] 垫片ID={gid}, 名称={gname}, 配套法兰={flanges}")
             chosen_pn = None
             if gname == "平盖垫片":
                 pn_map = {}
@@ -418,16 +426,19 @@ def check_gasket_params(self):
                     pv2 = it2.get("_pn_val")
                     if pv2 is not None:
                         pn_map[nm2] = pv2
-                        print(f"[垫片校验][平盖校验] 垫片={gname}, 法兰={nm2}, PN={pv2}")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[垫片校验][平盖校验] 垫片={gname}, 法兰={nm2}, PN={pv2}")
                 if "管箱法兰" in pn_map:
                     chosen_pn = pn_map["管箱法兰"]
-                    print(f"[垫片校验][平盖选择] 垫片={gname}, 选法兰=管箱法兰, PN={chosen_pn}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[垫片校验][平盖选择] 垫片={gname}, 选法兰=管箱法兰, PN={chosen_pn}")
                 else:
                     for it2 in items:
                         nm2 = (it2.get("配套法兰名称") or "").strip()
                         if nm2 in pn_map:
                             chosen_pn = pn_map[nm2]
-                            print(f"[垫片校验][平盖选择] 垫片={gname}, 选法兰={nm2}, PN={chosen_pn}")
+                            if DEBUG_VERBOSE_DEFINE_UI:
+                                print(f"[垫片校验][平盖选择] 垫片={gname}, 选法兰={nm2}, PN={chosen_pn}")
                             break
             else:
                 pn_vals = []
@@ -440,7 +451,8 @@ def check_gasket_params(self):
                         chosen_pn = max(pn_vals)
                     except Exception:
                         chosen_pn = pn_vals[-1]
-                    print(f"[垫片校验][聚合最大] 垫片={gname}, 候选PN={pn_vals} → 取最大={chosen_pn}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[垫片校验][聚合最大] 垫片={gname}, 候选PN={pn_vals} → 取最大={chosen_pn}")
             if chosen_pn is not None:
                 try:
                     conn = get_connection(**db_config1)
@@ -494,14 +506,17 @@ def check_gasket_params(self):
                                         update_element_name_data(product_id, gname, "垫片名义外径D2n", _norm_out(d_val))
                                     if (not is_dim_user_input_any(product_id, gid, gname, "垫片名义内径D1n")) and is_dim_weak(product_id, gname, "垫片名义内径D1n"):
                                         update_element_name_data(product_id, gname, "垫片名义内径D1n", _norm_out(d_in))
-                                    print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gid}, D2n/D1n/d1={_norm_out(d_val)}/{_norm_out(d_in)}/{_norm_out(d1)}")
+                                    if DEBUG_VERBOSE_DEFINE_UI:
+                                        print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gid}, D2n/D1n/d1={_norm_out(d_val)}/{_norm_out(d_in)}/{_norm_out(d1)}")
                                 except Exception as e:
                                     print(f"[垫片校验][DB] 更新D2n/D1n/d1失败: {e}")
                             except Exception as e:
                                 print(f"[垫片校验] 计算并更新垫片尺寸失败: {e}")
-                            print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gid}, 公称压力={chosen_pn}")
+                            if DEBUG_VERBOSE_DEFINE_UI:
+                                print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gid}, 公称压力={chosen_pn}")
                         else:
-                            print(f"[垫片校验][DB] 保留当前PN，不覆盖推荐={chosen_pn}")
+                            if DEBUG_VERBOSE_DEFINE_UI:
+                                print(f"[垫片校验][DB] 保留当前PN，不覆盖推荐={chosen_pn}")
                 finally:
                     conn.close()
 
@@ -535,7 +550,8 @@ def check_general_gasket(item):
     t_val = item.get("管程设计温度") if course_flange == "管程" else item.get("壳程设计温度")
 
     flange_name = item["配套法兰名称"]
-    print(f"[垫片校验][逐条] 垫片={gasket_name}, 法兰={flange_name}, 侧别={course_flange}, 材料={material}, P={p_val}, T={t_val}")
+    if DEBUG_VERBOSE_DEFINE_UI:
+        print(f"[垫片校验][逐条] 垫片={gasket_name}, 法兰={flange_name}, 侧别={course_flange}, 材料={material}, P={p_val}, T={t_val}")
     level, msg, pn_val = calc_pressure_limit(
         material, t_val, p_val,
         product_id, gasket_id,
@@ -597,14 +613,17 @@ def check_general_gasket(item):
                                 update_element_name_data(product_id, gasket_name, "垫片名义外径D2n", _norm_out(d_val))
                             if (not is_dim_user_input_any(product_id, gasket_id, gasket_name, "垫片名义内径D1n")) and is_dim_weak(product_id, gasket_name, "垫片名义内径D1n"):
                                 update_element_name_data(product_id, gasket_name, "垫片名义内径D1n", _norm_out(d_in))
-                            print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, D2n/D1n/d1={_norm_out(d_val)}/{_norm_out(d_in)}/{_norm_out(d1)}")
+                            if DEBUG_VERBOSE_DEFINE_UI:
+                                print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, D2n/D1n/d1={_norm_out(d_val)}/{_norm_out(d_in)}/{_norm_out(d1)}")
                         except Exception as e:
                             print(f"[垫片校验][DB] 更新D2n/D1n/d1失败: {e}")
                     except Exception as e:
                         print(f"[垫片校验] 计算并更新垫片尺寸失败: {e}")
-                    print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, 公称压力={pn_out}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, 公称压力={pn_out}")
                 else:
-                    print(f"[垫片校验][DB] 保留当前PN，不覆盖推荐={pn_out}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[垫片校验][DB] 保留当前PN，不覆盖推荐={pn_out}")
         finally:
             conn.close()
     if messages:
@@ -674,11 +693,13 @@ def check_floating_head_gasket(item):
         dn_val = item.get("壳程公称直径")
 
     if not dn_val or str(dn_val).strip() in ("", "程序推荐"):
-        print(f"[直径校验][INFO] {gasket_name}-{flange_name} 公称直径为空/程序推荐 → 跳过直径校核")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[直径校验][INFO] {gasket_name}-{flange_name} 公称直径为空/程序推荐 → 跳过直径校核")
     else:
         try:
             dn_val_f = float(dn_val)
-            print(f"[直径校验][DEBUG] {gasket_name}-{flange_name} 公称直径={dn_val_f}, 限值=[{dn_min}, {dn_max}]")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[直径校验][DEBUG] {gasket_name}-{flange_name} 公称直径={dn_val_f}, 限值=[{dn_min}, {dn_max}]")
             if not (dn_min <= dn_val_f <= dn_max):
                 messages.append(f"[{gasket_name}-{flange_name}] 公称直径已超限，垫片尺寸将由程序推荐，用户可对其进行更改")
         except Exception as e:
@@ -686,13 +707,15 @@ def check_floating_head_gasket(item):
 
     # === STEP4: 温度校验 ===
     if not t_val:
-        print(f"[温度校验][INFO] {gasket_name}-{flange_name} 设计温度为空 → 跳过校核")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[温度校验][INFO] {gasket_name}-{flange_name} 设计温度为空 → 跳过校核")
     else:
         if not (t_min <= t_val <= t_max):
             messages.append(f"[{gasket_name}-{flange_name}] 设计温度超限，垫片尺寸将由程序推荐，用户可对其进行更改")
 
     # === STEP5: 设计压力校验 ===
-    print(f"[垫片校验][逐条] 垫片={gasket_name}, 法兰={flange_name}, 侧别={course_gasket}, 材料={material}, P={p_val}, T={t_val}")
+    if DEBUG_VERBOSE_DEFINE_UI:
+        print(f"[垫片校验][逐条] 垫片={gasket_name}, 法兰={flange_name}, 侧别={course_gasket}, 材料={material}, P={p_val}, T={t_val}")
     level, msg, pn_val = calc_pressure_limit(
         material, t_val, p_val,
         product_id, gasket_id,
@@ -763,14 +786,17 @@ def check_floating_head_gasket(item):
                                 update_element_name_data(product_id, gasket_name, "垫片名义外径D2n", _norm_out(d_val))
                             if (not is_dim_user_input_any(product_id, gasket_id, gasket_name, "垫片名义内径D1n")) and is_dim_weak(product_id, gasket_name, "垫片名义内径D1n"):
                                 update_element_name_data(product_id, gasket_name, "垫片名义内径D1n", _norm_out(d_in))
-                            print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, D2n/D1n/d1={_norm_out(d_val)}/{_norm_out(d_in)}/{_norm_out(d1)}")
+                            if DEBUG_VERBOSE_DEFINE_UI:
+                                print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, D2n/D1n/d1={_norm_out(d_val)}/{_norm_out(d_in)}/{_norm_out(d1)}")
                         except Exception as e:
                             print(f"[垫片校验][DB] 更新D2n/D1n/d1失败: {e}")
                     except Exception as e:
                         print(f"[垫片校验] 计算并更新垫片尺寸失败: {e}")
-                    print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, 公称压力={pn_out}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, 公称压力={pn_out}")
                 else:
-                    print(f"[垫片校验][DB] 保留当前PN，不覆盖推荐={pn_out}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[垫片校验][DB] 保留当前PN，不覆盖推荐={pn_out}")
         finally:
             conn.close()
     if messages:
@@ -848,11 +874,13 @@ def check_outer_head_gasket(item):
 
     # === STEP3: 公称直径校验 ===
     if not dn_val or str(dn_val).strip() in ("", "程序推荐"):
-        print(f"[直径校验][INFO] {gasket_name}-{flange_name} 公称直径为空/程序推荐 → 跳过直径校核")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[直径校验][INFO] {gasket_name}-{flange_name} 公称直径为空/程序推荐 → 跳过直径校核")
     else:
         try:
             dn_val_f = float(dn_val)
-            print(f"[直径校验][DEBUG] {gasket_name}-{flange_name} 公称直径={dn_val_f}, 限值=[{dn_min}, {dn_max}]")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[直径校验][DEBUG] {gasket_name}-{flange_name} 公称直径={dn_val_f}, 限值=[{dn_min}, {dn_max}]")
             if not (dn_min <= dn_val_f <= dn_max):
                 messages.append(f"[{gasket_name}-{flange_name}] 公称直径已超限，垫片尺寸将由程序推荐，用户可对其进行更改")
         except Exception as e:
@@ -866,7 +894,8 @@ def check_outer_head_gasket(item):
         t_val = item.get("壳程设计温度")
 
     if not t_val or str(t_val).strip() == "":
-        print(f"[温度校验][INFO] {gasket_name}-{flange_name} 设计温度为空 → 跳过校核")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[温度校验][INFO] {gasket_name}-{flange_name} 设计温度为空 → 跳过校核")
     else:
         try:
             t_val_f = float(t_val)
@@ -886,7 +915,8 @@ def check_outer_head_gasket(item):
     else:
         p_val, t_val = None, None
 
-    print(f"[垫片校验][逐条] 垫片={gasket_name}, 法兰={flange_name}, 侧别={course_flange}, 材料={material}, P={p_val}, T={t_val}")
+    if DEBUG_VERBOSE_DEFINE_UI:
+        print(f"[垫片校验][逐条] 垫片={gasket_name}, 法兰={flange_name}, 侧别={course_flange}, 材料={material}, P={p_val}, T={t_val}")
     level, msg, pn_val = calc_pressure_limit(
         material, t_val, p_val,
         product_id, gasket_id,
@@ -947,14 +977,17 @@ def check_outer_head_gasket(item):
                                 update_element_name_data(product_id, gasket_name, "垫片名义外径D2n", _norm_out(d_val))
                             if (not is_dim_user_input_any(product_id, gasket_id, gasket_name, "垫片名义内径D1n")) and is_dim_weak(product_id, gasket_name, "垫片名义内径D1n"):
                                 update_element_name_data(product_id, gasket_name, "垫片名义内径D1n", _norm_out(d_in))
-                            print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, D2n/D1n/d1={_norm_out(d_val)}/{_norm_out(d_in)}/{_norm_out(d1)}")
+                            if DEBUG_VERBOSE_DEFINE_UI:
+                                print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, D2n/D1n/d1={_norm_out(d_val)}/{_norm_out(d_in)}/{_norm_out(d1)}")
                         except Exception as e:
                             print(f"[垫片校验][DB] 更新D2n/D1n/d1失败: {e}")
                     except Exception as e:
                         print(f"[垫片校验] 计算并更新垫片尺寸失败: {e}")
-                    print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, 公称压力={pn_out}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[垫片校验][DB] 已更新产品{product_id}, 垫片ID={gasket_id}, 公称压力={pn_out}")
                 else:
-                    print(f"[垫片校验][DB] 保留当前PN，不覆盖推荐={pn_out}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[垫片校验][DB] 保留当前PN，不覆盖推荐={pn_out}")
         finally:
             conn.close()
     if messages:
@@ -967,11 +1000,13 @@ def calc_pressure_limit(material, T, P, product_id, gasket_id, gasket_name, flan
     根据压力等级表计算设计压力是否超限
     返回: (level, message, pn_val)
     """
-    print(f"[设计压力校验][DEBUG] 开始校验 → 垫片={gasket_name}, 法兰={flange_name}, 材料={material}, T={T}, P={P}")
+    if DEBUG_VERBOSE_DEFINE_UI:
+        print(f"[设计压力校验][DEBUG] 开始校验 → 垫片={gasket_name}, 法兰={flange_name}, 材料={material}, T={T}, P={P}")
 
     # === 空值保护 ===
     if not T or not P or str(T).strip() == "" or str(P).strip() == "" or str(P).strip() == "程序推荐":
-        print(f"[设计压力校验][INFO] {gasket_name}-{flange_name} 设计压力/温度为空或程序推荐 → 跳过校核")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[设计压力校验][INFO] {gasket_name}-{flange_name} 设计压力/温度为空或程序推荐 → 跳过校核")
         return "ok", "", None
 
     try:
@@ -1006,44 +1041,53 @@ def calc_pressure_limit(material, T, P, product_id, gasket_id, gasket_name, flan
     temp_cols = [float(k) for k in rows[0].keys()
                  if k not in ("Name", "PN", "DNmin", "DNmax", "Tmin", "Tmax")]
     temp_cols.sort()
-    print(f"[设计压力校验][DEBUG] 可用温度列: {temp_cols}")
+    if DEBUG_VERBOSE_DEFINE_UI:
+        print(f"[设计压力校验][DEBUG] 可用温度列: {temp_cols}")
 
     candidate = None
     candidate_row = None
 
     for row in rows:
         PN_val = row.get("PN")
-        print(f"[设计压力校验][DEBUG] 检查行: PN={PN_val}")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[设计压力校验][DEBUG] 检查行: PN={PN_val}")
 
         px_val = get_col_value(row, T)
         if px_val is not None:
-            print(f"[设计压力校验][DEBUG] 命中温度列 T={T}℃ → px_val={px_val}")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[设计压力校验][DEBUG] 命中温度列 T={T}℃ → px_val={px_val}")
         else:
             lower = max([x for x in temp_cols if x < T], default=None)
             upper = min([x for x in temp_cols if x > T], default=None)
             if lower is None or upper is None:
-                print(f"[设计压力校验][WARN] 温度 {T} 超范围 → 跳过")
+                if DEBUG_VERBOSE_DEFINE_UI:
+                    print(f"[设计压力校验][WARN] 温度 {T} 超范围 → 跳过")
                 continue
             y1 = get_col_value(row, lower)
             y2 = get_col_value(row, upper)
             if y1 is None or y2 is None:
-                print(f"[设计压力校验][WARN] 行缺失: PN={PN_val}, lower={lower}, upper={upper}")
+                if DEBUG_VERBOSE_DEFINE_UI:
+                    print(f"[设计压力校验][WARN] 行缺失: PN={PN_val}, lower={lower}, upper={upper}")
                 continue
             px_val = y1 + (y2 - y1) * (T - lower) / (upper - lower)
-            print(f"[设计压力校验][DEBUG] 插值: ({lower},{y1})-({upper},{y2}) → px_val={px_val}")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[设计压力校验][DEBUG] 插值: ({lower},{y1})-({upper},{y2}) → px_val={px_val}")
 
-        print(f"[设计压力校验][DEBUG] 对比 P={P}, px_val={px_val}")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[设计压力校验][DEBUG] 对比 P={P}, px_val={px_val}")
         if px_val >= P:
             if candidate is None or px_val < candidate:
                 candidate = px_val
                 candidate_row = row
-                print(f"[设计压力校验][DEBUG] 更新候选: PN={PN_val}, px_val={px_val}")
+                if DEBUG_VERBOSE_DEFINE_UI:
+                    print(f"[设计压力校验][DEBUG] 更新候选: PN={PN_val}, px_val={px_val}")
 
     if candidate is None:
         return "warn", f"[{gasket_name}-{flange_name}] 设计压力已超限", None
 
     PN_val = candidate_row.get("PN")
-    print(f"[设计压力校验][RESULT] 选中 PN={PN_val}, px_val={candidate}")
+    if DEBUG_VERBOSE_DEFINE_UI:
+        print(f"[设计压力校验][RESULT] 选中 PN={PN_val}, px_val={candidate}")
     return "ok", "", PN_val
 
 

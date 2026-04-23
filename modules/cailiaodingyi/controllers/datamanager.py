@@ -16,11 +16,9 @@ from modules.cailiaodingyi.controllers.combo import ComboDelegate, MaterialInsta
 from modules.cailiaodingyi.db_cnt import get_connection
 from modules.cailiaodingyi.demo import NoWheelComboBoxFilter
 from modules.cailiaodingyi.funcs.funcs_pdf_change import (
-    load_element_additional_data,
     load_guankou_define_data,
     load_guankou_para_data,
     insert_or_update_element_data,
-    insert_or_update_guankou_material_data,
     insert_or_update_guankou_para_data,
     insert_or_update_element_para_data,
     update_param_table_data,
@@ -32,12 +30,11 @@ from modules.cailiaodingyi.funcs.funcs_pdf_change import (
     update_guankou_define_status,
     load_updated_guankou_define_data,
     update_guankou_param,
-    load_updated_guankou_param_data,
     load_guankou_para_data_leibie, is_all_guankou_parts_defined, get_filtered_material_options, save_image,
-    query_image_from_database, get_dependency_mapping_from_db, toggle_dependent_fields,
-    toggle_dependent_fields_multi_value, query_param_by_component_id, get_gasket_param_from_db,
+    query_image_from_database, get_dependency_mapping_from_db,
+    query_param_by_component_id, get_gasket_param_from_db,
     get_design_params_from_db, get_gasket_contact_dims_from_db, query_template_id, query_guankou_image_from_database,
-    update_element_para_data, toggle_dependent_fields_complex, get_corrosion_allowance_from_db,
+    update_element_para_data,  get_corrosion_allowance_from_db,
     get_shell_nominal_diameter_mm, get_yanban_height_auto_fill_context,
     update_guankou_category_for_tab, save_guankou_codes_for_tab, query_template_codes,
     update_guankou_params_bulk, get_numeric_rules, load_update_guankou_para_data,
@@ -47,7 +44,8 @@ from modules.cailiaodingyi.funcs.funcs_pdf_change import (
     query_gasket_D_d_d1_from_size, get_dn_for_gasket, get_pn_for_gasket, resolve_gasket_dimensions,
     query_extra_param_value, query_gasket_material_options_by_type_std, db_config_1, db_config_2, sync_baffle_thickness_to_db,
     update_spacer_tube_status_to_undefined, restore_spacer_tube_status_to_defined,load_updated_fastener_define_data,
-    update_element_name_data
+    update_element_name_data,
+    DEBUG_VERBOSE_DEFINE_UI,
 )
 from modules.cailiaodingyi.funcs.funcs_pdf_input import (
     load_elementoriginal_data,
@@ -74,59 +72,6 @@ from modules.condition_input.funcs.funcs_cdt_input import (
 )
 
 
-# def apply_combobox_to_table(table: QTableWidget, column_data_map: dict, viewer_instance, category_label: str):
-#     """
-#     给管口零件表格的定义设置下拉框
-#     """
-#     # 字段列索引和字段名映射
-#     col_to_field = {1: '材料类型', 2: '材料牌号', 3: '材料标准', 4: '供货状态'}
-#
-#     # 初始化下拉框
-#     for row in range(table.rowCount()):
-#         for col, options in column_data_map.items():
-#             current_text = table.item(row, col).text().strip() if table.item(row, col) else ""
-#
-#             # 创建下拉框
-#             combo = QComboBox()
-#             combo.addItem("")
-#             combo.addItems(options)
-#             combo.setEditable(True)
-#             combo.lineEdit().setAlignment(Qt.AlignCenter)
-#             combo.setStyleSheet("""
-#                 QComboBox {
-#                     border: none;
-#                     background-color: transparent;
-#                     font-size: 9pt;
-#                     font-family: "Microsoft YaHei";
-#                     padding-left: 2px;
-#                 }
-#             """)
-#
-#             combo.blockSignals(True)
-#             index = combo.findText(current_text.strip(), Qt.MatchFixedString)
-#             if index >= 0:
-#                 combo.setCurrentIndex(index)
-#             else:
-#                 combo.setCurrentIndex(0)
-#             combo.blockSignals(False)
-#
-#             table.setItem(row, col, None)
-#             table.setCellWidget(row, col, combo)
-#
-#             # 绑定保存逻辑
-#             combo.currentIndexChanged.connect(partial(on_combo_changed, viewer_instance, table, col, category_label))
-#
-#
-#             # 绑定联动逻辑（只绑定，不执行）
-#             if col in col_to_field:
-#                 combo.currentTextChanged.connect(partial(on_material_field_changed_row, table, row))
-#
-#     # 👉 使用 QTimer 延后触发联动初始化，避免信号冲突
-#     def delayed_linkage():
-#         for row in range(table.rowCount()):
-#             on_material_field_changed_row(table, row)
-#
-#     QTimer.singleShot(0, delayed_linkage)
 def apply_combobox_to_table(table: QTableWidget, column_data_map: dict, viewer_instance, category_label: str):
     """
     设置“管口材料分类”表格的四字段联动下拉框（列式结构），绑定保存 + 联动逻辑
@@ -190,43 +135,6 @@ def apply_combobox_to_table(table: QTableWidget, column_data_map: dict, viewer_i
     QTimer.singleShot(0, delayed_init)
 
 
-# def on_material_field_changed_row(table: QTableWidget, row: int):
-#     material_fields = {
-#         '材料类型': 1,
-#         '材料牌号': 2,
-#         '材料标准': 3,
-#         '供货状态': 4
-#     }
-#     col_to_field = {v: k for k, v in material_fields.items()}
-#     selected = {}
-#
-#     # 获取当前行已有值
-#     for col, field in col_to_field.items():
-#         combo = table.cellWidget(row, col)
-#         if isinstance(combo, QComboBox):
-#             val = combo.currentText().strip()
-#             if val:
-#                 selected[field] = val
-#
-#     filtered_options = get_filtered_material_options(selected)
-#
-#     # 更新字段
-#     for col, field in col_to_field.items():
-#         combo = table.cellWidget(row, col)
-#         if not isinstance(combo, QComboBox):
-#             continue
-#         current_val = combo.currentText().strip()
-#         new_options = filtered_options.get(field, [])
-#
-#         combo.blockSignals(True)
-#         combo.clear()
-#         combo.addItem("")
-#         combo.addItems(new_options)
-#         if current_val in new_options:
-#             combo.setCurrentText(current_val)
-#         else:
-#             combo.setCurrentIndex(0)
-#         combo.blockSignals(False)
 def on_material_field_changed_row(table: QTableWidget, row: int):
     material_fields = {
         '材料类型': 1,
@@ -413,7 +321,8 @@ def on_clear_param_update(viewer_instance):
     # 写库
     selected_ids = getattr(viewer_instance, "selected_element_ids", [])
     if len(selected_ids) > 1:
-        print(f"[多选] 批量清空元件ID: {selected_ids}")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[多选] 批量清空元件ID: {selected_ids}")
         for eid in selected_ids:
             update_param_table_data(param_table, viewer_instance.product_id, eid)
             part_info = next((it for it in viewer_instance.element_data if it["元件ID"] == eid), {})
@@ -631,27 +540,6 @@ def on_combo_changed(viewer_instance, table, col, category_label):
 
 
 
-
-
-
-# def on_guankou_param_changed(self, row, col, product_id):
-#
-#     item = self.tableWidget_guankou_param.item(row, col)
-#     if not item:
-#         return
-#
-#     new_value = item.text()
-#     print(f"新的值{new_value}")
-#
-#     # 假设第0列是参数名，第1列是参数值
-#     param_name = self.tableWidget_guankou_param.item(row, 0).text()
-#     print(f"参数名{param_name}")
-#     product_id = product_id
-#
-#     print(f"产品ID: {product_id}, 参数: {param_name}, 值: {new_value}")
-
-
-
 def set_table_tooltips(table: QTableWidget):
     """
     为 QTableWidget 所有单元格设置 tooltip（悬浮提示），包含普通单元格和下拉框。
@@ -669,172 +557,6 @@ def set_table_tooltips(table: QTableWidget):
         item_formatter=item_formatter,
     )
 
-
-def apply_paramname_dependent_combobox(table: QTableWidget,
-                                       param_col: int,
-                                       value_col: int,
-                                       param_options: dict,
-                                       component_info: dict = None,
-                                       viewer_instance = None):
-    """
-    设置除管口外的零件对应参数信息的下拉框，包括“是否有覆层”固定选项
-    """
-    material_fields = ['材料类型', '材料牌号', '材料标准', '供货状态']
-
-    for row in range(table.rowCount()):
-        try:
-            param_item = table.item(row, param_col)
-            param_name = param_item.text().strip() if param_item else ""
-
-            # ✅ 材料字段（支持联动）
-            if param_name in param_options and param_name in material_fields:
-                options = param_options[param_name]
-
-                value_item = table.item(row, value_col)
-                current_value = value_item.text().strip() if value_item else ""
-
-                combo = QComboBox()
-                combo.addItem("")
-                combo.setEditable(True)
-                combo.lineEdit().setAlignment(Qt.AlignCenter)
-                combo.setStyleSheet("""
-                                QComboBox {
-                                    border: none;
-                                    background-color: transparent;
-                                    font-size: 9pt;
-                                    font-family: "Microsoft YaHei";
-                                    padding-left: 2px;
-                                }
-                            """)
-                combo.addItems(options)
-                combo.full_options = options.copy()
-
-                matched = False
-                for i in range(combo.count()):
-                    if combo.itemText(i).strip() == current_value:
-                        combo.setCurrentIndex(i)
-                        matched = True
-                        break
-                if not matched:
-                    combo.setCurrentIndex(0)
-
-                table.setItem(row, value_col, None)
-                table.setCellWidget(row, value_col, combo)
-                combo.currentTextChanged.connect(partial(
-                    on_material_combobox_changed, table, row, param_col, value_col, 2
-                ))
-                QTimer.singleShot(0, lambda r=row: on_material_combobox_changed(
-                    table, r, param_col, value_col, 2
-                ))
-
-            if param_name == "材料类型":
-                # 绑定联动逻辑：材料类型为“钢锻件”时，显示“锻件级别”
-                combo.currentTextChanged.connect(
-                    partial(toggle_dependent_fields, table, combo, "钢锻件", ["锻件级别"], logic="==")
-                )
-                toggle_dependent_fields(table, combo, "钢锻件", ["锻件级别"], logic="==")
-
-                # ⚠ 如果当前不是“钢锻件”，则清空“锻件级别”字段并写入数据库
-                def clear_forging_level_if_needed(val):
-                    if val.strip() != "钢锻件":
-                        for r in range(table.rowCount()):
-                            pname_item = table.item(r, param_col)
-                            if pname_item and pname_item.text().strip() == "锻件级别":
-                                table.setRowHidden(r, True)
-
-                                # 清空 UI 值
-                                combo2 = table.cellWidget(r, value_col)
-                                if isinstance(combo2, QComboBox):
-                                    combo2.blockSignals(True)
-                                    combo2.setCurrentIndex(0)
-                                    combo2.lineEdit().clear()
-                                    combo2.blockSignals(False)
-                                table.setItem(r, value_col, QTableWidgetItem(""))
-
-                                # 清空数据库
-                                try:
-                                    product_id = viewer_instance.product_id
-                                    element_id = viewer_instance.clicked_element_data.get("元件ID", "")
-                                    update_element_para_data(product_id, element_id, "锻件级别", "")
-                                except Exception as e:
-                                    print(f"[清空锻件级别失败] {e}")
-
-                combo.currentTextChanged.connect(clear_forging_level_if_needed)
-                # 初始化时触发一次
-                clear_forging_level_if_needed(combo.currentText().strip())
-
-
-
-            elif param_name == "是否添加覆层":
-                value_item = table.item(row, value_col)
-                current_value = value_item.text().strip() if value_item else ""
-                combo = QComboBox()
-                combo.addItems(["是", "否"])
-                combo.setEditable(True)
-                combo.setCurrentText("是" if current_value == "是" else "否")
-                combo.lineEdit().setAlignment(Qt.AlignCenter)
-                combo.setStyleSheet("""
-                    QComboBox { border: none; background-color: transparent; font-size: 9pt; font-family: "Microsoft YaHei"; padding-left: 2px; }
-                """)
-                table.setItem(row, value_col, None)
-                table.setCellWidget(row, value_col, combo)
-
-                handler = make_on_covering_changed(component_info, viewer_instance, row)
-                handler2= make_on_flange_face_changed(component_info, viewer_instance, row)
-                handler3 = make_on_head_type_changed(component_info, viewer_instance, row)
-                handler4 = make_on_fangchongban_face_changed(component_info, viewer_instance, row)
-                handler5 = make_on_fenchenggeban_changed(component_info, viewer_instance, row)
-
-                combo.currentTextChanged.connect(handler)
-                try:
-                    sel_ids = getattr(viewer_instance, "selected_element_ids", []) or []
-                    if len(sel_ids) <= 1:
-                        handler(combo.currentText())
-                        handler2(combo.currentText())
-                        handler3(combo.currentText())
-                        handler4(combo.currentText())
-                        handler5(combo.currentText())
-                except Exception:
-                    pass
-
-                combo.currentTextChanged.connect(
-                    lambda _, c=combo, p=param_name: toggle_covering_fields(table, c, p)
-                )
-                toggle_covering_fields(table, combo, param_name)
-
-            elif param_name in ["管程侧是否添加覆层", "壳程侧是否添加覆层"]:
-                value_item = table.item(row, value_col)
-                current_value = value_item.text().strip() if value_item else ""
-                combo = QComboBox()
-                combo.addItems(["是", "否"])
-                combo.setEditable(True)
-                combo.setCurrentText("是" if current_value == "是" else "否")
-                combo.lineEdit().setAlignment(Qt.AlignCenter)
-                combo.setStyleSheet("""
-                    QComboBox { border: none; background-color: transparent; font-size: 9pt; font-family: "Microsoft YaHei"; padding-left: 2px; }
-                """)
-
-                table.setItem(row, value_col, None)
-                table.setCellWidget(row, value_col, combo)
-                combo.currentTextChanged.connect(
-                    lambda _, c=combo, p=param_name: toggle_covering_fields(table, c, p)
-                )
-                toggle_covering_fields(table, combo, param_name)
-
-        except Exception as e:
-            print(f"[错误] 第{row}行处理失败：{e}")
-
-    # ⚠ 统一在循环后绑定固定管板双字段逻辑
-    if component_info and viewer_instance:
-        fields = [table.item(r, param_col).text().strip() for r in range(table.rowCount())]
-        if "管程侧是否添加覆层" in fields and "壳程侧是否添加覆层" in fields:
-            try:
-                sel_ids = getattr(viewer_instance, "selected_element_ids", []) or []
-                if len(sel_ids) <= 1:
-                    handler = make_on_fixed_tube_covering_changed_v2(component_info, viewer_instance, table, param_col, value_col)
-                    handler()
-            except Exception:
-                pass
 
 _IMAGE_PATH_CACHE = {}  # key = (template_name, element_id, has_covering, mode) → path
 
@@ -1433,152 +1155,6 @@ def make_on_fixed_tube_covering_changed_v2(component_info_copy, viewer_instance_
     return refresh_image
 
 
-
-
-
-
-def make_on_covering_changed_guankou(component_info_copy, viewer_instance_copy, row_index):
-    def handler(value):
-        try:
-            print(f"[右上表触发图片刷新] 当前 combo 值: '{value}'")
-            has_covering = value.strip() == "是"
-            print(f"guankou{component_info_copy}")
-
-            if not component_info_copy or not viewer_instance_copy:
-                print(f"[跳过] 第{row_index}行：未绑定component_info")
-                return
-
-            # 右上表逻辑你现在已经有模板名和ID了
-            template_name = component_info_copy.get("模板名称")
-            template_id = query_template_id(template_name)
-            element_id = component_info_copy.get("管口零件ID")  # 注意这里字段名你已经提供了
-
-            # 查询数据库拿图片路径
-            image_path = query_guankou_image_from_database(template_id, element_id, has_covering)
-            print(f"材料库中图片路径: {image_path}")
-
-            if image_path:
-                viewer_instance_copy.display_image(image_path)
-            else:
-                print(f"[提示] 第{row_index}行无图片路径")
-
-        except Exception as e:
-            print(f"[右上表错误] 第{row_index}行图片处理失败: {e}")
-
-    return handler
-
-
-
-
-def on_material_combobox_changed(table: QTableWidget, changed_row: int, param_col: int, value_col: int, part_col: int):
-    material_fields = ['材料类型', '材料牌号', '材料标准', '供货状态']
-
-    part_item = table.item(changed_row, part_col)
-    if not part_item:
-        return
-    part_name = part_item.text().strip()
-
-    selected = {}
-    combo_map = {}
-    target_rows = []
-
-    for row in range(table.rowCount()):
-        if not table.item(row, part_col) or table.item(row, part_col).text().strip() != part_name:
-            continue
-        param_item = table.item(row, param_col)
-        if not param_item:
-            continue
-        param_name = param_item.text().strip()
-
-        if param_name in material_fields:
-            combo = table.cellWidget(row, value_col)
-            if not isinstance(combo, QComboBox):
-                continue
-            val = combo.currentText().strip()
-            selected[param_name] = val
-            combo_map[param_name] = combo
-            target_rows.append((row, param_name, combo))
-
-    changed_field = table.item(changed_row, param_col).text().strip()
-
-    # --- 材料类型为空：直接清空其余三项
-    if changed_field == "材料类型" and not selected.get("材料类型"):
-        for f in ['材料牌号', '材料标准', '供货状态']:
-            combo = combo_map.get(f)
-            if combo:
-                combo.blockSignals(True)
-                combo.setCurrentIndex(0)
-                table.setItem(changed_row, value_col, QTableWidgetItem(""))  # 清空表格文字
-                combo.blockSignals(False)
-        selected.clear()
-
-    # --- 材料类型改动：不受限制，其它三项若不兼容就清空
-    if changed_field == "材料类型":
-        if all(f in selected for f in ['材料牌号', '材料标准', '供货状态']):
-            for f in ['材料牌号', '材料标准', '供货状态']:
-                test_basis = {
-                    '材料类型': selected['材料类型'],
-                    f: selected[f]
-                }
-                valid = get_filtered_material_options(test_basis).get(f, [])
-                if selected[f] not in valid:
-                    combo = combo_map[f]
-                    combo.blockSignals(True)
-                    combo.setCurrentIndex(0)
-                    table.setItem(changed_row, value_col, QTableWidgetItem(""))  # 清空表格文字
-                    combo.blockSignals(False)
-                    selected.pop(f)
-
-    # --- 材料牌号改动：只受材料类型限制，其它两项若不兼容就清空
-    if changed_field == "材料牌号":
-        if all(f in selected for f in ['材料类型', '材料牌号', '材料标准', '供货状态']):
-            for f in ['材料标准', '供货状态']:
-                test_basis = {
-                    '材料类型': selected['材料类型'],
-                    '材料牌号': selected['材料牌号'],
-                    f: selected[f]
-                }
-                valid = get_filtered_material_options(test_basis).get(f, [])
-                if selected[f] not in valid:
-                    combo = combo_map[f]
-                    combo.blockSignals(True)
-                    combo.setCurrentIndex(0)
-                    table.setItem(changed_row, value_col, QTableWidgetItem(""))  # 清空表格文字
-                    combo.blockSignals(False)
-                    selected.pop(f)
-
-    # --- 联动字段刷新，自动带入唯一值
-    for row, param_name, combo in target_rows:
-        current_val = combo.currentText().strip()
-        all_options = getattr(combo, "full_options", [])
-
-        if param_name == "材料类型":
-            valid_options = all_options  # 不受限制
-        elif param_name == "材料牌号":
-            filter_basis = {'材料类型': selected.get('材料类型', '')}
-            valid_options = get_filtered_material_options(filter_basis).get(param_name, [])
-        else:
-            filter_basis = {
-                '材料类型': selected.get('材料类型', ''),
-                '材料牌号': selected.get('材料牌号', '')
-            }
-            valid_options = get_filtered_material_options(filter_basis).get(param_name, [])
-
-        combo.blockSignals(True)
-        combo.clear()
-        combo.addItem("")
-        combo.addItems(valid_options)
-
-        # ✅ 自动填入逻辑（唯一时自动赋值并写入）
-        if current_val in valid_options:
-            combo.setCurrentText(current_val)
-        elif len(valid_options) == 1:
-            unique_val = valid_options[0]
-            combo.setCurrentText(unique_val)
-        else:
-            combo.setCurrentIndex(0)
-        combo.blockSignals(False)
-
 MATERIAL_FIELDS = ("材料类型", "材料牌号", "材料标准", "供货状态")
 
 def _find_row_by_param(table, param_col, name: str) -> int:
@@ -1626,7 +1202,14 @@ def install_material_delegate_linkage(table, param_col, value_col, viewer_instan
     from PyQt5.QtWidgets import QAbstractItemView, QTableWidgetItem
     from PyQt5.QtCore import Qt
 
-    table.setEditTriggers(QAbstractItemView.SelectedClicked)
+    try:
+        import modules.chanpinguanli.bianl as _bianl_ro_lm
+        _readonly_lm = bool(getattr(_bianl_ro_lm, "product_local_files_missing_readonly", False))
+    except Exception:
+        _readonly_lm = False
+    table.setEditTriggers(
+        QAbstractItemView.NoEditTriggers if _readonly_lm else QAbstractItemView.SelectedClicked
+    )
 
     # ---------- 白名单参数名 ----------
     NAMES_ALL = [
@@ -1778,128 +1361,6 @@ def install_material_delegate_linkage(table, param_col, value_col, viewer_instan
     table.itemChanged.connect(_on_item_changed_material)
 
 
-def install_covering_delegate_linkage(table: QTableWidget,
-                                      param_col: int,
-                                      value_col: int,
-                                      component_info: dict,
-                                      viewer_instance):
-    """
-    给 ‘是否添加覆层 / 管程侧是否添加覆层 / 壳程侧是否添加覆层’ 安装行委托，并用 itemChanged 驱动
-    toggle_covering_fields() 与图片刷新（兼容代理，不依赖 QComboBox 控件）。
-    """
-    if getattr(table, "_covering_delegates_installed", False):
-        return
-    def _find_row(name: str) -> int:
-        for r in range(table.rowCount()):
-            it = table.item(r, param_col)
-            if it and it.text().strip() == name:
-                return r
-        return -1
-
-    r_global = _find_row("是否添加覆层")
-    r_g = _find_row("管程侧是否添加覆层")
-    r_k = _find_row("壳程侧是否添加覆层")
-
-    # 1) 给三行装下拉代理（仍然使用你现有的 ComboDelegate；不新增代理类）
-    for rr in [r_global, r_g, r_k]:
-        if rr >= 0:
-            # 确保 value 列有可编辑 item（代理才能工作）
-            it = table.item(rr, value_col)
-            if it is None:
-                it = QTableWidgetItem("")
-                it.setTextAlignment(Qt.AlignCenter)
-                table.setItem(rr, value_col, it)
-            # 行代理：是/否
-            table.setItemDelegateForRow(rr, ComboDelegate(["是", "否"], table))
-
-    # 2) 统一的 itemChanged 处理（避免重复绑定）
-    def _on_item_changed(item: QTableWidgetItem):
-        if item.column() != value_col:
-            return
-        r = item.row()
-        name_it = table.item(r, param_col)
-        if not name_it:
-            return
-        pname = name_it.text().strip()
-        val   = item.text().strip()
-
-        # 显隐逻辑（直接调用你原有的方法）
-        if pname in ("是否添加覆层", "管程侧是否添加覆层", "壳程侧是否添加覆层"):
-            # 用一个“假的 combo”接口传给 toggle_covering_fields（它只用到了 currentText）
-            class _Fake:
-                def __init__(self, t): self._t=t
-                def currentText(self): return self._t
-            toggle_covering_fields(table, _Fake(val), pname)
-
-            # 固定管板：双侧任意变化 → 刷新图片
-            if component_info and viewer_instance and (r_g >= 0 and r_k >= 0):
-                try:
-                    sel_ids = getattr(viewer_instance, "selected_element_ids", []) or []
-                    if len(sel_ids) <= 1:
-                        handler = make_on_fixed_tube_covering_changed_v2(
-                            component_info, viewer_instance, table, param_col, value_col
-                        )
-                        handler()
-                except Exception:
-                    pass
-
-            # 全局单开关：刷新图片
-            if component_info and viewer_instance and pname == "是否添加覆层":
-                try:
-                    sel_ids = getattr(viewer_instance, "selected_element_ids", []) or []
-                    if len(sel_ids) <= 1:
-                        h = make_on_covering_changed(component_info, viewer_instance, r, table=table)
-                        h2 = make_on_flange_face_changed(component_info, viewer_instance, r)
-                        h3 = make_on_head_type_changed(component_info, viewer_instance, r)
-                        h4 = make_on_fangchongban_face_changed(component_info, viewer_instance, r)
-                        h5 = make_on_fenchenggeban_changed(component_info, viewer_instance, r)
-                        h(val)
-                        h2(val)
-                        h3(val)
-                        h4(val)
-                        h5(val)
-                except Exception:
-                    pass
-    # 断开旧连接，防重复触发
-    try:
-        table.itemChanged.disconnect(_on_item_changed)
-    except Exception:
-        pass
-    table.itemChanged.connect(_on_item_changed)
-
-    # 3) 初始化：根据当前值做一次显隐与图片刷新
-    def _init_apply(row_idx: int, pname: str):
-        if row_idx < 0:
-            return
-        vitem = table.item(row_idx, value_col)
-        cur = vitem.text().strip() if vitem else ""
-        class _Fake:
-            def __init__(self, t): self._t=t
-            def currentText(self): return self._t
-        toggle_covering_fields(table, _Fake(cur), pname)
-
-    _init_apply(r_global, "是否添加覆层")
-    _init_apply(r_g,      "管程侧是否添加覆层")
-    _init_apply(r_k,      "壳程侧是否添加覆层")
-
-    # 固定管板：初始化图片
-    if component_info and viewer_instance and (r_g >= 0 and r_k >= 0):
-        try:
-            sel_ids = getattr(viewer_instance, "selected_element_ids", []) or []
-            if len(sel_ids) <= 1:
-                handler = make_on_fixed_tube_covering_changed_v2(component_info, viewer_instance, table, param_col, value_col)
-                handler()
-        except Exception:
-            pass
-
-
-
-
-
-
-
-
-
 def _apply_forging_visibility(table, param_col, value_col, viewer_instance, material_type_text, write_db=True):
     """材料类型≠钢锻件 → 隐藏‘锻件级别’并清空（可选写库）"""
     show = (material_type_text == "钢锻件")
@@ -1922,26 +1383,6 @@ def _apply_forging_visibility(table, param_col, value_col, viewer_instance, mate
                     except Exception as e:
                         print(f"[清空锻件级别失败] {e}")
             break
-
-
-def _norm(s: str) -> str:
-    return (s or "").strip()
-
-def _clean_options(options):
-    # 去 None/空串，去重保序
-    seen, out = set(), []
-    for o in options or []:
-        t = _norm(o)
-        if not t:
-            continue
-        if t not in seen:
-            seen.add(t); out.append(o)   # 保留原字符串，但用于比较走 _norm
-    return out
-
-def _in_options(val: str, options) -> bool:
-    v = _norm(val)
-    return any(_norm(x) == v for x in (options or []))
-
 
 
 
@@ -2021,48 +1462,6 @@ def on_material_delegate_changed(table, item, param_col, value_col, viewer_insta
     if item.row() == r_type:
         _apply_forging_visibility(table, param_col, value_col, viewer_instance, getv(r_type), write_db=(not init_mode))
 
-
-
-
-
-def update_combo_options(combo: QComboBox, all_options, valid_options, current_val: str):
-    combo.blockSignals(True)
-    combo.clear()
-    combo.addItem("")
-
-    if valid_options:
-        combo.addItems(valid_options)
-    else:
-        combo.addItem("（无匹配项）")
-        combo.model().item(combo.count() - 1).setEnabled(False)
-
-    valid_set = valid_options if valid_options else all_options
-    if current_val and current_val in valid_set:
-        combo.setCurrentText(current_val)
-    else:
-        combo.setCurrentIndex(0)
-
-    combo.blockSignals(False)
-
-    # ✅ 不再 emit 信号！只刷新显示
-    combo.repaint()
-    combo.update()
-
-def bind_define_table_click(self, table_define, table_param, define_data, category_label):
-    """
-    绑定左侧定义表格点击事件，每次绑定前先断开旧连接，防止多次触发。
-    """
-    try:
-        table_define.cellClicked.disconnect()
-        print("[解绑成功] 原有 cellClicked 信号已断开")
-    except Exception as e:
-        print("[解绑跳过] 无旧信号或断开失败", e)
-
-    def handler(row, col):
-        self.on_define_table_clicked(row, define_data, table_param, category_label)
-
-    table_define.cellClicked.connect(handler)
-    print("[绑定完成] 已绑定新的 cellClicked 事件")
 
 
 def generate_unique_guankou_label(self) -> str:
@@ -2534,52 +1933,6 @@ def load_data_by_template(viewer_instance, template_name):
                 # 会把管程/壳程的数据混在一起，导致“管程页显示壳程数值”的问题，因此不再重绘。
                 pass
 
-                # # 管口零件表格中的下拉框
-                # dropdown_data = load_material_dropdown_values()
-                # column_index_map = {'材料类型': 1, '材料牌号': 2, '材料标准': 3, '供货状态': 4}
-                # column_data_map = {column_index_map[k]: v for k, v in dropdown_data.items()}
-                # apply_combobox_to_table(viewer_instance.tableWidget_guankou_define, column_data_map, viewer_instance, category_label="管口材料分类1")
-                # set_table_tooltips(viewer_instance.tableWidget_guankou_define)
-
-                # #更新产品活动库中的管口零件材料表
-                # insert_or_update_guankou_material_data(guankou_define_info, product_id, template_name)
-                # # print(f"管口零件更新信息{guankou_define_info}")
-                #
-                # first_guankou_element = guankou_define_info[0]
-                # viewer_instance.guankou_define_info = guankou_define_info
-                # # print(f"第一条管口零件信息{first_guankou_element}")
-                # first_guankou_element_id = first_guankou_element.get("管口零件ID", None)
-                # # print(f"第一条管口零件对应的管口零件ID{first_guankou_element_id}")
-                # if first_guankou_element_id:
-                #     guankou_material_details = load_guankou_material_detail_template(first_guankou_element_id, first_template_id)
-                #     # print(f"第一个管口零件对应的参数信息{guankou_material_details}")
-                #     if guankou_material_details:
-                #         render_guankou_info_table(viewer_instance, guankou_material_details)
-                #         param_options = load_material_dropdown_values()
-                #         apply_paramname_dependent_combobox(
-                #             viewer_instance.tableWidget_para_define,
-                #             param_col=0,
-                #             value_col=1,
-                #             param_options=param_options
-                #         )
-                #         apply_paramname_dependent_combobox(
-                #             viewer_instance.tableWidget_guankou_param,
-                #             param_col=0,
-                #             value_col=1,
-                #             param_options=param_options
-                #         )
-                #         apply_gk_paramname_combobox(
-                #             viewer_instance.tableWidget_guankou_param,
-                #             param_col=0,
-                #             value_col=1
-                #         )
-                #
-                #
-                #         set_table_tooltips(viewer_instance.tableWidget_para_define)
-                #     else:
-                #         print("没有查到第一个管口零件材料的详细数据")
-                # else:
-                #     print("第一个管口零件没有ID")
             else:
                 print("没有查到管口定义数据")
 
@@ -2588,39 +1941,6 @@ def load_data_by_template(viewer_instance, template_name):
     else:
         viewer_instance.show_error_message("输入错误", "产品类型或形式未找到")
 
-    # # 存为模板
-    # # update_template_input_editable_state(viewer_instance)
-    # bind_define_table_click(
-    #     viewer_instance,
-    #     viewer_instance.tableWidget_guankou_define,
-    #     viewer_instance.tableWidget_guankou_param,
-    #     guankou_define_info,  # 模板切换后的新数据
-    #     category_label="管口材料分类1"
-    # )
-
-
-    # def force_select_guankou_and_trigger():
-    #     print("✅ 自动选中管口并触发刷新")
-    #
-    #     # 1. 先从左侧表格中查找“管口”行号
-    #     table = viewer_instance.tableWidget_parts
-    #     for r in range(table.rowCount()):
-    #         item = table.item(r, 1)  # 第1列为“零件名称”
-    #         if item and item.text().strip() == "管口":
-    #             table.setCurrentCell(r, 0)
-    #             viewer_instance.handle_table_click_guankou(r, 0)  # ✅ 切换到“管口”
-    #             handle_table_click(viewer_instance, r, 0)  # ✅ 加载管口定义数据
-    #             break
-    #
-    #     # 2. 再模拟点击右侧“管口定义”表第一行
-    #     QTimer.singleShot(10, lambda: viewer_instance.on_define_table_clicked(
-    #         0,
-    #         viewer_instance.guankou_define_info,
-    #         viewer_instance.tableWidget_guankou_param,
-    #         "管口材料分类1"
-    #     ))
-    #
-    # QTimer.singleShot(10, force_select_guankou_and_trigger)
 
     #1127切换模板自动点击管口元件
     def _auto_select_guankou():
@@ -2841,7 +2161,7 @@ def _load_additional_params_for_common_editor(product_id, element_id, element_na
             # 默认：元件附加参数表
             base_rows = load_element_additional_data_by_product(product_id, element_id) or []
     except Exception as e:
-        print(f"[DBG][multi] load_additional_params_for_common_editor failed: {e}")
+        print(f"[多选] 附加参数加载失败: {e}")
         base_rows = []
 
     return base_rows
@@ -2966,7 +2286,8 @@ def apply_common_params_aggregated_visibility(viewer_instance, param_table, fiel
             else:
                 vis.append(nm)
         page_idx = getattr(viewer_instance, "stackedWidget", None).currentIndex() if getattr(viewer_instance, "stackedWidget", None) else "?"
-        print(f"[DBG][multi] rowCount={param_table.rowCount()} visible={vis} hidden={hid} page={page_idx}")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[DBG][multi] rowCount={param_table.rowCount()} visible={vis} hidden={hid} page={page_idx}")
     except Exception as e:
         print(f"[DBG][multi] 聚合显隐失败: {e}")
 
@@ -2997,10 +2318,11 @@ def render_common_material_editor(viewer_instance):
     for r in selected_rows:
         nm = viewer_instance.element_data[r].get("零件名称") or viewer_instance.element_data[r].get("元件名称") or ""
         selected_names.append(str(nm).strip())
-    try:
-        print(f"[DBG][multi] product_id={product_id} selected_ids={selected_ids} selected_names={selected_names}")
-    except Exception:
-        pass
+    if DEBUG_VERBOSE_DEFINE_UI:
+        try:
+            print(f"[DBG][multi] product_id={product_id} selected_ids={selected_ids} selected_names={selected_names}")
+        except Exception:
+            pass
 
     # 为每个元件构造“逻辑参数名称”集合，底层来源根据元件类型自动路由
     name_sets = []
@@ -3036,13 +2358,14 @@ def render_common_material_editor(viewer_instance):
                 om[nn] = idx
         name_sets.append(names)
         order_maps.append(om)
-        try:
-            preview = sorted(list(names))
-            if len(preview) > 30:
-                preview = preview[:30]
-            print(f"[DBG][multi] eid={eid} names_count={len(names)} names={preview}")
-        except Exception:
-            pass
+        if DEBUG_VERBOSE_DEFINE_UI:
+            try:
+                preview = sorted(list(names))
+                if len(preview) > 30:
+                    preview = preview[:30]
+                print(f"[DBG][multi] eid={eid} names_count={len(names)} names={preview}")
+            except Exception:
+                pass
 
     common_names = set(name_sets[0]) if name_sets else set()
     for s in name_sets[1:]:
@@ -3208,11 +2531,12 @@ def render_common_material_editor(viewer_instance):
 
     fields.sort(key=_sort_key)
 
-    try:
-        print(f"[DBG][multi] common_count={len(common_names)} common={sorted(list(common_names))}")
-        print(f"[DBG][multi] final_fields={fields}")
-    except Exception:
-        pass
+    if DEBUG_VERBOSE_DEFINE_UI:
+        try:
+            print(f"[DBG][multi] common_count={len(common_names)} common={sorted(list(common_names))}")
+            print(f"[DBG][multi] final_fields={fields}")
+        except Exception:
+            pass
 
     param_table.clear()
     param_table.setColumnCount(3)
@@ -3277,7 +2601,14 @@ def render_common_material_editor(viewer_instance):
         unit_item.setTextAlignment(Qt.AlignCenter)
         param_table.setItem(i, unit_col, unit_item)
 
-    param_table.setEditTriggers(QTableWidget.SelectedClicked)
+    try:
+        import modules.chanpinguanli.bianl as _bianl_ro_lm
+        _ro_lm = bool(getattr(_bianl_ro_lm, "product_local_files_missing_readonly", False))
+    except Exception:
+        _ro_lm = False
+    param_table.setEditTriggers(
+        QTableWidget.NoEditTriggers if _ro_lm else QTableWidget.SelectedClicked
+    )
 
     install_material_delegate_linkage(
         table=param_table,
@@ -3315,7 +2646,7 @@ def render_common_material_editor(viewer_instance):
     )
 
 
-def handle_table_click(viewer_instance, row, col):
+def _handle_table_click_impl(viewer_instance, row, col):
     """处理点击零件列表的逻辑（支持包含管口/垫片/支座/铭牌/保温装置/设备法兰紧固件在内的多选）"""
     # 记录最后一次点击的行号，便于多选无共同项时回退
     try:
@@ -3352,7 +2683,15 @@ def handle_table_click(viewer_instance, row, col):
 
     # ✅ 多选：进入“共同参数项”统一编辑模式
     if len(selected_rows) > 1:
-        print("[多选模式] 渲染共同字段（包含管口/垫片/支座/铭牌/保温装置/设备法兰紧固件等元件）")
+        _names = []
+        for _r in selected_rows:
+            _d = _row_data(_r)
+            _nm = (_d.get("零件名称") or _d.get("元件名称") or "").strip()
+            if _nm:
+                _names.append(_nm)
+        print(f"[multi] 多选共同编辑模式 | 已选 {len(selected_rows)} 个元件 | 元件名称: {_names}")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print("[多选模式] 渲染共同字段（包含管口/垫片/支座/铭牌/保温装置/设备法兰紧固件等元件）")
         viewer_instance.label_part_image.clear()
         if hasattr(viewer_instance, "stackedWidget"):
             viewer_instance.stackedWidget.setCurrentIndex(1)
@@ -3383,12 +2722,14 @@ def handle_table_click(viewer_instance, row, col):
         # ✅ 切换到支座/铭牌页面 (page_3)
         if hasattr(viewer_instance, 'stackedWidget'):
             viewer_instance.stackedWidget.setCurrentIndex(2)
-            print(f"[{element_name}] 切换到页面: page_3")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[{element_name}] 切换到页面: page_3")
         
         # 加载元件附加参数合并表数据
         try:
             saddle_data = load_element_merged_para_product_data(viewer_instance.product_id, element_id)
-            print(f"[{element_name}] 加载数据: {len(saddle_data)} 条")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[{element_name}] 加载数据: {len(saddle_data)} 条")
             
             # 渲染数据到UI（支座和铭牌支架使用同一套UI）
             render_element_merged_para_data_to_ui(viewer_instance, saddle_data, element_name)
@@ -3563,51 +2904,6 @@ def handle_table_click(viewer_instance, row, col):
 
         return
 
-    # 其他元件：走普通元件逻辑
-
-        # if not guankou_define_info:
-        #     guankou_define_info = query_guankou_define_data_by_category(viewer_instance.product_id, "管口材料分类1")
-        #     render_guankou_param_table(viewer_instance, guankou_define_info)
-        # else:
-        #     guankou_ID = guankou_define_info[0].get("管口零件ID", None)
-        #     # guankou_additional_info = load_guankou_para_data(guankou_ID, "管口材料分类1")
-        #     guankou_additional_info = load_guankou_para_data(guankou_ID, viewer_instance.product_id, "管口材料分类1")
-
-        #     if guankou_additional_info:
-        #         render_guankou_info_table(viewer_instance, guankou_additional_info)
-        #
-        #         # ✅ 关键改动：不论初始化还是切换，都插入控件
-        #         param_options = load_material_dropdown_values()
-        #
-        #         apply_paramname_dependent_combobox(
-        #             viewer_instance.tableWidget_guankou_param,
-        #             param_col=0,
-        #             value_col=1,
-        #             param_options=param_options,
-        #             component_info=viewer_instance.clicked_element_data,
-        #             viewer_instance=viewer_instance
-        #         )
-        #         apply_gk_paramname_combobox(
-        #             viewer_instance.tableWidget_guankou_param,
-        #             param_col=0,
-        #             value_col=1
-        #         )
-        #         set_table_tooltips(viewer_instance.tableWidget_guankou_param)
-        #     else:
-        #         guankou_para_table = viewer_instance.tableWidget_guankou_param
-        #         guankou_para_table.setRowCount(0)
-        #         guankou_para_table.clearContents()
-        #
-        # # ✅ 不管有没有零件信息，define表也一样正常渲染
-        # dropdown_data = load_material_dropdown_values()
-        # column_index_map = {'材料类型': 1, '材料牌号': 2, '材料标准': 3, '供货状态': 4}
-        # column_data_map = {column_index_map[k]: v for k, v in dropdown_data.items()}
-        # apply_combobox_to_table(viewer_instance.tableWidget_guankou_define, column_data_map, viewer_instance,
-        #                         category_label="管口材料分类1")
-        # set_table_tooltips(viewer_instance.tableWidget_guankou_define)
-
-        return
-
     if not element_id:
         print("没有找到有效的元件ID，跳过查询！")
         return
@@ -3621,28 +2917,13 @@ def handle_table_click(viewer_instance, row, col):
 
 
     render_additional_info_table(viewer_instance, additional_info)
-    param_options = load_material_dropdown_values()
-    # apply_paramname_dependent_combobox(
-    #     viewer_instance.tableWidget_para_define,
-    #     param_col=0,
-    #     value_col=1,
-    #     param_options=param_options,
-    #     component_info=viewer_instance.clicked_element_data,
-    #     viewer_instance=viewer_instance
-    # )
+
     install_material_delegate_linkage(
         table=viewer_instance.tableWidget_para_define,
         param_col=0,
         value_col=1,
         viewer_instance=viewer_instance,  # 用于“锻件级别”清库时的 product_id / element_id
     )
-    # install_covering_delegate_linkage(
-    #     table=viewer_instance.tableWidget_para_define,
-    #     param_col=0,
-    #     value_col=1,
-    #     component_info=viewer_instance.clicked_element_data,
-    #     viewer_instance=viewer_instance
-    # )
     apply_paramname_combobox(
         viewer_instance.tableWidget_para_define,
         param_col=0,
@@ -3659,6 +2940,21 @@ def handle_table_click(viewer_instance, row, col):
         viewer_instance=viewer_instance,
     )
     set_table_tooltips(viewer_instance.tableWidget_para_define)
+
+
+def handle_table_click(viewer_instance, row, col):
+    """包装：渲染右侧表格后会重装委托，需在之后再次套用本地未恢复时的只读。"""
+    try:
+        _handle_table_click_impl(viewer_instance, row, col)
+    finally:
+        try:
+            from modules.chanpinguanli.local_product_folder import (
+                schedule_readonly_for_element_define_viewer,
+            )
+
+            schedule_readonly_for_element_define_viewer(viewer_instance)
+        except Exception as _e_ro:
+            print(f"[handle_table_click] schedule readonly: {_e_ro}")
 
 
 def _trigger_gasket_standard_update_on_type_change(table):
@@ -3712,24 +3008,6 @@ def _trigger_gasket_standard_update_on_type_change(table):
 
     except Exception as e:
         print(f"[DBG] 垫片标准主动更新失败: {e}")
-
-
-def display_param_dict_on_right_panel(viewer_instance, param_dict):
-    table = viewer_instance.tableWidget_para_define
-    table.setRowCount(0)
-    for i, (k, v) in enumerate(param_dict.items()):
-        table.insertRow(i)
-        table.setItem(i, 0, QTableWidgetItem(k))
-        table.setItem(i, 1, QTableWidgetItem(str(v)))
-        table.setItem(i, 2, QTableWidgetItem(""))  # 单位可补充
-
-
-def clear_right_panel(viewer_instance):
-    table = viewer_instance.tableWidget_para_define
-    table.setRowCount(0)
-    table.clearContents()
-
-
 
 def on_confirm_param_update(viewer_instance):
     # 普通元件的确定按钮
@@ -3872,7 +3150,8 @@ def on_confirm_param_update(viewer_instance):
         selected_ids = getattr(viewer_instance, "selected_element_ids", [])
 
         if len(selected_ids) > 1:
-            print(f"[多选] 批量处理元件ID: {selected_ids}")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[多选] 批量处理元件ID: {selected_ids}")
 
             # 从“共同参数编辑表”中获取材料四字段等逻辑字段的新值
             common_table = getattr(viewer_instance, "tableWidget_para_define", None)
@@ -3888,7 +3167,7 @@ def on_confirm_param_update(viewer_instance):
                         val = (value_item.text().strip() if value_item else "")
                         logical_values[nm] = val
                 except Exception as e:
-                    print(f"[DBG][multi] 读取共同参数编辑表失败: {e}")
+                    print(f"[多选] 读取共同参数编辑表失败: {e}")
 
             # 额外标记：多选集合中是否包含“管口附件”一类（其在附件表中无元件ID）
             selected_names_map = {}
@@ -4068,6 +3347,13 @@ def on_confirm_param_update(viewer_instance):
         viewer_instance.element_data = updated_element_info
         viewer_instance.render_data_to_table(updated_element_info)
 
+        try:
+            _n_multi = len(getattr(viewer_instance, "selected_element_ids", []) or [])
+        except Exception:
+            _n_multi = 0
+        if _n_multi > 1:
+            print(f"[multi] 多选更新同步成功（共 {_n_multi} 个元件）")
+
         save_ok = True
 
         # 联动布管参数表
@@ -4133,32 +3419,6 @@ def on_confirm_param_update(viewer_instance):
         )
     except Exception as e:
         print(f"[调试] 点击事件绑定失败: {e}")
-
-
-
-
-def show_success_message_auto(parent, message="保存成功！", timeout=2000):
-    box = QMessageBox(parent)
-    box.setIcon(QMessageBox.Information)
-    box.setWindowTitle("成功")
-    box.setText(message)
-    box.setStandardButtons(QMessageBox.NoButton)
-
-    # ✅ 设置提示文字字体大小 & 控制整体宽度
-    box.setStyleSheet("""
-        QMessageBox {
-            min-width: 200px;
-            max-width: 300px;
-        }
-        QMessageBox QLabel {
-            font-size: 18px;
-            padding: 8px;
-        }
-    """)
-
-    box.setWindowModality(False)  # 非阻塞
-    box.show()
-    QTimer.singleShot(timeout, box.accept)
 
 
 def _get_tab_table(viewer_instance, i: int):
@@ -4295,13 +3555,7 @@ def _is_multi_col_row(table, r: int) -> bool:
         # 某些版本没有 columnSpan 或异常时退回到旧判定
         return table.columnCount() > 2 and any(_cell_text(table, r, c) != "" for c in range(2, table.columnCount()))
 
-def _dedup_keep_order(items):
-    seen = set(); out = []
-    for x in items or []:
-        x = (x or "").strip()
-        if x and x not in seen:
-            seen.add(x); out.append(x)
-    return out
+
 
 _BRACKETS = [('（','）'), ('(',')'), ('[',']')]
 
@@ -4380,15 +3634,6 @@ def save_other_params_for_tab(viewer_instance, table_param, product_id, tab_name
 def on_confirm_guankouparam(viewer_instance):  # 已修改
     print("点击了管口确定按钮")
 
-    # tab_name = viewer_instance.tabWidget.tabText(viewer_instance.tabWidget.currentIndex())
-    #
-    # if tab_name == "管口材料分类1":
-    #     table_param = viewer_instance.tableWidget_guankou
-    # else:
-    #     table_param = viewer_instance.dynamic_guankou_param_tabs.get(tab_name)
-    #
-    # if table_param is None:
-    #     table_param = viewer_instance.tableWidget_guankou
 
     tw = getattr(viewer_instance, "guankou_tabWidget", None)
     if tw is None:
@@ -4585,48 +3830,6 @@ def on_confirm_guankouparam(viewer_instance):  # 已修改
         except Exception as e:
             print(f"[警告] 生成压力等级提示失败: {e}")
 
-# ===压力等级提示新增方法:获取管口ID==
-def get_guankou_id_by_product_and_code(product_id: str, guankou_code: str) -> str:
-    """
-    根据产品ID和管口代号从产品设计活动表_管口类别表中获取对应的管口ID
-
-    Args:
-        product_id: 产品ID
-        guankou_code: 管口代号（如 N1, N2 等）
-
-    Returns:
-        str: 管口ID，如果未找到则返回空字符串
-    """
-    import pymysql
-    from modules.cailiaodingyi.funcs.funcs_pdf_change import db_config_1
-
-    try:
-        # 使用产品设计活动库连接
-        connection = pymysql.connect(**db_config_1)
-        try:
-            with connection.cursor(pymysql.cursors.DictCursor) as cursor:
-                # 查询产品设计活动表_管口类别表
-                sql = """
-                    SELECT 管口ID 
-                    FROM 产品设计活动表_管口类别表 
-                    WHERE 产品ID = %s AND 管口代号 = %s
-                """
-
-                cursor.execute(sql, (product_id, guankou_code))
-                result = cursor.fetchone()
-
-                if result:
-                    return str(result['管口ID'])
-                else:
-                    print(f"[提示] 未找到匹配记录 - 产品ID: {product_id}, 管口代号: {guankou_code}")
-                    return ""
-
-        finally:
-            connection.close()
-
-    except Exception as e:
-        print(f"[错误] 查询管口ID失败 - 产品ID: {product_id}, 管口代号: {guankou_code}, 错误: {e}")
-        return ""
 
 
 def generate_pressure_level_tips_for_guankou_codes(product_id: str, guankou_codes: list) -> dict:
@@ -4895,33 +4098,6 @@ def render_guankou_param_table(viewer_instance, guankou_param_info):
             guankou_define.setItem(row_idx, col_idx, item)
 
 
-def handle_guankou_table_click(viewer_instance, row, col):
-
-    print(f"传入数据{viewer_instance.guankou_define_info}")
-    """处理点击零件列表的逻辑"""
-
-    # 获取当前点击行的数据
-    clicked_guankou_define_data = viewer_instance.guankou_define_info[row]  # 获取已经存储的行数据
-    print(f"点击的行数据: {clicked_guankou_define_data}")
-
-    viewer_instance.clicked_guankou_define_data = clicked_guankou_define_data
-
-    # 获取管口零件ID
-    guankou_id = clicked_guankou_define_data.get("管口零件ID", None)
-    print(f"管口：{guankou_id}")
-    # print(f"此时点击{clicked_guankou_define_data}")
-    category_label = viewer_instance.label
-    print(f"类别1: {category_label}")
-    # category_label = clicked_guankou_define_data.get("类别", None)
-    # print(f"类别: {category_label}")
-
-    # 查询管口附加参数数据
-    guankou_additional_info = load_guankou_para_data_leibie(guankou_id, category_label)
-    print(f"管口零件参数信息: {guankou_additional_info}")
-
-    # 渲染附加参数表格
-    render_guankou_info_table(viewer_instance, guankou_additional_info)
-
 
 def render_guankou_info_table(viewer_instance, additional_info):
     """渲染管口零件附加参数信息"""
@@ -4973,115 +4149,6 @@ def render_guankou_info_table(viewer_instance, additional_info):
 
     # details_table.setStyleSheet("QHeaderView::section { background-color: lightgreen; }")
 
-
-
-def setup_overlay_controls_logic(table, param_col, value_col, param_name, combo, field_widgets):
-    material_type_fields = {
-        "覆层材料类型": {
-            "control_field": "是否添加覆层",
-            "level_field": "覆层材料级别",
-            "status_field": "覆层使用状态",
-            "process_field": "覆层成型工艺"
-        },
-        "管程侧覆层材料类型": {
-            "control_field": "管程侧是否添加覆层",
-            "level_field": "管程侧覆层材料级别",
-            "status_field": "管程侧覆层使用状态",
-            "process_field": "管程侧覆层成型工艺"
-        },
-        "壳程侧覆层材料类型": {
-            "control_field": "壳程侧是否添加覆层",
-            "level_field": "壳程侧覆层材料级别",
-            "status_field": "壳程侧覆层使用状态",
-            "process_field": "壳程侧覆层成型工艺"
-        }
-    }
-
-    # 1. 对“是否添加覆层”字段的基本控制
-    if param_name in ["是否添加覆层", "管程侧是否添加覆层", "壳程侧是否添加覆层"]:
-        def on_cover_toggle(index, c=combo):
-            value = c.currentText().strip()
-            show = value == "是"
-
-            # 根据当前控制字段，隐藏/显示对应字段
-            for name, info in material_type_fields.items():
-                if info["control_field"] == param_name:
-                    targets = [name, info["level_field"], info["status_field"], info["process_field"]]
-                    for r in range(table.rowCount()):
-                        pitem = table.item(r, param_col)
-                        if pitem and pitem.text().strip() in targets:
-                            table.setRowHidden(r, not show)
-
-                    if "on_material_type_changed_" + name in field_widgets:
-                        field_widgets["on_material_type_changed_" + name](-1)
-
-        combo.currentIndexChanged.connect(on_cover_toggle)
-        QTimer.singleShot(0, lambda: on_cover_toggle(combo.currentIndex()))
-        return
-
-    # 2. 针对“覆层材料类型”联动成型工艺设置
-    if param_name in material_type_fields:
-        field_info = material_type_fields[param_name]
-
-        def on_material_type_changed(index, c=combo):
-            value = c.currentText().strip()
-            print(f"[联动] 当前选择的 {param_name}: {value}")
-
-            # 获取控制字段的值
-            control_value = ""
-            for rr in range(table.rowCount()):
-                item = table.item(rr, param_col)
-                if item and item.text().strip() == field_info["control_field"]:
-                    widget = table.cellWidget(rr, value_col)
-                    if isinstance(widget, QComboBox):
-                        control_value = widget.currentText().strip()
-                    break
-
-            # 隐藏级别和状态字段（仅当板材+是才显示）
-            for r in range(table.rowCount()):
-                pitem = table.item(r, param_col)
-                if not pitem:
-                    continue
-                pname = pitem.text().strip()
-                if pname == field_info["level_field"]:
-                    table.setRowHidden(r, not (control_value == "是" and value == "钢板"))
-                if pname == field_info["status_field"]:
-                    table.setRowHidden(r, not (control_value == "是" and value == "钢板"))
-
-            # 延迟设置成型工艺
-            def delayed_fill():
-                widget = field_widgets.get(field_info["process_field"])
-                if not widget:
-                    print(f"[警告] {field_info['process_field']} 控件未找到")
-                    return
-
-                if not isinstance(widget, QComboBox):
-                    print(f"[跳过] {field_info['process_field']} 不是 QComboBox")
-                    return
-
-                if control_value != "是":
-                    print(f"[跳过] {field_info['control_field']} 未选中“是”，跳过设置 {field_info['process_field']}")
-                    return
-
-                widget.blockSignals(True)
-                widget.clear()
-                widget.addItem("")  # 空项，避免锁死
-
-                if value == "钢板":
-                    widget.addItems(["轧制复合", "爆炸焊接"])
-                    widget.setCurrentText("爆炸焊接")
-                elif value == "焊材":
-                    widget.addItem("堆焊")
-                    widget.setCurrentText("堆焊")
-                else:
-                    widget.setCurrentText("")
-                widget.blockSignals(False)
-
-            QTimer.singleShot(50, delayed_fill)
-
-        # 绑定唯一键，支持多个材料类型字段独立注册
-        field_widgets["on_material_type_changed_" + param_name] = on_material_type_changed
-        combo.currentIndexChanged.connect(on_material_type_changed)
 
 
 def find_row_by_param_name(table: QTableWidget, name: str, param_col: int,
@@ -5254,6 +4321,12 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
     from PyQt5.QtWidgets import (
         QStyledItemDelegate, QLineEdit, QTableWidgetItem, QAbstractItemView
     )
+
+    try:
+        import modules.chanpinguanli.bianl as _bianl_ro_lm
+        readonly_local_missing = bool(getattr(_bianl_ro_lm, "product_local_files_missing_readonly", False))
+    except Exception:
+        readonly_local_missing = False
 
     # ===== 常量集合 =====
     MATERIAL_FIELDS = {
@@ -5591,12 +4664,16 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
     except Exception:
         param_names = set()
     gt0_params, ge0_params, range_params, allowed_map = get_numeric_rules()
-    print("[rules] gt0:", len(gt0_params), " ge0:", len(ge0_params),
-          " range:", len(range_params), " allowed_map:", len(allowed_map))
+    if DEBUG_VERBOSE_DEFINE_UI:
+        print("[rules] gt0:", len(gt0_params), " ge0:", len(ge0_params),
+              " range:", len(range_params), " allowed_map:", len(allowed_map))
 
 
-    # 1) 单击进入编辑
-    table.setEditTriggers(QAbstractItemView.SelectedClicked)
+    # 1) 单击进入编辑（本地未恢复时禁止，否则 _edit_on_click 会强制 table.edit 打开下拉）
+    if readonly_local_missing:
+        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+    else:
+        table.setEditTriggers(QAbstractItemView.SelectedClicked)
 
     # 2) 清理 value 列 cellWidget
     for r in range(table.rowCount()):
@@ -6559,7 +5636,8 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                             last_type = getattr(table, '_last_gasket_type', None)
                             if last_type and last_type != current_gasket_type:
                                 gasket_type_changed = True
-                                print(f"[DBG] 垫片联动: 垫片类型已变化: {last_type} → {current_gasket_type}")
+                                if DEBUG_VERBOSE_DEFINE_UI:
+                                    print(f"[DBG] 垫片联动: 垫片类型已变化: {last_type} → {current_gasket_type}")
                                 # 设置全局变化状态
                                 table._gasket_type_changing = True
                                 # 主动触发垫片标准的更新
@@ -6577,7 +5655,8 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                             last_standard = getattr(table, '_last_gasket_standard', None)
                             if last_standard and last_standard != current_gasket_standard:
                                 gasket_standard_changed = True
-                                print(f"[DBG] 垫片联动: 垫片标准已变化: {last_standard} → {current_gasket_standard}")
+                                if DEBUG_VERBOSE_DEFINE_UI:
+                                    print(f"[DBG] 垫片联动: 垫片标准已变化: {last_standard} → {current_gasket_standard}")
                                 # 设置全局变化状态
                                 table._gasket_standard_changing = True
                             table._last_gasket_standard = current_gasket_standard
@@ -6592,7 +5671,8 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                             last_np = getattr(table, '_last_nominal_pressure', None)
                             if last_np is not None and last_np != current_nominal_pressure:
                                 nominal_pressure_changed = True
-                                print(f"[DBG] 垫片联动: 公称压力PN已变化: {last_np} → {current_nominal_pressure}")
+                                if DEBUG_VERBOSE_DEFINE_UI:
+                                    print(f"[DBG] 垫片联动: 公称压力PN已变化: {last_np} → {current_nominal_pressure}")
                                 table._gasket_nominal_pressure_changing = True
                             table._last_nominal_pressure = current_nominal_pressure
 
@@ -6600,10 +5680,12 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                             nominal_pressure_changed = True
 
                         gasket_driver_changed = gasket_type_changed or gasket_standard_changed or nominal_pressure_changed
-                        print(f"[DBG] 垫片联动: 垫片驱动变化={gasket_driver_changed} (类型变化={gasket_type_changed}, 标准变化={gasket_standard_changed}, 公称压力变化={nominal_pressure_changed})")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[DBG] 垫片联动: 垫片驱动变化={gasket_driver_changed} (类型变化={gasket_type_changed}, 标准变化={gasket_standard_changed}, 公称压力变化={nominal_pressure_changed})")
 
                     except Exception as e:
-                        print(f"[DBG] 垫片联动: 检测垫片驱动变化失败: {e}")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[DBG] 垫片联动: 检测垫片驱动变化失败: {e}")
                         gasket_driver_changed = False
 
                     # ========== 【修改标记2】用户手动修改检查逻辑 ==========
@@ -6635,17 +5717,20 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                     # 这种情况不应被判定为“签名变化”，否则会把数据库中的手工值误覆盖成推荐值。
                     sig_changed_at_cell = (prev_sig is not None and prev_sig != cur_sig)
                     if user_manually_modified and (not gasket_driver_changed) and (not sig_changed_at_cell):
-                        print(f"[DBG] 垫片联动: 参数{tgt_name}已被用户手动修改为{cur_txt}，且垫片驱动未变化，跳过覆盖")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[DBG] 垫片联动: 参数{tgt_name}已被用户手动修改为{cur_txt}，且垫片驱动未变化，跳过覆盖")
                         return
 
                     # ========== 【修改标记3】垫片驱动变化时的强制覆盖逻辑 ==========
                     # 如果垫片类型或材料标准变化，即使参数被手动修改过，也要强制更新
                     if gasket_driver_changed:
-                        print(f"[DBG] 垫片联动: 垫片驱动已变化，强制覆盖参数{tgt_name}为{v}")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[DBG] 垫片联动: 垫片驱动已变化，强制覆盖参数{tgt_name}为{v}")
 
                         # 特殊处理垫片材料：垫片类型变化时必须清空用户锁
                         if tgt_name == "垫片材料" and getattr(table, '_gasket_type_changing', False):
-                            print(f"[DBG] 垫片联动: 垫片类型变化，清空垫片材料用户锁")
+                            if DEBUG_VERBOSE_DEFINE_UI:
+                                print(f"[DBG] 垫片联动: 垫片类型变化，清空垫片材料用户锁")
                             table._gasket_user_lock.pop(tgt_name, None)
 
                         # 执行强制覆盖（None 显示为“程序推荐”）
@@ -6653,7 +5738,8 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                         itx.setData(ROLE_SRC, AUTO_TAG)
                         itx.setData(ROLE_SIG, cur_sig)
                         table._gasket_user_lock.pop(tgt_name, None)
-                        print(f"[DBG] 垫片联动: 强制覆盖参数{tgt_name}为{v}")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[DBG] 垫片联动: 强制覆盖参数{tgt_name}为{v}")
                         try:
                             if tgt_name in {"垫片名义外径D2n","垫片名义内径D1n","环内径d1"} and viewer_instance:
                                 pid = getattr(viewer_instance, "product_id", "")
@@ -6675,7 +5761,8 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                                 table._gasket_standard_changing = False
                                 table._gasket_processed_count = 0
                                 table._gasket_nominal_pressure_changing = False
-                                print(f"[DBG] 垫片联动: 所有垫片参数处理完成，清除变化状态")
+                                if DEBUG_VERBOSE_DEFINE_UI:
+                                    print(f"[DBG] 垫片联动: 所有垫片参数处理完成，清除变化状态")
 
                         return
 
@@ -6686,7 +5773,8 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                         itx.setData(ROLE_SRC, AUTO_TAG)
                         itx.setData(ROLE_SIG, cur_sig)
                         table._gasket_user_lock.pop(tgt_name, None)
-                        print(f"[DBG] 垫片联动: 强制覆盖参数{tgt_name}为{v}")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[DBG] 垫片联动: 强制覆盖参数{tgt_name}为{v}")
                         try:
                             if tgt_name in {"垫片名义外径D2n","垫片名义内径D1n","环内径d1"} and viewer_instance:
                                 pid = getattr(viewer_instance, "product_id", "")
@@ -6762,7 +5850,8 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
 
 
         except Exception as e:
-            print(f"[垫片联动] 计算失败：{e}")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[垫片联动] 计算失败：{e}")
 
 
         # ==== 显隐规则：每次值变化后再评估 ====
@@ -6792,6 +5881,8 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
 
     # 5) 单击进入编辑
     def _edit_on_click(r, c):
+        if readonly_local_missing:
+            return
         idx = table.model().index(r, c)
         it = table.item(r, c)
         if idx.isValid() and it and (it.flags() & Qt.ItemIsEditable):
@@ -6831,6 +5922,16 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
 
     QTimer.singleShot(0, _bootstrap_tierod_by_db)
 
+    if readonly_local_missing and viewer_instance is not None:
+        try:
+            from modules.chanpinguanli.local_product_folder import (
+                schedule_readonly_for_element_define_viewer,
+            )
+
+            schedule_readonly_for_element_define_viewer(viewer_instance)
+        except Exception as _e_sch:
+            print(f"[apply_paramname_combobox] schedule readonly: {_e_sch}")
+
 
 
 
@@ -6840,6 +5941,12 @@ from PyQt5.QtCore import Qt
 
 def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_instance=None):
     from PyQt5.QtWidgets import QTableWidgetItem, QAbstractItemView
+
+    try:
+        import modules.chanpinguanli.bianl as _bianl_ro_lm
+        readonly_local_missing = bool(getattr(_bianl_ro_lm, "product_local_files_missing_readonly", False))
+    except Exception:
+        readonly_local_missing = False
 
     # ---- 小工具 ----
     def _ensure_editable_item(tbl, r, c):
@@ -6920,7 +6027,10 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
                 table.setCellWidget(r, value_col, None)
             _ensure_editable_item(table, r, value_col)
 
-    table.setEditTriggers(QAbstractItemView.SelectedClicked)
+    if readonly_local_missing:
+        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+    else:
+        table.setEditTriggers(QAbstractItemView.SelectedClicked)
 
     # —— 复合规则 ——
     rules = (mapping or {}).get("_compound_rules") or []
@@ -7024,7 +6134,8 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
                 # 如果有全局变化状态，或者是文本变化，都认为类型变化了
                 actual_type_changed = master_type_changed or global_type_changed
                 master_type_changed = actual_type_changed
-                print(f"[DBG] 垫片标准联动: 垫片类型'{master_field}'从'{saved}'变更为'{new_text}', 文本变化={saved != new_text}, 全局变化={global_type_changed}, 实际变化={actual_type_changed}")
+                if DEBUG_VERBOSE_DEFINE_UI:
+                    print(f"[DBG] 垫片标准联动: 垫片类型'{master_field}'从'{saved}'变更为'{new_text}', 文本变化={saved != new_text}, 全局变化={global_type_changed}, 实际变化={actual_type_changed}")
 
             for sub_field in dependent_fields_all.get(master_field, []):
                 opts = submap.get(sub_field, [])
@@ -7037,7 +6148,8 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
                         # 垫片类型发生变化：先清空，再使用默认值（第一个选项）
                         _set(r_standard, "")  # 先清空当前值
                         _install_dependent_delegate(sub_field, opts, force_default=True, preserve_current=False)
-                        print(f"[DBG] 垫片联动: 垫片类型变化，垫片标准已清空并设置为默认值: {opts[0] if opts else '无选项'}")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[DBG] 垫片联动: 垫片类型变化，垫片标准已清空并设置为默认值: {opts[0] if opts else '无选项'}")
                     else:
                         # 垫片类型没有变化：使用保存的垫片标准值，绝对不碰默认值
                         _install_dependent_delegate(sub_field, opts, force_default=False, preserve_current=True)
@@ -7085,6 +6197,16 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
                     table.blockSignals(False)
     except Exception:
         pass
+
+    if readonly_local_missing and viewer_instance is not None:
+        try:
+            from modules.chanpinguanli.local_product_folder import (
+                schedule_readonly_for_element_define_viewer,
+            )
+
+            schedule_readonly_for_element_define_viewer(viewer_instance)
+        except Exception as _e_sch:
+            print(f"[apply_linked_param_combobox] schedule readonly: {_e_sch}")
 
 
 
@@ -7670,10 +6792,12 @@ def get_first_tab_for_element(product_id, element_id):
                 return first_tab_name
             else:
                 # 如果没有数据，默认返回PNO.1
-                print(f"[第一个Tab判断] 元件 {element_id} 没有Tab数据，返回默认值 PNO.1")
+                if DEBUG_VERBOSE_DEFINE_UI:
+                    print(f"[第一个Tab判断] 元件 {element_id} 没有Tab数据，返回默认值 PNO.1")
                 return 'PNO.1'
     except Exception as e:
-        print(f"[第一个Tab判断] 查询失败: {e}")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[第一个Tab判断] 查询失败: {e}")
         return 'PNO.1'  # 异常情况下返回默认值
     finally:
         connection.close()
@@ -7686,7 +6810,8 @@ def is_first_tab_for_element(product_id, element_id, tab_name):
     
     first_tab = get_first_tab_for_element(product_id, element_id)
     is_first = (tab_name == first_tab)
-    print(f"[第一个Tab判断] Tab {tab_name} 是否是第一个Tab: {is_first} (第一个Tab是: {first_tab})")
+    if DEBUG_VERBOSE_DEFINE_UI:
+        print(f"[第一个Tab判断] Tab {tab_name} 是否是第一个Tab: {is_first} (第一个Tab是: {first_tab})")
     return is_first
 
 
@@ -8641,7 +7766,8 @@ def _on_element_merged_para_tab_changed(viewer_instance, index: int):
     table = page.property('param_table') if page else None
     
     if table is None:
-        print(f"[支座] 未找到 {tab_name} 的参数表，跳过刷新")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[支座] 未找到 {tab_name} 的参数表，跳过刷新")
         return
     
     # 刷新当前Tab页的数据
@@ -8795,11 +7921,13 @@ def save_element_merged_para_data_for_tab(product_id, element_id, tab_name, tab_
 def _add_single_element_merged_para_tab_copy_only(viewer_instance, source_tab_index, source_tab_name):
     """新增元件附加参数合并表Tab页（模仿管口的_add_single_table_tab_copy_only）"""
     try:
-        print(f"[附加参数合并表] 开始新增Tab页，源Tab: {source_tab_name}")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[附加参数合并表] 开始新增Tab页，源Tab: {source_tab_name}")
         
         tab_widget = getattr(viewer_instance, 'tabWidget_2', None)
         if not tab_widget:
-            print("[附加参数合并表] 未找到tabWidget_2")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print("[附加参数合并表] 未找到tabWidget_2")
             return
         
         # 生成新的Tab标签和ID
@@ -8813,20 +7941,23 @@ def _add_single_element_merged_para_tab_copy_only(viewer_instance, source_tab_in
         element_id = getattr(viewer_instance, 'clicked_element_data', {}).get('元件ID', '')
         
         if not product_id or not element_id:
-            print("[附加参数合并表] 缺少product_id或element_id")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print("[附加参数合并表] 缺少product_id或element_id")
             return
         
         # 加载源Tab页的数据
         # print(f"[附加参数合并表] 尝试加载源Tab页数据: {source_tab_name}")
         source_data = load_element_merged_para_tab_data(product_id, element_id, source_tab_name)
         if not source_data:
-            print(f"[附加参数合并表] 源Tab页 {source_tab_name} 没有数据")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[附加参数合并表] 源Tab页 {source_tab_name} 没有数据")
             return
         
         # print(f"[附加参数合并表] 源Tab页数据加载成功: {len(source_data)} 条")
         for item in source_data:
             if item.get('参数名称') == '腐蚀裕量':
-                print(f"[附加参数合并表] 源Tab页腐蚀裕量: {item.get('参数值')}")
+                if DEBUG_VERBOSE_DEFINE_UI:
+                    print(f"[附加参数合并表] 源Tab页腐蚀裕量: {item.get('参数值')}")
                 break
         
         # 获取element_name
@@ -9006,25 +8137,29 @@ def create_element_merged_para_tab_ui(viewer_instance, tab_name, data):
     # 切换到新Tab页
     tab_widget.setCurrentIndex(tab_widget.count() - 1)
     
-    print(f"[附加参数合并表] 新Tab页UI创建完成: {tab_name}")
+    if DEBUG_VERBOSE_DEFINE_UI:
+        print(f"[附加参数合并表] 新Tab页UI创建完成: {tab_name}")
 
 
 def patch_element_merged_para_params_for_current_tab(table, tab_name, viewer_instance):
     """刷新当前Tab页的数据（模仿管口的patch_codes_for_current_tab）"""
     try:
         # ★ 修复：在重新渲染前，先断开所有事件连接，清除残留状态
-        print(f"[附加参数合并表] 开始刷新Tab页 {tab_name}，清理旧事件和状态")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[附加参数合并表] 开始刷新Tab页 {tab_name}，清理旧事件和状态")
         
         # 1. 断开所有可能的事件连接
         try:
             table.itemChanged.disconnect()
-            print(f"[附加参数合并表] 已断开 itemChanged 事件")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[附加参数合并表] 已断开 itemChanged 事件")
         except Exception:
             pass  # 如果事件未连接，忽略错误
         
         try:
             table.cellClicked.disconnect()
-            print(f"[附加参数合并表] 已断开 cellClicked 事件")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[附加参数合并表] 已断开 cellClicked 事件")
         except Exception:
             pass
         
@@ -9039,9 +8174,11 @@ def patch_element_merged_para_params_for_current_tab(table, tab_name, viewer_ins
         for attr in old_attrs:
             if hasattr(table, attr):
                 delattr(table, attr)
-                print(f"[附加参数合并表] 已清理 {attr} 属性")
+                if DEBUG_VERBOSE_DEFINE_UI:
+                    print(f"[附加参数合并表] 已清理 {attr} 属性")
         
-        print(f"[附加参数合并表] 清理完成，开始重新渲染")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[附加参数合并表] 清理完成，开始重新渲染")
         
         # 从数据库加载当前Tab页的数据
         product_id = getattr(viewer_instance, 'product_id', None)
@@ -9050,7 +8187,8 @@ def patch_element_merged_para_params_for_current_tab(table, tab_name, viewer_ins
         element_name = getattr(viewer_instance, 'clicked_element_data', {}).get('零件名称', '未知元件')
         
         if not product_id:
-            print("[附加参数合并表] 缺少product_id，跳过数据刷新")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print("[附加参数合并表] 缺少product_id，跳过数据刷新")
             # 恢复信号
             table.blockSignals(False)
             table._loading = False
@@ -9059,7 +8197,8 @@ def patch_element_merged_para_params_for_current_tab(table, tab_name, viewer_ins
         # 加载数据
         data = load_element_merged_para_tab_data(product_id, element_id, tab_name)
         if not data:
-            print(f"[附加参数合并表] Tab页 {tab_name} 没有数据")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[附加参数合并表] Tab页 {tab_name} 没有数据")
             # 恢复信号（apply_element_merged_para_paramname_combobox 不会被执行）
             table.blockSignals(False)
             table._loading = False
@@ -9080,7 +8219,8 @@ def patch_element_merged_para_params_for_current_tab(table, tab_name, viewer_ins
         # 安装悬停提示功能
         _install_element_merged_para_tooltip_updater(table)
         
-        print(f"[附加参数合并表] Tab页 {tab_name} 数据刷新完成")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[附加参数合并表] Tab页 {tab_name} 数据刷新完成")
         
     except Exception as e:
         print(f"[附加参数合并表] Tab页数据刷新失败: {e}")
@@ -9090,7 +8230,8 @@ def patch_element_merged_para_params_for_current_tab(table, tab_name, viewer_ins
         try:
             table.blockSignals(False)
             table._loading = False
-            print(f"[附加参数合并表] 已恢复信号和加载状态")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[附加参数合并表] 已恢复信号和加载状态")
         except Exception:
             pass
 
@@ -9098,7 +8239,8 @@ def patch_element_merged_para_params_for_current_tab(table, tab_name, viewer_ins
 def render_element_merged_para_data_to_ui(viewer_instance, merged_para_data, element_name=None):
     """将元件附加参数合并表数据渲染到UI（完全模仿apply_paramname_combobox的逻辑）"""
     if not merged_para_data:
-        print("[附加参数合并表] 没有数据需要渲染")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print("[附加参数合并表] 没有数据需要渲染")
         return
 
     # 如果没有传入element_name，尝试从viewer_instance中获取
@@ -9127,7 +8269,8 @@ def render_element_merged_para_data_to_ui(viewer_instance, merged_para_data, ele
     try:
         tab_widget = viewer_instance.tabWidget_2  # 元件附加参数合并表的TabWidget
         if not tab_widget:
-            print("[附加参数合并表] 未找到TabWidget_2")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print("[附加参数合并表] 未找到TabWidget_2")
             return
 
         # 清空现有Tab页
@@ -9136,7 +8279,8 @@ def render_element_merged_para_data_to_ui(viewer_instance, merged_para_data, ele
 
         # 为每个Tab分类创建Tab页
         for tab_name, data in tab_data.items():
-            print(f"[附加参数合并表] 创建Tab页: {tab_name}, 数据条数: {len(data)}")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[附加参数合并表] 创建Tab页: {tab_name}, 数据条数: {len(data)}")
 
             # 创建新的Tab页
             tab_page = QWidget()
@@ -9210,7 +8354,8 @@ def render_element_merged_para_data_to_ui(viewer_instance, merged_para_data, ele
             else:
                 # 如果没有product_id或element_id，默认使用旧逻辑（向后兼容）
                 is_readonly = (tab_name != "PNO.1")
-            print(f"[附加参数合并表] Tab页 {tab_name} 设置为{'只读' if is_readonly else '可编辑'}模式 (元件: {element_name})")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[附加参数合并表] Tab页 {tab_name} 设置为{'只读' if is_readonly else '可编辑'}模式 (元件: {element_name})")
 
             apply_element_merged_para_paramname_combobox(table, 0, 1, viewer_instance, data, is_readonly=is_readonly)
 
@@ -9223,7 +8368,8 @@ def render_element_merged_para_data_to_ui(viewer_instance, merged_para_data, ele
                 tab_widget.currentChanged.connect(lambda index: _on_element_merged_para_tab_changed(viewer_instance, index))
                 setattr(tab_widget, "_element_merged_para_tab_changed_wired", True)
         except Exception as e:
-            print(f"[附加参数合并表] Tab页切换信号连接失败: {e}")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[附加参数合并表] Tab页切换信号连接失败: {e}")
 
         # 连接右键菜单信号
         try:
@@ -9233,7 +8379,8 @@ def render_element_merged_para_data_to_ui(viewer_instance, merged_para_data, ele
                 tab_widget.tabBar().customContextMenuRequested.connect(lambda pos: _on_element_merged_para_tab_right_menu(viewer_instance, pos))
                 setattr(tab_widget, "_element_merged_para_context_wired", True)
         except Exception as e:
-            print(f"[附加参数合并表] 右键菜单信号连接失败: {e}")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[附加参数合并表] 右键菜单信号连接失败: {e}")
 
         # 初始化PlusTabManager（在创建完所有Tab页后）
         try:
@@ -9301,10 +8448,12 @@ def render_element_merged_para_table_data(table, data, element_name=None):
     from PyQt5.QtWidgets import QHeaderView
     
     if not data:
-        print(f"[{element_name or '元件'}] 没有数据需要填充")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[{element_name or '元件'}] 没有数据需要填充")
         return
     
-    print(f"[render_element_merged_para_table_data] 接收到 element_name: {element_name}")
+    if DEBUG_VERBOSE_DEFINE_UI:
+        print(f"[render_element_merged_para_table_data] 接收到 element_name: {element_name}")
     
     # 根据参数名称分组数据
     param_groups = {}
@@ -9328,7 +8477,8 @@ def render_element_merged_para_table_data(table, data, element_name=None):
             '供货状态',
             '锻件级别'
         ]
-        print(f"[支座] 使用支座参数: {display_params}")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[支座] 使用支座参数: {display_params}")
     elif element_name in ["铭牌"]:
         display_params = [
             '元件名称',
@@ -9340,7 +8490,8 @@ def render_element_merged_para_table_data(table, data, element_name=None):
             '铭牌附属元件',
             '表面处理工艺'
         ]
-        print(f"[{element_name}] 使用铭牌参数: {display_params}")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[{element_name}] 使用铭牌参数: {display_params}")
     elif element_name in ["保温装置"]:  # 新增保温装置
         display_params = [
             '元件名称',
@@ -9352,7 +8503,8 @@ def render_element_merged_para_table_data(table, data, element_name=None):
             '螺柱型式',
             '表面处理工艺'
         ]
-        print(f"[{element_name}] 使用保温装置参数: {display_params}")  # 新增保温装置
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[{element_name}] 使用保温装置参数: {display_params}")  # 新增保温装置
     else:
         # 未知元件类型，显示所有可用参数
         display_params = list(param_groups.keys())
@@ -9472,14 +8624,16 @@ def control_param_visibility(table, element_name, trigger_param_name, trigger_pa
             if pitem and pitem.text().strip() == target_param_name:
                 # 控制整行的显示/隐藏
                 table.setRowHidden(row, not show_param)
-                print(f"[{element_name}显隐] {target_param_name}行{row}: {trigger_param_name}='{trigger_param_value}' -> {'显示' if show_param else '隐藏'}")
+                if DEBUG_VERBOSE_DEFINE_UI:
+                    print(f"[{element_name}显隐] {target_param_name}行{row}: {trigger_param_name}='{trigger_param_value}' -> {'显示' if show_param else '隐藏'}")
                 
                 # 如果显示且值为空且有默认值，设置默认值
                 if show_param and default_value is not None:
                     vitem = table.item(row, value_col)
                     if vitem and (not vitem.text() or vitem.text().strip() == ""):
                         vitem.setText(default_value)
-                        print(f"[{element_name}显隐] {target_param_name}默认值设置为: {default_value}")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[{element_name}显隐] {target_param_name}默认值设置为: {default_value}")
                 break
         
         return show_param
@@ -9526,7 +8680,8 @@ def control_nameplate_accessory_visibility(viewer_instance, param_col, value_col
     """
     try:
         if not hasattr(viewer_instance, 'dynamic_element_merged_para_tabs'):
-            print("[铭牌附属元件显隐] 未找到dynamic_element_merged_para_tabs，跳过")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print("[铭牌附属元件显隐] 未找到dynamic_element_merged_para_tabs，跳过")
             return
         
         # 第一步：扫描所有tab页，检查是否存在"铭牌垫板"和"铭牌支架"
@@ -9561,7 +8716,8 @@ def control_nameplate_accessory_visibility(viewer_instance, param_col, value_col
             if "铭牌支架" in component_names:
                 has_nameplate_bracket = True
         
-        print(f"[铭牌附属元件显隐] 扫描结果: 铭牌垫板={has_nameplate_pad}, 铭牌支架={has_nameplate_bracket}")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[铭牌附属元件显隐] 扫描结果: 铭牌垫板={has_nameplate_pad}, 铭牌支架={has_nameplate_bracket}")
         product_id = getattr(viewer_instance, 'product_id', None)
         clicked_data = getattr(viewer_instance, 'clicked_element_data', {}) or {}
         element_id = clicked_data.get('元件ID', None)
@@ -9619,7 +8775,8 @@ def control_nameplate_accessory_visibility(viewer_instance, param_col, value_col
                     acc_rows[tab_name] = row
                     if not should_show and acc_values.get(tab_name):
                         tabs_to_clear.append(tab_name)
-                    print(f"[铭牌附属元件显隐] Tab页{tab_name}: 元件名称={component_names} -> {'显示' if should_show else '隐藏'}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[铭牌附属元件显隐] Tab页{tab_name}: 元件名称={component_names} -> {'显示' if should_show else '隐藏'}")
                     break
 
         try:
@@ -9666,7 +8823,8 @@ def control_nameplate_accessory_visibility(viewer_instance, param_col, value_col
 def control_insulation_support_stud_type_visibility(viewer_instance, param_col, value_col):  # 新增保温装置
     try:
         if not hasattr(viewer_instance, 'dynamic_element_merged_para_tabs'):
-            print("[保温装置-螺柱型式显隐] 未找到dynamic_element_merged_para_tabs，跳过")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print("[保温装置-螺柱型式显隐] 未找到dynamic_element_merged_para_tabs，跳过")
             return
 
         for tab_name, table in viewer_instance.dynamic_element_merged_para_tabs.items():
@@ -9699,7 +8857,8 @@ def control_insulation_support_stud_type_visibility(viewer_instance, param_col, 
                         if vitem and not vitem.text().strip():
                             vitem.setText("（C）全螺纹螺柱")
                     break
-            print(f"[保温装置-螺柱型式显隐] Tab页{tab_name}: {'显示' if has_stud else '隐藏'}")  # 新增保温装置
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[保温装置-螺柱型式显隐] Tab页{tab_name}: {'显示' if has_stud else '隐藏'}")  # 新增保温装置
     except Exception as e:
         print(f"[保温装置-螺柱型式显隐] 控制失败: {e}")
         import traceback
@@ -9723,6 +8882,12 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
     - 铭牌特有：表面处理工艺、螺柱型式
     - 通用字段：元件名称
     """
+    try:
+        import modules.chanpinguanli.bianl as _bianl_ro_lm
+        readonly_local_missing = bool(getattr(_bianl_ro_lm, "product_local_files_missing_readonly", False))
+    except Exception:
+        readonly_local_missing = False
+
     # 定义只读delegate类 - 模仿非标支座的成功做法
     class ReadOnlyDelegate(QStyledItemDelegate):
         def createEditor(self, parent, option, index):
@@ -9735,10 +8900,12 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
         try:
             clicked_data = getattr(viewer_instance, 'clicked_element_data', None) or {}
             element_name = clicked_data.get('零件名称', '').strip()
-            print(f"[元件识别] 当前元件名称: {element_name}")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[元件识别] 当前元件名称: {element_name}")
             return element_name
         except Exception as e:
-            print(f"[元件识别] 获取元件名称失败: {e}")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[元件识别] 获取元件名称失败: {e}")
             return ""
 
     # ===== 常量集合 =====
@@ -9771,7 +8938,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
     # ===== 公共材料联动逻辑 =====
     def _apply_common_material_linkage(table, param_col, value_col, viewer_instance, is_readonly):
         """公共材料联动逻辑：材料类型、材料牌号、材料标准、材料状态/供货状态"""
-        print(f"[公共材料联动] 开始处理材料字段联动")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[公共材料联动] 开始处理材料字段联动")
         
         # 这里可以添加材料四字段的联动逻辑
         # 例如：材料类型 -> 材料牌号 -> 材料标准的联动
@@ -9786,7 +8954,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
     # ===== 支座特有联动逻辑 =====
     def _apply_fixed_saddle_specific_linkage(table, param_col, value_col, viewer_instance, is_readonly):
         """支座特有的联动逻辑：支座型式、支座标准、支座型号、鞍座高度、腐蚀裕量"""
-        print(f"[支座联动] 开始处理支座特有字段联动")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[支座联动] 开始处理支座特有字段联动")
         
         # 获取当前支座型式、支座标准的值
         support_type = ""
@@ -9820,12 +8989,14 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                     mt = vi.text().strip()
                 break
         control_forging_grade_visibility(table, mt, param_col, value_col)
-        print(f"[支座显隐] 已应用所有显隐规则：支座型式='{support_type}', 支座标准='{support_standard}'")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[支座显隐] 已应用所有显隐规则：支座型式='{support_type}', 支座标准='{support_standard}'")
 
     # ===== 铭牌特有联动逻辑 =====
     def _apply_nameplate_specific_linkage(table, param_col, value_col, viewer_instance, is_readonly):
         """铭牌特有的联动逻辑：铭牌附属元件、表面处理工艺"""
-        print(f"[铭牌支架联动] 开始处理铭牌支架特有字段联动")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[铭牌支架联动] 开始处理铭牌支架特有字段联动")
         
         # 获取当前材料类型的值
         material_type = ""
@@ -9867,16 +9038,20 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
     
     # 根据元件名称应用特定联动
     if element_name == "支座":
-        print(f"[元件联动] 检测到支座，应用支座特有联动逻辑")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[元件联动] 检测到支座，应用支座特有联动逻辑")
         _apply_fixed_saddle_specific_linkage(table, param_col, value_col, viewer_instance, is_readonly)
     elif element_name in ["铭牌"]:
-        print(f"[元件联动] 检测到铭牌，应用铭牌特有联动逻辑")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[元件联动] 检测到铭牌，应用铭牌特有联动逻辑")
         _apply_nameplate_specific_linkage(table, param_col, value_col, viewer_instance, is_readonly)
     elif element_name in ["保温装置"]:  # 新增保温装置
-        print(f"[元件联动] 检测到保温装置，应用特有联动逻辑")  # 新增保温装置
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[元件联动] 检测到保温装置，应用特有联动逻辑")  # 新增保温装置
         _apply_insulation_support_specific_linkage(table, param_col, value_col, viewer_instance, is_readonly)  # 新增保温装置
     else:
-        print(f"[元件联动] 未知元件类型: {element_name}，跳过特定联动逻辑")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[元件联动] 未知元件类型: {element_name}，跳过特定联动逻辑")
 
     # ===== 工具函数 =====
     def ensure_editable_item(r, c, txt=""):
@@ -9909,13 +9084,15 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                     # 获取其他Tab页已选的选项（用于过滤）
                     selected_in_other_tabs = get_selected_component_names_from_other_tabs(table, None)
                     available_options = [opt for opt in all_options if opt not in selected_in_other_tabs]
-                    print(f"[铭牌] 元件名称总可选: {all_options}, 其他Tab已选: {selected_in_other_tabs}, 当前Tab可选: {available_options}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[铭牌] 元件名称总可选: {all_options}, 其他Tab已选: {selected_in_other_tabs}, 当前Tab可选: {available_options}")
                     return available_options
                 if element_name in ["保温装置"]:  # 新增保温装置
                     all_options = ["支撑板", "支撑环", "支撑条", "螺母", "螺柱"]
                     selected_in_other_tabs = get_selected_component_names_from_other_tabs(table, None)
                     available_options = [opt for opt in all_options if opt not in selected_in_other_tabs]
-                    print(f"[保温装置] 元件名称总可选: {all_options}, 其他Tab已选: {selected_in_other_tabs}, 当前Tab可选: {available_options}")  # 新增保温装置
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[保温装置] 元件名称总可选: {all_options}, 其他Tab已选: {selected_in_other_tabs}, 当前Tab可选: {available_options}")  # 新增保温装置
                     return available_options
                 
                 # 如果是支座，从数据库或表格数据中解析
@@ -9951,7 +9128,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                                 if result and result["联动选项"]:
                                     import json
                                     options = json.loads(result["联动选项"])
-                                    print(f"[支座] 从数据库获取元件名称选项: {options}")
+                                    if DEBUG_VERBOSE_DEFINE_UI:
+                                        print(f"[支座] 从数据库获取元件名称选项: {options}")
                                     return options
                         finally:
                             conn.close()
@@ -9967,11 +9145,13 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                                     try:
                                         import json
                                         options = json.loads(raw_text)
-                                        print(f"[支座] 从表格数据解析元件名称: {raw_text} -> {options}")
+                                        if DEBUG_VERBOSE_DEFINE_UI:
+                                            print(f"[支座] 从表格数据解析元件名称: {raw_text} -> {options}")
                                         return options
                                     except json.JSONDecodeError:
                                         options = [x.strip() for x in raw_text.split("、") if x.strip()]
-                                        print(f"[支座] 从表格数据按逗号分割元件名称: {raw_text} -> {options}")
+                                        if DEBUG_VERBOSE_DEFINE_UI:
+                                            print(f"[支座] 从表格数据按逗号分割元件名称: {raw_text} -> {options}")
                                         return options
                     return []
                 
@@ -9998,7 +9178,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                         options = [row["主参数值"] for row in results if row["主参数值"]]
                         # 添加空值选项
                         options = [""] + options
-                        print(f"[支座] 从数据库获取{param_name}选项: {options}")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[支座] 从数据库获取{param_name}选项: {options}")
                         return options
                 finally:
                     conn.close()
@@ -10007,22 +9188,26 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                 from modules.cailiaodingyi.db_cnt import get_connection
                 from modules.cailiaodingyi.funcs.funcs_pdf_change import db_config_2
                 
-                print(f"[铭牌] 开始从数据库获取铭牌附属元件选项")
+                if DEBUG_VERBOSE_DEFINE_UI:
+                    print(f"[铭牌] 开始从数据库获取铭牌附属元件选项")
                 conn = get_connection(**db_config_2)
                 try:
                     with conn.cursor() as cur:
                         sql = "SELECT 参数值 FROM 参数表 WHERE 参数名称 = %s"
                         cur.execute(sql, ("铭牌附属元件",))
                         result = cur.fetchone()
-                        print(f"[铭牌] 数据库查询结果: {result}")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[铭牌] 数据库查询结果: {result}")
                         if result and result["参数值"]:
                             import json
                             options = json.loads(result["参数值"])
                             # 不添加空值选项，直接返回数据库的值
-                            print(f"[铭牌] 从数据库获取铭牌附属元件选项: {options}")
+                            if DEBUG_VERBOSE_DEFINE_UI:
+                                print(f"[铭牌] 从数据库获取铭牌附属元件选项: {options}")
                             return options
                         else:
-                            print(f"[铭牌] 数据库中没有找到铭牌附属元件的选项")
+                            if DEBUG_VERBOSE_DEFINE_UI:
+                                print(f"[铭牌] 数据库中没有找到铭牌附属元件的选项")
                 except Exception as e:
                     print(f"[铭牌] 查询铭牌附属元件选项失败: {e}")
                     import traceback
@@ -10042,7 +9227,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                         if result and result.get("参数值"):
                             import json
                             options = json.loads(result["参数值"]) or []
-                            print(f"[保温装置] 从数据库获取螺柱型式选项: {options}")
+                            if DEBUG_VERBOSE_DEFINE_UI:
+                                print(f"[保温装置] 从数据库获取螺柱型式选项: {options}")
                             return options
                 except Exception as e:
                     print(f"[保温装置] 查询螺柱型式选项失败: {e}")
@@ -10054,7 +9240,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                     except Exception:
                         pass
                 # 无数据则返回空列表，不回退到默认
-                print(f"[保温装置] 数据库未返回螺柱型式选项")
+                if DEBUG_VERBOSE_DEFINE_UI:
+                    print(f"[保温装置] 数据库未返回螺柱型式选项")
                 return []
             else:
                 # 其他参数暂时返回空列表，由联动逻辑处理
@@ -10173,11 +9360,13 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
         def __init__(self, options, parent_table):
             super().__init__(parent_table)
             self.options = options
-            print(f"[支座] ComboDelegate初始化，选项: {self.options}")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[支座] ComboDelegate初始化，选项: {self.options}")
 
         def createEditor(self, parent, option, index):
             combo = QComboBox(parent)
-            print(f"[支座] ComboDelegate创建编辑器，添加选项: {self.options}")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[支座] ComboDelegate创建编辑器，添加选项: {self.options}")
             combo.addItems(self.options)
             combo.setEditable(False)
             combo.currentTextChanged.connect(lambda: self.commitData.emit(combo))
@@ -10204,8 +9393,11 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
         def updateEditorGeometry(self, editor, option, index):
             editor.setGeometry(option.rect)
 
-    # 1) 单击进入编辑
-    table.setEditTriggers(QAbstractItemView.SelectedClicked)
+    # 1) 单击进入编辑（本地未恢复时禁止，避免 cellClicked 槽强制 table.edit）
+    if readonly_local_missing:
+        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+    else:
+        table.setEditTriggers(QAbstractItemView.SelectedClicked)
 
     # 2) 清理 value 列 cellWidget
     for r in range(table.rowCount()):
@@ -10222,7 +9414,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
     try:
         # 如果是只读模式，根据元件类型设置只读字段
         if is_readonly:
-            print(f"[支座] 只读模式：根据元件类型设置只读字段 (元件: {element_name})")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[支座] 只读模式：根据元件类型设置只读字段 (元件: {element_name})")
             
             # 支座：支座型式、支座标准、支座型号、鞍座高度、腐蚀裕量只读
             # 铭牌：所有字段都可编辑
@@ -10240,11 +9433,13 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                 if element_name == "支座" and pname in fixed_saddle_readonly_fields:
                     # 支座的特定字段设置为只读
                     table.setItemDelegateForRow(row, ReadOnlyDelegate(table))
-                    print(f"[支座] 参数'{pname}'设置为只读模式（支座特有）")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[支座] 参数'{pname}'设置为只读模式（支座特有）")
                 # 其他字段（包括铭牌的所有字段）保持可编辑，跳过后续逻辑
             
             # 继续执行后续的可编辑逻辑，为可编辑字段设置下拉框等
-            print(f"[支座] 只读模式：继续设置可编辑字段的下拉框等")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[支座] 只读模式：继续设置可编辑字段的下拉框等")
             
             # 为可编辑字段设置下拉框等
             for row in range(table.rowCount()):
@@ -10288,7 +9483,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                     
                     # 如果从数据库获取不到选项，使用默认选项
                     if not options:  # 空列表或None
-                        print(f"[支座] 数据库未返回{pname}选项，使用默认选项")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[支座] 数据库未返回{pname}选项，使用默认选项")
                         if pname == "支座型式":
                             options = ["", "鞍式支座", "耳式支座"]
                         elif pname == "支座标准":
@@ -10303,7 +9499,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                             if element_name_current in ["铭牌", "保温装置"]:
                                 # 铭牌类型的选项已经在get_options_from_database中处理，这里跳过
                                 # 如果是空列表说明所有选项都被其他Tab占用了，直接跳过
-                                print(f"[铭牌] 跳过铭牌元件名称的默认选项逻辑，所有选项已被占用")
+                                if DEBUG_VERBOSE_DEFINE_UI:
+                                    print(f"[铭牌] 跳过铭牌元件名称的默认选项逻辑，所有选项已被占用")
                                 # ★ 修复：清理旧的delegate，避免用户点击时使用旧的选项
                                 table.setItemDelegateForRow(row, None)
                                 # 保持单元格可编辑（文本模式），但不设置下拉框
@@ -10313,9 +9510,11 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                             else:
                                 # 默认使用支座的选项
                                 options = ["底板", "腹板", "筋板", "垫板", "盖板"]
-                                print(f"[支座] 使用支座的默认元件名称选项: {options}")
+                                if DEBUG_VERBOSE_DEFINE_UI:
+                                    print(f"[支座] 使用支座的默认元件名称选项: {options}")
                     else:
-                        print(f"[支座] 使用数据库返回的{pname}选项: {options}")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[支座] 使用数据库返回的{pname}选项: {options}")
                     
                     if options:
                         # 对于元件名称，需要特殊处理显示值
@@ -10347,7 +9546,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                             # 其他参数使用普通下拉框
                             cur_text = table.item(row, value_col).text().strip() if table.item(row, value_col) else ""
                             ensure_editable_item(row, value_col, cur_text)
-                            print(f"[支座] 为参数'{pname}'创建下拉框，选项: {options}")
+                            if DEBUG_VERBOSE_DEFINE_UI:
+                                print(f"[支座] 为参数'{pname}'创建下拉框，选项: {options}")
                             table.setItemDelegateForRow(row, ComboDelegate(options, table))
                     continue
                 
@@ -10393,7 +9593,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                     
                     # 如果从数据库获取不到选项，使用默认选项
                     if not options:  # 空列表或None
-                        print(f"[支座] 数据库未返回{pname}选项，使用默认选项")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[支座] 数据库未返回{pname}选项，使用默认选项")
                         if pname == "支座型式":
                             options = ["", "鞍式支座", "耳式支座"]
                         elif pname == "支座标准":
@@ -10408,7 +9609,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                             if element_name_current in ["铭牌", "保温装置"]:
                                 # 铭牌类型的选项已经在get_options_from_database中处理，这里跳过
                                 # 如果是空列表说明所有选项都被其他Tab占用了，直接跳过
-                                print(f"[铭牌] 跳过铭牌元件名称的默认选项逻辑，所有选项已被占用")
+                                if DEBUG_VERBOSE_DEFINE_UI:
+                                    print(f"[铭牌] 跳过铭牌元件名称的默认选项逻辑，所有选项已被占用")
                                 # ★ 修复：清理旧的delegate，避免用户点击时使用旧的选项
                                 table.setItemDelegateForRow(row, None)
                                 # 保持单元格可编辑（文本模式），但不设置下拉框
@@ -10418,9 +9620,11 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                             else:
                                 # 默认使用支座的选项
                                 options = ["底板", "腹板", "筋板", "垫板", "盖板"]
-                                print(f"[支座] 使用支座的默认元件名称选项: {options}")
+                                if DEBUG_VERBOSE_DEFINE_UI:
+                                    print(f"[支座] 使用支座的默认元件名称选项: {options}")
                     else:
-                        print(f"[支座] 使用数据库返回的{pname}选项: {options}")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[支座] 使用数据库返回的{pname}选项: {options}")
                     
                     if options:
                         # 对于元件名称，需要特殊处理显示值
@@ -10452,7 +9656,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                             # 其他参数使用普通下拉框
                             cur_text = table.item(row, value_col).text().strip() if table.item(row, value_col) else ""
                             ensure_editable_item(row, value_col, cur_text)
-                            print(f"[支座] 为参数'{pname}'创建下拉框，选项: {options}")
+                            if DEBUG_VERBOSE_DEFINE_UI:
+                                print(f"[支座] 为参数'{pname}'创建下拉框，选项: {options}")
                             table.setItemDelegateForRow(row, ComboDelegate(options, table))
                     continue
 
@@ -10608,7 +9813,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                     # 保存当前值
                     setattr(table, f"_old_{pname}", val)
                 else:
-                    print(f"[支座] 支座型式值未改变: {val}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[支座] 支座型式值未改变: {val}")
             except Exception as e:
                 print(f"[支座型式联动] 失败: {e}")
 
@@ -10628,7 +9834,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                     # 保存当前值
                     setattr(table, f"_old_{pname}", val)
                 else:
-                    print(f"[支座] 支座标准值未改变: {val}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[支座] 支座标准值未改变: {val}")
             except Exception as e:
                 print(f"[支座标准联动] 失败: {e}")
 
@@ -10640,7 +9847,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                 # print(f"[调试] 支座型号联动检查: 旧值='{old_value}', 新值='{val}'")
                 
                 if old_value != val:
-                    print(f"[支座] 支座型号值改变: {old_value} -> {val}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[支座] 支座型号值改变: {old_value} -> {val}")
                     
                     # 获取公称直径
                     product_id = getattr(viewer_instance, 'product_id', None)
@@ -10670,16 +9878,20 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                                             # print(f"[调试] UI中鞍座高度当前值: {current_height}")
                                         break
                             else:
-                                print(f"[支座] 未找到型号{val}对应的鞍座高度")
+                                if DEBUG_VERBOSE_DEFINE_UI:
+                                    print(f"[支座] 未找到型号{val}对应的鞍座高度")
                         else:
-                            print(f"[支座] 未找到产品{product_id}的公称直径")
+                            if DEBUG_VERBOSE_DEFINE_UI:
+                                print(f"[支座] 未找到产品{product_id}的公称直径")
                     else:
-                        print(f"[支座] 未找到产品ID")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[支座] 未找到产品ID")
                     
                     # 保存当前值
                     setattr(table, f"_old_{pname}", val)
                 else:
-                    print(f"[支座] 支座型号值未改变: {val}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[支座] 支座型号值未改变: {val}")
             except Exception as e:
                 # print(f"[支座型号联动] 失败: {e}")
                 import traceback
@@ -10726,6 +9938,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
 
     # 6) 单击进入编辑
     def _edit_on_click(r, c):
+        if readonly_local_missing:
+            return
         idx = table.model().index(r, c)
         it = table.item(r, c)
         if idx.isValid() and it and (it.flags() & Qt.ItemIsEditable):
@@ -10742,9 +9956,11 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
     # 需要监听 itemChanged 以触发元件名称为空时的材料字段清空等逻辑。
     if not is_readonly or element_name in ["铭牌", "保温装置", "支座"]:  # 支座加入白名单
         table.itemChanged.connect(_on_item_changed)
-        print(f"[支座] Tab页绑定itemChanged事件（{'可编辑模式' if not is_readonly else '保温装置/铭牌/支座后续Tab页（可编辑字段监听）'}）")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[支座] Tab页绑定itemChanged事件（{'可编辑模式' if not is_readonly else '保温装置/铭牌/支座后续Tab页（可编辑字段监听）'}）")
     else:
-        print(f"[支座] Tab页跳过itemChanged事件绑定（只读模式）")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[支座] Tab页跳过itemChanged事件绑定（只读模式）")
 
     try:
         table.cellClicked.disconnect()
@@ -10754,7 +9970,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
     
     # 在渲染完成后，再次调用铭牌的显隐控制（确保所有Tab页都生效）
     if element_name in ["铭牌"]:
-        print(f"[铭牌显隐] 渲染完成后再次设置显隐规则")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[铭牌显隐] 渲染完成后再次设置显隐规则")
         material_type = ""
         for row in range(table.rowCount()):
             pitem = table.item(row, param_col)
@@ -10802,7 +10019,8 @@ def apply_element_merged_para_paramname_combobox(table: QTableWidget, param_col:
                         # 查询并刷新示意图
                         image_path = _query_zhizuo_image(support_type, comp_name)
                         _set_pixmap_if_changed(viewer_instance, image_path)
-                        print(f"[支座示意图] 加载完成后刷新: 支座型式={support_type}, 图片={image_path}")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[支座示意图] 加载完成后刷新: 支座型式={support_type}, 图片={image_path}")
             except Exception as e:
                 print(f"[支座示意图刷新] 失败: {e}")
                 import traceback
@@ -10867,7 +10085,8 @@ def update_support_standard_options(table, support_type, param_col, value_col, a
                                 if standard_value and standard_value not in options:
                                     options.append(standard_value)
                         
-                        print(f"[支座] 支座型式'{support_type}'联动更新支座标准选项: {options}")
+                        if DEBUG_VERBOSE_DEFINE_UI:
+                            print(f"[支座] 支座型式'{support_type}'联动更新支座标准选项: {options}")
                         try:
                             update_support_standard_options._cache[support_type] = [opt for opt in options if opt.strip()]
                         except Exception:
@@ -10877,7 +10096,8 @@ def update_support_standard_options(table, support_type, param_col, value_col, a
                         if options:
                             if is_readonly:
                                 # 只读模式：不更新delegate，保持只读状态
-                                print(f"[支座] 只读模式，跳过支座标准delegate更新")
+                                if DEBUG_VERBOSE_DEFINE_UI:
+                                    print(f"[支座] 只读模式，跳过支座标准delegate更新")
                             else:
                                 # 可编辑模式：使用本地定义的ComboDelegate，而不是重新导入
                                 table.setItemDelegateForRow(row, ComboDelegate(options, table))
@@ -10965,7 +10185,8 @@ def update_support_model_options(table, support_standard, param_col, value_col, 
                         # 根据支座标准决定使用下拉框还是不可编辑文本框
                         if is_readonly:
                             # 只读模式：不更新delegate，保持只读状态
-                            print(f"[支座] 只读模式，跳过支座型号delegate更新")
+                            if DEBUG_VERBOSE_DEFINE_UI:
+                                print(f"[支座] 只读模式，跳过支座型号delegate更新")
                         elif support_standard == "非标支座":
                             # 非标支座使用不可编辑的文本框
                             from PyQt5.QtWidgets import QStyledItemDelegate
@@ -10980,7 +10201,8 @@ def update_support_model_options(table, support_standard, param_col, value_col, 
                             # 设置固定值"-"
                             if auto_update:
                                 table.item(row, value_col).setText("-")
-                                print(f"[支座] 非标支座，设置支座型号为固定值: -")
+                                if DEBUG_VERBOSE_DEFINE_UI:
+                                    print(f"[支座] 非标支座，设置支座型号为固定值: -")
                         else:
                             # 其他情况使用下拉框
                             if options:
@@ -11500,13 +10722,15 @@ def get_selected_component_names_from_other_tabs(table, support_type):
         # 获取viewer_instance
         viewer_instance = getattr(table, '_viewer_instance', None)
         if not viewer_instance:
-            print("[附加参数合并表] 未找到viewer_instance，无法获取其他Tab页数据")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print("[附加参数合并表] 未找到viewer_instance，无法获取其他Tab页数据")
             return []
         
         # 获取当前Tab页名称
         current_tab_name = getattr(table, '_current_tab_name', None)
         if not current_tab_name:
-            print("[附加参数合并表] 未找到当前Tab页名称")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print("[附加参数合并表] 未找到当前Tab页名称")
             return []
         
         # 从数据库查询其他Tab页已选择的元件名称
@@ -11514,7 +10738,8 @@ def get_selected_component_names_from_other_tabs(table, support_type):
         element_id = getattr(viewer_instance, 'clicked_element_data', {}).get('元件ID', '')
         
         if not product_id or not element_id:
-            print("[附加参数合并表] 缺少product_id或element_id")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print("[附加参数合并表] 缺少product_id或element_id")
             return []
         
         connection = get_connection(**db_config_1)
@@ -11631,7 +10856,8 @@ def get_saddle_height_by_model_and_diameter(model, diameter):
 def update_saddle_height_in_table(table, height, param_col, value_col, viewer_instance=None):
     """更新表格中的鞍座高度，并同时更新数据库"""
     try:
-        print(f"[调试] update_saddle_height_in_table 开始: height={height}, param_col={param_col}, value_col={value_col}")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[调试] update_saddle_height_in_table 开始: height={height}, param_col={param_col}, value_col={value_col}")
         
         for row in range(table.rowCount()):
             pitem = table.item(row, param_col)
@@ -11659,11 +10885,13 @@ def update_saddle_height_in_table(table, height, param_col, value_col, viewer_in
                     # 更新数据库
                     update_saddle_height_in_database(product_id, element_id, height, tab_name)
                 else:
-                    print(f"[调试] 无法更新数据库: viewer_instance={viewer_instance}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[调试] 无法更新数据库: viewer_instance={viewer_instance}")
                 
                 break
         else:
-            print(f"[调试] 未找到鞍座高度行")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[调试] 未找到鞍座高度行")
             
     except Exception as e:
         print(f"[鞍座高度更新] 更新失败: {e}")
@@ -11839,7 +11067,8 @@ def check_param_visibility_rule(element_name, trigger_param_name, trigger_param_
                     # print(f"[参数显隐规则] 找到规则: {element_name}.{trigger_param_name}={trigger_param_value} -> {target_param_name} = {rule}")
                     return (True, show)
                 else:
-                    print(f"[参数显隐规则] 未找到规则: {element_name}.{trigger_param_name}={trigger_param_value} -> {target_param_name}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[参数显隐规则] 未找到规则: {element_name}.{trigger_param_name}={trigger_param_value} -> {target_param_name}")
                     return (False, None)  # 未找到规则
                     
         finally:

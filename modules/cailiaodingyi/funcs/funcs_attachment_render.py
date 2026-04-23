@@ -11,10 +11,10 @@ from PyQt5.QtWidgets import QTableWidgetItem, QHeaderView, QAbstractItemView, QT
 from modules.cailiaodingyi.controllers.add_tab import PlusTabManager
 
 from modules.cailiaodingyi.controllers.checkcombo import CheckComboDelegate
-from modules.cailiaodingyi.controllers.combo import ComboPopupEventFilter, MultiSelectRowComboDelegate, ComboDelegate
+from modules.cailiaodingyi.controllers.combo import ComboPopupEventFilter, MultiSelectRowComboDelegate, ComboDelegate, NonNegativeDoubleDelegate
 from modules.cailiaodingyi.funcs.funcs_pdf_input import db_config_1, db_config_2, get_options_for_param
 from modules.cailiaodingyi.funcs.funcs_pdf_render import _set_table_tooltips, _install_tooltip_updater
-from modules.cailiaodingyi.funcs.funcs_pdf_change import get_filtered_material_options
+from modules.cailiaodingyi.funcs.funcs_pdf_change import get_filtered_material_options, DEBUG_VERBOSE_DEFINE_UI
 from modules.cailiaodingyi.controllers.datamanager import install_material_delegate_linkage, MaterialInstantDelegate, _apply_forging_visibility
 import pymysql
 
@@ -26,6 +26,12 @@ db_config_material = {
     'password': '123456',
     'database': '材料库'
 }
+
+
+def _dbg_print(msg: str):
+    """统一受 DEBUG_VERBOSE_DEFINE_UI 控制的调试输出。"""
+    if DEBUG_VERBOSE_DEFINE_UI:
+        print(msg)
 
 
 def _set_tip(viewer_instance, msg, *, success=True, auto_clear_ms=5000):
@@ -442,8 +448,8 @@ def query_selected_pipe_codes_in_other_tabs(product_id, attachment_type, current
                     selected_codes.update(codes)
             
             result = list(selected_codes)
-            print(f"[query_selected_pipe_codes_in_other_tabs] 产品ID={product_id}, 附件类型={attachment_type}, 当前tab={current_tab_name}")
-            print(f"[query_selected_pipe_codes_in_other_tabs] 查询结果: {result}")
+            _dbg_print(f"[query_selected_pipe_codes_in_other_tabs] 产品ID={product_id}, 附件类型={attachment_type}, 当前tab={current_tab_name}")
+            _dbg_print(f"[query_selected_pipe_codes_in_other_tabs] 查询结果: {result}")
             return result
     finally:
         connection.close()
@@ -489,7 +495,7 @@ def _get_tab_widget(viewer_instance):
                     if tab_widget:
                         setattr(viewer_instance, "tabWidget_attachment", tab_widget)
         except Exception as e:
-            print(f"[DBG][attachment_render] 查找tabWidget失败: {e}")
+            _dbg_print(f"[DBG][attachment_render] 查找tabWidget失败: {e}")
     return tab_widget
 
 
@@ -569,7 +575,7 @@ def render_empty_attachment_ui(viewer_instance, placeholder_tab_name="管口附�
     """
     tab_widget = _get_tab_widget(viewer_instance)
     if not tab_widget:
-        print("[DBG][attachment_render] 未找到tabWidget_attachment，无法渲染空界面")
+        _dbg_print("[DBG][attachment_render] 未找到tabWidget_attachment，无法渲染空界面")
         return
     
     _setup_tab_bar(tab_widget, viewer_instance)
@@ -602,23 +608,23 @@ def render_attachment_param_to_ui(viewer_instance, element_id, target_tab_name=N
     """
     product_id = getattr(viewer_instance, 'product_id', None)
     if not product_id:
-        print("[DBG][attachment_render] 未找到product_id")
+        _dbg_print("[DBG][attachment_render] 未找到product_id")
         return
     
-    print(f"[DBG][attachment_render] 开始渲染管口附件，产品ID={product_id}")
+    _dbg_print(f"[DBG][attachment_render] 开始渲染管口附件，产品ID={product_id}")
     
     # 获取Tab分类列表
     tab_types = get_attachment_tab_types_by_product(product_id)
     if not tab_types:
-        print("[DBG][attachment_render] 未找到Tab分类数据")
+        _dbg_print("[DBG][attachment_render] 未找到Tab分类数据")
         return
     
-    print(f"[DBG][attachment_render] 数据库中的Tab分类列表: {tab_types}")
+    _dbg_print(f"[DBG][attachment_render] 数据库中的Tab分类列表: {tab_types}")
     
     # 获取或创建tabWidget
     tab_widget = _get_tab_widget(viewer_instance)
     if not tab_widget:
-        print("[DBG][attachment_render] 未找到tabWidget_attachment")
+        _dbg_print("[DBG][attachment_render] 未找到tabWidget_attachment")
         return
     
     # 设置tabBar属性
@@ -646,7 +652,7 @@ def render_attachment_param_to_ui(viewer_instance, element_id, target_tab_name=N
         attachment_type, guankou_codes = _extract_attachment_info_from_params(param_data)
         
         if not attachment_type:
-            print(f"[DBG][attachment_render] Tab分类 '{tab_classification}' 未找到附件类型，跳过渲染")
+            _dbg_print(f"[DBG][attachment_render] Tab分类 '{tab_classification}' 未找到附件类型，跳过渲染")
             continue
         
         # 渲染数据
@@ -660,7 +666,7 @@ def render_attachment_param_to_ui(viewer_instance, element_id, target_tab_name=N
             product_id
         )
         
-        print(f"[DBG][attachment_render] 完成渲染 {tab_classification}，共 {table.rowCount()} 行")
+        _dbg_print(f"[DBG][attachment_render] 完成渲染 {tab_classification}，共 {table.rowCount()} 行")
     
     # 添加+号tab页管理器和tab切换处理器
     _setup_plus_tab_manager(tab_widget, viewer_instance)
@@ -674,13 +680,13 @@ def render_attachment_param_to_ui(viewer_instance, element_id, target_tab_name=N
             for i in range(tab_widget.count()):
                 if tab_widget.tabText(i).strip() == target_tab_name.strip():
                     tab_widget.setCurrentIndex(i)
-                    print(f"[DBG][attachment_render] 已切换到指定的tab页: {target_tab_name}")
+                    _dbg_print(f"[DBG][attachment_render] 已切换到指定的tab页: {target_tab_name}")
                     found = True
                     break
             if not found:
                 # 如果找不到指定的tab页，切换到第一个tab页
                 tab_widget.setCurrentIndex(0)
-                print(f"[DBG][attachment_render] 未找到指定的tab页 '{target_tab_name}'，切换到第一个tab页")
+                _dbg_print(f"[DBG][attachment_render] 未找到指定的tab页 '{target_tab_name}'，切换到第一个tab页")
         else:
             # 如果没有指定目标tab页，默认切换到第一个tab页
             # 从其他元件切换到管口附件时，应该默认显示第一个tab页
@@ -896,11 +902,11 @@ def _calculate_pipe_code_options(product_id, attachment_type, tab_classification
             pipe_code_options.append(code_stripped)
             seen.add(code_stripped)
     
-    print(f"[管口附件] Tab '{tab_classification}' (附件类型: {attachment_type})")
-    print(f"[管口附件] 总可选项（从产品设计活动表_管口表获取）: {all_pipe_codes}")
-    print(f"[管口附件] 其他tab已选: {selected_in_other_tabs}")
-    print(f"[管口附件] 当前tab已选: {guankou_codes}")
-    print(f"[管口附件] 当前tab可选项: {pipe_code_options}")
+    _dbg_print(f"[管口附件] Tab '{tab_classification}' (附件类型: {attachment_type})")
+    _dbg_print(f"[管口附件] 总可选项（从产品设计活动表_管口表获取）: {all_pipe_codes}")
+    _dbg_print(f"[管口附件] 其他tab已选: {selected_in_other_tabs}")
+    _dbg_print(f"[管口附件] 当前tab已选: {guankou_codes}")
+    _dbg_print(f"[管口附件] 当前tab可选项: {pipe_code_options}")
     
     return pipe_code_options if pipe_code_options else (guankou_codes if guankou_codes else [])
 
@@ -957,9 +963,12 @@ def _toggle_group_expand(table, title_row):
         title_item.setData(Qt.UserRole, user_data)
     
     # 显示/隐藏参数行
+    # 注意：若某行被业务逻辑（如“是否添加覆层=否”）强制隐藏，则分组展开时不能把它放出来
+    forced_hidden_rows = getattr(table, "_attachment_forced_hidden_rows", set()) or set()
     param_rows = group_data.get("param_rows", [])
     for param_row in param_rows:
-        table.setRowHidden(param_row, not new_expanded)
+        should_hide = (not new_expanded) or (param_row in forced_hidden_rows)
+        table.setRowHidden(param_row, should_hide)
 
 
 def _find_all_rows_by_param(table, param_col, name: str):
@@ -1018,10 +1027,10 @@ def _install_attachment_material_delegate_linkage(table, param_col, value_col, v
     # 找到所有"材料类型"行
     type_rows = _find_all_rows_by_param(table, param_col, "材料类型")
     if not type_rows:
-        print(f"[DBG][attachment_material_linkage] 未找到'材料类型'行")
+        _dbg_print(f"[DBG][attachment_material_linkage] 未找到'材料类型'行")
         return
     
-    print(f"[DBG][attachment_material_linkage] 找到 {len(type_rows)} 个材料类型行: {type_rows}")
+    _dbg_print(f"[DBG][attachment_material_linkage] 找到 {len(type_rows)} 个材料类型行: {type_rows}")
     
     # 工具函数
     def _ensure_editable(r: int):
@@ -1056,10 +1065,10 @@ def _install_attachment_material_delegate_linkage(table, param_col, value_col, v
         brand_row, std_row, status_row = _find_material_group_rows(table, param_col, type_row)
         
         if brand_row < 0 or std_row < 0 or status_row < 0:
-            print(f"[DBG][attachment_material_linkage] 材料组 {idx+1} (行{type_row}) 不完整，跳过")
+            _dbg_print(f"[DBG][attachment_material_linkage] 材料组 {idx+1} (行{type_row}) 不完整，跳过")
             continue
         
-        print(f"[DBG][attachment_material_linkage] 为材料组 {idx+1} 安装联动: 类型={type_row}, 牌号={brand_row}, 标准={std_row}, 状态={status_row}")
+        _dbg_print(f"[DBG][attachment_material_linkage] 为材料组 {idx+1} 安装联动: 类型={type_row}, 牌号={brand_row}, 标准={std_row}, 状态={status_row}")
         
         # 确保行可编辑
         for r in [type_row, brand_row, std_row, status_row]:
@@ -1188,7 +1197,716 @@ def _install_attachment_material_delegate_linkage(table, param_col, value_col, v
         # 记录所有目标行
         all_target_rows.update([type_row, brand_row, std_row, status_row])
     
-    print(f"[DBG][attachment_material_linkage] 共安装了 {len(type_rows)} 个材料组的联动逻辑")
+    _dbg_print(f"[DBG][attachment_material_linkage] 共安装了 {len(type_rows)} 个材料组的联动逻辑")
+
+
+def _find_first_row_by_param(table, param_col, name: str):
+    rows = _find_all_rows_by_param(table, param_col, name)
+    return rows[0] if rows else None
+
+
+def _ensure_editable_value_cell(table, row: int, value_col: int):
+    from PyQt5.QtWidgets import QTableWidgetItem
+    from PyQt5.QtCore import Qt
+    if row is None or row < 0:
+        return
+    if table.cellWidget(row, value_col):
+        table.setCellWidget(row, value_col, None)
+    it = table.item(row, value_col)
+    if it is None:
+        it = QTableWidgetItem("")
+        it.setTextAlignment(Qt.AlignCenter)
+        table.setItem(row, value_col, it)
+    it.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
+
+
+def _get_cell_text(table, row: int, value_col: int) -> str:
+    it = table.item(row, value_col)
+    return (it.text().strip() if it else "")
+
+
+def _set_cell_text(table, row: int, value_col: int, txt: str):
+    from PyQt5.QtWidgets import QTableWidgetItem
+    from PyQt5.QtCore import Qt
+    if row is None or row < 0:
+        return
+    it = table.item(row, value_col)
+    if it is None:
+        it = QTableWidgetItem("")
+        it.setTextAlignment(Qt.AlignCenter)
+        table.setItem(row, value_col, it)
+    it.setText(txt or "")
+
+
+def _attachment_pressure_series_from_product(product_id) -> str:
+    """
+    从产品设计活动表_管口类型选择表读取公称压力类型，映射到垫片规则主表的「压力体系」：
+    - 包含 class / lb / 磅 等 → CLASS
+    - 否则默认 PN
+    """
+    if not product_id:
+        return "PN"
+    conn = pymysql.connect(**db_config_1)
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cur:
+            cur.execute(
+                """
+                SELECT 公称压力类型
+                FROM 产品设计活动表_管口类型选择表
+                WHERE 产品ID = %s
+                LIMIT 1
+                """,
+                (product_id,),
+            )
+            row = cur.fetchone() or {}
+            pt = (row.get("公称压力类型") or "").strip()
+    except Exception as e:
+        print(f"[管口附件垫片] 读取公称压力类型失败: {e}")
+        pt = ""
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+    u = pt.upper().replace(" ", "")
+    if "CLASS" in u or u == "CL" or "LB" in u or "磅" in pt:
+        return "CLASS"
+    return "PN"
+
+
+def _query_flange_gasket_rules(pressure_series: str):
+    """
+    读取材料库：管口附件接管法兰垫片联动主表
+    返回 list[dict]，按规则ID排序。
+    """
+    conn = pymysql.connect(**db_config_material)
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cur:
+            cur.execute(
+                """
+                SELECT 规则ID, 压力体系, 垫片类型, 垫片标准, 垫片材料, 垫片型式
+                FROM 管口附件接管法兰垫片联动主表
+                WHERE 压力体系 = %s
+                ORDER BY 规则ID
+                """,
+                (pressure_series,),
+            )
+            return cur.fetchall() or []
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _query_flange_gasket_style_options(rule_id: int):
+    """
+    读取材料库：管口附件接管法兰垫片型式明细表
+    优先按「型式序号」排序；若列不存在则回退按明细ID排序。
+    """
+    conn = pymysql.connect(**db_config_material)
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cur:
+            try:
+                cur.execute(
+                    """
+                    SELECT 垫片型式
+                    FROM 管口附件接管法兰垫片型式明细表
+                    WHERE 规则ID = %s
+                    ORDER BY 型式序号, 明细ID
+                    """,
+                    (rule_id,),
+                )
+            except Exception:
+                cur.execute(
+                    """
+                    SELECT 垫片型式
+                    FROM 管口附件接管法兰垫片型式明细表
+                    WHERE 规则ID = %s
+                    ORDER BY 明细ID
+                    """,
+                    (rule_id,),
+                )
+            rows = cur.fetchall() or []
+            opts = []
+            seen = set()
+            for r in rows:
+                s = (r.get("垫片型式") or "").strip()
+                if s and s not in seen:
+                    seen.add(s)
+                    opts.append(s)
+            return opts
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+def _remap_gasket_type_between_pn_class(cur_type: str, target_series: str) -> str:
+    """
+    当用户在管口定义切换公称压力类型（PN/CLASS）后，活动库里可能仍保存旧系列的「垫片类型」文本。
+    这里按约定把 (PN系列)/(CLASS系列) 后缀互换到目标压力体系对应文本（同族名称）。
+    """
+    t = (cur_type or "").strip()
+    if not t:
+        return ""
+    ts = (target_series or "").strip().upper()
+    if ts not in ("PN", "CLASS"):
+        return t
+    low = t.lower()
+    if ts == "PN":
+        if "(class系列)" in low:
+            # 大小写不敏感替换一次（常见：Class系列）
+            idx = low.find("(class系列)")
+            return t[:idx] + "(PN系列)" + t[idx + len("(class系列)"):]
+        if low.endswith("(class)"):
+            return t[: -len("(class)")] + "(PN系列)"
+    else:
+        if "(pn系列)" in low:
+            idx = low.find("(pn系列)")
+            return t[:idx] + "(CLASS系列)" + t[idx + len("(pn系列)"):]
+        if low.endswith("(pn)"):
+            return t[: -len("(pn)")] + "(CLASS系列)"
+    return t
+
+
+def _install_attachment_flange_gasket_linkage(
+    table,
+    *,
+    product_id,
+    attachment_type: str,
+    param_col: int = 0,
+    value_col: int = 1,
+):
+    """
+    「接管法兰配对法兰」附件：垫片联动
+    - 垫片类型：按压力体系(PN/CLASS)从主表取候选
+    - 垫片标准：选类型后给出该类型下全部「垫片标准」候选（下拉）
+    - 垫片型式：选标准后按对应规则ID读明细表候选；默认型式以主表「垫片型式」为准
+    - 垫片材料：普通文本格，不参与下拉联动；仅在选类型/选标准时写入主表推荐值，用户可任意改
+    """
+    if not product_id:
+        return
+    if (attachment_type or "").strip() != "接管法兰配对法兰":
+        return
+
+    type_name, std_name, mat_name, style_name = "垫片类型", "垫片标准", "垫片材料", "垫片型式"
+    type_row = _find_first_row_by_param(table, param_col, type_name)
+    std_row = _find_first_row_by_param(table, param_col, std_name)
+    mat_row = _find_first_row_by_param(table, param_col, mat_name)
+    style_row = _find_first_row_by_param(table, param_col, style_name)
+    if type_row is None or std_row is None or mat_row is None or style_row is None:
+        return
+
+    pressure_series = _attachment_pressure_series_from_product(product_id)
+    rules = _query_flange_gasket_rules(pressure_series)
+    if not rules:
+        print(f"[管口附件垫片] 未找到压力体系={pressure_series} 的垫片联动规则")
+        return
+
+    # 同一垫片类型可能对应多条主表规则（不同标准）——按规则ID顺序分组
+    rules_by_type: dict = {}
+    for r in rules:
+        t = (r.get("垫片类型") or "").strip()
+        if not t:
+            continue
+        rules_by_type.setdefault(t, []).append(r)
+    valid_types = set(rules_by_type.keys())
+    type_options = []
+    seen_t = set()
+    for r in rules:
+        t = (r.get("垫片类型") or "").strip()
+        if t and t not in seen_t:
+            seen_t.add(t)
+            type_options.append(t)
+
+    for rr in (type_row, std_row, mat_row, style_row):
+        _ensure_editable_value_cell(table, rr, value_col)
+
+    def _distinct_standards_for_rules(rs: list) -> list:
+        out, seen = [], set()
+        for r in rs or []:
+            s = (r.get("垫片标准") or "").strip()
+            if s and s not in seen:
+                seen.add(s)
+                out.append(s)
+        return out
+
+    def _rule_for_type_std(type_key: str, std: str) -> dict:
+        rs = rules_by_type.get((type_key or "").strip()) or []
+        st = (std or "").strip()
+        for r in rs:
+            if (r.get("垫片标准") or "").strip() == st:
+                return r
+        return {}
+
+    def _clear_gasket_dependent_fields_and_delegates():
+        """垫片类型为空时：标准/型式清空并锁定空下拉；材料清空为文本格。"""
+        for rr in (std_row, style_row):
+            if rr is None:
+                continue
+            _set_cell_text(table, rr, value_col, "")
+            table.setItemDelegateForRow(rr, ComboDelegate([""], table))
+        if mat_row is not None:
+            _set_cell_text(table, mat_row, value_col, "")
+            table.setItemDelegateForRow(mat_row, None)
+
+    def _ensure_mat_is_plain_text():
+        if mat_row is not None:
+            table.setItemDelegateForRow(mat_row, None)
+
+    def _install_style_delegate(options):
+        opts = []
+        seen = set()
+        for o in list(options or []):
+            s = (o or "").strip()
+            if s and s not in seen:
+                seen.add(s)
+                opts.append(s)
+
+        if not opts:
+            table.setItemDelegateForRow(style_row, ComboDelegate([""], table))
+            return
+
+        def on_style_pick(_fn, new_text, _r, _c):
+            _set_cell_text(table, style_row, value_col, new_text)
+            table.viewport().update()
+
+        table.setItemDelegateForRow(
+            style_row, MaterialInstantDelegate(opts, table, style_name, on_style_pick)
+        )
+
+    def _apply_style_from_rule(rule: dict, *, reset_style_to_default: bool):
+        """仅根据规则刷新型式候选与单元格（不碰标准列、不强制改写材料）。"""
+        if not rule:
+            _set_cell_text(table, style_row, value_col, "")
+            table.setItemDelegateForRow(style_row, ComboDelegate([""], table))
+            return
+        rid = rule.get("规则ID")
+        default_style = (rule.get("垫片型式") or "").strip()
+        style_opts = []
+        if rid is not None and str(rid).strip() != "":
+            try:
+                style_opts = _query_flange_gasket_style_options(int(rid))
+            except Exception:
+                style_opts = []
+        if not style_opts and default_style:
+            style_opts = [default_style]
+        if reset_style_to_default and default_style:
+            _set_cell_text(table, style_row, value_col, default_style)
+        elif reset_style_to_default and not default_style:
+            _set_cell_text(table, style_row, value_col, "")
+        cur_style = _get_cell_text(table, style_row, value_col)
+        if style_opts:
+            if not (cur_style or "").strip():
+                if default_style and default_style in style_opts:
+                    _set_cell_text(table, style_row, value_col, default_style)
+            elif cur_style not in style_opts:
+                if default_style and default_style in style_opts:
+                    _set_cell_text(table, style_row, value_col, default_style)
+        _install_style_delegate(style_opts)
+
+    def on_std_pick(_fn, new_text, _r, _c):
+        _set_cell_text(table, std_row, value_col, new_text)
+        _ensure_mat_is_plain_text()
+        st = (new_text or "").strip()
+        t = (_get_cell_text(table, type_row, value_col) or "").strip()
+        if not t or not st:
+            _set_cell_text(table, style_row, value_col, "")
+            table.setItemDelegateForRow(style_row, ComboDelegate([""], table))
+            table.viewport().update()
+            return
+        rule = _rule_for_type_std(t, st)
+        if not rule:
+            _set_cell_text(table, style_row, value_col, "")
+            table.setItemDelegateForRow(style_row, ComboDelegate([""], table))
+            table.viewport().update()
+            return
+        _set_cell_text(table, mat_row, value_col, (rule.get("垫片材料") or "").strip())
+        _apply_style_from_rule(rule, reset_style_to_default=True)
+        table.viewport().update()
+
+    def _install_std_delegate(type_key: str):
+        rs = rules_by_type.get((type_key or "").strip()) or []
+        opts = _distinct_standards_for_rules(rs)
+        std_opts_ui = [""] + opts
+        table.setItemDelegateForRow(
+            std_row, MaterialInstantDelegate(std_opts_ui, table, std_name, on_std_pick)
+        )
+
+    def on_type_pick(_fn, new_text, _r, _c):
+        _set_cell_text(table, type_row, value_col, new_text)
+        t = (new_text or "").strip()
+        _ensure_mat_is_plain_text()
+        if not t:
+            _clear_gasket_dependent_fields_and_delegates()
+            table.viewport().update()
+            return
+        rs = rules_by_type.get(t) or []
+        std_opts = _distinct_standards_for_rules(rs)
+        if len(std_opts) == 1:
+            only = std_opts[0]
+            _set_cell_text(table, std_row, value_col, only)
+            rule = _rule_for_type_std(t, only)
+            _set_cell_text(table, mat_row, value_col, (rule.get("垫片材料") or "").strip())
+            _apply_style_from_rule(rule, reset_style_to_default=True)
+        else:
+            _set_cell_text(table, std_row, value_col, "")
+            _set_cell_text(table, style_row, value_col, "")
+            table.setItemDelegateForRow(style_row, ComboDelegate([""], table))
+            if rs:
+                _set_cell_text(table, mat_row, value_col, (rs[0].get("垫片材料") or "").strip())
+            else:
+                _set_cell_text(table, mat_row, value_col, "")
+        _install_std_delegate(t)
+        table.viewport().update()
+
+    # 垫片类型 delegate
+    seen_t2, topts = set(), []
+    for o in type_options:
+        s = (o or "").strip()
+        if s and s not in seen_t2:
+            seen_t2.add(s)
+            topts.append(s)
+    type_opts_ui = [""] + topts
+
+    # 若用户在「管口定义」切换了 PN/CLASS，而活动库里仍保存旧系列垫片类型：自动映射到同族 PN/CLASS 文本
+    try:
+        cur_type0 = _get_cell_text(table, type_row, value_col)
+        if cur_type0 and cur_type0 not in valid_types:
+            mapped = _remap_gasket_type_between_pn_class(cur_type0, pressure_series)
+            if mapped and mapped != cur_type0 and mapped in valid_types:
+                _set_cell_text(table, type_row, value_col, mapped)
+                _dbg_print(f"[管口附件垫片] 公称压力体系切换后自动映射垫片类型: {cur_type0} -> {mapped}")
+            elif mapped and mapped in valid_types and mapped == cur_type0:
+                pass
+            else:
+                _set_cell_text(table, type_row, value_col, "")
+                _clear_gasket_dependent_fields_and_delegates()
+                _dbg_print(f"[管口附件垫片] 无法将垫片类型映射到压力体系={pressure_series}，已清空: {cur_type0}")
+    except Exception as e:
+        print(f"[管口附件垫片] 自动映射垫片类型失败: {e}")
+
+    cur_type = _get_cell_text(table, type_row, value_col)
+    if not (cur_type or "").strip():
+        _clear_gasket_dependent_fields_and_delegates()
+        table.setItemDelegateForRow(
+            type_row, MaterialInstantDelegate(type_opts_ui, table, type_name, on_type_pick)
+        )
+    elif cur_type in valid_types:
+        _ensure_mat_is_plain_text()
+        rs = rules_by_type.get(cur_type) or []
+        std_opts = _distinct_standards_for_rules(rs)
+        cur_std = (_get_cell_text(table, std_row, value_col) or "").strip()
+        if cur_std not in std_opts:
+            if len(std_opts) == 1:
+                cur_std = std_opts[0]
+                _set_cell_text(table, std_row, value_col, cur_std)
+            else:
+                cur_std = ""
+                _set_cell_text(table, std_row, value_col, "")
+                _set_cell_text(table, style_row, value_col, "")
+        rule = _rule_for_type_std(cur_type, cur_std) if cur_std else {}
+        _install_std_delegate(cur_type)
+        if rule:
+            _apply_style_from_rule(rule, reset_style_to_default=False)
+        else:
+            _set_cell_text(table, style_row, value_col, "")
+            table.setItemDelegateForRow(style_row, ComboDelegate([""], table))
+        table.setItemDelegateForRow(
+            type_row, MaterialInstantDelegate(type_opts_ui, table, type_name, on_type_pick)
+        )
+    else:
+        _set_cell_text(table, type_row, value_col, "")
+        _clear_gasket_dependent_fields_and_delegates()
+        table.setItemDelegateForRow(
+            type_row, MaterialInstantDelegate(type_opts_ui, table, type_name, on_type_pick)
+        )
+
+
+def _apply_cladding_type_logic_for_attachment_table(
+    table,
+    param_col: int,
+    value_col: int,
+    *,
+    has_covering: bool,
+    type_value: str,
+    level_param: str,
+    status_param: str,
+    process_param: str,
+):
+    """
+    参照管口元件覆层逻辑：
+      - 覆层材料类型=焊材：隐藏「材料级别」「使用状态」，并把「成型工艺」限定为堆焊且赋值
+      - 覆层材料类型=板材/钢板：显示上述两项，且「成型工艺」候选为爆炸焊接/轧制复合，默认爆炸焊接
+      - 其它：恢复可见，不强制工艺
+    """
+    v = (type_value or "").strip()
+    level_row = _find_first_row_by_param(table, param_col, level_param)
+    status_row = _find_first_row_by_param(table, param_col, status_param)
+    process_row = _find_first_row_by_param(table, param_col, process_param)
+
+    # 覆层开关优先级最高：未启用覆层时，不在这里“强行展开/显示”任何行
+    if not has_covering:
+        return
+
+    if v == "焊材":
+        if level_row is not None:
+            table.setRowHidden(level_row, True)
+        if status_row is not None:
+            table.setRowHidden(status_row, True)
+        if process_row is not None:
+            table.setRowHidden(process_row, False)
+            _ensure_editable_value_cell(table, process_row, value_col)
+            table.setItemDelegateForRow(process_row, ComboDelegate(["堆焊"], table))
+            _set_cell_text(table, process_row, value_col, "堆焊")
+    elif v in ("板材", "钢板"):
+        if level_row is not None:
+            table.setRowHidden(level_row, False)
+        if status_row is not None:
+            table.setRowHidden(status_row, False)
+        if process_row is not None:
+            table.setRowHidden(process_row, False)
+            _ensure_editable_value_cell(table, process_row, value_col)
+            table.setItemDelegateForRow(process_row, ComboDelegate(["爆炸焊接", "轧制复合"], table))
+            cur = _get_cell_text(table, process_row, value_col)
+            if cur not in ("爆炸焊接", "轧制复合"):
+                _set_cell_text(table, process_row, value_col, "爆炸焊接")
+    else:
+        if level_row is not None:
+            table.setRowHidden(level_row, False)
+        if status_row is not None:
+            table.setRowHidden(status_row, False)
+        if process_row is not None:
+            table.setRowHidden(process_row, False)
+
+
+def _install_attachment_flange_cladding_linkage(table, param_col: int, value_col: int, viewer_instance=None):
+    """
+    在“接管法兰配对法兰”附件页中，为“接管法兰覆层”相关字段安装：
+      - 是否添加覆层 → 显示/隐藏覆层字段并在隐藏时清空值
+      - 覆层材料类型 → 覆层材料牌号/材料标准联动（同材料四字段的过滤逻辑），并驱动成型工艺/级别/使用状态显隐
+      - 覆层厚度(mm) → >=0 的数值代理
+
+    注意：管口附件页的写库在“确定”按钮触发，这里只做 UI 级联与候选项联动。
+    """
+    toggle_name = "接管法兰是否添加覆层"
+    type_name = "接管法兰覆层材料类型"
+    brand_name = "接管法兰覆层材料牌号"
+    std_name = "接管法兰覆层材料标准"
+    level_name = "接管法兰覆层材料级别"
+    process_name = "接管法兰覆层成型工艺"
+    status_name = "接管法兰覆层使用状态"
+    thickness_name = "接管法兰覆层厚度(mm)"
+
+    toggle_row = _find_first_row_by_param(table, param_col, toggle_name)
+    type_row = _find_first_row_by_param(table, param_col, type_name)
+    brand_row = _find_first_row_by_param(table, param_col, brand_name)
+    std_row = _find_first_row_by_param(table, param_col, std_name)
+    thickness_row = _find_first_row_by_param(table, param_col, thickness_name)
+
+    # 如果这套字段在当前tab不存在，直接跳过
+    if toggle_row is None and type_row is None:
+        return
+
+    dependent_names = [
+        type_name,
+        brand_name,
+        "接管法兰覆层材料级别",
+        std_name,
+        process_name,
+        status_name,
+        thickness_name,
+        "接管法兰覆层材料类型",
+    ]
+
+    # 统一找出依赖字段行
+    dep_rows = []
+    for n in dict.fromkeys(dependent_names):
+        r = _find_first_row_by_param(table, param_col, n)
+        if r is not None:
+            dep_rows.append(r)
+
+    def _mark_forced_hidden(rows, hidden: bool):
+        """记录/清理被覆层逻辑强制隐藏的行，避免分组展开时被错误展开。"""
+        s = getattr(table, "_attachment_forced_hidden_rows", None)
+        if s is None:
+            s = set()
+            setattr(table, "_attachment_forced_hidden_rows", s)
+        for rr in rows or []:
+            if rr is None:
+                continue
+            if hidden:
+                s.add(rr)
+            else:
+                s.discard(rr)
+
+    # --- 1) 覆层开关（是/否） ---
+    if toggle_row is not None:
+        _ensure_editable_value_cell(table, toggle_row, value_col)
+
+        def _on_cover_toggle(_field, new_text, _r, _c):
+            v = (new_text or "").strip()
+            has_cover = (v == "是")
+            # 显隐 + 隐藏时清空值（不写库，等“确定”写回）
+            for rr in dep_rows:
+                table.setRowHidden(rr, not has_cover)
+                if not has_cover:
+                    _ensure_editable_value_cell(table, rr, value_col)
+                    _set_cell_text(table, rr, value_col, "")
+            # 覆层总开关=否时，所有依赖行都强制隐藏；=是时先全部解除，后续再按材料类型二次控制
+            _mark_forced_hidden(dep_rows, not has_cover)
+            # 打开覆层时，按当前“覆层材料类型”立即应用一次工艺/显隐规则
+            if has_cover and type_row is not None:
+                cur_type = _get_cell_text(table, type_row, value_col)
+                _apply_cladding_type_logic_for_attachment_table(
+                    table,
+                    param_col,
+                    value_col,
+                    has_covering=True,
+                    type_value=cur_type,
+                    level_param=level_name,
+                    status_param=status_name,
+                    process_param=process_name,
+                )
+                # 材料类型=焊材时，级别/使用状态仍需保持隐藏，避免被分组展开放出来
+                level_row = _find_first_row_by_param(table, param_col, level_name)
+                status_row = _find_first_row_by_param(table, param_col, status_name)
+                type_hides = []
+                if (cur_type or "").strip() == "焊材":
+                    type_hides = [level_row, status_row]
+                _mark_forced_hidden([level_row, status_row], False)
+                _mark_forced_hidden(type_hides, True)
+            table.viewport().update()
+
+        table.setItemDelegateForRow(
+            toggle_row,
+            MaterialInstantDelegate(["是", "否"], table, toggle_name, _on_cover_toggle),
+        )
+
+        # 初始化一次显隐（按当前值）
+        try:
+            cur = _get_cell_text(table, toggle_row, value_col)
+            _on_cover_toggle(toggle_name, cur, toggle_row, value_col)
+        except Exception:
+            pass
+
+    # --- 2) 覆层材料类型 -> 牌号/标准联动 + 工艺/级别/使用状态 ---
+    if type_row is not None:
+        for rr in [type_row, brand_row, std_row]:
+            if rr is not None:
+                _ensure_editable_value_cell(table, rr, value_col)
+
+        def _install_delegate_for_row(row_idx, field_name, options, on_pick):
+            if row_idx is None:
+                return
+            seen, opts = set(), []
+            for o in list(options or []):
+                s = (o or "").strip()
+                if s and s not in seen:
+                    seen.add(s)
+                    opts.append(s)
+            table.setItemDelegateForRow(row_idx, MaterialInstantDelegate(opts, table, field_name, on_pick))
+
+        def _opts_for_brand(tval: str):
+            return (get_filtered_material_options({"材料类型": tval} if tval else {}) or {}).get("材料牌号", []) or []
+
+        def _opts_for_std(tval: str, bval: str):
+            basis = {k: v for k, v in {"材料类型": tval, "材料牌号": bval}.items() if v}
+            return (get_filtered_material_options(basis) or {}).get("材料标准", []) or []
+
+        def _on_pick_cladding(field_name: str, new_text: str, row: int, col: int):
+            # 覆层是否开启（用于门控后续“展开/强制值”逻辑）
+            has_covering = True
+            if toggle_row is not None:
+                has_covering = (_get_cell_text(table, toggle_row, value_col) == "是")
+
+            # 写回当前格
+            if field_name == type_name:
+                _set_cell_text(table, type_row, value_col, new_text)
+                # 类型变更：清空牌号/标准并刷新候选
+                if brand_row is not None:
+                    _set_cell_text(table, brand_row, value_col, "")
+                if std_row is not None:
+                    _set_cell_text(table, std_row, value_col, "")
+                b_opts = _opts_for_brand(new_text)
+                _install_delegate_for_row(brand_row, brand_name, b_opts, _on_pick_cladding)
+                std_opts = _opts_for_std(new_text, "")
+                _install_delegate_for_row(std_row, std_name, std_opts, _on_pick_cladding)
+
+                # 覆层类型逻辑（工艺候选 & 级别/使用状态显隐）
+                _apply_cladding_type_logic_for_attachment_table(
+                    table,
+                    param_col,
+                    value_col,
+                    has_covering=has_covering,
+                    type_value=new_text,
+                    level_param=level_name,
+                    status_param=status_name,
+                    process_param=process_name,
+                )
+                # 材料类型导致的额外隐藏（焊材隐藏级别/使用状态）也要参与“强制隐藏”集合
+                level_row = _find_first_row_by_param(table, param_col, level_name)
+                status_row = _find_first_row_by_param(table, param_col, status_name)
+                _mark_forced_hidden([level_row, status_row], False)
+                if has_covering and (new_text or "").strip() == "焊材":
+                    _mark_forced_hidden([level_row, status_row], True)
+            elif field_name == brand_name:
+                if brand_row is not None:
+                    _set_cell_text(table, brand_row, value_col, new_text)
+                # 牌号变更：清空标准并刷新
+                if std_row is not None:
+                    _set_cell_text(table, std_row, value_col, "")
+                    tval = _get_cell_text(table, type_row, value_col)
+                    std_opts = _opts_for_std(tval, new_text)
+                    _install_delegate_for_row(std_row, std_name, std_opts, _on_pick_cladding)
+            elif field_name == std_name:
+                if std_row is not None:
+                    _set_cell_text(table, std_row, value_col, new_text)
+
+            table.viewport().update()
+
+        # 初次安装 delegates
+        cur_t = _get_cell_text(table, type_row, value_col)
+        cur_b = _get_cell_text(table, brand_row, value_col) if brand_row is not None else ""
+
+        type_opts = get_options_for_param(type_name) or (get_filtered_material_options({}) or {}).get("材料类型", []) or []
+        _install_delegate_for_row(type_row, type_name, type_opts, _on_pick_cladding)
+        _install_delegate_for_row(brand_row, brand_name, _opts_for_brand(cur_t), _on_pick_cladding)
+        _install_delegate_for_row(std_row, std_name, _opts_for_std(cur_t, cur_b), _on_pick_cladding)
+
+        # 初始应用一次工艺/显隐
+        try:
+            has_covering_init = True
+            if toggle_row is not None:
+                has_covering_init = (_get_cell_text(table, toggle_row, value_col) == "是")
+            _apply_cladding_type_logic_for_attachment_table(
+                table,
+                param_col,
+                value_col,
+                has_covering=has_covering_init,
+                type_value=cur_t,
+                level_param=level_name,
+                status_param=status_name,
+                process_param=process_name,
+            )
+            # 初始化时同步一次“强制隐藏”集合，避免首次点分组标题时把覆层控制隐藏项展开
+            level_row = _find_first_row_by_param(table, param_col, level_name)
+            status_row = _find_first_row_by_param(table, param_col, status_name)
+            if not has_covering_init:
+                _mark_forced_hidden(dep_rows, True)
+            else:
+                _mark_forced_hidden(dep_rows, False)
+                if (cur_t or "").strip() == "焊材":
+                    _mark_forced_hidden([level_row, status_row], True)
+        except Exception:
+            pass
+
+    # --- 3) 覆层厚度(mm) 数值代理（>=0） ---
+    if thickness_row is not None:
+        _ensure_editable_value_cell(table, thickness_row, value_col)
+        table.setItemDelegateForRow(thickness_row, NonNegativeDoubleDelegate(bottom=0.0, parent=table))
 
 
 def _apply_attachment_param_combobox(table, param_col, value_col):
@@ -1264,7 +1982,7 @@ def _apply_attachment_param_combobox(table, param_col, value_col):
             # 如果有选项，设置ComboDelegate；否则设置为None
             if options:
                 table.setItemDelegateForRow(row, ComboDelegate(options, table))
-                print(f"[DBG][attachment_combobox] 为参数 '{param_name}' 绑定下拉框，选项数: {len(options)}")
+                _dbg_print(f"[DBG][attachment_combobox] 为参数 '{param_name}' 绑定下拉框，选项数: {len(options)}")
             else:
                 table.setItemDelegateForRow(row, None)
         except Exception as e:
@@ -1358,12 +2076,12 @@ def _render_attachment_table_data(table, attachment_type, guankou_codes, param_d
         # 适配 get_filtered_material_options 的新签名，未选择时传 None
         material_options = get_filtered_material_options(None)
     except Exception as e:
-        print(f"[DBG][attachment_render] 获取材料选项失败: {e}")
+        _dbg_print(f"[DBG][attachment_render] 获取材料选项失败: {e}")
     
     # 计算管口号的可选项
     pipe_code_options = _calculate_pipe_code_options(product_id, attachment_type, tab_classification, guankou_codes)
     table.setProperty("gk_code_candidates", pipe_code_options)
-    print(f"[管口附件] 已设置table.property('gk_code_candidates'): {pipe_code_options}")
+    _dbg_print(f"[管口附件] 已设置table.property('gk_code_candidates'): {pipe_code_options}")
     
     # 根据附件类型渲染不同的参数结构
     folding_structure = get_attachment_folding_structure(attachment_type)
@@ -1375,16 +2093,40 @@ def _render_attachment_table_data(table, attachment_type, guankou_codes, param_d
     # 安装材料四字段的联动逻辑（处理所有材料组，包括多个分组）
     try:
         _install_attachment_material_delegate_linkage(table, param_col=0, value_col=1, viewer_instance=viewer_instance)
-        print(f"[DBG][attachment_render] 材料联动逻辑安装完成")
+        _dbg_print(f"[DBG][attachment_render] 材料联动逻辑安装完成")
     except Exception as e:
         print(f"[DBG][attachment_render] 安装材料联动逻辑失败: {e}")
+        import traceback
+        traceback.print_exc()
+
+    # 安装“接管法兰覆层”相关字段的联动逻辑（仅在存在这些行时生效）
+    try:
+        _install_attachment_flange_cladding_linkage(table, param_col=0, value_col=1, viewer_instance=viewer_instance)
+        _dbg_print(f"[DBG][attachment_render] 接管法兰覆层联动逻辑安装完成")
+    except Exception as e:
+        print(f"[DBG][attachment_render] 安装接管法兰覆层联动逻辑失败: {e}")
+        import traceback
+        traceback.print_exc()
+
+    # 安装「接管法兰垫片」联动：类型→标准→型式下拉；垫片材料为文本推荐（材料库新表）
+    try:
+        _install_attachment_flange_gasket_linkage(
+            table,
+            product_id=product_id,
+            attachment_type=attachment_type,
+            param_col=0,
+            value_col=1,
+        )
+        _dbg_print(f"[DBG][attachment_render] 接管法兰垫片联动逻辑安装完成")
+    except Exception as e:
+        print(f"[DBG][attachment_render] 安装接管法兰垫片联动逻辑失败: {e}")
         import traceback
         traceback.print_exc()
     
     # 为其他参数绑定下拉框（从数据库获取选项）
     try:
         _apply_attachment_param_combobox(table, param_col=0, value_col=1)
-        print(f"[DBG][attachment_render] 参数下拉框绑定完成")
+        _dbg_print(f"[DBG][attachment_render] 参数下拉框绑定完成")
     except Exception as e:
         print(f"[DBG][attachment_render] 绑定参数下拉框失败: {e}")
         import traceback
@@ -1443,7 +2185,7 @@ def _render_flange_pairing_params(table, guankou_codes, param_data_list, materia
     folding_structure = get_attachment_folding_structure(attachment_type)
     
     if not folding_structure:
-        print(f"[DBG][attachment_render] 附件类型 '{attachment_type}' 在管口附件折叠表中没有找到小标题信息，跳过渲染")
+        _dbg_print(f"[DBG][attachment_render] 附件类型 '{attachment_type}' 在管口附件折叠表中没有找到小标题信息，跳过渲染")
         return
     
     # 按照折叠表中的排序顺序渲染每个分组
@@ -1619,7 +2361,7 @@ def _add_param_row(table, param_name, guankou_codes, param_data, material_option
             options = list(options) if options else []
         
         if options:
-            print(f"[管口附件] _add_param_row: 为管口号行设置delegate，可选项: {options}")
+            _dbg_print(f"[管口附件] _add_param_row: 为管口号行设置delegate，可选项: {options}")
             # 使用计算好的可选项（总可选项 - 已选项，但包含当前tab页已选的）
             # 注意：CheckComboDelegate会优先从table.property('gk_code_candidates')读取，所以这里传入的options作为兜底
             table.setItemDelegateForRow(row, CheckComboDelegate(options, table, enable_select_all=True))
@@ -2083,12 +2825,12 @@ def _on_attachment_tab_changed(viewer_instance, index: int):
         tab_widget.setCurrentIndex(max(0, index - 1))
         return
     
-    print(f"[管口附件] Tab页切换: {tab_name}")
+    _dbg_print(f"[管口附件] Tab页切换: {tab_name}")
     
     # 获取当前Tab页对应的表格
     table = viewer_instance.dynamic_attachment_param_tabs.get(tab_name)
     if table is None:
-        print(f"[管口附件] 未找到 {tab_name} 的参数表，跳过刷新")
+        _dbg_print(f"[管口附件] 未找到 {tab_name} 的参数表，跳过刷新")
         return
     
     # 刷新当前Tab页的管口号可选项
@@ -2109,7 +2851,7 @@ def _refresh_attachment_tab_pipe_code_options(viewer_instance, table, tab_name):
     """
     product_id = getattr(viewer_instance, 'product_id', None)
     if not product_id:
-        print(f"[管口附件] 未找到product_id，跳过刷新")
+        _dbg_print(f"[管口附件] 未找到product_id，跳过刷新")
         return
     
     # 找到"管口号"这一行
@@ -2127,13 +2869,13 @@ def _refresh_attachment_tab_pipe_code_options(viewer_instance, table, tab_name):
             break
     
     if pipe_code_row is None:
-        print(f"[管口附件] 未找到'管口号'行，跳过刷新")
+        _dbg_print(f"[管口附件] 未找到'管口号'行，跳过刷新")
         return
     
     # 从数据库加载最新的参数数据
     param_data = load_attachment_param_data(product_id, tab_name)
     if not param_data:
-        print(f"[管口附件] 未找到 {tab_name} 的参数数据，跳过刷新")
+        _dbg_print(f"[管口附件] 未找到 {tab_name} 的参数数据，跳过刷新")
         return
     
     # 获取附件类型
@@ -2142,7 +2884,7 @@ def _refresh_attachment_tab_pipe_code_options(viewer_instance, table, tab_name):
         attachment_type = param_data[0].get('附件类型', '').strip()
     
     if not attachment_type:
-        print(f"[管口附件] Tab分类 '{tab_name}' 未找到附件类型，跳过刷新")
+        _dbg_print(f"[管口附件] Tab分类 '{tab_name}' 未找到附件类型，跳过刷新")
         return
     
     # 获取当前tab页已选的管口号
@@ -2174,11 +2916,11 @@ def _refresh_attachment_tab_pipe_code_options(viewer_instance, table, tab_name):
             pipe_code_options.append(code_stripped)
             seen.add(code_stripped)
     
-    print(f"[管口附件] Tab切换刷新 '{tab_name}' (附件类型: {attachment_type})")
-    print(f"[管口附件] 总可选项: {all_pipe_codes}")
-    print(f"[管口附件] 其他tab已选: {selected_in_other_tabs}")
-    print(f"[管口附件] 当前tab已选: {guankou_codes}")
-    print(f"[管口附件] 刷新后的可选项: {pipe_code_options}")
+    _dbg_print(f"[管口附件] Tab切换刷新 '{tab_name}' (附件类型: {attachment_type})")
+    _dbg_print(f"[管口附件] 总可选项: {all_pipe_codes}")
+    _dbg_print(f"[管口附件] 其他tab已选: {selected_in_other_tabs}")
+    _dbg_print(f"[管口附件] 当前tab已选: {guankou_codes}")
+    _dbg_print(f"[管口附件] 刷新后的可选项: {pipe_code_options}")
     
     # 更新表格属性
     table.setProperty("gk_code_candidates", pipe_code_options)
@@ -2188,4 +2930,4 @@ def _refresh_attachment_tab_pipe_code_options(viewer_instance, table, tab_name):
     if pipe_code_options:
         from modules.cailiaodingyi.controllers.checkcombo import CheckComboDelegate
         table.setItemDelegateForRow(pipe_code_row, CheckComboDelegate(options=pipe_code_options, table=table, enable_select_all=True))
-        print(f"[管口附件] 已重新设置管口号行的delegate，可选项: {pipe_code_options}")
+        _dbg_print(f"[管口附件] 已重新设置管口号行的delegate，可选项: {pipe_code_options}")

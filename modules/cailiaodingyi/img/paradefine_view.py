@@ -28,7 +28,7 @@ from modules.cailiaodingyi.controllers.datamanager import (
     handle_table_click,
     handle_guankou_table_click,
     on_confirm_param_update,
-    on_confirm_guankouparam, apply_paramname_dependent_combobox, apply_paramname_combobox,
+    on_confirm_guankouparam, apply_paramname_combobox,
     apply_gk_paramname_combobox, bind_define_table_click, on_clear_param_update, load_data_by_template, on_clear_guankou_param_update,
 )
 from modules.cailiaodingyi.funcs.funcs_pdf_change import load_guankou_para_data_leibie, load_guankou_define_leibie, \
@@ -1531,22 +1531,7 @@ class DesignParameterDefineInputerViewer(QWidget):
             param_row_data = param_data[0]  # ✅ 取出第一行参数数据当作 component_info
 
 
-            # 绑定参数下拉逻辑
-            param_options = load_material_dropdown_values()
-            # apply_paramname_dependent_combobox(
-            #     self.tableWidget_guankou_param,
-            #     param_col=0,
-            #     value_col=1,
-            #     param_options=param_options,
-            #     component_info=guankou_row,
-            #     viewer_instance=self
-            # )
-            # apply_paramname_dependent_combobox(
-            #     table_param,
-            #     param_col=0,
-            #     value_col=1,
-            #     param_options=param_options
-            # )
+
             apply_gk_paramname_combobox(
                 table_param,
                 param_col=0,
@@ -1562,15 +1547,6 @@ class DesignParameterDefineInputerViewer(QWidget):
             table_param.setHorizontalHeaderLabels(["参数名称", "参数值", "参数单位"])
 
 
-
-    #
-    # def handle_table_click_guankou(self, row, column):
-    #     # 获取当前行的“零件名称”
-    #     part_name_item = self.tableWidget_parts.item(row, 1)
-    #     if part_name_item and part_name_item.text() == "管口":
-    #         self.stackedWidget.setCurrentIndex(0)
-    #     else:
-    #         self.stackedWidget.setCurrentIndex(1)
 
     def handle_table_click_guankou(self, row, column):
         # 获取当前行的"零件名称"

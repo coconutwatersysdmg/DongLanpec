@@ -26,6 +26,14 @@ db_config_2 = {
     'database': '材料库'
 }
 
+# 元件定义界面冗长调试输出总开关（默认关闭；开发排查时在下方置 True）
+# 控制：垫片尺寸/PN 计算、[DBG] 垫片联动、支座/铭牌/保温的合并表与支座联动、[铭牌附属元件显隐]、[保温装置-螺柱型式显隐]、
+# [DBG][fastener_render]/[DBG][fastener_data]、材料组识别与 get_options_for_param 的[警告]、
+# 多选共同编辑的详细日志 [多选模式]/[DBG][multi]/[多选] 批量ID 等；常驻简短提示 [multi] 进入模式/保存成功 在 datamanager 中始终打印。
+# 另：参数表 [更新]、update_left_table_db_from_param_table 过程、[调试] DB必填、
+# check_dianpian 中 [垫片校验]/[设计压力校验]/[直径校验]/[温度校验]/[条件保存后] 等控制台输出亦受本开关控制
+DEBUG_VERBOSE_DEFINE_UI = False
+
 # [性能优化] 以下缓存用于减少数据库重复查询，加快垫片相关联动与校核响应
 _DESIGN_ROWS_CACHE = {}
 _GASKET_MAPPING_CACHE = {}
@@ -62,27 +70,27 @@ def get_program_recommend_reset_param_names() -> Set[str]:
             conn.close()
         except Exception:
             pass
-
-def load_element_additional_data(template_id, element_id):
-
-    """根据元件ID和模板ID查询元件附加参数表"""
-    connection = get_connection(**db_config_2)
-    try:
-        with connection.cursor() as cursor:
-            sql = """
-            SELECT
-                参数名称,
-                参数数值,
-                参数单位
-            FROM 元件附加参数表
-            WHERE 元件ID = %s AND 模板ID = %s
-            """
-            # 执行查询，传入元件ID和模板ID
-            cursor.execute(sql, (element_id, template_id))
-            result = cursor.fetchall()
-            return result
-    finally:
-        connection.close()
+#
+# def load_element_additional_data(template_id, element_id):
+#
+#     """根据元件ID和模板ID查询元件附加参数表"""
+#     connection = get_connection(**db_config_2)
+#     try:
+#         with connection.cursor() as cursor:
+#             sql = """
+#             SELECT
+#                 参数名称,
+#                 参数数值,
+#                 参数单位
+#             FROM 元件附加参数表
+#             WHERE 元件ID = %s AND 模板ID = %s
+#             """
+#             # 执行查询，传入元件ID和模板ID
+#             cursor.execute(sql, (element_id, template_id))
+#             result = cursor.fetchall()
+#             return result
+#     finally:
+#         connection.close()
 
 
 #元件附加参数UI显示排序错误
@@ -212,58 +220,58 @@ def insert_or_update_element_data(element_original_info, product_id, template_na
     finally:
         connection.close()
 
-
-def insert_or_update_guankou_material_data(material_info, product_id, template_name):
-    """根据产品ID判断是否更新数据，如果存在模板名称不同则删除原纪录并插入新数据"""
-    connection = get_connection(**db_config_1)
-    try:
-        with connection.cursor() as cursor:
-            # 查询管口材料表中是否存在该产品ID对应的模板
-            print(f"当前模板名称{template_name}")
-            cursor.execute("SELECT COUNT(*) FROM 产品设计活动表_管口零件材料表 WHERE 产品ID = %s AND 模板名称 = %s", (product_id, template_name, ))
-            result = cursor.fetchone()  # 获取查询结果
-            print(f"管口零件数{result['COUNT(*)']}")
-
-            # 如果找到该产品ID的模板名称的记录则保留
-            if result['COUNT(*)'] > 0:
-                return
-
-            # 如果没找到该产品ID的模板名称的记录，先删除原模板对应的产品管口零件信息
-            if result['COUNT(*)'] == 0:
-                print(f"产品ID {product_id} 对应的管口数据已存在，但模板名称不同，执行删除操作")
-                cursor.execute("""
-                    DELETE FROM 产品设计活动表_管口零件材料表
-                    WHERE 产品ID = %s
-                """, (product_id,))
-                print(f"已删除产品ID:{product_id}的管口零件")
-
-            for item in material_info:
-                # 插入当前模板对应的管口零件信息
-                sql = """
-                        INSERT INTO 产品设计活动表_管口零件材料表
-                        (管口零件ID, 零件名称, 材料类型, 材料牌号, 材料标准, 供货状态, 产品ID, 模板名称, 类别, 元件示意图)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """
-                cursor.execute(sql, (
-                    item['管口零件ID'],
-                    item['零件名称'],
-                    item['材料类型'],
-                    item['材料牌号'],
-                    item['材料标准'],
-                    item['供货状态'],
-                    product_id,
-                    template_name,
-                    "管口材料分类1",
-                    item['元件示意图']
-                ))
-
-            # 提交事务
-            connection.commit()
-            print("管口零件数据已成功插入或更新到数据库！")
-    except pymysql.MySQLError as err:  # 使用 pymysql.MySQLError 来捕获异常
-        print(f"插入或更新管口零件数据时出错: {err}")
-    finally:
-        connection.close()
+#
+# def insert_or_update_guankou_material_data(material_info, product_id, template_name):
+#     """根据产品ID判断是否更新数据，如果存在模板名称不同则删除原纪录并插入新数据"""
+#     connection = get_connection(**db_config_1)
+#     try:
+#         with connection.cursor() as cursor:
+#             # 查询管口材料表中是否存在该产品ID对应的模板
+#             print(f"当前模板名称{template_name}")
+#             cursor.execute("SELECT COUNT(*) FROM 产品设计活动表_管口零件材料表 WHERE 产品ID = %s AND 模板名称 = %s", (product_id, template_name, ))
+#             result = cursor.fetchone()  # 获取查询结果
+#             print(f"管口零件数{result['COUNT(*)']}")
+#
+#             # 如果找到该产品ID的模板名称的记录则保留
+#             if result['COUNT(*)'] > 0:
+#                 return
+#
+#             # 如果没找到该产品ID的模板名称的记录，先删除原模板对应的产品管口零件信息
+#             if result['COUNT(*)'] == 0:
+#                 print(f"产品ID {product_id} 对应的管口数据已存在，但模板名称不同，执行删除操作")
+#                 cursor.execute("""
+#                     DELETE FROM 产品设计活动表_管口零件材料表
+#                     WHERE 产品ID = %s
+#                 """, (product_id,))
+#                 print(f"已删除产品ID:{product_id}的管口零件")
+#
+#             for item in material_info:
+#                 # 插入当前模板对应的管口零件信息
+#                 sql = """
+#                         INSERT INTO 产品设计活动表_管口零件材料表
+#                         (管口零件ID, 零件名称, 材料类型, 材料牌号, 材料标准, 供货状态, 产品ID, 模板名称, 类别, 元件示意图)
+#                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+#                     """
+#                 cursor.execute(sql, (
+#                     item['管口零件ID'],
+#                     item['零件名称'],
+#                     item['材料类型'],
+#                     item['材料牌号'],
+#                     item['材料标准'],
+#                     item['供货状态'],
+#                     product_id,
+#                     template_name,
+#                     "管口材料分类1",
+#                     item['元件示意图']
+#                 ))
+#
+#             # 提交事务
+#             connection.commit()
+#             print("管口零件数据已成功插入或更新到数据库！")
+#     except pymysql.MySQLError as err:  # 使用 pymysql.MySQLError 来捕获异常
+#         print(f"插入或更新管口零件数据时出错: {err}")
+#     finally:
+#         connection.close()
 
 
 def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_name, template_id=None):
@@ -699,7 +707,8 @@ def update_param_table_data(table: QTableWidget, product_id: int, element_id: in
                     finally:
                         table.blockSignals(False)
 
-                print(f"[更新] 参数名: {param_name}, 值: {param_value}, 单位: {param_unit}")
+                if DEBUG_VERBOSE_DEFINE_UI:
+                    print(f"[更新] 参数名: {param_name}, 值: {param_value}, 单位: {param_unit}")
 
                 cursor.execute("""
                     UPDATE 产品设计活动表_元件附加参数表
@@ -708,7 +717,6 @@ def update_param_table_data(table: QTableWidget, product_id: int, element_id: in
                 """, (param_value, param_unit, product_id, element_id, param_name))
 
         connection.commit()
-        print("参数更新成功！")
 
     except Exception as e:
         connection.rollback()
@@ -752,14 +760,6 @@ def is_defined_by_required_list(param_table: QTableWidget, required_names: set) 
             print(f"[调试] 必填项 {pname} 未定义，值为 {value}")  # 打印未定义项
             return False
     return True
-
-
-
-
-
-
-
-
 
 
 def update_left_table_db_from_param_table(param_table: QTableWidget, product_id: int, element_id: int, part_name: str, viewer_instance=None):
@@ -817,10 +817,17 @@ def update_left_table_db_from_param_table(param_table: QTableWidget, product_id:
     is_gasket = "垫片" in part_name
     is_fixed_tube_sheet = (part_name == "固定管板")
     
-    print(f"[update_left_table_db_from_param_table] 准备更新数据库")
-    print(f"[update_left_table_db_from_param_table] 零件名称={part_name}, 定义状态={define_status}")
-    print(f"[update_left_table_db_from_param_table] 产品ID={product_id}, 元件ID={element_id}")
-    print(f"[update_left_table_db_from_param_table] is_gasket={is_gasket}, is_fixed_tube_sheet={is_fixed_tube_sheet}")
+    if DEBUG_VERBOSE_DEFINE_UI:
+        tags = []
+        if is_gasket:
+            tags.append("垫片")
+        if is_fixed_tube_sheet:
+            tags.append("固定管板")
+        tag_s = f" ({'/'.join(tags)})" if tags else ""
+        print(
+            f"[update_left_table_db_from_param_table]{tag_s} {part_name} "
+            f"定义={define_status} 产品ID={product_id} 元件ID={element_id}"
+        )
 
     conn = get_connection(**db_config_1)
     try:
@@ -832,7 +839,8 @@ def update_left_table_db_from_param_table(param_table: QTableWidget, product_id:
                        SET 定义状态=%s
                      WHERE 产品ID=%s AND 元件ID=%s
                 """, (define_status, product_id, element_id))
-                print(f"[update_left_table_db_from_param_table] 垫片定义状态更新完成")
+                if DEBUG_VERBOSE_DEFINE_UI:
+                    print(f"[update_left_table_db_from_param_table] 垫片写库 rowcount={cursor.rowcount}")
 
             else:
                 material_type     = get_param("材料类型")
@@ -848,10 +856,11 @@ def update_left_table_db_from_param_table(param_table: QTableWidget, product_id:
                 else:
                     has_coating = "有覆层" if get_param("是否添加覆层") == "是" else "无覆层"
 
-                print(f"[update_left_table_db_from_param_table] 准备执行UPDATE，零件名称={part_name}")
-                print(f"[update_left_table_db_from_param_table] 材料类型={material_type}, 材料牌号={material_brand}, 供货状态={supply_status}")
-                print(f"[update_left_table_db_from_param_table] 材料标准={material_standard}, 有无覆层={has_coating}, 定义状态={define_status}")
-                print(f"[update_left_table_db_from_param_table] 产品ID={product_id}, 元件ID={element_id}")
+                if DEBUG_VERBOSE_DEFINE_UI:
+                    print(
+                        f"[update_left_table_db_from_param_table] 材料: 类型={material_type} 牌号={material_brand} "
+                        f"标准={material_standard} 供货={supply_status} 覆层={has_coating} 定义={define_status}"
+                    )
                 
                 cursor.execute("""
                     UPDATE 产品设计活动表_元件材料表
@@ -865,21 +874,20 @@ def update_left_table_db_from_param_table(param_table: QTableWidget, product_id:
                 """, (material_type, material_brand, supply_status, material_standard,
                       has_coating, define_status, product_id, element_id))
                 
-                print(f"[update_left_table_db_from_param_table] UPDATE执行完成，影响行数: {cursor.rowcount}")
-                
                 # 验证更新结果
                 cursor.execute("""
                     SELECT 元件名称, 定义状态 FROM 产品设计活动表_元件材料表
                     WHERE 产品ID=%s AND 元件ID=%s
                 """, (product_id, element_id))
                 verify_result = cursor.fetchone()
-                if verify_result:
-                    print(f"[update_left_table_db_from_param_table] 验证更新: 元件名称={verify_result['元件名称']}, 定义状态={verify_result['定义状态']}")
-                else:
-                    print(f"[update_left_table_db_from_param_table] 验证更新: 未找到记录")
+                if DEBUG_VERBOSE_DEFINE_UI:
+                    if verify_result:
+                        v = f"{verify_result['元件名称']}/{verify_result['定义状态']}"
+                    else:
+                        v = "未找到记录"
+                    print(f"[update_left_table_db_from_param_table] rowcount={cursor.rowcount} 回读={v}")
 
         conn.commit()
-        print(f"[update_left_table_db_from_param_table] 数据库提交成功")
     except Exception as e:
         conn.rollback()
         print(f"[update_left_table_db_from_param_table] 更新失败：{e}")
@@ -2658,7 +2666,8 @@ def query_required_paramlist_csv(part_name: str) -> set:
             raw = row[0] if isinstance(row, (list, tuple)) else row.get("必填参数", "")
             parts = re.split(r"[，,、]+", str(raw))
             req = {_norm_name(p) for p in parts if _norm_name(p)}
-            print(f"[调试] DB必填(清洗后): {req}")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[调试] DB必填(清洗后): {req}")
             return req
     finally:
         conn.close()
@@ -3725,7 +3734,8 @@ def compute_pn_for_gasket(product_id: str, gasket_name: str):
             side_print = side
         material = _get_flange_material_by_name(product_id, flange_name)
         pv = _compute_pn_inline(material, T, P)
-        print(f"[垫片尺寸PN][逐条] 垫片={gasket_name}, 法兰={flange_name}, 侧别={side_print}, 材料={material}, P={P}, T={T}, 计算PN={pv if pv is not None else 'None'}")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[垫片尺寸PN][逐条] 垫片={gasket_name}, 法兰={flange_name}, 侧别={side_print}, 材料={material}, P={P}, T={T}, 计算PN={pv if pv is not None else 'None'}")
         if pv is not None:
             pn_map[flange_name] = pv
             pn_vals.append(pv)
@@ -3733,13 +3743,15 @@ def compute_pn_for_gasket(product_id: str, gasket_name: str):
     if (gasket_name or "").strip() == "平盖垫片":
         if "管箱法兰" in pn_map:
             pn_inline = pn_map.get("管箱法兰")
-            print(f"[垫片尺寸PN][平盖选择] 垫片={gasket_name}, 选法兰=管箱法兰, PN={pn_inline}")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[垫片尺寸PN][平盖选择] 垫片={gasket_name}, 选法兰=管箱法兰, PN={pn_inline}")
         else:
             for r in maps or []:
                 nm2 = (r.get("配套法兰") or "").strip()
                 if nm2 in pn_map:
                     pn_inline = pn_map[nm2]
-                    print(f"[垫片尺寸PN][平盖选择] 垫片={gasket_name}, 选法兰={nm2}, PN={pn_inline}")
+                    if DEBUG_VERBOSE_DEFINE_UI:
+                        print(f"[垫片尺寸PN][平盖选择] 垫片={gasket_name}, 选法兰={nm2}, PN={pn_inline}")
                     break
     else:
         if pn_vals:
@@ -3747,7 +3759,8 @@ def compute_pn_for_gasket(product_id: str, gasket_name: str):
                 pn_inline = max(pn_vals)
             except Exception:
                 pn_inline = pn_vals[-1]
-            print(f"[垫片尺寸PN][聚合最大] 垫片={gasket_name}, 候选PN={pn_vals} → 取最大={pn_inline}")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[垫片尺寸PN][聚合最大] 垫片={gasket_name}, 候选PN={pn_vals} → 取最大={pn_inline}")
     _COMPUTE_PN_CACHE[key] = pn_inline
     return pn_inline
 
@@ -3784,7 +3797,8 @@ def resolve_gasket_dimensions(
     pn_inline = compute_pn_for_gasket(product_id, gasket_name or "")
     if pn_override:
         pn = pn_override
-        print(f"[垫片尺寸PN] 使用界面PN覆盖: 垫片={gasket_name}, PN={pn}")
+        if DEBUG_VERBOSE_DEFINE_UI:
+            print(f"[垫片尺寸PN] 使用界面PN覆盖: 垫片={gasket_name}, PN={pn}")
     elif pn_inline is not None:
         pn = str(pn_inline).strip()
     else:
@@ -3793,7 +3807,8 @@ def resolve_gasket_dimensions(
     cs_code = map_gasket_name_code(gasket_name or "")
     gp_code = map_gasket_type_code_from_db(gasket_type or "")
     st_abbr = (gasket_standard or "").strip()
-    print(f"dn{dn},pn{pn},cscode{cs_code},gp_code{gp_code}")
+    if DEBUG_VERBOSE_DEFINE_UI:
+        print(f"dn{dn},pn{pn},cscode{cs_code},gp_code{gp_code}")
 
     spec = query_gasket_D_d_d1_from_size(
         dn=dn, pn=pn, cs_code=cs_code, st_abbr=st_abbr, gp_code=gp_code
@@ -4131,7 +4146,8 @@ def load_updated_fastener_define_data(product_id, element_id):
             """
             cursor.execute(sql, (product_id, element_id))
             result = cursor.fetchall()
-            print(f"[DBG][fastener_data] 产品{product_id}的元件{element_id}查询到数据: {len(result)} 条")
+            if DEBUG_VERBOSE_DEFINE_UI:
+                print(f"[DBG][fastener_data] 产品{product_id}的元件{element_id}查询到数据: {len(result)} 条")
 
             return result
 
