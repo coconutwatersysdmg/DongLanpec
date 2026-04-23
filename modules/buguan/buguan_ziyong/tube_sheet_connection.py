@@ -2,12 +2,60 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QFrame,
     QLineEdit, QGridLayout, QMessageBox, QScrollBar, QTableWidget,
-    QTableWidgetItem, QHeaderView, QDialog, QApplication
+    QTableWidgetItem, QHeaderView, QDialog, QApplication, QPushButton, QAbstractItemView
 )
-from PyQt5.QtGui import QPixmap
-from PyQt5.QtCore import Qt, QSize
+from PyQt5.QtGui import QPixmap, QPainter, QColor, QBrush
+from PyQt5.QtCore import Qt, QSize, pyqtSignal
 import pymysql
 from pathlib import Path
+
+
+class ToggleSwitch(QWidget):
+    """一个轻量自绘开关：checked=True 显示蓝色，False 显示灰色。"""
+
+    toggled = pyqtSignal(bool)
+
+    def __init__(self, parent=None, checked=True):
+        super().__init__(parent)
+        self._checked = bool(checked)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedSize(52, 28)
+
+    def isChecked(self) -> bool:
+        return bool(self._checked)
+
+    def setChecked(self, checked: bool):
+        checked = bool(checked)
+        if self._checked == checked:
+            return
+        self._checked = checked
+        self.update()
+        self.toggled.emit(self._checked)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.setChecked(not self._checked)
+        super().mouseReleaseEvent(event)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        w = self.width()
+        h = self.height()
+        radius = h / 2.0
+        knob_d = h - 4
+        knob_r = knob_d / 2.0
+
+        bg = QColor("#2f80ff") if self._checked else QColor("#cfcfcf")
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(bg))
+        painter.drawRoundedRect(0, 0, w, h, radius, radius)
+
+        knob_x = (w - knob_d - 2) if self._checked else 2
+        painter.setBrush(QBrush(QColor("#ffffff")))
+        painter.drawEllipse(int(knob_x), 2, int(knob_d), int(knob_d))
+        painter.end()
 
 
 def create_component_connection():
@@ -112,6 +160,8 @@ class TubeSheetConnectionPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent
+        # 用户只读开关：True=只读（禁用一切操作），False=按原逻辑
+        self._tsc_user_readonly = False
         self.current_params = []
         self.current_image_path = ""
         self.current_dir = Path(__file__).parent.resolve()
@@ -262,8 +312,25 @@ class TubeSheetConnectionPage(QWidget):
 
     def setup_ui(self):
         """主布局"""
-        outer_layout = QHBoxLayout(self)
-        outer_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(12)
+
+        # 顶部只读开关（左上角，开=可操作；关=只读）
+        top_bar = QHBoxLayout()
+        top_bar.setSpacing(10)
+
+        self.tsc_readonly_title = QLabel("管板连接")
+        self.tsc_readonly_title.setStyleSheet("font-size: 18px; font-weight: 600; color: #222;")
+        top_bar.addWidget(self.tsc_readonly_title)
+
+        self.tsc_readonly_switch = ToggleSwitch(checked=True)
+        self.tsc_readonly_switch.toggled.connect(self._on_tsc_toggle_readonly)
+        top_bar.addWidget(self.tsc_readonly_switch)
+        top_bar.addStretch()
+        main_layout.addLayout(top_bar)
+
+        outer_layout = QHBoxLayout()
         outer_layout.setSpacing(30)
 
         left_outer = QVBoxLayout()
@@ -430,6 +497,8 @@ class TubeSheetConnectionPage(QWidget):
 
         outer_layout.addLayout(right_outer, 7)  # 右侧参数区：35% (7/20)
 
+        main_layout.addLayout(outer_layout)
+
         # ✅ 统一滚动条样式（灰色风格）
         scrollbar_style = """
         QScrollBar:horizontal, QScrollBar:vertical {
@@ -460,6 +529,8 @@ class TubeSheetConnectionPage(QWidget):
 
     def _make_label_click_handler(self, lbl):
         def handler(event):
+            if getattr(self, "_tsc_user_readonly", False):
+                return
             if event is None or event.button() == Qt.LeftButton:
                 self.select_image(lbl)
 
@@ -467,6 +538,8 @@ class TubeSheetConnectionPage(QWidget):
 
     def _make_label_double_click_handler(self, lbl):
         def handler(event):
+            if getattr(self, "_tsc_user_readonly", False):
+                return
             if event is None or event.button() == Qt.LeftButton:
                 # 双击时在进行参数选择的基础上，打开图片预览弹窗
                 self.select_image(lbl)
@@ -480,6 +553,23 @@ class TubeSheetConnectionPage(QWidget):
         """打开图片预览弹窗，显示可缩放大图"""
         dlg = ImagePreviewDialog(image_path, self)
         dlg.exec_()
+
+    def _on_tsc_toggle_readonly(self, is_operation_on: bool):
+        """顶部开关。is_operation_on=True 表示可操作；False 表示只读。"""
+        self._tsc_user_readonly = (not bool(is_operation_on))
+        # 参数表禁用编辑
+        try:
+            if hasattr(self, "param_table") and self.param_table is not None:
+                if self._tsc_user_readonly:
+                    self.param_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+                else:
+                    self.param_table.setEditTriggers(
+                        QAbstractItemView.DoubleClicked
+                        | QAbstractItemView.SelectedClicked
+                        | QAbstractItemView.EditKeyPressed
+                    )
+        except Exception:
+            pass
 
     def infer_tube_sheet_type(self, filename):
         f = filename.lower()
@@ -501,6 +591,8 @@ class TubeSheetConnectionPage(QWidget):
         return result
 
     def select_image(self, label):
+        if getattr(self, "_tsc_user_readonly", False):
+            return
         if not hasattr(label, 'connection_type') or not hasattr(label, 'tube_sheet_type'):
             return
 

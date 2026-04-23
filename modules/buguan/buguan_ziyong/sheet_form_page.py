@@ -4,11 +4,12 @@
 import os
 import traceback
 # 导入 QTimer
-from PyQt5.QtCore import Qt, QSize, QTimer, QRect
+from PyQt5.QtCore import Qt, QSize, QTimer, QRect, pyqtSignal
 from PyQt5.QtGui import QPixmap, QFont, QIcon, QPainter, QColor, QBrush
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
                              QGridLayout, QFrame, QListWidget, QListWidgetItem, QLineEdit, QComboBox, QSizePolicy,
-                             QTableWidget, QTableWidgetItem, QHeaderView, QDialog, QApplication, QStyledItemDelegate)
+                             QTableWidget, QTableWidgetItem, QHeaderView, QDialog, QApplication, QStyledItemDelegate,
+                             QPushButton, QAbstractItemView)
 import pymysql
 
 
@@ -372,10 +373,59 @@ class ImageLabel(QLabel):
 # -----------------------------------------------------------------
 
 
+class ToggleSwitch(QWidget):
+    """一个轻量自绘开关：checked=True 显示蓝色，False 显示灰色。"""
+
+    toggled = pyqtSignal(bool)
+
+    def __init__(self, parent=None, checked=True):
+        super().__init__(parent)
+        self._checked = bool(checked)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedSize(52, 28)
+
+    def isChecked(self) -> bool:
+        return bool(self._checked)
+
+    def setChecked(self, checked: bool):
+        checked = bool(checked)
+        if self._checked == checked:
+            return
+        self._checked = checked
+        self.update()
+        self.toggled.emit(self._checked)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.setChecked(not self._checked)
+        super().mouseReleaseEvent(event)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        w = self.width()
+        h = self.height()
+        radius = h / 2.0
+        knob_d = h - 4
+
+        bg = QColor("#2f80ff") if self._checked else QColor("#cfcfcf")
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(QBrush(bg))
+        painter.drawRoundedRect(0, 0, w, h, radius, radius)
+
+        knob_x = (w - knob_d - 2) if self._checked else 2
+        painter.setBrush(QBrush(QColor("#ffffff")))
+        painter.drawEllipse(int(knob_x), 2, int(knob_d), int(knob_d))
+        painter.end()
+
+
 class SheetFormPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent = parent  # 保存父窗口引用
+        # 用户只读开关：True=只读（禁用一切操作），False=按原逻辑
+        self._sheet_form_user_readonly = False
         # 标记图片下拉框是否已在初始时自动弹出
         self._sheet_form_combo_popup_done = False
         self.sheet_form_param_layout = None
@@ -733,6 +783,24 @@ class SheetFormPage(QWidget):
             main_layout.setContentsMargins(20, 20, 20, 20)
             main_layout.setSpacing(20)
 
+            # 顶部只读开关（左上角，开=可操作；关=只读）
+            try:
+                top_bar = QHBoxLayout()
+                top_bar.setSpacing(10)
+
+                self.sheet_form_readonly_title = QLabel("管板型式")
+                self.sheet_form_readonly_title.setStyleSheet("font-size: 18px; font-weight: 600; color: #222;")
+                top_bar.addWidget(self.sheet_form_readonly_title)
+
+                self.sheet_form_readonly_switch = ToggleSwitch(checked=True)
+                self.sheet_form_readonly_switch.toggled.connect(self._on_sheet_form_toggle_readonly)
+                top_bar.addWidget(self.sheet_form_readonly_switch)
+                top_bar.addStretch()
+                main_layout.addLayout(top_bar)
+            except Exception:
+                self.sheet_form_readonly_title = None
+                self.sheet_form_readonly_switch = None
+
             # 1. 下拉框区域
             header_layout = QHBoxLayout()
             header_layout.setSpacing(15)
@@ -1032,6 +1100,46 @@ class SheetFormPage(QWidget):
             # 异常时确保布局有默认值
             self._init_fallback_param_layout()
 
+    def _on_sheet_form_toggle_readonly(self, is_operation_on: bool):
+        """顶部开关。is_operation_on=True 表示可操作；False 表示只读。"""
+        try:
+            self._sheet_form_user_readonly = (not bool(is_operation_on))
+        except Exception:
+            self._sheet_form_user_readonly = True
+        self._apply_sheet_form_readonly_state()
+
+    def _apply_sheet_form_readonly_state(self):
+        """根据 _sheet_form_user_readonly 应用界面禁用/启用。"""
+        readonly = bool(getattr(self, "_sheet_form_user_readonly", False))
+        try:
+            # 下拉框：只读时禁用；否则按规则决定（这里不直接 enable=True，交给 _apply_plate_type_rule）
+            if readonly:
+                try:
+                    self.sheet_form_connection_type_combo.setEnabled(False)
+                except Exception:
+                    pass
+            else:
+                try:
+                    self._apply_plate_type_rule(saved_plate_type=self._get_saved_plate_type())
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # 参数表：只读时禁止编辑与交互编辑触发
+        try:
+            if hasattr(self, "sheet_form_param_table") and self.sheet_form_param_table is not None:
+                if readonly:
+                    self.sheet_form_param_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+                else:
+                    self.sheet_form_param_table.setEditTriggers(
+                        QAbstractItemView.DoubleClicked
+                        | QAbstractItemView.SelectedClicked
+                        | QAbstractItemView.EditKeyPressed
+                    )
+        except Exception:
+            pass
+
     def get_product_id(self):
         # 方法内容保持不变
         try:
@@ -1055,6 +1163,9 @@ class SheetFormPage(QWidget):
     def _handle_image_click(self, event, index):
         # 方法内容保持不变
         try:
+            # 用户只读开关：只读时不允许任何操作（包括选节点）
+            if getattr(self, "_sheet_form_user_readonly", False):
+                return
             # 对于固定型式（例如 NEN）：锁死节点切换，只允许强制节点（b_a）
             try:
                 if self._is_node_and_param_edit_locked():

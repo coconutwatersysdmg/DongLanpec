@@ -6191,8 +6191,10 @@ class TubeLayoutEditor(QMainWindow):
                     else:
                         input_json[json_key] = param_value
 
-        # 请求前强制按 do+排列方式映射修正 LB_S，避免异步联动时带入历史值（如 do=25 但 S=72）
+        # 请求前按 do+排列方式映射修正 LB_S（仅在用户未手动覆盖 S 时），避免异步联动时带入历史值
         try:
+            if getattr(self, "_user_override_tube_center_distance", False):
+                raise RuntimeError("skip_force_S_due_to_user_override")
             global _TUBE_CENTER_DISTANCE_MAP_CACHE
             if _TUBE_CENTER_DISTANCE_MAP_CACHE is None:
                 _TUBE_CENTER_DISTANCE_MAP_CACHE = {}
@@ -6251,18 +6253,15 @@ class TubeLayoutEditor(QMainWindow):
                 mapped_s = _TUBE_CENTER_DISTANCE_MAP_CACHE.get((do_for_s, range_type_for_s))
                 if mapped_s is not None:
                     mapped_s_text = f"{float(mapped_s):.1f}"
+                    # 只有在用户未手动覆盖 S 时，才用推荐值填充入参（不再强制回写界面）
                     input_json["LB_S"] = mapped_s_text
-                    # 同步回参数表，确保界面值与接口入参一致
-                    for r in range(self.param_table.rowCount()):
-                        n_item = self.param_table.item(r, 1)
-                        if n_item and n_item.text().strip() == "换热管中心距 S":
-                            self._update_table_cell(r, 2, mapped_s_text)
-                            break
                     print(
                         f"[calculate_piping_layout] 强制修正LB_S: do={do_for_s}, range={range_code}({range_type_for_s}) -> {mapped_s_text}"
                     )
         except Exception as _force_s_e:
-            print(f"[calculate_piping_layout] 强制修正LB_S失败: {_force_s_e}")
+            # 用户手动覆盖时会主动跳过
+            if str(_force_s_e) != "skip_force_S_due_to_user_override":
+                print(f"[calculate_piping_layout] 强制修正LB_S失败: {_force_s_e}")
 
         # 确保使用计算后的DL值
         input_json["LB_DL"] = f"{DL: .1f}"
@@ -6497,6 +6496,17 @@ class TubeLayoutEditor(QMainWindow):
             self.output_data = json_str
             # print(self.output_data)
             self.update_pipe_parameters()
+
+            # 打印接口返回(output_data)里的 S（兼容不同字段名）
+            try:
+                _out = json.loads(json_str) if isinstance(json_str, str) else json_str
+                if isinstance(_out, dict):
+                    _s_val = _out.get("S", None)
+                    if _s_val in (None, ""):
+                        _s_val = _out.get("LB_S", None)
+                    print(f"[output_data] S = {_s_val}")
+            except Exception as _e_print_s:
+                print(f"[output_data] 解析并打印S失败: {_e_print_s}")
 
             # 关键：接口返回的 json 可能缺少 parse_heat_exchanger_json() 需要的 DNs/DLs 结构。
             # 从界面参数表补齐，再用“补全后的 json”去解析绘图。
@@ -6814,8 +6824,10 @@ class TubeLayoutEditor(QMainWindow):
                     else:
                         input_json[json_key] = param_value
 
-        # 请求前强制按 do+排列方式映射修正 LB_S，避免异步联动时带入历史值
+        # 请求前按 do+排列方式映射修正 LB_S（仅在用户未手动覆盖 S 时），避免异步联动时带入历史值
         try:
+            if getattr(self, "_user_override_tube_center_distance", False):
+                raise RuntimeError("skip_force_S_due_to_user_override")
             global _TUBE_CENTER_DISTANCE_MAP_CACHE
             if _TUBE_CENTER_DISTANCE_MAP_CACHE is None:
                 _TUBE_CENTER_DISTANCE_MAP_CACHE = {}
@@ -6879,7 +6891,8 @@ class TubeLayoutEditor(QMainWindow):
                         f"[calculate_piping] 强制修正LB_S: do={do_for_s}, range={range_code}({range_type_for_s}) -> {mapped_s_text}"
                     )
         except Exception as _force_s_e:
-            print(f"[calculate_piping] 强制修正LB_S失败: {_force_s_e}")
+            if str(_force_s_e) != "skip_force_S_due_to_user_override":
+                print(f"[calculate_piping] 强制修正LB_S失败: {_force_s_e}")
 
         # 确保使用计算后的DL值
         input_json["LB_DL"] = f"{DL: .1f}"
@@ -9453,6 +9466,12 @@ class TubeLayoutEditor(QMainWindow):
         print(f"当前换热器型号: {self.heat_exchanger}")
 
     def update_tube_center_distance(self):
+        # 如果用户已经手动输入过中心距 S，则不再强制用推荐表覆盖
+        try:
+            if getattr(self, "_user_override_tube_center_distance", False):
+                return
+        except Exception:
+            pass
         # 1. 定位关键参数行（换热管外径、排列方式、中心距）
         target_params = {
             "换热管外径 do": -1,
@@ -12487,6 +12506,14 @@ class TubeLayoutEditor(QMainWindow):
                 return
             param_name = param_name_item.text().strip()
 
+            # 用户修改 do / 排列方式后，中心距 S 的“手动覆盖”标记应失效（重新回到程序推荐逻辑）
+            # 这样下一次联动/布管前刷新 S 时，会按新 do + 新排列方式给出推荐值。
+            try:
+                if param_name in ("换热管外径 do", "换热管排列方式"):
+                    self._user_override_tube_center_distance = False
+            except Exception:
+                pass
+
             # 抑制：避免同一次非法输入触发两次警告（例如编辑器提交/联动导致的重复触发）
             try:
                 if (
@@ -13734,6 +13761,12 @@ class TubeLayoutEditor(QMainWindow):
                             except Exception:
                                 pass
                             return
+
+                    # 能走到这里，说明用户输入的 S 已被接受（或无需提示），标记为“用户手动覆盖”
+                    try:
+                        self._user_override_tube_center_distance = True
+                    except Exception:
+                        pass
                 except Exception as e:
                     # S 校验失败不影响其他逻辑
                     print(f"[on_table_item_changed] 换热管中心距 S 校验失败: {e}")
@@ -14778,6 +14811,22 @@ class TubeLayoutEditor(QMainWindow):
                 print(f"[on_combobox_changed] do变更后刷新拉杆标准摘要失败: {e}")
             self.update_partition_plate_center_distance()
             self.update_divider_position_and_size()
+        elif param_name == "换热管排列方式":
+            # 排列方式变化：推荐 S 需要随之刷新，且用户对 S 的手动覆盖应失效
+            try:
+                self._user_override_tube_center_distance = False
+            except Exception:
+                pass
+            try:
+                self.update_tube_center_distance()
+            except Exception:
+                pass
+        elif param_name == "换热管中心距 S":
+            # 用户通过下拉框手动改 S：视为“手动覆盖”，不再允许推荐表/接口前强制覆盖
+            try:
+                self._user_override_tube_center_distance = True
+            except Exception:
+                pass
         elif param_name == "拉杆形式":
             self.update_lagan()
             # 拉杆形式会影响拉杆直径选项/默认值，联动刷新标准要求
