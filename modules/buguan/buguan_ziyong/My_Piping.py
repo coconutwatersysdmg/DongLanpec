@@ -5982,9 +5982,11 @@ class TubeLayoutEditor(QMainWindow):
                 if conn and conn.open:
                     conn.close()
 
-        # Dis 变化后表中 DL 常仍为上一壳径下的值（如 1128），会导致 draw_layout 中 DL 圆大于 Dis 圆；先按当前 Dis/do 重算再读回
+        # 仅在当前 DL 明显不合理（DL > Dis）时，才按当前 Dis/do 重算并回写；
+        # 否则保留用户输入的 DL，避免布管前被自动覆盖。
         try:
-            self.update_tube_layout_circle_dl()
+            if Di is not None and DL is not None and float(DL) > float(Di):
+                self.update_tube_layout_circle_dl()
         except Exception as _dl_sync_e:
             print(f"[calculate_piping_layout] update_tube_layout_circle_dl: {_dl_sync_e}")
 
@@ -13697,12 +13699,35 @@ class TubeLayoutEditor(QMainWindow):
                 try:
                     new_s = float(str(param_value).strip())
 
-                    # 新增校验：S 不宜小于 1.25 * do（用户手动输入过小需要确认）
+                    # 硬限制：S 不能小于 do；若小于则直接回滚（不弹窗）
                     do_val = self.get_tube_do()
                     try:
                         do_val = float(str(do_val).strip()) if do_val not in (None, "") else None
                     except Exception:
                         do_val = None
+
+                    if do_val is not None and do_val > 0 and new_s < do_val:
+                        rollback_text = ""
+                        try:
+                            rollback_text = str(self.original_param_values.get((row, 2), "")).strip()
+                        except Exception:
+                            rollback_text = ""
+                        if rollback_text == "":
+                            rollback_text = f"{do_val:g}"
+
+                        blocker = None
+                        try:
+                            from PyQt5.QtCore import QSignalBlocker
+                            blocker = QSignalBlocker(self.param_table)
+                        except Exception:
+                            blocker = None
+                        try:
+                            changed_item.setText(rollback_text)
+                        finally:
+                            del blocker
+                        return
+
+                    # 软限制：S 不宜小于 1.25 * do（用户手动输入过小需要确认）
 
                     if do_val is not None and do_val > 0 and new_s < 1.25 * do_val:
                         from PyQt5.QtWidgets import QMessageBox
@@ -14822,6 +14847,42 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 pass
         elif param_name == "换热管中心距 S":
+            # 硬限制：S 不能小于 do。下拉框改值时同样直接回滚，不弹窗。
+            try:
+                do_val = self.get_tube_do()
+                do_val = float(str(do_val).strip()) if do_val not in (None, "") else None
+            except Exception:
+                do_val = None
+            try:
+                s_val = float(str(value).strip())
+            except Exception:
+                s_val = None
+            if do_val is not None and do_val > 0 and s_val is not None and s_val < do_val:
+                try:
+                    rollback_text = str(self.original_param_values.get((row, 2), "")).strip()
+                except Exception:
+                    rollback_text = ""
+                if rollback_text == "":
+                    rollback_text = f"{do_val:g}"
+                combo = self.param_table.cellWidget(row, 2)
+                if isinstance(combo, QComboBox):
+                    try:
+                        from PyQt5.QtCore import QSignalBlocker
+                        blocker = QSignalBlocker(combo)
+                    except Exception:
+                        blocker = None
+                    try:
+                        idx = combo.findText(rollback_text)
+                        if idx >= 0:
+                            combo.setCurrentIndex(idx)
+                        else:
+                            combo.setEditText(rollback_text)
+                    finally:
+                        try:
+                            del blocker
+                        except Exception:
+                            pass
+                return
             # 用户通过下拉框手动改 S：视为“手动覆盖”，不再允许推荐表/接口前强制覆盖
             try:
                 self._user_override_tube_center_distance = True
@@ -17272,7 +17333,38 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 立即根据最新快照更新布管限定圆 DL
                     try:
-                        self.update_tube_layout_circle_dl()
+                        _cur_di = None
+                        _cur_dl = None
+                        try:
+                            for _r in range(self.param_table.rowCount()):
+                                _name_item = self.param_table.item(_r, 1)
+                                if not _name_item:
+                                    continue
+                                _pname = _name_item.text().strip()
+                                if _pname not in ("壳体内直径 Dis", "布管限定圆 DL"):
+                                    continue
+                                _w = self.param_table.cellWidget(_r, 2)
+                                if _w and isinstance(_w, QComboBox):
+                                    _txt = _w.currentText().strip()
+                                else:
+                                    _it = self.param_table.item(_r, 2)
+                                    _txt = _it.text().strip() if _it else ""
+                                if _txt == "":
+                                    continue
+                                try:
+                                    _v = float(_txt)
+                                except Exception:
+                                    continue
+                                if _pname == "壳体内直径 Dis":
+                                    _cur_di = _v
+                                elif _pname == "布管限定圆 DL":
+                                    _cur_dl = _v
+                        except Exception:
+                            pass
+
+                        # 与布管前逻辑一致：仅当 DL > Dis 时才自动重算并覆盖
+                        if _cur_di is not None and _cur_dl is not None and _cur_dl > _cur_di:
+                            self.update_tube_layout_circle_dl()
                     except Exception as e:
                         print(
                             f"[My_Piping] 根据 b 型 c/d/e/h 节点快照更新 DL 时发生异常: {e}"
@@ -18417,7 +18509,7 @@ class TubeLayoutEditor(QMainWindow):
             # "SlipWayAngle": "滑道与竖直中心线夹角",
             # "SlipWayHeight": "滑道高度",
             # "DNs": "公称直径 DN",
-            "DL": "布管限定圆 DL",
+            # "DL": "布管限定圆 DL",
             "BPBThick": "旁路挡板厚度",
             # 按需求：S 仅按 do+排列方式 对应表联动，不使用后端 output_data 回写覆盖
             "S": "换热管中心距 S",
