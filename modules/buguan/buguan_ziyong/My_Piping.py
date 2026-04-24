@@ -5814,7 +5814,7 @@ class TubeLayoutEditor(QMainWindow):
 
         全局 Enter 绑在布管上会先于 Qt 结束单元格编辑；否则会读到 item 里的旧值
         （例如编辑框已是 610，item 仍为 577，一布管又写回 577）。"""
-        from PyQt5.QtWidgets import QAbstractItemView, QApplication
+        from PyQt5.QtWidgets import QAbstractItemView, QApplication, QComboBox
 
         table = getattr(self, "param_table", None)
         if table is None or table.state() != QAbstractItemView.EditingState:
@@ -5830,6 +5830,15 @@ class TubeLayoutEditor(QMainWindow):
         delegate = table.itemDelegate(idx)
         if delegate is not None:
             delegate.setModelData(editor, table.model(), idx)
+        # 对可编辑下拉框，额外把 lineEdit 文本写回 currentText，避免“回车未失焦”时仍读到旧值
+        try:
+            w = table.cellWidget(idx.row(), idx.column())
+            if isinstance(w, QComboBox) and w.isEditable() and w.lineEdit() is not None:
+                txt = w.lineEdit().text().strip()
+                if txt != "":
+                    w.setCurrentText(txt)
+        except Exception:
+            pass
 
     # TODO 布管函数
     def calculate_piping_layout(self):
@@ -18628,9 +18637,8 @@ class TubeLayoutEditor(QMainWindow):
         self._buguan_in_progress = True
 
         step_errors = []
-        # 布管前置预检弹窗太频繁时，用该开关先静默处理。
-        # 静默模式下：跳过 QMessageBox 弹窗，但仍会尽量回滚到最后合法值（若有）。
-        suppress_precheck_dialogs = True
+        # 回车触发布管时，也要与失焦一致：先走完整预检弹窗逻辑，再决定是否继续布管。
+        suppress_precheck_dialogs = False
 
         def _safe_step(step_name, fn, *args, **kwargs):
             try:
@@ -18674,6 +18682,10 @@ class TubeLayoutEditor(QMainWindow):
                     if isinstance(w, QComboBox) and w.isEditable():
                         try:
                             w.interpretText()
+                            if w.lineEdit() is not None:
+                                txt = w.lineEdit().text().strip()
+                                if txt != "":
+                                    w.setCurrentText(txt)
                         except Exception:
                             pass
             except Exception:
@@ -18692,6 +18704,10 @@ class TubeLayoutEditor(QMainWindow):
                     if isinstance(w_widget, QComboBox) and w_widget.isEditable():
                         try:
                             w_widget.interpretText()
+                            if w_widget.lineEdit() is not None:
+                                txt = w_widget.lineEdit().text().strip()
+                                if txt != "":
+                                    w_widget.setCurrentText(txt)
                         except Exception:
                             pass
             except Exception:
@@ -18772,9 +18788,63 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 pass
 
+            # 回车直触发时，可能不会走到常规 itemChanged/currentTextChanged 高亮链路。
+            # 这里补一次“已修改”标记，确保与“先失焦再回车”的蓝色显示一致。
+            try:
+                if s_row >= 0 and s_text_debug != "":
+                    _orig = str(self.original_param_values.get((s_row, 2), "")).strip()
+                    if s_text_debug != _orig:
+                        self.modified_rows.add(s_row)
+                        self.highlight_modified_row(s_row)
+                    else:
+                        if s_row in self.modified_rows:
+                            self.modified_rows.remove(s_row)
+                            self.reset_row_background(s_row)
+            except Exception:
+                pass
+
             if s_val is None:
                 # 读不到时跳过本次 S 校验，由其他逻辑兜底
                 return True
+
+            # 硬限制：S 不能小于 do（与 itemChanged 逻辑保持一致）
+            if s_val < do_val:
+                if s_row >= 0:
+                    w = self.param_table.cellWidget(s_row, 2)
+                    rollback_text = ""
+                    try:
+                        rollback_text = str(self.original_param_values.get((s_row, 2), "")).strip()
+                    except Exception:
+                        rollback_text = ""
+                    if rollback_text == "":
+                        rollback_text = f"{do_val:g}"
+                    if isinstance(w, QComboBox):
+                        try:
+                            if w.isEditable() and w.lineEdit() is not None:
+                                w.lineEdit().setText(rollback_text)
+                            idx = w.findText(rollback_text)
+                            if idx >= 0:
+                                w.setCurrentIndex(idx)
+                            else:
+                                w.setCurrentText(rollback_text)
+                        except Exception:
+                            pass
+                    else:
+                        it = self.param_table.item(s_row, 2)
+                        if it:
+                            it.setText(rollback_text)
+                        else:
+                            try:
+                                self.param_table.setItem(s_row, 2, QTableWidgetItem(rollback_text))
+                            except Exception:
+                                pass
+                return False
+
+            # 读取到了有效 S，视为本次用户手动输入应被保留（避免回车直接布管被推荐值覆盖）
+            try:
+                self._user_override_tube_center_distance = True
+            except Exception:
+                pass
 
             # 触发确认逻辑：S < 1.25 * do
             if s_val < 1.25 * do_val:
