@@ -13160,6 +13160,14 @@ class TubeLayoutEditor(QMainWindow):
                         if getattr(self, "_slideway_height_warn_pending", False):
                             self._slideway_height_warn_in_progress = True
                             self._suppress_slideway_height_warn = True
+                            try:
+                                print(
+                                    "[POPUP] type=question title=提示 msg=你输入的数值小于预定义要求，是否继续？ "
+                                    f"param=滑道高度 input='{cur_text}' parsed={h_val} expected_min={pre_min} "
+                                    "reason=输入值低于预定义下限"
+                                )
+                            except Exception:
+                                pass
                             reply = QMessageBox.question(
                                 self,
                                 "提示",
@@ -13167,6 +13175,12 @@ class TubeLayoutEditor(QMainWindow):
                                 QMessageBox.Yes | QMessageBox.No,
                                 QMessageBox.No,
                             )
+                            try:
+                                print(
+                                    f"[POPUP] type=question result={'Yes' if reply == QMessageBox.Yes else 'No'} param=滑道高度"
+                                )
+                            except Exception:
+                                pass
                             self._slideway_height_warn_pending = False
 
                             def _clear_slideway_height_flags():
@@ -13257,6 +13271,14 @@ class TubeLayoutEditor(QMainWindow):
 
                         if getattr(self, "_slipway_thickness_warn_pending", False):
                             self._suppress_slipway_thickness_warn = True
+                            try:
+                                print(
+                                    "[POPUP] type=question title=提示 msg=你输入的数值小于预定义要求，是否继续？ "
+                                    f"param=滑道厚度 input='{cur_text}' parsed={thickness_val} expected_min={pre_min} "
+                                    "reason=输入值低于预定义下限"
+                                )
+                            except Exception:
+                                pass
                             reply = QMessageBox.question(
                                 self,
                                 "提示",
@@ -13264,6 +13286,12 @@ class TubeLayoutEditor(QMainWindow):
                                 QMessageBox.Yes | QMessageBox.No,
                                 QMessageBox.No,
                             )
+                            try:
+                                print(
+                                    f"[POPUP] type=question result={'Yes' if reply == QMessageBox.Yes else 'No'} param=滑道厚度"
+                                )
+                            except Exception:
+                                pass
                             self._slipway_thickness_warn_pending = False
                             QTimer.singleShot(
                                 600,
@@ -13400,6 +13428,13 @@ class TubeLayoutEditor(QMainWindow):
                 try:
                     from PyQt5.QtWidgets import QMessageBox
                     from PyQt5.QtCore import QTimer, QSignalBlocker
+
+                    # 参数行被隐藏时（界面不显示），不应参与校验/弹窗/回滚
+                    try:
+                        if hasattr(self, "param_table") and self.param_table.isRowHidden(row):
+                            return
+                    except Exception:
+                        pass
 
                     cur_text = str(param_value).strip()
 
@@ -13758,6 +13793,13 @@ class TubeLayoutEditor(QMainWindow):
             # 2.2.1) 额外校验：分程隔板两侧相邻管中心距（水平）不得小于预定义规定值
             if param_name == "分程隔板两侧相邻管中心距（水平）":
                 try:
+                    # 参数行被隐藏时（界面不显示），不应参与预定义下限确认弹窗
+                    try:
+                        if hasattr(self, "param_table") and self.param_table.isRowHidden(row):
+                            return
+                    except Exception:
+                        pass
+
                     cur_text = str(param_value).strip()
                     if cur_text != "":
                         new_snh = float(cur_text)
@@ -13790,7 +13832,8 @@ class TubeLayoutEditor(QMainWindow):
                             print(
                                 "[POPUP] type=question title=提示 msg=您输入的数值小于预定义的规定，是否继续？ "
                                 f"param=分程隔板两侧相邻管中心距（水平） input='{cur_text}' parsed={new_snh} "
-                                f"expected_min={expected_min} reason=输入值小于预定义规定"
+                                f"expected_min={expected_min} reason=输入值小于预定义规定",
+                                flush=True,
                             )
                         except Exception:
                             pass
@@ -13804,6 +13847,8 @@ class TubeLayoutEditor(QMainWindow):
                         try:
                             print(
                                 f"[POPUP] type=question result={'Yes' if reply == QMessageBox.Yes else 'No'} param=分程隔板两侧相邻管中心距（水平）"
+                                ,
+                                flush=True,
                             )
                         except Exception:
                             pass
@@ -13894,6 +13939,14 @@ class TubeLayoutEditor(QMainWindow):
                         # 弹窗期间抑制二次触发（避免 itemChanged 连弹）
                         self._s_center_warn_in_progress = True
                         self._suppress_s_center_warn = True
+                        try:
+                            print(
+                                "[POPUP] type=question title=提示 msg=标准推荐换热管中心距不宜小于1.25倍的换热管外径，是否继续？ "
+                                f"param=换热管中心距 S input='{cur_text}' parsed={new_s} do={do_val} threshold(1.25*do)={1.25 * do_val} "
+                                "reason=S低于推荐下限"
+                            )
+                        except Exception:
+                            pass
 
                         ret = QMessageBox.question(
                             self,
@@ -13902,6 +13955,12 @@ class TubeLayoutEditor(QMainWindow):
                             QMessageBox.Yes | QMessageBox.No,
                             QMessageBox.No,
                         )
+                        try:
+                            print(
+                                f"[POPUP] type=question result={'Yes' if ret == QMessageBox.Yes else 'No'} param=换热管中心距 S"
+                            )
+                        except Exception:
+                            pass
 
                         # 一旦用户完成一次交互（是/否），立刻进入“全局静默”状态
                         try:
@@ -18985,6 +19044,14 @@ class TubeLayoutEditor(QMainWindow):
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.No,
                 )
+                try:
+                    print(
+                        "[POPUP] type=question title=提示 msg=标准推荐换热管中心距不宜小于1.25倍的换热管外径，是否继续？ "
+                        f"param=换热管中心距 S(回车预检) input='{s_text_debug}' parsed={s_val} do={do_val} threshold(1.25*do)={1.25 * do_val} "
+                        f"result={'Yes' if reply == QMessageBox.Yes else 'No'}"
+                    )
+                except Exception:
+                    pass
                 # 用户已确认一次：进入全局静默
                 try:
                     self._s_center_warn_pending = False
@@ -19192,6 +19259,12 @@ class TubeLayoutEditor(QMainWindow):
                 name_item = self.param_table.item(r, 1)
                 if name_item and name_item.text().strip() == "分程隔板两侧相邻管中心距（水平）":
                     sn_row = r
+                    # 参数行被隐藏时（界面不显示），不应参与回车预检校验
+                    try:
+                        if hasattr(self, "param_table") and self.param_table.isRowHidden(r):
+                            return True
+                    except Exception:
+                        pass
                     w = self.param_table.cellWidget(r, 2)
                     if isinstance(w, QComboBox):
                         try:
@@ -19248,7 +19321,8 @@ class TubeLayoutEditor(QMainWindow):
                     print(
                         "[POPUP] type=question title=提示 msg=您输入的数值小于预定义的规定，是否继续？ "
                         f"param=分程隔板两侧相邻管中心距（水平）(回车预检) input='{cur_text}' parsed={sn_val} "
-                        f"expected_min={expected_min} result={'Yes' if reply == QMessageBox.Yes else 'No'}"
+                        f"expected_min={expected_min} result={'Yes' if reply == QMessageBox.Yes else 'No'}",
+                        flush=True,
                     )
                 except Exception:
                     pass
