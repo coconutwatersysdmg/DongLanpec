@@ -3233,6 +3233,13 @@ class TubeLayoutEditor(QMainWindow):
 
         # 标志位，标记是否成功从产品设计活动库加载参数
         product_params_loaded = False
+        # 只查一次：当前产品在“布管元件表”是否已有记录（用于控制 S/DL 首次打开自动更新策略）
+        has_buguan_component_records = False
+        try:
+            self._is_first_buguan_open = True
+            self._suppress_open_s_dl_autoupdate = False
+        except Exception:
+            pass
 
         # 首先尝试从产品设计活动库加载参数（包含设计数据表）
         product_conn = None
@@ -3253,6 +3260,30 @@ class TubeLayoutEditor(QMainWindow):
 
                     cursor.execute(query, (self.productID,))
                     product_params = cursor.fetchall()
+
+                    # 只查一次“布管元件表”是否存在该产品记录
+                    try:
+                        cursor.execute(
+                            """
+                            SELECT 1
+                            FROM 产品设计活动表_布管元件表
+                            WHERE 产品ID = %s
+                            LIMIT 1
+                            """,
+                            (self.productID,),
+                        )
+                        has_buguan_component_records = cursor.fetchone() is not None
+                    except Exception as e:
+                        has_buguan_component_records = False
+                        print(f"[load_initial_data] 查询布管元件表记录失败: {e}")
+
+                    # 供后续联动使用：首次打开=无元件记录；非首次=有元件记录
+                    try:
+                        self._is_first_buguan_open = (not has_buguan_component_records)
+                        # 非首次打开时，加载阶段禁止 S/DL 自动重算，直接显示布管参数表原值
+                        self._suppress_open_s_dl_autoupdate = bool(has_buguan_component_records)
+                    except Exception:
+                        pass
 
                     if product_params and isinstance(product_params, (list, tuple)):
                         # 处理公称直径DN等需要关联设计数据表的参数
@@ -3735,6 +3766,10 @@ class TubeLayoutEditor(QMainWindow):
                         else:
                             # 新增：只有当原始Di值和最终Di值不同时才计算DL
                             should_calculate_dl = False
+                            # 非首次打开（已存在布管元件记录）时，DL 必须保持布管参数表中的值，不自动重算
+                            if has_buguan_component_records:
+                                should_calculate_dl = False
+                                print("[load_initial_data] 非首次打开：DL 保持布管参数表值，不自动重算")
                             if original_di_value is not None:
                                 try:
                                     original_di_float = float(original_di_value)
@@ -3880,6 +3915,16 @@ class TubeLayoutEditor(QMainWindow):
                             self.setup_parameters(
                                 processed_params, setup_listeners=False
                             )
+                            # S 控制策略：
+                            # - 非首次打开：锁定为“按布管参数表显示”，阻止加载阶段推荐值覆盖；
+                            # - 首次打开：允许按方法联动更新推荐值。
+                            try:
+                                if has_buguan_component_records:
+                                    self._user_override_tube_center_distance = True
+                                else:
+                                    self._user_override_tube_center_distance = False
+                            except Exception:
+                                pass
                             self.hide_specific_params(hidden_params)
                             self.update_leftpad_params()
                             # 强制把关键行文本写回表格，避免旧值残留（例如仍显示200）
@@ -8645,6 +8690,12 @@ class TubeLayoutEditor(QMainWindow):
                 combo_box.currentTextChanged.connect(lambda: self.handle_param_change())
 
     def update_tube_layout_circle_dl(self):
+        # 非首次打开时，加载阶段按要求保持布管参数表中的 DL，不自动重算
+        try:
+            if getattr(self, "_suppress_open_s_dl_autoupdate", False):
+                return
+        except Exception:
+            pass
         # TODO 更新布管限定圆 DL
         # 1. 查找参数表中布管限定圆计算所需的关键参数行索引
         di_row = -1
@@ -9513,6 +9564,12 @@ class TubeLayoutEditor(QMainWindow):
         print(f"当前换热器型号: {self.heat_exchanger}")
 
     def update_tube_center_distance(self):
+        # 非首次打开时，加载阶段按要求保持布管参数表中的 S，不自动重算
+        try:
+            if getattr(self, "_suppress_open_s_dl_autoupdate", False):
+                return
+        except Exception:
+            pass
         # 如果用户已经手动输入过中心距 S，则不再强制用推荐表覆盖
         try:
             if getattr(self, "_user_override_tube_center_distance", False):
@@ -12557,6 +12614,8 @@ class TubeLayoutEditor(QMainWindow):
             # 这样下一次联动/布管前刷新 S 时，会按新 do + 新排列方式给出推荐值。
             try:
                 if param_name in ("换热管外径 do", "换热管排列方式"):
+                    # 用户主动修改关键参数后，解除“打开阶段禁止 S/DL 自动更新”限制
+                    self._suppress_open_s_dl_autoupdate = False
                     self._user_override_tube_center_distance = False
             except Exception:
                 pass
@@ -14917,6 +14976,7 @@ class TubeLayoutEditor(QMainWindow):
 
             # 外径变化时，S 的手动覆盖标记必须失效，确保按新 do 重新推荐
             try:
+                self._suppress_open_s_dl_autoupdate = False
                 self._user_override_tube_center_distance = False
             except Exception:
                 pass
@@ -14937,6 +14997,7 @@ class TubeLayoutEditor(QMainWindow):
         elif param_name == "换热管排列方式":
             # 排列方式变化：推荐 S 需要随之刷新，且用户对 S 的手动覆盖应失效
             try:
+                self._suppress_open_s_dl_autoupdate = False
                 self._user_override_tube_center_distance = False
             except Exception:
                 pass
