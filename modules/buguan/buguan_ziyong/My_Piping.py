@@ -3496,7 +3496,7 @@ class TubeLayoutEditor(QMainWindow):
                                             if str(getattr(self, "heat_exchanger", "")).strip() in ("AKU", "BKU"):
                                                 _candidate_names = ("公称直径*",)
                                             else:
-                                                _candidate_names = ("壳体内直径*", "壳体内直径 Dis*")
+                                                _candidate_names = ("公称直径*","壳体内直径*", "壳体内直径 Dis*")
 
                                             for _candidate_name in _candidate_names:
                                                 cursor.execute(
@@ -3509,6 +3509,7 @@ class TubeLayoutEditor(QMainWindow):
                                                     "",
                                                 ):
                                                     used_param_name = _candidate_name
+                                                    print(used_param_name,"used_param_name")
                                                     break
 
                                             _raw_v = None
@@ -3565,7 +3566,7 @@ class TubeLayoutEditor(QMainWindow):
                                             if str(getattr(self, "heat_exchanger", "")).strip() in ("AKU", "BKU"):
                                                 _candidate_names = ("公称直径*",)
                                             else:
-                                                _candidate_names = ("管箱内直径*", "管箱内直径 Dit*")
+                                                _candidate_names = ("公称直径*","管箱内直径*", "管箱内直径 Dit*")
 
                                             for _candidate_name in _candidate_names:
                                                 cursor.execute(
@@ -12936,6 +12937,14 @@ class TubeLayoutEditor(QMainWindow):
                             invalid = True
 
                     if invalid:
+                        try:
+                            print(
+                                "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入！ "
+                                f"param=旁路挡板厚度 input='{cur_text}' parsed={locals().get('thickness_val', None)} "
+                                f"rule=>0 reason=<=0或非数字 rollback='{str(getattr(self, '_last_valid_side_baffle_thickness_text', '')).strip()}'"
+                            )
+                        except Exception:
+                            pass
                         QMessageBox.warning(
                             self, "输入错误", "您输入的数值小于0或已超限，请重新输入！"
                         )
@@ -13045,6 +13054,15 @@ class TubeLayoutEditor(QMainWindow):
                             print(
                                 f"[RANGE_WARN DEBUG] 来源=滑道高度, param_name={param_name}, row={row}, "
                                 f"cur_text='{cur_text}', h_val={h_val}, upper={upper}"
+                            )
+                        except Exception:
+                            pass
+                        try:
+                            print(
+                                "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入！ "
+                                f"param=滑道高度 input='{cur_text}' parsed={h_val} upper={upper} "
+                                "rule=(0,upper] reason=<=0/非数字/超上限 rollback="
+                                f"'{str(getattr(self, '_last_valid_slideway_height_text', '')).strip()}'"
                             )
                         except Exception:
                             pass
@@ -13621,6 +13639,14 @@ class TubeLayoutEditor(QMainWindow):
                                 )
                             except Exception:
                                 pass
+                            try:
+                                print(
+                                    "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入！ "
+                                    f"param=非布管弦高 param_name='{param_name}' input='{cur_text}' parsed={cur_val} "
+                                    f"upper(DL/2)={upper} DL={dl_val} rule=[0,DL/2] reason=小于0或超上限 rollback='{rollback_text if 'rollback_text' in locals() else ''}'"
+                                )
+                            except Exception:
+                                pass
                             QMessageBox.warning(
                                 self,
                                 "输入错误",
@@ -13701,6 +13727,14 @@ class TubeLayoutEditor(QMainWindow):
                         self._sn_horizontal_warn_in_progress = True
                         self._suppress_sn_horizontal_warn = True
 
+                        try:
+                            print(
+                                "[POPUP] type=question title=提示 msg=您输入的数值小于预定义的规定，是否继续？ "
+                                f"param=分程隔板两侧相邻管中心距（水平） input='{cur_text}' parsed={new_snh} "
+                                f"expected_min={expected_min} reason=输入值小于预定义规定"
+                            )
+                        except Exception:
+                            pass
                         reply = QMessageBox.question(
                             self,
                             "提示",
@@ -13708,6 +13742,12 @@ class TubeLayoutEditor(QMainWindow):
                             QMessageBox.Yes | QMessageBox.No,
                             QMessageBox.No,
                         )
+                        try:
+                            print(
+                                f"[POPUP] type=question result={'Yes' if reply == QMessageBox.Yes else 'No'} param=分程隔板两侧相邻管中心距（水平）"
+                            )
+                        except Exception:
+                            pass
 
                         # 用户完成一次交互后，全局静默
                         self._sn_horizontal_warn_pending = False
@@ -14725,34 +14765,42 @@ class TubeLayoutEditor(QMainWindow):
             print(f"错误：图片基础目录不存在 - {base_path}")
             return
 
-        # 定义允许显示 4.1/4.3/6.1 图片的换热器类型
-        # 说明：这些型号在工程上需要显示对应的分程形式图片（含 AKU/BKU 等釜式重沸器）。
-        allowed_types = {"AES", "BES", "NEN", "BEM", "AEM", "AEU", "BEU", "AKU", "BKU"}
-        # 检查当前换热器类型是否在允许列表中
-        show_4_1 = self.heat_exchanger in allowed_types
-        show_4_3 = self.heat_exchanger in allowed_types
-        show_6_1 = self.heat_exchanger in allowed_types
+        # 分程形式显示规则（严格按表）：
+        # 1      -> AES BES NEN BEM
+        # 2      -> AEU BEU AKU BKU AES BES NEN BEM
+        # 4.1    -> AES BES NEN BEM
+        # 4.2.x  -> AEU BEU AKU BKU AES BES NEN BEM
+        # 4.3.x  -> AES BES NEN BEM
+        # 6.1.x  -> AES BES NEN BEM
+        # 6.2.x  -> AEU BEU AKU BKU AES BES NEN BEM
+        hx_norm = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
+        non_u_types = {"AES", "BES", "NEN", "BEM"}
+        u_and_common_types = {"AEU", "BEU", "AKU", "BKU", "AES", "BES", "NEN", "BEM"}
 
         # 根据管程程数加载对应图片，同时关联标识
         if tube_pass == "2":
-            self.add_image_to_combo(combo, base_path, "2.1.png", "2.1")
+            if hx_norm in u_and_common_types:
+                self.add_image_to_combo(combo, base_path, "2.1.png", "2.1")
         elif tube_pass == "4":
-            if show_4_1:
+            if hx_norm in non_u_types:
                 self.add_image_to_combo(combo, base_path, "4.1.png", "4.1")
-            self.add_image_to_combo(combo, base_path, "4.2.1.png", "4.2")
-            self.add_image_to_combo(combo, base_path, "4.2.2.png", "4.2")
-            if show_4_3:
+            if hx_norm in u_and_common_types:
+                self.add_image_to_combo(combo, base_path, "4.2.1.png", "4.2")
+                self.add_image_to_combo(combo, base_path, "4.2.2.png", "4.2")
+            if hx_norm in non_u_types:
                 self.add_image_to_combo(combo, base_path, "4.3.1.png", "4.3")
                 self.add_image_to_combo(combo, base_path, "4.3.2.png", "4.3")
         elif tube_pass == "6":
-            if show_6_1:
+            if hx_norm in non_u_types:
                 self.add_image_to_combo(combo, base_path, "6.1.1.png", "6.1")
                 self.add_image_to_combo(combo, base_path, "6.1.2.png", "6.1")
-            self.add_image_to_combo(combo, base_path, "6.2.1.png", "6.2")
-            self.add_image_to_combo(combo, base_path, "6.2.2.png", "6.2")
+            if hx_norm in u_and_common_types:
+                self.add_image_to_combo(combo, base_path, "6.2.1.png", "6.2")
+                self.add_image_to_combo(combo, base_path, "6.2.2.png", "6.2")
             # self.add_image_to_combo(combo, base_path, "6.3.png", "6.3")
         elif tube_pass == "1":
-            self.add_image_to_combo(combo, base_path, "1.1.png", "1.1")
+            if hx_norm in non_u_types:
+                self.add_image_to_combo(combo, base_path, "1.1.png", "1.1")
 
         else:
             combo.addItem("未选择")
@@ -19135,6 +19183,14 @@ class TubeLayoutEditor(QMainWindow):
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.No,
                 )
+                try:
+                    print(
+                        "[POPUP] type=question title=提示 msg=您输入的数值小于预定义的规定，是否继续？ "
+                        f"param=分程隔板两侧相邻管中心距（水平）(回车预检) input='{cur_text}' parsed={sn_val} "
+                        f"expected_min={expected_min} result={'Yes' if reply == QMessageBox.Yes else 'No'}"
+                    )
+                except Exception:
+                    pass
 
                 # 用户完成一次交互后全局静默
                 try:
@@ -19239,6 +19295,12 @@ class TubeLayoutEditor(QMainWindow):
                 name_item = self.param_table.item(r, 1)
                 if name_item and name_item.text().strip() == "隔条位置尺寸 W":
                     w_row = r
+                    # 参数行被隐藏时（界面不显示），不应参与回车预检校验
+                    try:
+                        if hasattr(self, "param_table") and self.param_table.isRowHidden(r):
+                            return True
+                    except Exception:
+                        pass
                     widget = self.param_table.cellWidget(r, 2)
                     if isinstance(widget, QComboBox):
                         try:
@@ -19276,6 +19338,14 @@ class TubeLayoutEditor(QMainWindow):
 
             # 非法：弹窗 + 回滚/重新输入
             if not suppress_precheck_dialogs:
+                try:
+                    print(
+                        "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入！ "
+                        f"param=隔条位置尺寸W(回车预检) input='{w_text_debug}' parsed={w_val} "
+                        f"upper(DL/2)={upper} rule=(0,DL/2) reason=<=0或>=上限 rollback='{str(getattr(self, '_last_valid_divider_W_text', '')).strip()}'"
+                    )
+                except Exception:
+                    pass
                 QMessageBox.warning(
                     self,
                     "输入错误",
@@ -19385,6 +19455,14 @@ class TubeLayoutEditor(QMainWindow):
 
                 if p_val is None or p_val < 0 or p_val > upper:
                     if not suppress_precheck_dialogs:
+                        try:
+                            print(
+                                "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入！ "
+                                f"param=非布管弦高(回车预检) param_name='{pname}' input='{p_text}' parsed={p_val} "
+                                f"upper(DL/2)={upper} rule=[0,DL/2] reason=解析失败/小于0/超上限 rollback='{str(getattr(self, last_attr, '') or '').strip()}'"
+                            )
+                        except Exception:
+                            pass
                         QMessageBox.warning(
                             self,
                             "输入错误",
@@ -35182,6 +35260,14 @@ class TubeLayoutEditor(QMainWindow):
             try:
                 block_height = float(self.thickness_input.text())
             except ValueError:
+                try:
+                    print(
+                        "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入！ "
+                        f"source=旁路挡板参数设置(on_side_block_click) param=旁路挡板厚度 input='{self.thickness_input.text()}' "
+                        f"reason=解析失败(ValueError) rollback_default={default_thickness}"
+                    )
+                except Exception:
+                    pass
                 QMessageBox.warning(
                     dialog, "输入错误", "您输入的数值小于0或已超限，请重新输入！"
                 )
@@ -35190,6 +35276,14 @@ class TubeLayoutEditor(QMainWindow):
                 self.thickness_input.selectAll()
                 return
             if block_height <= 0:
+                try:
+                    print(
+                        "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入！ "
+                        f"source=旁路挡板参数设置(on_side_block_click) param=旁路挡板厚度 input={block_height} "
+                        f"rule=>0 reason=<=0 rollback_default={default_thickness}"
+                    )
+                except Exception:
+                    pass
                 QMessageBox.warning(
                     dialog, "输入错误", "您输入的数值小于0或已超限，请重新输入！"
                 )
@@ -37283,6 +37377,14 @@ class TubeLayoutEditor(QMainWindow):
             try:
                 block_height = float(thickness_edit.text())
             except Exception:
+                try:
+                    print(
+                        "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入！ "
+                        f"source=旁路挡板参数设置(edit_side_block) param=旁路挡板厚度 input='{thickness_edit.text()}' "
+                        f"reason=解析失败 rollback_default={default_thickness}"
+                    )
+                except Exception:
+                    pass
                 QMessageBox.warning(
                     dialog, "输入错误", "您输入的数值小于0或已超限，请重新输入！"
                 )
@@ -37291,6 +37393,14 @@ class TubeLayoutEditor(QMainWindow):
                 thickness_edit.selectAll()
                 return
             if block_height <= 0:
+                try:
+                    print(
+                        "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入！ "
+                        f"source=旁路挡板参数设置(edit_side_block) param=旁路挡板厚度 input={block_height} "
+                        f"rule=>0 reason=<=0 rollback_default={default_thickness}"
+                    )
+                except Exception:
+                    pass
                 QMessageBox.warning(
                     dialog, "输入错误", "您输入的数值小于0或已超限，请重新输入！"
                 )
@@ -37916,6 +38026,15 @@ class TubeLayoutEditor(QMainWindow):
                 or slipway_height <= 0
                 or (baffle_od is not None and baffle_od > 0 and slipway_height > baffle_od / 2.0)
             ):
+                try:
+                    print(
+                        "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入! "
+                        f"source=滑道参数弹窗 param=滑道高度 input='{height_text}' parsed={slipway_height} "
+                        f"upper(baffle_od/2)={(baffle_od / 2.0) if (baffle_od is not None and baffle_od > 0) else None} "
+                        "rule=(0,upper] reason=<=0/非数字/超上限 action=回滚为旧值"
+                    )
+                except Exception:
+                    pass
                 QMessageBox.warning(
                     dialog,
                     "输入错误",
@@ -38265,6 +38384,15 @@ class TubeLayoutEditor(QMainWindow):
                 or slipway_height <= 0
                 or (baffle_od is not None and baffle_od > 0 and slipway_height > baffle_od / 2.0)
             ):
+                try:
+                    print(
+                        "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入! "
+                        f"source=滑道参数弹窗(含圆钢规格) param=滑道高度 input='{height_text}' parsed={slipway_height} "
+                        f"upper(baffle_od/2)={(baffle_od / 2.0) if (baffle_od is not None and baffle_od > 0) else None} "
+                        "rule=(0,upper] reason=<=0/非数字/超上限 action=回滚为旧值"
+                    )
+                except Exception:
+                    pass
                 QMessageBox.warning(
                     dialog,
                     "输入错误",
