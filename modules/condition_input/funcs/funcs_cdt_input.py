@@ -3,8 +3,7 @@ from openpyxl.styles import Alignment
 from modules.cailiaodingyi.funcs.funcs_pdf_change import update_element_name_data, \
     get_design_params_by_product_id, update_guankou_param_flex_db, query_guankou_affiliation, resolve_gasket_dimensions, query_guankou_codes, \
     invalidate_caches_for_product, update_guankou_corrosion_to_category_table, update_guankou_opening_weld_joint_coeff_to_category_table, \
-    sync_yanban_height_if_exceeds_shell_dn, \
-    db_config_1 as design_db_config_1
+    sync_yanban_height_if_exceeds_shell_dn,db_config_1 as design_db_config_1
 from modules.cailiaodingyi.controllers.check_dianpian import clear_all_pn_user_input_for_product, force_recompute_and_update_pn
 from modules.cailiaodingyi.funcs.funcs_pdf_input import query_all_guankou_categories
 # from modules.cailiaodingyi.funcs.funcs_pdf_change import update_element_name_data, \
@@ -2788,12 +2787,34 @@ def validate_coating_table_cell(column_name: str, value: str, tip_widget, table_
     safe_set_text_and_color(tip_widget, "", "black")
     return "ok"
 
-# 4.7可抽管束公称直径新增
+
+def _dn_ask_continue_or_clear(viewer, table, row, col, warning_msg: str) -> bool:
+    """弹出是/否；选「否」则清空单元格并返回 False，选「是」返回 True。"""
+    box = QMessageBox(viewer)
+    box.setIcon(QMessageBox.Question)
+    box.setWindowTitle("提示")
+    box.setText(warning_msg)
+    box.addButton("是", QMessageBox.YesRole)
+    btn_no = box.addButton("否", QMessageBox.NoRole)
+    box.setDefaultButton(btn_no)
+    box.exec_()
+    if box.clickedButton() == btn_no:
+        item = table.item(row, col)
+        if item:
+            item.setText("")
+        else:
+            table.setItem(row, col, QTableWidgetItem(""))
+        if getattr(viewer, "line_tip", None):
+            safe_set_text_and_color(viewer.line_tip, "", "black")
+        return False
+    return True
+
+
 def apply_dn_standard_range_user_prompt(viewer, table, row, col, value: str) -> bool:
     """
     在已通过「公称直径可填范围表」等原有校验后调用。
-    按产品型式检查 [150,2600]（可抽管束）或 [150,6000]（不可抽管束等）；
-    越界则弹出询问，用户选「否」则清空该单元格并返回 False，否则返回 True。
+    九种管壳式产品型式：先按 GB/T 150 询问小于 150mm；再按 GB/T 151 仅对超过型式上限询问。
+    用户选「否」则清空该单元格并返回 False，否则返回 True。
     非「公称直径*」或非壳/管程数值列、或无需弹窗时返回 True。
     """
     if not value or not str(value).strip():
@@ -2816,40 +2837,37 @@ def apply_dn_standard_range_user_prompt(viewer, table, row, col, value: str) -> 
         )
 
         raw_form = (_get_raw_product_form(table) or "").strip().upper()
-        product_form_sets_2600 = {"AEU", "BEU", "AES", "BES", "AKU", "BKU"}
-        product_form_sets_6000 = {"AEM", "BEM", "NEN"}
+        removable_for_gb151 = {"AEU", "BEU", "AES", "BES", "AKU", "BKU"}
+        non_removable_for_gb151 = {"AEM", "BEM", "NEN"}
+        gb150_shell_tube = removable_for_gb151 | non_removable_for_gb151
 
-        min_dn = 150
-        max_dn = None
-        warning_msg = None
-
-        if raw_form in product_form_sets_2600:
-            max_dn = 2600
-            warning_msg = (
-                "根据标准要求，可抽管束管壳式热交换器公称直径不大于2600mm，是否继续？"
-            )
-        elif raw_form in product_form_sets_6000:
-            max_dn = 6000
-            warning_msg = (
-                "根据标准要求，不可抽管束管壳式热交换器公称直径不大于6000mm，是否继续？"
-            )
-
-        if max_dn is not None and not (min_dn <= dn_val <= max_dn):
-            reply = QMessageBox.question(
+        if raw_form in gb150_shell_tube and dn_val < 150:
+            if not _dn_ask_continue_or_clear(
                 viewer,
-                "提示",
-                warning_msg,
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-            if reply == QMessageBox.No:
-                item = table.item(row, col)
-                if item:
-                    item.setText("")
-                else:
-                    table.setItem(row, col, QTableWidgetItem(""))
-                if getattr(viewer, "line_tip", None):
-                    safe_set_text_and_color(viewer.line_tip, "", "black")
+                table,
+                row,
+                col,
+                "根据 GB/T 150 要求，公称直径不应小于 150mm，是否继续？",
+            ):
+                return False
+
+        if raw_form in removable_for_gb151 and dn_val > 2600:
+            if not _dn_ask_continue_or_clear(
+                viewer,
+                table,
+                row,
+                col,
+                "根据 GB/T 151 要求，可抽管束管壳式热交换器公称直径不大于 2600mm，是否继续？",
+            ):
+                return False
+        elif raw_form in non_removable_for_gb151 and dn_val > 6000:
+            if not _dn_ask_continue_or_clear(
+                viewer,
+                table,
+                row,
+                col,
+                "根据 GB/T 151 要求，不可抽管束管壳式热交换器公称直径不大于 6000mm，是否继续？",
+            ):
                 return False
     except Exception:
         pass
@@ -2867,8 +2885,6 @@ def dispatch_cell_validation(viewer, table, row, col, param_name, column_name, v
         return "ok"
 
     if mode == "design":
-        # return validate_design_table_cell(param_name, column_name, value, viewer.line_tip, table, col)
-        # 4.7可抽管束公称直径新增
         # 1) 先执行原有校验（含公称直径可填范围表等）
         param_name_for_validation = param_name
         column_name_for_validation = column_name
@@ -2948,70 +2964,259 @@ def dispatch_cell_validation(viewer, table, row, col, param_name, column_name, v
 
 """参考数据导入相关函数"""
 
-def get_ref_data_excel_path(product_id: int) -> str:
+
+def _get_product_folder_abs_from_active_db(product_id) -> str:
+    """产品设计活动表中的「产品文件夹绝对路径」，无则返回空字符串。"""
+    if not product_id:
+        return ""
+    try:
+        connection = get_connection(**db_config_2)
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT `产品文件夹绝对路径` FROM `产品设计活动表` WHERE `产品ID` = %s LIMIT 1",
+                (product_id,),
+            )
+            row = cursor.fetchone()
+        connection.close()
+        if not row:
+            return ""
+        raw = row.get("产品文件夹绝对路径") if isinstance(row, dict) else row[0]
+        return (raw or "").strip().strip("'\"")
+    except Exception as e:
+        print(f"[_get_product_folder_abs_from_active_db] {e}")
+        return ""
+
+
+def get_expected_condition_xlsx_path(product_id, require_exists: bool = False) -> str:
     """
-    给定产品ID，查询并返回对应的 条件输入数据表.xlsx 完整路径
+    解析「条件输入数据表.xlsx」的期望绝对路径。
+    require_exists=True 时文件不存在则抛出 FileNotFoundError。
     """
     serial = ""
-    # ✅ 遍历 product_table_row_status，用 product_id 匹配行
     for row, status in bianl.product_table_row_status.items():
-        if isinstance(status, dict):
-            if str(status.get("product_id")) == str(product_id):
-                serial = status.get("old_serial", "") or f"{row+1:03d}"
-                break
+        if isinstance(status, dict) and str(status.get("product_id")) == str(product_id):
+            serial = status.get("old_serial", "") or f"{row + 1:03d}"
+            break
 
+    connection = get_connection(**db_config_3)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT `项目ID`, `产品编号`, `产品名称`, `设备位号`
+            FROM `产品需求表`
+            WHERE `产品ID` = %s
+            LIMIT 1
+            """,
+            (product_id,),
+        )
+        product_row = cursor.fetchone()
+    connection.close()
+
+    if not product_row:
+        raise ValueError(f"未找到产品ID {product_id} 的产品需求信息。")
+
+    project_id = product_row["项目ID"]
+    product_code = product_row["产品编号"]
+    product_name = product_row["产品名称"]
+    device_loc_id = product_row["设备位号"]
+
+    connection = get_connection(**db_config_4)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT `项目保存路径`,`项目名称`,`业主名称`
+            FROM `项目需求表`
+            WHERE `项目ID` = %s
+            LIMIT 1
+            """,
+            (project_id,),
+        )
+        project_row = cursor.fetchone()
+    connection.close()
+
+    if not project_row:
+        raise ValueError(f"未找到项目ID {project_id} 的项目信息。")
+
+    project_save_path = project_row["项目保存路径"]
+    project_path = project_row["项目名称"]
+    yezhu_path = project_row["业主名称"]
+    pinjie_path = f"{yezhu_path}_{project_path}"
+
+    parts = [serial, product_name, device_loc_id, product_code]
+    folder_name = "_".join([str(p).strip() for p in parts if p and str(p).strip()])
+
+    full_path = os.path.normpath(
+        os.path.join(project_save_path, pinjie_path, folder_name, "条件输入数据表.xlsx")
+    )
+
+    if require_exists and not os.path.isfile(full_path):
+        raise FileNotFoundError(f"未找到文件：{full_path}")
+    return full_path
+
+
+def get_expected_product_local_folder(product_id):
+    """
+    期望的产品本地文件夹（绝对路径）。
+    优先「产品设计活动表.产品文件夹绝对路径」；否则按项目路径 + 产品子目录规则拼接。
+    返回 (folder_or_None, err_message)。
+    """
+    if not product_id:
+        return None, "产品ID为空"
     try:
-        # 第一步：连接产品需求库，查产品需求表
-        connection = get_connection(**db_config_3)
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT `项目ID`, `产品编号`, `产品名称`, `设备位号`
-                FROM `产品需求表`
-                WHERE `产品ID` = %s
-                LIMIT 1
-            """, (product_id,))
-            product_row = cursor.fetchone()
-        connection.close()
+        db_folder = _get_product_folder_abs_from_active_db(product_id)
+        if db_folder:
+            return os.path.normpath(db_folder), ""
+        xlsx = get_expected_condition_xlsx_path(product_id, require_exists=False)
+        return os.path.dirname(xlsx), ""
+    except Exception as e:
+        print(f"[get_expected_product_local_folder] {e}")
+        return None, str(e)
 
-        if not product_row:
-            raise ValueError(f"未找到产品ID {product_id} 的产品需求信息。")
 
-        project_id = product_row['项目ID']
-        product_code = product_row['产品编号']
-        product_name = product_row['产品名称']
-        device_loc_id = product_row['设备位号']
+def fill_table_widget_export(table_widget, headers, rows, index_header=None):
+    """
+    与 DesignConditionInputViewer.fill_table_widget 对齐的填充逻辑，用于本地恢复写 Excel（不应用 NEN 特殊只读）。
+    """
+    import copy
 
-        # 第二步：连接项目需求库，查项目需求表
-        connection = get_connection(**db_config_4)
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT `项目保存路径`,`项目名称`,`业主名称`
-                FROM `项目需求表`
-                WHERE `项目ID` = %s
-                LIMIT 1
-            """, (project_id,))
-            project_row = cursor.fetchone()
-        connection.close()
+    rows = copy.deepcopy(rows) if rows else []
+    if table_widget.objectName() == "tableWidget_design_data":
+        rows = [row for row in rows if "[工况" not in str(row.get("参数名称", ""))]
+        if index_header and rows:
+            for idx, row in enumerate(rows):
+                row[index_header] = idx + 1
 
-        if not project_row:
-            raise ValueError(f"未找到项目ID {project_id} 的项目信息。")
+    clean_headers = headers.copy()
+    if index_header in clean_headers:
+        clean_headers.remove(index_header)
 
-        project_save_path = project_row['项目保存路径']
-        project_path = project_row['项目名称']
-        yezhu_path = project_row['业主名称']
-        pinjie_path = f"{yezhu_path}_{project_path}"
+    extra_col = 1 if index_header else 0
+    table_widget.clear()
+    table_widget.setColumnCount(len(clean_headers) + extra_col)
+    table_widget.setRowCount(len(rows))
 
-        # ✅ 拼接文件夹名：序号_产品名称_产品编号_设备位号（自动跳过空值）
-        parts = [serial, product_name, device_loc_id, product_code]
-        folder_name = "_".join([str(p).strip() for p in parts if p and str(p).strip()])
+    header_labels = [index_header] + clean_headers if index_header else clean_headers
 
-        full_path = os.path.join(project_save_path, pinjie_path, folder_name, "条件输入数据表.xlsx")
+    for col_index, header_text in enumerate(header_labels):
+        display_text = "序号" if index_header and col_index == 0 else header_text
+        item = QTableWidgetItem(display_text)
+        item.setData(Qt.UserRole, header_text)
+        item.setTextAlignment(Qt.AlignCenter)
+        font = item.font()
+        font.setBold(True)
+        item.setFont(font)
+        item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+        table_widget.setHorizontalHeaderItem(col_index, item)
 
-        if not os.path.exists(full_path):
-            raise FileNotFoundError(f"未找到文件：{full_path}")
+    table_widget.verticalHeader().setVisible(False)
 
-        return full_path
+    for row_idx, row in enumerate(rows):
+        if index_header:
+            index_value = row.get(index_header, "")
+            index_item = QTableWidgetItem(str(index_value))
+            index_item.setTextAlignment(Qt.AlignCenter)
+            index_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            table_widget.setItem(row_idx, 0, index_item)
 
+        for col_idx, key in enumerate(clean_headers):
+            value = str(row.get(key, ""))
+            item = QTableWidgetItem(value)
+
+            is_name_column = col_idx == 0
+            is_code_column = key == "规范/标准代号"
+            is_unit_column = key == "参数单位"
+            if is_name_column:
+                item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            elif is_unit_column:
+                item.setTextAlignment(Qt.AlignCenter)
+                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+            else:
+                if is_code_column:
+                    item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+                else:
+                    item.setTextAlignment(Qt.AlignCenter)
+                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
+
+            table_widget.setItem(row_idx, col_idx + extra_col, item)
+
+    if table_widget.objectName() == "tableWidget_coating_data":
+        table_widget.logical_headers = [
+            "执行标准/规范", "用途", "油漆类别", "颜色", "干膜厚度（μm）", "涂漆面积", "备注"
+        ]
+
+    table_widget.resizeColumnsToContents()
+
+
+def hydrate_stub_viewer_for_local_xlsx(stub, product_id) -> bool:
+    """
+    将产品设计活动库五表数据载入 stub 上的 QTableWidget，供 save_local_condition_file 写出。
+    无库数据时返回 False（调用方仍可保留空模板文件）。
+    """
+    try:
+        from main import get_product_form_from_db
+
+        product_form = get_product_form_from_db(product_id) or "all"
+    except Exception:
+        product_form = "all"
+
+    result = load_design_data_if_exists(product_id, product_form)
+    if not result or not result.get("import_status"):
+        return False
+
+    data = result["数据"]
+    fill_table_widget_export(
+        stub.tableWidget_product_std,
+        data["产品标准"]["headers"],
+        data["产品标准"]["rows"],
+        index_header=data["产品标准"].get("prepend_index_header"),
+    )
+    fill_table_widget_export(
+        stub.tableWidget_design_data,
+        data["设计数据"]["headers"],
+        data["设计数据"]["rows"],
+        index_header=data["设计数据"].get("prepend_index_header"),
+    )
+    fill_table_widget_export(
+        stub.tableWidget_general_data,
+        data["通用数据"]["headers"],
+        data["通用数据"]["rows"],
+        index_header=data["通用数据"].get("prepend_index_header"),
+    )
+    capture_default_order(stub.tableWidget_design_data)
+
+    set_multilevel_headers(
+        stub.tableWidget_trail_data,
+        top_headers=["接头种类", "检测方法", "壳程", "管程"],
+        sub_headers=["", "", "技术等级", "检测比例%", "合格级别", "技术等级", "检测比例%", "合格级别"],
+        span_map=[(0, 1), (1, 1), (2, 3), (5, 3)],
+    )
+    render_grouped_table(
+        stub.tableWidget_trail_data,
+        data["检测数据"]["格式化"],
+        [
+            "接头种类", "检测方法",
+            "壳程_技术等级", "壳程_检测比例", "壳程_合格级别",
+            "管程_技术等级", "管程_检测比例", "管程_合格级别",
+        ],
+        group_key_column=0,
+    )
+
+    coating_std_value = ""
+    for row in data["产品标准"]["rows"]:
+        if row.get("规范/标准名称", "").strip() == "涂漆标准":
+            coating_std_value = row.get("规范/标准代号", "").strip()
+            break
+    render_coating_table(stub.tableWidget_coating_data, data["涂漆数据"]["格式化"], coating_std_value)
+    return True
+
+
+def get_ref_data_excel_path(product_id: int) -> str:
+    """
+    给定产品ID，查询并返回对应的 条件输入数据表.xlsx 完整路径（文件须已存在）。
+    """
+    try:
+        return get_expected_condition_xlsx_path(product_id, require_exists=True)
     except Exception as e:
         print(f"[ERROR] get_ref_data_excel_path 出错: {e}")
         raise
@@ -3139,13 +3344,124 @@ def import_multi_conditions_from_excel(excel_path: str, product_id: int, viewer:
         3: (10, 11)  # Excel K=11, L=12 → df 索引=10,11
     }
 
+    def _get_param_unit_from_main_table(param_name: str) -> str:
+        """
+        从主界面设计数据表读取参数单位，确保多工况导入时同步写入单位字段。
+        主表列约定：0=序号, 1=参数名称, 2=参数单位, 3=壳程数值, 4=管程数值
+        """
+        try:
+            table = getattr(viewer, "tableWidget_design_data", None)
+            if table is None:
+                return ""
+            for r in range(table.rowCount()):
+                name_item = table.item(r, 1)
+                if name_item and name_item.text().strip() == param_name:
+                    unit_item = table.item(r, 2)
+                    return unit_item.text().strip() if unit_item and unit_item.text() else ""
+        except Exception as e:
+            print(f"[多工况导入] 读取参数单位失败({param_name}): {e}")
+        return ""
+
+    param_order = [
+        "设计压力*",
+        "设计温度（最高）*",
+        "工作压力",
+        "工作温度（入口）",
+        "工作温度（出口）",
+        "最高允许工作压力",
+    ]
+
+    def _compute_multi_id_base_and_threshold(cur) -> tuple:
+        """
+        不硬编码900000，按当前产品动态计算多工况ID起点：
+        - normal_max：当前产品常规参数最大ID（排除[工况]）
+        - template_max：模板表最大ID（按产品型式过滤：NEN/AEM/BEM额外包含'NEN,AEM,BEM'行；其余仅'all'）
+        - multi_max：当前产品已有多工况最大ID（若历史已高位，沿用）
+        “整齐化”策略：
+        - 对新产品/低位多工况：固定以 safe_threshold 作为基准（max(normal_max, template_max)），
+          保证工况2/3的ID区间稳定、连续，不会因导入部分参数导致后续 base 被 multi_max 抬高。
+        - 对历史已存在明显高位工况ID（例如 900xxx 或远高于常规区间）：视为 legacy_high，
+          为避免扰动历史数据，沿用“跟随 multi_max”的策略。
+        返回 (base, safe_threshold, legacy_high)。
+        """
+        normal_max = 0
+        template_max = 0
+        multi_max = 0
+        try:
+            from main import get_product_form_from_db
+            product_form = get_product_form_from_db(product_id) or "all"
+
+            cur.execute(
+                """
+                SELECT MAX(设计数据参数ID) AS max_id
+                FROM 产品设计活动表_设计数据表
+                WHERE 产品ID=%s
+                  AND (参数名称 IS NULL OR 参数名称 NOT LIKE %s)
+                """,
+                (product_id, "%[工况%")
+            )
+            r = cur.fetchone() or {}
+            normal_max = int(r.get("max_id") or 0)
+
+            cur.execute(
+                """
+                SELECT MAX(设计数据参数ID) AS max_id
+                FROM 产品设计活动表_设计数据表
+                WHERE 产品ID=%s AND 参数名称 LIKE %s
+                """,
+                (product_id, "%[工况%")
+            )
+            r2 = cur.fetchone() or {}
+            multi_max = int(r2.get("max_id") or 0)
+
+            if product_form in ("NEN", "AEM", "BEM"):
+                cur.execute(
+                    """
+                    SELECT MAX(设计数据参数ID) AS max_id
+                    FROM 产品条件库.设计数据模板表
+                    WHERE 所属型式 = %s OR 所属型式 LIKE %s
+                    """,
+                    ("all", f"%{product_form}%")
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT MAX(设计数据参数ID) AS max_id
+                    FROM 产品条件库.设计数据模板表
+                    WHERE 所属型式 = %s
+                    """,
+                    ("all",)
+                )
+            r3 = cur.fetchone() or {}
+            template_max = int(r3.get("max_id") or 0)
+        except Exception as e:
+            print(f"[多工况导入] 计算动态ID起点失败: {e}")
+
+        safe_threshold = max(normal_max, template_max)
+        legacy_high = False
+        try:
+            if int(multi_max or 0) >= 900000:
+                legacy_high = True
+            elif int(multi_max or 0) > int(safe_threshold or 0) + (len(param_order) * 2) + 50:
+                legacy_high = True
+        except Exception:
+            legacy_high = False
+
+        base = int(safe_threshold or 0) if not legacy_high else max(int(safe_threshold or 0), int(multi_max or 0))
+        return base, safe_threshold, legacy_high
+
+    def _reserved_multi_param_id(base: int, gk_no: int, pname_base: str) -> int:
+        try:
+            idx = param_order.index(pname_base) + 1
+        except ValueError:
+            idx = 99
+        offset = (gk_no - 2) * len(param_order) + idx
+        return int(base or 0) + offset
+
     conn = get_connection(**db_config_2)
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT MAX(设计数据参数ID) AS max_sn FROM 产品设计活动表_设计数据表 WHERE 产品ID=%s", (product_id,))
-            max_sn = cur.fetchone()["max_sn"] or 31
-            seq = max_sn
-
+            base_id, safe_threshold, legacy_high = _compute_multi_id_base_and_threshold(cur)
             for gk_no, (col_kc, col_gc) in gongkuang_cols.items():
                 # === 创建临时弹窗表格用于校核 ===
                 from modules.condition_input.funcs.multi_conditions_dialog import MultiConditionsDialog
@@ -3192,29 +3508,45 @@ def import_multi_conditions_from_excel(excel_path: str, product_id: int, viewer:
                                 gc_val = ""
 
                     db_field = f"{pname_base}[工况{gk_no}]"  # ✅ 无空格版本
+                    param_unit = _get_param_unit_from_main_table(pname_base)
 
                     # === 查数据库是否已存在 ===
                     cur.execute("""
-                        SELECT COUNT(*) AS cnt FROM 产品设计活动表_设计数据表
+                        SELECT 设计数据参数ID FROM 产品设计活动表_设计数据表
                         WHERE 产品ID=%s AND 参数名称=%s
                     """, (product_id, db_field))
-                    exists = cur.fetchone()["cnt"] > 0
+                    existing_row = cur.fetchone()
+                    exists = existing_row is not None
+                    reserved_id = _reserved_multi_param_id(base_id, gk_no, pname_base)
 
                     # === 根据规则处理 ===
                     if exists:
+                        existing_param_id = existing_row.get("设计数据参数ID")
+                        if (
+                            not legacy_high
+                            and existing_param_id != reserved_id
+                            and int(existing_param_id or 0) <= int(safe_threshold or 0) + (len(param_order) * 2) + 50
+                        ):
+                            try:
+                                cur.execute("""
+                                    UPDATE 产品设计活动表_设计数据表
+                                    SET 设计数据参数ID=%s
+                                    WHERE 产品ID=%s AND 参数名称=%s
+                                """, (reserved_id, product_id, db_field))
+                            except Exception as migrate_err:
+                                print(f"[多工况导入] 参数ID迁移失败({db_field}): {migrate_err}")
                         cur.execute("""
                             UPDATE 产品设计活动表_设计数据表
-                            SET 壳程数值=%s, 管程数值=%s
+                            SET 参数单位=%s, 壳程数值=%s, 管程数值=%s
                             WHERE 产品ID=%s AND 参数名称=%s
-                        """, (kc_val, gc_val, product_id, db_field))
+                        """, (param_unit, kc_val, gc_val, product_id, db_field))
                     else:
                         if kc_val or gc_val:
-                            seq += 1
                             cur.execute("""
                                 INSERT INTO 产品设计活动表_设计数据表
-                                (设计数据参数ID, 产品ID, 参数名称, 壳程数值, 管程数值)
-                                VALUES (%s, %s, %s, %s, %s)
-                            """, (seq, product_id, db_field, kc_val, gc_val))
+                                (设计数据参数ID, 产品ID, 参数名称, 参数单位, 壳程数值, 管程数值)
+                                VALUES (%s, %s, %s, %s, %s, %s)
+                            """, (reserved_id, product_id, db_field, param_unit, kc_val, gc_val))
 
                 print(f"[多工况导入] 工况{gk_no} 覆盖完成")
 
@@ -3530,15 +3862,13 @@ def validate_all_tables_after_import(viewer: QWidget):
                 tip_list.append(f"[设计数据] {param_name} - {col_name}: ❌ 非法值，已清空")
             elif result == "warn":
                 tip_list.append(f"[设计数据] {param_name} - {col_name}: ⚠️ 可疑值")
-            
-            # 4.7可抽管束公称直径新增
+
             # 原可填范围表校验通过后，导入时同样按产品型式做公称直径标准范围询问（如 AEM 导入 6500）
             if result != "error" and param_name == "公称直径*" and col_name in ("壳程数值", "管程数值"):
                 if not apply_dn_standard_range_user_prompt(viewer, table, row, col_index, val):
                     tip_list.append(
                         f"[设计数据] {param_name} - {col_name}: 公称直径超出标准允许范围，已按选择清空"
                     )
-
 
     # ✅ 通用数据表
     table = viewer.tableWidget_general_data
@@ -3734,12 +4064,40 @@ def is_file_locked(filepath: str) -> bool:
     except IOError:
         return True
 
-def save_local_condition_file(product_id: int, viewer: QWidget) -> bool:
+
+def _notify_local_condition_xlsx_missing(viewer: QWidget, detail: str) -> None:
+    """
+    本地「条件输入数据表.xlsx」不存在或无法打开时提示（标题：保存失败）；
+    正文仅含：具体路径/错误说明 + 前往项目管理恢复的指引。
+    """
+    parent = viewer if viewer is not None else getattr(bianl, "main_window", None)
+    if parent is None:
+        parent = viewer
+    first = (detail or "").strip()
+    second = "如需恢复该文件，请前往「项目管理」，选中当前产品后按提示恢复本地产品文件夹。"
+    msg = f"{first}\n\n{second}" if first else second
+    QMessageBox.warning(parent, "保存失败", msg)
+
+
+def save_local_condition_file(product_id: int, viewer: QWidget, local_path_override: str = None) -> bool:
     """
     保存界面数据到本地 Excel，如果文件被占用则提示并返回 False。
     —— 改动：写出时使用“默认顺序”的行索引，确保导出的 Excel 始终是固定顺序。
+    local_path_override：若指定则写出到此路径（用于本地文件夹恢复时与活动库「产品文件夹绝对路径」一致）。
     """
-    local_path = get_ref_data_excel_path(product_id)
+    try:
+        if local_path_override:
+            local_path = os.path.normpath(local_path_override)
+        else:
+            local_path = get_ref_data_excel_path(product_id)
+    except FileNotFoundError as e:
+        detail = str(e)
+        print(f"未找到本地条件数据路径：{detail}")
+        if viewer is not None:
+            setattr(viewer, "_local_condition_xlsx_missing", True)
+        _notify_local_condition_xlsx_missing(viewer, detail)
+        return False
+
     print(f"{local_path}")
     if is_file_locked(local_path):
         QMessageBox.warning(viewer, "文件占用", f"请先关闭本地文件：\n{local_path}\n然后重试保存。")
@@ -3748,6 +4106,9 @@ def save_local_condition_file(product_id: int, viewer: QWidget) -> bool:
         wb = load_workbook(local_path)
     except FileNotFoundError:
         print(f"未找到本地条件数据文件：{local_path}")
+        if viewer is not None:
+            setattr(viewer, "_local_condition_xlsx_missing", True)
+        _notify_local_condition_xlsx_missing(viewer, f"未找到文件：{local_path}")
         return False
     # === 关键：获取每张表的“默认写出顺序”索引 ===
     order_std     = get_row_index_order_for_default_write(viewer.tableWidget_product_std)
@@ -3825,6 +4186,8 @@ def save_local_condition_file(product_id: int, viewer: QWidget) -> bool:
 
     wb.save(local_path)
     print(f"✅ 本地条件数据表已成功保存到: {local_path}")
+    if viewer is not None:
+        setattr(viewer, "_local_condition_xlsx_missing", False)
     return True
 
 def update_sheet_from_table(sheet, table_widget, col_start=0, col_end=None,

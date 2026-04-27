@@ -134,29 +134,37 @@ def handle_auto_add_row(row, column):
 # 更新序号 改yxx
 def update_row_numbers():
     table = bianl.product_table
-    table.blockSignals(True)
+    # 外层若已对 table.blockSignals(True)（如删除行整段同步），此处不得再 blockSignals(False) 误开信号，
+    # 否则 removeRow 仍会触发 currentCellChanged，本地缺失弹窗会连弹两次。
+    blocked_here = False
+    if not table.signalsBlocked():
+        table.blockSignals(True)
+        blocked_here = True
 
-    for r in range(table.rowCount()):
-        item = QTableWidgetItem(f"{r + 1:02d}")
-        item.setTextAlignment(Qt.AlignCenter)
-        item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+    try:
+        for r in range(table.rowCount()):
+            item = QTableWidgetItem(f"{r + 1:02d}")
+            item.setTextAlignment(Qt.AlignCenter)
+            item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
 
-        # 判断是否为当前高亮行
-        if hasattr(bianl, 'row') and r == bianl.row:
-            item.setBackground(QBrush(QColor("#d0e7ff")))
-        else:
-            item.setBackground(QBrush(QColor("#ffffff")))
+            # 判断是否为当前高亮行
+            if hasattr(bianl, 'row') and r == bianl.row:
+                item.setBackground(QBrush(QColor("#d0e7ff")))
+            else:
+                item.setBackground(QBrush(QColor("#ffffff")))
 
-        row_status = bianl.product_table_row_status.get(r, {}).get("status", "")
-        if row_status == "view":
-            item.setForeground(QBrush(QColor("#888888")))
-        else:
-            item.setForeground(QBrush(Qt.black))
-        # 将 item 设置到 product_table 的第 row 行第 0 列
-        table.setItem(r, 0, item)
-        # item.setForeground(QBrush(Qt.black))
-        # table.setItem(r, 0, item)
-    table.blockSignals(False)
+            row_status = bianl.product_table_row_status.get(r, {}).get("status", "")
+            if row_status == "view":
+                item.setForeground(QBrush(QColor("#888888")))
+            else:
+                item.setForeground(QBrush(Qt.black))
+            # 将 item 设置到 product_table 的第 row 行第 0 列
+            table.setItem(r, 0, item)
+            # item.setForeground(QBrush(Qt.black))
+            # table.setItem(r, 0, item)
+    finally:
+        if blocked_here:
+            table.blockSignals(False)
 
 
 # ✅ 【新增】完整新增 逻辑判断函数 ———————— 核心修改一：

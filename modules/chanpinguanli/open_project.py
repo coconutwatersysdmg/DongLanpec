@@ -491,14 +491,21 @@ def open_project():
                 unlock_line_edit(bianl.co_signature_input)
                 print("第 1 行产品未定义，可编辑")
             print(f"[open_project] 自动显示第 1 行（含工作信息）完成：产品ID={first_product_id}")
+            # 本地三文件检查见下方：序号列刷新后统一 on_product_row_clicked，避免与 currentCellChanged 重复弹窗
         # 1015
         else:
             # 当项目没有任何产品时，执行清空和锁定操作
+            bianl.product_local_files_missing_readonly = False
             bianl.product_type_combo.setCurrentIndex(-1)  # 重置产品类型下拉框
             bianl.product_form_combo.setCurrentIndex(-1)  # 重置产品形式下拉框
             clear_and_lock_product_details()
             # 发射信号，传递 None 来通知主窗口清空产品信息
             product_manager.product_id_changed.emit(None)
+            try:
+                from modules.chanpinguanli import local_product_folder
+                local_product_folder._refresh_main_window_tabs_readonly()
+            except Exception:
+                pass
         # ▲▲▲ 修复结束 ▲▲▲
         bianl.product_info_group.show()
 
@@ -523,6 +530,19 @@ def open_project():
 
             item.setBackground(QBrush(QColor("#ffffff")))  # ✅ 强制白底，去掉残留高亮
             bianl.product_table.setItem(r, 0, item)
+
+        # 仅一次：程序化选中第 1 行并走 on_product_row_clicked（内含本地文件夹缺失弹窗）
+        if product_count > 0:
+            try:
+                from modules.chanpinguanli import chanpinguanli_main
+
+                t = bianl.product_table
+                t.blockSignals(True)
+                t.setCurrentCell(0, 1)
+                t.blockSignals(False)
+                chanpinguanli_main.on_product_row_clicked(0, 1)
+            except Exception as _e_open_row0:
+                print(f"[open_project] 同步第一行选中/本地检查: {_e_open_row0}")
 
         print("[✅刷新] 清除旧项目点击行序号列高亮")
         bianl.main_window.line_tip.setText("项目和产品数据加载成功！")

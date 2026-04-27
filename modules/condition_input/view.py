@@ -59,13 +59,13 @@ class DesignConditionInputViewer(QWidget):
 
         # ▼▼▼【核心修改 1】在最开始初始化状态变量 ▼▼▼
         self._is_modified = False     # 关键！追踪界面数据是否被修改
+        self._local_condition_xlsx_missing = False  # 本地条件输入 xlsx 缺失（保存失败）时置 True
         self._is_loading_data = True  # 关键！开始初始化，标记为"正在加载"
         self.original_window_title = ""  # UI加载后赋值
         self._is_saved_to_design_db = False  # 记录产品是否已保存到产品设计活动库#1106新修改
         self._has_confirmed_saved = False  # 记录是否点击过确认按钮保存#1106新修改
         self._initial_table_snapshots = {}  # 1112新修改-条件输入表格实质性变化：存储初始状态快照，用于实质性变化检测
         self._pending_outer_series_sync = False  # 外径系列被user_config覆盖时置True，关闭时需保存到DB
-
 
         # 0903会议纪要 首先进行项目和产品检查
         print("准备检查项目和产品状态...")
@@ -528,61 +528,43 @@ class DesignConditionInputViewer(QWidget):
             self.update_multi_conditions_status()
         except Exception as e:
             print(f"[多工况] 数据加载后检查失败: {e}")
-        # === 数据加载完成后：公式外径行 — 外径显示数值，外径系列显示「-」；勿再把外径改成「—」 ===
+        # === 数据加载完成后：仅修正“公式外径”的显示（保持外径系列使用数据库/用户值） ===
         try:
             from modules.condition_input.funcs.funcs_cdt_input import (
-                _get_dn_from_design,
-                _get_outer_diameter_from_mapping,
-                _get_series_from_general,
-                _determine_diameter_series,
+                _get_dn_from_design, _get_outer_diameter_from_mapping, _get_series_from_general
             )
             table = getattr(self, 'tableWidget_general_data', None)
             if table is not None:
+                # 仅当“是否以外径为基准*”为“是”时才处理外径显示
                 base_row = self._find_row_by_param_name(table, "是否以外径为基准*")
                 if base_row >= 0:
                     val_item = table.item(base_row, 3)
                     base_val = val_item.text().strip() if val_item and val_item.text() else ""
                     if base_val == "是" and self._is_saved_to_design_db:
+                        # 已保存到设计活动库的产品：若外径是按公式算出来的，界面应显示为“—”
                         dn = _get_dn_from_design(self)
                         if dn is not None:
                             current_series = _get_series_from_general(self)
-                            if current_series == "-":
-                                lookup_series = _determine_diameter_series() or "公制系列"
-                            elif current_series:
-                                lookup_series = current_series
-                            else:
-                                lookup_series = _determine_diameter_series() or "公制系列"
-                            outer_d_from_mapping = _get_outer_diameter_from_mapping(dn, lookup_series)
-                            row_series = self._find_row_by_param_name(table, "外径系列")
-                            if outer_d_from_mapping is None:
-                                # 上表未列出的 DN：外径保持库中数值；
-                                # 外径系列是否需要显示为「-」取决于当前库/保存值（不要覆盖用户已保存的系列）。
-                                setattr(self, "_outer_last_non_table_dn", dn)
-                                if row_series >= 0 and (not current_series or current_series.strip() == "-"):
-                                    s_item = table.item(row_series, 3)
-                                    if s_item and s_item.text().strip() != "-":
-                                        table.blockSignals(True)
-                                        try:
-                                            s_item.setText("-")
-                                        finally:
-                                            table.blockSignals(False)
-                                if hasattr(self, "_calculated_outer_diameter"):
-                                    self._calculated_outer_diameter = None
-                            elif current_series == "-" and row_series >= 0:
-                                # 库中误存为公式态「-」但 DN 实际在表内：恢复为英制/公制
-                                s_item = table.item(row_series, 3)
-                                if s_item:
-                                    table.blockSignals(True)
-                                    try:
-                                        s_item.setText(lookup_series)
-                                    finally:
-                                        table.blockSignals(False)
-                                if hasattr(self, "_calculated_outer_diameter"):
-                                    self._calculated_outer_diameter = None
+                            if current_series:
+                                outer_d_from_mapping = _get_outer_diameter_from_mapping(dn, current_series)
+                                if outer_d_from_mapping is None:
+                                    row_diameter = self._find_row_by_param_name(table, "外径")
+                                    if row_diameter >= 0:
+                                        d_item = table.item(row_diameter, 3)
+                                        if d_item:
+                                            db_value = d_item.text().strip()
+                                            if db_value and db_value not in ("—", "/"):
+                                                table.blockSignals(True)
+                                                try:
+                                                    d_item.setText("—")
+                                                    self._calculated_outer_diameter = db_value
+                                                finally:
+                                                    table.blockSignals(False)
+                                                print(f"[外径加载] 公式计算值，界面显示=—, 缓存={db_value}")
         except Exception as e:
             print(f"[数据加载后处理外径显示] 失败: {e}")
         # 1112新修改-条件输入表格实质性变化：
-        # 将“导入 + 初始联动修正（含公式外径时外径系列为「-」）”之后的界面状态
+        # 将“导入 + 初始联动修正（包括外径显示为'—'）”之后的界面状态
         # 作为快照基准，避免仅打开界面就被视为实质性修改。
         self._save_initial_snapshots()
 
@@ -1176,6 +1158,35 @@ class DesignConditionInputViewer(QWidget):
             QMessageBox.critical(self, "保存失败", f"保存数据出错：\n{str(e)}")
             return (False, [])
 
+    def _offer_discard_when_local_xlsx_missing(self, *, for_close_tab: bool) -> bool:
+        """
+        本地条件输入表不可写时，询问是否放弃未保存修改并关闭标签或切换界面。
+        """
+        if for_close_tab:
+            msg = "本次保存失败，关闭后，未保存的内容将清空，是否仍要关闭？"
+        else:
+            msg = "本次保存失败，离开后，未保存的内容将清空，是否仍要离开？"
+        return show_confirm_dialog(self, "保存失败", msg)
+
+    def _offer_close_after_save_failed_for_datagb(self, exc: Exception) -> bool:
+        """
+        仅用于关闭标签页流程（check_and_save_datagb）：
+        保存失败后提示错误，再询问是否仍要关闭界面（未保存修改将丢失）。
+        """
+        if getattr(self, "_local_condition_xlsx_missing", False):
+            return self._offer_discard_when_local_xlsx_missing(for_close_tab=True)
+
+        QMessageBox.warning(
+            self,
+            "保存失败",
+            f"保存数据时发生错误，无法自动保存。\n\n错误信息：{exc}",
+        )
+        return show_confirm_dialog(
+            self,
+            "确认关闭",
+            "是否仍要关闭条件输入界面？未保存的修改将丢失。",
+        )
+
     # 1106新修改
     def check_and_save_datagb(self, force=False, skip_confirm=False):
         """
@@ -1193,6 +1204,8 @@ class DesignConditionInputViewer(QWidget):
             # 不需要检查，直接允许关闭
             return (True, [])
 
+        # 标记：当前处于“主窗体关闭标签页”触发的检查流程里
+        self._in_close_tab_flow = True
         try:
             # 需要检查必填项
             is_valid, missing_fields = self.only_check_validate_data()
@@ -1239,7 +1252,8 @@ class DesignConditionInputViewer(QWidget):
                     except Exception as e:
                         # 如果保存失败，弹窗提示并阻止关闭
                         print(f"保存失败，无法关闭: {e}")
-                        QMessageBox.critical(self, "保存失败", f"保存数据时发生错误，关闭操作已取消。\n\n错误信息: {e}")
+                        if self._offer_close_after_save_failed_for_datagb(e):
+                            return (True, [])
                         return (False, [])
                 # 必填项完整，没有修改，直接允许关闭
                 return (True, [])
@@ -1292,13 +1306,17 @@ class DesignConditionInputViewer(QWidget):
             except Exception as e:
                 # 如果保存失败，弹窗提示并阻止关闭
                 print(f"保存失败，无法关闭: {e}")
-                QMessageBox.critical(self, "保存失败", f"保存数据时发生错误，关闭操作已取消。\n\n错误信息: {e}")
+                if self._offer_close_after_save_failed_for_datagb(e):
+                    return (True, missing_fields)
                 return (False, missing_fields)
 
         except Exception as e:
             print(f"检查数据出错：{str(e)}")
             QMessageBox.critical(self, "检查失败", f"检查数据时发生错误：\n{str(e)}")
             return (False, [])
+
+        finally:
+            self._in_close_tab_flow = False
 
     # 1106新修改
     def check_and_save_dataqh(self, force=False, skip_confirm=False):
@@ -1361,6 +1379,10 @@ class DesignConditionInputViewer(QWidget):
                     except Exception as e:
                         # 如果保存失败，弹窗提示并阻止切换
                         print(f"保存失败，无法切换: {e}")
+                        if getattr(self, "_local_condition_xlsx_missing", False):
+                            if self._offer_discard_when_local_xlsx_missing(for_close_tab=False):
+                                return (True, [])
+                            return (False, [])
                         QMessageBox.critical(self, "保存失败", f"保存数据时发生错误，切换操作已取消。\n\n错误信息: {e}")
                         return (False, [])
                 # 必填项完整，没有修改，直接允许切换
@@ -1414,6 +1436,10 @@ class DesignConditionInputViewer(QWidget):
             except Exception as e:
                 # 如果保存失败，弹窗提示并阻止切换
                 print(f"保存失败，无法切换: {e}")
+                if getattr(self, "_local_condition_xlsx_missing", False):
+                    if self._offer_discard_when_local_xlsx_missing(for_close_tab=False):
+                        return (True, missing_fields)
+                    return (False, missing_fields)
                 QMessageBox.critical(self, "保存失败", f"保存数据时发生错误，切换操作已取消。\n\n错误信息: {e}")
                 return (False, missing_fields)
 

@@ -918,6 +918,98 @@ class MainWindow(QtWidgets.QMainWindow):
 
         return self.stats_page_instance
 
+    # 4，12新修改--本地文件夹误删1共7
+    def apply_readonly_to_widget_tree(self, root, readonly: bool):
+        """业务界面只读：输入框、表格、表内控件、按钮等。"""
+        if root is None:
+            return
+        from PyQt5.QtWidgets import (
+            QAbstractItemView,
+            QAbstractSpinBox,
+            QComboBox,
+            QDateEdit,
+            QTimeEdit,
+            QLineEdit,
+            QTextEdit,
+            QPlainTextEdit,
+            QPushButton,
+            QToolButton,
+            QTableWidget,
+            QTreeWidget,
+            QCheckBox,
+            QRadioButton,
+        )
+        from PyQt5.QtCore import Qt
+
+        edit_triggers_default = (
+            QAbstractItemView.DoubleClicked
+            | QAbstractItemView.SelectedClicked
+            | QAbstractItemView.EditKeyPressed
+        )
+
+        for w in root.findChildren(QLineEdit):
+            w.setReadOnly(readonly)
+        for w in root.findChildren(QTextEdit):
+            w.setReadOnly(readonly)
+        for w in root.findChildren(QPlainTextEdit):
+            w.setReadOnly(readonly)
+        for w in root.findChildren(QComboBox):
+            w.setEnabled(not readonly)
+        for w in root.findChildren(QAbstractSpinBox):
+            w.setEnabled(not readonly)
+        for w in root.findChildren(QDateEdit):
+            w.setEnabled(not readonly)
+        for w in root.findChildren(QTimeEdit):
+            w.setEnabled(not readonly)
+        for w in root.findChildren(QPushButton):
+            w.setEnabled(not readonly)
+        for w in root.findChildren(QToolButton):
+            w.setEnabled(not readonly)
+        for w in root.findChildren(QCheckBox):
+            w.setEnabled(not readonly)
+        for w in root.findChildren(QRadioButton):
+            w.setEnabled(not readonly)
+
+        for w in root.findChildren(QTableWidget):
+            if readonly:
+                w.setEditTriggers(QAbstractItemView.NoEditTriggers)
+                for r in range(w.rowCount()):
+                    for c in range(w.columnCount()):
+                        it = w.item(r, c)
+                        if it:
+                            it.setFlags(it.flags() & ~Qt.ItemIsEditable)
+                        cw = w.cellWidget(r, c)
+                        if cw is not None:
+                            cw.setEnabled(False)
+            else:
+                w.setEditTriggers(edit_triggers_default)
+                for r in range(w.rowCount()):
+                    for c in range(w.columnCount()):
+                        cw = w.cellWidget(r, c)
+                        if cw is not None:
+                            cw.setEnabled(True)
+
+        for w in root.findChildren(QTreeWidget):
+            if readonly:
+                w.setEditTriggers(QAbstractItemView.NoEditTriggers)
+            else:
+                w.setEditTriggers(edit_triggers_default)
+
+    # 4，12新修改--本地文件夹误删2共7
+    def refresh_all_tabs_readonly_state(self):
+        import modules.chanpinguanli.bianl as bianl
+
+        ro = getattr(bianl, "product_local_files_missing_readonly", False)
+        for i in range(self.tab_widget.count()):
+            title = self.tab_widget.tabText(i)
+            w = self.tab_widget.widget(i)
+            if not w:
+                continue
+            if title in ("", "项目管理"):
+                self.apply_readonly_to_widget_tree(w, False)
+            else:
+                self.apply_readonly_to_widget_tree(w, ro)
+
     def safe_open_tab(self, title, widget_class):
         """安全地打开tab，处理widget创建失败的情况"""
         import modules.chanpinguanli.bianl as bianl
@@ -1234,12 +1326,17 @@ class MainWindow(QtWidgets.QMainWindow):
         for i in range(self.tab_widget.count()):
             if self.tab_widget.tabText(i) == title:
                 self.tab_widget.setCurrentIndex(i)
+                # 4，12新修改--本地文件夹误删3共7
+                self._last_tab_index = i
+                self.refresh_all_tabs_readonly_state()
                 return
 
         # 添加新 tab
         idx = self.tab_widget.addTab(widget, title)
         self.tab_widget.setCurrentIndex(idx)
         self._last_tab_index = idx
+        # 4，12新修改--本地文件夹误删4共7
+        self.refresh_all_tabs_readonly_state()
 
     # === on_tab_changed 改进版 ===
     def on_tab_changed(self, index):
@@ -1332,6 +1429,11 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.tab_widget.setCurrentIndex(new_idx)
                     self._last_tab_index = new_idx
                     print(f"[DEBUG] 已打开新产品界面: {ctitle}")
+                    # 4，12新修改--本地文件夹误删5共7
+                    try:
+                        self.refresh_all_tabs_readonly_state()
+                    except Exception:
+                        pass
                 # 重新连接信号
                 self.tab_widget.currentChanged.connect(self.on_tab_changed)
                 return
@@ -1428,6 +1530,11 @@ class MainWindow(QtWidgets.QMainWindow):
                         self.tab_widget.setCurrentIndex(new_idx)
                         self._last_tab_index = new_idx  # 更新 last_index
                         print(f"[DEBUG] 已打开新产品界面: {ctitle}")
+                        # 4，12新修改--本地文件夹误删6共7
+                        try:
+                            self.refresh_all_tabs_readonly_state()
+                        except Exception:
+                            pass
                     else:
                         print(f"[ERROR] 找不到要创建的界面: {ctitle}")
 
@@ -1459,6 +1566,11 @@ class MainWindow(QtWidgets.QMainWindow):
                 print(
                     f"[DEBUG][on_tab_changed] 无需关闭界面，直接同步 last_confirmed → {self.last_confirmed_product_id}")
         self._last_tab_index = index
+        # 4，12新修改--本地文件夹误删7共7
+        try:
+            self.refresh_all_tabs_readonly_state()
+        except Exception as _ro_e:
+            print(f"[on_tab_changed] refresh_all_tabs_readonly_state: {_ro_e}")
         # 1107新修改
         if target_tab_title != "管口及附件定义":
             self._tip_timer.start(5000)  # 设置定时器，用于显示提示信息

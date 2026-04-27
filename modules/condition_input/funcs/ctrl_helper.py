@@ -240,19 +240,36 @@ class DropDownClickOnlyFilter(QObject):
         self.table = table
         self.smart_delegate = smart_delegate # 智能代理对象（用于判断单元格类型）
 
+    def _already_editing(self, index):
+        if self.table.state() != QTableWidget.EditingState:
+            return False
+        cur = self.table.currentIndex()
+        return cur.isValid() and cur.row() == index.row() and cur.column() == index.column()
+
+    def _single_click_edit_line_cell(self, index):
+        """非下拉、但可编辑的单元格：单击即 edit（与下拉格一致）。"""
+        if not index.isValid() or self._already_editing(index):
+            return
+        # 设计数据第 1 列：参数名 + 多工况角标，勿抢点击
+        if self.table.objectName() == "tableWidget_design_data" and index.column() == 1:
+            return
+        item = self.table.item(index.row(), index.column())
+        if item is None or not (item.flags() & Qt.ItemIsEditable):
+            return
+        self.table.setCurrentIndex(index)
+        self.table.edit(index)
+
     def eventFilter(self, obj, event):
-        # 处理鼠标点击触发下拉框
-        if event.type() == QEvent.MouseButtonPress:
-            pos = event.pos()# 获取鼠标点击在表格视口内的坐标
+        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            pos = event.pos()
             index = self.table.indexAt(pos)
-            # 判断：如果点击的是有效单元格，且该单元格是下拉框类型
-            if index.isValid() and self.smart_delegate.is_dropdown_cell(index):
-                self.table.setCurrentIndex(index)
-                self.table.edit(index)  # ✅ 直接同步触发
-        # if event.type() == QEvent.Wheel:
-        #     index = self.table.currentIndex()
-        #     if index.isValid() and self.smart_delegate.is_dropdown_cell(index):
-        #         return True  # 拦截滚轮事件
+            if index.isValid():
+                if getattr(self.smart_delegate, "is_dropdown_cell", lambda _i: False)(index):
+                    if not self._already_editing(index):
+                        self.table.setCurrentIndex(index)
+                        self.table.edit(index)
+                else:
+                    self._single_click_edit_line_cell(index)
         return super().eventFilter(obj, event)
 
 class DeleteKeyFilter(QObject):
@@ -265,7 +282,12 @@ class DeleteKeyFilter(QObject):
     def eventFilter(self, obj, event):
         if event.type() == QEvent.KeyPress and event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
             selected_items = self.table.selectedItems()
+            if not selected_items:
+                return super().eventFilter(obj, event)
             for item in selected_items:
+                # 序号列、参数名称列、参数单位列等不可编辑列：不误删（与 fill_table / render 中 flags 一致）
+                if not (item.flags() & Qt.ItemIsEditable):
+                    continue
                 row, col = item.row(), item.column()
                 old_value = item.text()
 
@@ -287,7 +309,8 @@ class DeleteKeyFilter(QObject):
                     from .funcs_cdt_input import handle_cross_table_triggers
                     handle_cross_table_triggers(self.viewer, self.table, row, col)
 
-            return True  # 拦截默认行为
+            # 有选区时消费 Delete/Backspace，避免表格默认行为清掉只读格
+            return True
         return super().eventFilter(obj, event)
 
 

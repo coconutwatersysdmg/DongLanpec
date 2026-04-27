@@ -942,7 +942,9 @@ def delete_selected_product():
         # 设置焦点 + 统一高亮
         # bianl.product_table.setCurrentCell(new_row, new_col)
         # on_product_row_clicked(new_row, new_col)  # 会自动调用高亮逻辑
+        bianl.product_table.blockSignals(True)
         bianl.product_table.setCurrentCell(bianl.row, bianl.colum)
+        bianl.product_table.blockSignals(False)
         bianl.product_table.setFocus()
         on_product_row_clicked(bianl.row, bianl.colum)
 

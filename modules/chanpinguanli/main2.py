@@ -243,6 +243,9 @@ class cpgl_Stats(QtWidgets.QWidget):
         # ✅ 新增：键盘移动\点击
 
         bianl.product_table.currentCellChanged.connect(main.on_product_row_clicked)
+        # 右键菜单：复制产品
+        bianl.product_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        bianl.product_table.customContextMenuRequested.connect(main.show_product_table_context_menu)
 
         # 产品定义 确定
         # self.findChild(QtWidgets.QPushButton, "confirm_definition_btn").clicked.connect(main.confirm_product_definition)

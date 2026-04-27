@@ -453,7 +453,9 @@ def handle_confirm_product():
         if 0 <= row < total_rows and 0 <= col < total_cols:
             bianl.row = row
             bianl.colum = col
+            bianl.product_table.blockSignals(True)
             bianl.product_table.setCurrentCell(row, col)
+            bianl.product_table.blockSignals(False)
             bianl.product_table.setFocus()
             chanpinguanli_main.on_product_row_clicked(row, col)
             print(f"[✅高亮] 自动高亮行 {row}, 列 {col}")
