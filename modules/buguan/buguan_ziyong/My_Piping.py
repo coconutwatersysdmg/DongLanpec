@@ -42,6 +42,7 @@ from PyQt5.QtWidgets import (
     QGridLayout,
     QMessageBox,
     QComboBox,
+    QStyledItemDelegate,
 )
 from modules.buguan.buguan_ziyong.axial_design_page import AxialDesignPage
 from modules.buguan.buguan_ziyong.database_utils import create_activity_connection
@@ -144,6 +145,24 @@ class SignalBlocker:
         """恢复信号到原始状态"""
         if self.obj is not None and self._was_blocked is not None:
             self.obj.blockSignals(self._was_blocked)
+
+
+class _ParamNameDisplayDelegate(QStyledItemDelegate):
+    """参数名显示代理：仅改显示文案，不改底层存储键。"""
+
+    def __init__(self, owner=None, parent=None):
+        super().__init__(parent)
+        self._owner = owner
+
+    def displayText(self, value, locale):
+        text = "" if value is None else str(value)
+        try:
+            hx = str(getattr(self._owner, "heat_exchanger", "") or "").strip().upper()
+            if hx in ("AKU", "BKU") and text.strip() == "壳体内直径 Dis":
+                return "壳体小端内直径"
+        except Exception:
+            pass
+        return super().displayText(value, locale)
 
 
 def on_product_id_changed(new_id):
@@ -3218,7 +3237,7 @@ class TubeLayoutEditor(QMainWindow):
             "吊环螺钉规格",
             "吊环螺钉孔中心距",
             "吊环螺钉数量",
-            "折流板外径",
+            "折流/支持板外径",
             "折流/支持板间距",
             "折流板类型",
             "折流板切口方向",
@@ -3365,6 +3384,14 @@ class TubeLayoutEditor(QMainWindow):
                                         param_value = param_value.strip()
                                     if isinstance(unit, str):
                                         unit = unit.strip()
+                                except Exception:
+                                    pass
+
+                                # AKU/BKU 兼容：产品库若存“壳体小端内直径”，内部统一按 Dis 键处理
+                                try:
+                                    hx_norm = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
+                                    if hx_norm in ("AKU", "BKU") and param_name == "壳体小端内直径":
+                                        param_name = "壳体内直径 Dis"
                                 except Exception:
                                     pass
 
@@ -4025,7 +4052,7 @@ class TubeLayoutEditor(QMainWindow):
                                         "管箱内直径 Dit",
                                         "换热管外径 do",
                                         "换热管公称长度 LN",
-                                        "折流板外径",
+                                        "折流/支持板外径",
                                         "折流板切口方向",
                                         "折流板要求切口率",
                                     ):
@@ -4828,7 +4855,7 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 continue
 
-        # 收集超出折流板外径的坐标，最后统一提示
+        # 收集超出折流/支持板外径的坐标，最后统一提示
         invalid_centers = []
         for center in parsed_side_abs_centers:
             result = self.build_free_form_lagan(
@@ -4850,7 +4877,7 @@ class TubeLayoutEditor(QMainWindow):
             # QMessageBox.warning(
             #     self,
             #     "警告",
-            #     f"有 {count} 个拉杆位置超出折流板外径，已跳过绘制。\n"
+            #     f"有 {count} 个拉杆位置超出折流/支持板外径，已跳过绘制。\n"
             #     f"超出范围的坐标数量: {count}"
             # )
         # self.build_side_lagan(side_centers)
@@ -6132,7 +6159,7 @@ class TubeLayoutEditor(QMainWindow):
             basic_params = {}
             params_to_fetch = [
                 "换热管公称长度 LN",
-                "折流板外径",
+                "折流/支持板外径",
                 "折流板切口方向",
                 "折流板要求切口率",
                 "公称直径 DN",
@@ -6201,7 +6228,7 @@ class TubeLayoutEditor(QMainWindow):
             "折流板要求切口率": ("LB_BafflePerStr", None),
             "切口距垂直中心线间距": ("LB_BaffleToODistance", None),
             "折流/支持板间距": ("BaffleSpacing", None),
-            "折流板外径": ("LB_BaffleOD", None),
+            "折流/支持板外径": ("LB_BaffleOD", None),
             "分程隔板两侧相邻管中心距（竖直）": ("LB_SN", None),
             "分程隔板两侧相邻管中心距（水平）": ("LB_SNH", None),
             "隔条位置尺寸 W": ("LB_W", None),
@@ -6481,7 +6508,7 @@ class TubeLayoutEditor(QMainWindow):
             "LB_BafflePerStr": "折流板要求切口率",
             "LB_BaffleToODistance": "切口距垂直中心线间距",
             "BaffleSpacing": "折流/支持板间距",
-            "LB_BaffleOD": "折流板外径",
+            "LB_BaffleOD": "折流/支持板外径",
             "LB_SN": "分程隔板两侧相邻管中心距（竖直）",
             "LB_SNH": "分程隔板两侧相邻管中心距（水平）",
             "LB_W": "隔条位置尺寸 W",
@@ -6834,7 +6861,7 @@ class TubeLayoutEditor(QMainWindow):
             "折流板要求切口率": ("LB_BafflePerStr", None),
             "切口距垂直中心线间距": ("LB_BaffleToODistance", None),
             "折流/支持板间距": ("BaffleSpacing", None),
-            "折流板外径": ("LB_BaffleOD", None),
+            "折流/支持板外径": ("LB_BaffleOD", None),
             "分程隔板两侧相邻管中心距（竖直）": ("LB_SN", None),
             "分程隔板两侧相邻管中心距（水平）": ("LB_SNH", None),
             "隔条位置尺寸 W": ("LB_W", None),
@@ -7235,7 +7262,7 @@ class TubeLayoutEditor(QMainWindow):
             "LB_BafflePerStr": "折流板要求切口率",
             "LB_BaffleToODistance": "切口距垂直中心线间距",
             "BaffleSpacing": "折流/支持板间距",
-            "LB_BaffleOD": "折流板外径",
+            "LB_BaffleOD": "折流/支持板外径",
             "LB_SN": "分程隔板两侧相邻管中心距（竖直）",
             "LB_SNH": "分程隔板两侧相邻管中心距（水平）",
             "LB_W": "隔条位置尺寸 W",
@@ -7466,7 +7493,7 @@ class TubeLayoutEditor(QMainWindow):
                     return False
 
             elif param_name == "防冲板宽度":
-                # 获取折流板外径
+                # 获取折流/支持板外径
                 baffle_diameter = self.get_baffle_diameter()
                 if value <= 0:
                     QMessageBox.warning(
@@ -7480,7 +7507,7 @@ class TubeLayoutEditor(QMainWindow):
                     QMessageBox.warning(
                         self,
                         "输入错误",
-                        f'您输入的"{param_name}"必须小于折流板外径，请核对后重新输入！',
+                        f'您输入的"{param_name}"必须小于折流/支持板外径，请核对后重新输入！',
                     )
                     self.clear_selection_highlight()
                     return False
@@ -7496,7 +7523,7 @@ class TubeLayoutEditor(QMainWindow):
                     return False
 
             elif param_name == "至圆筒内壁距离":
-                # 获取折流板外径
+                # 获取折流/支持板外径
                 baffle_diameter = self.get_baffle_diameter()
                 if value <= 0:
                     QMessageBox.warning(
@@ -7510,7 +7537,7 @@ class TubeLayoutEditor(QMainWindow):
                     QMessageBox.warning(
                         self,
                         "输入错误",
-                        f'您输入的"{param_name}"必须小于折流板外径的一半，请核对后重新输入！',
+                        f'您输入的"{param_name}"必须小于折流/支持板外径的一半，请核对后重新输入！',
                     )
                     self.clear_selection_highlight()
                     return False
@@ -7725,7 +7752,7 @@ class TubeLayoutEditor(QMainWindow):
                     item.setText(original_value)
 
             elif param_name == "防冲板宽度":
-                # 获取折流板外径
+                # 获取折流/支持板外径
                 baffle_diameter = self.get_baffle_diameter()
                 if baffle_diameter is not None and (
                         value <= 0 or value >= baffle_diameter
@@ -7733,7 +7760,7 @@ class TubeLayoutEditor(QMainWindow):
                     QMessageBox.warning(
                         self,
                         "输入错误",
-                        f"您输入的“{param_name}”必须大于0且小于折流板外径，请核对后重新输入！",
+                        f"您输入的“{param_name}”必须大于0且小于折流/支持板外径，请核对后重新输入！",
                     )
                     item.setText(original_value)
 
@@ -7747,7 +7774,7 @@ class TubeLayoutEditor(QMainWindow):
                     item.setText(original_value)
 
             elif param_name == "至圆筒内壁距离":
-                # 获取折流板外径
+                # 获取折流/支持板外径
                 baffle_diameter = self.get_baffle_diameter()
                 if baffle_diameter is not None and (
                         value <= 0 or value >= baffle_diameter / 2
@@ -7755,7 +7782,7 @@ class TubeLayoutEditor(QMainWindow):
                     QMessageBox.warning(
                         self,
                         "输入错误",
-                        f"您输入的“{param_name}”必须大于0且小于折流板外径的一半，请核对后重新输入！",
+                        f"您输入的“{param_name}”必须大于0且小于折流/支持板外径的一半，请核对后重新输入！",
                     )
                     item.setText(original_value)
 
@@ -7766,11 +7793,11 @@ class TubeLayoutEditor(QMainWindow):
             self._is_validating = False
 
     def get_baffle_diameter(self):
-        """获取折流板外径的值，用于参数验证"""
-        # 假设在param_table中存在"折流板外径"参数
+        """获取折流/支持板外径的值，用于参数验证"""
+        # 假设在param_table中存在"折流/支持板外径"参数
         for row in range(self.param_table.rowCount()):
             param_name_item = self.param_table.item(row, 1)
-            if param_name_item and param_name_item.text() == "折流板外径":
+            if param_name_item and param_name_item.text() == "折流/支持板外径":
                 value_item = self.param_table.item(row, 2)
                 if value_item:
                     try:
@@ -8531,7 +8558,7 @@ class TubeLayoutEditor(QMainWindow):
                 di_row = row
             elif param_name == "公称直径 DN":
                 dn_row = row
-            elif param_name == "折流板外径":
+            elif param_name == "折流/支持板外径":
                 baffle_row = row
             elif param_name == "换热管外径 do":
                 do_row = row
@@ -8598,7 +8625,7 @@ class TubeLayoutEditor(QMainWindow):
                 if range_type_item and range_type_item.text().strip():
                     range_type_value = range_type_item.text()
 
-        # 3. 更新折流/支持板外径（折流板外径）
+        # 3. 更新折流/支持板外径（折流/支持板外径）
         # 按表8：以 公称直径 DN 为基准确定默认值，且允许用户手动修改。
         # 自动更新时：若用户已手动修改（该行在 modified_rows 内），则不覆盖用户输入。
         if dn_value is not None and baffle_row != -1:
@@ -8654,7 +8681,7 @@ class TubeLayoutEditor(QMainWindow):
 
             if should_overwrite:
                 self._update_table_cell(baffle_row, 2, f"{max_baffle_od:.1f}")
-                print(f"已更新折流板外径(按DN表8): {max_baffle_od:.1f}")
+                print(f"已更新折流/支持板外径(按DN表8): {max_baffle_od:.1f}")
 
         # 4. 更新拉杆形式（逻辑完全保留）
         if lg_row != -1 and do_value is not None:
@@ -12327,7 +12354,7 @@ class TubeLayoutEditor(QMainWindow):
                     shell_inner_diameter = float(param_value)
                 except ValueError:
                     shell_inner_diameter = None
-            elif param_name == "折流板外径":
+            elif param_name == "折流/支持板外径":
                 baffle_diameter_row = row
                 try:
                     baffle_diameter = float(param_value)
@@ -12362,7 +12389,7 @@ class TubeLayoutEditor(QMainWindow):
         self._is_validating = True
 
         try:
-            if changed_param_name == "折流板外径":
+            if changed_param_name == "折流/支持板外径":
                 if baffle_diameter is None or baffle_diameter <= 0:
                     return
 
@@ -12370,7 +12397,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 if cut_rate is not None and 0 <= cut_rate <= 50:
                     # 按规范：中心线间距 x = OD/2 - 切口率 * OD
-                    # 这里的 OD 取折流/支持板外径（即折流板外径 baffle_diameter），而非壳体内直径 Dis
+                    # 这里的 OD 取折流/支持板外径（即折流/支持板外径 baffle_diameter），而非壳体内直径 Dis
                     cut_size = (cut_rate / 100) * baffle_diameter
                     new_spacing = baffle_radius - cut_size
 
@@ -12576,7 +12603,7 @@ class TubeLayoutEditor(QMainWindow):
             "壳体内直径 Dis",
             "管箱内直径 Dit",
             "换热管外径 do",
-            "折流板外径",
+            "折流/支持板外径",
             "折流板切口与中心线间距a",
             "折流板要求切口率",
             "管程程数",
@@ -12624,7 +12651,7 @@ class TubeLayoutEditor(QMainWindow):
             try:
                 if (
                         getattr(self, "_suppress_baffle_od_warn", False)
-                        and param_name == "折流板外径"
+                        and param_name == "折流/支持板外径"
                 ):
                     return
                 if (
@@ -12724,8 +12751,8 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception as e:
                     print(f"[on_table_item_changed] 刷新拉杆标准摘要失败: {e}")
 
-            # 提前单独处理：折流板外径（避免后续分支重复校验与弹窗）
-            if param_name == "折流板外径":
+            # 提前单独处理：折流/支持板外径（避免后续分支重复校验与弹窗）
+            if param_name == "折流/支持板外径":
                 try:
                     # 标记本次已检查
                     self._baffle_od_checked = True
@@ -12850,7 +12877,7 @@ class TubeLayoutEditor(QMainWindow):
                         try:
                             if hasattr(self, "original_param_values"):
                                 prev_val = self.original_param_values.get(
-                                    "折流板外径", None
+                                    "折流/支持板外径", None
                                 )
                         except Exception:
                             pass
@@ -12878,11 +12905,11 @@ class TubeLayoutEditor(QMainWindow):
                             self._is_programmatic_update = True
                             if not hasattr(self, "_programmatic_update_params"):
                                 self._programmatic_update_params = set()
-                            self._programmatic_update_params.add("折流板外径")
+                            self._programmatic_update_params.add("折流/支持板外径")
                             changed_item.setText(str(prev_val))
                         finally:
                             try:
-                                self._programmatic_update_params.discard("折流板外径")
+                                self._programmatic_update_params.discard("折流/支持板外径")
                             except Exception:
                                 pass
                             try:
@@ -12900,7 +12927,7 @@ class TubeLayoutEditor(QMainWindow):
                         # 同步原值基线
                         try:
                             if hasattr(self, "original_param_values"):
-                                self.original_param_values["折流板外径"] = str(prev_val)
+                                self.original_param_values["折流/支持板外径"] = str(prev_val)
                         except Exception:
                             pass
                     # 清除抑制标志（延迟一个事件循环）
@@ -14089,13 +14116,13 @@ class TubeLayoutEditor(QMainWindow):
                             )
                         self.isDi_change = True
                     if param_name in [
-                        "折流板外径",
+                        "折流/支持板外径",
                         "折流板切口与中心线间距a",
                         "折流板要求切口率",
                         "折流板切口方向",
                     ]:
-                        # 校验：折流板外径不得大于壳体内直径 Dis
-                        if param_name == "折流板外径":
+                        # 校验：折流/支持板外径不得大于壳体内直径 Dis
+                        if param_name == "折流/支持板外径":
                             try:
                                 di_row = -1
                                 di_val = None
@@ -14142,9 +14169,9 @@ class TubeLayoutEditor(QMainWindow):
                                         QMessageBox.warning(
                                             self,
                                             "提示",
-                                            f"折流板外径不应大于壳体内直径Di {di_val:g} mm!",
+                                            f"折流/支持板外径不应大于壳体内直径Di {di_val:g} mm!",
                                         )
-                                        # 回退优先级：LB_BaffleOD -> original_param_values['折流板外径'] -> Di
+                                        # 回退优先级：LB_BaffleOD -> original_param_values['折流/支持板外径'] -> Di
                                         try:
                                             prev_val = None
                                             # 1) 从 input_json
@@ -14172,7 +14199,7 @@ class TubeLayoutEditor(QMainWindow):
                                             ):
                                                 prev_val = (
                                                     self.original_param_values.get(
-                                                        "折流板外径", None
+                                                        "折流/支持板外径", None
                                                     )
                                                 )
                                             # 3) 再退到 Di
@@ -14224,7 +14251,7 @@ class TubeLayoutEditor(QMainWindow):
                             # 成功更新后，记录最新有效值，作为下次回退的基准
                             try:
                                 if hasattr(self, "original_param_values"):
-                                    self.original_param_values["折流板外径"] = str(
+                                    self.original_param_values["折流/支持板外径"] = str(
                                         param_value
                                     ).strip()
                             except Exception:
@@ -14380,12 +14407,19 @@ class TubeLayoutEditor(QMainWindow):
                 self.side_dangban_thick = param["参数值"]
 
         self.param_table.setRowCount(len(params))
+        # 参数名显示壳子：AKU/BKU 时把 Dis 显示为“壳体小端内直径”（仅显示，不改内部键）
+        try:
+            self.param_table.setItemDelegateForColumn(
+                1, _ParamNameDisplayDelegate(owner=self, parent=self.param_table)
+            )
+        except Exception:
+            pass
         self._is_validating = False
         self._original_values = {}
 
         self.baffle_params_rows = {
             "壳体内直径 Dis": None,
-            "折流板外径": None,
+            "折流/支持板外径": None,
             "折流板切口与中心线间距a": None,
             "折流板要求切口率": None,
             "换热管外径 do": None,
@@ -17665,7 +17699,7 @@ class TubeLayoutEditor(QMainWindow):
             "吊环螺钉规格",
             "吊环螺钉孔中心距",
             "吊环螺钉数量",
-            "折流板外径",
+            "折流/支持板外径",
             "折流/支持板间距",
             "折流板类型",
             "折流板切口方向",
@@ -18220,7 +18254,7 @@ class TubeLayoutEditor(QMainWindow):
     def can_place_lagan_without_intersect(self, selected_centers, lagan_length) -> bool:
         """
         判断以 selected_centers 中的绝对坐标为圆心、以 lagan_length 为直径的小圆，
-        是否与折流板外径对应的大圆相交（或发生相切视为不相交）。
+        是否与折流/支持板外径对应的大圆相交（或发生相切视为不相交）。
 
         Args:
             selected_centers: 包含绝对坐标的列表/元组，如 [(x, y)]。
@@ -18248,7 +18282,7 @@ class TubeLayoutEditor(QMainWindow):
         if candidate_coord is None:
             return False
 
-        # 获取折流板外径（作为大圆直径）
+        # 获取折流/支持板外径（作为大圆直径）
         try:
             baffle_od_raw = self.get_Baffle_OD()
             baffle_od = float(baffle_od_raw)
@@ -18266,13 +18300,13 @@ class TubeLayoutEditor(QMainWindow):
             return False
 
         # 计算半径、圆心距
-        R = baffle_od / 2.0  # 大圆半径（折流板外径的半径）
+        R = baffle_od / 2.0  # 大圆半径（折流/支持板外径的半径）
         r = lagan_length / 2.0  # 小圆半径（拉杆的半径）
         x0, y0 = candidate_coord
         distance = math.hypot(x0, y0)  # 拉杆圆心到原点的距离
         epsilon = 1e-9
 
-        # 判断拉杆是否在折流板外径内部（安全）
+        # 判断拉杆是否在折流/支持板外径内部（安全）
         # 拉杆在折流板内部的条件：拉杆的最外边缘（圆心距离 + 拉杆半径）不超过折流板半径
         # 即：distance + r <= R + epsilon
 
@@ -18280,8 +18314,8 @@ class TubeLayoutEditor(QMainWindow):
         if distance + r <= R + epsilon:
             return True
 
-        # 情况2：拉杆超出折流板外径或与折流板相交 => 不安全
-        # 如果 distance + r > R，说明拉杆至少有一部分超出折流板外径
+        # 情况2：拉杆超出折流/支持板外径或与折流板相交 => 不安全
+        # 如果 distance + r > R，说明拉杆至少有一部分超出折流/支持板外径
         return False
 
     from typing import List, Tuple
@@ -18301,7 +18335,7 @@ class TubeLayoutEditor(QMainWindow):
         cut_direction = None  # 折流板切口方向
         cut_rate = None  # 折流板要求切口率
         shell_inner_diameter = None  # 壳体内直径
-        baffle_outer_diameter = None  # 折流板外径
+        baffle_outer_diameter = None  # 折流/支持板外径
         a_distance = None  # A型板切口与中心线间距a
         b_distance = None  # B型板切口与中心线间距b
 
@@ -18337,7 +18371,7 @@ class TubeLayoutEditor(QMainWindow):
                 except ValueError:
                     # QMessageBox.warning(self, "参数错误", "壳体内直径必须为数值")
                     return
-            elif param_name == "折流板外径":
+            elif param_name == "折流/支持板外径":
                 try:
                     baffle_outer_diameter = float(param_value)
                 except ValueError:
@@ -18356,7 +18390,7 @@ class TubeLayoutEditor(QMainWindow):
         baffle_type_text = (baffle_type or "").strip()
         if baffle_type_text in ["双弓型", "双弓形"]:
             # 双弓型：根据 a/b 画竖向弦线
-            # 优先使用折流板外径作为大圆直径；若缺失则退回壳体内直径
+            # 优先使用折流/支持板外径作为大圆直径；若缺失则退回壳体内直径
             circle_diameter = baffle_outer_diameter or shell_inner_diameter
             if circle_diameter is None:
                 return
@@ -18722,7 +18756,7 @@ class TubeLayoutEditor(QMainWindow):
         param_mapping = {
             # "SN": "分程隔板两侧相邻管中心距（竖直）",
             # "SNH": "分程隔板两侧相邻管中心距（水平）",
-            # "BaffleOD": "折流板外径",
+            # "BaffleOD": "折流/支持板外径",
             # "SlipWayThick": "滑道厚度",
             # "SlipWayAngle": "滑道与竖直中心线夹角",
             # "SlipWayHeight": "滑道高度",
@@ -21192,7 +21226,7 @@ class TubeLayoutEditor(QMainWindow):
             if not name_item:
                 continue
 
-            if name_item.text() == "折流板外径":
+            if name_item.text() == "折流/支持板外径":
                 # 检查单元格是否是QComboBox控件
                 cell_widget = self.param_table.cellWidget(row, 2)
                 if isinstance(cell_widget, QComboBox):
@@ -25386,7 +25420,16 @@ class TubeLayoutEditor(QMainWindow):
             if line_num == "是否以外径为基准":
                 base_on_outer_diameter = str(data.get("参数值", "")).strip()
 
-            safe_line_num = escape_str(line_num)
+            # AKU/BKU：写入产品设计活动库时，Dis 参数名改为“壳体小端内直径”
+            store_line_num = line_num
+            try:
+                hx_norm = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
+                if hx_norm in ("AKU", "BKU") and line_num == "壳体内直径 Dis":
+                    store_line_num = "壳体小端内直径"
+            except Exception:
+                pass
+
+            safe_line_num = escape_str(store_line_num)
             safe_holes_up = escape_str(holes_up)
             if holes_down is None or (
                     isinstance(holes_down, str) and holes_down.strip() == ""
@@ -27607,7 +27650,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 切口率（cut_rate）= (折流板半径 - 切口间距) / 壳体内直径 × 100%
         # 切口间距（cut_spacing）= 折流板半径 - (切口率/100) × 壳体内直径
-        # 折流板半径 = 折流板外径 / 2
+        # 折流板半径 = 折流/支持板外径 / 2
 
         def get_param_value(param_name: str) -> str:
             """从 self.param_table 按参数名读取当前值（支持下拉框/文本）。"""
@@ -27671,7 +27714,7 @@ class TubeLayoutEditor(QMainWindow):
         # ---------- 基本/附加参数定义 ----------
         # 基本参数：始终显示
         base_params = [
-            ("折流板外径", "折流板外径", "mm"),
+            ("折流/支持板外径", "折流/支持板外径", "mm"),
             ("折流/支持板间距", "折流/支持板间距", "mm"),
             ("折流板类型", "折流板类型", ""),
         ]
@@ -27840,7 +27883,7 @@ class TubeLayoutEditor(QMainWindow):
         if show_other_params:
             try:
                 di_str = get_param_value("壳体内直径 Dis")
-                od_str = get_param_value("折流板外径")
+                od_str = get_param_value("折流/支持板外径")
                 rate_str = get_param_value("折流板要求切口率")
                 di = float(di_str) if di_str else None
                 baffle_diameter = float(od_str) if od_str else None
@@ -28229,33 +28272,33 @@ class TubeLayoutEditor(QMainWindow):
                 return
 
             # 获取弹窗中的三个关键参数
-            baffle_diameter = get_float_from_dialog("折流板外径")
+            baffle_diameter = get_float_from_dialog("折流/支持板外径")
             cut_spacing = get_float_from_dialog("折流板切口与中心线间距a")
             cut_rate = get_float_from_dialog("折流板要求切口率")
 
             # 检查必要参数是否存在
             if baffle_diameter is None or baffle_diameter <= 0:
-                # 折流板外径无效，无法计算
+                # 折流/支持板外径无效，无法计算
                 return
 
             # 进入新一轮计算前，先清掉旧的红色提示，避免“上一次错误状态”残留导致后续合法输入仍被判错
             clear_warning()
 
-            # 折流/支持板外径（折流板外径）下限与表8上限校验：在用户输入、失焦时就检查并提示
+            # 折流/支持板外径（折流/支持板外径）下限与表8上限校验：在用户输入、失焦时就检查并提示
             dn_val = get_nominal_dn()
             max_od = calc_max_baffle_od_by_table8(dn_val) if dn_val is not None else None
             if baffle_diameter <= 0:
-                set_warning("折流板外径必须是大于0的数字!")
+                set_warning("折流/支持板外径必须是大于0的数字!")
                 try:
                     from PyQt5.QtWidgets import QMessageBox
 
-                    warn_key = ("折流板外径", "LE_ZERO")
+                    warn_key = ("折流/支持板外径", "LE_ZERO")
                     if last_dialog_warn_key["key"] != warn_key:
                         last_dialog_warn_key["key"] = warn_key
                         QMessageBox.warning(
                             self,
                             "提示",
-                            "折流板外径必须是大于0的数字!",
+                            "折流/支持板外径必须是大于0的数字!",
                         )
                 except Exception:
                     pass
@@ -28266,7 +28309,7 @@ class TubeLayoutEditor(QMainWindow):
                 try:
                     from PyQt5.QtWidgets import QMessageBox
 
-                    warn_key = ("折流板外径", f"{baffle_diameter:.3f}", f"{max_od:.3f}")
+                    warn_key = ("折流/支持板外径", f"{baffle_diameter:.3f}", f"{max_od:.3f}")
                     if last_dialog_warn_key["key"] != warn_key:
                         last_dialog_warn_key["key"] = warn_key
                         QMessageBox.warning(
@@ -28300,7 +28343,7 @@ class TubeLayoutEditor(QMainWindow):
             baffle_radius = baffle_diameter / 2.0
 
             try:
-                if changed_name == "折流板外径":
+                if changed_name == "折流/支持板外径":
                     if baffle_diameter <= 0:
                         return
 
@@ -28400,7 +28443,7 @@ class TubeLayoutEditor(QMainWindow):
 
             # 检查是否是折流板联动参数
             if changed_name in [
-                "折流板外径",
+                "折流/支持板外径",
                 "折流/支持板间距",
                 "折流板要求切口率",
                 "折流板切口与中心线间距a",
@@ -28441,9 +28484,9 @@ class TubeLayoutEditor(QMainWindow):
                 if updating_linked_values["active"]:
                     return
 
-                # 获取壳体内直径和折流板外径
+                # 获取壳体内直径和折流/支持板外径
                 Di = get_shell_inner_diameter()
-                Db = get_float_from_dialog("折流板外径")
+                Db = get_float_from_dialog("折流/支持板外径")
 
                 if changed_name == "弓形弦高切口率":
                     rate = get_float_from_dialog("弓形弦高切口率")
@@ -31750,7 +31793,7 @@ class TubeLayoutEditor(QMainWindow):
             # QMessageBox.warning(
             #     self,
             #     "警告",
-            #     f"有 {len(invalid_centers)} 个拉杆位置超出折流板外径，已跳过绘制。",
+            #     f"有 {len(invalid_centers)} 个拉杆位置超出折流/支持板外径，已跳过绘制。",
             # )
             QMessageBox.warning(
                 self,
@@ -32787,12 +32830,12 @@ class TubeLayoutEditor(QMainWindow):
                 lagan_x = x_left - S
                 lagan_y = y
 
-        # 调用 can_place_lagan_without_intersect 判断是否与折流板外径相交
+        # 调用 can_place_lagan_without_intersect 判断是否与折流/支持板外径相交
         lagan_coord = [(lagan_x, lagan_y)]
         if not self.can_place_lagan_without_intersect(lagan_coord, lagan_length):
             # 返回 False 表示超出范围，不弹窗，由调用者统一处理
             print(
-                f"[build_free_form_lagan] 拉杆位置 ({lagan_x:.2f}, {lagan_y:.2f}) 超出折流板外径，跳过绘制"
+                f"[build_free_form_lagan] 拉杆位置 ({lagan_x:.2f}, {lagan_y:.2f}) 超出折流/支持板外径，跳过绘制"
             )
             self.clear_selection_highlight()
             return False  # 返回 False 表示失败
@@ -35768,7 +35811,7 @@ class TubeLayoutEditor(QMainWindow):
         else:
             n_x, n_y = selected_centers[0]  # 使用原始点作为备选
 
-        # 2. 计算 y = n_y 与折流板外径圆的交点
+        # 2. 计算 y = n_y 与折流/支持板外径圆的交点
         bendblock = self.get_tube_bendblock()
         bendblock_value = float(bendblock)
         R_bend = bendblock_value / 2.0
@@ -36109,7 +36152,7 @@ class TubeLayoutEditor(QMainWindow):
                 actual_coord[0] if actual_coord else (0, 0)
             )  # 使用原始点作为备选
 
-        # 2. 计算 x = n_x 与折流板外径圆的交点（垂直方向）
+        # 2. 计算 x = n_x 与折流/支持板外径圆的交点（垂直方向）
         bendblock = self.get_tube_bendblock()
         bendblock_value = float(bendblock)
         R_bend = bendblock_value / 2.0
@@ -36154,7 +36197,7 @@ class TubeLayoutEditor(QMainWindow):
 
     def build_side_dangban(self, selected_centers, block_length, block_height):
         self.operation_order += 1
-        """构建旁路挡板，确保所有挡板都在折流板外径圆内且紧贴边缘"""
+        """构建旁路挡板，确保所有挡板都在折流/支持板外径圆内且紧贴边缘"""
         if not selected_centers:
             return []
 
@@ -36251,7 +36294,7 @@ class TubeLayoutEditor(QMainWindow):
             # QMessageBox.warning(self, "参数缺失", "未找到换热管外径 do，请先配置参数表")
             return 0
 
-        # 使用折流板外径（或弯曲块尺寸）来限定挡板边界，保持与长度计算一致
+        # 使用折流/支持板外径（或弯曲块尺寸）来限定挡板边界，保持与长度计算一致
         bendblock = self.get_tube_bendblock()
         try:
             bendblock_value = float(bendblock)
@@ -36418,7 +36461,7 @@ class TubeLayoutEditor(QMainWindow):
         return added_count
 
     def build_single_side_dangban(self, selected_centers, block_length, block_height):
-        """构建单侧旁路挡板，确保所有挡板都在折流板外径圆内且紧贴边缘"""
+        """构建单侧旁路挡板，确保所有挡板都在折流/支持板外径圆内且紧贴边缘"""
         if not selected_centers:
             return []
 
@@ -36507,7 +36550,7 @@ class TubeLayoutEditor(QMainWindow):
 
         baffle_diameter = self.get_baffle_diameter()
         if baffle_diameter is None:
-            # QMessageBox.warning(self, "参数错误", "未找到折流板外径参数")
+            # QMessageBox.warning(self, "参数错误", "未找到折流/支持板外径参数")
             return 0
 
         # 计算折流板半径（用于确定挡板边界）
@@ -36645,7 +36688,7 @@ class TubeLayoutEditor(QMainWindow):
     def build_single_side_dangban_vertical(
             self, selected_centers, block_length, block_height
     ):
-        """构建垂直方向单侧旁路挡板，确保所有挡板都在折流板外径圆内且紧贴边缘"""
+        """构建垂直方向单侧旁路挡板，确保所有挡板都在折流/支持板外径圆内且紧贴边缘"""
         if not selected_centers:
             return 0
 
@@ -36909,7 +36952,7 @@ class TubeLayoutEditor(QMainWindow):
 
     def build_side_dangban_vertical(self, selected_centers, block_length, block_height):
         self.operation_order += 1
-        """构建垂直方向的旁路挡板（上下两侧），确保所有挡板都在折流板外径圆内且紧贴边缘"""
+        """构建垂直方向的旁路挡板（上下两侧），确保所有挡板都在折流/支持板外径圆内且紧贴边缘"""
         if not selected_centers:
             return 0
 
@@ -43339,7 +43382,7 @@ class TubeLayoutEditor(QMainWindow):
             if not name_item:
                 continue
 
-            if name_item.text() == "折流板外径":
+            if name_item.text() == "折流/支持板外径":
                 # 检查单元格是否是QComboBox控件
                 cell_widget = self.param_table.cellWidget(row, 2)
                 if isinstance(cell_widget, QComboBox):

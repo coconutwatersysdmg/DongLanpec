@@ -20,7 +20,7 @@
             "折流板要求切口率": ("LB_BafflePerStr", None),
             "切口距垂直中心线间距": ("LB_BaffleToODistance", None),
             "折流/支持板间距": ("BaffleSpacing", None),
-            "折流板外径": ("LB_BaffleOD", None),
+            "折流/支持板外径": ("LB_BaffleOD", None),
             "分程隔板两侧相邻管中心距（竖直）": ("LB_SN", None),
             "分程隔板两侧相邻管中心距（水平）": ("LB_SNH", None),
             "隔条位置尺寸 W": ("LB_SpacerPositionSize", None),

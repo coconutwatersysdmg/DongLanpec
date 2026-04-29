@@ -582,7 +582,7 @@ class AxialDesignPage(QWidget):
                 "公称直径 DN",
                 "换热管公称长度 LN",
                 "换热管外径 do",
-                "折流板外径",
+                "折流/支持板外径",
                 "折流板切口方向",
                 "折流板要求切口率",
             }
@@ -1907,10 +1907,10 @@ class AxialDesignPage(QWidget):
         except Exception:
             axial_basic_params = {}
 
-        # 折流板外径 dz
+        # 折流/支持板外径 dz
         dz = None
         try:
-            dz_text = str(axial_basic_params.get("折流板外径", "")).strip()
+            dz_text = str(axial_basic_params.get("折流/支持板外径", "")).strip()
             if dz_text:
                 dz = float(dz_text)
         except Exception:
@@ -2051,7 +2051,7 @@ class AxialDesignPage(QWidget):
 
         dz = None
         try:
-            dz_text = str(axial_basic_params.get("折流板外径", "")).strip()
+            dz_text = str(axial_basic_params.get("折流/支持板外径", "")).strip()
             if dz_text:
                 dz = float(dz_text)
         except Exception:

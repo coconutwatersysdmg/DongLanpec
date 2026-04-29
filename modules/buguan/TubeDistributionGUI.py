@@ -590,7 +590,7 @@ class TubeDistributionGUI(QWidget):
         self.mDataGridViewOutputParam.model().insertRow(rowIndex)
         self.mDataGridViewOutputParam.model().setData(
             self.mDataGridViewOutputParam.model().index(rowIndex, self.Col_ParamName2),
-            "折流板外径")
+            "折流/支持板外径")
         self.mDataGridViewOutputParam.model().setData(
             self.mDataGridViewOutputParam.model().index(rowIndex, self.Col_ParamValue2),
             str(outputParams.BaffleOD))
@@ -876,7 +876,7 @@ class TubeDistributionGUI(QWidget):
                 outputParams.SlipWayHeight = float(paramValue)
             elif paramName == "垂直/平行于壳程流体流动方向的通道宽度":
                 outputParams.PassagewayWidth = int(paramValue)
-            elif paramName == "折流板外径":
+            elif paramName == "折流/支持板外径":
                 outputParams.BaffleOD = float(paramValue)
             elif paramName == "布管限定圆直径":
                 outputParams.DL = float(paramValue)

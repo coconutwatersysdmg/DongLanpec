@@ -74,7 +74,7 @@
     #         "折流板切口方向": ("LB_BaffleDirection", {"水平上下": "1", "垂直左右": "2"}),
     #         "折流板要求切口率": ("LB_BafflePerStr", None),
     #         "折流/支持板间距": ("LB_BaffleToODistance", None),
-    #         "折流板外径": ("LB_BaffleOD", None),
+    #         "折流/支持板外径": ("LB_BaffleOD", None),
     #         "分程隔板两侧相邻管中心距Sn（竖直）": ("LB_SNH", None),
     #         "分程隔板两侧相邻管中心距Sn（竖直）": ("LB_SN", None),
     #         "拉杆直径": ("LB_TieRodD", None),
