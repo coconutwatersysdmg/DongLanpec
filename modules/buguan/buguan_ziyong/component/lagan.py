@@ -147,6 +147,13 @@ def draw_lagan_at_position(coord, editor=None, diameter=None):
         if not exists:
             editor.lagan_info.append(coord)
 
+            # 维护 current_centers_lagan：= current_centers + lagan_info
+            if hasattr(editor, "_sync_current_centers_lagan"):
+                try:
+                    editor._sync_current_centers_lagan(reason="build_lagan add")
+                except Exception:
+                    pass
+
     # 记录操作
     from ..variable import operations as g_operations
     if not hasattr(editor, 'operations'):
@@ -247,6 +254,13 @@ def delete_selected_lagans(editor=None):
             except (TypeError, ValueError):
                 new_lagan_info.append(coord)
         editor.lagan_info = new_lagan_info
+
+    # 维护 current_centers_lagan：= current_centers + lagan_info
+    if hasattr(editor, "_sync_current_centers_lagan"):
+        try:
+            editor._sync_current_centers_lagan(reason="delete_lagan")
+        except Exception:
+            pass
 
     # 同步删除对应位置的换热管
     try:

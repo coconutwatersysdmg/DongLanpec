@@ -1458,6 +1458,73 @@ class TubeLayoutEditor(QMainWindow):
 
         sync_from_editor(self)
 
+    def _sync_current_centers_lagan(self, reason: str = ""):
+        """
+        维护 current_centers_lagan 的一致性：
+        - 存“绝对坐标”
+        - 内容 = current_centers(当前换热管孔) + lagan_info(普通拉杆)
+        - 自由拉杆不会出现在 lagan_info 中（自由拉杆写入 red_dangban_abs）
+        """
+
+        try:
+            tube_centers = list(getattr(self, "current_centers", []) or [])
+        except Exception:
+            tube_centers = []
+
+        try:
+            lagan_centers = list(getattr(self, "lagan_info", []) or [])
+        except Exception:
+            lagan_centers = []
+
+        def key6(x, y):
+            return (round(float(x), 6), round(float(y), 6))
+
+        tube_keys = set()
+        for x, y in tube_centers:
+            try:
+                tube_keys.add(key6(x, y))
+            except Exception:
+                pass
+
+        # 先保留 tube 的原始顺序；再补齐 lagan_info 中 tube_centers 没有的点
+        combined = list(tube_centers)
+        for x, y in lagan_centers:
+            try:
+                k = key6(x, y)
+            except Exception:
+                continue
+            if k not in tube_keys:
+                combined.append((x, y))
+                tube_keys.add(k)
+
+        self.current_centers_lagan = combined
+
+        # 调试输出：观察删除/添加换热管、拉杆后该变量是否同步刷新
+        try:
+            tube_count = len(tube_centers)
+            lagan_count = len(lagan_centers)
+            combined_count = len(self.current_centers_lagan)
+            sizes = (tube_count, lagan_count, combined_count)
+            last_sizes = getattr(self, "_debug_sync_last_sizes", None)
+            if last_sizes != sizes:
+                print(
+                    f"[SYNC current_centers_lagan] reason={reason} "
+                    f"tube={tube_count} lagan={lagan_count} current_centers_lagan={combined_count}",
+                    flush=True,
+                )
+                self._debug_sync_last_sizes = sizes
+        except Exception:
+            pass
+
+        # 同步缓存分组结果（后续定位/绘制用）
+        try:
+            (
+                self.sorted_current_centers_lagan_up,
+                self.sorted_current_centers_lagan_down,
+            ) = self.group_centers_by_y(self.current_centers_lagan)
+        except Exception:
+            pass
+
     def handle_symmetric_layout(self, state):
         if state == Qt.Checked:
             self.isSymmetry = True
@@ -1492,6 +1559,13 @@ class TubeLayoutEditor(QMainWindow):
             except Exception as e:
                 # 如果计算失败，不影响主流程，只记录日志
                 print(f"【警告】更新竖直表最小R值时出错: {e}")
+
+        # current_centers 整体赋值时，同步维护 current_centers_lagan
+        try:
+            if hasattr(self, "_sync_current_centers_lagan"):
+                self._sync_current_centers_lagan()
+        except Exception:
+            pass
 
     @property
     def selected_centers(self):
@@ -5354,6 +5428,9 @@ class TubeLayoutEditor(QMainWindow):
             if not any(is_close(center, rm) for rm in centers_to_remove)
         ]
 
+        # 统一重算 current_centers_lagan = current_centers + lagan_info
+        self._sync_current_centers_lagan()
+
         # 在初始化完成后设置监听器
         self.setup_parameter_listeners()
         self.update_baffle_parameters("折流板要求切口率")
@@ -6651,6 +6728,7 @@ class TubeLayoutEditor(QMainWindow):
             # 给现有圆心赋值
             self.current_centers = current_centers
             self.current_centers_lagan = current_centers
+            self._sync_current_centers_lagan()
 
             # 更新管数量和绘制布局（确保小圆绘制在最上层）
             self.draw_layout(DN, Di, DL, do, result["centers"])
@@ -15520,6 +15598,9 @@ class TubeLayoutEditor(QMainWindow):
                 if (round(cx, 2), round(cy, 2)) not in absolute_coords_to_remove
             ]
 
+            # 统一重算 current_centers_lagan = current_centers + lagan_info
+            self._sync_current_centers_lagan()
+
             if self.create_scene():
                 self.update_tube_nums()
 
@@ -24379,6 +24460,9 @@ class TubeLayoutEditor(QMainWindow):
                         coord for coord in self.lagan_info
                         if not _coord_equal(coord, first_coord)
                     ]
+
+                    # 维护 current_centers_lagan = current_centers + lagan_info
+                    self._sync_current_centers_lagan()
                 
                 # 从选中列表中移除
                 if first_lagan_item in self.selected_lagans:
@@ -25866,6 +25950,9 @@ class TubeLayoutEditor(QMainWindow):
                     self.lagan_info = list(dict.fromkeys(refreshed_lagan))
                 except Exception:
                     self.lagan_info = refreshed_lagan if refreshed_lagan else []
+
+                # 维护 current_centers_lagan = current_centers + lagan_info
+                self._sync_current_centers_lagan()
 
                 # 定义元件映射和数量计算规则
                 component_mappings = [
@@ -29318,6 +29405,8 @@ class TubeLayoutEditor(QMainWindow):
         )
         self.find_edge_tube()
         self.update_tube_nums()
+        # 统一重算 current_centers_lagan = current_centers + lagan_info
+        self._sync_current_centers_lagan()
         if added_count == 0:
             return
 
@@ -29808,6 +29897,10 @@ class TubeLayoutEditor(QMainWindow):
         self.lagan_info = [
             coord for coord in self.lagan_info if coord not in selected_centers
         ]
+
+        # 统一重算 current_centers_lagan = current_centers + lagan_info
+        self._sync_current_centers_lagan()
+
         self.update_total_lagan_count()
 
         # 自动兼容不同命名
@@ -30799,6 +30892,9 @@ class TubeLayoutEditor(QMainWindow):
         # 转换为列表形式存储（保留原始坐标格式，用于后续绘制）
         # 注意：这里存储的是 key6 格式的坐标，但我们需要保留原始坐标用于绘制
         self.lagan_info = list(combined_abs)
+
+        # 维护 current_centers_lagan = current_centers + lagan_info
+        self._sync_current_centers_lagan()
 
         # ========== 绘制逻辑（方式1：在换热管上绘制拉杆，不可选中） ==========
         # 初始化操作记录列表（如果不存在）
@@ -39205,6 +39301,9 @@ class TubeLayoutEditor(QMainWindow):
                 self.lagan_info = [
                     center for center in self.lagan_info if center not in slipway_set
                 ]
+
+                # 统一重算 current_centers_lagan = current_centers + lagan_info
+                self._sync_current_centers_lagan()
 
                 # 坐标转换
                 centers = []
