@@ -4672,7 +4672,8 @@ class TubeLayoutEditor(QMainWindow):
                 print("初始设置的值")
 
             tube_result = self.calculate_piping_layout()
-            self.draw_baffle_plates()
+            if str(getattr(self, "heat_exchanger", "") or "").strip().upper() not in ("AKU", "BKU"):
+                self.draw_baffle_plates()
 
             if loaded_radial_rows:
                 try:
@@ -18388,6 +18389,9 @@ class TubeLayoutEditor(QMainWindow):
                     return
 
         baffle_type_text = (baffle_type or "").strip()
+        # 支持板：不绘制切口线（黄线）
+        if baffle_type_text == "支持板":
+            return
         if baffle_type_text in ["双弓型", "双弓形"]:
             # 双弓型：根据 a/b 画竖向弦线
             # 优先使用折流/支持板外径作为大圆直径；若缺失则退回壳体内直径
@@ -19881,7 +19885,9 @@ class TubeLayoutEditor(QMainWindow):
                 pass
 
             # 3) 绘制折流板（可能依赖 result/参数齐全）
-            _safe_step("draw_baffle_plates", self.draw_baffle_plates)
+            # AKU/BKU 不绘制切口黄线
+            if str(getattr(self, "heat_exchanger", "") or "").strip().upper() not in ("AKU", "BKU"):
+                _safe_step("draw_baffle_plates", self.draw_baffle_plates)
 
             # 4) 更新满布行分组缓存（供后续点击/框选/表格使用）
             if result and getattr(self, "global_centers", None):
@@ -27736,6 +27742,9 @@ class TubeLayoutEditor(QMainWindow):
 
         # 读取初始折流板类型
         current_baffle_type = get_param_value("折流板类型") or "单弓形"
+        is_ku_type = str(getattr(self, "heat_exchanger", "") or "").strip().upper() in ("AKU", "BKU")
+        if is_ku_type:
+            current_baffle_type = "支持板"
         show_other_params = current_baffle_type != "双弓形"
 
         # ---------- 构造对话框 ----------
@@ -27838,12 +27847,17 @@ class TubeLayoutEditor(QMainWindow):
             if cn == "折流板类型":
                 # 使用下拉框
                 type_combo = _QComboBoxForDialog()
-                type_combo.addItems(["单弓形", "双弓形"])
-                # 设置当前值
-                if value_text in ["单弓形", "双弓形"]:
-                    type_combo.setCurrentText(value_text)
+                if is_ku_type:
+                    type_combo.addItems(["支持板"])
+                    type_combo.setCurrentText("支持板")
+                    type_combo.setEnabled(False)
                 else:
-                    type_combo.setCurrentText(current_baffle_type)
+                    type_combo.addItems(["单弓形", "双弓形", "支持板"])
+                    # 设置当前值
+                    if value_text in ["单弓形", "双弓形", "支持板"]:
+                        type_combo.setCurrentText(value_text)
+                    else:
+                        type_combo.setCurrentText(current_baffle_type)
                 table.setCellWidget(row, 1, type_combo)
                 # 单位为空
                 unit_item = QTableWidgetItem("")
@@ -27960,7 +27974,11 @@ class TubeLayoutEditor(QMainWindow):
                 # 从表格中读取当前切口方向
                 cut_direction = get_param_value("折流板切口方向") or "水平上下"
             
-            if baffle_type == "单弓形":
+            if baffle_type == "支持板":
+                load_and_set_image(image_container_1, "支持板.png")
+                image_container_2.setText("")
+                image_container_2.setPixmap(QPixmap())
+            elif baffle_type == "单弓形":
                 # 根据切口方向选择不同的图片
                 if cut_direction == "垂直左右":
                     load_and_set_image(image_container_1, "单弓形垂直左右.png")
@@ -27971,6 +27989,57 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 load_and_set_image(image_container_1, "A.png")
                 load_and_set_image(image_container_2, "B.png")
+
+        def apply_support_plate_lock_state(baffle_type_text: str):
+            """支持板模式下，切口三参数灰显且不可编辑。"""
+            is_support = str(baffle_type_text or "").strip() == "支持板"
+            target_names = {
+                "折流板切口方向",
+                "折流板要求切口率",
+                "折流板切口与中心线间距a",
+            }
+            gray = QColor(150, 150, 150)
+            black = QColor(0, 0, 0)
+
+            for r in range(table.rowCount()):
+                name_item = table.item(r, 0)
+                if not name_item:
+                    continue
+                name = name_item.text().strip()
+                if name not in target_names:
+                    continue
+
+                # 参数名、单位颜色
+                try:
+                    name_item.setForeground(QBrush(gray if is_support else black))
+                except Exception:
+                    pass
+                unit_item = table.item(r, 2)
+                if unit_item:
+                    try:
+                        unit_item.setForeground(QBrush(gray if is_support else black))
+                    except Exception:
+                        pass
+
+                # 参数值控件状态
+                value_widget = table.cellWidget(r, 1)
+                if isinstance(value_widget, _QComboBoxForDialog):
+                    try:
+                        value_widget.setEnabled(not is_support)
+                    except Exception:
+                        pass
+                else:
+                    value_item = table.item(r, 1)
+                    if value_item:
+                        try:
+                            flags = value_item.flags()
+                            if is_support:
+                                value_item.setFlags(flags & ~Qt.ItemIsEditable)
+                            else:
+                                value_item.setFlags(flags | Qt.ItemIsEditable)
+                            value_item.setForeground(QBrush(gray if is_support else black))
+                        except Exception:
+                            pass
 
         # 读取初始切口方向
         current_cut_direction = get_param_value("折流板切口方向") or "水平上下"
@@ -28224,6 +28293,7 @@ class TubeLayoutEditor(QMainWindow):
                     ensure_other_rows_exist()
                     # 重新绑定切口方向事件（因为行被重新添加）
                     bind_cut_direction_event()
+                apply_support_plate_lock_state(btype)
                 table.resizeColumnsToContents()
 
             if isinstance(type_combo, _QComboBoxForDialog):
@@ -28259,11 +28329,34 @@ class TubeLayoutEditor(QMainWindow):
         
         # 初始绑定切口方向事件
         bind_cut_direction_event()
+        # 初始应用“支持板”模式的禁用/灰显状态
+        apply_support_plate_lock_state(current_baffle_type)
 
         def validate_and_update_baffle_params(changed_name: str):
             """执行折流板参数联动计算（基于原函数的逻辑）"""
             if updating_linked_values["active"]:
                 return
+
+            # 支持板模式下，不做切口相关参数联动计算
+            try:
+                _type_row = find_row_by_name("折流板类型")
+                _current_type = ""
+                if _type_row >= 0:
+                    _w = table.cellWidget(_type_row, 1)
+                    if isinstance(_w, _QComboBoxForDialog):
+                        _current_type = _w.currentText().strip()
+                    else:
+                        _it = table.item(_type_row, 1)
+                        _current_type = _it.text().strip() if _it else ""
+                if _current_type == "支持板" and changed_name in [
+                    "折流/支持板外径",
+                    "折流板要求切口率",
+                    "折流板切口与中心线间距a",
+                ]:
+                    clear_warning()
+                    return
+            except Exception:
+                pass
 
             # 获取壳体内直径（从主参数表）
             shell_inner_diameter = get_shell_inner_diameter()
