@@ -818,10 +818,6 @@ class ClickableCircleItem(QGraphicsEllipseItem):
             QColor(255, 215, 0), 3, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin
         )
         self.selected_brush = QBrush(QColor(173, 216, 230))  # 淡蓝色填充
-        # 普通拉杆选中样式：淡蓝色空心圆（仅边框，不填充）
-        self.lagan_selected_pen = QPen(
-            QColor(173, 216, 230), 3, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin
-        )
         self.paired_rod = None  # 配对拉杆引用
         self.original_selected_center = None  # 存储原始选中坐标
         self.position = None  # 存储拉杆的绝对坐标（用于普通拉杆）
@@ -921,20 +917,20 @@ class ClickableCircleItem(QGraphicsEllipseItem):
                         # 若已全部在 selected_centers 中，则视为取消选择；否则加入
                         cur = list(editor.selected_centers)
                         if all(coord in cur for coord in rel_list):
-                            # 取消选中：移除坐标 + 恢复原始画刷
+                            # 取消选中：移除坐标 + 移除与换热管一致的 marker 叠层
                             cur = [c for c in cur if c not in rel_list]
-                            self.setBrush(self.original_brush)
+                            if hasattr(editor, "_remove_abs_selection_marker"):
+                                editor._remove_abs_selection_marker(cx, cy)
                             # 同步普通拉杆选中列表
                             if self in editor.selected_lagans:
                                 editor.selected_lagans.remove(self)
                         else:
-                            # 选中：加入坐标 + 设置淡蓝色实心
+                            # 选中：加入坐标 + 叠淡蓝 marker（与 eventFilter 换热管选中一致）
                             for coord in rel_list:
                                 if coord not in cur:
                                     cur.append(coord)
-                            from PyQt5.QtGui import QColor, QBrush
-
-                            self.setBrush(QBrush(QColor(173, 216, 230)))
+                            if hasattr(editor, "_add_abs_selection_marker"):
+                                editor._add_abs_selection_marker(cx, cy)
                             # 同步普通拉杆选中列表
                             if self not in editor.selected_lagans:
                                 editor.selected_lagans.append(self)
@@ -943,14 +939,15 @@ class ClickableCircleItem(QGraphicsEllipseItem):
                         # 无法转换为相对坐标（例如从吊环螺钉转换来的拉杆）
                         # 直接使用 selected_lagans 列表进行选中/取消选中
                         if self in editor.selected_lagans:
-                            # 取消选中：恢复原始画刷
-                            self.setBrush(self.original_brush)
+                            # 取消选中：移除 marker
+                            if hasattr(editor, "_remove_abs_selection_marker"):
+                                editor._remove_abs_selection_marker(cx, cy)
                             editor.selected_lagans.remove(self)
                             print(f"[ClickableCircleItem] 普通拉杆取消选中（无法转换为相对坐标），坐标: ({cx:.3f}, {cy:.3f})")
                         else:
-                            # 选中：设置淡蓝色实心
-                            from PyQt5.QtGui import QColor, QBrush
-                            self.setBrush(QBrush(QColor(173, 216, 230)))
+                            # 选中：叠淡蓝 marker
+                            if hasattr(editor, "_add_abs_selection_marker"):
+                                editor._add_abs_selection_marker(cx, cy)
                             editor.selected_lagans.append(self)
                             print(f"[ClickableCircleItem] 普通拉杆选中（无法转换为相对坐标），坐标: ({cx:.3f}, {cy:.3f})")
                 except Exception as e:
@@ -20335,12 +20332,53 @@ class TubeLayoutEditor(QMainWindow):
 
         self.on_row_selection_changed()
 
-    def simulate_center_click(self, x, y):
-        """模拟点击圆心，直接处理选中逻辑，不通过eventFilter"""
-        from PyQt5.QtCore import QPointF, Qt
+    def _remove_abs_selection_marker(self, x, y):
+        """移除绝对坐标处的选中 marker（与换热管选中叠层一致，data(0)=='marker'）。"""
+        from PyQt5.QtCore import QPointF
+        from PyQt5.QtWidgets import QGraphicsEllipseItem
+
+        if not hasattr(self, "graphics_scene") or not self.graphics_scene:
+            return
+        try:
+            pt = QPointF(float(x), float(y))
+        except Exception:
+            return
+        for it in self.graphics_scene.items(pt):
+            if isinstance(it, QGraphicsEllipseItem) and it.data(0) == "marker":
+                self.graphics_scene.removeItem(it)
+                break
+
+    def _add_abs_selection_marker(self, x, y):
+        """在绝对坐标处叠一层淡蓝实心 marker（与 eventFilter 中换热管选中一致）。"""
+        from PyQt5.QtCore import Qt
         from PyQt5.QtGui import QPen, QBrush, QColor
         from PyQt5.QtWidgets import QGraphicsEllipseItem
 
+        if not hasattr(self, "graphics_scene") or not self.graphics_scene:
+            return
+        try:
+            fx, fy = float(x), float(y)
+        except Exception:
+            return
+        # 避免重复叠 marker
+        self._remove_abs_selection_marker(fx, fy)
+        r = float(getattr(self, "r", 0) or 0)
+        if r <= 0:
+            return
+        pen = QPen(Qt.NoPen)
+        brush = QBrush(QColor(173, 216, 230))
+        marker = self.graphics_scene.addEllipse(
+            fx - r, fy - r, 2 * r, 2 * r, pen, brush
+        )
+        marker.setData(0, "marker")
+        try:
+            # 普通拉杆本体 z 常为 20，marker 需在其之上
+            marker.setZValue(25)
+        except Exception:
+            pass
+
+    def simulate_center_click(self, x, y):
+        """模拟点击圆心，直接处理选中逻辑，不通过eventFilter"""
         # 临时设置鼠标坐标
         self.mouse_x = x
         self.mouse_y = y
@@ -20385,29 +20423,12 @@ class TubeLayoutEditor(QMainWindow):
                 # 取消选中 → 删除 marker，使用列表推导式创建新列表
                 new_selected = [c for c in self.selected_centers if c != label]
                 self.selected_centers = new_selected
-                click_point = QPointF(x_center, y_center)
-                for item in self.graphics_scene.items(click_point):
-                    if (
-                            isinstance(item, QGraphicsEllipseItem)
-                            and item.data(0) == "marker"
-                    ):
-                        self.graphics_scene.removeItem(item)
-                        break
+                self._remove_abs_selection_marker(x_center, y_center)
             else:
                 # 添加选中 → 画 marker，通过新列表赋值方式添加
                 new_selected = self.selected_centers + [label]
                 self.selected_centers = new_selected
-                pen = QPen(Qt.NoPen)
-                brush = QBrush(QColor(173, 216, 230))
-                marker = self.graphics_scene.addEllipse(
-                    x_center - self.r,
-                    y_center - self.r,
-                    2 * self.r,
-                    2 * self.r,
-                    pen,
-                    brush,
-                )
-                marker.setData(0, "marker")  # 标记这个圆是 marker
+                self._add_abs_selection_marker(x_center, y_center)
 
     # TODO 整行选中函数
     def on_row_selection_changed(self):
@@ -45866,23 +45887,11 @@ class TubeLayoutEditor(QMainWindow):
                     if label in self.selected_centers:
                         new_selected = [c for c in self.selected_centers if c != label]
                         self.selected_centers = new_selected
-                        click_point = QPointF(x, y)
-                        for it in self.graphics_scene.items(click_point):
-                            if (
-                                    isinstance(it, QGraphicsEllipseItem)
-                                    and it.data(0) == "marker"
-                            ):
-                                self.graphics_scene.removeItem(it)
-                                break
+                        self._remove_abs_selection_marker(x, y)
                     else:
                         new_selected = self.selected_centers + [label]
                         self.selected_centers = new_selected
-                        pen = QPen(Qt.NoPen)
-                        brush = QBrush(QColor(173, 216, 230))
-                        marker = self.graphics_scene.addEllipse(
-                            x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen, brush
-                        )
-                        marker.setData(0, "marker")
+                        self._add_abs_selection_marker(x, y)
                     return True
                 else:
                     # 在大圆内但未命中任何圆心：视为点击空白，但不取消选中（保持选中状态）
@@ -46120,28 +46129,11 @@ class TubeLayoutEditor(QMainWindow):
                                     c for c in self.selected_centers if c != label
                                 ]
                                 self.selected_centers = new_selected
-                                click_point = QPointF(x, y)
-                                for it in self.graphics_scene.items(click_point):
-                                    if (
-                                            isinstance(it, QGraphicsEllipseItem)
-                                            and it.data(0) == "marker"
-                                    ):
-                                        self.graphics_scene.removeItem(it)
-                                        break
+                                self._remove_abs_selection_marker(x, y)
                             else:
                                 new_selected = self.selected_centers + [label]
                                 self.selected_centers = new_selected
-                                pen = QPen(Qt.NoPen)
-                                brush = QBrush(QColor(173, 216, 230))
-                                marker = self.graphics_scene.addEllipse(
-                                    x - self.r,
-                                    y - self.r,
-                                    2 * self.r,
-                                    2 * self.r,
-                                    pen,
-                                    brush,
-                                )
-                                marker.setData(0, "marker")
+                                self._add_abs_selection_marker(x, y)
                             return True
                         else:
                             # 在大圆内但未命中任何圆心：视为点击空白，但不取消选中（保持选中状态）
@@ -46208,18 +46200,8 @@ class TubeLayoutEditor(QMainWindow):
 
                         if new_labels:
                             self.selected_centers = new_labels
-                            pen = QPen(Qt.NoPen)
-                            brush = QBrush(QColor(173, 216, 230))
                             for x, y in marker_points:
-                                marker = self.graphics_scene.addEllipse(
-                                    x - self.r,
-                                    y - self.r,
-                                    2 * self.r,
-                                    2 * self.r,
-                                    pen,
-                                    brush,
-                                )
-                                marker.setData(0, "marker")
+                                self._add_abs_selection_marker(x, y)
                         else:
                             if (
                                     hasattr(self, "selected_centers")
@@ -46241,14 +46223,7 @@ class TubeLayoutEditor(QMainWindow):
                                     lb for lb in current_labels if lb != label
                                 ]
 
-                                click_point = QPointF(x, y)
-                                for it in self.graphics_scene.items(click_point):
-                                    if (
-                                            isinstance(it, _QBoxEllipse2)
-                                            and it.data(0) == "marker"
-                                    ):
-                                        self.graphics_scene.removeItem(it)
-                                        break
+                                self._remove_abs_selection_marker(x, y)
 
                         # 回写最终选中集合
                         self.selected_centers = current_labels
