@@ -38683,65 +38683,96 @@ class TubeLayoutEditor(QMainWindow):
                 pass
 
         def on_ok():
-            # 读取输入并校验角度范围提醒
-            # 滑道高度输入限制：0 < 滑道高度 <= 折流/支持板外径/2
-            height_text = input_widgets["滑道高度"].text().strip()
             try:
-                slipway_height = float(height_text) if height_text != "" else None
+                form = input_widgets["滑道形式"].currentText().strip()
             except Exception:
-                slipway_height = None
-            baffle_od = self.get_baffle_diameter()
-            if (
-                slipway_height is None
-                or slipway_height <= 0
-                or (baffle_od is not None and baffle_od > 0 and slipway_height > baffle_od / 2.0)
-            ):
+                form = ""
+            is_round = form == "圆钢条式滑道"
+
+            def _eff_line(key):
+                t = input_widgets[key].text().strip()
+                return t if t else (default_values.get(key) or "").strip()
+
+            # 圆钢条式：界面隐藏高/厚/角，只校验圆钢规格；构建时高/厚/角用表内旧值兜底
+            if is_round:
                 try:
-                    print(
-                        "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入! "
-                        f"source=滑道参数弹窗 param=滑道高度 input='{height_text}' parsed={slipway_height} "
-                        f"upper(baffle_od/2)={(baffle_od / 2.0) if (baffle_od is not None and baffle_od > 0) else None} "
-                        "rule=(0,upper] reason=<=0/非数字/超上限 action=回滚为旧值"
+                    rs_text = str(input_widgets.get("圆钢规格").text()).strip()
+                    rs_val = float(rs_text) if rs_text != "" else None
+                except Exception:
+                    rs_val = None
+                if rs_val is None or rs_val <= 0:
+                    QMessageBox.warning(
+                        dialog,
+                        "输入错误",
+                        "您输入的数值小于0，请重新输入！",
                     )
+                    try:
+                        input_widgets["圆钢规格"].setText(
+                            default_values.get("圆钢规格", "12")
+                        )
+                    except Exception:
+                        pass
+                    return
+            else:
+                # 板式：0 < 滑道高度；若参数表中有折流/支持板外径则再校验 <= 外径/2（AES 等可无此项，不得误报）
+                height_text = input_widgets["滑道高度"].text().strip()
+                try:
+                    slipway_height = float(height_text) if height_text != "" else None
+                except Exception:
+                    slipway_height = None
+                baffle_od = self.get_baffle_diameter()
+                upper_ok = (
+                    baffle_od is not None
+                    and baffle_od > 0
+                    and slipway_height is not None
+                    and slipway_height > baffle_od / 2.0
+                )
+                if slipway_height is None or slipway_height <= 0 or upper_ok:
+                    try:
+                        print(
+                            "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入! "
+                            f"source=滑道参数弹窗 param=滑道高度 input='{height_text}' parsed={slipway_height} "
+                            f"upper(baffle_od/2)={(baffle_od / 2.0) if (baffle_od is not None and baffle_od > 0) else None} "
+                            "rule=(0,upper] reason=<=0/非数字/超上限 action=回滚为旧值"
+                        )
+                    except Exception:
+                        pass
+                    QMessageBox.warning(
+                        dialog,
+                        "输入错误",
+                        "您输入的数值小于0或已超限，请重新输入!",
+                    )
+                    input_widgets["滑道高度"].setText(default_values.get("滑道高度", ""))
+                    return
+
+                angle_text = input_widgets["滑道与竖直中心线夹角"].text()
+                try:
+                    angle_val = float(angle_text)
+                    if angle_val < 15 or angle_val > 25:
+                        reply = QMessageBox.question(
+                            dialog,
+                            "角度范围提示",
+                            "滑道与竖直中心线夹角宜在15°至25°之间，是否继续？",
+                            QMessageBox.Yes | QMessageBox.No,
+                            QMessageBox.No,
+                        )
+                        if reply == QMessageBox.No:
+                            return
                 except Exception:
                     pass
-                QMessageBox.warning(
-                    dialog,
-                    "输入错误",
-                    "您输入的数值小于0或已超限，请重新输入!",
-                )
-                # 回滚：恢复为打开弹窗前的旧值，避免保留错误输入
-                input_widgets["滑道高度"].setText(default_values.get("滑道高度", ""))
-                return
-            if baffle_od is None or baffle_od <= 0:
-                # 折流/支持板外径缺失时无法做上限校验
-                QMessageBox.warning(
-                    dialog,
-                    "输入错误",
-                    "您输入的数值小于0或已超限，请重新输入!",
-                )
-                # 回滚：恢复为打开弹窗前的旧值
-                input_widgets["滑道高度"].setText(default_values.get("滑道高度", ""))
-                return
 
-            angle_text = input_widgets["滑道与竖直中心线夹角"].text()
+            # 同步参数表（含滑道形式/圆钢/导轨，避免仅改可见项）
+            sync_param_table("滑道定位", input_widgets["滑道定位"].currentText())
+            sync_param_table("滑道形式", input_widgets["滑道形式"].currentText())
+            sync_param_table("圆钢规格", input_widgets["圆钢规格"].text())
             try:
-                angle_val = float(angle_text)
-                if angle_val < 15 or angle_val > 25:
-                    reply = QMessageBox.question(
-                        dialog,
-                        "角度范围提示",
-                        "滑道与竖直中心线夹角宜在15°至25°之间，是否继续？",
-                        QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.No,
+                he = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
+                if (he in ("AKU", "BKU")) or he.endswith("KU"):
+                    sync_param_table(
+                        "导轨类型", input_widgets["导轨类型"].currentText()
                     )
-                    if reply == QMessageBox.No:
-                        return
             except Exception:
                 pass
-
-            # 同步参数表
-            sync_param_table("滑道定位", input_widgets["滑道定位"].currentText())
             for key in [
                 "滑道高度",
                 "滑道厚度",
@@ -38751,13 +38782,14 @@ class TubeLayoutEditor(QMainWindow):
             ]:
                 sync_param_table(key, input_widgets[key].text())
 
-            # 构造参数，调用现有构建函数（其内部已有删除旧滑道的逻辑）
             try:
                 params = {
                     "location": input_widgets["滑道定位"].currentText(),
-                    "height": input_widgets["滑道高度"].text(),
-                    "thickness": input_widgets["滑道厚度"].text(),
-                    "angle": input_widgets["滑道与竖直中心线夹角"].text(),
+                    "height": _eff_line("滑道高度") if is_round else input_widgets["滑道高度"].text(),
+                    "thickness": _eff_line("滑道厚度") if is_round else input_widgets["滑道厚度"].text(),
+                    "angle": _eff_line("滑道与竖直中心线夹角")
+                    if is_round
+                    else input_widgets["滑道与竖直中心线夹角"].text(),
                     "cut_length": input_widgets["切边长度 L1"].text(),
                     "cut_height": input_widgets["切边高度 h"].text(),
                 }
@@ -39023,83 +39055,82 @@ class TubeLayoutEditor(QMainWindow):
         ok_btn = QPushButton("确定")
 
         def on_ok_clicked():
-            # 圆钢规格输入限制：0 < 圆钢规格
             try:
-                rs_text = str(input_widgets.get("圆钢规格").text()).strip()
-                rs_val = float(rs_text) if rs_text != "" else None
+                form = input_widgets["滑道形式"].currentText().strip()
             except Exception:
-                rs_val = None
-            if rs_val is None or rs_val <= 0:
-                QMessageBox.warning(
-                    dialog,
-                    "输入错误",
-                    "您输入的数值小于0，请重新输入！",
-                )
-                try:
-                    input_widgets["圆钢规格"].setText(default_values.get("圆钢规格", "12"))
-                except Exception:
-                    pass
-                return
+                form = ""
+            is_round = form == "圆钢条式滑道"
 
-            # 验证滑道与竖直中心线夹角的范围
-            # 滑道高度输入限制：0 < 滑道高度 <= 折流/支持板外径/2
-            height_text = input_widgets["滑道高度"].text().strip()
-            try:
-                slipway_height = float(height_text) if height_text != "" else None
-            except Exception:
-                slipway_height = None
-            baffle_od = self.get_baffle_diameter()
-            if (
-                slipway_height is None
-                or slipway_height <= 0
-                or (baffle_od is not None and baffle_od > 0 and slipway_height > baffle_od / 2.0)
-            ):
-                try:
-                    print(
-                        "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入! "
-                        f"source=滑道参数弹窗(含圆钢规格) param=滑道高度 input='{height_text}' parsed={slipway_height} "
-                        f"upper(baffle_od/2)={(baffle_od / 2.0) if (baffle_od is not None and baffle_od > 0) else None} "
-                        "rule=(0,upper] reason=<=0/非数字/超上限 action=回滚为旧值"
-                    )
-                except Exception:
-                    pass
-                QMessageBox.warning(
-                    dialog,
-                    "输入错误",
-                    "您输入的数值小于0或已超限，请重新输入!",
-                )
-                # 回滚：恢复为打开弹窗前的旧值，避免保留错误输入
-                input_widgets["滑道高度"].setText(default_values.get("滑道高度", ""))
-                return
-            if baffle_od is None or baffle_od <= 0:
-                # 折流/支持板外径缺失时无法做上限校验
-                QMessageBox.warning(
-                    dialog,
-                    "输入错误",
-                    "您输入的数值小于0或已超限，请重新输入!",
-                )
-                # 回滚：恢复为打开弹窗前的旧值
-                input_widgets["滑道高度"].setText(default_values.get("滑道高度", ""))
-                return
+            def _eff_line(key):
+                t = input_widgets[key].text().strip()
+                return t if t else (default_values.get(key) or "").strip()
 
-            angle_text = input_widgets["滑道与竖直中心线夹角"].text()
-            try:
-                angle = float(angle_text)
-                # 检查角度是否在15°到25°之间
-                if angle < 15 or angle > 25:
-                    # 弹出确认对话框
-                    reply = QMessageBox.question(
+            if is_round:
+                try:
+                    rs_text = str(input_widgets.get("圆钢规格").text()).strip()
+                    rs_val = float(rs_text) if rs_text != "" else None
+                except Exception:
+                    rs_val = None
+                if rs_val is None or rs_val <= 0:
+                    QMessageBox.warning(
                         dialog,
-                        "角度范围提示",
-                        "滑道与竖直中心线夹角宜在15°至25°之间，是否继续？",
-                        QMessageBox.Yes | QMessageBox.No,
-                        QMessageBox.No,
+                        "输入错误",
+                        "您输入的数值小于0，请重新输入！",
                     )
-                    if reply == QMessageBox.No:
-                        self.clear_selection_highlight()
-                        return
-            except ValueError:
-                pass
+                    try:
+                        input_widgets["圆钢规格"].setText(
+                            default_values.get("圆钢规格", "12")
+                        )
+                    except Exception:
+                        pass
+                    return
+            else:
+                height_text = input_widgets["滑道高度"].text().strip()
+                try:
+                    slipway_height = float(height_text) if height_text != "" else None
+                except Exception:
+                    slipway_height = None
+                baffle_od = self.get_baffle_diameter()
+                upper_ok = (
+                    baffle_od is not None
+                    and baffle_od > 0
+                    and slipway_height is not None
+                    and slipway_height > baffle_od / 2.0
+                )
+                if slipway_height is None or slipway_height <= 0 or upper_ok:
+                    try:
+                        print(
+                            "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入! "
+                            f"source=滑道参数弹窗(含圆钢规格) param=滑道高度 input='{height_text}' parsed={slipway_height} "
+                            f"upper(baffle_od/2)={(baffle_od / 2.0) if (baffle_od is not None and baffle_od > 0) else None} "
+                            "rule=(0,upper] reason=<=0/非数字/超上限 action=回滚为旧值"
+                        )
+                    except Exception:
+                        pass
+                    QMessageBox.warning(
+                        dialog,
+                        "输入错误",
+                        "您输入的数值小于0或已超限，请重新输入!",
+                    )
+                    input_widgets["滑道高度"].setText(default_values.get("滑道高度", ""))
+                    return
+
+                angle_text = input_widgets["滑道与竖直中心线夹角"].text()
+                try:
+                    angle = float(angle_text)
+                    if angle < 15 or angle > 25:
+                        reply = QMessageBox.question(
+                            dialog,
+                            "角度范围提示",
+                            "滑道与竖直中心线夹角宜在15°至25°之间，是否继续？",
+                            QMessageBox.Yes | QMessageBox.No,
+                            QMessageBox.No,
+                        )
+                        if reply == QMessageBox.No:
+                            self.clear_selection_highlight()
+                            return
+                except ValueError:
+                    pass
 
             if temp_centers is not None:
                 self.current_centers = temp_centers.copy()
@@ -39126,12 +39157,18 @@ class TubeLayoutEditor(QMainWindow):
                         if item:
                             item.setText(new_value)
 
-            # 收集参数并调用build_huadao
+            # 收集参数并调用 build_huadao（圆钢条式时高/厚/角行隐藏，用表内旧值兜底）
             params = {
-                "location": input_widgets["滑道定位"].currentText(),  # 从下拉框获取值
-                "height": input_widgets["滑道高度"].text(),
-                "thickness": input_widgets["滑道厚度"].text(),
-                "angle": input_widgets["滑道与竖直中心线夹角"].text(),
+                "location": input_widgets["滑道定位"].currentText(),
+                "height": _eff_line("滑道高度")
+                if is_round
+                else input_widgets["滑道高度"].text(),
+                "thickness": _eff_line("滑道厚度")
+                if is_round
+                else input_widgets["滑道厚度"].text(),
+                "angle": _eff_line("滑道与竖直中心线夹角")
+                if is_round
+                else input_widgets["滑道与竖直中心线夹角"].text(),
                 "cut_length": input_widgets["切边长度 L1"].text(),
                 "cut_height": input_widgets["切边高度 h"].text(),
             }
