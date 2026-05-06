@@ -1448,6 +1448,8 @@ class TubeLayoutEditor(QMainWindow):
         self._box_selecting = False
         self._box_start_pos = None
         self._box_rect_item = None
+        # 打开管束后由 load_initial_data 判定：通用数据表「是」且布管参数表「否」时为 True
+        self.need_initial_user_update_di_for_outer_base = False
         self.load_initial_data()
 
         # 初始化完成后同步全局变量
@@ -3210,6 +3212,8 @@ class TubeLayoutEditor(QMainWindow):
                     print(f"关闭交叉布管查询连接时出错：{str(close_e)}")
 
     def load_initial_data(self):
+        # 打开管束即初始化：仅当通用数据表为「是」且布管参数表为「否」时在末尾允许 user_update_Di（见标志）
+        self.need_initial_user_update_di_for_outer_base = False
         if self.productID is None:
             QMessageBox.information(self, "提示", "请先创建项目!")
             return  # 关键修复：如果productID为None，直接返回，避免后续错误
@@ -3350,6 +3354,57 @@ class TubeLayoutEditor(QMainWindow):
 
                     cursor.execute(query, (self.productID,))
                     product_params = cursor.fetchall()
+
+                    # 通用数据表「是」且布管参数表仍为「否」→ 与界面覆盖同源（见下方 elif 是否以外径为基准）
+                    try:
+                        piping_outer = None
+                        if product_params:
+                            for _p in product_params:
+                                if (
+                                        isinstance(_p, dict)
+                                        and _p.get("参数名") == "是否以外径为基准"
+                                ):
+                                    _pv = _p.get("参数值")
+                                    if _pv is not None and str(_pv).strip() != "":
+                                        piping_outer = str(_pv).strip()
+                                    break
+                        design_outer = None
+                        cursor.execute(
+                            """
+                            SELECT 数值 FROM 产品设计活动表_通用数据表
+                            WHERE 产品ID = %s AND 参数名称 = %s
+                            LIMIT 1
+                            """,
+                            (self.productID, "是否以外径为基准*"),
+                        )
+                        _row = cursor.fetchone()
+                        if isinstance(_row, dict):
+                            _dv = _row.get("数值")
+                        else:
+                            _dv = _row[0] if _row else None
+                        if _dv is not None and str(_dv).strip() != "":
+                            design_outer = str(_dv).strip()
+                        self.need_initial_user_update_di_for_outer_base = (
+                                design_outer == "是" and piping_outer == "否"
+                        )
+                        print(
+                            "[打开管束] 是否以外径为基准 — "
+                            "产品设计活动表_通用数据表[参数名称='是否以外径为基准*'][列=数值]: "
+                            f"{design_outer!r} | "
+                            "产品设计活动表_布管参数表[参数名=是否以外径为基准]: "
+                            f"{piping_outer!r} | "
+                            "need_initial_user_update_di_for_outer_base="
+                            f"{self.need_initial_user_update_di_for_outer_base}"
+                        )
+                    except Exception as _ob_e:
+                        print(
+                            f"[load_initial_data] need_initial_user_update_di_for_outer_base 判定失败: {_ob_e}"
+                        )
+                        self.need_initial_user_update_di_for_outer_base = False
+                        print(
+                            "[打开管束] 是否以外径为基准 — 通用数据表/布管参数表: (读取异常) | "
+                            "need_initial_user_update_di_for_outer_base=False"
+                        )
 
                     # 只查一次“布管元件表”是否存在该产品记录
                     try:
@@ -4140,6 +4195,12 @@ class TubeLayoutEditor(QMainWindow):
                         )
             else:
                 print("无法创建产品数据库连接")
+                print(
+                    "[打开管束] 是否以外径为基准 — 通用数据表: (未连接产品库) | "
+                    "布管参数表: (未连接产品库) | "
+                    f"need_initial_user_update_di_for_outer_base="
+                    f"{getattr(self, 'need_initial_user_update_di_for_outer_base', False)}"
+                )
         except Exception as e:
             print(f"数据库操作错误: {str(e)}")
         finally:
@@ -4571,10 +4632,13 @@ class TubeLayoutEditor(QMainWindow):
             self.load_initial_tube_num()
             self.update_total_holes_count()
             self.update_diameter_visibility_by_outer_flag()
-            # 仅限“刚打开管束”这一步：
-            # - 如果布管操作记录表存在记录：不做初次重算（避免覆盖 DL）
-            # - 否则：走原逻辑重算（允许用 Dis 等值计算 DL）
-            if not operation_record_exists_effective:
+            # 仅限“刚打开管束”这一步调用 user_update_Di：
+            # - 无有效操作记录：一定执行（恢复原逻辑）
+            # - 有有效操作记录：仅当通用数据表「是」且布管参数表「否」（need_initial_user_update_di_for_outer_base）时也执行
+            if (
+                    not operation_record_exists_effective
+                    or getattr(self, "need_initial_user_update_di_for_outer_base", False)
+            ):
                 self.user_update_Di()
         # 初始化完成后，监听开关自动恢复（在 with 块退出时）
         try:
@@ -4583,7 +4647,7 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
-        if self.heat_exchanger in ["BEM", "NEN","AEM"]:
+        if self.heat_exchanger in ["BEM", "NEN", "AEM"]:
             self.header.setCurrentIndex(0)  # 管板形式页面
             self.stacked_widget.setCurrentIndex(0)
         else:
@@ -5899,7 +5963,7 @@ class TubeLayoutEditor(QMainWindow):
             if isinstance(_hx, str):
                 _hx = _hx.strip().upper()
             _shell_cylinder_key = (
-                "小端壳体圆筒" if _hx in ("AKU", "BKU") else "壳体圆筒"
+                "管箱圆筒" if _hx in ("AKU", "BKU") else "壳体圆筒"
             )
             if (
                     "DictOutDatas" in data
@@ -11727,27 +11791,6 @@ class TubeLayoutEditor(QMainWindow):
                 except:
                     pass
 
-    def get_is_outer_diameter_base(self):
-        """获取'是否以外径为基准'参数值"""
-        row_count = self.param_table.rowCount()
-        for row in range(row_count):
-            # 获取当前行的参数名
-            name_item = self.param_table.item(row, 1)
-            if not name_item:
-                continue
-
-            if name_item.text() == "是否以外径为基准":
-                # 检查单元格是否是QComboBox控件
-                cell_widget = self.param_table.cellWidget(row, 2)
-                if isinstance(cell_widget, QComboBox):
-                    return cell_widget.currentText()
-                else:
-                    # 普通文本单元格
-                    value_item = self.param_table.item(row, 2)
-                    return value_item.text() if value_item else None
-
-        # 未找到参数时返回None
-        return None
     def update_DN_Di(self):
         """当'是否以外径为基准'为'否'时，将壳体内直径Di更新为公称直径DN"""
         # 1. 定位关键参数行：公称直径 DN、壳体内直径 Dis、是否以外径为基准
@@ -20651,6 +20694,119 @@ class TubeLayoutEditor(QMainWindow):
             table.setSelectionBehavior(QAbstractItemView.SelectRows)
             table.itemSelectionChanged.connect(self.on_col_selection_changed)
 
+    def _rel_label_set_for_hole_distribution_table_row(self, tbl_row):
+        """与 on_row_selection_changed / on_col_selection_changed 一致，得到该表行对应的全部相对 (row,col) 标签集合。"""
+        labels = set()
+
+        def add_from_xy(x, y):
+            if y >= 0:
+                centers = self.full_sorted_current_centers_up
+                y_multiplier = 1
+            else:
+                centers = self.full_sorted_current_centers_down
+                y_multiplier = -1
+            x_multiplier = 1 if x >= 0 else -1
+            result = (
+                self.find_nearest_circle_index(centers, [], x, y, self.r)
+                if centers
+                else None
+            )
+            if result:
+                row, col = result
+                row_label = (row + 1) * y_multiplier
+                col_label = (col + 1) * x_multiplier
+                labels.add((row_label, col_label))
+
+        if getattr(self, "is_arrange_by_row", True):
+            self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = (
+                self.group_centers_by_y(self.global_centers)
+            )
+            is_special_layout = hasattr(
+                self, "tube_pass_form_value"
+            ) and self.tube_pass_form_value in ["4.3", "6.2"]
+            if is_special_layout and tbl_row == 0:
+                if tbl_row < len(self.full_sorted_current_centers_up):
+                    for x, y in self.full_sorted_current_centers_up[tbl_row]:
+                        add_from_xy(x, y)
+            else:
+                if tbl_row < len(self.full_sorted_current_centers_down):
+                    for x, y in self.full_sorted_current_centers_down[tbl_row]:
+                        add_from_xy(x, y)
+                if tbl_row < len(self.full_sorted_current_centers_up):
+                    for x, y in self.full_sorted_current_centers_up[tbl_row]:
+                        add_from_xy(x, y)
+        else:
+            self.full_sorted_current_centers_left, self.full_sorted_current_centers_right = (
+                self.group_centers_by_x(self.global_centers)
+            )
+            is_special_layout_col = hasattr(self, "tube_pass_form_value") and (
+                self.tube_pass_form_value in ["1.1", "2.1", "4.1", "4.3", "6.1"]
+            )
+            col_idx = tbl_row
+            if is_special_layout_col and col_idx == 0:
+                if col_idx < len(self.full_sorted_current_centers_right):
+                    for x, y in self.full_sorted_current_centers_right[col_idx]:
+                        add_from_xy(x, y)
+            else:
+                if col_idx < len(self.full_sorted_current_centers_left):
+                    for x, y in self.full_sorted_current_centers_left[col_idx]:
+                        add_from_xy(x, y)
+                if col_idx < len(self.full_sorted_current_centers_right):
+                    for x, y in self.full_sorted_current_centers_right[col_idx]:
+                        add_from_xy(x, y)
+        return labels
+
+    def _hole_table_line_nos_fully_in_selection(self, selected_centers_expanded):
+        """按第 0 列显示为 1/2/3 识别分布表行；若该行全部管孔标签 ⊆ 本次删除集合，则返回对应中心线编号集合。"""
+        table = getattr(self, "hole_distribution_table", None)
+        if table is None:
+            return set()
+        sel = set()
+        for item in selected_centers_expanded or []:
+            if isinstance(item, (list, tuple)) and len(item) == 2:
+                a, b = item[0], item[1]
+                if isinstance(a, int) and isinstance(b, int):
+                    sel.add((a, b))
+        if not sel:
+            return set()
+        out = set()
+        for r in range(table.rowCount()):
+            item0 = table.item(r, 0)
+            if item0 is None:
+                continue
+            try:
+                n = int(str(item0.text()).strip())
+            except (ValueError, TypeError):
+                continue
+            if n not in (1, 2, 3):
+                continue
+            expected = self._rel_label_set_for_hole_distribution_table_row(r)
+            if expected and expected.issubset(sel):
+                out.add(n)
+        return out
+
+    def _apply_cross_pipe_reset_for_centerlines(self, line_nos):
+        """整行/整列删除「第0列为1/2/3」后，将对应交叉布管 bool 与 coord/abs 缓存清空并尝试落库。"""
+        if not line_nos:
+            return
+        row_mode = getattr(self, "is_arrange_by_row", True)
+        for k in (1, 2, 3):
+            if k not in line_nos:
+                continue
+            setattr(self, f"abs_coords_line{k}", [])
+            if row_mode:
+                setattr(self, f"is_x_line{k}", False)
+                setattr(self, f"coord_x_line{k}_2", [])
+                setattr(self, f"coord_x_line{k}_4", [])
+            else:
+                setattr(self, f"is_y_line{k}", False)
+                setattr(self, f"coord_y_line{k}_2", [])
+                setattr(self, f"coord_y_line{k}_4", [])
+        try:
+            self.build_sql_for_cross_pipes()
+        except Exception as e:
+            print(f"[_apply_cross_pipe_reset_for_centerlines] build_sql_for_cross_pipes: {e}")
+
     def clear_selection_highlight(self):
         from PyQt5.QtCore import QPointF, Qt
         from PyQt5.QtWidgets import QGraphicsEllipseItem
@@ -21983,6 +22139,16 @@ class TubeLayoutEditor(QMainWindow):
         result = self.get_selected_x_4_center_numbers(
             selected_centers, print_cross_x_up, print_cross_x_down
         )
+        print(
+            "[交叉布管·4点 X向] 选中相对坐标(行,列):",
+            selected_centers,
+            "| 上侧管孔编号:",
+            result["up_numbers"],
+            "| 下侧管孔编号:",
+            result["down_numbers"],
+            "| 上下编号集合一致(进入配对):",
+            set(result["up_numbers"]) == set(result["down_numbers"]),
+        )
 
         if set(result["up_numbers"]) == set(result["down_numbers"]):
             if abs(result["up_numbers"][0] - result["up_numbers"][1]) > 3:
@@ -21994,10 +22160,14 @@ class TubeLayoutEditor(QMainWindow):
                 tube_num = self.get_tube_pass_count()
                 if tube_num == "2":
                     up_seq, down_seq = self.get_x_4_number_sequences(
-                        result, print_cross_x_up
+                        result, print_cross_x_up, print_cross_x_down
                     )
                     pair_x_info_up = up_seq
                     pair_x_info_down = down_seq
+                    print(
+                        "[交叉布管·4点 X向] 配对(上排孔位编号 -> 下排孔位编号):",
+                        list(zip(pair_x_info_up, pair_x_info_down)),
+                    )
                     coordinate_pairs = []
                     absolute_coord_pairs = []  # 存储绝对坐标对
                     used_up_nums = set()
@@ -22119,10 +22289,17 @@ class TubeLayoutEditor(QMainWindow):
                     self.selected_centers = []
 
         else:
+            print(
+                "[交叉布管·4点 X向] 上下编号集合不一致，无法配对，已清空选择。"
+                " 上=",
+                result["up_numbers"],
+                "下=",
+                result["down_numbers"],
+            )
             self.clear_selection_highlight()
             self.selected_centers = []
 
-    def get_x_4_number_sequences(self, result, print_cross_x_up):
+    def get_x_4_number_sequences(self, result, print_cross_x_up, print_cross_x_down):
         pair_x_info_up = []
         pair_x_info_down = []
         tubeline_num = self.get_tube_pass_count()
@@ -22162,6 +22339,26 @@ class TubeLayoutEditor(QMainWindow):
             for up_tube, down_tube in all_pairs:
                 pair_x_info_up.append(up_tube)
                 pair_x_info_down.append(down_tube)
+
+            # 不改变配对集合，仅按几何从左到右排序：先画/先删左侧再右侧，左右观感对称
+            def _x_of_num(num, row):
+                for it in row or []:
+                    if it[0] == num:
+                        return float(it[1])
+                return 0.0
+
+            if print_cross_x_down is not None:
+                _pairs = list(zip(pair_x_info_up, pair_x_info_down))
+                _pairs.sort(
+                    key=lambda ud: (
+                        (_x_of_num(ud[0], print_cross_x_up) + _x_of_num(ud[1], print_cross_x_down))
+                        / 2.0,
+                        ud[0],
+                        ud[1],
+                    )
+                )
+                pair_x_info_up = [p[0] for p in _pairs]
+                pair_x_info_down = [p[1] for p in _pairs]
 
         else:
             QMessageBox.warning(self, "功能提示", "该管程程数交叉布管尚未开发")
@@ -22300,8 +22497,16 @@ class TubeLayoutEditor(QMainWindow):
         result = self.get_selected_y_4_center_numbers(
             current_coords, print_cross_y_left, print_cross_y_right
         )
-        print(result["up_numbers"])
-        print(result["down_numbers"])
+        print(
+            "[交叉布管·4点 Y向] 选中相对坐标(行,列):",
+            current_coords,
+            "| 左侧管孔编号:",
+            result["up_numbers"],
+            "| 右侧管孔编号:",
+            result["down_numbers"],
+            "| 左右编号集合一致(进入配对):",
+            set(result["up_numbers"]) == set(result["down_numbers"]),
+        )
         if set(result["up_numbers"]) == set(result["down_numbers"]):
             if abs(result["up_numbers"][0] - result["up_numbers"][1]) > 3:
                 QMessageBox.warning(self, "选择错误", "参照管孔间隔不能大于3个换热管孔")
@@ -22314,7 +22519,12 @@ class TubeLayoutEditor(QMainWindow):
                 )
                 pair_x_info_up = up_seq
                 pair_x_info_down = down_seq
+                print(
+                    "[交叉布管·4点 Y向] 配对(左排孔位编号 -> 右排孔位编号):",
+                    list(zip(pair_x_info_up, pair_x_info_down)),
+                )
                 coordinate_pairs = []
+                coordinate_pair_nums = []  # 与 coordinate_pairs 同序的 (左#, 右#)
                 absolute_coord_pairs = []  # 存储绝对坐标对
                 used_up_nums = set()
                 used_down_nums = set()
@@ -22339,6 +22549,7 @@ class TubeLayoutEditor(QMainWindow):
                         down_selected = self.actual_to_selected_coords(down_coord)
                         if up_selected and down_selected:
                             coordinate_pairs.append((up_selected, down_selected))
+                            coordinate_pair_nums.append((up_num, down_num))
                             absolute_coord_pairs.append([up_coord, down_coord])
                             used_up_nums.add(up_num)
                             used_down_nums.add(down_num)
@@ -22350,10 +22561,17 @@ class TubeLayoutEditor(QMainWindow):
                         self.calculate_distance([left_selected, right_selected])
                     )
 
-                for left_selected, right_selected in coordinate_pairs:
+                drawn_num_pairs_y4 = []
+                for i, (left_selected, right_selected) in enumerate(coordinate_pairs):
                     distance = self.calculate_distance([left_selected, right_selected])
                     if int(distance) == valid_distance:
                         self.build_2_cross_pipes([left_selected, right_selected])
+                        if i < len(coordinate_pair_nums):
+                            drawn_num_pairs_y4.append(coordinate_pair_nums[i])
+                print(
+                    "[交叉布管·4点 Y向] 距离校验后实际绘制(左#->右#):",
+                    drawn_num_pairs_y4,
+                )
 
                 # 存储绝对坐标对（只存储符合距离要求的）
                 filtered_abs_coords = []
@@ -22396,6 +22614,13 @@ class TubeLayoutEditor(QMainWindow):
                     self.delete_huanreguan(del_centers)
 
         else:
+            print(
+                "[交叉布管·4点 Y向] 左右编号集合不一致，无法配对，已清空选择。"
+                " 左=",
+                result["up_numbers"],
+                "右=",
+                result["down_numbers"],
+            )
             self.clear_selection_highlight()
             self.selected_centers = []
 
@@ -22499,7 +22724,19 @@ class TubeLayoutEditor(QMainWindow):
         self.original_print_cross_y_left_line3 = self.print_cross_y_left_line3.copy()
         self.original_print_cross_y_right_line3 = self.print_cross_y_right_line3.copy()
 
-        # -------------------------- 第二步：对Y轴坐标按y值排序（X轴无需排序，保持原顺序） --------------------------
+        # -------------------------- 第二步：X 向按 x 升序再编号；Y 向按 y 排序 --------------------------
+        # X 轴上/下各线：先按几何 x 从左到右编号，避免“序号顺序≠左右顺序”导致配对看起来不对称
+        for _x_attr in (
+            "print_cross_x_up_line1",
+            "print_cross_x_up_line2",
+            "print_cross_x_up_line3",
+            "print_cross_x_down_line1",
+            "print_cross_x_down_line2",
+            "print_cross_x_down_line3",
+        ):
+            _x_line = getattr(self, _x_attr, None)
+            if _x_line:
+                _x_line.sort(key=lambda coord: coord[0])
         # Y轴左线1-3
         self.print_cross_y_left_line1.sort(key=lambda coord: coord[1])
         self.print_cross_y_left_line2.sort(key=lambda coord: coord[1])
@@ -29081,9 +29318,22 @@ class TubeLayoutEditor(QMainWindow):
                     else:
                         selected_centers = list(self.selected_centers)
 
+                cross_line_nos_to_reset = set()
+                try:
+                    cross_line_nos_to_reset = self._hole_table_line_nos_fully_in_selection(
+                        selected_centers
+                    )
+                except Exception as e:
+                    print(f"[on_del_click] 检测分布表整行删除(1/2/3排)失败: {e}")
+
                 # for center in selected_centers:
                 #     self.delete_huanreguan(center)
                 self.delete_huanreguan(selected_centers)
+                if cross_line_nos_to_reset:
+                    try:
+                        self._apply_cross_pipe_reset_for_centerlines(cross_line_nos_to_reset)
+                    except Exception as e:
+                        print(f"[on_del_click] 同步交叉布管状态失败: {e}")
                 try:
                     self.cleanup_unpaired_tubes_after_cross_pipe_delete()
                 except Exception as e:
@@ -43576,25 +43826,58 @@ class TubeLayoutEditor(QMainWindow):
         return None
 
     def get_is_outer_diameter_base(self):
-        """获取'是否以外径为基准'参数值"""
+        """
+        获取「是否以外径为基准」的实际取值（用于 user_update_Di / 一致性检查等逻辑）。
+
+        优先级（与 load_initial_data 覆盖逻辑、cal_di 一致）：
+        1) 产品设计活动表_通用数据表：参数名称「是否以外径为基准*」→ 列「数值」
+        2) 回退：当前 param_table 界面显示值
+        """
+        pid = getattr(self, "productID", None)
+        if pid:
+            conn = None
+            try:
+                conn = create_product_connection()
+                if conn and getattr(conn, "open", False):
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            SELECT 数值 FROM 产品设计活动表_通用数据表
+                            WHERE 产品ID = %s AND 参数名称 = %s
+                            LIMIT 1
+                            """,
+                            (pid, "是否以外径为基准*"),
+                        )
+                        row_g = cur.fetchone()
+                        if isinstance(row_g, dict):
+                            vg = row_g.get("数值")
+                        else:
+                            vg = row_g[0] if row_g else None
+                        if vg is not None and str(vg).strip() != "":
+                            return str(vg).strip()
+            except Exception as e:
+                print(f"[get_is_outer_diameter_base] 读产品库失败，回退 param_table: {e}")
+            finally:
+                if conn and getattr(conn, "open", False):
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+
         row_count = self.param_table.rowCount()
         for row in range(row_count):
-            # 获取当前行的参数名
             name_item = self.param_table.item(row, 1)
             if not name_item:
                 continue
 
             if name_item.text() == "是否以外径为基准":
-                # 检查单元格是否是QComboBox控件
                 cell_widget = self.param_table.cellWidget(row, 2)
                 if isinstance(cell_widget, QComboBox):
                     return cell_widget.currentText()
                 else:
-                    # 普通文本单元格
                     value_item = self.param_table.item(row, 2)
                     return value_item.text() if value_item else None
 
-        # 未找到参数时返回None
         return None
 
     def get_tube_bendblock(self):
