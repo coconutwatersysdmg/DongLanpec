@@ -22685,23 +22685,50 @@ class TubeLayoutEditor(QMainWindow):
         raise ValueError("输入的坐标不符合要求，无法找到对角线点对")
 
     def restore_all_coords(self, pair_str):
-        """从一对对角线坐标（字符串形式）还原出完整的四个坐标"""
+        """从一对对角线坐标或四个角点还原为四个角点列表。
+
+        兼容两种入库形式：
+        - 旧：两个对角点 ``[(x1,y1), (x2,y2)]``，由本函数补全矩形另两点；
+        - 新：`build_sql_for_cross_pipes` 中 ``format_data`` 对整表保存 ``str(coord_*_line*_4)``，
+          即已是四个角点 ``[(x1,y1), (x2,y2), (x3,y3), (x4,y4)]``，直接规范化返回。
+        """
         try:
-            # 如果输入是字符串，先将其解析为元组
             if isinstance(pair_str, str):
-                # 去除可能的空白字符
                 pair_str = pair_str.strip()
-                # 使用eval安全地解析字符串为元组（仅在确定字符串来源安全时使用）
-                pair = eval(pair_str)
+                if pair_str in ("", "0", "[]", "None", "null"):
+                    return []
+                try:
+                    pair = ast.literal_eval(pair_str)
+                except (ValueError, SyntaxError):
+                    pair = eval(pair_str)
             else:
                 pair = pair_str
 
-            # 验证解析结果是否为包含两个元素的序列
-            if not isinstance(pair, (list, tuple)) or len(pair) != 2:
-                raise ValueError(f"坐标对格式错误，期望包含两个元素，实际为: {pair}")
+            if not isinstance(pair, (list, tuple)):
+                if pair in (0, None):
+                    return []
+                raise ValueError(f"坐标格式错误，期望 list/tuple，实际为: {type(pair).__name__} {pair}")
+
+            if len(pair) == 0:
+                return []
+
+            # 已是四个角点（与入库 format_data 一致）
+            if len(pair) == 4:
+                out = []
+                for p in pair:
+                    if not (isinstance(p, (list, tuple)) and len(p) == 2):
+                        raise ValueError(f"坐标点格式错误，每个点应为两个数值，实际为: {p}")
+                    out.append((float(p[0]), float(p[1])))
+                return out
+
+            if len(pair) != 2:
+                raise ValueError(
+                    f"坐标对格式错误，期望 2 个对角点或 4 个角点，实际元素个数: {len(pair)}, 数据: {pair}"
+                )
 
             # 解包两个点的坐标
             (x1, y1), (x2, y2) = pair
+            x1, y1, x2, y2 = float(x1), float(y1), float(x2), float(y2)
 
             # 确保这对坐标是对角线（x和y都不相同）
             if x1 == x2 or y1 == y2:
