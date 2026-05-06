@@ -3222,8 +3222,9 @@ class TubeLayoutEditor(QMainWindow):
         self.isBlock = False
         self.heat_exchanger = None
         # 打开管束阶段用：操作记录表是否“有效存在”
-        # 规则：有记录 + 公称直径 DN(布管参数表) 与设计数据表「公称直径*」的壳程数值或管程数值（先填者优先）任一一致 =>
-        #       有效存在。无记录或两列均与 DN 不一致 => 按“未有效”处理（可从设计数据表覆盖 Dis/Dit 等）。
+        # 规则：有记录 + 布管参数表 DN 与设计数据表「公称直径*」按换热器型式取用的那一列一致 =>
+        #       AKU/BKU 取 管程数值（空则回退壳程）；其它型式取 壳程数值（空则回退管程）。
+        #       无记录或与该取用值不一致 => 按“未有效”处理（可从设计数据表覆盖 Dis/Dit 等）。
         operation_record_exists_effective = False
         product_conn_for_type = None
         try:
@@ -3282,6 +3283,21 @@ class TubeLayoutEditor(QMainWindow):
             if not isinstance(d, dict):
                 return None, None
             for k in ("壳程数值", "管程数值"):
+                v = d.get(k)
+                if v is not None and str(v).strip() != "":
+                    return str(v).strip(), k
+            return None, None
+
+        # 设计数据表「公称直径*」：按产品型式取用列（另一列为空时回退）
+        def _design_dn_pick(d):
+            if not isinstance(d, dict):
+                return None, None
+            hx = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
+            if hx in ("AKU", "BKU"):
+                order = ("管程数值", "壳程数值")
+            else:
+                order = ("壳程数值", "管程数值")
+            for k in order:
                 v = d.get(k)
                 if v is not None and str(v).strip() != "":
                     return str(v).strip(), k
@@ -3483,26 +3499,19 @@ class TubeLayoutEditor(QMainWindow):
                             row_dn = None
 
                         operation_record_exists_effective = operation_record_exists
-                        # 有操作记录且布管表有 DN 时：设计数据表「公称直径*」壳程/管程至少一列非空且与 DN 一致才算有效
+                        # 有操作记录且布管表有 DN 时：与「公称直径*」按型式取用列一致才算有效
                         if operation_record_exists and table_dn_value is not None and isinstance(
                                 row_dn, dict
                         ):
-                            dn_candidates = []
-                            for _k in ("壳程数值", "管程数值"):
-                                _v = row_dn.get(_k)
-                                if _v is not None and str(_v).strip() != "":
-                                    dn_candidates.append(str(_v).strip())
-                            if dn_candidates:
+                            _dvn, _ = _design_dn_pick(row_dn)
+                            if _dvn is not None:
                                 _matched = False
-                                for dvn in dn_candidates:
-                                    try:
-                                        if abs(float(table_dn_value) - float(dvn)) <= 1e-6:
-                                            _matched = True
-                                            break
-                                    except Exception:
-                                        if str(table_dn_value).strip() == dvn:
-                                            _matched = True
-                                            break
+                                try:
+                                    if abs(float(table_dn_value) - float(_dvn)) <= 1e-6:
+                                        _matched = True
+                                except Exception:
+                                    if str(table_dn_value).strip() == _dvn:
+                                        _matched = True
                                 if not _matched:
                                     operation_record_exists_effective = False
                         # ========== 关键：结束 ==========
@@ -3567,7 +3576,7 @@ class TubeLayoutEditor(QMainWindow):
                                             design_query, (self.productID, "公称直径*")
                                         )
                                         design_data = cursor.fetchone()
-                                        _dn_pick, _ = _design_shell_tube_pick(design_data)
+                                        _dn_pick, _ = _design_dn_pick(design_data)
 
                                         if _dn_pick is not None:
                                             final_value = _dn_pick
@@ -4279,9 +4288,7 @@ class TubeLayoutEditor(QMainWindow):
                                                         design_data = (
                                                             design_cursor.fetchone()
                                                         )
-                                                        _dv, _ = _design_shell_tube_pick(
-                                                            design_data
-                                                        )
+                                                        _dv, _ = _design_dn_pick(design_data)
                                                         if _dv is not None:
                                                             final_value = _dv
                                                             print(
