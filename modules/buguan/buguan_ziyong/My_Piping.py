@@ -5894,13 +5894,19 @@ class TubeLayoutEditor(QMainWindow):
             shell_di = None  # 壳体内直径
             tube_box_di = None  # 管箱内直径
 
-            # 1. 查找壳体内直径
+            # 1. 查找壳体内直径（AKU/BKU 从小端壳体圆筒取数，其余从壳体圆筒取数）
+            _hx = getattr(self, "heat_exchanger", None) or ""
+            if isinstance(_hx, str):
+                _hx = _hx.strip().upper()
+            _shell_cylinder_key = (
+                "小端壳体圆筒" if _hx in ("AKU", "BKU") else "壳体圆筒"
+            )
             if (
                     "DictOutDatas" in data
-                    and "壳体圆筒" in data["DictOutDatas"]
-                    and "Datas" in data["DictOutDatas"]["壳体圆筒"]
+                    and _shell_cylinder_key in data["DictOutDatas"]
+                    and "Datas" in data["DictOutDatas"][_shell_cylinder_key]
             ):
-                for item in data["DictOutDatas"]["壳体圆筒"]["Datas"]:
+                for item in data["DictOutDatas"][_shell_cylinder_key]["Datas"]:
                     if item.get("Name") == "圆筒内径":
                         value = item.get("Value")
                         # 可以根据需要将字符串转换为数值类型
@@ -18408,6 +18414,10 @@ class TubeLayoutEditor(QMainWindow):
         if len(self.baffle_lines) != 0:
             self.clear_baffle_plates()
             self.baffle_lines = []
+
+        _hx = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
+        if _hx in ("AKU", "BKU"):
+            return
 
         # 获取折流板相关参数
         baffle_type = None  # 折流板类型
