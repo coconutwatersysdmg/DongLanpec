@@ -22310,30 +22310,52 @@ class TubeLayoutEditor(QMainWindow):
             up_num1, up_num2 = result["up_numbers"]
             A, B = sorted([up_num1, up_num2])
             D = B - A
+            N = total_count
 
-            # 所有管子按从小到大排序
-            all_tubes = sorted(range(1, total_count + 1))
-            valid_tubes = all_tubes  # 保留所有管子，根据实际需求调整
-            used_tubes = set()
+            # D==1：整条 1..N 只能用一种「相邻互换」奇偶类，否则会出现左半奇起点、右半偶起点，与编号中点镜像不对称。
+            # 偶起点类：{2,3},{4,5},… —— 镜像 {k,k+1} <-> {N-k,N+1-k}；两端 1、N 可能不参与互换（与原先参照 12-13 时一致）。
+            # 奇起点类：{1,2},{3,4},… —— 满覆盖无孤立端点（N 为偶时）。
+            all_pairs = []
+            if D == 1:
+                user_edge = frozenset({A, B})
+                even_start = (A % 2 == 0)
 
-            # 核心配对：确保用户选择的配对优先且必须包含
-            user_pairs = [(A, B), (B, A)]
-            used_tubes.update([A, B])
+                def _parity_undirected_edges(even_start_flag):
+                    edges = []
+                    if even_start_flag:
+                        for k in range(2, N, 2):
+                            if k + 1 <= N:
+                                edges.append(frozenset({k, k + 1}))
+                    else:
+                        for k in range(1, N, 2):
+                            if k + 1 <= N:
+                                edges.append(frozenset({k, k + 1}))
+                    return edges
 
-            # 处理其他管子，按当前D值进行配对
-            other_pairs = []
-            for tube in valid_tubes:
-                if tube in used_tubes:
-                    continue
-                pair_tube = tube + D
-                if pair_tube in valid_tubes and pair_tube not in used_tubes:
-                    other_pairs.append((tube, pair_tube))
-                    other_pairs.append((pair_tube, tube))
-                    used_tubes.add(tube)
-                    used_tubes.add(pair_tube)
-
-            # 合并所有配对（用户选择的配对 + 其他配对）
-            all_pairs = user_pairs + other_pairs
+                undirected = _parity_undirected_edges(even_start)
+                if user_edge not in undirected:
+                    undirected = _parity_undirected_edges(not even_start)
+                for e in undirected:
+                    lo, hi = sorted(e)
+                    all_pairs.append((lo, hi))
+                    all_pairs.append((hi, lo))
+            else:
+                all_tubes = sorted(range(1, N + 1))
+                valid_tubes = all_tubes
+                used_tubes = set()
+                user_pairs = [(A, B), (B, A)]
+                used_tubes.update([A, B])
+                other_pairs = []
+                for tube in valid_tubes:
+                    if tube in used_tubes:
+                        continue
+                    pair_tube = tube + D
+                    if pair_tube in valid_tubes and pair_tube not in used_tubes:
+                        other_pairs.append((tube, pair_tube))
+                        other_pairs.append((pair_tube, tube))
+                        used_tubes.add(tube)
+                        used_tubes.add(pair_tube)
+                all_pairs = user_pairs + other_pairs
 
             # 生成最终序列
             for up_tube, down_tube in all_pairs:
@@ -22405,35 +22427,57 @@ class TubeLayoutEditor(QMainWindow):
             )
             return cross_gap1 or cross_gap2
 
+        def _all_pairs_for_cross_y(A_in, B_in, D_in, N_in):
+            """与 get_x_4_number_sequences（2 管程）一致：D==1 用单一奇偶相邻互换，否则参照孔+D 贪心。"""
+            if D_in == 1:
+                user_edge = frozenset({A_in, B_in})
+                even_start = (A_in % 2 == 0)
+
+                def _parity_undirected_edges(even_start_flag):
+                    edges = []
+                    if even_start_flag:
+                        for k in range(2, N_in, 2):
+                            if k + 1 <= N_in:
+                                edges.append(frozenset({k, k + 1}))
+                    else:
+                        for k in range(1, N_in, 2):
+                            if k + 1 <= N_in:
+                                edges.append(frozenset({k, k + 1}))
+                    return edges
+
+                undirected = _parity_undirected_edges(even_start)
+                if user_edge not in undirected:
+                    undirected = _parity_undirected_edges(not even_start)
+                out = []
+                for e in undirected:
+                    lo, hi = sorted(e)
+                    out.append((lo, hi))
+                    out.append((hi, lo))
+                return out
+            all_tubes = sorted(range(1, N_in + 1))
+            valid_tubes = all_tubes
+            used_tubes = set()
+            user_pairs = [(A_in, B_in), (B_in, A_in)]
+            used_tubes.update([A_in, B_in])
+            other_pairs = []
+            for tube in valid_tubes:
+                if tube in used_tubes:
+                    continue
+                pair_tube = tube + D_in
+                if pair_tube in valid_tubes and pair_tube not in used_tubes:
+                    other_pairs.append((tube, pair_tube))
+                    other_pairs.append((pair_tube, tube))
+                    used_tubes.add(tube)
+                    used_tubes.add(pair_tube)
+            return user_pairs + other_pairs
+
         if tubeline_num == "4":
             # 获取用户选择的两个管子
             up_num1, up_num2 = result["up_numbers"]
             A, B = sorted([up_num1, up_num2])
             D = B - A
 
-            # 所有管子按从小到大排序
-            all_tubes = sorted(range(1, total_count + 1))
-            valid_tubes = all_tubes  # 保留所有管子，根据实际需求调整
-            used_tubes = set()
-
-            # 核心配对：确保用户选择的配对优先且必须包含
-            user_pairs = [(A, B), (B, A)]
-            used_tubes.update([A, B])
-
-            # 处理其他管子，按当前D值进行配对
-            other_pairs = []
-            for tube in valid_tubes:
-                if tube in used_tubes:
-                    continue
-                pair_tube = tube + D
-                if pair_tube in valid_tubes and pair_tube not in used_tubes:
-                    other_pairs.append((tube, pair_tube))
-                    other_pairs.append((pair_tube, tube))
-                    used_tubes.add(tube)
-                    used_tubes.add(pair_tube)
-
-            # 合并所有配对（用户选择的配对 + 其他配对）
-            all_pairs = user_pairs + other_pairs
+            all_pairs = _all_pairs_for_cross_y(A, B, D, total_count)
 
             # 过滤跨间隔的配对（4管程单一间隔）
             filtered_pairs = [
@@ -22451,29 +22495,7 @@ class TubeLayoutEditor(QMainWindow):
             A, B = sorted([up_num1, up_num2])
             D = B - A
 
-            # 所有管子按从小到大排序
-            all_tubes = sorted(range(1, total_count + 1))
-            valid_tubes = all_tubes
-            used_tubes = set()
-
-            # 核心配对：确保用户选择的配对优先且必须包含
-            user_pairs = [(A, B), (B, A)]
-            used_tubes.update([A, B])
-
-            # 处理其他管子，按当前D值进行配对
-            other_pairs = []
-            for tube in valid_tubes:
-                if tube in used_tubes:
-                    continue
-                pair_tube = tube + D
-                if pair_tube in valid_tubes and pair_tube not in used_tubes:
-                    other_pairs.append((tube, pair_tube))
-                    other_pairs.append((pair_tube, tube))
-                    used_tubes.add(tube)
-                    used_tubes.add(pair_tube)
-
-            # 合并所有配对（用户选择的配对 + 其他配对）
-            all_pairs = user_pairs + other_pairs
+            all_pairs = _all_pairs_for_cross_y(A, B, D, total_count)
 
             # 过滤跨间隔的配对（6管程两个间隔）
             filtered_pairs = [
