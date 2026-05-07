@@ -6040,6 +6040,19 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
+    def _safe_disconnect_param_table_item_changed(self):
+        """断开 param_table.itemChanged 的全部连接。
+
+        PyQt5：当前无任何连接时调用 disconnect() 会抛 TypeError（勿记入布管异常）。
+        """
+        table = getattr(self, "param_table", None)
+        if table is None:
+            return
+        try:
+            table.itemChanged.disconnect()
+        except TypeError:
+            pass
+
     # TODO 布管函数
     def calculate_piping_layout(self):
         self.is_x_line1 = False
@@ -6121,6 +6134,12 @@ class TubeLayoutEditor(QMainWindow):
             self.update_DN_Di()
         except Exception as _ud_e:
             print(f"[calculate_piping_layout] update_DN_Di: {_ud_e}")
+
+        # 布管前保险：管箱内直径 Dit 与壳体内直径 Dis 一致（如仅回车提交 Dis、未走 itemChanged 联动）
+        try:
+            self._sync_dis_dit_peer_from_source("壳体内直径 Dis")
+        except Exception as _dit_guard_e:
+            print(f"[calculate_piping_layout] Dis→Dit 同步: {_dit_guard_e}")
 
         # 1. 读取参数
         DL = None
@@ -6853,6 +6872,12 @@ class TubeLayoutEditor(QMainWindow):
         self.left_data_pd = []
 
         self._commit_param_table_open_editor()
+
+        # 布管前保险：管箱内直径 Dit 与壳体内直径 Dis 一致
+        try:
+            self._sync_dis_dit_peer_from_source("壳体内直径 Dis")
+        except Exception as _dit_guard_e:
+            print(f"[calculate_piping] Dis→Dit 同步: {_dit_guard_e}")
 
         # 1. 读取参数
         DL = None
@@ -10064,6 +10089,115 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             return None
 
+    def _find_param_row_by_name(self, param_name: str):
+        for r in range(self.param_table.rowCount()):
+            it = self.param_table.item(r, 1)
+            if it and it.text().strip() == param_name:
+                return r
+        return -1
+
+    def _sync_dis_dit_peer_from_source(self, source_name: str):
+        """保持壳体内直径 Dis 与管箱内直径 Dit 同值；从 source_name 指定的一侧读取写到另一侧。"""
+        from PyQt5.QtWidgets import QTableWidgetItem, QComboBox
+
+        dis_row = self._find_param_row_by_name("壳体内直径 Dis")
+        dit_row = self._find_param_row_by_name("管箱内直径 Dit")
+        if dis_row < 0 or dit_row < 0:
+            return
+        if source_name not in ("壳体内直径 Dis", "管箱内直径 Dit"):
+            return
+
+        src_row = dis_row if source_name == "壳体内直径 Dis" else dit_row
+        dst_row = dit_row if source_name == "壳体内直径 Dis" else dis_row
+        dst_name = "管箱内直径 Dit" if source_name == "壳体内直径 Dis" else "壳体内直径 Dis"
+
+        if self.param_table.isRowHidden(src_row) or self.param_table.isRowHidden(dst_row):
+            return
+
+        w_src = self.param_table.cellWidget(src_row, 2)
+        if isinstance(w_src, QComboBox):
+            txt = w_src.currentText().strip()
+        else:
+            it_s = self.param_table.item(src_row, 2)
+            txt = it_s.text().strip() if it_s else ""
+
+        if txt == "":
+            return
+
+        self._is_programmatic_update = True
+        if not hasattr(self, "_programmatic_update_params"):
+            self._programmatic_update_params = set()
+        self._programmatic_update_params.add(dst_name)
+        try:
+            w_dst = self.param_table.cellWidget(dst_row, 2)
+            if isinstance(w_dst, QComboBox):
+                dst_blocked = w_dst.blockSignals(True)
+                try:
+                    idx = w_dst.findText(txt)
+                    if idx >= 0:
+                        w_dst.setCurrentIndex(idx)
+                    else:
+                        try:
+                            w_dst.setEditText(txt)
+                        except Exception:
+                            self.param_table.setItem(dst_row, 2, QTableWidgetItem(txt))
+                finally:
+                    w_dst.blockSignals(dst_blocked)
+            else:
+                it_d = self.param_table.item(dst_row, 2)
+                if it_d:
+                    it_d.setText(txt)
+                else:
+                    self.param_table.setItem(dst_row, 2, QTableWidgetItem(txt))
+        finally:
+            try:
+                self._programmatic_update_params.discard(dst_name)
+            except Exception:
+                pass
+            self._is_programmatic_update = False
+
+    def _handle_dis_dit_combo_edit(self, row: int):
+        """第 2 列为下拉框时的 Dis/Dit 修改（itemChanged 可能不由文本触发）。"""
+        param_item = self.param_table.item(row, 1)
+        pname = param_item.text().strip() if param_item else ""
+        if pname not in ("壳体内直径 Dis", "管箱内直径 Dit"):
+            return
+
+        if pname == "管箱内直径 Dit":
+            self._sync_dis_dit_peer_from_source("管箱内直径 Dit")
+        trig = "壳体内直径 Dis" if pname == "管箱内直径 Dit" else pname
+        ok = self.check_diameter_consistency(trigger_name=trig)
+        if ok is False:
+            try:
+                self._sync_dis_dit_peer_from_source("壳体内直径 Dis")
+            except Exception:
+                pass
+            return
+
+        if pname == "壳体内直径 Dis":
+            try:
+                self._sync_dis_dit_peer_from_source("壳体内直径 Dis")
+            except Exception:
+                pass
+
+        self.isDi_change = True
+        self.isDN_change = False
+        try:
+            self.user_update_Di()
+            if pname == "壳体内直径 Dis":
+                self.update_tube_layout_circle_dl()
+        except Exception as e:
+            print(f"[_handle_dis_dit_combo_edit] user_update_Di: {e}")
+
+        if pname == "壳体内直径 Dis":
+            try:
+                self.update_baffle_diameter()
+                self.update_tube_center_distance()
+                self.update_tube_layout_circle_dl()
+                self.update_divider_position_and_size()
+            except Exception as e:
+                print(f"[_handle_dis_dit_combo_edit] 联动更新: {e}")
+
     def user_update_Di(self):
         # TODO  调接口更新壳体内直径
         """
@@ -10160,17 +10294,21 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception:
                     original_handler = None
 
-            # 6. 先更新布管限定圆为0（在更新壳体内直径之前）
+            # 6. 暂将布管限定圆写为当前壳体内直径 Dis（更新前），再写回新 Dis/Dit；最后由
+            #    update_tube_layout_circle_dl() 重算 DL。避免占位 0 导致短暂无效或重算失败时残留 0。
             try:
                 if dl_row != -1:
                     # 检查布管限定圆单元格的控件类型
                     dl_widget = self.param_table.cellWidget(dl_row, 2)
-                    dl_str_value = "0"
+                    dl_str_value = (
+                        f"{dis_value:.1f}"
+                        if dis_value is not None
+                        else "0"
+                    )
                     if isinstance(dl_widget, QComboBox):
                         # 阻塞 QComboBox 的信号，避免触发监听
                         dl_was_blocked = dl_widget.blockSignals(True)
                         try:
-                            # 查找值为0的项
                             idx = dl_widget.findText(dl_str_value)
                             if idx >= 0:
                                 dl_widget.setCurrentIndex(idx)
@@ -14145,55 +14283,104 @@ class TubeLayoutEditor(QMainWindow):
                     print(f"[on_table_item_changed] 换热管中心距 S 校验失败: {e}")
 
             # 2.5) 关键：DN/Dis/DL 先做一致性检查（不通过就立刻回滚并停止后续联动/重绘）
+            # Dis 与 Dit 双列保持同值：改 Dit 时先把数值写到 Dis，再按「壳体内直径 Dis」参与直径链校验。
+            # 纯下拉 Dis/Dit 在本行用 QComboBox 时：同步与校验已在 on_combobox_changed 处理，避免与下段重复。
             # 目的：避免“非法值先触发 update_baffle_diameter/draw_baffle_plates 等重绘，回滚后图形仍保留”
-            # 触发条件：壳体内直径 Dis / 布管限定圆 DL 手动修改时均需校验
+            # 触发条件：壳体内直径 Dis / 管箱内直径 Dit / 布管限定圆 DL 手动修改时均需校验（Dit 走 Dis 触发键）
             # 以外径为基准=是：Dis >= DL（有 Dis 时）；以外径为基准=否：DN >= Dis >= DL（有 Dis 时）；不再单独要求 DL<=DN
-            if param_name in ("壳体内直径 Dis", "布管限定圆 DL"):
-                try:
-                    print(f"[DEBUG] 准备调用 check_diameter_consistency，参数={param_name}")
-                    ok = self.check_diameter_consistency(trigger_name=param_name)
-                    print(f"[DEBUG] check_diameter_consistency 返回结果={ok}，参数={param_name}")
-                except Exception as e:
-                    import traceback
-                    print(f"[on_table_item_changed] 一致性检查执行失败: {e}")
-                    print(f"[DEBUG] 异常堆栈:\n{traceback.format_exc()}")
-                    ok = False
+            _cw_2 = self.param_table.cellWidget(row, 2)
+            _dis_dit_is_combo = (
+                param_name in ("壳体内直径 Dis", "管箱内直径 Dit")
+                and isinstance(_cw_2, QComboBox)
+            )
+            if not _dis_dit_is_combo:
+                if param_name == "管箱内直径 Dit":
+                    try:
+                        self._sync_dis_dit_peer_from_source("管箱内直径 Dit")
+                    except Exception as _dit_sync_e:
+                        print(
+                            f"[on_table_item_changed] Dis/Dit 同步(Dit→Dis)失败: {_dit_sync_e}"
+                        )
 
-                if ok is False:
-                    print(
-                        f"[on_table_item_changed] DN/Dis/DL 未通过检查，已回滚（来源：{param_name}），跳过后续联动。"
+                _need_di_dl_check = param_name in (
+                    "壳体内直径 Dis",
+                    "布管限定圆 DL",
+                    "管箱内直径 Dit",
+                )
+                if _need_di_dl_check:
+                    _consistency_trigger = (
+                        "壳体内直径 Dis"
+                        if param_name == "管箱内直径 Dit"
+                        else param_name
                     )
-                    return
-                else:
-                    print(f"[DEBUG] 一致性检查通过，继续后续操作，参数={param_name}")
+                    try:
+                        print(
+                            f"[DEBUG] 准备调用 check_diameter_consistency，参数={_consistency_trigger}"
+                        )
+                        ok = self.check_diameter_consistency(
+                            trigger_name=_consistency_trigger
+                        )
+                        print(
+                            f"[DEBUG] check_diameter_consistency 返回结果={ok}，参数={_consistency_trigger}"
+                        )
+                    except Exception as e:
+                        import traceback
+                        print(f"[on_table_item_changed] 一致性检查执行失败: {e}")
+                        print(f"[DEBUG] 异常堆栈:\n{traceback.format_exc()}")
+                        ok = False
+
+                    if ok is False:
+                        print(
+                            f"[on_table_item_changed] DN/Dis/DL 未通过检查，已回滚（来源：{param_name}），跳过后续联动。"
+                        )
+                        try:
+                            self._sync_dis_dit_peer_from_source("壳体内直径 Dis")
+                        except Exception as _dit_roll_e:
+                            print(
+                                f"[on_table_item_changed] Dis/Dit 同步(Dis 为准)失败: {_dit_roll_e}"
+                            )
+                        return
+                    print(
+                        f"[DEBUG] 一致性检查通过，继续后续操作，参数={param_name}"
+                    )
+
+                if param_name == "壳体内直径 Dis":
+                    try:
+                        self._sync_dis_dit_peer_from_source("壳体内直径 Dis")
+                    except Exception as _dis_sync_e:
+                        print(
+                            f"[on_table_item_changed] Dis/Dit 同步(Dis→Dit)失败: {_dis_sync_e}"
+                        )
 
             # 3) 目标参数联动逻辑（保持原有行为）
             try:
                 if param_name in target_params:
                     # TODO 在load_initial函数后触发的输入框改变的监听事件
                     if param_name == "壳体内直径 Dis":
-                        print(
-                            "[on_table_item_changed DEBUG] 执行 壳体内直径 Dis 相关逻辑"
-                        )
-                        self.isDi_change = True
-                        self.isDN_change = False
-                        # user_update_Di 内部会断开/重连 itemChanged，且会再触发一致性检查一次
-                        try:
-                            self.user_update_Di()
-                            self.update_tube_layout_circle_dl()
-                        except Exception as e:
-                            print(f"[on_table_item_changed] user_update_Di 出错: {e}")
+                        if not _dis_dit_is_combo:
+                            print(
+                                "[on_table_item_changed DEBUG] 执行 壳体内直径 Dis 相关逻辑"
+                            )
+                            self.isDi_change = True
+                            self.isDN_change = False
+                            # user_update_Di 内部会断开/重连 itemChanged，且会再触发一致性检查一次
+                            try:
+                                self.user_update_Di()
+                                self.update_tube_layout_circle_dl()
+                            except Exception as e:
+                                print(f"[on_table_item_changed] user_update_Di 出错: {e}")
                     if param_name == "管箱内直径 Dit":
-                        print(
-                            "[on_table_item_changed DEBUG] 执行 管箱内直径 Dit 相关逻辑"
-                        )
-                        self.isDi_change = True
-                        self.isDN_change = False
-                        # user_update_Di 内部会断开/重连 itemChanged，且会再触发一致性检查一次
-                        try:
-                            self.user_update_Di()
-                        except Exception as e:
-                            print(f"[on_table_item_changed] user_update_Di 出错: {e}")
+                        if not _dis_dit_is_combo:
+                            print(
+                                "[on_table_item_changed DEBUG] 执行 管箱内直径 Dit 相关逻辑"
+                            )
+                            self.isDi_change = True
+                            self.isDN_change = False
+                            # user_update_Di 内部会断开/重连 itemChanged，且会再触发一致性检查一次
+                            try:
+                                self.user_update_Di()
+                            except Exception as e:
+                                print(f"[on_table_item_changed] user_update_Di 出错: {e}")
                     if param_name == "公称直径 DN":
                         self.isDN_change = True
                         # try:
@@ -14224,16 +14411,19 @@ class TubeLayoutEditor(QMainWindow):
                         "换热管外径 do",
                         "换热管排列方式",
                     ]:
-                        try:
-                            self.update_baffle_diameter()
-                            self.update_tube_center_distance()
-                            self.update_tube_layout_circle_dl()
-                            self.update_divider_position_and_size()
-                        except Exception as e:
-                            print(
-                                f"[on_table_item_changed] update tube layout 出错: {e}"
-                            )
-                        self.isDi_change = True
+                        if param_name == "壳体内直径 Dis" and _dis_dit_is_combo:
+                            pass
+                        else:
+                            try:
+                                self.update_baffle_diameter()
+                                self.update_tube_center_distance()
+                                self.update_tube_layout_circle_dl()
+                                self.update_divider_position_and_size()
+                            except Exception as e:
+                                print(
+                                    f"[on_table_item_changed] update tube layout 出错: {e}"
+                                )
+                            self.isDi_change = True
                     if param_name in [
                         "折流/支持板外径",
                         "折流板切口与中心线间距a",
@@ -15178,6 +15368,17 @@ class TubeLayoutEditor(QMainWindow):
             pass
 
         print(f"下拉框变更: 参数名={param_name}, 行={row}")
+
+        pname = param_name.strip() if isinstance(param_name, str) else ""
+        wcell = self.param_table.cellWidget(row, 2)
+        if pname in ("壳体内直径 Dis", "管箱内直径 Dit") and isinstance(
+                wcell, QComboBox
+        ):
+            try:
+                self._handle_dis_dit_combo_edit(row)
+            except Exception as _disc_e:
+                print(f"[on_combobox_changed] Dis/Dit combo 联动失败: {_disc_e}")
+            return
 
         if param_name == "换热管外径 do":
             # 获取当前选中的值
@@ -19803,15 +20004,34 @@ class TubeLayoutEditor(QMainWindow):
 
             return True
 
+        # 0) 必须在断开 itemChanged 之前：提交正在编辑的单元格并派发事件，让
+        #    itemChanged → setup_parameter_listeners（含 Dis/Dit 联动、校验等）先跑完，再进入布管。
+        #    原顺序若先 disconnect 再 _commit，则监听永远不会收到本次回车提交。
+        try:
+            self._commit_param_table_open_editor()
+        except Exception as _fe_open:
+            try:
+                print(f"[on_buguan_bt_click] _commit_param_table_open_editor: {_fe_open}")
+            except Exception:
+                pass
+        try:
+            _commit_param_table_edits_before_run()
+        except Exception as _fe_run:
+            try:
+                print(f"[on_buguan_bt_click] _commit_param_table_edits_before_run: {_fe_run}")
+            except Exception:
+                pass
+        try:
+            from PyQt5.QtCore import QCoreApplication
+            QCoreApplication.processEvents()
+        except Exception:
+            pass
+
         # 1) 临时断开所有 itemChanged 监听，避免布管时触发参数修改逻辑
-        _safe_step(
-            "断开 param_table.itemChanged",
-            lambda: self.param_table.itemChanged.disconnect(),
-        )
+        self._safe_disconnect_param_table_item_changed()
 
         try:
-            # 回车/快捷键触发时先提交编辑器内容，确保读取到最新 S
-            _commit_param_table_edits_before_run()
+            # 提交与事件派发已在上文（0）完成，这里不再重复
 
             # Enter/Return 直接布管：先校验 S（避免 itemChanged 未触发导致少弹窗）
             if not _precheck_tube_center_distance_S():
