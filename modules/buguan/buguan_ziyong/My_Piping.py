@@ -30564,6 +30564,15 @@ class TubeLayoutEditor(QMainWindow):
             import traceback
             traceback.print_exc()
 
+        if (
+                not getattr(self, "_cleanup_unpaired_cross_pipe_busy", False)
+                and not getattr(self, "is_loading_data", False)
+        ):
+            try:
+                self.cleanup_unpaired_tubes_after_cross_pipe_delete()
+            except Exception as e:
+                print(f"[delete_huanreguan] cleanup_unpaired_tubes_after_cross_pipe_delete: {e}")
+
     # 10/24 修改，解决管板连接页面多次查询后重复展示的问题。修改以下2个函数，加上先删除旧数据
     def copy_tube_sheet_connection_data(self):
         """
@@ -30979,11 +30988,19 @@ class TubeLayoutEditor(QMainWindow):
         except Exception as e:
             print(f"[delete_cross_pipes_for_selected_centers] 写回交叉布管表失败: {e}")
 
+        try:
+            self.cleanup_unpaired_tubes_after_cross_pipe_delete()
+        except Exception as e:
+            print(f"[delete_cross_pipes_for_selected_centers] 未配对换热管清理失败: {e}")
+
     def cleanup_unpaired_tubes_after_cross_pipe_delete(self):
         """
         删除已布置交叉布管后，按“当前剩余配对”二次清理同一行未配对换热管。
         目标：保证同一行最终仅保留仍可成对且已参与交叉布管的换热管。
         """
+        if getattr(self, "_cleanup_unpaired_cross_pipe_busy", False):
+            return
+
         if not hasattr(self, "current_centers") or not self.current_centers:
             return
 
@@ -31002,110 +31019,125 @@ class TubeLayoutEditor(QMainWindow):
         if not has_cross_rows:
             return
 
-        def key6(x, y):
-            return (round(float(x), 6), round(float(y), 6))
+        self._cleanup_unpaired_cross_pipe_busy = True
+        try:
 
-        def extract_xy(point):
-            if not isinstance(point, (list, tuple)):
+            def key6(x, y):
+                return (round(float(x), 6), round(float(y), 6))
+
+            def extract_xy(point):
+                if not isinstance(point, (list, tuple)):
+                    return None
+                if len(point) >= 3:
+                    return (point[-2], point[-1])
+                if len(point) >= 2:
+                    return (point[0], point[1])
                 return None
-            if len(point) >= 3:
-                return (point[-2], point[-1])
-            if len(point) >= 2:
-                return (point[0], point[1])
-            return None
 
-        def flatten_pair_keys(pair_list):
-            keys = set()
-            if not isinstance(pair_list, list):
+            def flatten_pair_keys(pair_list):
+                keys = set()
+                if not isinstance(pair_list, list):
+                    return keys
+                for pair in pair_list:
+                    if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+                        continue
+                    p1 = extract_xy(pair[0])
+                    p2 = extract_xy(pair[1])
+                    if p1 and p2:
+                        keys.add(key6(p1[0], p1[1]))
+                        keys.add(key6(p2[0], p2[1]))
                 return keys
-            for pair in pair_list:
-                if not isinstance(pair, (list, tuple)) or len(pair) != 2:
+
+            # 基于当前剩余换热管重算候选行
+            self.sorted_current_centers_up, self.sorted_current_centers_down = (
+                self.group_centers_by_y(self.current_centers)
+            )
+            self.find_closest_to_axes()
+            self.update_print_cross_lines()
+
+            rows = [
+                (
+                    1,
+                    getattr(self, "is_x_line1", False),
+                    getattr(self, "is_y_line1", False),
+                    getattr(self, "print_cross_x_up_line1", []),
+                    getattr(self, "print_cross_x_down_line1", []),
+                    getattr(self, "print_cross_y_left_line1", []),
+                    getattr(self, "print_cross_y_right_line1", []),
+                    getattr(self, "abs_coords_line1", []),
+                ),
+                (
+                    2,
+                    getattr(self, "is_x_line2", False),
+                    getattr(self, "is_y_line2", False),
+                    getattr(self, "print_cross_x_up_line2", []),
+                    getattr(self, "print_cross_x_down_line2", []),
+                    getattr(self, "print_cross_y_left_line2", []),
+                    getattr(self, "print_cross_y_right_line2", []),
+                    getattr(self, "abs_coords_line2", []),
+                ),
+                (
+                    3,
+                    getattr(self, "is_x_line3", False),
+                    getattr(self, "is_y_line3", False),
+                    getattr(self, "print_cross_x_up_line3", []),
+                    getattr(self, "print_cross_x_down_line3", []),
+                    getattr(self, "print_cross_y_left_line3", []),
+                    getattr(self, "print_cross_y_right_line3", []),
+                    getattr(self, "abs_coords_line3", []),
+                ),
+            ]
+
+            to_delete_rel = []
+            active_keys = {
+                key6(x, y)
+                for (x, y) in (self.current_centers if self.current_centers else [])
+            }
+
+            lagan_keys = set()
+            for c in getattr(self, "lagan_info", None) or []:
+                if isinstance(c, (list, tuple)) and len(c) >= 2:
+                    try:
+                        lagan_keys.add(key6(float(c[0]), float(c[1])))
+                    except (TypeError, ValueError):
+                        pass
+
+            for row_no, is_x, is_y, x_up, x_down, y_left, y_right, abs_pairs in rows:
+                if not is_x and not is_y:
                     continue
-                p1 = extract_xy(pair[0])
-                p2 = extract_xy(pair[1])
-                if p1 and p2:
-                    keys.add(key6(p1[0], p1[1]))
-                    keys.add(key6(p2[0], p2[1]))
-            return keys
 
-        # 基于当前剩余换热管重算候选行
-        self.sorted_current_centers_up, self.sorted_current_centers_down = (
-            self.group_centers_by_y(self.current_centers)
-        )
-        self.find_closest_to_axes()
-        self.update_print_cross_lines()
+                pair_keys = flatten_pair_keys(abs_pairs)
+                candidate_points = []
+                if is_x:
+                    candidate_points = list(x_up or []) + list(x_down or [])
+                elif is_y:
+                    candidate_points = list(y_left or []) + list(y_right or [])
 
-        rows = [
-            (
-                1,
-                getattr(self, "is_x_line1", False),
-                getattr(self, "is_y_line1", False),
-                getattr(self, "print_cross_x_up_line1", []),
-                getattr(self, "print_cross_x_down_line1", []),
-                getattr(self, "print_cross_y_left_line1", []),
-                getattr(self, "print_cross_y_right_line1", []),
-                getattr(self, "abs_coords_line1", []),
-            ),
-            (
-                2,
-                getattr(self, "is_x_line2", False),
-                getattr(self, "is_y_line2", False),
-                getattr(self, "print_cross_x_up_line2", []),
-                getattr(self, "print_cross_x_down_line2", []),
-                getattr(self, "print_cross_y_left_line2", []),
-                getattr(self, "print_cross_y_right_line2", []),
-                getattr(self, "abs_coords_line2", []),
-            ),
-            (
-                3,
-                getattr(self, "is_x_line3", False),
-                getattr(self, "is_y_line3", False),
-                getattr(self, "print_cross_x_up_line3", []),
-                getattr(self, "print_cross_x_down_line3", []),
-                getattr(self, "print_cross_y_left_line3", []),
-                getattr(self, "print_cross_y_right_line3", []),
-                getattr(self, "abs_coords_line3", []),
-            ),
-        ]
+                candidate_keys = set()
+                for p in candidate_points:
+                    xy = extract_xy(p)
+                    if not xy:
+                        continue
+                    k = key6(xy[0], xy[1])
+                    if k in active_keys:
+                        candidate_keys.add(k)
 
-        to_delete_rel = []
-        active_keys = {
-            key6(x, y) for (x, y) in (self.current_centers if self.current_centers else [])
-        }
+                unmatched_keys = candidate_keys - pair_keys
+                if unmatched_keys:
+                    print(
+                        f"[cleanup_unpaired_tubes_after_cross_pipe_delete] row={row_no}, unmatched={len(unmatched_keys)}"
+                    )
+                for pt_key in unmatched_keys:
+                    if pt_key in lagan_keys:
+                        continue
+                    rel = self.actual_to_selected_coords((pt_key[0], pt_key[1]))
+                    if rel and rel not in to_delete_rel:
+                        to_delete_rel.append(rel)
 
-        for row_no, is_x, is_y, x_up, x_down, y_left, y_right, abs_pairs in rows:
-            if not is_x and not is_y:
-                continue
-
-            pair_keys = flatten_pair_keys(abs_pairs)
-            candidate_points = []
-            if is_x:
-                candidate_points = list(x_up or []) + list(x_down or [])
-            elif is_y:
-                candidate_points = list(y_left or []) + list(y_right or [])
-
-            candidate_keys = set()
-            for p in candidate_points:
-                xy = extract_xy(p)
-                if not xy:
-                    continue
-                k = key6(xy[0], xy[1])
-                if k in active_keys:
-                    candidate_keys.add(k)
-
-            # 同一行中，候选里存在但不在当前配对集合中的换热管，需要二次删除
-            unmatched_keys = candidate_keys - pair_keys
-            if unmatched_keys:
-                print(
-                    f"[cleanup_unpaired_tubes_after_cross_pipe_delete] row={row_no}, unmatched={len(unmatched_keys)}"
-                )
-            for kx, ky in unmatched_keys:
-                rel = self.actual_to_selected_coords((kx, ky))
-                if rel and rel not in to_delete_rel:
-                    to_delete_rel.append(rel)
-
-        if to_delete_rel:
-            self.delete_huanreguan(to_delete_rel)
+            if to_delete_rel:
+                self.delete_huanreguan(to_delete_rel)
+        finally:
+            self._cleanup_unpaired_cross_pipe_busy = False
 
     def build_lagan(self, selected_centers):
         self.operation_order += 1
@@ -31564,11 +31596,20 @@ class TubeLayoutEditor(QMainWindow):
         # 返回移除已绘制拉杆后的中心坐标列表（使用绝对坐标）
         abs_coords_set = set(all_abs_coords)
         # 这里不要更新self.current_centers_lagan
-        return [
+        new_centers = [
             center
             for center in self.current_centers
             if key6(center[0], center[1]) not in abs_coords_set
         ]
+        # 先同步 current_centers，再清理未配对管（cleanup 依赖「拉杆已不占换热管位」）
+        self.current_centers = new_centers
+        if not getattr(self, "is_loading_data", False):
+            try:
+                self.cleanup_unpaired_tubes_after_cross_pipe_delete()
+            except Exception as e:
+                print(f"[build_lagan] cleanup_unpaired_tubes_after_cross_pipe_delete: {e}")
+        # delete_huanreguan（cleanup 内）可能继续删管，需返回最新 current_centers
+        return list(self.current_centers)
 
     def check_lagan_conflict(self, selected_centers):
         """
