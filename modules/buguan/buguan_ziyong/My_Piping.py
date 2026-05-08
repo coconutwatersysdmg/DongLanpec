@@ -36693,41 +36693,39 @@ class TubeLayoutEditor(QMainWindow):
             
             print(f"[干涉检查] 当前行在 y 坐标列表中的索引 = {current_y_idx}")
             
-            upper_row_leftmost = None
-            lower_row_leftmost = None
-            
-            if current_y_idx is not None:
-                # 找上一行（y坐标更大的，索引更小的）
-                if current_y_idx > 0:
-                    upper_y = all_y_coords[current_y_idx - 1]
-                    print(f"[干涉检查] 上一行的 y 坐标 = {upper_y:.3f}")
+            # 仅用换热管排布来找相邻行、做名义圆干涉（不含拉杆等）
+            tube_centers = list(self.current_centers or [])
+            upper_row_points = []
+            lower_row_points = []
+            tube_y_coords = sorted(set(p[1] for p in tube_centers))
+            tube_y_idx = None
+            for idx, y_coord in enumerate(tube_y_coords):
+                if abs(y_coord - selected_y) < 1e-6:
+                    tube_y_idx = idx
+                    break
+            print(f"[干涉检查] 换热管行 y 列表索引 tube_y_idx = {tube_y_idx}")
+
+            if tube_y_idx is not None:
+                if tube_y_idx > 0:
+                    upper_y = tube_y_coords[tube_y_idx - 1]
+                    print(f"[干涉检查] 上一行（换热管）y = {upper_y:.3f}")
                     upper_row_points = [
-                        point for point in centers 
-                        if abs(point[1] - upper_y) < 1e-6
+                        p for p in tube_centers if abs(p[1] - upper_y) < 1e-6
                     ]
-                    print(f"[干涉检查] 上一行的点数量 = {len(upper_row_points)}")
-                    if upper_row_points:
-                        upper_row_leftmost = min(upper_row_points, key=lambda p: p[0])
-                        print(f"[干涉检查] 上一行最左侧点 = ({upper_row_leftmost[0]:.3f}, {upper_row_leftmost[1]:.3f})")
+                    print(f"[干涉检查] 上一行换热管数 = {len(upper_row_points)}")
                 else:
-                    print(f"[干涉检查] 当前行是第一个，没有上一行")
-                
-                # 找下一行（y坐标更小的，索引更大的）
-                if current_y_idx < len(all_y_coords) - 1:
-                    lower_y = all_y_coords[current_y_idx + 1]
-                    print(f"[干涉检查] 下一行的 y 坐标 = {lower_y:.3f}")
+                    print(f"[干涉检查] 换热管行为首行，无上一行")
+                if tube_y_idx < len(tube_y_coords) - 1:
+                    lower_y = tube_y_coords[tube_y_idx + 1]
+                    print(f"[干涉检查] 下一行（换热管）y = {lower_y:.3f}")
                     lower_row_points = [
-                        point for point in centers 
-                        if abs(point[1] - lower_y) < 1e-6
+                        p for p in tube_centers if abs(p[1] - lower_y) < 1e-6
                     ]
-                    print(f"[干涉检查] 下一行的点数量 = {len(lower_row_points)}")
-                    if lower_row_points:
-                        lower_row_leftmost = min(lower_row_points, key=lambda p: p[0])
-                        print(f"[干涉检查] 下一行最左侧点 = ({lower_row_leftmost[0]:.3f}, {lower_row_leftmost[1]:.3f})")
+                    print(f"[干涉检查] 下一行换热管数 = {len(lower_row_points)}")
                 else:
-                    print(f"[干涉检查] 当前行是最后一个，没有下一行")
+                    print(f"[干涉检查] 换热管行为末行，无下一行")
             else:
-                print(f"[干涉检查] 警告：未找到当前行在 y 坐标列表中的位置")
+                print(f"[干涉检查] 警告：selected_y 未落在换热管 y 列表上，相邻行干涉跳过")
             
             # 2. 计算名义圆半径：do/2 + 名义孔桥 + 适当余量
             nominal_circle_margin = 1.0  # mm，适当放大，避免相交
@@ -36743,60 +36741,51 @@ class TubeLayoutEditor(QMainWindow):
             # 这里假设挡板在左侧（n_x < 0的情况）
             is_left_side = n_x < 0
             print(f"\n[挡板位置] n_x = {n_x:.3f}, 挡板在 {'左侧' if is_left_side else '右侧'}")
-            
-            # 计算挡板矩形的位置
+
+            # 与 build_side_dangban 一致：该行 y 处在折流/支持圆上的左右边界，不用 -R_bend（否则会整体偏壳体侧一档，漏检向管束侧干涉）
+            _bend_chord_sq = R_bend * R_bend - selected_y * selected_y
+            if abs(_bend_chord_sq) < 1e-9:
+                _bend_chord_sq = 0.0
+            max_abs_x_row = math.sqrt(max(_bend_chord_sq, 0.0))
+            print(
+                f"[挡板矩形-几何] selected_y={selected_y:.3f}, R_bend={R_bend:.3f}, "
+                f"该行圆弦半宽 max_abs_x_row={max_abs_x_row:.3f} (≠ R_bend 处边界)"
+            )
+
+            # 计算挡板矩形的位置（建模与绘制相同）
             if is_left_side:
-                # 左挡板：左上角在折流板左边界
-                rect_x = -R_bend
+                rect_x = -max_abs_x_row
+                rect_width = side_dangban_length
             else:
-                # 右挡板：左上角在折流板右边界减去长度
-                rect_x = R_bend - side_dangban_length
+                rect_x = max_abs_x_row - side_dangban_length
+                rect_width = side_dangban_length
             
             rect_y = selected_y - block_height_val / 2.0
-            rect_width = side_dangban_length
             rect_height = block_height_val
             
             print(f"[挡板矩形] 左上角 = ({rect_x:.3f}, {rect_y:.3f})")
             print(f"[挡板矩形] 宽度 = {rect_width:.3f}, 高度 = {rect_height:.3f}")
             print(f"[挡板矩形] 右下角 = ({rect_x + rect_width:.3f}, {rect_y + rect_height:.3f})")
-            
-            # 检查与上下两行名义圆的干涉
-            interference = False
-            interfering_circle_center = None
-            interfering_y_line = None  # 记录发生干涉的行y，用于交点计算
-            
-            print(f"\n[干涉检查] 开始检查与名义圆的干涉")
-            for i, circle_center in enumerate([upper_row_leftmost, lower_row_leftmost]):
-                row_name = "上一行" if i == 0 else "下一行"
-                if circle_center is None:
-                    print(f"[干涉检查] {row_name} 最左侧点不存在，跳过")
-                    continue
-                
-                cx, cy = circle_center
-                print(f"[干涉检查] {row_name} 名义圆圆心 = ({cx:.3f}, {cy:.3f}), 半径 = {nominal_circle_radius:.3f}")
-                
-                # 检查矩形与圆的干涉
-                # 找到矩形上距离圆心最近的点
+
+            adjacent_tube_centers = list(upper_row_points) + list(lower_row_points)
+            interferers_msg = []
+
+            print(f"\n[干涉检查] 对相邻行共 {len(adjacent_tube_centers)} 根换热管做名义圆-AABB 检测")
+            for cx, cy in adjacent_tube_centers:
                 closest_x = max(rect_x, min(cx, rect_x + rect_width))
                 closest_y = max(rect_y, min(cy, rect_y + rect_height))
-                
-                print(f"[干涉检查] 矩形上距离圆心最近的点 = ({closest_x:.3f}, {closest_y:.3f})")
-                
-                # 计算最近点到圆心的距离
-                dist_to_center = math.sqrt((closest_x - cx)**2 + (closest_y - cy)**2)
-                print(f"[干涉检查] 最近点到圆心的距离 = {dist_to_center:.3f}, 名义圆半径 = {nominal_circle_radius:.3f}")
-                
-                # 如果距离小于名义圆半径，则干涉
-                if dist_to_center < nominal_circle_radius - 1e-6:
-                    interference = True
-                    print(f"[干涉检查] ✓ 检测到干涉！距离 {dist_to_center:.3f} < 半径 {nominal_circle_radius:.3f}")
-                    if interfering_circle_center is None or abs(cx) > abs(interfering_circle_center[0]):
-                        interfering_circle_center = circle_center
-                        interfering_y_line = cy
-                        print(f"[干涉检查] 更新干涉圆心为: ({cx:.3f}, {cy:.3f})，干涉行y={interfering_y_line:.3f}")
-                else:
-                    print(f"[干涉检查] ✗ 无干涉，距离 {dist_to_center:.3f} >= 半径 {nominal_circle_radius:.3f}")
-            
+                dist_to_center_sq = (
+                    (closest_x - cx) ** 2 + (closest_y - cy) ** 2
+                )
+                if dist_to_center_sq < nominal_circle_radius * nominal_circle_radius - 1e-6:
+                    print(
+                        f"[干涉检查] ✓ 与管 ({cx:.3f},{cy:.3f}) 干涉，最近距 "
+                        f"{math.sqrt(dist_to_center_sq):.3f} < Rnom {nominal_circle_radius:.3f}"
+                    )
+                    interferers_msg.append((cx, cy))
+
+            interference = len(interferers_msg) > 0
+
             # 4. 如果不干涉，直接返回原值
             if not interference:
                 print(f"[干涉检查] 结论：无干涉，使用原始 side_dangban_length = {side_dangban_length:.3f}")
@@ -36804,52 +36793,51 @@ class TubeLayoutEditor(QMainWindow):
                 self.side_dangban_length = side_dangban_length
                 return side_dangban_length
             
-            # 5. 如果干涉，重新计算 side_dangban_length
-            print(f"\n[重新计算] 检测到干涉，开始重新计算 side_dangban_length")
-            
-            # 取横坐标绝对值最大的那个圆心
-            if interfering_circle_center is None:
-                print(f"[重新计算] interfering_circle_center 为 None，尝试从候选点中选择")
-                # 如果两个圆心都存在，取横坐标绝对值最大的
-                candidates = [c for c in [upper_row_leftmost, lower_row_leftmost] if c is not None]
-                print(f"[重新计算] 候选点数量 = {len(candidates)}")
-                if candidates:
-                    interfering_circle_center = max(candidates, key=lambda p: abs(p[0]))
-                    interfering_y_line = interfering_circle_center[1]
-                    print(f"[重新计算] 选择横坐标绝对值最大的点: ({interfering_circle_center[0]:.3f}, {interfering_circle_center[1]:.3f})，干涉行y={interfering_y_line:.3f}")
-                else:
-                    # 没有找到，直接返回原值
-                    print(f"[重新计算] 没有候选点，使用原始值")
-                    self.side_dangban_length = side_dangban_length
-                    return side_dangban_length
-            
-            cx, cy = interfering_circle_center
-            if interfering_y_line is None:
-                interfering_y_line = cy
-            print(f"[重新计算] 使用干涉圆心: ({cx:.3f}, {cy:.3f}), 名义圆半径 = {nominal_circle_radius:.3f}")
-            
-            # 重新计算 side_dangban_length
-            # 旁路挡板矩形的一个角搭在名义圆上
-            print(f"[重新计算] 挡板在 {'左侧' if is_left_side else '右侧'}, rect_x = {rect_x:.3f}, 交点所在行 y_line = {interfering_y_line:.3f}")
-            
-            # 交点按“水平线 y=y_line 与圆 (cx,cy,r)”求解：x = cx ± sqrt(r^2 - (y_line-cy)^2)
-            # 取靠近挡板一侧的交点作为新的边界
-            y_line = interfering_y_line
-            delta_y_to_line = y_line - cy
-            sqrt_term = math.sqrt(max(nominal_circle_radius ** 2 - delta_y_to_line ** 2, 0.0))
+            # 5. 如果干涉：每根干涉管在给定挡板带宽内求弦线限制，取最保守（左挡板：右端最靠左）
+            print(f"\n[重新计算] 检测到干涉（{len(interferers_msg)} 处），按多管截断最短长度")
+
+            def _clamp_y_to_rect(y_val):
+                return max(rect_y, min(y_val, rect_y + rect_height))
 
             if is_left_side:
-                # 左挡板：用左交点 x = cx - sqrt(...)
-                new_rect_right_x = cx - sqrt_term
+                tip_limits = []
+                for cx, cy in interferers_msg:
+                    y_h = _clamp_y_to_rect(cy)
+                    dy_ch = y_h - cy
+                    sq_tm = nominal_circle_radius * nominal_circle_radius - dy_ch * dy_ch
+                    if sq_tm <= 0:
+                        continue
+                    tip_limits.append(cx - math.sqrt(max(sq_tm, 0.0)))
+                if not tip_limits:
+                    for cx, _cy in interferers_msg:
+                        tip_limits.append(cx - nominal_circle_radius)
+                if not tip_limits:
+                    self.side_dangban_length = side_dangban_length
+                    return side_dangban_length
+                new_rect_right_x = min(tip_limits)
                 new_side_dangban_length = new_rect_right_x - rect_x
-                print(f"[重新计算] 左挡板：交点 sqrt_term={sqrt_term:.3f}, new_rect_right_x = {cx:.3f} - {sqrt_term:.3f} = {new_rect_right_x:.3f}")
-                print(f"[重新计算] new_side_dangban_length = {new_rect_right_x:.3f} - {rect_x:.3f} = {new_side_dangban_length:.3f}")
+                print(f"[重新计算] 左挡板：multi tip_limits min → 右边界 x={new_rect_right_x:.3f}")
             else:
-                # 右挡板：用右交点 x = cx + sqrt(...)
-                new_rect_left_x = cx + sqrt_term
-                new_side_dangban_length = R_bend - new_rect_left_x
-                print(f"[重新计算] 右挡板：交点 sqrt_term={sqrt_term:.3f}, new_rect_left_x = {cx:.3f} + {sqrt_term:.3f} = {new_rect_left_x:.3f}")
-                print(f"[重新计算] new_side_dangban_length = {R_bend:.3f} - {new_rect_left_x:.3f} = {new_side_dangban_length:.3f}")
+                tip_limits = []
+                for cx, cy in interferers_msg:
+                    y_h = _clamp_y_to_rect(cy)
+                    dy_ch = y_h - cy
+                    sq_tm = nominal_circle_radius * nominal_circle_radius - dy_ch * dy_ch
+                    if sq_tm <= 0:
+                        continue
+                    tip_limits.append(cx + math.sqrt(max(sq_tm, 0.0)))
+                if not tip_limits:
+                    for cx, _cy in interferers_msg:
+                        tip_limits.append(cx + nominal_circle_radius)
+                if not tip_limits:
+                    self.side_dangban_length = side_dangban_length
+                    return side_dangban_length
+                new_rect_left_x = max(tip_limits)
+                new_side_dangban_length = max_abs_x_row - new_rect_left_x
+                print(
+                    f"[重新计算] 右挡板：multi tip_limits max → 左边界 x={new_rect_left_x:.3f}, "
+                    f"该行 max_abs_x_row={max_abs_x_row:.3f}"
+                )
             
             # 确保新长度不为负
             if new_side_dangban_length < 0:
