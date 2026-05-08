@@ -9,7 +9,11 @@ from PyQt5.QtGui import QBrush, QColor, QPen, QIcon, QPixmap, QFont, QPainterPat
 import sys
 import os
 import pymysql
-from modules.buguan.buguan_ziyong.variable import update_axial_basic_params, axial_basic_params
+from modules.buguan.buguan_ziyong.variable import (
+    update_axial_basic_params,
+    axial_basic_params,
+    normalize_lb_baffle_od_param_row,
+)
 
 
 def create_activity_connection():
@@ -596,6 +600,7 @@ class AxialDesignPage(QWidget):
                 try:
                     name_item = table.item(row, 1)
                     param_name = name_item.text().strip() if name_item else ""
+                    param_name = normalize_lb_baffle_od_param_row(param_name)
                     if param_name not in params_to_fetch:
                         continue
                     value_widget = None

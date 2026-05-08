@@ -52,6 +52,8 @@ from modules.buguan.buguan_ziyong.variable import (
     update_is_suitable_tube_sheet,
     update_tube_sheet_params_snapshot,
     tube_sheet_params_snapshot,
+    normalize_lb_baffle_od_param_row,
+    matches_lb_baffle_od_param_row,
 )
 
 from modules.buguan.buguan_ziyong.api import run_layout_tube_calculate
@@ -7953,16 +7955,27 @@ class TubeLayoutEditor(QMainWindow):
 
     def get_baffle_diameter(self):
         """获取折流/支持板外径的值，用于参数验证"""
-        # 假设在param_table中存在"折流/支持板外径"参数
+        from PyQt5.QtWidgets import QComboBox as _QComboBox
+
         for row in range(self.param_table.rowCount()):
             param_name_item = self.param_table.item(row, 1)
-            if param_name_item and param_name_item.text() == "折流/支持板外径":
+            if not param_name_item or not matches_lb_baffle_od_param_row(
+                param_name_item.text()
+            ):
+                continue
+            cell_widget = self.param_table.cellWidget(row, 2)
+            txt = ""
+            if isinstance(cell_widget, _QComboBox):
+                txt = cell_widget.currentText().strip()
+            else:
                 value_item = self.param_table.item(row, 2)
-                if value_item:
-                    try:
-                        return float(value_item.text())
-                    except ValueError:
-                        return None
+                txt = value_item.text().strip() if value_item else ""
+            if txt == "":
+                return None
+            try:
+                return float(txt)
+            except ValueError:
+                return None
         return None
 
     def update_SN(self):
@@ -11689,15 +11702,25 @@ class TubeLayoutEditor(QMainWindow):
         # 5. 调用update_SN()重新应用管程数的约束（例如管程数=2时保持不可编辑）
         self.update_SN()
 
-    def update_divider_position_and_size_user(self):
+    def update_divider_position_and_size_user(self, sync_w_from_output=True):
         """更新隔条位置尺寸（用户版本）
-        逻辑：
-        1. 先获取当前隔条位置尺寸的值
-        2. 如果当前值为0，则查询映射表，查到则用映射值，没查到则用output_data的W
-        3. 如果当前值不为0，则直接更新为output_data的W
+
+        先 ``calculate_piping()`` 刷新 ``output_data``。
+
+        - ``sync_w_from_output=True``（默认）：按原逻辑用映射表或 ``output_data['W']`` 写回表格
+          （含「当前 W≠0 仍用布管输出 W」——用于其它参数变更后让 W 与计算一致）。
+        - ``sync_w_from_output=False``：仅重算布管，**不**用 ``output_data`` 覆盖当前格里的 W，
+          用于用户正在编辑「隔条位置尺寸 W」本身，避免刚输入的值被刷成计算推荐值。
         """
         self.calculate_piping()
-        # 注意：这是用户手动更新时触发的函数，不需要设置程序自动更新标记
+        if not sync_w_from_output:
+            try:
+                self.update_SN()
+            except Exception:
+                pass
+            return
+
+        # 注意：以下写回 W 的逻辑仅在 sync_w_from_output 为 True 时执行
 
         # 1. 定位关键参数行：公称直径 DN、换热管外径 do、隔条位置尺寸 W
         target_params = {"公称直径 DN": -1, "换热管外径 do": -1, "隔条位置尺寸 W": -1}
@@ -13888,8 +13911,22 @@ class TubeLayoutEditor(QMainWindow):
                 if invalid is False and w_val is not None:
                     self._last_valid_divider_W_text = cur_text
 
+                # 与其它文本格一致：变蓝依赖 on_combobox_changed 开头逻辑；本分支原先提前 return 会跳过该调用
+                try:
+                    _orig_w = self.original_param_values.get((row, 2), "")
+                    if str(cur_text).strip() != str(_orig_w).strip():
+                        self.modified_rows.add(row)
+                        self.highlight_modified_row(row)
+                    else:
+                        if row in self.modified_rows:
+                            self.modified_rows.remove(row)
+                            self.reset_row_background(row)
+                except Exception:
+                    pass
+
                 print(f"[用户手动修改] {param_name} 被修改为: '{param_value}'")
-                self.update_divider_position_and_size_user()
+                # 不重算后把 W 强行改回 output_data（否则会看到「输入 250 又变 238」）
+                self.update_divider_position_and_size_user(sync_w_from_output=False)
 
                 # 延迟调用validate_input，确保update_divider_position_and_size_user()中的信号已恢复
                 from PyQt5.QtCore import QTimer
@@ -14675,6 +14712,11 @@ class TubeLayoutEditor(QMainWindow):
         # 确保左侧参数表一定存在这三项，才能做显示/隐藏联动与保存链路。
         try:
             if isinstance(params, list):
+                for _norm in params:
+                    if isinstance(_norm, dict) and _norm.get("参数名") is not None:
+                        _norm["参数名"] = normalize_lb_baffle_od_param_row(
+                            _norm.get("参数名")
+                        )
                 existing_names = set()
                 for _p in params:
                     try:
@@ -15129,6 +15171,13 @@ class TubeLayoutEditor(QMainWindow):
             pass
         try:
             self._apply_baffle_placement_visibility()
+        except Exception:
+            pass
+        # 折流/支持板等：仅折叠流板参数弹窗可编辑；左侧表行必须保持隐藏（与 load_initial_data 双保险）
+        try:
+            _hp = getattr(self, "hidden_params", None)
+            if isinstance(_hp, (list, tuple)) and _hp:
+                self.hide_specific_params(_hp)
         except Exception:
             pass
         # self.update_partition_plate_center_distance()
@@ -19092,7 +19141,7 @@ class TubeLayoutEditor(QMainWindow):
             # "SlipWayHeight": "滑道高度",
             # "DNs": "公称直径 DN",
             # "DL": "布管限定圆 DL",
-            "BPBThick": "旁路挡板厚度",
+            # "BPBThick": "旁路挡板厚度",
             # 按需求：S 仅按 do+排列方式 对应表联动，不使用后端 output_data 回写覆盖
             "S": "换热管中心距 S",
             # "W": "隔条位置尺寸 W"
@@ -21714,7 +21763,7 @@ class TubeLayoutEditor(QMainWindow):
             if not name_item:
                 continue
 
-            if name_item.text() == "折流/支持板外径":
+            if matches_lb_baffle_od_param_row(name_item.text()):
                 # 检查单元格是否是QComboBox控件
                 cell_widget = self.param_table.cellWidget(row, 2)
                 if isinstance(cell_widget, QComboBox):
@@ -44217,7 +44266,7 @@ class TubeLayoutEditor(QMainWindow):
             if not name_item:
                 continue
 
-            if name_item.text() == "折流/支持板外径":
+            if matches_lb_baffle_od_param_row(name_item.text()):
                 # 检查单元格是否是QComboBox控件
                 cell_widget = self.param_table.cellWidget(row, 2)
                 if isinstance(cell_widget, QComboBox):

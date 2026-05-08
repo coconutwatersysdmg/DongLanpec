@@ -41,6 +41,32 @@ operations = []  # 操作历史记录列表
 
 axial_basic_params = {}
 
+# 左侧布管参数（及产品设计库）中 LB_BaffleOD 对应行的规范「参数名」
+CANON_LB_BAFFLE_OD_PARAM = "折流/支持板外径"
+# 历史曾用行名：用 UTF-8 字节拼装，避免源码再写入已废止字面量
+_LEGACY_LB_BAFFLE_OD_PARAM_UTF8 = bytes(
+    (0xE6, 0x8A, 0x98, 0xE6, 0xB5, 0x81, 0xE6, 0x9D, 0xBF, 0xE5, 0xA4, 0x96, 0xE5, 0xBE, 0x84)
+).decode("utf-8")
+
+
+def normalize_lb_baffle_od_param_row(name):
+    """将仍可能残留在库里的旧 LB_BaffleOD 行名统一为当前规范名。"""
+    if name is None:
+        return ""
+    s = str(name).strip()
+    if s == _LEGACY_LB_BAFFLE_OD_PARAM_UTF8:
+        return CANON_LB_BAFFLE_OD_PARAM
+    return s
+
+
+def matches_lb_baffle_od_param_row(name) -> bool:
+    """是否与 LB_BaffleOD（折流/支持板外径）行对应（含历史行名）。"""
+    if name is None:
+        return False
+    s = str(name).strip()
+    return s == CANON_LB_BAFFLE_OD_PARAM or s == _LEGACY_LB_BAFFLE_OD_PARAM_UTF8
+
+
 # ========== 当前活跃实例引用 ==========
 _current_editor = None  # 存储当前活跃的 TubeLayoutEditor 实例引用
 
