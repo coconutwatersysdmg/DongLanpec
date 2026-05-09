@@ -285,6 +285,7 @@ def update_tube_sheet_params_snapshot(new_snapshot):
     except Exception:
         print(tube_sheet_params_snapshot)
 
+    prefix = "[tube_sheet_params_snapshot]"
     try:
         plate_type = tube_sheet_params_snapshot.get("plate_type")
         main_category = tube_sheet_params_snapshot.get("main_category")

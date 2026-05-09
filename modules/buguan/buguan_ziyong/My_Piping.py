@@ -11714,10 +11714,8 @@ class TubeLayoutEditor(QMainWindow):
         """
         self.calculate_piping()
         if not sync_w_from_output:
-            try:
-                self.update_SN()
-            except Exception:
-                pass
+            # 用户正在改 W：仅重算布管即可。此处若再调 update_SN() 会触发行显隐/控件刷新，
+            # 与分程隔板中心距等程序写表叠加后易造成信号级联（表现为切到 4.3 等时死循环）。
             return
 
         # 注意：以下写回 W 的逻辑仅在 sync_w_from_output 为 True 时执行
@@ -12541,56 +12539,6 @@ class TubeLayoutEditor(QMainWindow):
             if conn:
                 conn.close()
 
-    def _update_table_cell(self, row, column, value):
-        """安全更新表格单元格的辅助方法"""
-        print(f"_update_table_cell 被调用: row={row}, column={column}, value='{value}'")
-
-        if row < 0 or row >= self.param_table.rowCount():
-            print(f"错误: 行索引 {row} 超出范围 [0, {self.param_table.rowCount() - 1}]")
-            return  # 直接返回，避免后续错误
-        # 临时断开信号避免循环触发
-        original_handler = None
-        if hasattr(self, "handle_param_change"):
-            try:
-                self.param_table.itemChanged.disconnect(self.handle_param_change)
-                original_handler = self.handle_param_change
-            except:
-                pass
-
-        try:
-            # 更新单元格
-            cell_widget = self.param_table.cellWidget(row, column)
-            if isinstance(cell_widget, QComboBox):
-                # 下拉框处理逻辑保持不变...
-                index = cell_widget.findText(value)
-                if index >= 0:
-                    cell_widget.setCurrentIndex(index)
-                else:
-                    cell_widget.setEditText(value)
-            else:
-                # 文本单元格处理：先检查是否存在，不存在则创建
-                item = self.param_table.item(row, column)
-                if item:
-                    # 直接设置文本，这会触发itemChanged信号，但我们已经断开了连接
-                    item.setText(value)
-                else:
-                    # 创建新项目
-                    new_item = QTableWidgetItem(value)
-                    self.param_table.setItem(row, column, new_item)
-
-            # 强制刷新该单元格
-            self.param_table.viewport().update()
-
-        except Exception as e:
-            print(f"更新单元格错误: {e}")
-        finally:
-            # 重新连接信号
-            if original_handler:
-                try:
-                    self.param_table.itemChanged.connect(original_handler)
-                except:
-                    pass
-
     def update_baffle_parameters(self, changed_param_name):
         """
         根据参数变化更新折流板相关参数的联动关系
@@ -12800,13 +12748,42 @@ class TubeLayoutEditor(QMainWindow):
             self._is_validating = False
 
     def _update_table_cell(self, row, column, value):
-        """统一更新表格单元格的方法"""
+        """统一更新表格单元格的方法（程序写表时阻断信号，避免 itemChanged/下拉框级联死循环）。"""
+        from PyQt5.QtCore import QSignalBlocker
+
+        if row < 0 or row >= self.param_table.rowCount():
+            return
+
         widget = self.param_table.cellWidget(row, column)
+        target_text = str(value).strip()
+
+        def _text_item_numeric_equal(a: str, b: str) -> bool:
+            try:
+                return abs(float(a) - float(b)) < 1e-9
+            except Exception:
+                return False
+
         if isinstance(widget, QLineEdit):
-            widget.setText(value)
+            if widget.text().strip() == target_text:
+                return
+            try:
+                _tb = QSignalBlocker(self.param_table)
+            except Exception:
+                _tb = None
+            try:
+                widget.setText(value)
+            finally:
+                try:
+                    del _tb
+                except Exception:
+                    pass
         elif isinstance(widget, QComboBox):
+            _cur_combo = widget.currentText().strip()
+            if _cur_combo == target_text or _text_item_numeric_equal(
+                _cur_combo, target_text
+            ):
+                return
             # 尝试在组合框中匹配值（先精确，再数值等价）
-            target_text = str(value).strip()
             matched_index = -1
             for i in range(widget.count()):
                 if widget.itemText(i).strip() == target_text:
@@ -12827,23 +12804,62 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception:
                     pass
 
-            if matched_index >= 0:
-                widget.setCurrentIndex(matched_index)
-            else:
-                # 没有匹配项：可编辑则直接输入；不可编辑则补充新项后选中
-                if widget.isEditable():
-                    widget.setEditText(target_text)
+            if matched_index >= 0 and matched_index == widget.currentIndex():
+                cur = widget.currentText().strip()
+                if cur == target_text or _text_item_numeric_equal(cur, target_text):
+                    return
+
+            try:
+                _tb = QSignalBlocker(self.param_table)
+                _cb = QSignalBlocker(widget)
+            except Exception:
+                _tb = None
+                _cb = None
+            try:
+                if matched_index >= 0:
+                    widget.setCurrentIndex(matched_index)
                 else:
-                    widget.addItem(target_text)
-                    widget.setCurrentIndex(widget.count() - 1)
+                    if widget.isEditable():
+                        widget.setEditText(target_text)
+                    else:
+                        widget.addItem(target_text)
+                        widget.setCurrentIndex(widget.count() - 1)
+            finally:
+                try:
+                    del _cb
+                    del _tb
+                except Exception:
+                    pass
         else:
-            # 如果没有widget，直接设置item
             item = self.param_table.item(row, column)
             if item:
-                item.setText(value)
+                cur = item.text().strip()
+                if cur == target_text or _text_item_numeric_equal(cur, target_text):
+                    return
+                try:
+                    _tb = QSignalBlocker(self.param_table)
+                except Exception:
+                    _tb = None
+                try:
+                    item.setText(value)
+                finally:
+                    try:
+                        del _tb
+                    except Exception:
+                        pass
             else:
-                item = QTableWidgetItem(value)
-                self.param_table.setItem(row, column, item)
+                try:
+                    _tb = QSignalBlocker(self.param_table)
+                except Exception:
+                    _tb = None
+                try:
+                    new_item = QTableWidgetItem(value)
+                    self.param_table.setItem(row, column, new_item)
+                finally:
+                    try:
+                        del _tb
+                    except Exception:
+                        pass
 
     def get_selected_tube_pass_form(self):
         """获取当前选中的管程分程形式标识"""
@@ -15276,16 +15292,17 @@ class TubeLayoutEditor(QMainWindow):
             return
 
         # 分程形式显示规则（严格按表）：
-        # 1      -> AES BES NEN BEM
-        # 2      -> AEU BEU AKU BKU AES BES NEN BEM
-        # 4.1    -> AES BES NEN BEM
-        # 4.2.x  -> AEU BEU AKU BKU AES BES NEN BEM
-        # 4.3.x  -> AES BES NEN BEM
-        # 6.1.x  -> AES BES NEN BEM
-        # 6.2.x  -> AEU BEU AKU BKU AES BES NEN BEM
+        # 1      -> AES BES NEN BEM AEM（固定管板式与浮头式同类示意图）
+        # 2      -> AEU BEU AKU BKU AES BES NEN BEM AEM
+        # 4.1    -> AES BES NEN BEM AEM
+        # 4.2.x  -> AEU BEU AKU BKU AES BES NEN BEM AEM
+        # 4.3.x  -> AES BES NEN BEM AEM
+        # 6.1.x  -> AES BES NEN BEM AEM
+        # 6.2.x  -> AEU BEU AKU BKU AES BES NEN BEM AEM
         hx_norm = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
-        non_u_types = {"AES", "BES", "NEN", "BEM"}
-        u_and_common_types = {"AEU", "BEU", "AKU", "BKU", "AES", "BES", "NEN", "BEM"}
+        # non_u：与 AES/BES 同类的“非 U 管”布置示意图；AEM 固定管板式此前漏写导致下拉无任何图片
+        non_u_types = {"AES", "BES", "NEN", "BEM", "AEM"}
+        u_and_common_types = {"AEU", "BEU", "AKU", "BKU", "AES", "BES", "NEN", "BEM", "AEM"}
 
         # 根据管程程数加载对应图片，同时关联标识
         if tube_pass == "2":
