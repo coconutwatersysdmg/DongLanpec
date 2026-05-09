@@ -16205,6 +16205,110 @@ class TubeLayoutEditor(QMainWindow):
             print(f"[错误] 保存前检查时出错: {str(e)}")
             return True  # 避免程序崩溃
 
+    def _notify_save_success_ui(self, message="数据保存成功！"):
+        """
+        在底部 line_tip 显示保存成功；与主窗体 _tip_timer→clear_line_tip 竞争时先停主定时器，
+        避免刚写入即被清空；line_tip 不可用时用 QMessageBox 兜底，保证用户能看到文案。
+        """
+        # 主窗体单发定时器会清空 line_tip，保存成功后先停掉，避免“有时不显示”
+        try:
+            import importlib
+
+            mw = None
+            for _mod in (sys.modules.get("main"), sys.modules.get("__main__")):
+                if _mod is not None:
+                    mw = getattr(_mod, "APP_MAIN_WINDOW", None)
+                    if mw is not None:
+                        break
+            if mw is None:
+                try:
+                    mw = getattr(importlib.import_module("main"), "APP_MAIN_WINDOW", None)
+                except Exception:
+                    mw = None
+            if mw is not None:
+                _tm = getattr(mw, "_tip_timer", None)
+                if _tm is not None:
+                    try:
+                        _tm.stop()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        tip_ok = False
+        try:
+            tip = getattr(self, "line_tip", None)
+            if tip is not None:
+                tip.setText(message)
+                tip.setStyleSheet("color: black;")
+                tip.setVisible(True)
+                try:
+                    tip.setToolTip(message)
+                except Exception:
+                    pass
+                try:
+                    tip.repaint()
+                except Exception:
+                    pass
+                tip_ok = True
+                try:
+                    from PyQt5.QtWidgets import QApplication
+
+                    QApplication.processEvents()
+                except Exception:
+                    pass
+        except Exception as e:
+            try:
+                print(f"[_notify_save_success_ui] line_tip 写入失败: {e}")
+            except Exception:
+                pass
+
+        if not tip_ok:
+            try:
+                from PyQt5.QtWidgets import QMessageBox
+
+                QMessageBox.information(self, "提示", message)
+            except Exception as e2:
+                try:
+                    print(message)
+                    print(f"[_notify_save_success_ui] 弹窗也失败: {e2}")
+                except Exception:
+                    pass
+
+        # 用实例上的单发定时器清空，避免 lambda 在 line_tip 已销毁时抛错
+        try:
+            from PyQt5.QtCore import QTimer
+
+            if not hasattr(self, "_save_success_tip_clear_timer"):
+                self._save_success_tip_clear_timer = QTimer(self)
+                self._save_success_tip_clear_timer.setSingleShot(True)
+
+            def _safe_clear():
+                try:
+                    t = getattr(self, "line_tip", None)
+                    if t is not None:
+                        t.setText("")
+                except Exception:
+                    pass
+
+            try:
+                self._save_success_tip_clear_timer.timeout.disconnect()
+            except TypeError:
+                pass
+            try:
+                self._save_success_tip_clear_timer.timeout.connect(_safe_clear)
+                self._save_success_tip_clear_timer.start(5000)
+            except Exception as e3:
+                try:
+                    print(f"[_notify_save_success_ui] 启动清空定时器失败: {e3}")
+                except Exception:
+                    pass
+        except Exception as e4:
+            try:
+                print(f"[_notify_save_success_ui] 定时器创建失败: {e4}")
+            except Exception:
+                pass
+
     # 10/29 修改，布管界面保存时需要先判断，满足条件才保存
     def save_data(self):
         current_page_index = self.header.currentIndex()
@@ -16218,34 +16322,47 @@ class TubeLayoutEditor(QMainWindow):
             if not self.check_before_save():
                 return
 
-        # 保存顺序：先管板形式(0) → 布管(1) → 管-板连接(2) → 轴向设计(3)
-        # 其中 1/3 的分支内部会有自身的“空数据直接返回”逻辑
-        for idx in (0, 1, 2, 3):
-            try:
-                # 非布管页触发的全量保存：布管未布管时不弹窗
-                silent = (idx == 1 and current_page_index != 1)
-                self.actual_save_operation(idx, silent=silent)
-            except Exception as e:
-                print(f"[save_data] 保存 page_index={idx} 失败: {e}")
+        try:
+            # 保存顺序：先管板形式(0) → 布管(1) → 管-板连接(2) → 轴向设计(3)
+            # 其中 1/3 的分支内部会有自身的“空数据直接返回”逻辑
+            for idx in (0, 1, 2, 3):
+                try:
+                    # 非布管页触发的全量保存：布管未布管时不弹窗
+                    silent = (idx == 1 and current_page_index != 1)
+                    self.actual_save_operation(idx, silent=silent)
+                except Exception as e:
+                    print(f"[save_data] 保存 page_index={idx} 失败: {e}")
 
-        if current_page_index == 0:
+            if current_page_index == 0:
+                try:
+                    self.clear_modification_marks()
+                except Exception:
+                    pass
+        except Exception as e:
             try:
-                self.clear_modification_marks()
+                print(f"[save_data] 保存流程异常: {e}")
+                import traceback
+
+                traceback.print_exc()
             except Exception:
                 pass
+        finally:
+            try:
+                self._notify_save_success_ui("数据保存成功！")
+            except Exception as e:
+                try:
+                    print(f"[save_data] 成功提示仍失败: {e}")
+                except Exception:
+                    pass
+                try:
+                    from PyQt5.QtWidgets import QMessageBox
 
-        message = "数据保存成功！"
-
-        # ✅ 通用提示信息
-        try:
-            self.line_tip.setText(message)
-            self.line_tip.setStyleSheet("color: black;")
-            self.line_tip.setVisible(True)
-            from PyQt5.QtCore import QTimer
-
-            QTimer.singleShot(5000, lambda: self.line_tip.setText(""))
-        except AttributeError:
-            print(message)
+                    QMessageBox.information(self, "提示", "数据保存成功！")
+                except Exception:
+                    try:
+                        print("数据保存成功！")
+                    except Exception:
+                        pass
 
     def build_sql_for_screw_ring(self):
         """
@@ -27282,63 +27399,82 @@ class TubeLayoutEditor(QMainWindow):
 
     def calculate_strange_tube(self):
         """
-        找出self.full_sorted_current_centers_up中两行距离特别远的管子，
-        返回这两行管子的数量、第一行管子的水平距离以及两行y坐标和的绝对值
-        """
-        # 确保full_sorted_current_centers_up已计算
-        if not hasattr(self, "full_sorted_current_centers_up"):
-            # 如果尚未计算，则调用group_centers_by_y方法计算
-            (
-                self.full_sorted_current_centers_up,
-                self.full_sorted_current_centers_down,
-            ) = self.group_centers_by_y(self.global_centers)
-            self.sorted_current_centers_up, self.sorted_current_centers_down = (
-                self.group_centers_by_y(self.current_centers)
-            )
+        找出 self.sorted_current_centers_up 中两行距离特别远的管子。
 
-        # 提取每行第一个管子的y坐标
+        返回：
+        (
+            row1_count,                  # 第一行管子数量 * 2
+            row2_count,                  # 第二行管子数量 * 2
+            row1_horizontal_distance,    # 第一行最两端管孔中心距
+            adjacent_slot_center_distance # 相邻隔板槽中心距
+        )
+        """
+
+        # 确保 current_centers 存在
+        if not hasattr(self, "current_centers") or not self.current_centers:
+            return (0, 0, 0, 0)
+
+        # 确保 sorted_current_centers_up 已经计算
+        if not hasattr(self, "sorted_current_centers_up") or self.sorted_current_centers_up is None:
+            try:
+                self.sorted_current_centers_up, self.sorted_current_centers_down = (
+                    self.group_centers_by_y(self.current_centers)
+                )
+            except Exception as e:
+                print("[calculate_strange_tube] group_centers_by_y 计算失败:", e)
+                return (0, 0, 0, 0)
+
+        if not self.sorted_current_centers_up:
+            return (0, 0, 0, 0)
+
+        # 提取每行第一个管子的 y 坐标
         row_ys = []
         for row in self.sorted_current_centers_up:
-            if row:  # 确保行不为空
-                # 取每行第一个管子的y坐标
+            if row:
                 first_tube_y = row[0][1]
                 row_ys.append(first_tube_y)
 
-        # 如果行数不足2行，无法找到两行之间的距离，返回(0, 0, 0, 0)
+        # 如果行数不足 2 行，无法计算异常间距
         if len(row_ys) < 2:
             return (0, 0, 0, 0)
 
-        # 计算相邻行之间的y坐标差值
+        # 计算相邻行之间的 y 坐标差值
         diffs = []
         for i in range(1, len(row_ys)):
             diff = abs(row_ys[i] - row_ys[i - 1])
-            diffs.append((i - 1, i, diff))  # 存储前一行索引、当前行索引和差值
+            diffs.append((i - 1, i, diff))
 
-        # 找到最大的差值（即离得特别远的两行）
-        # 按差值降序排序
+        if not diffs:
+            return (0, 0, 0, 0)
+
+        # 找到 y 间距最大的两行
         diffs.sort(key=lambda x: x[2], reverse=True)
-        max_diff_pair = diffs[0]
-        row1_idx, row2_idx, _ = max_diff_pair
+        row1_idx, row2_idx, max_diff = diffs[0]
 
         # 获取这两行的管子数量
         row1_count = len(self.sorted_current_centers_up[row1_idx]) * 2
         row2_count = len(self.sorted_current_centers_up[row2_idx]) * 2
 
-        # 计算第一行管子的水平距离（最大x与最小x之差的绝对值）
+        # 计算第一行最两端管孔中心距
         row1_tubes = self.sorted_current_centers_up[row1_idx]
+
         if len(row1_tubes) >= 2:
             xs = [tube[0] for tube in row1_tubes]
-            max_x = max(xs)
-            min_x = min(xs)
-
-            row1_horizontal_distance = abs(max_x - min_x)
+            row1_horizontal_distance = abs(max(xs) - min(xs))
         else:
-            # 如果该行管子数量不足2个，水平距离为0
             row1_horizontal_distance = 0
 
-        # 计算row1和row2的y坐标的和的绝对值
+        # 计算相邻隔板槽中心距
         row1_y = row_ys[row1_idx]
         row2_y = row_ys[row2_idx]
+        adjacent_slot_center_distance = abs(row1_y + row2_y)
+
+        return (
+            row1_count,
+            row2_count,
+            row1_horizontal_distance,
+            adjacent_slot_center_distance
+        )
 
     # TODO 径向开孔功能
     def on_radial_holes_click(self):
