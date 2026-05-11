@@ -3381,9 +3381,13 @@ class TubeLayoutEditor(QMainWindow):
                         piping_outer = None
                         if product_params:
                             for _p in product_params:
-                                if (
-                                        isinstance(_p, dict)
-                                        and _p.get("参数名") == "是否以外径为基准"
+                                _pname = (
+                                    str(_p.get("参数名")).strip()
+                                    if isinstance(_p, dict) and _p.get("参数名") is not None
+                                    else ""
+                                )
+                                if isinstance(_p, dict) and _pname.startswith(
+                                        "是否以外径为基准"
                                 ):
                                     _pv = _p.get("参数值")
                                     if _pv is not None and str(_pv).strip() != "":
@@ -4148,7 +4152,8 @@ class TubeLayoutEditor(QMainWindow):
                                     f"Dis={_read_display('壳体内直径 Dis')}, "
                                     f"Dit={_read_display('管箱内直径 Dit')}"
                                 )
-                                from PyQt5.QtCore import QTimer
+                                # 勿在 load_initial_data 内再 import QTimer：会使整函数中 QTimer
+                                # 变为局部名，未走本分支时末尾 singleShot 会 UnboundLocalError
 
                                 def _later():
                                     try:
@@ -4637,6 +4642,16 @@ class TubeLayoutEditor(QMainWindow):
         else:
             self.header.setCurrentIndex(1)  # 布管页面
             self.stacked_widget.setCurrentIndex(1)
+
+        # 首次 show / 切 tab 前后布局会刷新左侧表控件状态；延迟再锁「是否以外径为基准」避免首屏仍可点
+        def _defer_lock_outer_after_load():
+            try:
+                self._lock_outer_base_flag_param_cell()
+            except Exception:
+                pass
+
+        QTimer.singleShot(0, _defer_lock_outer_after_load)
+        QTimer.singleShot(150, _defer_lock_outer_after_load)
 
     def initial_operation(self):
         # 先根据产品ID从产品设计活动表_管口表读取管口代号及所属元件，存成全局数据字典
@@ -8193,6 +8208,39 @@ class TubeLayoutEditor(QMainWindow):
             if target_row != -1:
                 self.set_param_visibility(target_row, not hide_rows)
 
+        self._lock_outer_base_flag_param_cell()
+
+    def _lock_outer_base_flag_param_cell(self):
+        """左侧「是否以外径为基准」值列始终只读并灰显（不在布管界面手工修改）。"""
+        if not hasattr(self, "param_table") or self.param_table is None:
+            return
+        try:
+            for row in range(self.param_table.rowCount()):
+                name_item = self.param_table.item(row, 1)
+                if not name_item or name_item.text().strip() != "是否以外径为基准":
+                    continue
+                cw = self.param_table.cellWidget(row, 2)
+                if isinstance(cw, QComboBox):
+                    cw.setEditable(False)
+                    cw.setEnabled(False)
+                    cw.setFocusPolicy(Qt.NoFocus)
+                    # 在 QTableWidget 内，部分样式/布局刷新后禁用态偶发失效；吞掉鼠标更稳妥
+                    try:
+                        cw.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+                    except Exception:
+                        pass
+                    cw.setStyleSheet(
+                        "QComboBox:disabled { color: rgb(150, 150, 150); }"
+                    )
+                else:
+                    it = self.param_table.item(row, 2)
+                    if it is not None:
+                        it.setFlags(it.flags() & ~Qt.ItemIsEditable)
+                        it.setForeground(QBrush(QColor(150, 150, 150)))
+                break
+        except Exception:
+            pass
+
     def setup_modification_detection(self):
         """设置参数修改检测机制"""
         # 连接表格变化信号
@@ -8304,6 +8352,11 @@ class TubeLayoutEditor(QMainWindow):
         for row in range(row_count):
             combo_widget = self.param_table.cellWidget(row, 2)
             if isinstance(combo_widget, QComboBox):
+                # 避免多次 setup_parameters 重复叠加 currentTextChanged
+                try:
+                    combo_widget.currentTextChanged.disconnect()
+                except TypeError:
+                    pass
                 # 为每个下拉框连接信号，使用lambda确保正确的row值传递
                 combo_widget.currentTextChanged.connect(
                     lambda text, r=row: self.on_combobox_changed(r, text)
@@ -8637,6 +8690,12 @@ class TubeLayoutEditor(QMainWindow):
 
         except Exception as e:
             print(f"update_lagan函数执行出错: {str(e)}")
+        finally:
+            # update_lagan 会重建拉杆直径等单元格；在表格内偶发影响其它列交互态，这里统一把外径基准行锁回只读
+            try:
+                self._lock_outer_base_flag_param_cell()
+            except Exception:
+                pass
 
     def _get_default_lg_diameter(self, do_value):
         # 添加调试信息
@@ -12927,6 +12986,22 @@ class TubeLayoutEditor(QMainWindow):
                 return
             param_name = param_name_item.text().strip()
 
+            if param_name == "是否以外径为基准":
+                try:
+                    orig = str(
+                        self.original_param_values.get((row, 2), "")
+                    ).strip()
+                    if orig and changed_item.text().strip() != orig:
+                        with SignalBlocker(self.param_table):
+                            changed_item.setText(orig)
+                except Exception:
+                    pass
+                try:
+                    self._lock_outer_base_flag_param_cell()
+                except Exception:
+                    pass
+                return
+
             # 用户修改 do / 排列方式 / Dis / Dit 后，应解除“打开阶段禁止 S/DL 自动更新”限制，
             # 否则 update_tube_center_distance / update_tube_layout_circle_dl 会因 _suppress_open_s_dl_autoupdate
             # 一直为 True（有布管元件记录时打开管束会置位）而直接 return，改 Dis 也不会重算 DL。
@@ -14723,6 +14798,11 @@ class TubeLayoutEditor(QMainWindow):
         # 5. 连接表格的itemChanged信号到总处理器（处理文本单元格）
         self.param_table.itemChanged.connect(on_table_item_changed)
 
+        try:
+            self._lock_outer_base_flag_param_cell()
+        except Exception:
+            pass
+
     def setup_parameters(self, params, setup_listeners=True):
         # ---- 补齐“滑道新增参数”（元件库默认表可能尚未配置）----
         # 确保左侧参数表一定存在这三项，才能做显示/隐藏联动与保存链路。
@@ -14755,6 +14835,24 @@ class TubeLayoutEditor(QMainWindow):
             pass
         # 避免启动/加载时刷屏输出大量参数
         self.all_params = params
+        # 归一化参数名/外径基准取值：库或模板中带空格、「是否以外径为基准*」等时，必须仍命中 special_params，
+        # 否则会落成默认可编辑 QComboBox（AEM/BEM 等先开管板页时表现尤为明显）。
+        try:
+            for _p in params:
+                if not isinstance(_p, dict) or _p.get("参数名") is None:
+                    continue
+                _pn = str(_p["参数名"]).strip()
+                if _pn.startswith("是否以外径为基准"):
+                    _pn = "是否以外径为基准"
+                _p["参数名"] = _pn
+                if _pn == "是否以外径为基准" and _p.get("参数值") is not None:
+                    _pv = str(_p["参数值"]).strip()
+                    if _pv in ("1", "true", "True", "Y", "y", "是"):
+                        _p["参数值"] = "是"
+                    elif _pv in ("0", "false", "False", "N", "n", "否"):
+                        _p["参数值"] = "否"
+        except Exception:
+            pass
         self.is_loading_data = True
 
         # 清空之前的修改记录
@@ -15095,14 +15193,28 @@ class TubeLayoutEditor(QMainWindow):
                         if not found and combo.count() > 0:
                             combo.setCurrentIndex(0)
 
-                    if is_diameter_based or dn_visible:
-                        combo.setEnabled(False)
-
                     # 注意：此处不额外绑定 currentTextChanged/currentIndexChanged。
                     # 统一由 setup_parameter_listeners() 内的 bind_combobox_listeners() 做一次性绑定，
                     # 避免闭包 row 捕获错误/重复触发/错行联动。
 
                     self.param_table.setCellWidget(row, 2, combo)
+                    # 附到表格后再锁：部分型式/布局下 setCellWidget 会刷新子控件状态，先锁再 attach 会失效
+                    if is_diameter_based:
+                        combo.setEditable(False)
+                        combo.setEnabled(False)
+                        combo.setFocusPolicy(Qt.NoFocus)
+                        try:
+                            combo.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+                        except Exception:
+                            pass
+                        combo.setStyleSheet(
+                            "QComboBox:disabled { color: rgb(150, 150, 150); }"
+                        )
+                    elif dn_visible:
+                        combo.setEnabled(False)
+                        combo.setStyleSheet(
+                            "QComboBox:disabled { color: rgb(150, 150, 150); }"
+                        )
                     param_value_str = (
                         str(param["参数值"]) if param["参数值"] is not None else ""
                     )
@@ -15194,6 +15306,10 @@ class TubeLayoutEditor(QMainWindow):
             _hp = getattr(self, "hidden_params", None)
             if isinstance(_hp, (list, tuple)) and _hp:
                 self.hide_specific_params(_hp)
+        except Exception:
+            pass
+        try:
+            self._lock_outer_base_flag_param_cell()
         except Exception:
             pass
         # self.update_partition_plate_center_distance()
@@ -15401,14 +15517,54 @@ class TubeLayoutEditor(QMainWindow):
 
         # 检查是否是程序自动更新（标记变量方法）
         param_name_item = self.param_table.item(row, 1)
+        param_name_stripped = (
+            param_name_item.text().strip() if param_name_item else ""
+        )
         if param_name_item:
-            param_name = param_name_item.text().strip()
             if (
                     self._is_programmatic_update
-                    and param_name in self._programmatic_update_params
+                    and param_name_stripped in self._programmatic_update_params
             ):
-                print(f"[程序自动更新] {param_name} 下拉框被更新，跳过用户修改处理")
+                print(
+                    f"[程序自动更新] {param_name_stripped} 下拉框被更新，跳过用户修改处理"
+                )
                 return  # 跳过用户修改的处理逻辑
+
+        if param_name_stripped == "是否以外径为基准":
+            if getattr(self, "_is_programmatic_update", False):
+                try:
+                    self._lock_outer_base_flag_param_cell()
+                except Exception:
+                    pass
+                return
+            try:
+                cw = self.param_table.cellWidget(row, 2)
+                if isinstance(cw, QComboBox):
+                    orig = str(self.original_param_values.get((row, 2), "")).strip()
+                    if orig in ("是", "否"):
+                        from PyQt5.QtCore import QSignalBlocker
+
+                        _bk = QSignalBlocker(cw)
+                        try:
+                            idx = cw.findText(orig)
+                            if idx >= 0:
+                                cw.setCurrentIndex(idx)
+                            else:
+                                cw.setCurrentText(orig)
+                        finally:
+                            del _bk
+            except Exception:
+                pass
+            try:
+                self.modified_rows.discard(row)
+                self.reset_row_background(row)
+            except Exception:
+                pass
+            try:
+                self._lock_outer_base_flag_param_cell()
+            except Exception:
+                pass
+            return
 
         original_value = self.original_param_values.get((row, 2), "")
 
@@ -18158,6 +18314,16 @@ class TubeLayoutEditor(QMainWindow):
                     pass
         except Exception as e:
             print(f"[My_Piping] 切换到布管 tab 时检查管板形式发生异常: {e}")
+
+        if index == 1:
+            def _defer_lock_outer_on_buguan_tab():
+                try:
+                    self._lock_outer_base_flag_param_cell()
+                except Exception:
+                    pass
+
+            QTimer.singleShot(0, _defer_lock_outer_on_buguan_tab)
+            QTimer.singleShot(100, _defer_lock_outer_on_buguan_tab)
 
         # 切换页面时更新底部按钮
         self.update_footer_buttons()
@@ -44401,7 +44567,7 @@ class TubeLayoutEditor(QMainWindow):
             if not name_item:
                 continue
 
-            if name_item.text() == "是否以外径为基准":
+            if name_item.text().strip() == "是否以外径为基准":
                 cell_widget = self.param_table.cellWidget(row, 2)
                 if isinstance(cell_widget, QComboBox):
                     return cell_widget.currentText()
