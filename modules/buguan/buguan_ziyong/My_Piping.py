@@ -46687,8 +46687,18 @@ class TubeLayoutEditor(QMainWindow):
 
             traceback.print_exc()
 
+    def _param_value_row_for_col2_widget(self, w):
+        """若 w 是参数表第 2 列的单元格控件，返回行号，否则 -1。"""
+        tbl = getattr(self, "param_table", None)
+        if tbl is None or w is None:
+            return -1
+        for r in range(tbl.rowCount()):
+            if tbl.cellWidget(r, 2) is w:
+                return r
+        return -1
+
     def _on_app_focus_changed_for_param_value_enter(self, old, now):
-        """在参数表内数值编辑控件上安装回车跳转的 eventFilter。"""
+        """在参数表内参数值列控件上安装回车跳转的 eventFilter。"""
         try:
             ow = getattr(self, "_param_enter_filter_widget", None)
             if ow is not None:
@@ -46705,11 +46715,15 @@ class TubeLayoutEditor(QMainWindow):
             if isinstance(now, (QLineEdit, QAbstractSpinBox)):
                 now.installEventFilter(self)
                 self._param_enter_filter_widget = now
+            elif isinstance(now, QComboBox):
+                if self._param_value_row_for_col2_widget(now) >= 0:
+                    now.installEventFilter(self)
+                    self._param_enter_filter_widget = now
         except Exception:
             pass
 
     def _param_value_row_enter_jumpable(self, row):
-        """第 2 列是否可用回车跳转到的可编辑数值格（跳过隐藏行、禁用下拉等）。"""
+        """第 2 列是否参与回车跳转（含不可编辑下拉；跳过隐藏行、禁用控件）。"""
         tbl = getattr(self, "param_table", None)
         if tbl is None or row < 0 or row >= tbl.rowCount():
             return False
@@ -46717,14 +46731,14 @@ class TubeLayoutEditor(QMainWindow):
             return False
         w = tbl.cellWidget(row, 2)
         if isinstance(w, QComboBox):
-            return w.isEnabled() and w.isEditable()
+            return w.isEnabled()
         it = tbl.item(row, 2)
         if it is None:
             return False
         return bool(it.flags() & Qt.ItemIsEditable)
 
     def _find_next_editable_param_value_row(self, after_row):
-        """从 after_row 之后（含绕回）找下一行可编辑参数值。"""
+        """从 after_row 之后（含绕回）找下一行参数值列可停留的单元格。"""
         tbl = getattr(self, "param_table", None)
         if tbl is None:
             return -1
@@ -46736,6 +46750,42 @@ class TubeLayoutEditor(QMainWindow):
             if self._param_value_row_enter_jumpable(r):
                 return r
         return -1
+
+    def _focus_param_value_cell(self, row):
+        """将焦点落到第 row 行参数值列（文本格进入编辑；下拉框获焦，可编辑时选中 lineEdit 全文）。"""
+        tbl = getattr(self, "param_table", None)
+        if tbl is None or row < 0 or row >= tbl.rowCount():
+            return
+        item = tbl.item(row, 2)
+        cw = tbl.cellWidget(row, 2)
+        if item is not None and (item.flags() & Qt.ItemIsEditable):
+            tbl.editItem(item)
+        elif isinstance(cw, QComboBox):
+            cw.setFocus(Qt.OtherFocusReason)
+            if cw.isEditable():
+                le = cw.lineEdit()
+                if le is not None:
+                    le.setFocus(Qt.OtherFocusReason)
+                    le.selectAll()
+
+    def _handle_param_table_combo_enter_commit_and_next(self, combo):
+        """参数值列为 QComboBox（含不可编辑）时按回车：跳到下一参数值单元格。"""
+        tbl = getattr(self, "param_table", None)
+        if tbl is None or not isinstance(combo, QComboBox):
+            return False
+        if not tbl.isAncestorOf(combo):
+            return False
+        row = self._param_value_row_for_col2_widget(combo)
+        if row < 0 or not self._param_value_row_enter_jumpable(row):
+            return False
+        next_row = self._find_next_editable_param_value_row(row)
+        if next_row >= 0:
+            tbl.setCurrentCell(next_row, 2)
+            tbl.setFocus(Qt.OtherFocusReason)
+            self._focus_param_value_cell(next_row)
+        else:
+            tbl.setFocus(Qt.OtherFocusReason)
+        return True
 
     def _handle_param_table_value_enter_commit_and_next(self, editor_widget):
         """
@@ -46770,16 +46820,7 @@ class TubeLayoutEditor(QMainWindow):
         if next_row >= 0:
             tbl.setCurrentCell(next_row, 2)
             tbl.setFocus(Qt.OtherFocusReason)
-            item = tbl.item(next_row, 2)
-            if item is not None and (item.flags() & Qt.ItemIsEditable):
-                tbl.editItem(item)
-            else:
-                cw = tbl.cellWidget(next_row, 2)
-                if isinstance(cw, QComboBox) and cw.isEditable():
-                    le = cw.lineEdit()
-                    if le is not None:
-                        le.setFocus(Qt.OtherFocusReason)
-                        le.selectAll()
+            self._focus_param_value_cell(next_row)
         else:
             try:
                 tbl.closeEditor(
@@ -46820,6 +46861,12 @@ class TubeLayoutEditor(QMainWindow):
             if isinstance(event, QKeyEvent):
                 key = event.key()
                 if key in (Qt.Key_Return, Qt.Key_Enter):
+                    if isinstance(obj, QComboBox) and getattr(self, "param_table", None) is not None:
+                        if self.param_table.isAncestorOf(obj):
+                            if self._param_value_row_for_col2_widget(obj) >= 0:
+                                if self._handle_param_table_combo_enter_commit_and_next(obj):
+                                    event.accept()
+                                    return True
                     if isinstance(obj, (QLineEdit, QAbstractSpinBox)):
                         if getattr(self, "param_table", None) is not None:
                             if self.param_table.isAncestorOf(obj):
