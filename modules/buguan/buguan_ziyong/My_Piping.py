@@ -16,7 +16,7 @@ import pandas as pd
 import pymysql
 from PyQt5.QtCore import QLineF
 from PyQt5.QtCore import QPointF, QRectF
-from PyQt5.QtCore import QSize, QTimer
+from PyQt5.QtCore import QSize, QTimer, QPoint, QEvent, Qt
 from PyQt5.QtGui import QBrush, QIcon
 from PyQt5.QtGui import QColor, QPen, QPolygonF, QPainterPath, QIntValidator
 from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsLineItem
@@ -43,6 +43,9 @@ from PyQt5.QtWidgets import (
     QMessageBox,
     QComboBox,
     QStyledItemDelegate,
+    QAbstractSpinBox,
+    QAbstractItemDelegate,
+    QApplication,
 )
 from modules.buguan.buguan_ziyong.axial_design_page import AxialDesignPage
 from modules.buguan.buguan_ziyong.database_utils import create_activity_connection
@@ -2338,6 +2341,15 @@ class TubeLayoutEditor(QMainWindow):
             lambda event: self.restore_param_table_column_widths()
         )
         param_layout.addWidget(self.param_table)
+
+        # 左侧参数值列：编辑时回车跳到下一可编辑数值格（不再用回车触发布管）
+        try:
+            self._param_enter_filter_widget = None
+            QApplication.instance().focusChanged.connect(
+                self._on_app_focus_changed_for_param_value_enter
+            )
+        except Exception:
+            pass
 
         # 拉杆数量摘要（左侧底部）
         self.lagan_summary_container = QWidget(self.param_frame)
@@ -46675,6 +46687,115 @@ class TubeLayoutEditor(QMainWindow):
 
             traceback.print_exc()
 
+    def _on_app_focus_changed_for_param_value_enter(self, old, now):
+        """在参数表内数值编辑控件上安装回车跳转的 eventFilter。"""
+        try:
+            ow = getattr(self, "_param_enter_filter_widget", None)
+            if ow is not None:
+                try:
+                    ow.removeEventFilter(self)
+                except Exception:
+                    pass
+                self._param_enter_filter_widget = None
+            tbl = getattr(self, "param_table", None)
+            if tbl is None or now is None:
+                return
+            if not tbl.isAncestorOf(now):
+                return
+            if isinstance(now, (QLineEdit, QAbstractSpinBox)):
+                now.installEventFilter(self)
+                self._param_enter_filter_widget = now
+        except Exception:
+            pass
+
+    def _param_value_row_enter_jumpable(self, row):
+        """第 2 列是否可用回车跳转到的可编辑数值格（跳过隐藏行、禁用下拉等）。"""
+        tbl = getattr(self, "param_table", None)
+        if tbl is None or row < 0 or row >= tbl.rowCount():
+            return False
+        if tbl.isRowHidden(row):
+            return False
+        w = tbl.cellWidget(row, 2)
+        if isinstance(w, QComboBox):
+            return w.isEnabled() and w.isEditable()
+        it = tbl.item(row, 2)
+        if it is None:
+            return False
+        return bool(it.flags() & Qt.ItemIsEditable)
+
+    def _find_next_editable_param_value_row(self, after_row):
+        """从 after_row 之后（含绕回）找下一行可编辑参数值。"""
+        tbl = getattr(self, "param_table", None)
+        if tbl is None:
+            return -1
+        n = tbl.rowCount()
+        if n <= 0:
+            return -1
+        for step in range(1, n):
+            r = (after_row + step) % n
+            if self._param_value_row_enter_jumpable(r):
+                return r
+        return -1
+
+    def _handle_param_table_value_enter_commit_and_next(self, editor_widget):
+        """
+        在参数值列编辑中按回车：提交当前编辑并跳到下一可编辑数值格。
+        不再触发布管。
+        """
+        tbl = getattr(self, "param_table", None)
+        if tbl is None or not isinstance(editor_widget, (QLineEdit, QAbstractSpinBox)):
+            return False
+        if not tbl.isAncestorOf(editor_widget):
+            return False
+        idx = tbl.indexAt(
+            editor_widget.mapTo(
+                tbl.viewport(),
+                QPoint(
+                    max(0, editor_widget.width() // 2),
+                    max(0, editor_widget.height() // 2),
+                ),
+            )
+        )
+        if not idx.isValid() or idx.column() != 2:
+            cr, cc = tbl.currentRow(), tbl.currentColumn()
+            if cc == 2 and cr >= 0:
+                row = cr
+            else:
+                return False
+        else:
+            row = idx.row()
+        if not self._param_value_row_enter_jumpable(row):
+            return False
+        next_row = self._find_next_editable_param_value_row(row)
+        if next_row >= 0:
+            tbl.setCurrentCell(next_row, 2)
+            tbl.setFocus(Qt.OtherFocusReason)
+            item = tbl.item(next_row, 2)
+            if item is not None and (item.flags() & Qt.ItemIsEditable):
+                tbl.editItem(item)
+            else:
+                cw = tbl.cellWidget(next_row, 2)
+                if isinstance(cw, QComboBox) and cw.isEditable():
+                    le = cw.lineEdit()
+                    if le is not None:
+                        le.setFocus(Qt.OtherFocusReason)
+                        le.selectAll()
+        else:
+            try:
+                tbl.closeEditor(
+                    editor_widget, QAbstractItemDelegate.SubmitModelCache
+                )
+            except Exception:
+                try:
+                    del_idx = tbl.model().index(row, 2)
+                    dlg = tbl.itemDelegate(del_idx)
+                    if dlg is not None:
+                        dlg.setModelData(editor_widget, tbl.model(), del_idx)
+                except Exception:
+                    pass
+            tbl.setFocus(Qt.OtherFocusReason)
+        return True
+
     def enable_scene_click_capture(self):
         """启用图形视图的点击事件捕获"""
         self.graphics_view.setMouseTracking(True)
@@ -46682,27 +46803,7 @@ class TubeLayoutEditor(QMainWindow):
         # 在主窗口级别也安装 eventFilter，以便无论焦点在哪都能捕获键盘事件
         self.installEventFilter(self)
 
-        # 全局快捷键：无论焦点在哪，Enter/Return 都触发布管按钮入口
-        # 使用 Qt.ApplicationShortcut，避免子控件（如表格/输入框）吞掉回车导致 eventFilter 收不到
-        try:
-            from PyQt5.QtWidgets import QShortcut
-            from PyQt5.QtGui import QKeySequence
-            from PyQt5.QtCore import Qt
-
-            # Return 与 Enter 在不同键盘/小键盘上可能不同，两个都绑
-            self._shortcut_buguan_return = QShortcut(QKeySequence(Qt.Key_Return), self)
-            self._shortcut_buguan_return.setContext(Qt.ApplicationShortcut)
-            self._shortcut_buguan_return.activated.connect(self.on_buguan_bt_click)
-
-            self._shortcut_buguan_enter = QShortcut(QKeySequence(Qt.Key_Enter), self)
-            self._shortcut_buguan_enter.setContext(Qt.ApplicationShortcut)
-            self._shortcut_buguan_enter.activated.connect(self.on_buguan_bt_click)
-        except Exception as e:
-            # 快捷键初始化失败不应影响其他功能
-            try:
-                print(f"[enable_scene_click_capture WARN] 布管回车快捷键初始化失败: {e}")
-            except Exception:
-                pass
+        # 回车不再全局触发布管；参数表数值格回车跳转见 _handle_param_table_value_enter_commit_and_next
 
     def eventFilter(self, obj, event):
         from PyQt5.QtCore import QEvent, QPointF, Qt, QRectF
@@ -46714,38 +46815,17 @@ class TubeLayoutEditor(QMainWindow):
         # 确保ClickableRectItem已定义（如果在其他文件中需导入）
         # from your_module import ClickableRectItem
 
-        # 全局键盘事件处理：无论焦点在哪，Enter/Return 都触发布管计算
+        # 左侧参数值列编辑中回车：提交并跳到下一可编辑单元格（不触发布管）
         if event.type() == QEvent.KeyPress:
             if isinstance(event, QKeyEvent):
                 key = event.key()
-                # Enter/Return：触发布管按钮入口（内部会调用 calculate_piping_layout 并做保护）
                 if key in (Qt.Key_Return, Qt.Key_Enter):
-                    try:
-                        print(
-                            "[eventFilter] 捕获 Enter/Return 键，准备调用 on_buguan_bt_click()"
-                        )
-                        if hasattr(self, "on_buguan_bt_click"):
-                            self.on_buguan_bt_click()
-                            print(
-                                "[eventFilter] 已调用 on_buguan_bt_click() 完成"
-                            )
-                        elif hasattr(self, "calculate_piping_layout"):
-                            # 兜底：若没有入口函数，至少触发计算
-                            self.calculate_piping_layout()
-                            print(
-                                "[eventFilter] on_buguan_bt_click 不存在，已回退调用 calculate_piping_layout()"
-                            )
-                        else:
-                            print(
-                                "[eventFilter WARN] 对象上不存在 on_buguan_bt_click / calculate_piping_layout 方法"
-                            )
-                    except Exception as e:
-                        print(
-                            f"[eventFilter ERROR] 回车触发布管失败: {e}"
-                        )
-                    # 无论成功与否都标记事件已处理，避免重复触发
-                    event.accept()
-                    return True
+                    if isinstance(obj, (QLineEdit, QAbstractSpinBox)):
+                        if getattr(self, "param_table", None) is not None:
+                            if self.param_table.isAncestorOf(obj):
+                                if self._handle_param_table_value_enter_commit_and_next(obj):
+                                    event.accept()
+                                    return True
 
         if not hasattr(self, "has_piped"):
             self.has_piped = False
