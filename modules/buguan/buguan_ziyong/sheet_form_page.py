@@ -476,7 +476,7 @@ class SheetFormPage(QWidget):
         if hx in {"AEU", "BEU"}:
             return "a", True
         # 固定 b 型，不允许修改
-        if hx in {"NEN"}:
+        if hx in {"NEN", "NEN(Head)"}:
             return "b", False
         # 固定 e 型，不允许修改
         if hx in {"AEM", "BEM"}:
@@ -579,7 +579,7 @@ class SheetFormPage(QWidget):
             hx = str(getattr(self, "_sheet_form_hx_for_rule", "") or "").strip().upper()
         except Exception:
             hx = ""
-        return hx in {"NEN", "AES", "BES", "AKU", "BKU", "AEM", "BEM"}
+        return hx in {"NEN", "AES", "BES", "AKU", "BKU", "AEM", "BEM", "NEN(Head)"}
 
     def _get_forced_node_for_hx(self):
         """返回需要强制选中的节点名（不含扩展名），如 NEN -> b_a。"""
@@ -587,7 +587,7 @@ class SheetFormPage(QWidget):
             hx = str(getattr(self, "_sheet_form_hx_for_rule", "") or "").strip().upper()
         except Exception:
             hx = ""
-        if hx == "NEN":
+        if hx in ["NEN", "NEN(Head)"]:
             return "b_a"
         if hx in {"AEM", "BEM"}:
             return "e_a"

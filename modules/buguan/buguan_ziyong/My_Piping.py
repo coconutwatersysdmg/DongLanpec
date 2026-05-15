@@ -3966,7 +3966,7 @@ class TubeLayoutEditor(QMainWindow):
                                 if not self.heat_exchanger:
                                     self.heat_exchanger = "AEU"
                                 # 根据换热器型号计算DL
-                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN","AEM", "AKU", "BKU"]:
+                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN", "AEM", "AKU", "BKU", "NEN(Head)"]:
                                     # 计算方式1: DL = Di - 2×b₃，其中b₃ = max(0.25×do, 8mm)
                                     b3 = max(0.25 * do, 8.0)  # 取两者较大值作为b3
                                     DL = Di - 2 * b3
@@ -4495,7 +4495,7 @@ class TubeLayoutEditor(QMainWindow):
                                 print("无法计算DL：未获取到换热器型号")
                             else:
                                 # 根据换热器型号计算DL
-                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN","AEM", "AKU", "BKU"]:
+                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN", "AEM", "AKU", "BKU", "NEN(Head)"]:
                                     # 计算方式1: DL = Di - 2×b₃，其中b₃ = max(0.25×do, 8mm)
                                     b3 = max(0.25 * do, 8.0)  # 取两者较大值作为b3
                                     DL = Di - 2 * b3
@@ -4648,7 +4648,7 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
-        if self.heat_exchanger in ["BEM", "NEN", "AEM"]:
+        if self.heat_exchanger in ["BEM", "NEN", "AEM", "NEN(Head)"]:
             self.header.setCurrentIndex(0)  # 管板形式页面
             self.stacked_widget.setCurrentIndex(0)
         else:
@@ -5874,7 +5874,7 @@ class TubeLayoutEditor(QMainWindow):
             di_result = qtzj.cal_qiaotineizhijing_S(
                 self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN, user_Dit
             )
-        elif self.heat_exchanger in ["NEN", "BEM"]:
+        elif self.heat_exchanger in ["NEN", "BEM", "NEN(Head)"]:
             print(1111111111111111111111111)
             di_result = qtzj.cal_qiaotineizhijing_NEN(
                 self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN, user_Dit
@@ -6617,7 +6617,7 @@ class TubeLayoutEditor(QMainWindow):
         # 根据产品型式判断热交换器类型
         if product_type_str in ["AEU", "BEU", "AKU", "BKU"]:
             he_type = "2"  # U型管式
-        elif product_type_str in ["NEN","BEM","AEM"]:
+        elif product_type_str in ["NEN", "BEM", "AEM", "NEN(Head)"]:
             he_type = "1"  # 固定管板式
         elif product_type_str in ["AES", "BES"]:
             he_type = "0"  # 浮头式
@@ -6640,7 +6640,7 @@ class TubeLayoutEditor(QMainWindow):
                             # 根据产品型式判断热交换器类型
                             if product_type_str in ["AEU", "BEU", "AKU", "BKU"]:
                                 he_type = "2"  # U型管式
-                            elif product_type_str in ["NEN","BEM","AEM"]:
+                            elif product_type_str in ["NEN", "BEM", "AEM", "NEN(Head)"]:
                                 he_type = "1"  # 固定管板式
                             elif product_type_str in ["AES", "BES"]:
                                 he_type = "0"  # 浮头式
@@ -7378,7 +7378,7 @@ class TubeLayoutEditor(QMainWindow):
         # 根据产品型式判断热交换器类型
         if product_type_str in ["AEU", "BEU", "AKU", "BKU"]:
             he_type = "2"  # U型管式
-        elif product_type_str in ["NEN","BEM","AEM"]:
+        elif product_type_str in ["NEN", "BEM", "AEM", "NEN(Head)"]:
             he_type = "1"  # 固定管板式
         elif product_type_str in ["AES", "BES"]:
             he_type = "0"  # 浮头式
@@ -7401,7 +7401,7 @@ class TubeLayoutEditor(QMainWindow):
                             # 根据产品型式判断热交换器类型
                             if product_type_str in ["AEU", "BEU", "AKU", "BKU"]:
                                 he_type = "2"  # U型管式
-                            elif product_type_str in ["NEN","BEM","AEM"]:
+                            elif product_type_str in ["NEN", "BEM", "AEM", "NEN(Head)"]:
                                 he_type = "1"  # 固定管板式
                             elif product_type_str in ["AES", "BES"]:
                                 he_type = "0"  # 浮头式
@@ -9104,7 +9104,7 @@ class TubeLayoutEditor(QMainWindow):
             """内部工具函数：按原逻辑根据换热器型号计算 DL。"""
             heat_exchanger_type_local = self.heat_exchanger or "AEU"
 
-            if heat_exchanger_type_local in ["AEU", "BEU", "BEM", "NEN","AEM", "AKU", "BKU"]:
+            if heat_exchanger_type_local in ["AEU", "BEU", "BEM", "NEN", "AEM", "AKU", "BKU", "NEN(Head)"]:
                 # 计算方式1: DL = Di - 2b₃, b₃ = max(0.25do, 8)
                 b3_local = max(0.25 * do_value_local, 8.0)
                 dl_local = di_value_local - 2 * b3_local
@@ -12332,7 +12332,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 4. 按换热器类型+管程数更新中心距
         # 4.1 浮头式换热器（AES、BES）
-        if self.heat_exchanger in ["AES", "BES", "NEN", "BEM"]:
+        if self.heat_exchanger in ["AES", "BES", "NEN", "BEM", "NEN(Head)"]:
             # 获取浮头式对应的中心距（竖直/水平一致）
             if do_value not in aes_bes_map or range_type not in aes_bes_map[do_value]:
                 print(
@@ -15413,7 +15413,7 @@ class TubeLayoutEditor(QMainWindow):
         hx_norm = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
         # non_u：与 AES/BES 同类的“非 U 管”布置示意图；AEM 固定管板式此前漏写导致下拉无任何图片
         non_u_types = {"AES", "BES", "NEN", "BEM", "AEM"}
-        u_and_common_types = {"AEU", "BEU", "AKU", "BKU", "AES", "BES", "NEN", "BEM", "AEM"}
+        u_and_common_types = {"AEU", "BEU", "AKU", "BKU", "AES", "BES", "NEN", "BEM", "AEM", "NEN(Head)"}
 
         # 根据管程程数加载对应图片，同时关联标识
         if tube_pass == "2":
@@ -15730,7 +15730,7 @@ class TubeLayoutEditor(QMainWindow):
             print(f"当前管程分程形式: {self.tube_pass_form_value}")
 
             # 交互前移：当管程程数改为1且型号为AEM/BEM/NEN时，立即询问是否置0固定管板槽宽/槽深
-            if str(tube_pass_text).strip() == "1" and getattr(self, "heat_exchanger", None) in ("AEM", "BEM", "NEN"):
+            if str(tube_pass_text).strip() == "1" and getattr(self, "heat_exchanger", None) in ("AEM", "BEM", "NEN", "NEN(Head)"):
                 # 同一轮值变更可能触发两次回调（text/index），这里做一次性防重
                 if not getattr(self, "_tube_pass_one_prompt_shown", False):
                     self._tube_pass_one_prompt_shown = True
@@ -44768,13 +44768,13 @@ class TubeLayoutEditor(QMainWindow):
 
             heat_exchanger = getattr(self, "heat_exchanger", None)
             tube_pass_form_value = getattr(self, "tube_pass_form_value", None)
-            is_special_4_1 = (str(heat_exchanger) in ("AES", "BES", "NEN")) and (
+            is_special_4_1 = (str(heat_exchanger) in ("AES", "BES", "NEN", "NEN(Head)")) and (
                     str(tube_pass_form_value) == "4.1"
             )
-            is_special_4_3 = (str(heat_exchanger) in ("AES", "BES", "NEN")) and (
+            is_special_4_3 = (str(heat_exchanger) in ("AES", "BES", "NEN", "NEN(Head)")) and (
                     str(tube_pass_form_value) == "4.3"
             )
-            is_special_6_1 = (str(heat_exchanger) in ("AES", "BES", "NEN")) and (
+            is_special_6_1 = (str(heat_exchanger) in ("AES", "BES", "NEN", "NEN(Head)")) and (
                     str(tube_pass_form_value) == "6.1"
             )
 
