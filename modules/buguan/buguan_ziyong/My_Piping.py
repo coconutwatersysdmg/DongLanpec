@@ -7993,6 +7993,85 @@ class TubeLayoutEditor(QMainWindow):
                 return None
         return None
 
+    def _read_param_table_float(self, param_name: str):
+        """从左侧参数表按参数名读取数值（支持下拉框/文本，含隐藏行）。"""
+        if not hasattr(self, "param_table") or self.param_table is None:
+            return None
+        target = str(param_name).strip()
+        for row in range(self.param_table.rowCount()):
+            name_item = self.param_table.item(row, 1)
+            if not name_item or name_item.text().strip() != target:
+                continue
+            cell_widget = self.param_table.cellWidget(row, 2)
+            if isinstance(cell_widget, QComboBox):
+                txt = cell_widget.currentText().strip()
+            else:
+                value_item = self.param_table.item(row, 2)
+                txt = value_item.text().strip() if value_item else ""
+            if txt == "":
+                return None
+            try:
+                return float(txt)
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _table8_baffle_od_offset(dn: float) -> float:
+        """表8：按公称直径 DN 区间取折流/支持板外径减数 offset。"""
+        if dn < 400:
+            return 2.5
+        if dn < 500:
+            return 3.5
+        if dn < 900:
+            return 4.5
+        if dn < 1300:
+            return 6.0
+        if dn < 1700:
+            return 7.0
+        if dn < 2100:
+            return 8.5
+        if dn < 2300:
+            return 12.0
+        if dn <= 2600:
+            return 14.0
+        if dn <= 3200:
+            return 16.0
+        if dn <= 4000:
+            return 18.0
+        return 18.0
+
+    def _calc_table8_default_baffle_od(self, dn_value=None, dis_value=None):
+        """
+        表8默认/上限折流/支持板外径（仅读参数表，不推算 Dis）：
+        - 是否以外径为基准=否：DN - offset(DN)
+        - 是否以外径为基准=是：Dis - offset(DN)，Dis 直接读「壳体内直径 Dis」
+        offset 区间始终按 DN 划分。
+        """
+        if dn_value is None:
+            dn_value = self._read_param_table_float("公称直径 DN")
+        if dis_value is None:
+            dis_value = self._read_param_table_float("壳体内直径 Dis")
+        try:
+            dn = float(dn_value) if dn_value is not None else None
+        except (TypeError, ValueError):
+            dn = None
+        if dn is None or dn <= 0:
+            return None
+        is_outer = self.get_is_outer_diameter_base()
+        if is_outer == "是":
+            try:
+                dis = float(dis_value) if dis_value is not None else None
+            except (TypeError, ValueError):
+                dis = None
+            if dis is None or dis <= 0:
+                return None
+            base = dis
+        else:
+            base = dn
+        result = base - self._table8_baffle_od_offset(dn)
+        return result if result > 0 else None
+
     def update_SN(self):
         """根据管程数的值更新分程隔板两侧相邻管中心距（竖直/水平）所在行的状态"""
         print(self.tube_pass_form_value)
@@ -8799,30 +8878,8 @@ class TubeLayoutEditor(QMainWindow):
                 lg_row = row
 
         # 2. 获取关键参数值
-        # 2.1 壳体内直径 Dis
-        di_value = None
-        if di_row != -1:
-            di_item = self.param_table.item(di_row, 2)
-            if di_item and di_item.text().strip():
-                try:
-                    di_value = float(di_item.text())
-                except ValueError:
-                    print("壳体内直径 Dis 参数值格式错误")
-                    return
-
-        # 2.0 公称直径 DN（表8折流/支持板外径的关联项）
-        dn_value = None
-        if dn_row != -1:
-            dn_widget = self.param_table.cellWidget(dn_row, 2)
-            if isinstance(dn_widget, QComboBox):
-                dn_text = dn_widget.currentText().strip()
-            else:
-                dn_item = self.param_table.item(dn_row, 2)
-                dn_text = dn_item.text().strip() if dn_item else ""
-            try:
-                dn_value = float(dn_text) if dn_text != "" else None
-            except Exception:
-                dn_value = None
+        di_value = self._read_param_table_float("壳体内直径 Dis")
+        dn_value = self._read_param_table_float("公称直径 DN")
 
         # 2.2 换热管外径 do
         do_value = None
@@ -8856,43 +8913,11 @@ class TubeLayoutEditor(QMainWindow):
                 if range_type_item and range_type_item.text().strip():
                     range_type_value = range_type_item.text()
 
-        # 3. 更新折流/支持板外径（折流/支持板外径）
-        # 按表8：以 公称直径 DN 为基准确定默认值，且允许用户手动修改。
-        # 自动更新时：若用户已手动修改（该行在 modified_rows 内），则不覆盖用户输入。
-        if dn_value is not None and baffle_row != -1:
-            dn = float(dn_value)
-            if dn <= 0:
-                return
-
-            # 表8：折流/支持板外径 = DN - offset
-            if dn < 400:
-                offset = 2.5
-            elif 400 <= dn < 500:
-                offset = 3.5
-            elif 500 <= dn < 900:
-                offset = 4.5
-            elif 900 <= dn < 1300:
-                offset = 6.0
-            elif 1300 <= dn < 1700:
-                offset = 7.0
-            elif 1700 <= dn < 2100:
-                offset = 8.5
-            elif 2100 <= dn < 2300:
-                offset = 12.0
-            elif 2300 <= dn <= 2600:
-                offset = 14.0
-            elif 2600 < dn <= 3200:
-                offset = 16.0
-            elif 3200 < dn <= 4000:
-                offset = 18.0
-            else:
-                # 表8未覆盖更大 DN：继续按 18 处理，避免出现异常大外径
-                offset = 18.0
-
-            max_baffle_od = dn - offset
-            if max_baffle_od <= 0:
-                return
-
+        # 3. 更新折流/支持板外径：表8；否→DN-offset，是→读 Dis 再 Dis-offset；允许用户手动改
+        default_baffle_od = self._calc_table8_default_baffle_od(
+            dn_value=dn_value, dis_value=di_value
+        )
+        if default_baffle_od is not None and baffle_row != -1:
             should_overwrite = True
             try:
                 if hasattr(self, "modified_rows") and baffle_row in self.modified_rows:
@@ -8911,8 +8936,12 @@ class TubeLayoutEditor(QMainWindow):
                 should_overwrite = True
 
             if should_overwrite:
-                self._update_table_cell(baffle_row, 2, f"{max_baffle_od:.1f}")
-                print(f"已更新折流/支持板外径(按DN表8): {max_baffle_od:.1f}")
+                self._update_table_cell(baffle_row, 2, f"{default_baffle_od:.1f}")
+                _ob = self.get_is_outer_diameter_base()
+                _base = "Dis" if _ob == "是" else "DN"
+                print(
+                    f"已更新折流/支持板外径(表8,{_base}基准): {default_baffle_od:.1f}"
+                )
 
         # 4. 更新拉杆形式（逻辑完全保留）
         if lg_row != -1 and do_value is not None:
@@ -13130,29 +13159,6 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception:
                     pass
 
-                # 读取 DN 当前值（表8上限的关联项）
-                dn_val = None
-                try:
-                    dn_row = -1
-                    for r in range(self.param_table.rowCount()):
-                        itn = self.param_table.item(r, 1)
-                        if itn and itn.text().strip() == "公称直径 DN":
-                            dn_row = r
-                            break
-                    if dn_row != -1:
-                        w = self.param_table.cellWidget(dn_row, 2)
-                        if hasattr(w, "currentText"):
-                            dn_text = w.currentText().strip()
-                        else:
-                            dnt = self.param_table.item(dn_row, 2)
-                            dn_text = dnt.text().strip() if dnt else ""
-                        try:
-                            dn_val = float(dn_text) if dn_text != "" else None
-                        except Exception:
-                            dn_val = None
-                except Exception:
-                    dn_val = None
-
                 # 解析当前外径数值
                 try:
                     od_val = (
@@ -13163,34 +13169,10 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception:
                     od_val = None
 
-                # 按表8计算折流/支持板外径上限：max_od = DN - offset
+                # 表8上限：否→DN-offset，是→读 Dis 再 Dis-offset
                 max_od = None
                 try:
-                    if dn_val is not None and dn_val > 0:
-                        dn = float(dn_val)
-                        if dn < 400:
-                            offset = 2.5
-                        elif 400 <= dn < 500:
-                            offset = 3.5
-                        elif 500 <= dn < 900:
-                            offset = 4.5
-                        elif 900 <= dn < 1300:
-                            offset = 6.0
-                        elif 1300 <= dn < 1700:
-                            offset = 7.0
-                        elif 1700 <= dn < 2100:
-                            offset = 8.5
-                        elif 2100 <= dn < 2300:
-                            offset = 12.0
-                        elif 2300 <= dn <= 2600:
-                            offset = 14.0
-                        elif 2600 < dn <= 3200:
-                            offset = 16.0
-                        elif 3200 < dn <= 4000:
-                            offset = 18.0
-                        else:
-                            offset = 18.0
-                        max_od = dn - offset
+                    max_od = self._calc_table8_default_baffle_od()
                 except Exception:
                     max_od = None
 
@@ -29185,40 +29167,15 @@ class TubeLayoutEditor(QMainWindow):
                 pass
             return None
 
-        def calc_max_baffle_od_by_table8(dn_value: float):
-            """表8：折流/支持板外径上限 = DN - offset（按区间）"""
-            if dn_value is None:
-                return None
+        def calc_max_baffle_od_by_table8():
+            """表8上限：与主表 _calc_table8_default_baffle_od 一致（否→DN，是→读 Dis）。"""
             try:
-                dn = float(dn_value)
+                return self._calc_table8_default_baffle_od(
+                    dn_value=get_nominal_dn(),
+                    dis_value=get_shell_inner_diameter(),
+                )
             except Exception:
                 return None
-            if dn <= 0:
-                return None
-            if dn < 400:
-                offset = 2.5
-            elif 400 <= dn < 500:
-                offset = 3.5
-            elif 500 <= dn < 900:
-                offset = 4.5
-            elif 900 <= dn < 1300:
-                offset = 6.0
-            elif 1300 <= dn < 1700:
-                offset = 7.0
-            elif 1700 <= dn < 2100:
-                offset = 8.5
-            elif 2100 <= dn < 2300:
-                offset = 12.0
-            elif 2300 <= dn <= 2600:
-                offset = 14.0
-            elif 2600 < dn <= 3200:
-                offset = 16.0
-            elif 3200 < dn <= 4000:
-                offset = 18.0
-            else:
-                offset = 18.0
-            max_od = dn - offset
-            return max_od if max_od > 0 else None
 
         # 标记当前是否正在程序化更新，避免循环触发
         updating_linked_values = {"active": False}
@@ -29364,8 +29321,7 @@ class TubeLayoutEditor(QMainWindow):
             clear_warning()
 
             # 折流/支持板外径（折流/支持板外径）下限与表8上限校验：在用户输入、失焦时就检查并提示
-            dn_val = get_nominal_dn()
-            max_od = calc_max_baffle_od_by_table8(dn_val) if dn_val is not None else None
+            max_od = calc_max_baffle_od_by_table8()
             if baffle_diameter <= 0:
                 set_warning("折流/支持板外径必须是大于0的数字!")
                 try:
