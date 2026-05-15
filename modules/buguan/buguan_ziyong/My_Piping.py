@@ -7571,7 +7571,8 @@ class TubeLayoutEditor(QMainWindow):
         row_count = self.param_table.rowCount()
         for row in range(row_count):
             name_item = self.param_table.item(row, 1)
-            if name_item and name_item.text() in hidden_params:
+            pname = name_item.text().strip() if name_item else ""
+            if name_item and pname in hidden_params:
                 self.set_param_visibility(row, False)
         self.renumber_visible_rows()
 
@@ -16270,7 +16271,7 @@ class TubeLayoutEditor(QMainWindow):
             pass
 
     def _apply_baffle_placement_visibility(self):
-        """防冲板放置位置仅在防冲板形式=平板形时显示。"""
+        """左侧参数表始终隐藏「放置位置」；该参数仅在防冲板弹窗等中编辑，数据仍保留在隐藏行。"""
         try:
             if not hasattr(self, "param_table") or self.param_table is None:
                 return
@@ -16287,26 +16288,11 @@ class TubeLayoutEditor(QMainWindow):
                 pass
             return -1
 
-        type_row = _find_row("防冲板形式")
         place_row = _find_row("放置位置")
         if place_row == -1:
             return
-
-        current_type = ""
         try:
-            if type_row != -1:
-                w = self.param_table.cellWidget(type_row, 2)
-                if isinstance(w, QComboBox):
-                    current_type = (w.currentText() or "").strip()
-                else:
-                    it = self.param_table.item(type_row, 2)
-                    current_type = (it.text() if it else "").strip()
-        except Exception:
-            current_type = ""
-
-        show_place = current_type == "平板形"
-        try:
-            self.set_param_visibility(place_row, show_place, force=True)
+            self.set_param_visibility(place_row, False, force=True)
         except Exception:
             pass
 
