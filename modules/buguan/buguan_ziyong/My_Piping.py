@@ -2,6 +2,7 @@ import ast
 import json
 import logging
 import os
+import re
 import sys
 from collections import defaultdict
 from typing import List, Tuple
@@ -18045,7 +18046,85 @@ class TubeLayoutEditor(QMainWindow):
                         except Exception:
                             # 任意转换/计算错误，跳过该排列
                             continue
+            # ==========================================================
+            # 特殊规则：
+            # 当 产品设计活动表_布管参数表 中：
+            #   换热管排列方式 = 转角正方形
+            #   管程程数 = 4
+            # 且当前更新的是 产品设计活动表_布管数量表_竖直 时，
+            # 竖直表中每一排的 U 形弯半径 R，
+            # 在前一排 R 的基础上增加：0.5 * 换热管中心距S * sqrt(3)
+            # ==========================================================
+            if use_vertical_table:
+                try:
+                    cursor.execute("""
+                        SELECT 参数名, 参数值
+                        FROM 产品设计活动表_布管参数表
+                        WHERE 产品ID = %s
+                          AND 参数名 IN (
+                              '换热管排列方式',
+                              '管程程数',
+                              '管程数',
+                              '换热管中心距 S'
+                          )
+                    """, (product_id,))
 
+                    param_rows = cursor.fetchall()
+                    param_map = {
+                        str(name).strip(): value
+                        for name, value in param_rows
+                        if name is not None
+                    }
+
+                    arrange_type = str(param_map.get("换热管排列方式", "") or "").strip()
+
+                    pass_count_raw = (
+                        param_map.get("管程程数")
+                        or param_map.get("管程数")
+                        or tube_num
+                    )
+                    pass_count_text = str(pass_count_raw or "").strip()
+                    pass_count_match = re.search(r"\d+", pass_count_text)
+                    pass_count_val = pass_count_match.group(0) if pass_count_match else pass_count_text
+
+                    s_raw = (
+                        param_map.get("换热管中心距 S")
+                    )
+
+                    s_match = re.search(r"[-+]?\d+(?:\.\d+)?", str(s_raw or ""))
+                    s_value = float(s_match.group(0)) if s_match else None
+
+                    if arrange_type == "转角正三角形" and pass_count_val == "4" and s_value is not None:
+                        step_r = math.sqrt(0.5 * s_value * 3)
+
+                        # 只处理管孔数量不为 0 的行；数量为 0 的行仍保持 R=0
+                        valid_lines = [
+                            ln for ln in rows_sorted
+                            if row_quantity_map.get(ln, 0) not in (0, None)
+                        ]
+
+                        if valid_lines:
+                            first_line = valid_lines[0]
+
+                            # 第一排保留原来已经算出的 R，后续每排在前一排基础上递增
+                            try:
+                                prev_r = float(updates.get(first_line, 0) or 0)
+                            except Exception:
+                                prev_r = 0
+
+                            updates[first_line] = prev_r
+
+                            for ln in valid_lines[1:]:
+                                prev_r = prev_r + step_r
+                                updates[ln] = prev_r
+
+                            print(
+                                f"[调试] 转角正方形+4管程：已按 0.5*S*sqrt(3) 更新竖直表R，"
+                                f"S={s_value}, step={step_r}, 有效行数={len(valid_lines)}"
+                            )
+
+                except Exception as e:
+                    print(f"[调试] 转角正方形+4管程 R 特殊规则处理失败：{e}")
             # 8. 执行更新 —— 只更新 updates 中存在的行/列
 
             update_sql = (
