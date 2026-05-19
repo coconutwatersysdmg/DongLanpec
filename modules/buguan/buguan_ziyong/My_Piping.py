@@ -18,7 +18,7 @@ import pymysql
 from PyQt5.QtCore import QLineF
 from PyQt5.QtCore import QPointF, QRectF
 from PyQt5.QtCore import QSize, QTimer, QPoint, QEvent, Qt
-from PyQt5.QtGui import QBrush, QIcon
+from PyQt5.QtGui import QBrush, QIcon, QPalette
 from PyQt5.QtGui import QColor, QPen, QPolygonF, QPainterPath, QIntValidator
 from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsLineItem
 from PyQt5.QtWidgets import (
@@ -40,6 +40,7 @@ from PyQt5.QtWidgets import (
     QListView,
     QGraphicsPathItem,
     QGraphicsItem,
+    QGraphicsPolygonItem,
     QGridLayout,
     QMessageBox,
     QComboBox,
@@ -90,7 +91,87 @@ ENABLE_RADIAL_HOLES = True
 # TODO 吊环螺钉功能开关
 ENABLE_SCREW_RING = True
 
+# 布管图 UI 配色（对照示例图）
+_BUGUAN_TUBE_OUTLINE = QColor(66, 165, 245)  # 更亮蓝空心换热管 #42A5F5
+_BUGUAN_SHELL_RING_GREEN = QColor(102, 187, 106)  # 最大/次大外圆之间实心绿环 #66BB6A
+_BUGUAN_AXIS_X = QColor(255, 0, 0)
+_BUGUAN_AXIS_Y = QColor(0, 180, 0)
+_BUGUAN_AXIS_ITEM_ROLE = "buguan_main_axis"
+_BUGUAN_AXIS_LABEL_ROLE = "buguan_axis_label"
+_BUGUAN_AXIS_Z = 10000  # 主坐标轴始终在最上层
+_BUGUAN_CENTER_BTN_ICON_DIR = os.path.join(
+    current_dir, "static", "布管等按钮图标"
+)
+
 edge_centers: List[Tuple[float, float]] = []
+
+
+class BuguanCornerAxisWidget(QWidget):
+    """画布左下角固定坐标示意：方框 + 左上绿 Y 上指 + 右下红 X 右指。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(80, 76)
+        self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+
+    def paintEvent(self, event):
+        from PyQt5.QtGui import QPainter, QFont
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+
+        box = 12
+        sx = 20
+        sy = self.height() - 18
+        br_x = sx + box
+        br_y = sy + box
+
+        p.fillRect(sx, sy, box, box, QColor(248, 248, 248))
+        p.setPen(QPen(QColor(80, 80, 80), 1))
+        p.drawRect(sx, sy, box, box)
+
+        y_len = 24
+        y_tip_x, y_tip_y = sx, sy - y_len
+        pen_y = QPen(_BUGUAN_AXIS_Y, 2)
+        pen_y.setCapStyle(Qt.RoundCap)
+        p.setPen(pen_y)
+        p.drawLine(sx, sy, y_tip_x, y_tip_y)
+        self._paint_filled_arrow(p, y_tip_x, y_tip_y, 0, -1, _BUGUAN_AXIS_Y, head=8, wing=4.5)
+
+        x_len = 28
+        x_tip_x, x_tip_y = br_x + x_len, br_y
+        pen_x = QPen(_BUGUAN_AXIS_X, 2)
+        pen_x.setCapStyle(Qt.RoundCap)
+        p.setPen(pen_x)
+        p.drawLine(br_x, br_y, x_tip_x, x_tip_y)
+        self._paint_filled_arrow(p, x_tip_x, x_tip_y, 1, 0, _BUGUAN_AXIS_X, head=8, wing=4.5)
+
+        label_font = QFont("Arial", 9, QFont.Bold)
+        p.setFont(label_font)
+        p.setPen(_BUGUAN_AXIS_Y)
+        y_label_rect = QRectF(y_tip_x - 10, 0, 20, max(12.0, y_tip_y - 6))
+        p.drawText(y_label_rect, Qt.AlignHCenter | Qt.AlignBottom, "Y")
+        p.setPen(_BUGUAN_AXIS_X)
+        x_label_rect = QRectF(x_tip_x + 2, x_tip_y - 10, 18, 20)
+        p.drawText(x_label_rect, Qt.AlignLeft | Qt.AlignVCenter, "X")
+        p.end()
+
+    @staticmethod
+    def _paint_filled_arrow(p, tip_x, tip_y, ux, uy, color, head=8, wing=4.5):
+        px, py = -uy, ux
+        base_x = tip_x - ux * head
+        base_y = tip_y - uy * head
+        tri = QPolygonF(
+            [
+                QPointF(tip_x, tip_y),
+                QPointF(base_x + px * wing, base_y + py * wing),
+                QPointF(base_x - px * wing, base_y - py * wing),
+            ]
+        )
+        p.setPen(Qt.NoPen)
+        p.setBrush(color)
+        p.drawPolygon(tri)
 
 # 从配置库加载的“换热管中心距 S 映射表”缓存（只读一次，避免每次联动都查询数据库）
 _TUBE_CENTER_DISTANCE_MAP_CACHE = None
@@ -169,6 +250,72 @@ class _ParamNameDisplayDelegate(QStyledItemDelegate):
         except Exception:
             pass
         return super().displayText(value, locale)
+
+
+class _ParamValueCellDelegate(QStyledItemDelegate):
+    """参数值列：圆角白底边框（对照示例输入框）。"""
+
+    def __init__(self, owner=None, parent=None):
+        super().__init__(parent)
+        self._owner = owner
+
+    def paint(self, painter, option, index):
+        if index.column() != 2:
+            super().paint(painter, option, index)
+            return
+
+        table = option.widget
+        if table is not None and table.cellWidget(index.row(), index.column()) is not None:
+            return
+
+        from PyQt5.QtGui import QPainter
+        from PyQt5.QtWidgets import QStyle
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        if option.state & QStyle.State_Selected:
+            painter.fillRect(option.rect, option.palette.highlight())
+
+        box_rect = option.rect.adjusted(5, 4, -5, -4)
+        editable = bool(index.flags() & Qt.ItemIsEditable)
+
+        painter.setBrush(QColor("#f5f7fa" if not editable else "#ffffff"))
+        painter.setPen(QPen(QColor("#dcdfe6"), 1))
+        painter.drawRoundedRect(box_rect, 4, 4)
+
+        text = "" if index.data(Qt.DisplayRole) is None else str(index.data(Qt.DisplayRole))
+        painter.setPen(QColor("#969696" if not editable else "#303133"))
+        text_rect = box_rect.adjusted(10, 0, -8, 0)
+        painter.drawText(text_rect, Qt.AlignLeft | Qt.AlignVCenter, text)
+        painter.restore()
+
+    def createEditor(self, parent, option, index):
+        editor = QLineEdit(parent)
+        editor.setFrame(False)
+        editor.setStyleSheet(
+            "QLineEdit {"
+            "  border: 1px solid #dcdfe6;"
+            "  border-radius: 4px;"
+            "  padding: 2px 10px;"
+            "  background-color: #ffffff;"
+            "  color: #303133;"
+            "  font-size: 10pt;"
+            "}"
+            "QLineEdit:focus {"
+            "  border: 1px solid #c0c4cc;"
+            "}"
+        )
+        return editor
+
+    def setEditorData(self, editor, index):
+        editor.setText("" if index.data(Qt.DisplayRole) is None else str(index.data(Qt.DisplayRole)))
+
+    def setModelData(self, editor, model, index):
+        model.setData(index, editor.text(), Qt.EditRole)
+
+    def updateEditorGeometry(self, editor, option, index):
+        editor.setGeometry(option.rect.adjusted(5, 4, -5, -4))
 
 
 def on_product_id_changed(new_id):
@@ -2198,6 +2345,7 @@ class TubeLayoutEditor(QMainWindow):
             headers = ["至竖直中心线列号", "管孔数量(左)", "管孔数量(右)"]
 
         self.hole_distribution_table.setHorizontalHeaderLabels(headers)
+        self._apply_bold_table_header(self.hole_distribution_table, point_size=10)
         for i, header_text in enumerate(headers):
             header_item = self.hole_distribution_table.horizontalHeaderItem(i)
             if header_item:
@@ -2320,6 +2468,7 @@ class TubeLayoutEditor(QMainWindow):
         self.param_table.setColumnCount(4)
         self.param_table.setHorizontalHeaderLabels(["序号", "参数名", "参数值", "单位"])
         self.param_table.verticalHeader().setVisible(False)
+        self._apply_bold_table_header(self.param_table, point_size=10)
 
         self.param_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.Interactive
@@ -2341,6 +2490,7 @@ class TubeLayoutEditor(QMainWindow):
         self.param_table.showEvent = (
             lambda event: self.restore_param_table_column_widths()
         )
+        self._apply_param_table_style()
         param_layout.addWidget(self.param_table)
 
         # 左侧参数值列：编辑时回车跳到下一可编辑数值格（不再用回车触发布管）
@@ -2569,32 +2719,8 @@ class TubeLayoutEditor(QMainWindow):
 
         self.graphics_scene.setSceneRect(-300, -340, 600, 680)
 
-        x_axis_color = QColor(Qt.red)
-        x_axis_color.setAlpha(128)
-        y_axis_color = QColor(Qt.green)
-        y_axis_color.setAlpha(128)
-        x_axis_pen = QPen(x_axis_color, 3)
-        y_axis_pen = QPen(y_axis_color, 3)
-        label_font = QFont("Arial", 12)
-
-        x_axis_line = self.graphics_scene.addLine(-250, 0, 250, 0, x_axis_pen)
-        y_axis_line = self.graphics_scene.addLine(0, -250, 0, 250, y_axis_pen)
-        x_axis_line.setZValue(15)
-        y_axis_line.setZValue(15)
-
-        x_label = self.graphics_scene.addText("X", label_font)
-        x_label_color = QColor(Qt.red)
-        x_label_color.setAlpha(128)
-        x_label.setDefaultTextColor(x_label_color)
-        x_label.setPos(260, -5)
-        x_label.setZValue(15)
-
-        y_label = self.graphics_scene.addText("Y", label_font)
-        y_label_color = QColor(Qt.green)
-        y_label_color.setAlpha(128)
-        y_label.setDefaultTextColor(y_label_color)
-        y_label.setPos(5, -260)
-        y_label.setZValue(15)
+        # 初始占位坐标轴（首次布管后由 draw_axes 按 R_wai 重绘）
+        self.draw_axes(self.graphics_scene, 250.0)
 
         self.graphics_container.layout().addWidget(self.graphics_view)
 
@@ -2605,12 +2731,22 @@ class TubeLayoutEditor(QMainWindow):
             "background-color: rgba(255, 255, 255, 200); border-radius: 5px;"
         )
 
+        self.corner_axis_widget = BuguanCornerAxisWidget(self.graphics_container)
+        self.corner_axis_widget.raise_()
+        self.corner_axis_widget.show()
+
         def update_overlay_widgets_position(event):
             x_right = (
                     self.graphics_container.width() - self.checkbox_container.width() - 10
             )
             y_top = 10
             self.checkbox_container.move(x_right, y_top)
+            bottom_margin = 8
+            if hasattr(self, "corner_axis_widget") and self.corner_axis_widget:
+                axis_h = self.corner_axis_widget.height()
+                axis_y = self.graphics_container.height() - axis_h - bottom_margin
+                self.corner_axis_widget.move(bottom_margin, max(8, axis_y))
+                self.corner_axis_widget.raise_()
 
             if hasattr(
                     super(type(self.graphics_container), self.graphics_container),
@@ -2621,6 +2757,12 @@ class TubeLayoutEditor(QMainWindow):
                 ).resizeEvent(event)
 
         self.graphics_container.resizeEvent = update_overlay_widgets_position
+        QTimer.singleShot(
+            0,
+            lambda: update_overlay_widgets_position(
+                None
+            ),
+        )
 
         checkbox_layout = QHBoxLayout(self.checkbox_container)
         checkbox_layout.setContentsMargins(5, 5, 5, 5)
@@ -2635,31 +2777,100 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
-        center_layout.addWidget(self.graphics_container)
+        self._buguan_toolbar_btn_style = (
+            "QPushButton {"
+            "  background-color: #ffffff;"
+            "  border: 1px solid #d4d4d4;"
+            "  border-radius: 4px;"
+            "  padding: 7px 16px 7px 10px;"
+            "  color: #222222;"
+            "  font-size: 11pt;"
+            "  text-align: left;"
+            "  min-height: 36px;"
+            "}"
+            "QPushButton:hover {"
+            "  background-color: #f5f5f5;"
+            "  border-color: #b8b8b8;"
+            "}"
+            "QPushButton:pressed {"
+            "  background-color: #e8e8e8;"
+            "}"
+            "QPushButton:disabled {"
+            "  color: #999999;"
+            "  background-color: #f0f0f0;"
+            "}"
+        )
+        self._buguan_toolbar_btn_style_no_icon = (
+            "QPushButton {"
+            "  background-color: #ffffff;"
+            "  border: 1px solid #d4d4d4;"
+            "  border-radius: 4px;"
+            "  padding: 7px 16px;"
+            "  color: #222222;"
+            "  font-size: 11pt;"
+            "  min-height: 36px;"
+            "}"
+            "QPushButton:hover {"
+            "  background-color: #f5f5f5;"
+            "  border-color: #b8b8b8;"
+            "}"
+            "QPushButton:pressed {"
+            "  background-color: #e8e8e8;"
+            "}"
+            "QPushButton:disabled {"
+            "  color: #999999;"
+            "  background-color: #f0f0f0;"
+            "}"
+        )
 
-        self.action_bar = QHBoxLayout()
-        self.action_bar.addStretch()
+        # 中间视图底部单行：左四（图标）+ 右三（预览/全屏/操作记录）
+        self.center_bottom_toolbar = QWidget()
+        self.center_bottom_toolbar.setStyleSheet(
+            "background-color: rgba(255, 255, 255, 235);"
+        )
+        bottom_bar_layout = QHBoxLayout(self.center_bottom_toolbar)
+        bottom_bar_layout.setContentsMargins(8, 6, 8, 6)
+        bottom_bar_layout.setSpacing(10)
 
-        actions = ["布管", "交叉布管", "删除交叉布管", "全屏", "操作记录"]
-        for action in actions:
-            btn = QPushButton(action)
-            btn.setStyleSheet("padding: 5px 10px;")
-            btn.adjustSize()
-            self.action_bar.addWidget(btn)
+        def _add_bottom_icon_btn(text, icon_name, slot):
+            btn = QPushButton(text)
+            btn.setStyleSheet(self._buguan_toolbar_btn_style)
+            btn.setCursor(Qt.PointingHandCursor)
+            icon_path = os.path.join(_BUGUAN_CENTER_BTN_ICON_DIR, f"{icon_name}.png")
+            if os.path.isfile(icon_path):
+                btn.setIcon(QIcon(icon_path))
+            btn.setIconSize(QSize(28, 28))
+            btn.clicked.connect(slot)
+            bottom_bar_layout.addWidget(btn)
+            return btn
 
-            if action == "布管":
-                btn.clicked.connect(self.on_buguan_bt_click)
-            elif action == "全屏":
-                btn.setObjectName("fullscreenButton")
-                btn.clicked.connect(lambda: self.handle_fullscreen_toggle())
-            elif action == "操作记录":
-                btn.clicked.connect(self.on_show_operations_click)
-            elif action == "删除交叉布管":
-                btn.clicked.connect(self.clear_cross_pipe_lines)
-            elif action == "交叉布管":
-                btn.clicked.connect(self.on_cross_pipes_click)
+        def _add_bottom_text_btn(text, slot, object_name=None):
+            btn = QPushButton(text)
+            btn.setStyleSheet(self._buguan_toolbar_btn_style_no_icon)
+            btn.setCursor(Qt.PointingHandCursor)
+            if object_name:
+                btn.setObjectName(object_name)
+            btn.clicked.connect(slot)
+            bottom_bar_layout.addWidget(btn)
+            return btn
 
-        center_layout.addLayout(self.action_bar)
+        _add_bottom_icon_btn("布管", "布管", self.on_buguan_bt_click)
+        self.buguan_cross_pipe_btn = _add_bottom_icon_btn(
+            "交叉布管", "交叉布管", self.on_cross_pipes_click
+        )
+        self.buguan_delete_cross_pipe_btn = _add_bottom_icon_btn(
+            "删除交叉布管", "删除交叉布管", self.clear_cross_pipe_lines
+        )
+        _add_bottom_icon_btn("保存", "保存", self.save_data)
+        bottom_bar_layout.addStretch()
+        _add_bottom_text_btn("预览", self.show_preview)
+        _add_bottom_text_btn(
+            "全屏", self.handle_fullscreen_toggle, object_name="fullscreenButton"
+        )
+        _add_bottom_text_btn("操作记录", self.on_show_operations_click)
+
+        center_layout.addWidget(self.graphics_container, 1)
+        center_layout.addWidget(self.center_bottom_toolbar)
 
         # 右侧区域
         self.right_frame = QFrame()
@@ -2740,6 +2951,21 @@ class TubeLayoutEditor(QMainWindow):
         self.hole_distribution_table.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding
         )
+        self.hole_distribution_table.setStyleSheet(
+            """
+            QHeaderView::section {
+                background-color: #f2f2f2;
+                color: #222222;
+                padding: 6px 4px;
+                border: none;
+                border-bottom: 1px solid #bdbdbd;
+                border-right: 1px solid #e0e0e0;
+                font-weight: 700;
+                font-size: 10pt;
+            }
+            """
+        )
+        self._apply_bold_table_header(self.hole_distribution_table, point_size=10)
 
         # ✅ 关键修改：创建阶段强制 Fixed（不要 Stretch）
         _hdr = self.hole_distribution_table.horizontalHeader()
@@ -6108,36 +6334,29 @@ class TubeLayoutEditor(QMainWindow):
         was_blocked = self.graphics_scene.blockSignals(True)
 
         try:
-            # 使用优化后的清除方法
-            if hasattr(self, "graphics_scene") and hasattr(
-                    self.graphics_scene, "clear_connection_lines"
-            ):
-                self.graphics_scene.clear_connection_lines()
-            if hasattr(self, "graphics_scene") and hasattr(
-                    self.graphics_scene, "clear_markers"
-            ):
-                self.graphics_scene.clear_markers()
-
-            # 备用方案：如果自定义方法不可用，使用批量移除
-            else:
-                items_to_remove = [
-                    item
-                    for item in self.graphics_scene.items()
-                    if (
-                            isinstance(item, (QGraphicsLineItem, QGraphicsEllipseItem))
-                            and (
-                                    item in getattr(self, "connection_lines", [])
-                                    or item.data(0) == "marker"
-                            )
-                    )
-                ]
-
+            # 清除圆心连线/标记（勿误删主坐标轴）
+            if hasattr(self, "clear_connection_lines"):
+                self.clear_connection_lines(self.graphics_scene)
+            if hasattr(self, "clear_markers"):
+                self.clear_markers(self.graphics_scene)
+            elif self.graphics_scene is not None:
+                items_to_remove = []
+                for item in self.graphics_scene.items():
+                    try:
+                        role = item.data(Qt.UserRole)
+                    except Exception:
+                        role = None
+                    if role in (_BUGUAN_AXIS_ITEM_ROLE, _BUGUAN_AXIS_LABEL_ROLE):
+                        continue
+                    if isinstance(item, (QGraphicsLineItem, QGraphicsEllipseItem)) and (
+                            item in getattr(self, "connection_lines", [])
+                            or item.data(0) == "marker"
+                    ):
+                        items_to_remove.append(item)
                 for item in items_to_remove:
                     self.graphics_scene.removeItem(item)
-
                 if hasattr(self, "connection_lines"):
                     self.connection_lines.clear()
-                # 同时清空交叉布管连接线
                 if hasattr(self, "cross_pipe_lines"):
                     self.cross_pipe_lines.clear()
 
@@ -6846,6 +7065,8 @@ class TubeLayoutEditor(QMainWindow):
             self.none_tube(height_0_180, height_90_270, Di, do, centers)
             # self.draw_baffle_plates()
 
+            self.ensure_main_axes(self.graphics_scene, force=True)
+
             # 强制刷新场景
             self.graphics_scene.update()
             QApplication.processEvents()
@@ -6859,18 +7080,9 @@ class TubeLayoutEditor(QMainWindow):
             self.update_tube_nums()
 
             # TODO 根据产品型式设置交叉布管按钮状态
-            cross_pipe_btn = None
-            cross_pipe_del_btn = None
-            # 遍历中心布局中的所有按钮
-            for i in range(self.action_bar.count()):
-                item = self.action_bar.itemAt(i)
-                if item.widget() and isinstance(item.widget(), QPushButton):
-                    if item.widget().text() == "交叉布管":
-                        cross_pipe_btn = item.widget()
-                    elif item.widget().text() == "删除交叉布管":
-                        cross_pipe_del_btn = item.widget()
+            cross_pipe_btn = getattr(self, "buguan_cross_pipe_btn", None)
+            cross_pipe_del_btn = getattr(self, "buguan_delete_cross_pipe_btn", None)
 
-            # 如果找到按钮，根据产品型式设置可用状态
             if cross_pipe_btn is not None:
                 if product_type_str not in ["AEU", "BEU", "AKU", "BKU"]:
                     cross_pipe_btn.setEnabled(False)
@@ -8322,9 +8534,7 @@ class TubeLayoutEditor(QMainWindow):
                         cw.setAttribute(Qt.WA_TransparentForMouseEvents, True)
                     except Exception:
                         pass
-                    cw.setStyleSheet(
-                        "QComboBox:disabled { color: rgb(150, 150, 150); }"
-                    )
+                    self._apply_param_combo_widget_style(cw, disabled=True)
                 else:
                     it = self.param_table.item(row, 2)
                     if it is not None:
@@ -11176,7 +11386,7 @@ class TubeLayoutEditor(QMainWindow):
                     # 如果是下拉框，设置为不可用
                     dn_widget.setEnabled(False)
                     # 设置样式使其显示为灰色
-                    dn_widget.setStyleSheet("QComboBox:disabled { color: rgb(150, 150, 150); }")
+                    self._apply_param_combo_widget_style(dn_widget, disabled=True)
                     print(
                         f"[update_divider_position_and_size] 已将公称直径 DN 行 {dn_row} 的下拉框置为不可编辑且灰色显示"
                     )
@@ -14993,6 +15203,7 @@ class TubeLayoutEditor(QMainWindow):
                     # 统一由 setup_parameter_listeners() 内的 bind_combobox_listeners() 做一次性绑定，
                     # 避免闭包 row 捕获错误/重复触发/错行联动（会导致分程形式图不刷新等问题）。
                     self.param_table.setCellWidget(row, 2, combo)
+                    self._apply_param_combo_widget_style(combo, disabled=False)
                     current_value = (
                         combo.currentText() if isinstance(combo, QComboBox) else ""
                     )
@@ -15203,14 +15414,12 @@ class TubeLayoutEditor(QMainWindow):
                             combo.setAttribute(Qt.WA_TransparentForMouseEvents, True)
                         except Exception:
                             pass
-                        combo.setStyleSheet(
-                            "QComboBox:disabled { color: rgb(150, 150, 150); }"
-                        )
+                        self._apply_param_combo_widget_style(combo, disabled=True)
                     elif dn_visible:
                         combo.setEnabled(False)
-                        combo.setStyleSheet(
-                            "QComboBox:disabled { color: rgb(150, 150, 150); }"
-                        )
+                        self._apply_param_combo_widget_style(combo, disabled=True)
+                    else:
+                        self._apply_param_combo_widget_style(combo, disabled=False)
                     param_value_str = (
                         str(param["参数值"]) if param["参数值"] is not None else ""
                     )
@@ -15306,6 +15515,11 @@ class TubeLayoutEditor(QMainWindow):
             pass
         try:
             self._lock_outer_base_flag_param_cell()
+        except Exception:
+            pass
+        try:
+            self._refresh_param_table_value_widgets_style()
+            self.param_table.viewport().update()
         except Exception:
             pass
         # self.update_partition_plate_center_distance()
@@ -15945,7 +16159,7 @@ class TubeLayoutEditor(QMainWindow):
         white_pen = QPen(QColor(255, 255, 255))  # 白色边框
         white_pen.setWidth(3)  # 增加边框宽度到3像素，减少抗锯齿影响
         white_brush = QBrush(QColor(255, 255, 255))  # 白色实心填充
-        blue_tube_pen = QColor(0, 0, 80)
+        blue_tube_pen = _BUGUAN_TUBE_OUTLINE
 
         # 转换为要删除的绝对坐标集合
         absolute_coords_to_remove = set((round(x, 2), round(y, 2)) for x, y in centers)
@@ -15989,7 +16203,11 @@ class TubeLayoutEditor(QMainWindow):
                                 items_to_remove.append(item)
 
                             # 检查是否为需要替换的圆（蓝色换热管或旧的白色空心圆）
-                            is_blue_tube = current_color == blue_tube_pen
+                            is_blue_tube = (
+                                    current_color.red() == blue_tube_pen.red()
+                                    and current_color.green() == blue_tube_pen.green()
+                                    and current_color.blue() == blue_tube_pen.blue()
+                            )
                             is_old_white = (
                                     current_color == QColor(255, 255, 255)
                                     and item.brush() == Qt.NoBrush
@@ -16159,33 +16377,9 @@ class TubeLayoutEditor(QMainWindow):
         # 重新添加stretch
         self.footer_layout.addStretch()
 
-        # 仅在非"管-板连接"页面显示完整按钮
-        if self.header.currentIndex() == 1:  # 0是"布管"页面的索引
-            buttons = ["预览", "保存", "取消"]
-            for btn_text in buttons:
-                btn = QPushButton(btn_text)
-                btn.setFixedSize(80, 30)
-                btn.setStyleSheet(
-                    """
-                    QPushButton {
-                        background-color: #f0f0f0;
-                        border: 1px solid #ccc;
-                        border-radius: 4px;
-                    }
-                    QPushButton:hover {
-                        background-color: #e0e0e0;
-                        border: 1px solid #aaa;
-                    }
-                    QPushButton:pressed {
-                        background-color: #d0d0d0;
-                    }
-                """
-                )
-                if btn_text == "预览":
-                    btn.clicked.connect(self.show_preview)
-                elif btn_text == "保存":
-                    btn.clicked.connect(self.save_data)  # 添加保存按钮点击事件
-                self.footer_layout.addWidget(btn)
+        # 布管页：预览/全屏/操作记录已移至中间区域底部 action_bar；此处不再显示预览/保存/取消
+        if self.header.currentIndex() == 1:
+            pass
         else:
             # 在"管-板连接"页面只显示保存按钮
             save_btn = QPushButton("保存")
@@ -18756,86 +18950,413 @@ class TubeLayoutEditor(QMainWindow):
             self.toolbar_row1_layout.addStretch()
             self.toolbar_row2_layout.addStretch()
 
+    def _apply_bold_table_header(self, table, point_size=10):
+        """表头文字加粗（样式表 + QFont 双保险）。"""
+        if table is None:
+            return
+        try:
+            from PyQt5.QtGui import QFont
+
+            header_font = QFont()
+            header_font.setBold(True)
+            header_font.setWeight(QFont.Bold)
+            header_font.setPointSize(point_size)
+            hdr = table.horizontalHeader()
+            hdr.setFont(header_font)
+            hdr.setDefaultAlignment(Qt.AlignCenter)
+            for col in range(table.columnCount()):
+                item = table.horizontalHeaderItem(col)
+                if item is not None:
+                    item.setFont(header_font)
+                    item.setTextAlignment(Qt.AlignCenter)
+        except Exception:
+            pass
+
+    def _param_combo_extra_stylesheet(self):
+        """弹出列表与内嵌文本颜色（不覆盖 ::drop-down，保留系统下拉箭头）。"""
+        return (
+            "QComboBox QAbstractItemView {"
+            "  border: 1px solid #dcdfe6;"
+            "  background-color: #ffffff;"
+            "  color: #303133;"
+            "  selection-background-color: #e3f2fd;"
+            "  selection-color: #212121;"
+            "  outline: 0;"
+            "}"
+            "QComboBox QLineEdit {"
+            "  color: #303133;"
+            "  selection-background-color: #b3d7ff;"
+            "  selection-color: #212121;"
+            "}"
+        )
+
+    def _apply_param_combo_widget_style(self, combo, disabled=False):
+        """统一参数表下拉框样式与调色板，避免行选中后文字变白。"""
+        if not isinstance(combo, QComboBox):
+            return
+        combo.setStyleSheet(self._param_value_widget_stylesheet(disabled=disabled))
+        text_color = QColor("#969696" if disabled else "#303133")
+        pal = combo.palette()
+        for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
+            pal.setColor(group, QPalette.Text, text_color)
+            pal.setColor(group, QPalette.ButtonText, text_color)
+            pal.setColor(group, QPalette.WindowText, text_color)
+            if group != QPalette.Disabled:
+                pal.setColor(group, QPalette.Highlight, QColor("#e3f2fd"))
+                pal.setColor(group, QPalette.HighlightedText, QColor("#212121"))
+        combo.setPalette(pal)
+        le = combo.lineEdit()
+        if le is not None:
+            le.setStyleSheet(
+                "border: none; background: transparent; padding: 0; margin: 0;"
+                "color: #303133;"
+                "selection-background-color: #b3d7ff;"
+                "selection-color: #212121;"
+            )
+            le_pal = le.palette()
+            for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
+                le_pal.setColor(group, QPalette.Text, text_color)
+                if group != QPalette.Disabled:
+                    le_pal.setColor(group, QPalette.HighlightedText, QColor("#212121"))
+            le.setPalette(le_pal)
+
+    def _param_value_widget_stylesheet(self, disabled=False):
+        """参数值列内嵌 QComboBox / QLineEdit 样式（与示例圆角输入框一致）。"""
+        base = (
+            "border: 1px solid #dcdfe6;"
+            "border-radius: 4px;"
+            "padding: 2px 28px 2px 10px;"
+            "background-color: #ffffff;"
+            "color: #303133;"
+            "font-size: 10pt;"
+            "min-height: 24px;"
+        )
+        extra = self._param_combo_extra_stylesheet()
+        if disabled:
+            return (
+                "QComboBox {"
+                f"{base}"
+                "background-color: #f5f7fa;"
+                "color: #969696;"
+                "}"
+                f"{extra}"
+            )
+        return "QComboBox {" f"{base}" "}" f"{extra}"
+
+    def _refresh_param_table_value_widgets_style(self):
+        """为参数值列已嵌入的下拉框应用圆角输入框样式。"""
+        if not hasattr(self, "param_table") or self.param_table is None:
+            return
+        try:
+            for row in range(self.param_table.rowCount()):
+                widget = self.param_table.cellWidget(row, 2)
+                if isinstance(widget, QComboBox):
+                    self._apply_param_combo_widget_style(
+                        widget, disabled=not widget.isEnabled()
+                    )
+        except Exception:
+            pass
+
+    def _apply_param_table_style(self):
+        """左侧布管参数表样式（对照示例：浅灰表头、网格线、交替行）。"""
+        if not hasattr(self, "param_table") or self.param_table is None:
+            return
+        try:
+            self.param_table.setAlternatingRowColors(True)
+            self.param_table.setShowGrid(True)
+            try:
+                self.param_table.verticalHeader().setDefaultSectionSize(34)
+            except Exception:
+                pass
+            if not getattr(self, "_param_value_cell_delegate", None):
+                self._param_value_cell_delegate = _ParamValueCellDelegate(
+                    owner=self, parent=self.param_table
+                )
+            self.param_table.setItemDelegateForColumn(
+                2, self._param_value_cell_delegate
+            )
+            self.param_table.setStyleSheet(
+                """
+                QTableWidget {
+                    gridline-color: #d4d4d4;
+                    background-color: #ffffff;
+                    border: 1px solid #bdbdbd;
+                    font-size: 10pt;
+                    selection-background-color: #e3f2fd;
+                    selection-color: #212121;
+                }
+                QTableWidget::item {
+                    padding: 4px 6px;
+                    border-bottom: 1px solid #eeeeee;
+                }
+                QTableWidget::item:alternate {
+                    background-color: #fafafa;
+                }
+                QTableWidget::item:selected {
+                    background-color: #e3f2fd;
+                    color: #212121;
+                }
+                QHeaderView::section {
+                    background-color: #f2f2f2;
+                    color: #222222;
+                    padding: 6px 4px;
+                    border: none;
+                    border-bottom: 1px solid #bdbdbd;
+                    border-right: 1px solid #e0e0e0;
+                    font-weight: 700;
+                    font-size: 10pt;
+                }
+                QTableWidget QWidget {
+                    background-color: transparent;
+                }
+                QTableWidget QLineEdit {
+                    border: 1px solid #dcdfe6;
+                    border-radius: 4px;
+                    padding: 2px 10px;
+                    background-color: #ffffff;
+                    color: #303133;
+                    font-size: 10pt;
+                    min-height: 24px;
+                }
+                QTableWidget QComboBox {
+                    border: 1px solid #dcdfe6;
+                    border-radius: 4px;
+                    padding: 2px 28px 2px 10px;
+                    background-color: #ffffff;
+                    color: #303133;
+                    font-size: 10pt;
+                    min-height: 24px;
+                }
+                QTableWidget QComboBox QAbstractItemView {
+                    color: #303133;
+                    selection-background-color: #e3f2fd;
+                    selection-color: #212121;
+                }
+                QTableWidget QComboBox QLineEdit {
+                    color: #303133;
+                    selection-background-color: #b3d7ff;
+                    selection-color: #212121;
+                }
+                QTableWidget QComboBox:disabled {
+                    background-color: #f5f7fa;
+                    color: #969696;
+                }
+                """
+            )
+            self._apply_bold_table_header(self.param_table, point_size=10)
+            self._refresh_param_table_value_widgets_style()
+        except Exception:
+            pass
+
+    def _buguan_tube_pen(self):
+        pen = QPen(_BUGUAN_TUBE_OUTLINE)
+        pen.setWidth(4)
+        pen.setCapStyle(Qt.RoundCap)
+        return pen
+
+    def _buguan_tube_brush(self):
+        return QBrush(Qt.NoBrush)
+
+    def _add_annulus_fill(self, scene, r_outer, r_inner, color, z=2):
+        """两圆之间的环形区域填充（r_outer > r_inner）。"""
+        if r_outer <= r_inner or r_outer <= 0:
+            return
+        path = QPainterPath()
+        path.addEllipse(-r_outer, -r_outer, 2 * r_outer, 2 * r_outer)
+        hole = QPainterPath()
+        hole.addEllipse(-r_inner, -r_inner, 2 * r_inner, 2 * r_inner)
+        path = path.subtracted(hole)
+        item = QGraphicsPathItem(path)
+        item.setBrush(QBrush(color))
+        item.setPen(QPen(Qt.NoPen))
+        item.setZValue(z)
+        scene.addItem(item)
+
+    def _draw_shell_circles_and_ring(
+            self, scene, R_wai, R_Di, R_nei, z_outline=100, z_ring=2
+    ):
+        """壳体：最大与次大半径之间绿环 + 三个大圆描边。"""
+        r_wai = float(R_wai) if R_wai else 0.0
+        r_di = float(R_Di) if R_Di else 0.0
+        r_nei = float(R_nei) if R_nei else 0.0
+        radii = sorted([r for r in (r_wai, r_di, r_nei) if r > 0], reverse=True)
+        if len(radii) >= 2:
+            self._add_annulus_fill(
+                scene, radii[0], radii[1], _BUGUAN_SHELL_RING_GREEN, z=z_ring
+            )
+        pen_gray = QPen(Qt.gray)
+        pen_gray.setWidth(2)
+        pen_black = QPen(Qt.black)
+        pen_black.setWidth(2)
+        brush_no = QBrush(Qt.NoBrush)
+        if r_nei > 0:
+            c = scene.addEllipse(-r_nei, -r_nei, 2 * r_nei, 2 * r_nei, pen_gray, brush_no)
+            c.setZValue(z_outline)
+        if r_di > 0:
+            c = scene.addEllipse(-r_di, -r_di, 2 * r_di, 2 * r_di, pen_black, brush_no)
+            c.setZValue(z_outline)
+        if r_wai > 0:
+            c = scene.addEllipse(-r_wai, -r_wai, 2 * r_wai, 2 * r_wai, pen_black, brush_no)
+            c.setZValue(z_outline)
+
+    def _draw_tube_circles(self, scene, centers, r, z=1):
+        """绘制换热管小圆（空心、略亮的蓝色描边）。"""
+        pen_t = self._buguan_tube_pen()
+        brush_t = self._buguan_tube_brush()
+        for x, y in centers or []:
+            tube = scene.addEllipse(x - r, y - r, 2 * r, 2 * r, pen_t, brush_t)
+            tube.setZValue(z)
+
+    def _axis_reference_radius(self):
+        """主坐标轴长度：取各壳体半径最大值，避免 DN 为空时轴消失。"""
+        r_wai = float(getattr(self, "R_wai", 0) or 0)
+        r_di = float(getattr(self, "R_Di", 0) or 0)
+        r_nei = float(getattr(self, "R_nei", 0) or 0)
+        return max(r_wai, r_di, r_nei, 1.0)
+
+    def _is_axis_scene_item(self, item):
+        try:
+            return item.data(Qt.UserRole) in (
+                _BUGUAN_AXIS_ITEM_ROLE,
+                _BUGUAN_AXIS_LABEL_ROLE,
+            )
+        except Exception:
+            return False
+
+    def _clear_scene_preserve_axes(self, scene):
+        """清空布管图元，保留主坐标轴（禁止 scene.clear 删掉坐标轴）。"""
+        for item in list(scene.items()):
+            if self._is_axis_scene_item(item):
+                continue
+            scene.removeItem(item)
+
+    def _remove_main_axes(self, scene):
+        for item in list(scene.items()):
+            if self._is_axis_scene_item(item):
+                scene.removeItem(item)
+
+    def _count_main_axis_parts(self, scene):
+        """返回 (轴线数, 箭头数)。"""
+        line_n = arrow_n = 0
+        for item in scene.items():
+            if not self._is_axis_scene_item(item):
+                continue
+            if item.data(Qt.UserRole) != _BUGUAN_AXIS_ITEM_ROLE:
+                continue
+            if isinstance(item, QGraphicsLineItem):
+                line_n += 1
+            elif isinstance(item, QGraphicsPolygonItem):
+                arrow_n += 1
+        return line_n, arrow_n
+
+    def _tag_axis_item(self, item, label=False):
+        item.setData(
+            Qt.UserRole,
+            _BUGUAN_AXIS_LABEL_ROLE if label else _BUGUAN_AXIS_ITEM_ROLE,
+        )
+        item.setZValue(_BUGUAN_AXIS_Z)
+        item.setFlag(QGraphicsItem.ItemStacksBehindParent, False)
+
+    def _add_solid_arrow_head(self, scene, tip_x, tip_y, ux, uy, color, head=18, wing=9):
+        """在尖端绘制实心三角箭头。"""
+        px, py = -uy, ux
+        base_x = tip_x - ux * head
+        base_y = tip_y - uy * head
+        poly = QPolygonF(
+            [
+                QPointF(tip_x, tip_y),
+                QPointF(base_x + px * wing, base_y + py * wing),
+                QPointF(base_x - px * wing, base_y - py * wing),
+            ]
+        )
+        head_item = QGraphicsPolygonItem(poly)
+        head_item.setBrush(QBrush(color))
+        head_item.setPen(QPen(Qt.NoPen))
+        self._tag_axis_item(head_item)
+        scene.addItem(head_item)
+
     def draw_axes(self, scene: QGraphicsScene, R: float):
-        # 绘制带箭头、角度标注的坐标轴
-        extension = R * 0.1  # 让坐标轴比大圆长10%
+        from PyQt5.QtGui import QFont
+        from PyQt5.QtWidgets import QGraphicsTextItem
+
+        R = max(float(R or 0), self._axis_reference_radius(), 1.0)
+        extension = R * 0.1
         total_length = R + extension
-        arrow_size = 10  # 箭头大小
-        font = QFont("Arial", 12, QFont.Bold)  # 固定字体大小
+        arrow_head = 18
+        wing = 9
+        font = QFont("Arial", 12, QFont.Bold)
 
-        # 红色 X 轴（半透明）
-        x_axis_color = QColor(Qt.red)
-        x_axis_color.setAlpha(128)  # 设置50%透明度
-        pen_x = QPen(x_axis_color)
-        pen_x.setWidth(5)
-        x_axis_line = scene.addLine(-total_length, 0, total_length, 0, pen_x)
+        pen_x = QPen(_BUGUAN_AXIS_X)
+        pen_x.setWidth(4)
+        pen_x.setCapStyle(Qt.RoundCap)
+        x_axis_line = QGraphicsLineItem(-total_length, 0, total_length, 0)
+        x_axis_line.setPen(pen_x)
 
-        # X轴箭头 (右)
-        x_arrow_r1 = scene.addLine(
-            total_length, 0, total_length - arrow_size, -arrow_size / 2, pen_x
-        )
-        x_arrow_r2 = scene.addLine(
-            total_length, 0, total_length - arrow_size, arrow_size / 2, pen_x
-        )
-        # X轴箭头 (左)
-        x_arrow_l1 = scene.addLine(
-            -total_length, 0, -total_length + arrow_size, -arrow_size / 2, pen_x
-        )
-        x_arrow_l2 = scene.addLine(
-            -total_length, 0, -total_length + arrow_size, arrow_size / 2, pen_x
-        )
+        pen_y = QPen(_BUGUAN_AXIS_Y)
+        pen_y.setWidth(4)
+        pen_y.setCapStyle(Qt.RoundCap)
+        y_axis_line = QGraphicsLineItem(0, -total_length, 0, total_length)
+        y_axis_line.setPen(pen_y)
 
-        # 绿色 Y 轴（半透明）
-        y_axis_color = QColor(Qt.green)
-        y_axis_color.setAlpha(128)  # 设置50%透明度
-        pen_y = QPen(y_axis_color)
-        pen_y.setWidth(5)
-        y_axis_line = scene.addLine(0, -total_length, 0, total_length, pen_y)
+        geom_items = [x_axis_line, y_axis_line]
+        for tip_x, tip_y, ux, uy, color in (
+                (total_length + arrow_head, 0, 1, 0, _BUGUAN_AXIS_X),
+                (-total_length - arrow_head, 0, -1, 0, _BUGUAN_AXIS_X),
+                (0, -total_length - arrow_head, 0, -1, _BUGUAN_AXIS_Y),
+                (0, total_length + arrow_head, 0, 1, _BUGUAN_AXIS_Y),
+        ):
+            px, py = -uy, ux
+            base_x = tip_x - ux * arrow_head
+            base_y = tip_y - uy * arrow_head
+            poly = QPolygonF(
+                [
+                    QPointF(tip_x, tip_y),
+                    QPointF(base_x + px * wing, base_y + py * wing),
+                    QPointF(base_x - px * wing, base_y - py * wing),
+                ]
+            )
+            head_item = QGraphicsPolygonItem(poly)
+            head_item.setBrush(QBrush(color))
+            head_item.setPen(QPen(Qt.NoPen))
+            geom_items.append(head_item)
 
-        # Y轴箭头 (上)
-        y_arrow_u1 = scene.addLine(
-            0, -total_length, -arrow_size / 2, -total_length + arrow_size, pen_y
-        )
-        y_arrow_u2 = scene.addLine(
-            0, -total_length, arrow_size / 2, -total_length + arrow_size, pen_y
-        )
-        # Y轴箭头 (下)
-        y_arrow_d1 = scene.addLine(
-            0, total_length, -arrow_size / 2, total_length - arrow_size, pen_y
-        )
-        y_arrow_d2 = scene.addLine(
-            0, total_length, arrow_size / 2, total_length - arrow_size, pen_y
-        )
-
-        # 设置坐标轴绘制优先级
-        x_axis_line.setZValue(15)
-        y_axis_line.setZValue(15)
-        x_arrow_r1.setZValue(15)
-        x_arrow_r2.setZValue(15)
-        x_arrow_l1.setZValue(15)
-        x_arrow_l2.setZValue(15)
-        y_arrow_u1.setZValue(15)
-        y_arrow_u2.setZValue(15)
-        y_arrow_d1.setZValue(15)
-        y_arrow_d2.setZValue(15)
-
-        # 角度文字 - 使用 ItemIgnoresTransformations 固定大小
-        text_offset = 80  # 固定偏移量
-
+        label_items = []
+        text_offset = 80
         texts = [
             ("0°", -10, -total_length - text_offset),
             ("90°", total_length + text_offset / 2, -30),
             ("180°", -20, total_length + 5),
             ("270°", -total_length - text_offset, -30),
         ]
-
         for label, x, y in texts:
-            text_item = scene.addText(label, font)
+            text_item = QGraphicsTextItem(label)
+            text_item.setFont(font)
             text_item.setPos(x, y)
-            text_item.setFlag(
-                QGraphicsItem.ItemIgnoresTransformations
-            )  # 关键：忽略缩放
-            text_item.setZValue(15)  # 设置角度文字绘制优先级
+            text_item.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+            label_items.append(text_item)
+
+        self._remove_main_axes(scene)
+        for item in geom_items:
+            self._tag_axis_item(item, label=False)
+            scene.addItem(item)
+        for item in label_items:
+            self._tag_axis_item(item, label=True)
+            scene.addItem(item)
+
+    def ensure_main_axes(self, scene=None, force=False):
+        """布管后校验主坐标轴；不完整或 force 时强制重绘并置顶。"""
+        scene = scene or self.graphics_scene
+        if scene is None:
+            return
+        line_n, arrow_n = self._count_main_axis_parts(scene)
+        if force or line_n < 2 or arrow_n < 4:
+            self.draw_axes(scene, self._axis_reference_radius())
+        else:
+            for item in scene.items():
+                if self._is_axis_scene_item(item):
+                    item.setZValue(_BUGUAN_AXIS_Z)
+        if hasattr(self, "corner_axis_widget") and self.corner_axis_widget:
+            self.corner_axis_widget.raise_()
 
     # TODO 圆心连线
     def connect_center(self, scene, centers: List[Tuple[float, float]], do: float):
@@ -18904,8 +19425,7 @@ class TubeLayoutEditor(QMainWindow):
                         # 创建连线
                         line = QGraphicsLineItem(x0, y0, x1, y1)
                         line.setPen(pen)
-                        # 设置ZValue为10（足够大以覆盖其他元素），确保连线在最上层
-                        # line.setZValue(10)
+                        line.setZValue(3)  # 在绿环之上、大圆轮廓之下，保留圆心连线可见
                         scene.addItem(line)
                         # 如果有存储连线的列表，添加进去
                         if hasattr(self, "connection_lines"):
@@ -18928,58 +19448,27 @@ class TubeLayoutEditor(QMainWindow):
         # 清空self.graphics_scene
         scene = self.graphics_scene
 
-        scene.clear()
+        self._clear_scene_preserve_axes(scene)
         # 计算大小半径
-        self.R_wai = big_D_wai / 2.0
-        self.R_nei = big_D_nei / 2.0
-        self.R_Di = Di / 2.0  # 新增：计算Di对应的半径
+        self.R_wai = (big_D_wai or 0) / 2.0
+        self.R_nei = (big_D_nei or 0) / 2.0
+        self.R_Di = (Di or 0) / 2.0
         self.r = small_D / 2.0
+        layout_r = max(self.R_wai, self.R_Di, self.R_nei, 1.0)
         # 设置坐标系：在原点上方多留空间、下方少留空间，避免 0° 位置贴到顶部工具栏
-        padding = self.R_wai * 0.2  # 基础边距
-        base = self.R_wai + padding
-        # 上方多 1.5 倍 padding，下方 0.5 倍 padding，总高度不变，只是整体向下偏移
-        top = -(self.R_wai + padding * 1.5)
+        padding = layout_r * 0.2
+        base = layout_r + padding
+        top = -(layout_r + padding * 1.5)
         height = 2 * base
         left = -base
         scene.setSceneRect(left, top, 2 * base, height)
-        # 坐标轴
-        self.draw_axes(self.graphics_scene, self.R_wai)
-        # 大内圆
-        pen = QPen(Qt.gray)
-        pen.setWidth(2)
-        brush = QBrush(Qt.NoBrush)
-        circle_nei = scene.addEllipse(
-            -self.R_nei, -self.R_nei, 2 * self.R_nei, 2 * self.R_nei, pen, brush
-        )
-        circle_nei.setZValue(100)  # 设置高优先级，避免被删除换热管时影响
-
-        # 大外圆（big_D_wai）
-        pen = QPen(Qt.black)
-        pen.setWidth(2)
-        brush = QBrush(Qt.NoBrush)
-        circle_wai = scene.addEllipse(
-            -self.R_wai, -self.R_wai, 2 * self.R_wai, 2 * self.R_wai, pen, brush
-        )
-        circle_wai.setZValue(100)  # 设置高优先级，避免被删除换热管时影响
-
-        # 新增：Di对应的大圆，绘制逻辑与big_D_wai完全一致
-        pen = QPen(Qt.black)
-        pen.setWidth(2)
-        brush = QBrush(Qt.NoBrush)
-        circle_Di = scene.addEllipse(
-            -self.R_Di, -self.R_Di, 2 * self.R_Di, 2 * self.R_Di, pen, brush
-        )
-        circle_Di.setZValue(100)  # 设置高优先级，避免被删除换热管时影响
-
-        # 小圆（换热管）
-        pen_t = QPen(QColor(0, 0, 80))  # 深蓝色：DarkBlue
-        pen_t.setWidth(1)
-        for x, y in centers:
-            tube_circle = scene.addEllipse(
-                x - self.r, y - self.r, 2 * self.r, 2 * self.r, pen_t
-            )
-            tube_circle.setZValue(0)  # 设置较低优先级，确保不影响大圆
-        # 刷新视图
+        # 坐标轴（最高层级）、壳体绿环与大圆、换热管小圆
+        self.draw_axes(scene, layout_r)
+        self._draw_shell_circles_and_ring(scene, self.R_wai, self.R_Di, self.R_nei)
+        self._draw_tube_circles(scene, centers, self.r, z=1)
+        self.ensure_main_axes(scene, force=True)
+        if hasattr(self, "corner_axis_widget") and self.corner_axis_widget:
+            self.corner_axis_widget.raise_()
         self.graphics_view.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
 
     def can_place_lagan_without_intersect(self, selected_centers, lagan_length) -> bool:
@@ -19453,25 +19942,8 @@ class TubeLayoutEditor(QMainWindow):
         left = -base
         scene.setSceneRect(left, top, 2 * base, height)
 
-        # 绘制坐标轴
-        self.draw_axes(scene, R_wai)
-
-        # 绘制大内圆
-        pen = QPen(Qt.gray)
-        pen.setWidth(2)
-        brush = QBrush(Qt.NoBrush)
-        scene.addEllipse(-R_nei, -R_nei, 2 * R_nei, 2 * R_nei, pen, brush)
-
-        # 绘制大外圆
-        pen = QPen(Qt.black)
-        pen.setWidth(2)
-        scene.addEllipse(-R_wai, -R_wai, 2 * R_wai, 2 * R_wai, pen, brush)
-
-        # 绘制小圆
-        pen_t = QPen(QColor(0, 0, 80))  # 深蓝色
-        pen_t.setWidth(1)
-        for x, y in current_centers:
-            scene.addEllipse(x - r, y - r, 2 * r, 2 * r, pen_t)
+        # 仅同步参数数据；图形由 draw_layout 统一绘制，避免重复叠画换热管
+        self.ensure_main_axes(scene)
 
         # 存储场景到类属性
         self.scene = scene
@@ -20739,6 +21211,14 @@ class TubeLayoutEditor(QMainWindow):
             _safe_step("setup_parameter_listeners", self.setup_parameter_listeners)
             _safe_step("setup_param_listeners", self.setup_param_listeners)
             _safe_step("update_total_lagan_count(2)", self.update_total_lagan_count)
+
+            def _finalize_axes():
+                self.ensure_main_axes(self.graphics_scene, force=True)
+                if hasattr(self, "graphics_scene") and self.graphics_scene:
+                    self.graphics_scene.update()
+
+            _safe_step("ensure_main_axes finally", _finalize_axes)
+            QTimer.singleShot(0, _finalize_axes)
 
             self._buguan_in_progress = False
 
@@ -30252,9 +30732,8 @@ class TubeLayoutEditor(QMainWindow):
                 return (p.x(), p.y())
 
         # 颜色与笔刷
-        blue_pen = QPen(QColor(0, 0, 80))
-        blue_pen.setWidth(1)
-        blue_brush = QBrush(Qt.NoBrush)
+        blue_pen = self._buguan_tube_pen()
+        blue_brush = self._buguan_tube_brush()
         hilite_brush_color = QColor(173, 216, 230)  # 你的淡蓝高亮
 
         # 先清除可能存在的淡蓝高亮 marker（避免视觉叠层）
@@ -39475,13 +39954,15 @@ class TubeLayoutEditor(QMainWindow):
 
     # TODO 这个删除圆心连线的方法一直不正确，没有删除成功
     def clear_connection_lines(self, scene):
-        """安全清除所有连线，处理无效对象"""
+        """安全清除所有连线，处理无效对象（不删除主坐标轴）。"""
         if not hasattr(self, "connection_lines"):
             self.connection_lines = []
             return
 
         for line in reversed(self.connection_lines):
             try:
+                if self._is_axis_scene_item(line):
+                    continue
                 if line in scene.items():
                     scene.removeItem(line)
             except RuntimeError:
