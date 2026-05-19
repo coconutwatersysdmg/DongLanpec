@@ -162,8 +162,9 @@ def set_project_inputs_editable(editable: bool):
             }
         """)
 
-    # 改变项目信息的编辑状态进行记录
-    bianl.project_mode = "view"
+    # 0506新修改-项目管理只读区域设置
+    # project_mode 由 open_project / 保存 / 新建 / 修改项目 等逻辑维护，不在此处改写，
+    # 避免与主窗口 refresh_all_tabs_readonly_state 等整页只读刷新产生冲突。
 
 
 # 获取新的项目ID

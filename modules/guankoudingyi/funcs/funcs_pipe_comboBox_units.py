@@ -28,6 +28,14 @@ def setup_unit_selection_handlers(stats_widget):
             
             # 公称压力类型切换时，刷新法兰标准和压力等级
             if field_name == "公称压力类型":
+                # ⚠️ 重要：先保存旧值，再更新新值
+                old_pressure_type = getattr(stats_widget, 'current_pressure_type', None)
+                if old_pressure_type is None:
+                    # 如果之前没有记录，从数据库获取
+                    existing_types = get_unit_types_from_db(product_id)
+                    old_pressure_type = existing_types.get("公称压力类型", "Class") if existing_types else "Class"
+                
+                # 更新为新值（在获取旧值之后）
                 stats_widget.current_pressure_type = unit_value  # ✨记录最新选择值
 
                 # 获取新默认值和下拉选项
@@ -39,26 +47,131 @@ def setup_unit_selection_handlers(stats_widget):
                     code_item = table.item(row, 1)
                     if not code_item or not code_item.text().strip():
                         continue
-                    # 公称尺寸（第4列）设定为空
-                    nominal_size_item = QTableWidgetItem(default_nominal_size)
-                    nominal_size_item.setTextAlignment(Qt.AlignCenter)
-                    table.setItem(row, 4, nominal_size_item)
-                    # 法兰标准
+                    
+                    # 获取当前行的现有值
+                    current_nominal_size_item = table.item(row, 4)
+                    current_nominal_size = current_nominal_size_item.text().strip() if current_nominal_size_item else ""
+                    
+                    current_standard_item = table.item(row, 5)
+                    current_standard = current_standard_item.text().strip() if current_standard_item else ""
+                    
+                    current_level_item = table.item(row, 6)
+                    current_level = current_level_item.text().strip() if current_level_item else ""
+                    
+                    current_flange_type_item = table.item(row, 7)
+                    current_flange_type = current_flange_type_item.text().strip() if current_flange_type_item else ""
+                    
+                    current_seal_type_item = table.item(row, 8)
+                    current_seal_type = current_seal_type_item.text().strip() if current_seal_type_item else ""
+                    
+                    # 设置新的法兰标准
                     standard_item = QTableWidgetItem(default_standard)
                     standard_item.setTextAlignment(Qt.AlignCenter)
                     table.setItem(row, 5, standard_item)
-                    # 压力等级
+                    
+                    # 设置新的压力等级
                     level_item = QTableWidgetItem(default_level)
                     level_item.setTextAlignment(Qt.AlignCenter)
                     table.setItem(row, 6, level_item)
-
-                    # 法兰型式列 (第7列)
-                    flange_type_item = QTableWidgetItem('')  # 设置为空值
+                    
+                    # 处理公称尺寸列（第4列）
+                    if old_pressure_type == "Class" and unit_value == "PN":
+                        # Class切换到PN时，可以都保留
+                        if current_nominal_size:
+                            nominal_size_item = QTableWidgetItem(current_nominal_size)
+                        else:
+                            nominal_size_item = QTableWidgetItem(default_nominal_size)
+                        nominal_size_item.setTextAlignment(Qt.AlignCenter)
+                        table.setItem(row, 4, nominal_size_item)
+                    elif old_pressure_type == "PN" and unit_value == "Class":
+                        # PN切换到Class时，只保留DN≤600（或NPS≤24）的值
+                        from modules.guankoudingyi.funcs.funcs_pipe_data_in_out import validate_nominal_size_by_unit
+                        from modules.guankoudingyi.funcs.pipe_get_units_types import get_current_unit_types_from_ui
+                        
+                        # 获取当前公称尺寸单位类型
+                        current_unit_types = get_current_unit_types_from_ui(stats_widget)
+                        size_unit_type = current_unit_types.get("公称尺寸类型", "DN")
+                        
+                        if current_nominal_size:
+                            # 先进行数值大小检查：只保留DN≤600（或NPS≤24）的值
+                            size_valid = False
+                            try:
+                                # 直接转换为数值
+                                size_value = int(str(current_nominal_size).strip())
+                                
+                                if size_unit_type == "DN":
+                                    # DN单位：只保留≤600的值
+                                    if size_value <= 600:
+                                        size_valid = True
+                                elif size_unit_type == "NPS":
+                                    # NPS单位：只保留≤24的值
+                                    if size_value <= 24:
+                                        size_valid = True
+                            except (ValueError, AttributeError):
+                                # 如果无法解析数值，则认为无效
+                                size_valid = False
+                            
+                            # 如果数值大小检查通过，再进行数据库验证
+                            if size_valid:
+                                validated_size = validate_nominal_size_by_unit(
+                                    current_nominal_size, 
+                                    size_unit_type, 
+                                    product_id, 
+                                    default_standard
+                                )
+                                # 如果验证通过（返回非空），使用验证后的值；否则使用默认值（空）
+                                if validated_size:
+                                    nominal_size_item = QTableWidgetItem(validated_size)
+                                else:
+                                    nominal_size_item = QTableWidgetItem(default_nominal_size)
+                            else:
+                                # 数值超过限制，直接置空
+                                nominal_size_item = QTableWidgetItem(default_nominal_size)
+                        else:
+                            nominal_size_item = QTableWidgetItem(default_nominal_size)
+                        nominal_size_item.setTextAlignment(Qt.AlignCenter)
+                        table.setItem(row, 4, nominal_size_item)
+                    else:
+                        # 其他情况，保留当前值（如果存在），否则保持为空
+                        if current_nominal_size:
+                            nominal_size_item = QTableWidgetItem(current_nominal_size)
+                        else:
+                            nominal_size_item = QTableWidgetItem('')
+                        nominal_size_item.setTextAlignment(Qt.AlignCenter)
+                        table.setItem(row, 4, nominal_size_item)
+                    
+                    # 验证法兰型式（第7列）
+                    from modules.guankoudingyi.funcs.funcs_pipe_data_in_out import validate_flange_form_by_database
+                    if current_flange_type:
+                        validated_flange_type, _ = validate_flange_form_by_database(
+                            current_flange_type,
+                            default_standard,  # 新的法兰标准
+                            default_level,      # 新的压力等级
+                            unit_value,         # 新的压力等级类型
+                            row
+                        )
+                        flange_type_item = QTableWidgetItem(validated_flange_type)
+                    else:
+                        flange_type_item = QTableWidgetItem('')
                     flange_type_item.setTextAlignment(Qt.AlignCenter)
                     table.setItem(row, 7, flange_type_item)
-
-                    # 密封面型式列 (第8列)
-                    sealing_surface_item = QTableWidgetItem('')  # 设置为空值
+                    
+                    # 验证密封面型式（第8列）
+                    from modules.guankoudingyi.funcs.funcs_pipe_data_in_out import validate_sealing_face_form_by_database
+                    validated_flange_type = flange_type_item.text().strip()
+                    if current_seal_type and validated_flange_type:
+                        # 只有在法兰型式存在时才验证密封面型式
+                        validated_seal_type, _ = validate_sealing_face_form_by_database(
+                            current_seal_type,
+                            default_standard,   # 新的法兰标准
+                            default_level,     # 新的压力等级
+                            unit_value,        # 新的压力等级类型
+                            validated_flange_type,  # 验证后的法兰型式
+                            row
+                        )
+                        sealing_surface_item = QTableWidgetItem(validated_seal_type)
+                    else:
+                        sealing_surface_item = QTableWidgetItem('')
                     sealing_surface_item.setTextAlignment(Qt.AlignCenter)
                     table.setItem(row, 8, sealing_surface_item)
 

@@ -257,7 +257,7 @@ class MultiConditionsDialog(QDialog):
                     multi_max = int(r2.get("max_id") or 0)
 
                     # 模板最大ID（按产品型式：NEN/AEM/BEM 额外包含 'NEN,AEM,BEM' 行；其余仅'all'）
-                    if product_form in ("NEN", "AEM", "BEM"):
+                    if product_form in ("NEN", "AEM", "BEM","NEN(Head)"):
                         cur.execute(
                             """
                             SELECT MAX(设计数据参数ID) AS max_id

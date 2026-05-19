@@ -1524,21 +1524,29 @@ def render_fastener_param_to_ui(viewer_instance, fastener_para_info: list):
     except Exception:
         pass
 
-    # 处理数据分组 - 按Tab分类字段分组
+    # 处理数据分组 - 按Tab分类字段分组（strip 避免 'PNO.2' / 'PNO.2 ' 拆成两组）
     param_map = {}
     if fastener_para_info:
         for item in fastener_para_info:
-            # 使用Tab分类字段进行分组
-            tab_class = item.get('Tab分类', 'PNO.1')  # 默认PNO.1
-            if tab_class not in param_map:
-                param_map[tab_class] = []
-            param_map[tab_class].append(item)
+            tab_class = str(item.get('Tab分类') or 'PNO.1').strip() or 'PNO.1'
+            param_map.setdefault(tab_class, []).append(item)
     else:
-        # 如果没有数据，创建默认的PNO.1
         param_map = {"PNO.1": []}
 
+    def _fastener_tab_sort_key(label: str):
+        s = str(label or '').strip()
+        up = s.upper()
+        if up.startswith('PNO.'):
+            try:
+                return (0, int(s.split('.', 1)[1]))
+            except (ValueError, IndexError):
+                return (1, s)
+        return (1, s)
+
+    sorted_tab_items = sorted(param_map.items(), key=lambda kv: _fastener_tab_sort_key(kv[0]))
+
     if DEBUG_VERBOSE_DEFINE_UI:
-        print(f"[DBG][fastener_render] 参数分组: {list(param_map.keys())}")
+        print(f"[DBG][fastener_render] 参数分组: {[k for k, _ in sorted_tab_items]}")
 
     # 获取或创建tabWidget - 设备法兰紧固件使用tabWidget_3
     tw = getattr(viewer_instance, "tabWidget_3", None)
@@ -1560,8 +1568,8 @@ def render_fastener_param_to_ui(viewer_instance, fastener_para_info: list):
         viewer_instance.dynamic_fastener_param_tabs = {}
     viewer_instance.dynamic_fastener_param_tabs.clear()
 
-    # 为每个PNO创建tab页
-    for idx, (pno_label, data) in enumerate(param_map.items()):
+    # 为每个PNO创建tab页（顺序固定为 PNO.1, PNO.2, …，不依赖数据库返回顺序）
+    for idx, (pno_label, data) in enumerate(sorted_tab_items):
         already_used = set()
         for t, vs in used_by_tab.items():
             if t != pno_label:
@@ -1856,6 +1864,9 @@ def _render_fastener_table_data(table, data, param_structures, dropdown_options,
                 item.setTextAlignment(Qt.AlignCenter)
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
                 table.setItem(row, 1, item)
+                if param_name == "元件所属":
+                    # 记录「上次已知的元件所属」：仅当用户从非空改为空时才清空材料行，避免加载/刷新时空值触发误清
+                    item.setData(Qt.UserRole + 2, display_val)
 
                 if param_name == "元件名称":
                     item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
@@ -2087,6 +2098,8 @@ def _render_fastener_table_data(table, data, param_structures, dropdown_options,
         # 总闸
         if getattr(table, "_loading", False):
             return
+        if getattr(table, "_fastener_suppress_belonging_clear", False):
+            return
         if item.column() == 0:  # 参数名称列不处理
             return
 
@@ -2104,12 +2117,17 @@ def _render_fastener_table_data(table, data, param_structures, dropdown_options,
             _apply_fastener_surface_treatment_visibility()
             _apply_fastener_forging_grade_visibility()
         if pname == "元件所属":
+            it_own = table.item(r, 1)
+            prev_raw = it_own.data(Qt.UserRole + 2) if it_own else None
+            prev = "" if prev_raw is None else str(prev_raw)
             try:
                 refresh_fastener_belonging_candidates(viewer_instance)
             except Exception as _e:
                 print(f"[设备法兰紧固件] 刷新元件所属候选失败: {_e}")
-            if _is_empty_belonging_text(val):
+            if _is_empty_belonging_text(val) and (not _is_empty_belonging_text(prev)):
                 _clear_on_empty_belonging()
+            if it_own:
+                it_own.setData(Qt.UserRole + 2, val)
 
     def _select_row_first(r, c):
         table.selectRow(r)
@@ -2145,24 +2163,6 @@ def _render_fastener_table_data(table, data, param_structures, dropdown_options,
     _set_table_tooltips(table)
     _install_tooltip_updater(table)
 
-    try:
-        r0 = None
-        for r in range(table.rowCount()):
-            it0 = table.item(r, 0)
-            if it0 and (it0.text() or "").strip() == "元件所属":
-                r0 = r
-                break
-        if r0 is not None:
-            itv = table.item(r0, 1)
-            s0 = (itv.text() or "").strip() if itv else ""
-            if _is_empty_belonging_text(s0):
-                _clear_on_empty_belonging()
-    except Exception:
-        pass
-
-
-
-
 
 def refresh_fastener_belonging_candidates(viewer_instance):
     try:
@@ -2171,37 +2171,6 @@ def refresh_fastener_belonging_candidates(viewer_instance):
         if not tabs:
             return
         used_by_tab_ui = {}
-        saved_by_tab = {}
-        try:
-            from modules.cailiaodingyi.funcs.funcs_pdf_change import load_updated_fastener_define_data
-            product_id = getattr(viewer_instance, 'product_id', None)
-            element_id = getattr(viewer_instance, 'current_fastener_element_id', None) or getattr(viewer_instance, 'current_element_id', None)
-            data2 = load_updated_fastener_define_data(product_id, element_id)
-            for item in data2 or []:
-                name = str(item.get('参数名称', '')).strip()
-                val = str(item.get('参数值', '') or '').strip()
-                tabc = str(item.get('Tab分类', '') or '').strip()
-                if not tabc:
-                    continue
-                if not val or val.lower() == 'null':
-                    continue
-                if name == '元件所属' or name.startswith('元件所属'):
-                    vals = []
-                    if val.startswith('['):
-                        import json
-                        try:
-                            parsed = json.loads(val)
-                            if isinstance(parsed, list):
-                                vals = [str(x).strip() for x in parsed if str(x).strip()]
-                        except Exception:
-                            vals = []
-                    if not vals:
-                        vals = [x.strip() for x in val.split('、') if x.strip()]
-                    s = saved_by_tab.setdefault(tabc, set())
-                    for x in vals:
-                        s.add(x)
-        except Exception:
-            saved_by_tab = getattr(viewer_instance, 'fastener_belonging_used_by_tab_saved', {}) or {}
         from PyQt5.QtWidgets import QTableWidgetItem
         from PyQt5.QtCore import Qt
         def _find_row(tbl, name):
@@ -2211,53 +2180,61 @@ def refresh_fastener_belonging_candidates(viewer_instance):
                     return r
             return None
         import json
-        for tab_name, tbl in tabs.items():
-            r = _find_row(tbl, '元件所属')
-            sel = set()
-            if r is not None:
+        tbl_list = list(tabs.values())
+        for tbl in tbl_list:
+            tbl.blockSignals(True)
+            setattr(tbl, '_fastener_suppress_belonging_clear', True)
+        try:
+            for tab_name, tbl in tabs.items():
+                r = _find_row(tbl, '元件所属')
+                sel = set()
+                if r is not None:
+                    it = tbl.item(r, 1)
+                    txt = (it.text() or '').strip() if it else ''
+                    vals = []
+                    if txt.startswith('['):
+                        try:
+                            parsed = json.loads(txt)
+                            if isinstance(parsed, list):
+                                vals = [str(x).strip() for x in parsed if str(x).strip()]
+                        except Exception:
+                            vals = []
+                    if not vals:
+                        vals = [x.strip() for x in txt.split('、') if x.strip()]
+                    sel = set(vals)
+                used_by_tab_ui[tab_name] = sel
+            for tab_name, tbl in tabs.items():
+                already = set()
+                for t, vs in used_by_tab_ui.items():
+                    if t != tab_name:
+                        already |= (vs or set())
+                filtered = [x for x in all_options if x not in already]
+                curr = used_by_tab_ui.get(tab_name, set()) or set()
+                for v in curr:
+                    if v and v not in filtered:
+                        filtered.append(v)
+                try:
+                    tbl.setProperty('gk_code_candidates', filtered)
+                except Exception:
+                    pass
+                r = _find_row(tbl, '元件所属')
+                if r is None:
+                    continue
                 it = tbl.item(r, 1)
-                txt = (it.text() or '').strip() if it else ''
-                vals = []
-                if txt.startswith('['):
-                    try:
-                        parsed = json.loads(txt)
-                        if isinstance(parsed, list):
-                            vals = [str(x).strip() for x in parsed if str(x).strip()]
-                    except Exception:
-                        vals = []
-                if not vals:
-                    vals = [x.strip() for x in txt.split('、') if x.strip()]
-                sel = set(vals)
-            used_by_tab_ui[tab_name] = sel
-        for tab_name, tbl in tabs.items():
-            already = set()
-            for t, vs in saved_by_tab.items():
-                if t != tab_name:
-                    already |= (vs or set())
-            filtered = [x for x in all_options if x not in already]
-            curr = used_by_tab_ui.get(tab_name, set()) or set()
-            for v in curr:
-                if v and v not in filtered:
-                    filtered.append(v)
-            try:
-                tbl.setProperty('gk_code_candidates', filtered)
-            except Exception:
-                pass
-            r = _find_row(tbl, '元件所属')
-            if r is None:
-                continue
-            it = tbl.item(r, 1)
-            if it is None:
-                it = QTableWidgetItem('')
-                it.setTextAlignment(Qt.AlignCenter)
-                it.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
-                tbl.setItem(r, 1, it)
-            from modules.cailiaodingyi.controllers.checkcombo import CheckComboDelegate
-            from modules.cailiaodingyi.controllers.combo import MultiSelectRowComboDelegate
-            if filtered:
-                tbl.setItemDelegateForRow(r, CheckComboDelegate(filtered, tbl))
-            else:
-                tbl.setItemDelegateForRow(r, None)
+                if it is None:
+                    it = QTableWidgetItem('')
+                    it.setTextAlignment(Qt.AlignCenter)
+                    it.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
+                    tbl.setItem(r, 1, it)
+                from modules.cailiaodingyi.controllers.checkcombo import CheckComboDelegate
+                if filtered:
+                    tbl.setItemDelegateForRow(r, CheckComboDelegate(filtered, tbl))
+                else:
+                    tbl.setItemDelegateForRow(r, None)
+        finally:
+            for tbl in tbl_list:
+                setattr(tbl, '_fastener_suppress_belonging_clear', False)
+                tbl.blockSignals(False)
     except Exception as e:
         print(f"[设备法兰紧固件] 刷新候选失败: {e}")
 

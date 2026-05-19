@@ -2957,6 +2957,44 @@ def handle_table_click(viewer_instance, row, col):
             print(f"[handle_table_click] schedule readonly: {_e_ro}")
 
 
+def refresh_open_paradefine_after_outer_base_inner(product_id):
+    """
+    条件输入将基准改为「否」并已同步库后，若元件定义界面已打开且为同一产品，
+    按当前选中行重载右侧参数表，避免仍显示 HG 法兰类型/密封面。
+    """
+    try:
+        from PyQt5.QtWidgets import QApplication
+        from modules.cailiaodingyi.paradefine_view import DesignParameterDefineInputerViewer
+    except Exception:
+        return
+    pid = str(product_id or "").strip()
+    if not pid:
+        return
+    app = QApplication.instance()
+    if not app:
+        return
+    try:
+        for top in app.topLevelWidgets():
+            for viewer in top.findChildren(DesignParameterDefineInputerViewer):
+                vp = str(getattr(viewer, "product_id", "") or "").strip()
+                if vp != pid:
+                    continue
+                tw = getattr(viewer, "tableWidget_parts", None)
+                if tw is None:
+                    continue
+                row = tw.currentRow()
+                if row < 0:
+                    continue
+                handle_table_click(viewer, row, 0)
+                try:
+                    if hasattr(viewer, "handle_table_click_guankou"):
+                        viewer.handle_table_click_guankou(row, 0)
+                except Exception:
+                    pass
+    except Exception as e:
+        print(f"[refresh_open_paradefine_after_outer_base_inner] {e}")
+
+
 def _trigger_gasket_standard_update_on_type_change(table):
     """垫片类型变化时主动触发垫片标准的更新"""
     try:
@@ -4463,7 +4501,7 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                 clear_tip()
                 return
 
-            #11.28修改 NEN、BEM管程侧分程隔板槽深度范围是>=4,=0
+            #11.28修改 NEN、BEM、AEM 管程侧分程隔板槽深度范围是>=4,=0
             # 注意：必须在检查allowed_texts之前处理，因为"0"在allowed_texts中会提前return
             pf = getattr(viewer_instance, "product_form", "") or ""
             if self.pname == "管程侧分程隔板槽深度" and pf in ("NEN", "BEM","AEM"):
@@ -4506,7 +4544,7 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                     pass
             
             # 当壳程侧分程隔板槽深度为0时，自动将壳程分程隔板槽宽设置为0
-            if self.pname == "壳程侧分程隔板槽深度" and pf in ("NEN", "BEM","AEM","AEU","AES","BEU","BES"):
+            if self.pname == "壳程侧分程隔板槽深度" and pf in ("NEN", "BEM", "AEM", "AEU", "AES", "BEU", "BES", "AKU", "BKU"):
                 try:
                     if float(txt) == 0.0:
                         clear_tip()
@@ -4696,6 +4734,65 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
         it.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
         return it
 
+    # 法兰密封面 → 密封面高度（仅 UI；两参同时存在时生效，不区分元件名）
+    # 与产品规则一致：平 RF=3；突面 RF=2；FF=0；其余列出的凹凸榫槽/环连接=6（NB 与 HG 字面量均支持）。
+    _FLANGESEAL_HEIGHT_THREE_MM = ("平密封面RF",)
+    _FLANGESEAL_HEIGHT_TWO_MM = ("突面RF",)
+    _FLANGESEAL_HEIGHT_ZERO_MM = ("全平面FF", "全平密封面FF")
+    _FLANGESEAL_HEIGHT_SIX_MM = (
+        "凸密封面M", "凹密封面FM", "榫密封面T", "槽密封面G",
+        "凸面M", "凹面FM", "榫面T", "槽面G", "环连接面RJ", "环连接密封面RJ",
+    )
+
+    def _default_seal_height_mm_for_flange_seal_face(face: str) -> Optional[str]:
+        f = (face or "").strip()
+        if f in _FLANGESEAL_HEIGHT_THREE_MM:
+            return "3"
+        if f in _FLANGESEAL_HEIGHT_TWO_MM:
+            return "2"
+        if f in _FLANGESEAL_HEIGHT_ZERO_MM:
+            return "0"
+        if f in _FLANGESEAL_HEIGHT_SIX_MM:
+            return "6"
+        return None
+
+    def _apply_flange_seal_face_to_seal_height_ui(*, only_if_height_empty: bool) -> None:
+        try:
+            r_face = find_row_by_param_name(table, "法兰密封面", param_col)
+            r_h = find_row_by_param_name(table, "密封面高度", param_col)
+            if r_face is None or r_h is None:
+                return
+            face_val = _cell_text(table, r_face, value_col)
+            d = _default_seal_height_mm_for_flange_seal_face(face_val)
+            if d is None:
+                return
+            if only_if_height_empty:
+                cur_h = (table.item(r_h, value_col).text() if table.item(r_h, value_col) else "").strip()
+                if cur_h:
+                    return
+            table.blockSignals(True)
+            try:
+                ensure_editable_item(r_h, value_col, "")
+                table.item(r_h, value_col).setText(d)
+                w = table.cellWidget(r_h, value_col)
+                if isinstance(w, QLineEdit):
+                    w.setText(d)
+                elif isinstance(w, QComboBox):
+                    i = w.findText(d)
+                    if i >= 0:
+                        w.setCurrentIndex(i)
+                    elif w.isEditable():
+                        w.setEditText(d)
+                tm = table.model()
+                if tm:
+                    ix = tm.index(r_h, value_col)
+                    if ix.isValid():
+                        tm.setData(ix, d)
+            finally:
+                table.blockSignals(False)
+        except Exception as ex:
+            print(f"[法兰密封面→密封面高度] 处理失败: {ex}")
+
     # 3) 初次渲染：用总闸防误触发
     table._loading = True
     table.blockSignals(True)
@@ -4803,9 +4900,9 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                 elif pname in ge0_params: rule, minmax = "ge0", None
                 else: rule, minmax = "range", range_params.get(pname)
                 allowed_texts_this_param = allowed_map.get(pname, set())
-                #11.28修改 NEN、BEM管程侧分程隔板槽深度范围是>=4,=0
+                #11.28修改 NEN、BEM、AEM 管程侧分程隔板槽深度范围是>=4,=0（与 setModelData 中联调槽宽的产品型式一致）
                 pf = getattr(viewer_instance, "product_form", "") or ""
-                if pname == "管程侧分程隔板槽深度" and pf in ("NEN", "BEM"):
+                if pname == "管程侧分程隔板槽深度" and pf in ("NEN", "BEM", "AEM"):
                     allowed_texts_this_param = set(allowed_texts_this_param) | {"0"}
                 table.setItemDelegateForRow(row, NumericDelegate(rule, pname, minmax, allowed_texts=allowed_texts_this_param))
                 continue
@@ -4973,6 +5070,7 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
 
     _apply_forging_visibility_local()
     _apply_surface_treatment_visibility_local()
+    _apply_flange_seal_face_to_seal_height_ui(only_if_height_empty=True)
 
     # 4) itemChanged：覆层联动 + 写库 + 图片刷新 + 再评估显隐
     def _on_item_changed(item: QTableWidgetItem):
@@ -5332,6 +5430,7 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                     handler(val, pname)
             except Exception:
                 pass
+            _apply_flange_seal_face_to_seal_height_ui(only_if_height_empty=False)
         if pname == "封头类型代号":
             try:
                 sel_ids = getattr(viewer_instance, "selected_element_ids", []) or []
@@ -5427,6 +5526,37 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                         table.blockSignals(False)
             except Exception as e:
                 print(f"[联动失败] μ→η: {e}")
+
+        # ==== 装配凸台高度 → 隔板槽深度（仅 UI：两参数同时存在时，装配凸台高度改为任意值后槽深与之一致） ====
+        if pname == "装配凸台高度":
+            try:
+                r_slot = find_row_by_param_name(table, "隔板槽深度", param_col)
+                if r_slot is None:
+                    r_slot = find_row_by_param_name(table, "隔板槽深度", param_col, fuzzy=True)
+                if r_slot is not None:
+                    if table.item(r_slot, value_col) is None:
+                        ensure_editable_item(r_slot, value_col, "")
+                    table.blockSignals(True)
+                    try:
+                        table.item(r_slot, value_col).setText(val)
+                        w = table.cellWidget(r_slot, value_col)
+                        if isinstance(w, QLineEdit):
+                            w.setText(val)
+                        elif isinstance(w, QComboBox):
+                            i = w.findText(val)
+                            if i >= 0:
+                                w.setCurrentIndex(i)
+                            elif w.isEditable():
+                                w.setEditText(val)
+                        tm = table.model()
+                        if tm:
+                            ix = tm.index(r_slot, value_col)
+                            if ix.isValid():
+                                tm.setData(ix, val)
+                    finally:
+                        table.blockSignals(False)
+            except Exception as e:
+                print(f"[装配凸台高度→隔板槽深度联动] {e}")
 
         # ==== 拉杆型式：根据换热管外径自动带入（对比“库中外径数值”，变了才覆盖；允许用户改） ====
         try:
@@ -5939,6 +6069,87 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
 
 from PyQt5.QtCore import Qt
 
+
+def _query_flange_type_allowed_by_outer_base(viewer_instance):
+    """
+    按「是否以外径为基准*」与「封头类型代号联动参数表」中被联动参数「法兰类型」的联动选项，
+    得到法兰类型主字段允许项的顺序列表（与 apply_paramname_combobox 侧数据来源一致）。
+    """
+    _default_inner = [
+        "NB/T 47021 甲型平焊法兰",
+        "NB/T 47022 乙型平焊法兰",
+        "NB/T 47023 长颈对焊法兰",
+    ]
+    _default_outer = _default_inner + [
+        "HG/T 20615 带颈对焊法兰",
+        "HG/T 20592 带颈对焊法兰",
+    ]
+    if not viewer_instance:
+        return list(_default_inner)
+    product_id = getattr(viewer_instance, "product_id", None)
+    if not product_id:
+        return list(_default_inner)
+
+    is_outer_base = None
+    try:
+        conn = get_connection(**db_config_1)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT 数值
+                    FROM 产品设计活动表_通用数据表
+                    WHERE 产品ID = %s AND 参数名称 = %s
+                    """,
+                    (product_id, "是否以外径为基准*"),
+                )
+                row_result = cur.fetchone()
+                if row_result and "数值" in row_result:
+                    is_outer_base = str(row_result["数值"] or "").strip()
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"[法兰类型联动过滤] 读取「是否以外径为基准*」失败: {e}")
+
+    options = []
+    if is_outer_base in ("是", "否"):
+        try:
+            conn = get_connection(**db_config_2)
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT 联动选项
+                        FROM 封头类型代号联动参数表
+                        WHERE 主参数名称 = %s
+                          AND 主参数值 = %s
+                          AND 被联动参数名称 = %s
+                        """,
+                        ("是否以外径为基准*", is_outer_base, "法兰类型"),
+                    )
+                    result = cur.fetchone()
+                    raw = (result or {}).get("联动选项")
+                    if raw:
+                        try:
+                            options = json.loads(raw)
+                            if not isinstance(options, list):
+                                options = []
+                        except Exception:
+                            options = [
+                                x.strip()
+                                for x in re.split(r"[，、,;；\s]+", str(raw))
+                                if x.strip()
+                            ]
+            finally:
+                conn.close()
+        except Exception as e:
+            print(f"[法兰类型联动过滤] 读取封头类型代号联动参数表（法兰类型）失败: {e}")
+
+    if not options:
+        options = list(_default_outer if is_outer_base == "是" else _default_inner)
+    return options
+
+
 def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_instance=None):
     from PyQt5.QtWidgets import QTableWidgetItem, QAbstractItemView
 
@@ -5947,6 +6158,10 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
         readonly_local_missing = bool(getattr(_bianl_ro_lm, "product_local_files_missing_readonly", False))
     except Exception:
         readonly_local_missing = False
+
+    # 与 apply_paramname_combobox 一致：普通参数表「元件名称/零件名称」仅展示不可改。
+    # 本函数会把联动映射内的主/从字段一律设为可编辑并安装代理，若不排除则会覆盖上述只读。
+    READONLY_VALUE_PARAMS = frozenset({"元件名称", "零件名称"})
 
     # ---- 小工具 ----
     def _ensure_editable_item(tbl, r, c):
@@ -6010,8 +6225,9 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
                 return r
         return -1
 
-    # —— 收集单主映射 ——
-    master_fields = [k for k in (mapping or {}).keys() if k != "_compound_rules"]
+    # —— 收集单主映射 ——（忽略元数据键，避免多行法兰联动扩展破坏主字段列表）
+    _META_KEYS = frozenset({"_compound_rules", "_dependent_defaults"})
+    master_fields = [k for k in (mapping or {}).keys() if k not in _META_KEYS]
     dependent_fields_all = {}
     for mf in master_fields:
         deps = set()
@@ -6021,6 +6237,8 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
 
     # —— 可编辑 ——
     for fname in set(master_fields) | set().union(*dependent_fields_all.values()):
+        if (fname or "").strip() in READONLY_VALUE_PARAMS:
+            continue
         r = _row_of(fname)
         if r >= 0:
             if table.cellWidget(r, value_col):
@@ -6032,6 +6250,19 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
     else:
         table.setEditTriggers(QAbstractItemView.SelectedClicked)
 
+    # —— 当前元件名称（与模板 / 附加参数里「元件名称」「零件名称」一致）——
+    element_ctx = ""
+    try:
+        ci = (getattr(viewer_instance, "clicked_element_data", {}) or {}) if viewer_instance else {}
+        element_ctx = (
+            getattr(table, "_element_name", "")
+            or ci.get("元件名称", "")
+            or ci.get("零件名称", "")
+            or ""
+        ).strip()
+    except Exception:
+        element_ctx = ""
+
     # —— 复合规则 ——
     rules = (mapping or {}).get("_compound_rules") or []
     compound_master_set = {_canon(n) for rule in rules for (n, _v) in (rule.get("masters") or [])}
@@ -6040,6 +6271,9 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
         if not rules:
             return
         for rule in rules:
+            raw_dep_rule = (rule.get("dependent") or "").strip()
+            if raw_dep_rule in READONLY_VALUE_PARAMS:
+                continue
             dep = _canon(rule.get("dependent", ""))
             r_dep = _row_of(dep)
             if r_dep < 0:
@@ -6068,7 +6302,18 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
                     _set(r_dep, opts[0] if opts else "")
 
     # —— 安装被联动字段 ——
-    def _install_dependent_delegate(sub_field, options, *, force_default=False, triggerable=False, preserve_current=True):
+    def _install_dependent_delegate(
+        sub_field,
+        options,
+        *,
+        force_default=False,
+        triggerable=False,
+        preserve_current=True,
+        master_field=None,
+        master_value=None,
+    ):
+        if (sub_field or "").strip() in READONLY_VALUE_PARAMS:
+            return
         r = _row_of(sub_field)
         if r < 0:
             return
@@ -6077,6 +6322,27 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
             s = (o or "").strip()
             if s and s not in seen:
                 seen.add(s); opts.append(s)
+
+        def _db_default_for_linked_field():
+            """《法兰参数联动表》扩展列：按 (主字段, 主值, 从字段) + 当前元件 取默认。"""
+            if not (master_field and master_value and element_ctx):
+                return ""
+            key = (
+                (master_field or "").strip(),
+                (master_value or "").strip(),
+                (sub_field or "").strip(),
+            )
+            cm = (mapping or {}).get("_dependent_defaults", {}).get(key) or {}
+            return (cm.get(element_ctx) or "").strip()
+
+        def _value_when_no_valid_current(current_val):
+            """当前值不在可选项中（或为空）时：优先库里的默认，否则第一项。"""
+            if not opts:
+                return ""
+            ddef = _db_default_for_linked_field()
+            if ddef and ddef in opts:
+                return ddef
+            return opts[0]
 
         def _cb(_field_name, new_text, _row, _col):
             _apply_compound_rules()
@@ -6091,7 +6357,7 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
         # 处理值设置逻辑
         if force_default and not preserve_current:
             # 强制设置默认值
-            _set(r, opts[0] if opts else "")
+            _set(r, _value_when_no_valid_current(""))
         elif preserve_current and not force_default:
             # 保持当前值：若当前值在选项中则保留；
             # 特例：垫片标准为“非标垫片”时，即使不在选项中也保持不变。
@@ -6102,10 +6368,10 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
                 if _canon(sub_field) == "垫片标准" and (current_val == "非标垫片"):
                     _set(r, current_val)
                 elif opts:
-                    _set(r, opts[0] if opts else "")
+                    _set(r, _value_when_no_valid_current(current_val))
         elif force_default and preserve_current:
             # 既有强制又有保持，优先强制设置默认值
-            _set(r, opts[0] if opts else "")
+            _set(r, _value_when_no_valid_current(""))
         else:
             # 不设置值，保持原有状态
             pass
@@ -6120,6 +6386,22 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
         base_opts = list((mapping.get(master_field) or {}).keys())
         if saved and (saved not in base_opts):
             base_opts = base_opts + [saved]
+
+        # 「法兰类型」在法兰参数联动表里主键为 5 项；需按「是否以外径为基准*」与封头联动表再筛成 3/5 项，
+        # 否则 apply_paramname_combobox 已设好的下拉会被此处覆盖为全集。
+        if (master_field or "").strip() == "法兰类型" and viewer_instance is not None:
+            allowed_ordered = _query_flange_type_allowed_by_outer_base(viewer_instance)
+            mk = set(base_opts)
+            base_opts = [x for x in allowed_ordered if x in mk]
+            if not base_opts:
+                base_opts = list((mapping.get(master_field) or {}).keys())
+            saved = _get(r_master)
+            if saved and saved not in base_opts:
+                prefer = "NB/T 47023 长颈对焊法兰"
+                nv = prefer if prefer in base_opts else (base_opts[0] if base_opts else "")
+                if nv:
+                    _set(r_master, nv)
+                    saved = nv
 
         def on_master_pick(_field_name, new_text, _row, _col):
             if not (new_text or "").strip():
@@ -6147,15 +6429,35 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
                     if master_type_changed:
                         # 垫片类型发生变化：先清空，再使用默认值（第一个选项）
                         _set(r_standard, "")  # 先清空当前值
-                        _install_dependent_delegate(sub_field, opts, force_default=True, preserve_current=False)
+                        _install_dependent_delegate(
+                            sub_field,
+                            opts,
+                            force_default=True,
+                            preserve_current=False,
+                            master_field=master_field,
+                            master_value=new_text,
+                        )
                         if DEBUG_VERBOSE_DEFINE_UI:
                             print(f"[DBG] 垫片联动: 垫片类型变化，垫片标准已清空并设置为默认值: {opts[0] if opts else '无选项'}")
                     else:
                         # 垫片类型没有变化：使用保存的垫片标准值，绝对不碰默认值
-                        _install_dependent_delegate(sub_field, opts, force_default=False, preserve_current=True)
+                        _install_dependent_delegate(
+                            sub_field,
+                            opts,
+                            force_default=False,
+                            preserve_current=True,
+                            master_field=master_field,
+                            master_value=new_text,
+                        )
                 else:
-                    # 其他依赖字段的常规处理
-                    _install_dependent_delegate(sub_field, opts, force_default=False)
+                    # 其他依赖字段的常规处理（法兰密封面等：库配置按元件默认）
+                    _install_dependent_delegate(
+                        sub_field,
+                        opts,
+                        force_default=False,
+                        master_field=master_field,
+                        master_value=new_text,
+                    )
 
             _apply_compound_rules()
             table.viewport().update()
@@ -6168,6 +6470,8 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
             on_master_pick(master_field, saved, r_master, value_col)
 
     for mf in master_fields:
+        if (mf or "").strip() in READONLY_VALUE_PARAMS:
+            continue
         _install_master_delegate(mf)
 
     _apply_compound_rules()
@@ -6197,6 +6501,22 @@ def apply_linked_param_combobox(table, param_col, value_col, mapping, viewer_ins
                     table.blockSignals(False)
     except Exception:
         pass
+
+    # 再次锁定「元件名称/零件名称」：复合规则等路径仍可能给这些行装上代理
+    for _ro_name in READONLY_VALUE_PARAMS:
+        _r = _row_of(_ro_name)
+        if _r < 0:
+            continue
+        table.setItemDelegateForRow(_r, None)
+        if table.cellWidget(_r, value_col):
+            table.setCellWidget(_r, value_col, None)
+        _it = table.item(_r, value_col)
+        _cur = (_it.text() if _it else "").strip()
+        if _it is None:
+            _it = QTableWidgetItem(_cur)
+            table.setItem(_r, value_col, _it)
+        _it.setTextAlignment(Qt.AlignCenter)
+        _it.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
 
     if readonly_local_missing and viewer_instance is not None:
         try:
@@ -11430,6 +11750,7 @@ def generate_unique_fastener_tab_label(viewer_instance):
     return f'PNO.{max_idx+1}'
 
 def copy_fastener_data_for_new_tab(source_data, new_tab_name, new_tab_id):
+    """复制源 Tab 参数到新建 Tab（与管口新建 Tab 一致：整表拷贝）。"""
     copied = []
     for item in source_data:
         pname = item.get('参数名称', '')
@@ -11437,9 +11758,12 @@ def copy_fastener_data_for_new_tab(source_data, new_tab_name, new_tab_id):
         unit = item.get('参数单位', '')
         tname = item.get('模板名称', '')
         tid = item.get('模板ID', 0)
-        keep = (pname.startswith('元件类型'))
-        val = pval if keep else ''
-        if pname == '元件名称':
+        val = pval
+        ps = str(pname or '').strip()
+        # 元件所属在各 Tab 间互斥：新 Tab 清空，由用户在剩余候选项中选择
+        if ps == '元件所属' or ps.startswith('元件所属'):
+            val = ''
+        elif ps == '元件名称':
             val = '设备法兰紧固件'
         copied.append({
             '参数名称': pname,
@@ -11461,54 +11785,6 @@ def _add_single_fastener_tab_copy_only(viewer_instance, source_tab_index, source
         element_id = getattr(viewer_instance, 'current_fastener_element_id', None) or getattr(viewer_instance, 'current_element_id', None)
         if not product_id or not element_id:
             return
-        try:
-            all_items = load_element_merged_para_product_data(product_id, element_id) or []
-            used_names = set()
-            for it in all_items:
-                n = str(it.get('参数名称', '') or '').strip()
-                v = str(it.get('参数值', '') or '').strip()
-                if not v or v.lower() == 'null':
-                    continue
-                if n == '元件所属' or n.startswith('元件所属'):
-                    try:
-                        import json
-                        vals = []
-                        if v.startswith('['):
-                            parsed = json.loads(v)
-                            if isinstance(parsed, list):
-                                vals = [str(x).strip() for x in parsed if str(x).strip()]
-                        if not vals:
-                            vals = [x.strip() for x in v.split('、') if x.strip()]
-                        for x in vals:
-                            used_names.add(x)
-                    except Exception:
-                        used_names.add(v)
-            source_data = load_element_merged_para_tab_data(product_id, element_id, source_tab_name) or []
-            template_id = None
-            for it in source_data:
-                tid = it.get('模板ID', None)
-                if tid not in (None, ''):
-                    template_id = tid
-                    break
-            try:
-                from modules.cailiaodingyi.funcs.funcs_pdf_change import get_fastener_component_options_by_template_id
-                allowed = get_fastener_component_options_by_template_id(template_id) or []
-            except Exception:
-                allowed = []
-            avail = [x for x in allowed if x not in used_names]
-            if allowed and not avail:
-                from PyQt5.QtWidgets import QMessageBox
-                box = QMessageBox(QMessageBox.Information, '提示', '合并元件已完成定义，不允许新建', QMessageBox.NoButton, tw)
-                box.addButton('确认', QMessageBox.AcceptRole)
-                box.exec_()
-                try:
-                    from PyQt5.QtCore import QTimer
-                    QTimer.singleShot(0, lambda: tw.setCurrentIndex(source_tab_index))
-                except Exception:
-                    pass
-                return
-        except Exception:
-            pass
         new_tab_name = generate_unique_fastener_tab_label(viewer_instance)
         new_tab_id = generate_unique_tab_id()
         source_data = load_element_merged_para_tab_data(product_id, element_id, source_tab_name)

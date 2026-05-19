@@ -1,4 +1,5 @@
 import os
+import re
 import modules.chanpinguanli.bianl as bianl
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
@@ -12,6 +13,28 @@ from modules.chanpinguanli import chanpinguanli_main
 
 # 添加一个定时器变量，用于确保只有一个定时器在运行1014
 tip_timer = None
+
+# 0506新修改--产品信息非法字符约束
+# Windows文件名非法字符
+ILLEGAL_FILENAME_CHARS = r'[\\/:*?"<>|]'
+
+
+def validate_filename_chars(text, field_name):
+    """
+    验证文本是否包含文件名非法字符
+    :param text: 要验证的文本
+    :param field_name: 字段名称（用于提示）
+    :return: (is_valid: bool, error_message: str)
+    """
+    if not text:
+        return True, ""
+    
+    if re.search(ILLEGAL_FILENAME_CHARS, text):
+        illegal_found = re.findall(ILLEGAL_FILENAME_CHARS, text)
+        error_msg = f"{field_name}包含非法文件名字符：{' '.join(set(illegal_found))}\n禁止使用的字符：\\ / : * ? \" < > |"
+        return False, error_msg
+    
+    return True, ""
 
 
 def show_tip(message, style="color: black;"):
@@ -89,6 +112,51 @@ def get_input_must_var(row):
             # 局部变量 只能当前函数访问
             design_stage_item = bianl.product_table.item(row, 4)
             curr_row_design_stage = design_stage_item.text().strip() if design_stage_item and design_stage_item.text() else ""
+
+        # 0506新修改--产品信息非法字符约束
+        # 验证设计阶段
+        if curr_row_design_stage:
+            is_valid, error_msg = validate_filename_chars(curr_row_design_stage, "设计阶段")
+            if not is_valid:
+                show_tip(error_msg, "color: orange;")
+                print(f"[get_input_must_var] 警告：设计阶段仍包含非法字符: {curr_row_design_stage}")
+                return None, None, None, None, None  # 阻止保存
+
+        # 验证文件名非法字符（作为兜底检查，正常情况下实时验证已经阻止了非法字符）
+        # 验证产品名称
+        if curr_row_product_name:
+            is_valid, error_msg = validate_filename_chars(curr_row_product_name, "产品名称")
+            if not is_valid:
+                # 如果这里还能检测到非法字符，说明实时验证可能被绕过了
+                # 直接阻止保存并提示用户
+                show_tip(error_msg, "color: orange;")
+                print(f"[get_input_must_var] 警告：产品名称仍包含非法字符: {curr_row_product_name}")
+                # 不进行清理，让用户手动处理
+                return None, None, None, None, None  # 阻止保存
+
+        # 验证设备位号
+        if curr_row_device_position:
+            is_valid, error_msg = validate_filename_chars(curr_row_device_position, "设备位号")
+            if not is_valid:
+                show_tip(error_msg, "color: orange;")
+                print(f"[get_input_must_var] 警告：设备位号仍包含非法字符: {curr_row_device_position}")
+                return None, None, None, None, None  # 阻止保存
+
+        # 验证产品编号
+        if curr_row_product_number:
+            is_valid, error_msg = validate_filename_chars(curr_row_product_number, "产品编号")
+            if not is_valid:
+                show_tip(error_msg, "color: orange;")
+                print(f"[get_input_must_var] 警告：产品编号仍包含非法字符: {curr_row_product_number}")
+                return None, None, None, None, None  # 阻止保存
+
+        # 验证设计版次
+        if curr_row_design_edition:
+            is_valid, error_msg = validate_filename_chars(curr_row_design_edition, "设计版次")
+            if not is_valid:
+                show_tip(error_msg, "color: orange;")
+                print(f"[get_input_must_var] 警告：设计版次仍包含非法字符: {curr_row_design_edition}")
+                return None, None, None, None, None  # 阻止保存
 
         print(
             f"[get_input_must_var] 编号: {curr_row_product_number}, 名称: {curr_row_product_name}, 设备位号: {curr_row_device_position}, 设计阶段: {curr_row_design_stage}, 设计版次: {curr_row_design_edition}")

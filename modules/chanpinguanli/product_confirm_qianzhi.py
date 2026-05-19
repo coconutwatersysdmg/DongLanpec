@@ -28,6 +28,12 @@ def clear_line_tip():
         bianl.main_window.line_tip.setToolTip("")
 
 def build_pd_folder_name(serial, name, position, number):
+    # 0506新修改--产品信息非法字符约束
+    import re
+    
+    # Windows文件名非法字符
+    illegal_chars = r'[\\/:*?"<>|]'
+    
     # 统一清洗 & 顺序：序号_产品名称_产品编号_设备位号（空值自动跳过）
     parts = [
         (serial or "").strip(),
@@ -35,7 +41,18 @@ def build_pd_folder_name(serial, name, position, number):
         (position or "").strip(),
         (number or "").strip(),
     ]
-    parts = [p for p in parts if p]  # 跳过空
+    # 0506新修改--产品信息非法字符约束
+    # 安全验证：清理所有非法字符（作为兜底）
+    sanitized_parts = []
+    for part in parts:
+        if part:
+            # 检查并清理非法字符
+            if re.search(illegal_chars, part):
+                print(f"[build_pd_folder_name] 警告：发现非法字符并自动清理: {part}")
+                part = re.sub(illegal_chars, '', part)  # 直接删除非法字符
+            sanitized_parts.append(part)
+    
+    parts = [p for p in sanitized_parts if p]  # 跳过空
     return "_".join(parts)
 
 

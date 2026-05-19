@@ -102,7 +102,40 @@
               </font>
              </property>
              <property name="styleSheet">
-              <string notr="true">background-color: rgb(255, 255, 255);
+              <string notr="true">QPushButton {
+    /* 背景：纯白，无渐变 */
+    background-color: #FFFFFF;
+    /* 边框：浅灰色细线 */
+    border: 1px solid #E0E0E0;
+    /* 圆角：8px，和参考图一致 */
+    border-radius: 8px;
+    /* 文字样式 */
+    color: #333333;
+    font-size: px;
+    /* 内边距，让文字居中 */
+    padding: 6px 22px;
+    /* 鼠标悬浮时的过渡效果 */
+    transition: all 0.2s ease;
+}
+
+/* 鼠标悬浮效果：轻微加深边框 + 浅背景 */
+QPushButton:hover {
+    background-color: #F5F5F5;
+    border-color: #D0D0D0;
+}
+
+/* 点击效果：按下时轻微变暗 */
+QPushButton:pressed {
+    background-color: #EEEEEE;
+    border-color: #C0C0C0;
+}
+
+/* 禁用状态样式（可选） */
+QPushButton:disabled {
+    background-color: #FAFAFA;
+    color: #AAAAAA;
+    border-color: #E5E5E5;
+}
 </string>
              </property>
              <property name="text">
@@ -113,7 +146,40 @@
            <item>
             <widget class="QPushButton" name="pushButton_out">
              <property name="styleSheet">
-              <string notr="true">background-color: rgb(255, 255, 255);
+              <string notr="true">QPushButton {
+    /* 背景：纯白，无渐变 */
+    background-color: #FFFFFF;
+    /* 边框：浅灰色细线 */
+    border: 1px solid #E0E0E0;
+    /* 圆角：8px，和参考图一致 */
+    border-radius: 8px;
+    /* 文字样式 */
+    color: #333333;
+    font-size: px;
+    /* 内边距，让文字居中 */
+    padding: 6px 22px;
+    /* 鼠标悬浮时的过渡效果 */
+    transition: all 0.2s ease;
+}
+
+/* 鼠标悬浮效果：轻微加深边框 + 浅背景 */
+QPushButton:hover {
+    background-color: #F5F5F5;
+    border-color: #D0D0D0;
+}
+
+/* 点击效果：按下时轻微变暗 */
+QPushButton:pressed {
+    background-color: #EEEEEE;
+    border-color: #C0C0C0;
+}
+
+/* 禁用状态样式（可选） */
+QPushButton:disabled {
+    background-color: #FAFAFA;
+    color: #AAAAAA;
+    border-color: #E5E5E5;
+}
 </string>
              </property>
              <property name="text">
@@ -124,7 +190,40 @@
            <item>
             <widget class="QPushButton" name="pushButton_cv">
              <property name="styleSheet">
-              <string notr="true">background-color: rgb(255, 255, 255);
+              <string notr="true">QPushButton {
+    /* 背景：纯白，无渐变 */
+    background-color: #FFFFFF;
+    /* 边框：浅灰色细线 */
+    border: 1px solid #E0E0E0;
+    /* 圆角：8px，和参考图一致 */
+    border-radius: 8px;
+    /* 文字样式 */
+    color: #333333;
+    font-size: px;
+    /* 内边距，让文字居中 */
+    padding: 6px 16px;
+    /* 鼠标悬浮时的过渡效果 */
+    transition: all 0.2s ease;
+}
+
+/* 鼠标悬浮效果：轻微加深边框 + 浅背景 */
+QPushButton:hover {
+    background-color: #F5F5F5;
+    border-color: #D0D0D0;
+}
+
+/* 点击效果：按下时轻微变暗 */
+QPushButton:pressed {
+    background-color: #EEEEEE;
+    border-color: #C0C0C0;
+}
+
+/* 禁用状态样式（可选） */
+QPushButton:disabled {
+    background-color: #FAFAFA;
+    color: #AAAAAA;
+    border-color: #E5E5E5;
+}
 </string>
              </property>
              <property name="text">
@@ -135,7 +234,41 @@
            <item>
             <widget class="QPushButton" name="pushButton_pipe_delete">
              <property name="styleSheet">
-              <string notr="true">background-color: rgb(255, 255, 255);</string>
+              <string notr="true">QPushButton {
+    /* 背景：纯白，无渐变 */
+    background-color: #FFFFFF;
+    /* 边框：浅灰色细线 */
+    border: 1px solid #E0E0E0;
+    /* 圆角：8px，和参考图一致 */
+    border-radius: 8px;
+    /* 文字样式 */
+    color: #333333;
+    font-size: px;
+    /* 内边距，让文字居中 */
+    padding: 6px 16px;
+    /* 鼠标悬浮时的过渡效果 */
+    transition: all 0.2s ease;
+}
+
+/* 鼠标悬浮效果：轻微加深边框 + 浅背景 */
+QPushButton:hover {
+    background-color: #F5F5F5;
+    border-color: #D0D0D0;
+}
+
+/* 点击效果：按下时轻微变暗 */
+QPushButton:pressed {
+    background-color: #EEEEEE;
+    border-color: #C0C0C0;
+}
+
+/* 禁用状态样式（可选） */
+QPushButton:disabled {
+    background-color: #FAFAFA;
+    color: #AAAAAA;
+    border-color: #E5E5E5;
+}
+</string>
              </property>
              <property name="text">
               <string>管口删除</string>
@@ -145,7 +278,41 @@
            <item>
             <widget class="QPushButton" name="pushButton_pipe_up">
              <property name="styleSheet">
-              <string notr="true">background-color: rgb(255, 255, 255);</string>
+              <string notr="true">QPushButton {
+    /* 背景：纯白，无渐变 */
+    background-color: #FFFFFF;
+    /* 边框：浅灰色细线 */
+    border: 1px solid #E0E0E0;
+    /* 圆角：8px，和参考图一致 */
+    border-radius: 8px;
+    /* 文字样式 */
+    color: #000000;
+    font-size: px;
+    /* 内边距，让文字居中 */
+    padding: 6px 16px;
+    /* 鼠标悬浮时的过渡效果 */
+    transition: all 0.2s ease;
+}
+
+/* 鼠标悬浮效果：轻微加深边框 + 浅背景 */
+QPushButton:hover {
+    background-color: #F5F5F5;
+    border-color: #D0D0D0;
+}
+
+/* 点击效果：按下时轻微变暗 */
+QPushButton:pressed {
+    background-color: #EEEEEE;
+    border-color: #C0C0C0;
+}
+
+/* 禁用状态样式（可选） */
+QPushButton:disabled {
+    background-color: #FAFAFA;
+    color: #AAAAAA;
+    border-color: #E5E5E5;
+}
+</string>
              </property>
              <property name="text">
               <string>管口上移</string>
@@ -155,7 +322,41 @@
            <item>
             <widget class="QPushButton" name="pushButton_pipe_down">
              <property name="styleSheet">
-              <string notr="true">background-color: rgb(255, 255, 255);</string>
+              <string notr="true">QPushButton {
+    /* 背景：纯白，无渐变 */
+    background-color: #FFFFFF;
+    /* 边框：浅灰色细线 */
+    border: 1px solid #E0E0E0;
+    /* 圆角：8px，和参考图一致 */
+    border-radius: 8px;
+    /* 文字样式 */
+    color: #000000;
+    font-size: px;
+    /* 内边距，让文字居中 */
+    padding: 6px 16px;
+    /* 鼠标悬浮时的过渡效果 */
+    transition: all 0.2s ease;
+}
+
+/* 鼠标悬浮效果：轻微加深边框 + 浅背景 */
+QPushButton:hover {
+    background-color: #F5F5F5;
+    border-color: #D0D0D0;
+}
+
+/* 点击效果：按下时轻微变暗 */
+QPushButton:pressed {
+    background-color: #EEEEEE;
+    border-color: #C0C0C0;
+}
+
+/* 禁用状态样式（可选） */
+QPushButton:disabled {
+    background-color: #FAFAFA;
+    color: #AAAAAA;
+    border-color: #E5E5E5;
+}
+</string>
              </property>
              <property name="text">
               <string>管口下移</string>
@@ -468,7 +669,118 @@
           <number>6</number>
          </property>
          <item>
-          <layout class="QHBoxLayout" name="horizontalLayout_2">
+          <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,0,0,0,0,7,1,1">
+           <property name="spacing">
+            <number>20</number>
+           </property>
+           <property name="leftMargin">
+            <number>20</number>
+           </property>
+           <property name="rightMargin">
+            <number>20</number>
+           </property>
+           <item>
+            <widget class="QPushButton" name="pic_anshizhizuo">
+             <property name="maximumSize">
+              <size>
+               <width>32</width>
+               <height>32</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">border: none; background: transparent; image: url(:/icons/鞍式支座.png);</string>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pic_erzuo">
+             <property name="maximumSize">
+              <size>
+               <width>32</width>
+               <height>32</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">border: none; background: transparent; image: url(:/icons/耳座.png);</string>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+             <property name="iconSize">
+              <size>
+               <width>20</width>
+               <height>20</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pic_mingpai">
+             <property name="maximumSize">
+              <size>
+               <width>32</width>
+               <height>32</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">border: none; background: transparent; image: url(:/icons/铭牌.png);</string>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pic_diaoer">
+             <property name="maximumSize">
+              <size>
+               <width>32</width>
+               <height>32</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">border: none; background: transparent; image: url(:/icons/吊耳.png);</string>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pic_baowenzhichengquan">
+             <property name="maximumSize">
+              <size>
+               <width>32</width>
+               <height>32</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">border: none; background: transparent; image: url(:/icons/保温支撑圈.png);</string>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="pic_baowenzhichengtiao">
+             <property name="maximumSize">
+              <size>
+               <width>32</width>
+               <height>32</height>
+              </size>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">border: none; background: transparent; image: url(:/icons/保温支撑条.png);</string>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+            </widget>
+           </item>
            <item>
             <spacer name="horizontalSpacer_2">
              <property name="orientation">
@@ -484,31 +796,101 @@
            </item>
            <item>
             <widget class="QPushButton" name="pushButton_attachment_delete">
+             <property name="maximumSize">
+              <size>
+               <width>110</width>
+               <height>16777215</height>
+              </size>
+             </property>
              <property name="styleSheet">
-              <string notr="true">background-color: rgb(255, 255, 255);</string>
+              <string notr="true">QPushButton {
+    /* 背景：纯白，无渐变 */
+    background-color: #FFFFFF;
+    /* 边框：浅灰色细线 */
+    border: 1px solid #E0E0E0;
+    /* 圆角：8px，和参考图一致 */
+    border-radius: 8px;
+    /* 文字样式 */
+    color: #000000;
+    font-size: px;
+    /* 内边距，让文字居中 */
+    padding: 6px 16px;
+    /* 鼠标悬浮时的过渡效果 */
+    transition: all 0.2s ease;
+}
+
+/* 鼠标悬浮效果：轻微加深边框 + 浅背景 */
+QPushButton:hover {
+    background-color: #F5F5F5;
+    border-color: #D0D0D0;
+}
+
+/* 点击效果：按下时轻微变暗 */
+QPushButton:pressed {
+    background-color: #EEEEEE;
+    border-color: #C0C0C0;
+}
+
+/* 禁用状态样式（可选） */
+QPushButton:disabled {
+    background-color: #FAFAFA;
+    color: #AAAAAA;
+    border-color: #E5E5E5;
+}
+</string>
              </property>
              <property name="text">
-              <string>附件删除</string>
+              <string>元件删除</string>
              </property>
             </widget>
            </item>
            <item>
-            <widget class="QPushButton" name="pushButton_attachment_up">
+            <widget class="QPushButton" name="pushButton_attachment_copy">
+             <property name="maximumSize">
+              <size>
+               <width>110</width>
+               <height>16777215</height>
+              </size>
+             </property>
              <property name="styleSheet">
-              <string notr="true">background-color: rgb(255, 255, 255);</string>
+              <string notr="true">QPushButton {
+    /* 背景：纯白，无渐变 */
+    background-color: #FFFFFF;
+    /* 边框：浅灰色细线 */
+    border: 1px solid #E0E0E0;
+    /* 圆角：8px，和参考图一致 */
+    border-radius: 8px;
+    /* 文字样式 */
+    color: #000000;
+    font-size: px;
+    /* 内边距，让文字居中 */
+    padding: 6px 16px;
+    /* 鼠标悬浮时的过渡效果 */
+    transition: all 0.2s ease;
+}
+
+/* 鼠标悬浮效果：轻微加深边框 + 浅背景 */
+QPushButton:hover {
+    background-color: #F5F5F5;
+    border-color: #D0D0D0;
+}
+
+/* 点击效果：按下时轻微变暗 */
+QPushButton:pressed {
+    background-color: #EEEEEE;
+    border-color: #C0C0C0;
+}
+
+/* 禁用状态样式（可选） */
+QPushButton:disabled {
+    background-color: #FAFAFA;
+    color: #AAAAAA;
+    border-color: #E5E5E5;
+}
+</string>
              </property>
              <property name="text">
-              <string>附件上移</string>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QPushButton" name="pushButton_attachment_down">
-             <property name="styleSheet">
-              <string notr="true">background-color: rgb(255, 255, 255);</string>
-             </property>
-             <property name="text">
-              <string>附件下移</string>
+              <string>元件复制</string>
              </property>
             </widget>
            </item>
@@ -527,6 +909,9 @@
            </property>
            <property name="sortingEnabled">
             <bool>false</bool>
+           </property>
+           <property name="columnCount">
+            <number>12</number>
            </property>
            <attribute name="horizontalHeaderVisible">
             <bool>false</bool>
@@ -689,11 +1074,6 @@
              <string>新建列</string>
             </property>
            </column>
-           <column>
-            <property name="text">
-             <string>新建列</string>
-            </property>
-           </column>
           </widget>
          </item>
         </layout>
@@ -738,7 +1118,41 @@
         </font>
        </property>
        <property name="styleSheet">
-        <string notr="true">background-color: rgb(255, 255, 255);</string>
+        <string notr="true">QPushButton {
+    /* 背景：纯白，无渐变 */
+    background-color: #FFFFFF;
+    /* 边框：浅灰色细线 */
+    border: 1px solid #E0E0E0;
+    /* 圆角：8px，和参考图一致 */
+    border-radius: 8px;
+    /* 文字样式 */
+    color: #000000;
+    font-size: px;
+    /* 内边距，让文字居中 */
+    padding: 6px 16px;
+    /* 鼠标悬浮时的过渡效果 */
+    transition: all 0.2s ease;
+}
+
+/* 鼠标悬浮效果：轻微加深边框 + 浅背景 */
+QPushButton:hover {
+    background-color: #F5F5F5;
+    border-color: #D0D0D0;
+}
+
+/* 点击效果：按下时轻微变暗 */
+QPushButton:pressed {
+    background-color: #EEEEEE;
+    border-color: #C0C0C0;
+}
+
+/* 禁用状态样式（可选） */
+QPushButton:disabled {
+    background-color: #FAFAFA;
+    color: #AAAAAA;
+    border-color: #E5E5E5;
+}
+</string>
        </property>
        <property name="text">
         <string>确认</string>
@@ -749,6 +1163,8 @@
    </item>
   </layout>
  </widget>
- <resources/>
+ <resources>
+  <include location="../resource/pic.qrc"/>
+ </resources>
  <connections/>
 </ui>

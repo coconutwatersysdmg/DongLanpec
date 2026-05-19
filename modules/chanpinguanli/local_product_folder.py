@@ -29,6 +29,58 @@ _TEMPLATE_NOZZLE = os.path.join(_CHANPINGUANLI_DIR, "管口导入模板.xlsx")
 
 _REQUIRED_FILES = ("pro_id.csv", "管口导入模板.xlsx", "条件输入数据表.xlsx")
 
+# 0509新修改--产品恢复时同时恢复项目id.csv
+def _ensure_project_root_id_csv(product_id) -> str:
+    """
+    在「项目根目录」写入 id.csv（与 project_path_relocate / 打开项目 约定一致），
+    避免仅恢复产品子目录后，下次启动仍提示项目路径失效。
+    成功返回空串，失败返回供用户可见的短说明（不抛异常）。
+    """
+    try:
+        from modules.chanpinguanli import common_usage
+        from modules.chanpinguanli.project_path_relocate import get_project_root_folder
+
+        conn_p = common_usage.get_mysql_connection_product()
+        cur_p = conn_p.cursor()
+        cur_p.execute(
+            "SELECT `项目ID` FROM `产品需求表` WHERE `产品ID` = %s LIMIT 1",
+            (product_id,),
+        )
+        prow = cur_p.fetchone()
+        cur_p.close()
+        conn_p.close()
+        if not prow:
+            return "（项目 id.csv 未写入：未查到该产品所属项目）"
+        proj_id = prow.get("项目ID") if isinstance(prow, dict) else prow[0]
+        if proj_id is None or str(proj_id).strip() == "":
+            return "（项目 id.csv 未写入：项目ID为空）"
+
+        conn_j = common_usage.get_mysql_connection_project()
+        cur_j = conn_j.cursor()
+        cur_j.execute(
+            "SELECT * FROM `项目需求表` WHERE `项目ID` = %s LIMIT 1",
+            (proj_id,),
+        )
+        project_info = cur_j.fetchone()
+        cur_j.close()
+        conn_j.close()
+        if not project_info:
+            return "（项目 id.csv 未写入：无项目需求记录）"
+
+        root = get_project_root_folder(project_info)
+        if not root:
+            return "（项目 id.csv 未写入：无法解析项目根路径）"
+
+        os.makedirs(root, exist_ok=True)
+        csv_path = os.path.join(root, "id.csv")
+        with open(csv_path, "w", encoding="utf-8") as f:
+            f.write(str(proj_id).strip())
+        print(f"[_ensure_project_root_id_csv] 已写入 {csv_path}")
+        return ""
+    except Exception as e:
+        print(f"[_ensure_project_root_id_csv] {e}")
+        return f"（项目 id.csv 写入失败：{e}）"
+
 
 def _refresh_main_window_tabs_readonly():
     try:
@@ -121,13 +173,21 @@ def restore_local_product_files(parent, product_id) -> tuple:
     except Exception as e:
         return False, f"复制模板或写入 pro_id 失败：{e}"
 
+    # 0509新修改--产品恢复时同时恢复项目id.csv
+    id_csv_note = _ensure_project_root_id_csv(pid)
+
     stub = ConditionLocalRestoreStub(parent)
     try:
         has_db = hydrate_stub_viewer_for_local_xlsx(stub, pid)
         if has_db:
             if not save_local_condition_file(pid, stub, local_path_override=xlsx_path):
                 return False, "已创建文件，但写入条件输入数据表失败（可能被占用或路径异常）。"
-        return True, "" if has_db else "已恢复模板文件；数据库中无该产品的条件输入数据，条件表为空模板。"
+        base = (
+            ""
+            if has_db
+            else "已恢复模板文件；数据库中无该产品的条件输入数据，条件表为空模板。"
+        )
+        return True, base + id_csv_note
     except Exception as e:
         print(f"[restore_local_product_files] {e}")
         return False, f"写入条件数据时出错：{e}"

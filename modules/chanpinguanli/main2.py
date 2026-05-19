@@ -1,5 +1,7 @@
 # 这是一个示例 Python 脚本。
 import warnings
+import re
+from PyQt5.QtWidgets import QMessageBox
 
 # 按 Shift+F10 执行或将其替换为您的代码。
 # 按 双击 Shift 在所有地方搜索类、文件、工具窗口、操作和设置。
@@ -42,6 +44,7 @@ class cpgl_Stats(QtWidgets.QWidget):
         import os
         current_dir = os.path.dirname(os.path.abspath(__file__))
         ui_path = os.path.join(current_dir, "guanli.ui")
+        # ui_path = os.path.join(current_dir, "guanli_try.ui")
         uic.loadUi(ui_path, self)
         # 强制给整个界面设置字体
         font = QtWidgets.QApplication.font()
@@ -76,6 +79,11 @@ class cpgl_Stats(QtWidgets.QWidget):
 
         # 产品信息区
         bianl.product_table = self.findChild(QtWidgets.QTableWidget, "product_table")
+
+        # 0506新修改--项目信息非法字符约束
+        # 安装自定义委托，实现实时非法字符验证
+        from modules.chanpinguanli.chanpinguanli_main import TableItemDelegate
+        bianl.product_table.setItemDelegate(TableItemDelegate(bianl.product_table))
 
         # 产品定义区 改77
         bianl.product_type_combo = self.findChild(QtWidgets.QComboBox, "product_type_combo")
@@ -677,6 +685,20 @@ class cpgl_Stats(QtWidgets.QWidget):
         if bianl.product_form_combo is not None:
             bianl.product_form_combo.activated.connect(self._mark_dirty)
 
+        # 0506新修改--项目信息非法字符约束
+        # 项目输入框：同时处理脏标记和非法字符验证
+        project_inputs = [
+            bianl.owner_input,
+            bianl.project_number_input,
+            bianl.project_name_input,
+            bianl.department_input,
+            bianl.contractor_input,
+            bianl.project_path_input,
+        ]
+        for le in project_inputs:
+            if le is not None:
+                le.textEdited.connect(self._on_project_input_changed)
+
         # 3) 日期：用户完成编辑时再置脏（程序 setDate 不触发）
         if bianl.date_edit is not None:
             bianl.date_edit.editingFinished.connect(self._mark_dirty)
@@ -889,6 +911,64 @@ class cpgl_Stats(QtWidgets.QWidget):
 
         print("【调试】所有检查通过，无需提示未保存")
         return True
+
+    # 0506新修改--项目信息非法字符约束
+    # 0519新修改-项目信息-项目路径输入框允许输入\:
+    def _on_project_input_changed(self, text):
+        """处理项目输入框的文本变化，同时处理脏标记和非法字符验证"""
+        # 标记为脏
+        self._mark_dirty()
+        
+        # 获取当前输入框
+        sender = self.sender()
+        if not sender:
+            return
+
+        # 根据不同的输入框，定义不同的非法字符规则和提示信息
+        if sender == self.project_path_input:
+            # 1. 对于项目路径输入框，允许输入 '\:'
+            illegal_chars_regex = r'[/"<>|?*]'  # 注意：正则表达式中去掉了 '\\和:'
+            forbidden_chars_display = '/ * ? " < > |'
+        else:
+            # 2. 对于其他所有输入框，规则保持不变
+            illegal_chars_regex = r'[\\/:*?"<>|]'
+            forbidden_chars_display = '\\ / : * ? " < > |'
+            
+        # 非法字符列表
+        # illegal_chars = r'[\\/:*?"<>|]'
+        
+        # 检查是否包含非法字符
+        if re.search(illegal_chars_regex, text):
+            # 找出所有非法字符
+            illegal_found = re.findall(illegal_chars_regex, text)
+            illegal_unique = sorted(set(illegal_found))  # 排序以保持一致的显示顺序
+            
+            # 阻止输入：恢复到之前的状态
+            # 获取当前光标位置
+            cursor_pos = sender.cursorPosition()
+            
+            # 移除非法字符
+            cleaned_text = re.sub(illegal_chars_regex, '', text)
+            
+            # 恢复清理后的文本
+            sender.blockSignals(True)
+            sender.setText(cleaned_text)
+            # 尝试恢复光标位置（考虑删除字符后的位置偏移）
+            deleted_before_cursor = len([c for c in text[:cursor_pos] if c in illegal_unique])
+            new_cursor_pos = max(0, cursor_pos - deleted_before_cursor)
+            sender.setCursorPosition(new_cursor_pos)
+            sender.blockSignals(False)
+            
+            # 弹窗提示用户
+            QMessageBox.warning(
+                sender,
+                "提示",
+                f"文件名不能包含下列任何字符：{' '.join(illegal_unique)}\n\n禁止使用的字符：{forbidden_chars_display}"
+            )
+            return
+        
+        # 如果没有非法字符，正常处理
+        return
 
 # if __name__ == "__main__":
 #     App = QApplication(sys.argv)

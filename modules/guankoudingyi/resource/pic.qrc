@@ -1,0 +1,10 @@
+<RCC>
+  <qresource prefix="/icons">
+    <file>保温支撑圈.png</file>
+    <file>保温支撑条.png</file>
+    <file>吊耳.png</file>
+    <file>铭牌.png</file>
+    <file>鞍式支座.png</file>
+    <file>耳座.png</file>
+  </qresource>
+</RCC>

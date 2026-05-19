@@ -40,6 +40,14 @@ def show_confirm_dialog(parent, title, text):
     msg_box.exec_()
     return msg_box.clickedButton() == yes_button
 
+# 0515新修改-项目路径变更处理--项目路径保存时，变更为绝对路径
+def normalize_project_save_path(raw: str) -> str:
+    """项目保存路径（项目根父目录）入库前统一为本地绝对路径，避免相对路径依赖 cwd。"""
+    s = (raw or "").strip()
+    if not s:
+        return s
+    return os.path.normpath(os.path.abspath(s))
+
 
 def save_project_to_db():
     """根据项目状态保存项目信息到数据库，并处理文件夹操作"""
@@ -56,6 +64,11 @@ def save_project_to_db():
     if not owner or not project_name or not project_path:
         QMessageBox.warning(bianl.main_window, "提示", "业主名称、项目名称、项目路径为必填项！")
         return
+
+# 0515新修改-项目路径变更处理
+    project_path = normalize_project_save_path(project_path)
+    if bianl.project_path_input is not None:
+        bianl.project_path_input.setText(project_path)
 
     # 如果当前项目状态是 "view" 或 "edit"，但没有旧项目的原始信息，那么就自动将状态识别为 "new"
     # if bianl.project_mode in ("view", "edit") and (
@@ -122,12 +135,35 @@ def save_project_to_db():
 
         # 如果是修改项目，重命名文件夹并更新路径
         elif bianl.project_mode == "edit":
-            # 处理文件夹重命名
-            old_folder = os.path.join(bianl.old_project_path, f"{bianl.old_owner}_{bianl.old_project_name}")
-            new_folder = os.path.join(project_path, f"{owner}_{project_name}")
+            # 0515新修改-项目路径变更处理
+            # 处理文件夹重命名（旧路径可能是历史相对路径，先规范为绝对路径再 rename / 替换前缀）
+            old_parent = normalize_project_save_path(bianl.old_project_path or "")
+            old_folder = os.path.normpath(
+                os.path.join(old_parent, f"{bianl.old_owner}_{bianl.old_project_name}")
+            )
+            new_folder = os.path.normpath(os.path.join(project_path, f"{owner}_{project_name}"))
             project_id = bianl.current_project_id
-            if os.path.exists(old_folder):
-                os.rename(old_folder, new_folder)  # 重命名文件夹
+
+            #0519新修改- 在移动/重命名之前，确保新的目标父目录存在
+            if not os.path.exists(project_path):
+                print(f"[修改项目] 新的项目路径 '{project_path}' 不存在，正在创建...")
+                os.makedirs(project_path, exist_ok=True)
+            # 增加一个健壮性检查：如果新旧文件夹路径相同，则无需移动
+            if old_folder != new_folder:
+                # 再次检查：确保源文件夹存在才进行移动
+                if os.path.exists(old_folder):
+                    # 增加检查：防止目标位置已存在同名文件夹导致报错
+                    if os.path.exists(new_folder):
+                        QMessageBox.critical(bianl.main_window, "操作失败",
+                                                 f"目标位置已存在同名项目文件夹：\n{new_folder}\n\n请检查项目名称或项目路径。")
+                        return
+                    print(f"[修改项目] 正在移动文件夹: '{old_folder}' -> '{new_folder}'")
+                    os.rename(old_folder, new_folder)  # 重命名/移动文件夹
+                else:
+                    # 如果旧文件夹不存在，可能已经被移动或删除，只更新数据库记录
+                    print(f"[修改项目] 警告：未找到旧的项目文件夹 '{old_folder}'，将仅更新数据库记录。")
+            # if os.path.exists(old_folder):
+            #     os.rename(old_folder, new_folder)  # 重命名文件夹
             # 更新数据库信息
             # conn = common_usage.get_mysql_connection()
             # cursor = conn.cursor()
@@ -147,6 +183,74 @@ def save_project_to_db():
             conn.commit()
             cursor.close()
             conn.close()
+            # 0506新修改
+            # 同步更新产品设计活动表中的产品文件夹绝对路径
+            try:
+                print(f"[修改项目] 开始同步产品路径，项目ID: {project_id}")
+                print(f"[修改项目] 旧项目文件夹: {old_folder}")
+                print(f"[修改项目] 新项目文件夹: {new_folder}")
+                
+                conn_act = common_usage.get_mysql_connection_active()
+                cursor_act = conn_act.cursor()
+                
+                # 获取该项目下所有产品
+                cursor_act.execute(
+                    "SELECT 产品ID, 产品文件夹绝对路径 FROM 产品设计活动表 WHERE 项目ID = %s",
+                    (project_id,)
+                )
+                products = cursor_act.fetchall()
+                print(f"[修改项目] 找到 {len(products)} 个产品记录")
+                
+                updated_count = 0
+                for i, product in enumerate(products):
+                    # 支持字典和元组两种返回格式
+                    if isinstance(product, dict):
+                        product_id = product.get('产品ID')
+                        old_path = product.get('产品文件夹绝对路径')
+                    else:
+                        product_id = product[0]
+                        old_path = product[1]
+                    
+                    print(f"[修改项目] 产品 {i+1}: ID={product_id}, 旧路径={old_path}")
+                    
+                    if old_path:
+                        # 直接替换路径前缀，处理路径不匹配的情况
+                        try:
+                            # 方法1：如果旧路径包含旧项目文件夹，直接替换
+                            if old_folder in old_path:
+                                new_product_path = old_path.replace(old_folder, new_folder)
+                            else:
+                                # 方法2：如果路径不匹配，尝试从旧路径中提取产品文件夹名，然后拼接到新项目路径
+                                product_folder_name = os.path.basename(old_path)
+                                new_product_path = os.path.join(new_folder, product_folder_name)
+                            
+                            # 标准化路径
+                            new_product_path = os.path.normpath(new_product_path)
+                            
+                            print(f"[修改项目]   新路径: {new_product_path}")
+                            
+                            # 更新产品文件夹绝对路径
+                            cursor_act.execute(
+                                "UPDATE 产品设计活动表 SET 产品文件夹绝对路径 = %s WHERE 产品ID = %s",
+                                (new_product_path, product_id)
+                            )
+                            updated_count += 1
+                            print(f"[修改项目]   ✅ 已更新产品路径: {product_id}")
+                            
+                        except Exception as e_path:
+                            print(f"[修改项目]   ❌ 路径更新失败: {e_path}")
+                    else:
+                        print(f"[修改项目]   ⚠️ 跳过空路径: {old_path}")
+                
+                conn_act.commit()
+                cursor_act.close()
+                conn_act.close()
+                print(f"[修改项目] ✅ 已同步更新 {updated_count} 个产品的文件夹路径")
+                
+            except Exception as e_act:
+                print(f"[修改项目] ⚠️ 更新产品设计活动表路径失败: {e_act}")
+                import traceback
+                traceback.print_exc()
 
             bianl.project_mode = "view"
             print("[状态] 修改项目完成，project_mode = view")
@@ -162,6 +266,9 @@ def save_project_to_db():
             bianl.tip_timer.stop()
             bianl.tip_timer.start(5000)
             # QMessageBox.information(bianl.main_window, "成功", "项目修改已保存")
+            bianl.old_owner = owner
+            bianl.old_project_name = project_name
+            bianl.old_project_path = project_path
 
         elif bianl.project_mode == "view":
             bianl.main_window.line_tip.setText("只读模式下不可保存修改！")
@@ -337,8 +444,12 @@ def delete_project_and_related_data():
             cursor_act.close()
             conn_act.close()
 
-        # Step 4: 删除项目文件夹
-        folder_path = os.path.join(bianl.old_project_path, f"{bianl.old_owner}_{bianl.old_project_name}")
+        # 0515新修改-项目路径变更处理
+        # Step 4: 删除项目文件夹（与保存路径一致：相对路径按 cwd 规范为绝对路径再删）
+        _del_parent = normalize_project_save_path(bianl.old_project_path or "")
+        folder_path = os.path.normpath(
+            os.path.join(_del_parent, f"{bianl.old_owner}_{bianl.old_project_name}")
+        )
         if os.path.exists(folder_path):
             shutil.rmtree(folder_path)
 

@@ -5,13 +5,153 @@ import traceback
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
-                             QComboBox, QFileDialog, QFrame, QGroupBox, QHeaderView, QDateEdit, QMessageBox, QAction)
-from PyQt5.QtCore import Qt, QDate, pyqtSignal
+                             QComboBox, QFileDialog, QFrame, QGroupBox, QHeaderView, QDateEdit, QMessageBox, QAction,
+                             QStyledItemDelegate)
+from PyQt5.QtCore import Qt, QDate, pyqtSignal, QTimer, QObject
 from PyQt5.QtGui import QPixmap
 import shutil
 
 import modules.chanpinguanli.bianl as bianl
 # 按钮文件导入
+
+# 0506新修改--产品信息非法字符约束
+class TableLineEditFilter(QObject):
+    """表格行编辑器的实时验证过滤器"""
+    def __init__(self):
+        super().__init__()
+        self.last_warning_time = 0  # 防止频繁弹窗
+        
+    def eventFilter(self, obj, event):
+        if event.type() == event.KeyPress:
+            # 获取当前文本
+            text = obj.text()
+            cursor_pos = obj.cursorPosition()
+            
+            # 检查即将输入的字符
+            if event.text():
+                new_text = text[:cursor_pos] + event.text() + text[cursor_pos:]
+                
+                # 验证非法字符
+                import re
+                import time
+                illegal_chars = r'[\\/:*?"<>|]'
+                if re.search(illegal_chars, new_text):
+                    # 阻止输入
+                    current_time = time.time()
+                    
+                    # 防止频繁弹窗（间隔至少1秒）
+                    if current_time - self.last_warning_time > 1:
+                        illegal_found = re.findall(illegal_chars, event.text())
+                        illegal_unique = sorted(set(illegal_found))
+                        
+                        QMessageBox.warning(
+                            None,  # 使用None作为父窗口，避免依赖问题
+                            "提示",
+                            f"文件名不能包含下列任何字符：{' '.join(illegal_unique)}\n\n禁止使用的字符：\\ / : * ? \" < > |"
+                        )
+                        
+                        self.last_warning_time = current_time
+                        print(f"[实时验证] 非法字符已阻止: {event.text()}")
+                    
+                    return True
+                    
+        return super().eventFilter(obj, event)
+
+
+# 全局过滤器实例
+line_edit_filter = TableLineEditFilter()
+
+
+class ComboBoxFilter(QObject):
+    """下拉框的实时验证过滤器"""
+    def __init__(self):
+        super().__init__()
+        self.last_warning_time = 0
+        
+    def eventFilter(self, obj, event):
+        if event.type() == event.KeyPress:
+            # 检查即将输入的字符
+            if event.text():
+                # 获取当前文本
+                current_text = obj.currentText()
+                
+                # 验证非法字符
+                import re
+                import time
+                illegal_chars = r'[\\/:*?"<>|]'
+                if re.search(illegal_chars, event.text()):
+                    # 阻止输入
+                    current_time = time.time()
+                    
+                    # 防止频繁弹窗（间隔至少1秒）
+                    if current_time - self.last_warning_time > 1:
+                        illegal_found = re.findall(illegal_chars, event.text())
+                        illegal_unique = sorted(set(illegal_found))
+                        
+                        QMessageBox.warning(
+                            None,
+                            "提示",
+                            f"文件名不能包含下列任何字符：{' '.join(illegal_unique)}\n\n禁止使用的字符：\\ / : * ? \" < > |"
+                        )
+                        
+                        self.last_warning_time = current_time
+                        print(f"[实时验证] 下拉框非法字符已阻止: {event.text()}")
+                    
+                    return True
+                    
+        return super().eventFilter(obj, event)
+
+
+# 全局下拉框过滤器实例
+combo_filter = ComboBoxFilter()
+
+
+class TableItemDelegate(QStyledItemDelegate):
+    """表格项委托，用于实时验证非法字符"""
+    def createEditor(self, parent, option, index):
+        # 创建默认编辑器
+        editor = super().createEditor(parent, option, index)
+        
+        # 如果是文本编辑器，安装事件过滤器
+        if isinstance(editor, QLineEdit):
+            editor.installEventFilter(line_edit_filter)
+        # 如果是下拉框，安装下拉框过滤器
+        elif isinstance(editor, QComboBox):
+            editor.installEventFilter(combo_filter)
+            # 为下拉框的编辑器（如果可编辑）也安装文本过滤器
+            if editor.isEditable():
+                editor.lineEdit().installEventFilter(line_edit_filter)
+            
+        return editor
+    
+    def setModelData(self, editor, model, index):
+        # 在设置模型数据前进行最终验证
+        if isinstance(editor, QLineEdit):
+            text = editor.text()
+            
+            # 验证非法字符
+            import re
+            illegal_chars = r'[\\/:*?"<>|]'
+            if re.search(illegal_chars, text):
+                # 移除非法字符
+                cleaned_text = re.sub(illegal_chars, '', text)
+                editor.setText(cleaned_text)
+                
+                # 弹窗提示
+                illegal_found = re.findall(illegal_chars, text)
+                illegal_unique = sorted(set(illegal_found))
+                QMessageBox.warning(
+                    bianl.main_window,
+                    "提示",
+                    f"文件名不能包含下列任何字符：{' '.join(illegal_unique)}\n\n禁止使用的字符：\\ / : * ? \" < > |"
+                )
+                
+                # 设置清理后的数据
+                super().setModelData(editor, model, index)
+                return
+        
+        # 正常设置数据
+        super().setModelData(editor, model, index)
 
 import modules.chanpinguanli.project_confirm_btn as project_confirm_btn
 import modules.chanpinguanli.modify_project as modify_project
@@ -103,6 +243,8 @@ from PyQt5.QtCore import Qt, QObject, pyqtSignal
 from typing import Callable, List, Optional
 from PyQt5.QtCore import Qt, QObject
 from PyQt5.QtWidgets import QStyledItemDelegate, QComboBox, QTableWidget, QTableWidgetItem, QWidget
+# 0506新修改--产品信息非法字符约束
+from PyQt5.QtWidgets import QLineEdit
 
 # 拦截 没有产品id的自删自增
 def _row_has_product_id(row: int) -> bool:
@@ -118,6 +260,87 @@ def on_product_cell_changed_router(row: int, col: int):
         return
     table._routing = True
     try:
+        # 0506新修改--产品信息非法字符约束
+        # 实时验证文件名非法字符
+        if col in [1, 2, 3, 5]:  # 产品名称、设备位号、产品编号、设计版次列
+            item = table.item(row, col)
+            if item:
+                text = item.text().strip()
+                if text:
+                    # 导入验证函数
+                    import re
+                    illegal_chars = r'[\\/:*?"<>|]'
+                    
+                    if re.search(illegal_chars, text):
+                        # 找到非法字符，阻止输入并弹窗提示
+                        illegal_found = re.findall(illegal_chars, text)
+                        illegal_unique = sorted(set(illegal_found))  # 排序以保持一致的显示顺序
+                        field_names = {1: "产品名称", 2: "设备位号", 3: "产品编号", 5: "设计版次"}
+                        field_name = field_names.get(col, f"第{col}列")
+                        
+                        # 阻止输入：移除非法字符
+                        cleaned_text = re.sub(illegal_chars, '', text)
+                        
+                        # 阻止信号循环，恢复清理后的文本
+                        table.blockSignals(True)
+                        item.setText(cleaned_text)
+                        table.blockSignals(False)
+                        
+                        # 弹窗提示用户
+                        QMessageBox.warning(
+                            bianl.main_window,
+                            "提示",
+                            f"文件名不能包含下列任何字符：{' '.join(illegal_unique)}\n\n禁止使用的字符：\\ / : * ? \" < > |"
+                        )
+                        
+                        print(f"[实时验证] {field_name}非法字符已阻止: {text} -> {cleaned_text}")
+        
+        # 设计阶段是下拉框，需要特殊处理
+        elif col == 4:  # 设计阶段列
+            widget = table.cellWidget(row, col)
+            if widget and hasattr(widget, 'currentText'):
+                text = widget.currentText().strip()
+                if text:
+                    # 导入验证函数
+                    import re
+                    illegal_chars = r'[\\/:*?"<>|]'
+                    
+                    if re.search(illegal_chars, text):
+                        # 找到非法字符，阻止输入并弹窗提示
+                        illegal_found = re.findall(illegal_chars, text)
+                        illegal_unique = sorted(set(illegal_found))  # 排序以保持一致的显示顺序
+                        
+                        # 阻止输入：移除非法字符
+                        cleaned_text = re.sub(illegal_chars, '', text)
+                        
+                        # 同时更新下拉框和表格项
+                        table.blockSignals(True)
+                        widget.blockSignals(True)
+                        
+                        # 设置下拉框文本
+                        widget.setCurrentText(cleaned_text)
+                        
+                        # 同时更新表格项（确保数据一致性）
+                        item = table.item(row, col)
+                        if item:
+                            item.setText(cleaned_text)
+                        else:
+                            # 如果没有表格项，创建一个
+                            item = QTableWidgetItem(cleaned_text)
+                            table.setItem(row, col, item)
+                        
+                        widget.blockSignals(False)
+                        table.blockSignals(False)
+                        
+                        # 弹窗提示用户
+                        QMessageBox.warning(
+                            bianl.main_window,
+                            "提示",
+                            f"文件名不能包含下列任何字符：{' '.join(illegal_unique)}\n\n禁止使用的字符：\\ / : * ? \" < > |"
+                        )
+                        
+                        print(f"[实时验证] 设计阶段非法字符已阻止: {text} -> {cleaned_text}")
+        
         if not _row_has_product_id(row):
             # 只有“无 product_id”的行，才继续走原来的自动增/删逻辑
             auto_edit_row.handle_auto_add_row(row, col)
@@ -160,6 +383,12 @@ class EditOnlyComboDelegate(QStyledItemDelegate):
         combo.setEditable(self._editable)
         combo.setInsertPolicy(QComboBox.NoInsert)
         combo.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+
+        # 0506新修改--产品信息非法字符约束-
+        # —— 安装实时非法字符验证过滤器 ——
+        combo.installEventFilter(combo_filter)
+        if combo.isEditable() and combo.lineEdit():
+            combo.lineEdit().installEventFilter(line_edit_filter)
 
         # —— ① 下拉框lineEdit左对齐，下拉列表选项居中显示 ——
         # 1108新修改-设计阶段左对齐显示
@@ -2613,18 +2842,39 @@ def load_last_project():
 
         if project_id:
             print(f"自动加载最后使用的项目: {project_id}")
-            # 准备打开了 就更新一下
-            # 设置当前项目ID
-            bianl.current_project_id = project_id
-            print(f"current_project_id:{bianl.current_project_id}")
-            # 这里需要复制 open_project 函数中的加载逻辑
-            # 加载项目信息
+            # 0509新修改--项目路径变更处理
+            # 0515新修改-项目路径变更处理
+            # 加载项目信息；校验本机磁盘路径后再设置 current_project_id（避免路径被移动后仍误加载）
             conn_project = common_usage.get_mysql_connection_project()
             cursor_project = conn_project.cursor()
             cursor_project.execute("SELECT * FROM 项目需求表 WHERE 项目ID = %s", (project_id,))
             project_info = cursor_project.fetchone()
             cursor_project.close()
             conn_project.close()
+
+            if not project_info:
+                print(f"[AutoOpen] 未找到项目需求记录 project_id={project_id}")
+                new_project_button.prepare_new_project()
+                return
+
+            from modules.chanpinguanli import project_path_relocate
+            if not project_path_relocate.verify_last_session_path(project_id, project_info):
+                new_project_button.prepare_new_project()
+                tip = "上一次打开的项目在记录路径下未找到，可能已被移动。"
+                if (
+                    hasattr(bianl, "main_window")
+                    and bianl.main_window
+                    and hasattr(bianl.main_window, "line_tip")
+                    and bianl.main_window.line_tip
+                ):
+                    bianl.main_window.line_tip.setText(tip)
+                    bianl.main_window.line_tip.setToolTip(tip)
+                    bianl.main_window.line_tip.setStyleSheet("color: black;")
+                print(f"[AutoOpen] {tip}")
+                return
+
+            bianl.current_project_id = project_id
+            print(f"current_project_id:{bianl.current_project_id}")
 
             if project_info:
                 # 填充项目信息到UI

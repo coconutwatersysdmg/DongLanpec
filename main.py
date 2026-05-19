@@ -560,8 +560,13 @@ def get_product_form_from_db(product_id: str) -> str:
                 # 如果是 AEM，就返回 AEM
                 print(f"    ↳ 逻辑转换: 保持为 'AEM'")
                 return 'AEM'
+            # 0515新修改-NEN(Head)产品型式
+            if raw_product_form == 'NEN(Head)':
+                # 如果是 NEN(Head)，就返回 NEN(Head)
+                print(f"    ↳ 逻辑转换: 保持为 'NEN(Head)'")
+                return 'NEN(Head)'
             else:
-                # 如果是其他任何值 (AES, BES, 空值等)，都统一视为 'all'
+                # 如果是其他任何值 (AES, BES, NEN、NEN(Head)空值等)，都统一视为 'all'
                 print(f"    ↳ 逻辑转换: 将 '{raw_product_form}' 视为 'all'")
                 return 'all'
         else:
@@ -692,6 +697,8 @@ class MainWindow(QtWidgets.QMainWindow):
         APP_MAIN_WINDOW = self
 
         uic.loadUi(resource_path("main_viewer333.ui"), self)
+        # uic.loadUi(resource_path("main_viewer333_try.ui"), self)
+        self.tabWidget.tabBar().hide()
 
 
         # ✅ 设置界面打开大小为屏幕的 80%
@@ -995,6 +1002,44 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 w.setEditTriggers(edit_triggers_default)
 
+    # 0506新修改-项目管理只读区域设置
+    def _apply_readonly_unlock_project_management_product_areas(self):
+        """
+        本地文件缺失解除锁定时：只对「产品信息 / 产品定义 / 工作信息」三个分组执行解锁，
+        不刷项目信息整页，避免误把查看态项目信息行编辑设为可写。
+        产品定义组内含「类型」「型式」下拉：子树刷前后对其 isEnabled / 样式 / minWidth 打快照并恢复。
+        """
+        import modules.chanpinguanli.bianl as bianl
+
+        def _snap_combo(c):
+            if c is None:
+                return None
+            return (c.isEnabled(), c.styleSheet(), c.minimumWidth())
+
+        def _restore_combo(c, snap):
+            if c is None or snap is None:
+                return
+            en, stylesheet, minw = snap
+            c.setEnabled(en)
+            c.setStyleSheet(stylesheet)
+            c.setMinimumWidth(minw)
+
+        try:
+            t_combo = getattr(bianl, "product_type_combo", None)
+            f_combo = getattr(bianl, "product_form_combo", None)
+            snap_t = _snap_combo(t_combo)
+            snap_f = _snap_combo(f_combo)
+
+            for attr in ("product_info_group", "product_definition_group", "work_information_group"):
+                box = getattr(bianl, attr, None)
+                if box is not None:
+                    self.apply_readonly_to_widget_tree(box, False)
+
+            _restore_combo(t_combo, snap_t)
+            _restore_combo(f_combo, snap_f)
+        except Exception as e:
+            print(f"[_apply_readonly_unlock_project_management_product_areas] {e}")
+
     # 4，12新修改--本地文件夹误删2共7
     def refresh_all_tabs_readonly_state(self):
         import modules.chanpinguanli.bianl as bianl
@@ -1006,7 +1051,8 @@ class MainWindow(QtWidgets.QMainWindow):
             if not w:
                 continue
             if title in ("", "项目管理"):
-                self.apply_readonly_to_widget_tree(w, False)
+                # 0506新修改-项目管理只读区域设置
+                self._apply_readonly_unlock_project_management_product_areas()
             else:
                 self.apply_readonly_to_widget_tree(w, ro)
 

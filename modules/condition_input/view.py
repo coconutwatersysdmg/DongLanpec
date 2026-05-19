@@ -528,39 +528,15 @@ class DesignConditionInputViewer(QWidget):
             self.update_multi_conditions_status()
         except Exception as e:
             print(f"[多工况] 数据加载后检查失败: {e}")
-        # === 数据加载完成后：仅修正“公式外径”的显示（保持外径系列使用数据库/用户值） ===
+        # === 数据加载完成后：触发外径自动填充，确保公式计算的外径值正确显示 ===
         try:
-            from modules.condition_input.funcs.funcs_cdt_input import (
-                _get_dn_from_design, _get_outer_diameter_from_mapping, _get_series_from_general
-            )
-            table = getattr(self, 'tableWidget_general_data', None)
-            if table is not None:
-                # 仅当“是否以外径为基准*”为“是”时才处理外径显示
-                base_row = self._find_row_by_param_name(table, "是否以外径为基准*")
-                if base_row >= 0:
-                    val_item = table.item(base_row, 3)
-                    base_val = val_item.text().strip() if val_item and val_item.text() else ""
-                    if base_val == "是" and self._is_saved_to_design_db:
-                        # 已保存到设计活动库的产品：若外径是按公式算出来的，界面应显示为“—”
-                        dn = _get_dn_from_design(self)
-                        if dn is not None:
-                            current_series = _get_series_from_general(self)
-                            if current_series:
-                                outer_d_from_mapping = _get_outer_diameter_from_mapping(dn, current_series)
-                                if outer_d_from_mapping is None:
-                                    row_diameter = self._find_row_by_param_name(table, "外径")
-                                    if row_diameter >= 0:
-                                        d_item = table.item(row_diameter, 3)
-                                        if d_item:
-                                            db_value = d_item.text().strip()
-                                            if db_value and db_value not in ("—", "/"):
-                                                table.blockSignals(True)
-                                                try:
-                                                    d_item.setText("—")
-                                                    self._calculated_outer_diameter = db_value
-                                                finally:
-                                                    table.blockSignals(False)
-                                                print(f"[外径加载] 公式计算值，界面显示=—, 缓存={db_value}")
+            # 标记外径自动填充就绪，确保可以触发计算
+            setattr(self, "_outer_autofill_ready", True)
+            
+            # 触发一次外径自动填充，确保公式计算的外径值正确显示
+            from modules.condition_input.funcs.funcs_cdt_input import autofill_outer_diameter
+            autofill_outer_diameter(self)
+            print(f"[外径加载] 数据加载完成后触发外径自动填充")
         except Exception as e:
             print(f"[数据加载后处理外径显示] 失败: {e}")
         # 1112新修改-条件输入表格实质性变化：
@@ -669,10 +645,10 @@ class DesignConditionInputViewer(QWidget):
         product_form = get_product_form_from_db(self.product_id)
 
         # 只对NEN\AEM和BEM产品应用
-        if product_form not in ['NEN','AEM', 'BEM']:
+        if product_form not in ['NEN','AEM','BEM','NEN(Head)']:
             return
 
-        print(f"[DEBUG] 正在为NEN/AEM/BEM产品设置特殊只读单元格")
+        print(f"[DEBUG] 正在为NEN/NEN(Head)/AEM/BEM产品设置特殊只读单元格")
 
         # 遍历设计数据表的所有行
         for row in range(self.tableWidget_design_data.rowCount()):
@@ -767,6 +743,25 @@ class DesignConditionInputViewer(QWidget):
             is_loading = getattr(self, "_is_loading_data", False)
             if not is_loading:
                 self._update_head_type_code_by_outer_base(val)
+                # 0515元件定义新增
+                # 「否」时 HG 法兰类型不在可选范围内：同步库内法兰类型/密封面/密封面高度，并刷新已打开的元件定义界面
+                if val == "否":
+                    pid = getattr(self, "product_id", None)
+                    if pid:
+                        try:
+                            from modules.cailiaodingyi.funcs.funcs_pdf_change import (
+                                sync_flange_params_when_outer_base_inner,
+                            )
+                            sync_flange_params_when_outer_base_inner(pid)
+                        except Exception as _e_fl:
+                            print(f"[基准切否-法兰同步库] 失败: {_e_fl}")
+                        try:
+                            from modules.cailiaodingyi.controllers.datamanager import (
+                                refresh_open_paradefine_after_outer_base_inner,
+                            )
+                            refresh_open_paradefine_after_outer_base_inner(pid)
+                        except Exception as _e_ui:
+                            print(f"[基准切否-刷新元件定义界面] 失败: {_e_ui}")
         except Exception as e:
             print(f"[封头类型代号联动更新] 失败: {e}")
 

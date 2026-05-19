@@ -154,27 +154,181 @@ class ReturnKeyJumpFilter(QObject):
         super().__init__(table)
         self.table = table
 
+    # 0506新修改-条件输入双击编辑+键盘键入恢复
     def eventFilter(self, obj, event):
-        if event.type() == QEvent.KeyPress and event.key() in (Qt.Key_Return, Qt.Key_Enter):
-            # 如果正在编辑，不处理
-            if self.table.state() == self.table.EditingState:
+        if event.type() == QEvent.KeyPress:
+            # 处理回车键 - 向下移动并进入编辑
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                # 如果正在编辑，先完成编辑再移动
+                if self.table.state() == self.table.EditingState:
+                    return False  # 让默认处理完成编辑
+
+                current = self.table.currentIndex()
+                if not current.isValid():
+                    return False
+
+                row = current.row()
+                col = current.column()
+                next_row = row + 1
+
+                if next_row >= self.table.rowCount():
+                    next_row = 0  # 到最后一行则回到第一行，可按需修改逻辑
+
+                self.table.setCurrentCell(next_row, col)
+                # 自动进入编辑模式，实现键盘直接键入
+                QTimer.singleShot(0, lambda: self._enter_edit_mode_if_editable(next_row, col))
+                return True  # 拦截掉默认行为
+
+            # 处理Tab键 - 向右移动并进入编辑
+            elif event.key() == Qt.Key_Tab:
+                # 如果正在编辑，先完成编辑再移动
+                if self.table.state() == self.table.EditingState:
+                    return False
+
+                current = self.table.currentIndex()
+                if not current.isValid():
+                    return False
+
+                row = current.row()
+                col = current.column()
+                next_col = col + 1
+
+                if next_col >= self.table.columnCount():
+                    next_col = 0
+                    next_row = row + 1
+                    if next_row >= self.table.rowCount():
+                        next_row = 0
+                else:
+                    next_row = row
+
+                self.table.setCurrentCell(next_row, next_col)
+                # 自动进入编辑模式，实现键盘直接键入
+                QTimer.singleShot(0, lambda: self._enter_edit_mode_if_editable(next_row, next_col))
+                return True  # 拦截掉默认行为
+
+            # 处理Shift+Tab键 - 向左移动并进入编辑
+            elif event.key() == Qt.Key_Tab and event.modifiers() & Qt.ShiftModifier:
+                # 如果正在编辑，先完成编辑再移动
+                if self.table.state() == self.table.EditingState:
+                    return False
+
+                current = self.table.currentIndex()
+                if not current.isValid():
+                    return False
+
+                row = current.row()
+                col = current.column()
+                next_col = col - 1
+
+                if next_col < 0:
+                    next_col = self.table.columnCount() - 1
+                    next_row = row - 1
+                    if next_row < 0:
+                        next_row = self.table.rowCount() - 1
+                else:
+                    next_row = row
+
+                self.table.setCurrentCell(next_row, next_col)
+                # 自动进入编辑模式，实现键盘直接键入
+                QTimer.singleShot(0, lambda: self._enter_edit_mode_if_editable(next_row, next_col))
+                return True  # 拦截掉默认行为
+
+            # 方向键：完全交给 Qt 默认（移动当前格 / 从行内编辑退出并移动），不自动 table.edit()，
+            # 落点保持「整格蓝色选中」；需要行内编辑时用双击或可打印字符（TypeToStartEditFilter）。
+            elif event.key() in (Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right):
                 return False
-
-            current = self.table.currentIndex()
-            if not current.isValid():
-                return False
-
-            row = current.row()
-            col = current.column()
-            next_row = row + 1
-
-            if next_row >= self.table.rowCount():
-                next_row = 0  # 到最后一行则回到第一行，可按需修改逻辑
-
-            self.table.setCurrentCell(next_row, col)
-            return True  # 拦截掉默认行为
 
         return super().eventFilter(obj, event)
+
+    # 0506新修改-条件输入双击编辑+键盘键入恢复
+    def _enter_edit_mode_if_editable(self, row, col):
+        """检查单元格是否可编辑，如果可编辑则进入编辑模式"""
+        try:
+            item = self.table.item(row, col)
+            if item and (item.flags() & Qt.ItemIsEditable):
+                # 检查是否是特殊列（如设计数据第1列参数名）
+                if self.table.objectName() == "tableWidget_design_data" and col == 1:
+                    return
+                self.table.edit(self.table.model().index(row, col))
+        except Exception as e:
+            print(f"进入编辑模式失败: {e}")
+
+# 0506新修改-条件输入--下拉框禁用backspace+delete
+class TypeToStartEditFilter(QObject):
+    """
+    单击选中（未进入行内编辑）时，按可打印字符即打开编辑器并插入该字符；
+    不拦截 Delete/Backspace（整格删除仍由 DeleteKeyFilter 处理，且须保持在其之后安装）。
+    双击进入编辑的原有行为不变。
+    """
+
+    def __init__(self, table, smart_delegate):
+        super().__init__(table)
+        self.table = table
+        self.smart_delegate = smart_delegate
+
+    def _inject_text_into_focus_editor(self, text: str):
+        if not text:
+            return
+        fw = self.table.focusWidget()
+        if isinstance(fw, QLineEdit):
+            if not fw.isReadOnly():
+                fw.insert(text)
+            return
+        if isinstance(fw, QComboBox):
+            le = fw.lineEdit()
+            if le is not None and not le.isReadOnly():
+                le.insert(text)
+
+    def eventFilter(self, obj, event):
+        if event.type() != QEvent.KeyPress:
+            return super().eventFilter(obj, event)
+        if self.table.state() == QTableWidget.EditingState:
+            return False
+
+        key = event.key()
+        if key in (Qt.Key_Delete, Qt.Key_Backspace):
+            return False
+
+        if event.modifiers() & (Qt.ControlModifier | Qt.MetaModifier | Qt.AltModifier):
+            return False
+
+        if key in (
+            Qt.Key_Return,
+            Qt.Key_Enter,
+            Qt.Key_Tab,
+            Qt.Key_Escape,
+            Qt.Key_Up,
+            Qt.Key_Down,
+            Qt.Key_Left,
+            Qt.Key_Right,
+            Qt.Key_Home,
+            Qt.Key_End,
+            Qt.Key_PageUp,
+            Qt.Key_PageDown,
+            Qt.Key_F2,
+        ):
+            return False
+
+        ch = event.text()
+        if not ch or not ch.isprintable():
+            return False
+
+        current = self.table.currentIndex()
+        if not current.isValid():
+            return False
+
+        item = self.table.item(current.row(), current.column())
+        if item is None or not (item.flags() & Qt.ItemIsEditable):
+            return False
+
+        if self.table.objectName() == "tableWidget_design_data" and current.column() == 1:
+            return False
+
+        self.table.edit(current)
+        captured = ch
+        QTimer.singleShot(0, lambda t=captured: self._inject_text_into_focus_editor(t))
+        return True
+
 
 def disable_keyboard_search(table: QTableWidget):
     """
@@ -220,13 +374,19 @@ def enable_full_undo(target_widget, parent_for_stack, mode: str = "design", drop
 
     target_widget.setItemDelegate(delegate)
     disable_keyboard_search(target_widget)
-    # # target_widget.setEditTriggers(QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed)
-    filter = DropDownClickOnlyFilter(target_widget, delegate)
-    target_widget.viewport().installEventFilter(filter)
+    # 0506新修改-条件输入双击编辑+键盘键入恢复
+    # 只启用双击编辑
+    target_widget.setEditTriggers(QTableWidget.DoubleClicked)
+    # 注释掉单击编辑过滤器，禁用单击编辑功能
+    # filter = DropDownClickOnlyFilter(target_widget, delegate)
+    # target_widget.viewport().installEventFilter(filter)
 
     # ✅ 安装回车跳转事件过滤器
     target_widget.installEventFilter(ReturnKeyJumpFilter(target_widget))
-    # ✅ 安装 DeleteKeyFilter，传入 viewer 触发联动逻辑
+    # 0506新修改-条件输入双击编辑+键盘键入恢复
+    # ✅ 选中格未编辑时直接键入打开编辑（须装在 DeleteKeyFilter 之前，保证 Del/Backspace 仍由后者优先处理）
+    target_widget.installEventFilter(TypeToStartEditFilter(target_widget, delegate))
+    # ✅ 安装 DeleteKeyFilter，传入 viewer 触发联动逻辑（最后安装 → 事件链上最先处理 Del/Backspace）
     target_widget.installEventFilter(DeleteKeyFilter(
         target_widget,
         undo_stack=parent_for_stack.undo_stack,
@@ -289,6 +449,20 @@ class DeleteKeyFilter(QObject):
                 if not (item.flags() & Qt.ItemIsEditable):
                     continue
                 row, col = item.row(), item.column()
+                # 0506新修改-条件输入--下拉框禁用backspace+delete
+                # 整格蓝色选中（未打开行内编辑器）时：下拉限定格不用 Del/Backspace 整格清空；
+                # 已打开 Combo/行内编辑时由子控件处理键，此处通常收不到事件，与图二行为一致。
+                if self.table.state() != QTableWidget.EditingState:
+                    delg = self.table.itemDelegate()
+                    idx = self.table.model().index(row, col)
+                    if (
+                        delg is not None
+                        and hasattr(delg, "is_dropdown_cell")
+                        and callable(getattr(delg, "is_dropdown_cell"))
+                        and delg.is_dropdown_cell(idx)
+                    ):
+                        continue
+
                 old_value = item.text()
 
                 # ✅ 清空单元格内容

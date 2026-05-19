@@ -232,9 +232,6 @@ def open_project():
             # QMessageBox.critical(bianl.main_window, "错误", "id.csv 为空，无法打开项目")
             return
 
-        bianl.current_project_id = project_id
-        print(f"当前项目ID: {bianl.current_project_id}")  # 调试信息
-
         # 加载项目信息 根据项目id
         conn_project = common_usage.get_mysql_connection_project()
         cursor_project = conn_project.cursor()
@@ -250,6 +247,49 @@ def open_project():
             bianl.main_window.line_tip.setStyleSheet("color: black;")
             # QMessageBox.warning(bianl.main_window, "提示", "未找到对应的项目信息！")
             return
+
+        # 所选项目根与库登记不一致时，将路径写入数据库并同步活动表产品路径
+        from modules.chanpinguanli import project_path_relocate
+
+        selected_root = os.path.normpath(os.path.abspath(folder_path))
+        db_root = project_path_relocate.get_project_root_folder(project_info)
+        db_root_norm = (
+            os.path.normpath(os.path.abspath(db_root)) if db_root else None
+        )
+        need_sync = db_root_norm is None or os.path.normcase(
+            selected_root
+        ) != os.path.normcase(db_root_norm)
+        if need_sync:
+            try:
+                project_path_relocate.relocate_project_paths(
+                    project_id, project_info, selected_root
+                )
+            except Exception as e:
+                print(f"[open_project] 同步项目路径失败: {e}")
+                bianl.main_window.line_tip.setText(f"同步项目路径失败：{e}")
+                bianl.main_window.line_tip.setToolTip(str(e))
+                bianl.main_window.line_tip.setStyleSheet("color: black;")
+                return
+            conn_project = common_usage.get_mysql_connection_project()
+            cursor_project = conn_project.cursor()
+            cursor_project.execute(
+                "SELECT * FROM 项目需求表 WHERE 项目ID = %s", (project_id,)
+            )
+            project_info = cursor_project.fetchone()
+            cursor_project.close()
+            conn_project.close()
+            if not project_info:
+                bianl.main_window.line_tip.setText("路径已更新但重新加载项目信息失败。")
+                bianl.main_window.line_tip.setToolTip("路径已更新但重新加载项目信息失败。")
+                bianl.main_window.line_tip.setStyleSheet("color: black;")
+                return
+            if hasattr(bianl.main_window, "line_tip") and bianl.main_window.line_tip:
+                bianl.main_window.line_tip.setText("已根据所选文件夹同步项目保存路径与产品路径。")
+                bianl.main_window.line_tip.setToolTip("")
+                bianl.main_window.line_tip.setStyleSheet("color: black;")
+
+        bianl.current_project_id = project_id
+        print(f"当前项目ID: {bianl.current_project_id}")  # 调试信息
 
         # 填充项目信息到UI
         bianl.owner_input.setText(str(project_info.get('业主名称') or ''))

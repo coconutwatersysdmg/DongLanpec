@@ -2011,6 +2011,9 @@ class DesignParameterDefineInputerViewer(QWidget):
         其他控件/事件全部走父类默认逻辑。
         """
         try:
+            if getattr(self, "_parts_table_viewport", None) is not None and obj is self._parts_table_viewport:
+                if event.type() == QEvent.Resize:
+                    QTimer.singleShot(0, self._apply_parts_list_weighted_widths)
             if obj is getattr(self, "lineEdit_template", None):
                 tip = getattr(self, "line_tip", None)
                 focus_tip_text = "点击回车键即可保存为新模板"
@@ -2060,6 +2063,8 @@ class DesignParameterDefineInputerViewer(QWidget):
             self.comboBox_template.installEventFilter(self)
         self.tableWidget_parts = self.findChild(QtWidgets.QTableWidget, "tableWidget")
         self.tableWidget_parts.setHorizontalHeader(CustomHeaderView(QtCore.Qt.Horizontal, self.tableWidget_parts))
+        self._parts_table_viewport = self.tableWidget_parts.viewport()
+        self._parts_table_viewport.installEventFilter(self)
         self.tableWidget_parts.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.tableWidget_parts.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tableWidget_parts.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -2083,8 +2088,10 @@ class DesignParameterDefineInputerViewer(QWidget):
 
         # 获取快速筛选输入框
         self.lineEdit_filter = self.findChild(QtWidgets.QLineEdit, "lineEdit")
-        self.lineEdit_filter.setPlaceholderText("输入关键词筛选所有列...")
-        self.lineEdit_filter.textChanged.connect(self.filter_table_globally)
+        self.lineEdit_filter.setPlaceholderText("输入关键词后按回车筛选所有列...")
+        self.lineEdit_filter.returnPressed.connect(
+            lambda: self.filter_table_globally(self.lineEdit_filter.text())
+        )
         # 获取批量替换按钮
         self.pushButton_batch_replace = self.findChild(QPushButton, "pushButton_batch_replace")
         if self.pushButton_batch_replace:
@@ -3947,6 +3954,47 @@ class DesignParameterDefineInputerViewer(QWidget):
         except Exception as _e_ro:
             print(f"[load_original_data] schedule readonly: {_e_ro}")
 
+    def _apply_parts_list_weighted_widths(self):
+        """
+        元件列表中间五列（零件名称 + 材料四列）按权重分配视口剩余宽度。
+        Stretch 无法设比例，故用 Interactive + 计算宽度；零件名称与材料单列权重比默认 1.5:1。
+        """
+        table = getattr(self, "tableWidget_parts", None)
+        if not table or table.columnCount() < 9:
+            return
+        try:
+            vp_w = max(0, table.viewport().width())
+            if vp_w <= 0:
+                return
+            fixed = (
+                table.columnWidth(0)
+                + table.columnWidth(6)
+                + table.columnWidth(7)
+                + table.columnWidth(8)
+                + 8
+            )
+            avail = vp_w - fixed
+            if avail < 200:
+                return
+            # 零件名称 : 每个材料列 = name_w : mat_w（总权重 = name_w + 4*mat_w）
+            name_w, mat_w = 1.5, 1.0
+            tw = name_w + 4.0 * mat_w
+            w_part = int(avail * name_w / tw)
+            w_mat = int(avail * mat_w / tw)
+            w_part += avail - w_part - 4 * w_mat
+            w_part = max(72, w_part)
+            w_mat = max(56, w_mat)
+            if w_part + 4 * w_mat > avail:
+                s = avail / float(w_part + 4 * w_mat)
+                w_part = max(72, int(w_part * s))
+                w_mat = max(56, int(w_mat * s))
+                w_part += max(0, avail - w_part - 4 * w_mat)
+            table.setColumnWidth(1, w_part)
+            for c in (2, 3, 4, 5):
+                table.setColumnWidth(c, w_mat)
+        except Exception:
+            pass
+
     def render_data_to_table(self, element_original_info):
         # 获取表格控件
         table = self.tableWidget_parts
@@ -3973,12 +4021,13 @@ class DesignParameterDefineInputerViewer(QWidget):
             pass
         header.sectionClicked.connect(self.on_header_clicked)
 
-        # 设置列宽
+        # 列宽：序号/有无覆层/是否定义/所属部件按内容；零件名称+材料四列用 Interactive，由 _apply_parts_list_weighted_widths 按权重分配（默认 零件:材料列=1.5:1）。
+        _col_resize_content = (0, 6, 7, 8)  # 序号、有无覆层、是否定义、所属部件
         for i in range(table.columnCount()):
-            if i in (0, 7, 8):
+            if i in _col_resize_content:
                 header.setSectionResizeMode(i, QtWidgets.QHeaderView.ResizeToContents)
             else:
-                header.setSectionResizeMode(i, QtWidgets.QHeaderView.Stretch)
+                header.setSectionResizeMode(i, QtWidgets.QHeaderView.Interactive)
 
         # 强制不出现水平滚动条
         table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
@@ -3998,9 +4047,7 @@ class DesignParameterDefineInputerViewer(QWidget):
         }
         """)
 
-        # 限制最后一列最大宽度（可选）
         last_col = table.columnCount() - 1
-        table.setColumnWidth(last_col, 100)
 
         # 遍历数据并填入表格
         for row_index, row_data in enumerate(element_original_info):
@@ -4012,9 +4059,24 @@ class DesignParameterDefineInputerViewer(QWidget):
                     item = QTableWidgetItem(str(row_data.get(key, "")))
                 item.setTextAlignment(Qt.AlignCenter)
                 item.setToolTip(item.text())  # ✅ 添加悬浮提示
+                # 元件列表仅展示：去掉默认可编辑标志（否则主窗口恢复非只读时会重新打开单元格编辑）
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
                 if element_id:
                     item.setData(Qt.UserRole, element_id)
                 table.setItem(row_index, col_idx, item)
+
+        for i in _col_resize_content:
+            table.resizeColumnToContents(i)
+        table.setColumnWidth(last_col, 100)
+        _cap_clad = 84
+        if table.columnWidth(6) > _cap_clad:
+            table.setColumnWidth(6, _cap_clad)
+
+        self._apply_parts_list_weighted_widths()
+        QTimer.singleShot(0, self._apply_parts_list_weighted_widths)
+
+        # 与 init_widgets 一致；refresh 后可能被主窗口 apply_readonly_to_widget_tree 改回默认可编辑触发
+        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         # ✅ 视觉分隔效果【核心】
         table.setShowGrid(True)

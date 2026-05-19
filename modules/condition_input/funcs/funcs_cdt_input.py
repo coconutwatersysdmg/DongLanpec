@@ -328,6 +328,79 @@ def _determine_diameter_series():
         print(f"[判断外径系列失败] 错误: {e}")
         return None
 # 0221新修改-配置库-外径系列-外径
+# 0506新修改-配置库-外径系列-外径
+# === 新增：读取外径计算公式 ===
+def _get_outer_diameter_formula():
+    """
+    从user_config的2.2.11.4读取外径计算公式，只提取"外径值="后的公式部分
+    :return: 计算公式（字符串），失败返回None
+    """
+    try:
+        value = _get_user_config_value("2.2.11.4")
+        if not value:
+            return None
+        
+        value_str = str(value).strip()
+        if not value_str:
+            return None
+        
+        # 查找"外径值="的位置
+        marker = "外径值="
+        marker_pos = value_str.find(marker)
+        if marker_pos == -1:
+            print(f"[读取外径计算公式失败] 未找到'外径值='标记")
+            return None
+        
+        # 提取"外径值="后的公式部分
+        formula = value_str[marker_pos + len(marker):].strip()
+        if not formula:
+            print(f"[读取外径计算公式失败] '外径值='后没有公式内容")
+            return None
+        
+        return formula
+    except Exception as e:
+        print(f"[读取外径计算公式失败] 错误: {e}")
+        return None
+
+def _calculate_outer_diameter_by_formula(dn: int, formula: str):
+    """
+    根据公式计算外径值
+    :param dn: 公称直径（整数）
+    :param formula: 计算公式（字符串，如 "round(25.4 * DN / 25, 0)"）
+    :return: 计算结果（浮点数），失败返回None
+    """
+    try:
+        if not formula or not isinstance(dn, (int, float)):
+            return None
+        
+        # 创建安全的执行环境
+        safe_dict = {
+            'DN': dn,
+            'dn': dn,
+            'round': round,
+            'int': int,
+            'float': float,
+            'abs': abs,
+            'min': min,
+            'max': max,
+            '__builtins__': {}
+        }
+        
+        # 执行公式
+        result = eval(formula, safe_dict)
+        
+        # 确保返回数值类型
+        if isinstance(result, (int, float)):
+            return result
+        else:
+            print(f"[公式计算结果类型错误] 期望数值类型，实际: {type(result)}")
+            return None
+            
+    except Exception as e:
+        print(f"[公式计算失败] DN={dn}, formula={formula}, 错误: {e}")
+        return None
+
+# 0221新修改-配置库-外径系列-外径
 # === 新增：解析映射表并查找外径值 ===
 def _get_outer_diameter_from_mapping(dn: int, series: str):
     """
@@ -481,8 +554,12 @@ def autofill_outer_diameter(viewer: QWidget):
     1. 外径系列优先使用通用数据表当前值；
        若当前为空，再根据user_config(2.2.11.2 / 2.2.11.3)给一个默认系列；
     2. 外径值优先从user_config的2.2.11.1映射表查找；
-    3. 映射表没有对应DN时，按公式 round(25.4 * DN / 25, 0) 计算并显示在「外径」；
-       若当前「外径系列」为「-」，则保持「-」；否则保留用户当前选择。
+    3. 映射表没有对应DN时：
+       - 外径按数据库公式计算并显示；
+       - 数据加载时，保留数据库中保存的外径系列值；
+       - 新的不在表内DN时，外径系列显示为"-"；
+       - 同一不在表内DN下，保留用户选择的外径系列（"英制系列"或"公制系列"）；
+    4. 用户修改外径系列时，保持"不在表内DN"状态，继续使用公式计算外径值。
     """
     # 未就绪时不进行自动填充（避免界面进入前弹窗）
     if not getattr(viewer, "_outer_autofill_ready", False):
@@ -557,27 +634,67 @@ def autofill_outer_diameter(viewer: QWidget):
                 _set_general_outer_diameter_series(viewer, lookup_series)
             setattr(viewer, "_outer_last_pair", (dn, lookup_series))
         else:
+            # 0506新修改-配置库-外径系列-外径
             # 映射表中不存在：外径显示公式计算值。
             # 规则：
-            # - 如果仍是“同一个不在表内的 DN”，允许保留用户手动修改过的外径系列（英制/公制）。
-            # - 如果 DN 变成了“另一个不在表内的值”，则强制外径系列显示为「-」（公式态）。
-            calculated_value = round(25.4 * dn / 25, 0)
-            calculated_value_str = str(int(calculated_value))
-            _set_general_outer_diameter(viewer, calculated_value_str)
-            if hasattr(viewer, "_calculated_outer_diameter"):
-                viewer._calculated_outer_diameter = None
+            # - 初始状态：外径系列显示为"-"
+            # - 允许用户通过下拉框修改外径系列为"英制系列"或"公制系列"
+            
+            # 从数据库读取计算公式
+            formula = _get_outer_diameter_formula()
+            if formula:
+                # 使用数据库中的公式计算
+                calculated_value = _calculate_outer_diameter_by_formula(dn, formula)
+                if calculated_value is not None:
+                    calculated_value_str = str(int(calculated_value))
+                    _set_general_outer_diameter(viewer, calculated_value_str)
+                    print(f"[外径计算] DN={dn}, 使用数据库公式: {formula}, 结果: {calculated_value_str}")
+                else:
+                    # 公式计算失败，不设置外径值
+                    print(f"[外径计算] DN={dn}, 数据库公式计算失败: {formula}")
+                    return
+            else:
+                # 无法获取公式，不设置外径值
+                print(f"[外径计算] DN={dn}, 无法获取数据库公式")
+                return
+            
+            # 检查当前外径系列的值
+            current_series = _get_series_from_general(viewer)
+            
+            # 检查是否是同一个不在表内的DN
             last_non_table_dn = getattr(viewer, "_outer_last_non_table_dn", None)
-            # 第一次进入“公式态”（例如：切换“是否以外径为基准*”为“是”后、或首次输入不在表内DN）
-            # 以及从一个不在表内DN切到另一个不在表内DN时，都强制外径系列显示为「-」。
-            should_force_dash = (last_non_table_dn is None) or (last_non_table_dn != dn)
-            if should_force_dash:
+            
+            # 检查是否正在加载数据
+            is_loading = getattr(viewer, "_is_loading_data", False)
+            
+            # 如果是新的不在表内的DN，则设置为"-"（仅在非加载状态下）
+            # 如果是同一个不在表内的DN，保留用户当前选择的外径系列值
+            # 如果正在加载数据，保留数据库中的值
+            if is_loading:
+                # 数据加载时，保留数据库中的外径系列值
+                if current_series and current_series not in ("", "/", "-"):
+                    # 数据库中有有效值，保留它
+                    series_effective = current_series
+                else:
+                    # 数据库中无有效值，设置为"-"
+                    _set_general_outer_diameter_series(viewer, "-")
+                    series_effective = "-"
+            elif last_non_table_dn != dn:
+                # 新的不在表内的DN，设置为"-"
+                _set_general_outer_diameter_series(viewer, "-")
+                series_effective = "-"
+            elif not current_series or current_series == "/":
+                # 当前外径系列为空或为"/"，设置为"-"
                 _set_general_outer_diameter_series(viewer, "-")
                 series_effective = "-"
             else:
-                series_effective = series_ui
+                # 保留用户当前选择的外径系列值（"英制系列"或"公制系列"）
+                series_effective = current_series
+            
+            # 记录当前DN，用于后续判断
             setattr(viewer, "_outer_last_non_table_dn", dn)
             print(
-                f"[外径计算] DN={dn}, 映射无此行，公式外径={calculated_value_str}, 外径系列={series_effective}, last_non_table_dn={last_non_table_dn}"
+                f"[外径计算] DN={dn}, 映射无此行，公式外径={calculated_value_str}, 外径系列={series_effective}"
             )
             setattr(viewer, "_outer_last_pair", (dn, series_effective))
     finally:
@@ -2838,7 +2955,7 @@ def apply_dn_standard_range_user_prompt(viewer, table, row, col, value: str) -> 
 
         raw_form = (_get_raw_product_form(table) or "").strip().upper()
         removable_for_gb151 = {"AEU", "BEU", "AES", "BES", "AKU", "BKU"}
-        non_removable_for_gb151 = {"AEM", "BEM", "NEN"}
+        non_removable_for_gb151 = {"AEM", "BEM", "NEN","NEN(HEAD)"}
         gb150_shell_tube = removable_for_gb151 | non_removable_for_gb151
 
         if raw_form in gb150_shell_tube and dn_val < 150:
@@ -3344,6 +3461,7 @@ def import_multi_conditions_from_excel(excel_path: str, product_id: int, viewer:
         3: (10, 11)  # Excel K=11, L=12 → df 索引=10,11
     }
 
+    # 0506新修改-多工况新增参数单位
     def _get_param_unit_from_main_table(param_name: str) -> str:
         """
         从主界面设计数据表读取参数单位，确保多工况导入时同步写入单位字段。
@@ -3414,7 +3532,7 @@ def import_multi_conditions_from_excel(excel_path: str, product_id: int, viewer:
             r2 = cur.fetchone() or {}
             multi_max = int(r2.get("max_id") or 0)
 
-            if product_form in ("NEN", "AEM", "BEM"):
+            if product_form in ("NEN", "AEM", "BEM","NEN(Head)"):
                 cur.execute(
                     """
                     SELECT MAX(设计数据参数ID) AS max_id
@@ -4431,6 +4549,18 @@ def handle_cross_table_triggers(viewer: QWidget, changed_table: QTableWidget, ro
                 setattr(viewer, "_outer_series_ts", now_ts)
             except Exception:
                 pass
+            # 0506新修改-配置库-外径系列-外径
+            # 获取新的外径系列值
+            new_series = changed_table.item(row, 3).text().strip() if changed_table.item(row, 3) else ""
+            
+            # 注意：不清除"不在表内DN"的标记，让系统继续使用公式计算外径值
+            # 用户修改外径系列时，仍然保持DN不在映射表中的状态
+            if new_series in ["英制系列", "公制系列"]:
+                try:
+                    print(f"[外径系列变更] 用户选择了'{new_series}'，保持不在表内DN状态")
+                except Exception:
+                    pass
+            
             try:
                 autofill_outer_diameter(viewer)
                 # show_info_tip(viewer, "[通用数据]外径已根据公称直径与外径系列自动更新。")
@@ -4814,7 +4944,7 @@ def get_product_type_from_db(product_id):
 def fetch_general_dropdown_config():
     """
     从数据库读取通用数据表的下拉字段配置
-    注意：外径系列已从下拉框配置中移除，改为只读显示，值由user_config决定
+    注意：外径系列支持下拉框选择，用户可以修改为"英制系列"或"公制系列"
     """
     config = {}
     conn = get_connection(**db_config_1)
@@ -4827,17 +4957,18 @@ def fetch_general_dropdown_config():
             rows = cursor.fetchall()
             for row in rows:
                 name = row["参数名称"]
-                # # === 移除外径系列的下拉框配置 ===
-                # if name == "外径系列":
-                #     continue  # 跳过外径系列，不添加到下拉框配置中
-                
                 typ = row["type"]
                 editable = str(row["editable"]).lower() in ("true", "1", "是")
-                try:
-                    options = ast.literal_eval(row["options"])
-                except Exception as e:
-                    print(f"⚠️ 参数 {name} 的 options 无法解析：{e}")
-                    options = []
+                
+                # 为外径系列提供特殊的下拉框选项
+                if name == "外径系列":
+                    options = ["英制系列", "公制系列"]
+                else:
+                    try:
+                        options = ast.literal_eval(row["options"])
+                    except Exception as e:
+                        print(f"⚠️ 参数 {name} 的 options 无法解析：{e}")
+                        options = []
 
                 config[name] = {
                     "type": typ.strip(),

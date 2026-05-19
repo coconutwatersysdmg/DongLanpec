@@ -16,6 +16,15 @@ db_config_2 = {
     'password': '123456',
     'database': '产品设计活动库'
 }
+# 材料库配置（用于查询模板）
+db_config_material = {
+    'host': 'localhost',
+    'port': 3306,
+    'user': 'root',
+    'password': '123456',
+    'database': '材料库'
+}
+
 
 def get_connection(host, port, user, password, database):
     return pymysql.connect(

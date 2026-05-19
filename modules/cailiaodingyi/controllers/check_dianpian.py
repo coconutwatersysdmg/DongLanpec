@@ -87,6 +87,39 @@ db_config2 = {
     "database": "材料库"
 }
 
+def _normalize_forms(forms_text):
+    s = str(forms_text or "").strip().upper().replace("，", ",")
+    return [x.strip() for x in s.split(",") if x.strip()]
+
+def _get_product_form(product_id):
+    conn = get_connection(**db_config1)
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT 产品型式
+                FROM 产品设计活动表
+                WHERE 产品ID = %s
+                LIMIT 1
+                """,
+                (product_id,)
+            )
+            row = cursor.fetchone()
+            return (row.get("产品型式") or "").strip().upper() if row else ""
+    finally:
+        conn.close()
+
+def _filter_mapping_rows_by_form(rows, product_form):
+    preferred = []
+    fallback = []
+    for r in rows or []:
+        tokens = _normalize_forms(r.get("产品型式"))
+        if product_form and product_form in tokens:
+            preferred.append(r)
+        elif (not tokens) or ("ALL" in tokens):
+            fallback.append(r)
+    return preferred if preferred else fallback
+
 
 def get_gasket_elements(product_id):
     """
@@ -129,6 +162,7 @@ def get_gasket_elements(product_id):
 
     if not gasket_ids:
         return []
+    product_form = _get_product_form(product_id)
 
     # === STEP3-5: 查配套法兰 + 法兰元件ID + 材料牌号 ===
     result = []
@@ -141,7 +175,8 @@ def get_gasket_elements(product_id):
                     FROM 垫片配套法兰映射表
                     WHERE 垫片名称 = %s
                 """, (gname,))
-                rows = cursor2.fetchall()
+                rows = cursor2.fetchall() or []
+                rows = _filter_mapping_rows_by_form(rows, product_form)
 
                 for r in rows:
                     flange_name = r.get("配套法兰") or r.get("法兰名称")
