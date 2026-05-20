@@ -4,6 +4,7 @@ import logging
 import os
 import re
 import sys
+import weakref
 from collections import defaultdict
 from typing import List, Tuple
 
@@ -318,9 +319,18 @@ class _ParamValueCellDelegate(QStyledItemDelegate):
         editor.setGeometry(option.rect.adjusted(5, 4, -5, -4))
 
 
+# 已打开的管束编辑器实例（tab 隐藏后无法关闭重开，需在再次显示时刷新）
+_tube_layout_editor_instances = weakref.WeakSet()
+
+
 def on_product_id_changed(new_id):
     global product_id
     product_id = new_id
+    for editor in list(_tube_layout_editor_instances):
+        try:
+            editor._on_global_product_id_changed(new_id)
+        except Exception as e:
+            print(f"[on_product_id_changed] 通知管束界面刷新失败: {e}")
 
 
 # 测试用产品 ID（真实情况中由外部输入）
@@ -1603,12 +1613,94 @@ class TubeLayoutEditor(QMainWindow):
         self._box_rect_item = None
         # 打开管束后由 load_initial_data 判定：通用数据表「是」且布管参数表「否」时为 True
         self.need_initial_user_update_di_for_outer_base = False
+        _tube_layout_editor_instances.add(self)
+        self._reload_in_progress = False
+        # main 隐藏 tabBar 后无法关 tab 再开；跳过首次 show，之后每次切回管束 tab 重载库数据
+        self._skip_next_show_reload = True
         self.load_initial_data()
 
         # 初始化完成后同步全局变量
         from modules.buguan.buguan_ziyong.variable import sync_from_editor
 
         sync_from_editor(self)
+
+    def showEvent(self, event):
+        """tab 已存在时 main.open_tab 只切索引不重建；再次显示须重载参数。"""
+        super().showEvent(event)
+        if getattr(self, "_skip_next_show_reload", False):
+            self._skip_next_show_reload = False
+            return
+        QTimer.singleShot(0, self._reload_on_tab_reactivated)
+
+    def _sync_current_product_id_from_global(self):
+        global product_id
+        try:
+            import modules.chanpinguanli.bianl as bianl
+
+            pid = getattr(bianl, "current_product_id", None)
+        except Exception:
+            pid = None
+        if pid:
+            product_id = pid
+            self.productID = pid
+        return getattr(self, "productID", None)
+
+    def _disconnect_param_reload_signals(self):
+        """重复 load 前断开表格监听，避免 itemChanged 叠加。"""
+        if not hasattr(self, "param_table") or self.param_table is None:
+            return
+        for slot in (
+            getattr(self, "on_param_changed", None),
+            getattr(self, "on_param_table_item_changed", None),
+            getattr(self, "update_leftpad_params", None),
+        ):
+            if slot is None:
+                continue
+            try:
+                self.param_table.itemChanged.disconnect(slot)
+            except Exception:
+                pass
+
+    def _reload_on_tab_reactivated(self, reason="tab_reshown"):
+        """
+        等效于以前「关闭管束 tab 再打开」：从产品设计库重新 load_initial_data。
+        不修改 main.py；解决 tabBar.hide() 后无法关 tab 导致界面陈旧的问题。
+        """
+        if getattr(self, "_reload_in_progress", False):
+            return
+        pid = self._sync_current_product_id_from_global()
+        if not pid:
+            print(f"[TubeLayoutEditor] 跳过刷新（无产品ID）reason={reason}")
+            return
+        self._reload_in_progress = True
+        try:
+            print(
+                f"[TubeLayoutEditor] 从数据库刷新管束参数 "
+                f"reason={reason} productID={pid}"
+            )
+            self._disconnect_param_reload_signals()
+            self.load_initial_data()
+            try:
+                from modules.buguan.buguan_ziyong.variable import sync_from_editor
+
+                sync_from_editor(self)
+            except Exception as e:
+                print(f"[TubeLayoutEditor] sync_from_editor 失败: {e}")
+        except Exception as e:
+            print(f"[TubeLayoutEditor] 刷新失败: {e}")
+        finally:
+            self._reload_in_progress = False
+
+    def _on_global_product_id_changed(self, new_id):
+        """产品树切换产品：若本页仍挂在 tab 上则立即刷新。"""
+        global product_id
+        if new_id:
+            product_id = new_id
+            self.productID = new_id
+        if self.isVisible():
+            self._reload_on_tab_reactivated(reason="product_id_changed")
+        else:
+            self._skip_next_show_reload = False
 
     def _sync_current_centers_lagan(self, reason: str = ""):
         """
@@ -3529,20 +3621,9 @@ class TubeLayoutEditor(QMainWindow):
                     return str(v).strip(), k
             return None, None
 
-        # 设计数据表「公称直径*」：按产品型式取用列（另一列为空时回退）
+        # 设计数据表「公称直径*」：与条件输入页一致（两列不等时优先管程）
         def _design_dn_pick(d):
-            if not isinstance(d, dict):
-                return None, None
-            hx = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
-            if hx in ("AKU", "BKU"):
-                order = ("管程数值", "壳程数值")
-            else:
-                order = ("壳程数值", "管程数值")
-            for k in order:
-                v = d.get(k)
-                if v is not None and str(v).strip() != "":
-                    return str(v).strip(), k
-            return None, None
+            return self._design_dn_pick_row(d)
 
         # 定义全局隐藏参数列表（存储为实例变量）
         self.hidden_params = [
@@ -3632,30 +3713,17 @@ class TubeLayoutEditor(QMainWindow):
                                     if _pv is not None and str(_pv).strip() != "":
                                         piping_outer = str(_pv).strip()
                                     break
-                        design_outer = None
-                        cursor.execute(
-                            """
-                            SELECT 数值 FROM 产品设计活动表_通用数据表
-                            WHERE 产品ID = %s AND 参数名称 = %s
-                            LIMIT 1
-                            """,
-                            (self.productID, "是否以外径为基准*"),
+                        design_outer = self._fetch_outer_base_from_general_db(
+                            cursor
                         )
-                        _row = cursor.fetchone()
-                        if isinstance(_row, dict):
-                            _dv = _row.get("数值")
-                        else:
-                            _dv = _row[0] if _row else None
-                        if _dv is not None and str(_dv).strip() != "":
-                            design_outer = str(_dv).strip()
                         self.need_initial_user_update_di_for_outer_base = (
                                 design_outer == "是" and piping_outer == "否"
                         )
                         print(
                             "[打开管束] 是否以外径为基准 — "
-                            "产品设计活动表_通用数据表[参数名称='是否以外径为基准*'][列=数值]: "
+                            "通用数据表(是否以外径为基准*): "
                             f"{design_outer!r} | "
-                            "产品设计活动表_布管参数表[参数名=是否以外径为基准]: "
+                            "布管参数表(旧值,仅对比): "
                             f"{piping_outer!r} | "
                             "need_initial_user_update_di_for_outer_base="
                             f"{self.need_initial_user_update_di_for_outer_base}"
@@ -3728,27 +3796,20 @@ class TubeLayoutEditor(QMainWindow):
                             except Exception:
                                 continue
 
-                        row_dn = None
+                        _dvn_design = None
                         try:
-                            cursor.execute(
-                                """
-                                SELECT 壳程数值, 管程数值
-                                FROM 产品设计活动表_设计数据表
-                                WHERE 产品ID = %s AND 参数名称 = %s
-                                """,
-                                (self.productID, "公称直径*"),
-                            )
-                            row_dn = cursor.fetchone()
+                            _dvn_design = self._fetch_dn_from_design_db(cursor)
                         except Exception as e:
                             print(f"[load_initial_data] 查询设计数据表 DN(公称直径*)失败: {e}")
-                            row_dn = None
 
                         operation_record_exists_effective = operation_record_exists
                         # 有操作记录且布管表有 DN 时：与「公称直径*」按型式取用列一致才算有效
-                        if operation_record_exists and table_dn_value is not None and isinstance(
-                                row_dn, dict
+                        if (
+                            operation_record_exists
+                            and table_dn_value is not None
+                            and _dvn_design is not None
                         ):
-                            _dvn, _ = _design_dn_pick(row_dn)
+                            _dvn = _dvn_design
                             if _dvn is not None:
                                 _matched = False
                                 try:
@@ -3806,25 +3867,14 @@ class TubeLayoutEditor(QMainWindow):
                                 if param_name == "壳体内直径 Dis":
                                     original_di_value = param_value
 
-                                # 公称直径DN的个性化查询（仅产品库有设计数据表）
+                                # 公称直径 DN：仅显示设计数据表取值，不使用布管参数表缓存
                                 if param_name == "公称直径 DN":
-                                    # print(param_value)
-                                    # print("公称直径原本的值")
                                     try:
-                                        # 从产品库的设计数据表查询（符合实际表结构）
-                                        design_query = """
-                                            SELECT 壳程数值, 管程数值
-                                            FROM 产品设计活动表_设计数据表 
-                                            WHERE 产品ID = %s AND 参数名称 = %s
-                                        """
-                                        cursor.execute(
-                                            design_query, (self.productID, "公称直径*")
+                                        _dn_pick = self._fetch_dn_from_design_db(
+                                            cursor, prefer_value=param_value
                                         )
-                                        design_data = cursor.fetchone()
-                                        _dn_pick, _ = _design_dn_pick(design_data)
-
+                                        final_value = _dn_pick if _dn_pick is not None else ""
                                         if _dn_pick is not None:
-                                            final_value = _dn_pick
                                             # print(final_value)
                                             # print("从设计数据表中读取的新值")
                                             # 逻辑说明：
@@ -3892,40 +3942,50 @@ class TubeLayoutEditor(QMainWindow):
                                                         f"删除布管相关表数据时出错: {str(e)}"
                                                     )
                                             print(
-                                                f"更新公称直径 DN: {param_value} -> {final_value}"
+                                                f"更新公称直径 DN(仅设计数据表): "
+                                                f"布管表={param_value!r} -> 显示={final_value!r}"
                                             )
+                                            try:
+                                                self._buguan_display_dn = (
+                                                    str(final_value).strip()
+                                                    if final_value not in (None, "")
+                                                    else ""
+                                                )
+                                            except Exception:
+                                                pass
                                     except Exception as e:
                                         print(
-                                            f"处理公称直径DN时出错: {str(e)}，使用原值: {param_value}"
+                                            f"处理公称直径DN时出错: {str(e)}，界面不采用布管参数表值"
                                         )
+                                        final_value = ""
 
-                                # 其他需要产品库设计数据表的参数处理
+                                # 是否以外径为基准：仅显示通用数据表取值，不使用布管参数表缓存
                                 elif param_name == "是否以外径为基准":
                                     try:
-                                        design_query = """
-                                            SELECT 数值 
-                                            FROM 产品设计活动表_通用数据表 
-                                            WHERE 产品ID = %s AND 参数名称 = %s
-                                        """
-                                        cursor.execute(
-                                            design_query,
-                                            (self.productID, "是否以外径为基准*"),
+                                        piping_val = param_value
+                                        db_val = self._fetch_outer_base_from_general_db(
+                                            cursor
                                         )
-                                        design_data = cursor.fetchone()
-
-                                        if (
-                                                isinstance(design_data, dict)
-                                                and "数值" in design_data
-                                                and design_data["数值"]
-                                        ):
-                                            final_value = design_data["数值"]
-                                            print(
-                                                f"更新是否以外径为基准: {param_value} -> {final_value}"
-                                            )
+                                        final_value = (
+                                            db_val
+                                            if db_val is not None
+                                            else "否"
+                                        )
+                                        print(
+                                            f"更新是否以外径为基准(仅通用数据表): "
+                                            f"布管表={piping_val!r} -> 显示={final_value!r}"
+                                        )
+                                        try:
+                                            self._buguan_display_outer_base = str(
+                                                final_value
+                                            ).strip()
+                                        except Exception:
+                                            pass
                                     except Exception as e:
                                         print(
-                                            f"处理是否以外径为基准时出错: {str(e)}，使用原值: {param_value}"
+                                            f"处理是否以外径为基准时出错: {str(e)}，界面不采用布管参数表值"
                                         )
+                                        final_value = "否"
 
                                 elif param_name == "壳体内直径 Dis":
                                     try:
@@ -3950,13 +4010,25 @@ class TubeLayoutEditor(QMainWindow):
                                                     (self.productID, _candidate_name),
                                                 )
                                                 design_data = cursor.fetchone()
-                                                _pv, _pc = _design_shell_tube_pick(design_data)
+                                                if _candidate_name == "公称直径*":
+                                                    _pv, _pc = _design_dn_pick(design_data)
+                                                else:
+                                                    _pv, _pc = _design_shell_tube_pick(
+                                                        design_data
+                                                    )
                                                 if _pv is not None:
                                                     used_param_name = _candidate_name
                                                     print(used_param_name, "used_param_name")
                                                     break
 
-                                            _raw_v, _raw_col = _design_shell_tube_pick(design_data)
+                                            if used_param_name == "公称直径*":
+                                                _raw_v, _raw_col = _design_dn_pick(
+                                                    design_data
+                                                )
+                                            else:
+                                                _raw_v, _raw_col = _design_shell_tube_pick(
+                                                    design_data
+                                                )
 
                                             if _raw_v is not None:
                                                 final_value = _raw_v
@@ -4009,12 +4081,24 @@ class TubeLayoutEditor(QMainWindow):
                                                     (self.productID, _candidate_name),
                                                 )
                                                 design_data = cursor.fetchone()
-                                                _pv, _ = _design_shell_tube_pick(design_data)
+                                                if _candidate_name == "公称直径*":
+                                                    _pv, _ = _design_dn_pick(design_data)
+                                                else:
+                                                    _pv, _ = _design_shell_tube_pick(
+                                                        design_data
+                                                    )
                                                 if _pv is not None:
                                                     used_param_name = _candidate_name
                                                     break
 
-                                            _raw_v, _raw_col = _design_shell_tube_pick(design_data)
+                                            if used_param_name == "公称直径*":
+                                                _raw_v, _raw_col = _design_dn_pick(
+                                                    design_data
+                                                )
+                                            else:
+                                                _raw_v, _raw_col = _design_shell_tube_pick(
+                                                    design_data
+                                                )
 
                                             if _raw_v is not None:
                                                 final_value = _raw_v
@@ -4309,6 +4393,21 @@ class TubeLayoutEditor(QMainWindow):
                                     processed_params[i]["参数值"] = "16"
 
                         if processed_params:
+                            try:
+                                for _p in processed_params:
+                                    if not isinstance(_p, dict):
+                                        continue
+                                    _n = str(_p.get("参数名", "")).strip()
+                                    if _n == "公称直径 DN":
+                                        self._buguan_display_dn = str(
+                                            _p.get("参数值") or ""
+                                        ).strip()
+                                    elif _n == "是否以外径为基准":
+                                        self._buguan_display_outer_base = str(
+                                            _p.get("参数值") or ""
+                                        ).strip()
+                            except Exception:
+                                pass
                             self.setup_parameters(
                                 processed_params, setup_listeners=False
                             )
@@ -4518,28 +4617,16 @@ class TubeLayoutEditor(QMainWindow):
                                             if product_design_conn and self.productID:
                                                 with product_design_conn.cursor() as design_cursor:
                                                     if param_name == "公称直径 DN":
-
-                                                        design_query = """
-                                                            SELECT 壳程数值, 管程数值
-                                                            FROM 产品设计活动表_设计数据表 
-                                                            WHERE 产品ID = %s AND 参数名称 = %s
-                                                        """
-                                                        design_cursor.execute(
-                                                            design_query,
-                                                            (
-                                                                self.productID,
-                                                                "公称直径*",
-                                                            ),
+                                                        _dv = self._fetch_dn_from_design_db(
+                                                            design_cursor
                                                         )
-                                                        design_data = (
-                                                            design_cursor.fetchone()
+                                                        final_value = (
+                                                            _dv if _dv is not None else ""
                                                         )
-                                                        _dv, _ = _design_dn_pick(design_data)
-                                                        if _dv is not None:
-                                                            final_value = _dv
-                                                            print(
-                                                                f"更新公称直径 DN: {param_value} -> {final_value}"
-                                                            )
+                                                        print(
+                                                            f"更新公称直径 DN(仅设计数据表): "
+                                                            f"布管表={param_value!r} -> 显示={final_value!r}"
+                                                        )
                                                     elif param_name == "壳体内直径 Dis":
                                                         record_query = """
                                                             SELECT 1
@@ -4619,35 +4706,20 @@ class TubeLayoutEditor(QMainWindow):
                                                     elif (
                                                             param_name == "是否以外径为基准"
                                                     ):
-                                                        design_query = """
-                                                            SELECT 数值 
-                                                            FROM 产品设计活动表_通用数据表 
-                                                            WHERE 产品ID = %s AND 参数名称 = %s
-                                                        """
-                                                        design_cursor.execute(
-                                                            design_query,
-                                                            (
-                                                                self.productID,
-                                                                "是否以外径为基准*",
-                                                            ),
-                                                        )
-                                                        design_data = (
-                                                            design_cursor.fetchone()
-                                                        )
-
-                                                        if (
-                                                                isinstance(
-                                                                    design_data, dict
-                                                                )
-                                                                and "数值" in design_data
-                                                                and design_data["数值"]
-                                                        ):
-                                                            final_value = design_data[
-                                                                "数值"
-                                                            ]
-                                                            print(
-                                                                f"更新是否以外径为基准: {param_value} -> {final_value}"
+                                                        db_val = (
+                                                            self._fetch_outer_base_from_general_db(
+                                                                design_cursor
                                                             )
+                                                        )
+                                                        final_value = (
+                                                            db_val
+                                                            if db_val is not None
+                                                            else "否"
+                                                        )
+                                                        print(
+                                                            f"更新是否以外径为基准(仅通用数据表): "
+                                                            f"布管表={param_value!r} -> 显示={final_value!r}"
+                                                        )
 
                                         except Exception as e:
                                             print(
@@ -8526,6 +8598,11 @@ class TubeLayoutEditor(QMainWindow):
                     continue
                 cw = self.param_table.cellWidget(row, 2)
                 if isinstance(cw, QComboBox):
+                    self._set_outer_base_combo_value(
+                        cw,
+                        getattr(self, "_buguan_display_outer_base", None)
+                        or self._fetch_outer_base_from_general_db(),
+                    )
                     cw.setEditable(False)
                     cw.setEnabled(False)
                     cw.setFocusPolicy(Qt.NoFocus)
@@ -15215,6 +15292,9 @@ class TubeLayoutEditor(QMainWindow):
 
                     if param["参数名"] == "是否以外径为基准":
                         combo.addItems(["是", "否"])
+                        self._set_outer_base_combo_value(
+                            combo, param.get("参数值")
+                        )
                     elif param["参数名"] == "分程布置形式":
                         combo.addItems(["未选择", "形式1", "形式2", "形式3"])
                     elif param["参数名"] == "换热管排列方式":
@@ -15366,39 +15446,43 @@ class TubeLayoutEditor(QMainWindow):
                             ]
                         )
 
-                    param_value_str = (
-                        str(param["参数值"]) if param["参数值"] is not None else ""
-                    )
-                    # 拉杆形式默认规则：do >= 19 -> 螺纹拉杆；do < 19 -> 焊接拉杆
-                    if param["参数名"] == "拉杆形式" and param_value_str.strip() == "":
-                        do_default = None
-                        try:
-                            for _p in params:
-                                if _p.get("参数名") == "换热管外径 do":
-                                    v = _p.get("参数值")
-                                    if v not in (None, ""):
-                                        do_default = float(str(v).strip())
-                                    break
-                        except Exception:
+                    if not is_diameter_based:
+                        param_value_str = (
+                            str(param["参数值"]).strip()
+                            if param["参数值"] is not None
+                            else ""
+                        )
+                        # 拉杆形式默认规则：do >= 19 -> 螺纹拉杆；do < 19 -> 焊接拉杆
+                        if param["参数名"] == "拉杆形式" and param_value_str.strip() == "":
                             do_default = None
-                        if do_default is not None:
-                            param_value_str = "螺纹拉杆" if do_default >= 19 else "焊接拉杆"
+                            try:
+                                for _p in params:
+                                    if _p.get("参数名") == "换热管外径 do":
+                                        v = _p.get("参数值")
+                                        if v not in (None, ""):
+                                            do_default = float(str(v).strip())
+                                        break
+                            except Exception:
+                                do_default = None
+                            if do_default is not None:
+                                param_value_str = (
+                                    "螺纹拉杆" if do_default >= 19 else "焊接拉杆"
+                                )
 
-                    try:
-                        if param_value_str:
-                            combo.setCurrentText(param_value_str)
-                        else:
-                            if combo.count() > 0:
+                        try:
+                            if param_value_str:
+                                combo.setCurrentText(param_value_str)
+                            elif combo.count() > 0:
                                 combo.setCurrentIndex(0)
-                    except:
-                        found = False
-                        for i in range(combo.count()):
-                            if combo.itemText(i) == param_value_str:
-                                combo.setCurrentIndex(i)
-                                found = True
-                                break
-                        if not found and combo.count() > 0:
-                            combo.setCurrentIndex(0)
+                        except Exception:
+                            found = False
+                            for i in range(combo.count()):
+                                if combo.itemText(i) == param_value_str:
+                                    combo.setCurrentIndex(i)
+                                    found = True
+                                    break
+                            if not found and combo.count() > 0:
+                                combo.setCurrentIndex(0)
 
                     # 注意：此处不额外绑定 currentTextChanged/currentIndexChanged。
                     # 统一由 setup_parameter_listeners() 内的 bind_combobox_listeners() 做一次性绑定，
@@ -15407,6 +15491,9 @@ class TubeLayoutEditor(QMainWindow):
                     self.param_table.setCellWidget(row, 2, combo)
                     # 附到表格后再锁：部分型式/布局下 setCellWidget 会刷新子控件状态，先锁再 attach 会失效
                     if is_diameter_based:
+                        self._set_outer_base_combo_value(
+                            combo, self._fetch_outer_base_from_general_db()
+                        )
                         combo.setEditable(False)
                         combo.setEnabled(False)
                         combo.setFocusPolicy(Qt.NoFocus)
@@ -15415,14 +15502,14 @@ class TubeLayoutEditor(QMainWindow):
                         except Exception:
                             pass
                         self._apply_param_combo_widget_style(combo, disabled=True)
+                        param_value_str = combo.currentText()
                     elif dn_visible:
                         combo.setEnabled(False)
                         self._apply_param_combo_widget_style(combo, disabled=True)
+                        param_value_str = combo.currentText()
                     else:
                         self._apply_param_combo_widget_style(combo, disabled=False)
-                    param_value_str = (
-                        str(param["参数值"]) if param["参数值"] is not None else ""
-                    )
+                        param_value_str = combo.currentText()
                     self.original_param_values[(row, 2)] = param_value_str
 
             else:
@@ -15515,6 +15602,27 @@ class TubeLayoutEditor(QMainWindow):
             pass
         try:
             self._lock_outer_base_flag_param_cell()
+        except Exception:
+            pass
+        try:
+            _sync_dn = getattr(self, "_buguan_display_dn", None)
+            _sync_ob = getattr(self, "_buguan_display_outer_base", None)
+            if _sync_dn is None or _sync_ob is None:
+                for _p in params:
+                    if not isinstance(_p, dict):
+                        continue
+                    if _p.get("参数名") == "公称直径 DN" and _sync_dn is None:
+                        _sync_dn = str(_p.get("参数值", "")).strip()
+                    elif (
+                        _p.get("参数名") == "是否以外径为基准"
+                        and _sync_ob is None
+                    ):
+                        _sync_ob = str(_p.get("参数值", "")).strip()
+            self._sync_readonly_params_from_product_db(_sync_dn, _sync_ob)
+            if _sync_dn is not None:
+                print(
+                    f"[setup_parameters][UI] 公称直径 DN 同步显示={_sync_dn!r}"
+                )
         except Exception:
             pass
         try:
@@ -45036,44 +45144,221 @@ class TubeLayoutEditor(QMainWindow):
         # 未找到参数时返回None
         return None
 
+    @staticmethod
+    def _normalize_outer_base_display(value):
+        if value is None:
+            return None
+        s = str(value).strip()
+        if s in ("1", "true", "True", "Y", "y", "是"):
+            return "是"
+        if s in ("0", "false", "False", "N", "n", "否"):
+            return "否"
+        return s
+
+    def _set_outer_base_combo_value(self, combo, value):
+        """外径基准下拉：明确索引，避免 setCurrentText 失败时误落到「是」。"""
+        if not isinstance(combo, QComboBox):
+            return
+        val = self._normalize_outer_base_display(value)
+        if val == "否":
+            combo.setCurrentIndex(1)
+        else:
+            combo.setCurrentIndex(0)
+
+    def _sync_readonly_params_from_product_db(self, dn_value=None, outer_base_value=None):
+        """把 load 阶段已确定的产品库显示值写回控件（不再二次查库，避免覆盖成旧值）。"""
+        if not hasattr(self, "param_table") or self.param_table is None:
+            return
+        db_dn = dn_value
+        db_ob = outer_base_value
+        for row in range(self.param_table.rowCount()):
+            name_item = self.param_table.item(row, 1)
+            if not name_item:
+                continue
+            pname = name_item.text().strip()
+            if pname == "公称直径 DN" and db_dn is not None:
+                w = self.param_table.cellWidget(row, 2)
+                if isinstance(w, QComboBox):
+                    w.setCurrentText(db_dn)
+                else:
+                    it = self.param_table.item(row, 2)
+                    if it is None:
+                        it = QTableWidgetItem(db_dn)
+                        it.setFlags(it.flags() & ~Qt.ItemIsEditable)
+                        it.setForeground(QBrush(QColor(150, 150, 150)))
+                        self.param_table.setItem(row, 2, it)
+                    else:
+                        it.setText(db_dn)
+            elif pname == "是否以外径为基准" and db_ob is not None:
+                w = self.param_table.cellWidget(row, 2)
+                if isinstance(w, QComboBox):
+                    self._set_outer_base_combo_value(w, db_ob)
+
+    def _design_dn_pick_row(self, row):
+        """
+        设计数据表「公称直径*」取值规则（与 condition_input._get_dn_from_design 一致）：
+        - 仅一列有值：用该列；
+        - 两列相等：任选；
+        - 两列不等：优先管程数值。
+        """
+        if not isinstance(row, dict):
+            return None, None
+        shell_text = ""
+        tube_text = ""
+        sv = row.get("壳程数值")
+        tv = row.get("管程数值")
+        if sv is not None and str(sv).strip() != "":
+            shell_text = str(sv).strip()
+        if tv is not None and str(tv).strip() != "":
+            tube_text = str(tv).strip()
+
+        def _parse_int_safe(t):
+            try:
+                return int(float(t))
+            except (ValueError, TypeError):
+                return None
+
+        shell_dn = _parse_int_safe(shell_text) if shell_text else None
+        tube_dn = _parse_int_safe(tube_text) if tube_text else None
+        if shell_dn is not None and tube_dn is not None:
+            if shell_dn == tube_dn:
+                return shell_text, "壳程数值"
+            return tube_text, "管程数值"
+        if tube_text:
+            return tube_text, "管程数值"
+        if shell_text:
+            return shell_text, "壳程数值"
+        return None, None
+
+    def _dn_column_candidates(self, row):
+        """公称直径* 行上壳程/管程列所有非空候选（用于 prefer 与调试）。"""
+        if not isinstance(row, dict):
+            return []
+        out = []
+        for k in ("壳程数值", "管程数值"):
+            v = row.get(k)
+            if v is not None and str(v).strip() != "":
+                s = str(v).strip()
+                if s not in out:
+                    out.append(s)
+        return out
+
+    def _fetch_dn_from_design_db(self, cursor=None, prefer_value=None):
+        """公称直径 DN：产品设计活动表_设计数据表「公称直径*」，不读布管参数表。"""
+        pid = getattr(self, "productID", None)
+        if not pid:
+            return None
+        own_conn = None
+        try:
+            cur = cursor
+            if cur is None:
+                own_conn = create_product_connection()
+                cur = own_conn.cursor() if own_conn else None
+            if cur is None:
+                return None
+            cur.execute(
+                """
+                SELECT 壳程数值, 管程数值
+                FROM 产品设计活动表_设计数据表
+                WHERE 产品ID = %s AND 参数名称 = %s
+                """,
+                (pid, "公称直径*"),
+            )
+            rows = cur.fetchall() or []
+            if not rows:
+                return None
+            merged = {"壳程数值": None, "管程数值": None}
+            all_cands = []
+            for r in rows:
+                all_cands.extend(self._dn_column_candidates(r))
+                if isinstance(r, dict):
+                    for k in ("壳程数值", "管程数值"):
+                        rv = r.get(k)
+                        if rv is not None and str(rv).strip() != "":
+                            merged[k] = str(rv).strip()
+            val, col = self._design_dn_pick_row(merged if rows else None)
+            if val is None and rows:
+                val, col = self._design_dn_pick_row(rows[0])
+            if prefer_value is not None:
+                pv = str(prefer_value).strip()
+                if pv and pv in all_cands:
+                    val = pv
+            if len(all_cands) > 1:
+                print(
+                    f"[_fetch_dn_from_design_db] 产品{pid} 公称直径* "
+                    f"壳程={merged.get('壳程数值')!r} 管程={merged.get('管程数值')!r} "
+                    f"-> DN={val!r} (列={col})"
+                )
+            return val
+        except Exception as e:
+            print(f"[_fetch_dn_from_design_db] 读取失败: {e}")
+            return None
+        finally:
+            if own_conn and getattr(own_conn, "open", False):
+                try:
+                    own_conn.close()
+                except Exception:
+                    pass
+
+    def _fetch_outer_base_from_general_db(self, cursor=None):
+        """是否以外径为基准：产品设计活动表_通用数据表「是否以外径为基准*」→ 数值（与条件输入页一致）。"""
+        pid = getattr(self, "productID", None)
+        if not pid:
+            return None
+        own_conn = None
+        try:
+            cur = cursor
+            if cur is None:
+                own_conn = create_product_connection()
+                cur = own_conn.cursor() if own_conn else None
+            if cur is None:
+                return None
+            cur.execute(
+                """
+                SELECT 数值 FROM 产品设计活动表_通用数据表
+                WHERE 产品ID = %s AND 参数名称 = %s
+                LIMIT 1
+                """,
+                (pid, "是否以外径为基准*"),
+            )
+            row_g = cur.fetchone()
+            if isinstance(row_g, dict):
+                vg = row_g.get("数值")
+            else:
+                vg = row_g[0] if row_g else None
+            return self._normalize_outer_base_display(vg)
+        except Exception as e:
+            print(f"[_fetch_outer_base_from_general_db] 读取失败: {e}")
+            return None
+        finally:
+            if own_conn and getattr(own_conn, "open", False):
+                try:
+                    own_conn.close()
+                except Exception:
+                    pass
+
+    def _fetch_buguan_param_from_product_db(self, display_name, cursor=None):
+        """布管左侧表：公称直径/外径基准从产品库读取，不采用布管参数表缓存值。"""
+        if display_name == "公称直径 DN":
+            return self._fetch_dn_from_design_db(cursor)
+        if display_name == "是否以外径为基准":
+            return self._fetch_outer_base_from_general_db(cursor)
+        return None
+
+    def _fetch_is_outer_diameter_base_from_db(self, cursor=None):
+        return self._fetch_outer_base_from_general_db(cursor)
+
     def get_is_outer_diameter_base(self):
         """
         获取「是否以外径为基准」的实际取值（用于 user_update_Di / 一致性检查等逻辑）。
 
-        优先级（与 load_initial_data 覆盖逻辑、cal_di 一致）：
-        1) 产品设计活动表_通用数据表：参数名称「是否以外径为基准*」→ 列「数值」
-        2) 回退：当前 param_table 界面显示值
+        优先级（与 load_initial_data 一致）：
+        1) 通用数据表「是否以外径为基准*」
+        2) 回退 param_table 界面显示值
         """
-        pid = getattr(self, "productID", None)
-        if pid:
-            conn = None
-            try:
-                conn = create_product_connection()
-                if conn and getattr(conn, "open", False):
-                    with conn.cursor() as cur:
-                        cur.execute(
-                            """
-                            SELECT 数值 FROM 产品设计活动表_通用数据表
-                            WHERE 产品ID = %s AND 参数名称 = %s
-                            LIMIT 1
-                            """,
-                            (pid, "是否以外径为基准*"),
-                        )
-                        row_g = cur.fetchone()
-                        if isinstance(row_g, dict):
-                            vg = row_g.get("数值")
-                        else:
-                            vg = row_g[0] if row_g else None
-                        if vg is not None and str(vg).strip() != "":
-                            return str(vg).strip()
-            except Exception as e:
-                print(f"[get_is_outer_diameter_base] 读产品库失败，回退 param_table: {e}")
-            finally:
-                if conn and getattr(conn, "open", False):
-                    try:
-                        conn.close()
-                    except Exception:
-                        pass
+        db_val = self._fetch_outer_base_from_general_db()
+        if db_val is not None:
+            return db_val
 
         row_count = self.param_table.rowCount()
         for row in range(row_count):
