@@ -698,7 +698,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         uic.loadUi(resource_path("main_viewer333.ui"), self)
         # uic.loadUi(resource_path("main_viewer333_try.ui"), self)
-        self.tabWidget.tabBar().hide()
+        # self.tabWidget.tabBar().hide()
 
 
         # ✅ 设置界面打开大小为屏幕的 80%
