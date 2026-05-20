@@ -1609,6 +1609,51 @@ class TubeLayoutEditor(QMainWindow):
         from modules.buguan.buguan_ziyong.variable import sync_from_editor
 
         sync_from_editor(self)
+        self._schedule_cross_pipe_button_refresh()
+
+    def showEvent(self, event):
+        """主窗口 refresh_all_tabs_readonly_state 会统一 setEnabled(True)，需在显示后再按型式禁用交叉布管。"""
+        super().showEvent(event)
+        self._schedule_cross_pipe_button_refresh()
+
+    def _schedule_cross_pipe_button_refresh(self):
+        for _ms in (0, 50, 200, 400):
+            QTimer.singleShot(_ms, self.update_cross_pipe_button_state)
+
+    def _fetch_product_type_from_db(self):
+        """产品设计活动表「产品型式」，与 sheet_form_page 一致。"""
+        pid = getattr(self, "productID", None)
+        if not pid:
+            return ""
+        conn = None
+        try:
+            conn = create_product_connection()
+            if not conn:
+                return ""
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT 产品型式
+                    FROM 产品设计活动表
+                    WHERE 产品ID = %s
+                    LIMIT 1
+                    """,
+                    (pid,),
+                )
+                row = cursor.fetchone()
+                if row and isinstance(row, dict):
+                    hx = row.get("产品型式")
+                    if hx is not None and str(hx).strip():
+                        return str(hx).strip().upper()
+        except Exception as e:
+            print(f"[_fetch_product_type_from_db] {e}")
+        finally:
+            if conn and getattr(conn, "open", False):
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        return ""
 
     def _sync_current_centers_lagan(self, reason: str = ""):
         """
@@ -2724,9 +2769,9 @@ class TubeLayoutEditor(QMainWindow):
 
         self.graphics_container.layout().addWidget(self.graphics_view)
 
-        # 勾选框容器
+        # 勾选框容器（高度需容纳 13pt 加粗「对称分布」，避免文字被裁切）
         self.checkbox_container = QWidget(self.graphics_container)
-        self.checkbox_container.setFixedSize(150, 30)
+        self.checkbox_container.setFixedSize(168, 44)
         self.checkbox_container.setStyleSheet(
             "background-color: rgba(255, 255, 255, 200); border-radius: 5px;"
         )
@@ -2765,10 +2810,26 @@ class TubeLayoutEditor(QMainWindow):
         )
 
         checkbox_layout = QHBoxLayout(self.checkbox_container)
-        checkbox_layout.setContentsMargins(5, 5, 5, 5)
+        checkbox_layout.setContentsMargins(8, 4, 8, 4)
+        checkbox_layout.setSpacing(0)
         self.symmetric_checkbox = QCheckBox("对称分布")
         self.symmetric_checkbox.setChecked(True)
-        self.symmetric_checkbox.setStyleSheet("font-size: 20px; color: #333;")
+        _sym_font = QFont()
+        _sym_font.setPointSize(13)
+        _sym_font.setBold(True)
+        self.symmetric_checkbox.setFont(_sym_font)
+        self.symmetric_checkbox.setStyleSheet(
+            "QCheckBox {"
+            "  color: #333333;"
+            "  spacing: 8px;"
+            "  min-height: 34px;"
+            "  padding-top: 2px;"
+            "  padding-bottom: 2px;"
+            "}"
+        )
+        self.symmetric_checkbox.setSizePolicy(
+            QSizePolicy.Preferred, QSizePolicy.Minimum
+        )
         checkbox_layout.addWidget(self.symmetric_checkbox)
         self.symmetric_checkbox.stateChanged.connect(self.handle_symmetric_layout)
 
@@ -3305,6 +3366,28 @@ class TubeLayoutEditor(QMainWindow):
             # 出错时不影响其它功能
             pass
 
+    def update_cross_pipe_button_state(self, product_type=None):
+        """交叉布管/删除交叉布管：仅 U 型管（AEU/BEU/AKU/BKU）可用；打开管束即按产品型式刷新。"""
+        _allowed = ("AEU", "BEU", "AKU", "BKU")
+        try:
+            hx = product_type
+            if hx is None or str(hx).strip() == "":
+                hx = self._fetch_product_type_from_db()
+            if not hx:
+                hx = getattr(self, "heat_exchanger", None)
+            hx = str(hx or "").strip().upper()
+            if hx:
+                self.heat_exchanger = hx
+            enabled = hx in _allowed
+            tip = "" if enabled else "当前产品型式不支持交叉布管功能"
+            for _name in ("buguan_cross_pipe_btn", "buguan_delete_cross_pipe_btn"):
+                btn = getattr(self, _name, None)
+                if btn is not None:
+                    btn.setEnabled(enabled)
+                    btn.setToolTip(tip)
+        except Exception as e:
+            print(f"[update_cross_pipe_button_state] {e}")
+
     def find_cross_pipes_info(self):
         self.coord_x_line1_2 = []
         self.coord_y_line1_2 = []
@@ -3457,11 +3540,11 @@ class TubeLayoutEditor(QMainWindow):
         self.need_initial_user_update_di_for_outer_base = False
         if self.productID is None:
             QMessageBox.information(self, "提示", "请先创建项目!")
+            self.update_cross_pipe_button_state()
             return  # 关键修复：如果productID为None，直接返回，避免后续错误
         print("加载初始数据")
 
         self.isBlock = False
-        self.heat_exchanger = None
         # 打开管束阶段用：操作记录表是否“有效存在”
         # 规则：有记录 + 布管参数表 DN 与设计数据表「公称直径*」按换热器型式取用的那一列一致 =>
         #       AKU/BKU 取 管程数值（空则回退壳程）；其它型式取 壳程数值（空则回退管程）。
@@ -3494,10 +3577,10 @@ class TubeLayoutEditor(QMainWindow):
                 if result and isinstance(result, dict) and "产品型式" in result:
                     product_type = result["产品型式"]
                     if product_type is not None and product_type.strip():
-                        self.heat_exchanger = product_type.strip()
-                        # 更新吊环螺钉按钮可用状态
+                        self.heat_exchanger = product_type.strip().upper()
                         if hasattr(self, "update_screw_ring_button_state"):
                             self.update_screw_ring_button_state()
+                        self.update_cross_pipe_button_state(self.heat_exchanger)
                         # print(f"成功查询到产品型式: {self.heat_exchanger}，已赋值给self.heat_exchanger")
                     else:
                         print(f"查询到的产品型式为空值（产品ID: {self.productID}）")
@@ -3518,6 +3601,8 @@ class TubeLayoutEditor(QMainWindow):
                     # print("产品型式查询连接已关闭")
                 except Exception as close_e:
                     print(f"关闭产品型式查询连接时出错: {str(close_e)}")
+
+        self._schedule_cross_pipe_button_refresh()
 
         # 设计数据表双列参数：统一先壳程后管程取第一个非空（不按换热器型式分岔）
         def _design_shell_tube_pick(d):
@@ -4891,6 +4976,7 @@ class TubeLayoutEditor(QMainWindow):
 
         QTimer.singleShot(0, _defer_lock_outer_after_load)
         QTimer.singleShot(150, _defer_lock_outer_after_load)
+        self._schedule_cross_pipe_button_refresh()
 
     def initial_operation(self):
         # 先根据产品ID从产品设计活动表_管口表读取管口代号及所属元件，存成全局数据字典
@@ -6450,9 +6536,9 @@ class TubeLayoutEditor(QMainWindow):
                         if result and "产品型式" in result:
                             heat_exchanger_type = result["产品型式"].strip().upper()
                             self.heat_exchanger = heat_exchanger_type
-                            # 更新吊环螺钉按钮可用状态
                             if hasattr(self, "update_screw_ring_button_state"):
                                 self.update_screw_ring_button_state()
+                            self.update_cross_pipe_button_state(heat_exchanger_type)
             except pymysql.MySQLError as e:
                 print(f"数据库查询产品型式失败: {e}")
             finally:
@@ -7079,28 +7165,7 @@ class TubeLayoutEditor(QMainWindow):
             ) = self.group_centers_by_y(self.global_centers)
             self.update_tube_nums()
 
-            # TODO 根据产品型式设置交叉布管按钮状态
-            cross_pipe_btn = getattr(self, "buguan_cross_pipe_btn", None)
-            cross_pipe_del_btn = getattr(self, "buguan_delete_cross_pipe_btn", None)
-
-            if cross_pipe_btn is not None:
-                if product_type_str not in ["AEU", "BEU", "AKU", "BKU"]:
-                    cross_pipe_btn.setEnabled(False)
-                    cross_pipe_btn.setToolTip("浮头式产品不支持交叉布管功能")
-                else:
-                    cross_pipe_btn.setEnabled(True)
-                    cross_pipe_btn.setToolTip("")
-            else:
-                print("警告：未找到交叉布管按钮")
-            if cross_pipe_del_btn is not None:
-                if product_type_str not in ["AEU", "BEU", "AKU", "BKU"]:
-                    cross_pipe_del_btn.setEnabled(False)
-                    cross_pipe_del_btn.setToolTip("浮头式产品不支持交叉布管功能")
-                else:
-                    cross_pipe_del_btn.setEnabled(True)
-                    cross_pipe_del_btn.setToolTip("")
-            else:
-                print("警告：未找到交叉布管按钮")
+            self.update_cross_pipe_button_state(product_type_str)
             self.update_total_lagan_count()
 
             return result
