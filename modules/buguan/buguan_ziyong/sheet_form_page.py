@@ -157,6 +157,52 @@ def create_product_connection():
         return None
 
 
+# 元件库/未迁移产品数据仍可能用旧单字母代号；界面“全改名”后按新代号取参，需补全映射
+_PLATE_OLD_TO_NEW_BY_NODE = {
+    "b_a": {"a": "x1", "b": "x2", "c": "α"},
+    "b_b": {"a": "R1", "b": "p", "c": "α"},
+    "b_c": {"a": "α1", "b": "b", "c": "p1", "d": "d1", "e": "α2", "f": "R", "g": "n", "h": "e"},
+    "b_d": {
+        "a": "β1", "b": "β2", "c": "p1", "d": "R1", "e": "b1", "f": "R2", "g": "R3", "h": "e",
+        "i": "β3", "j": "β4", "k": "p2", "L": "R4", "l": "R4", "M": "b2", "m": "b2",
+    },
+    "b_e": {
+        "a": "β1", "b": "p1", "c": "b1", "d": "R1", "e": "R2", "f": "H", "g": "R3", "h": "β2",
+        "i": "d1", "j": "β3", "k": "b2", "L": "R4", "l": "R4", "m": "R5", "n": "p2",
+        "s": "α", "p": "e", "q": "d2", "r": "d3",
+    },
+    "b_h": {
+        "a": "β1", "b": "p1", "c": "R1", "d": "R2", "e": "b1", "f": "b2", "g": "R3", "h": "β2",
+        "i": "R4", "j": "R5", "k": "e", "l": "p2",
+    },
+    "e_a": {"a": "d1", "b": "d2", "c": "d3", "d": "p", "e": "α1", "f": "α2"},
+    "e_b": {"a": "R1", "b": "d1", "c": "d2", "d": "b", "e": "p", "f": "R2", "g": "d3", "h": "α", "j": "e", "K": "K"},
+    "e_c": {"a": "p1", "b": "d1", "c": "R1", "d": "d2", "e": "b", "f": "R2", "g": "d3", "h": "α", "j": "e", "l": "p2", "L": "p2", "K": "K"},
+    "e_d": {"a": "R1", "b": "R2", "c": "d1", "d": "b", "e": "α1", "f": "α2", "g": "p", "h": "h", "j": "e"},
+    "e_e": {"a": "R1", "b": "R2", "c": "α1", "d": "d1", "e": "b", "f": "α2", "g": "p", "h": "h", "j": "e", "k": "d2"},
+    "e_f": {"a": "R1", "b": "h", "c": "α", "d": "p", "e": "e"},
+    "e_g": {"a": "R1", "b": "R2", "c": "h1", "d": "h2", "e": "α", "f": "p", "g": "e"},
+}
+
+
+def _normalize_plate_form_params(plate_type, param_dict):
+    """若库中仅有旧代号，则按节点映射补全新代号键（不覆盖已有新代号值）。"""
+    if not param_dict:
+        return param_dict
+    mapping = _PLATE_OLD_TO_NEW_BY_NODE.get(str(plate_type).strip())
+    if not mapping:
+        return param_dict
+    out = dict(param_dict)
+    for old_k, new_k in mapping.items():
+        new_v = out.get(new_k)
+        if new_v is not None and str(new_v).strip() != "":
+            continue
+        old_v = out.get(old_k)
+        if old_v is not None and str(old_v).strip() != "":
+            out[new_k] = old_v
+    return out
+
+
 def get_plate_form_params(image_name, product_id=None):
     """从管板形式表中获取参数，仿照tube_sheet_connection.py的多级查询逻辑"""
     # 根据图片名称构建管板类型
@@ -198,7 +244,7 @@ def get_plate_form_params(image_name, product_id=None):
                                 continue
                         
                         # print(f"🔍 [调试] 最终参数字典包含 {len(param_dict)} 个参数")
-                        return param_dict
+                        return _normalize_plate_form_params(plate_type, param_dict)
                     else:
                         pass
             except pymysql.Error as e:
@@ -233,7 +279,7 @@ def get_plate_form_params(image_name, product_id=None):
                 else:
                     continue
             
-            return param_dict
+            return _normalize_plate_form_params(plate_type, param_dict)
     except pymysql.Error as e:
         print(f"元件库查询错误: {e}")
         return {}
