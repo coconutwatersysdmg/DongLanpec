@@ -9,6 +9,8 @@ from PyQt5.QtCore import Qt, QSize, pyqtSignal
 import pymysql
 from pathlib import Path
 
+from .buguan_param_table_style import apply_buguan_param_table_style
+
 
 class ToggleSwitch(QWidget):
     """一个轻量自绘开关：checked=True 显示蓝色，False 显示灰色。"""
@@ -454,7 +456,7 @@ class TubeSheetConnectionPage(QWidget):
         self.param_frame = QFrame()
         self.param_frame.setStyleSheet("""
             QFrame {
-                background-color: #f9f9f9;
+                background-color: #ffffff;
                 border-radius: 8px;
             }
         """)
@@ -490,6 +492,8 @@ class TubeSheetConnectionPage(QWidget):
 
         # 在表格显示后设置初始列宽
         self.param_table.showEvent = lambda event: set_initial_column_widths()
+
+        apply_buguan_param_table_style(self.param_table, value_column_index=1)
 
         self.param_layout.addWidget(self.param_table)
 

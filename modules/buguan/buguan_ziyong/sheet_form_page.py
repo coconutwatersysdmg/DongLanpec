@@ -12,6 +12,8 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollA
                              QPushButton, QAbstractItemView)
 import pymysql
 
+from .buguan_param_table_style import apply_buguan_param_table_style
+
 
 class _ItalicColumnDelegate(QStyledItemDelegate):
     """强制指定列斜体渲染，避免全局样式表覆盖 item 字体。"""
@@ -972,7 +974,7 @@ class SheetFormPage(QWidget):
             self.sheet_form_param_frame = QFrame()
             self.sheet_form_param_frame.setStyleSheet("""
                 QFrame {
-                    background-color: #f9f9f9;
+                    background-color: #ffffff;
                     border-radius: 8px;
                 }
             """)
@@ -1014,6 +1016,7 @@ class SheetFormPage(QWidget):
             
             # 在表格显示后设置初始列宽
             self.sheet_form_param_table.showEvent = lambda event: set_initial_column_widths()
+            apply_buguan_param_table_style(self.sheet_form_param_table, value_column_index=1)
             # 参数值手动修改后高亮蓝色（仿 My_Piping）
             self.sheet_form_param_table.itemChanged.connect(self._on_sheet_form_param_item_changed)
             

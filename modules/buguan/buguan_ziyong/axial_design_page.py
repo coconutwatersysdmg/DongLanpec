@@ -14,6 +14,7 @@ from modules.buguan.buguan_ziyong.variable import (
     axial_basic_params,
     normalize_lb_baffle_od_param_row,
 )
+from modules.buguan.buguan_ziyong.buguan_param_table_style import apply_buguan_param_table_style
 
 
 def create_activity_connection():
@@ -208,6 +209,10 @@ class AutoAddDialog(QDialog):
         self.combo_element.currentTextChanged.connect(self._update_orientation_options)
         # 初始化一次
         self._update_orientation_options(self.combo_element.currentText())
+
+        apply_buguan_param_table_style(
+            self.table, value_column_index=0, extra_value_columns=[1, 2]
+        )
 
         layout.addWidget(self.table)
 
@@ -404,8 +409,8 @@ class AxialDesignPage(QWidget):
         self.tube_table.setHorizontalHeaderLabels([
             "参数名", "参数值", "单位",
         ])
-        # 公共样式（含列宽策略）
-        self._init_table_style(self.tube_table)
+        # 公共样式（含列宽策略）+ 布管参数表圆角输入框
+        self._init_table_style(self.tube_table, value_column_index=1)
 
         # 初始列宽（可根据实际效果自行调整）
         self.tube_table.setColumnWidth(0, 320)  # 参数名
@@ -435,8 +440,10 @@ class AxialDesignPage(QWidget):
             "元件厚度/mm",
             "元件类型",
         ])
-        # 公共样式（含列宽策略）
-        self._init_table_style(self.component_table)
+        # 公共样式（含列宽策略）+ 距离/厚度列圆角输入框
+        self._init_table_style(
+            self.component_table, value_column_index=1, extra_value_columns=[2]
+        )
 
         # 初始列宽（可根据实际效果自行调整）
         self.component_table.setColumnWidth(0, 60)  # 序号
@@ -2464,12 +2471,11 @@ class AxialDesignPage(QWidget):
             self.initial_draw_layout()
 
     @staticmethod
-    def _init_table_style(table: QTableWidget):
-        # 整体调小表格字体
-        base_font = table.font()
-        base_font.setPointSize(max(base_font.pointSize() - 1, 8))
-        table.setFont(base_font)
-
+    def _init_table_style(
+        table: QTableWidget,
+        value_column_index=None,
+        extra_value_columns=None,
+    ):
         header = table.horizontalHeader()
         # 列宽可交互调整，模仿 My_Piping 中左侧参数表的行为
         header.setSectionResizeMode(QHeaderView.Interactive)
@@ -2512,8 +2518,14 @@ class AxialDesignPage(QWidget):
         table.setEditTriggers(QAbstractItemView.AllEditTriggers)
         table.setSelectionBehavior(QTableWidget.SelectRows)
         table.setSelectionMode(QTableWidget.SingleSelection)
-        table.setAlternatingRowColors(True)
         table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        if value_column_index is not None:
+            apply_buguan_param_table_style(
+                table,
+                value_column_index=value_column_index,
+                extra_value_columns=extra_value_columns,
+            )
 
 
 if __name__ == "__main__":
