@@ -491,11 +491,10 @@ class SheetFormPage(QWidget):
             self._init_fallback_param_layout()
 
     def showEvent(self, event):
-        """仅在页面第一次真正显示时，让图片下拉框处于弹出状态。"""
+        """页面显示时恢复上次保存的型式/节点及参数表。"""
         super().showEvent(event)
         try:
-            # 页面显示时按产品型式刷新“管板型式”下拉可编辑性（仅锁型式，不锁节点）
-            self._apply_plate_type_rule()
+            self._restore_saved_plate_state()
             if (not self._sheet_form_combo_popup_done
                     and hasattr(self, 'sheet_form_connection_type_combo')
                     and self.sheet_form_connection_type_combo is not None
@@ -685,11 +684,14 @@ class SheetFormPage(QWidget):
                 raw_type = row.get("管板类型") if isinstance(row, dict) else row[0]
                 plate_type = str(raw_type).strip() if raw_type is not None else ""
 
-                # 规范化管板类型：去掉“型管板”等后缀，只保留前缀字母
+                # 规范化：e_a / b_h → 下拉框用首段字母；仅 e型管板 → e
                 if plate_type:
                     plate_type = plate_type.replace("型管板", "").strip()
                     if plate_type:
-                        plate_type = plate_type[0].lower()
+                        if "_" in plate_type:
+                            plate_type = plate_type.split("_", 1)[0].lower()
+                        else:
+                            plate_type = plate_type[0].lower()
 
                 print(f"[sheet_form_page] 自动选择已保存管板形式 - 原始类型: {raw_type}, 规范化后: {plate_type}")
                 return plate_type or None
@@ -744,6 +746,70 @@ class SheetFormPage(QWidget):
             return None
         finally:
             conn.close()
+
+    def _resolve_initial_node_name(self, saved_node, default_node):
+        """确定打开页面时应选中的节点名（与图片文件名一致，如 e_a）。"""
+        saved_node = str(saved_node or "").strip()
+        default_node = str(default_node or "").strip()
+        target = saved_node or default_node
+        # 库中若只存了型式字母（如 e），则改用规则默认节点或当前文件夹首图
+        if target and "_" not in target:
+            if default_node:
+                target = default_node
+            elif getattr(self, "sheet_form_current_images", None):
+                try:
+                    first = self.sheet_form_current_images[0]
+                    target = os.path.splitext(os.path.basename(str(first)))[0]
+                except Exception:
+                    pass
+        return target or None
+
+    def _find_image_index_for_node(self, node_name):
+        """在当前型式图片列表中查找节点对应的索引。"""
+        if not node_name or not getattr(self, "sheet_form_current_images", None):
+            return 0
+        for idx, img_path in enumerate(self.sheet_form_current_images):
+            base = os.path.splitext(os.path.basename(str(img_path)))[0]
+            if base == node_name:
+                return idx
+        return 0
+
+    def _restore_saved_plate_state(self, retry=0):
+        """恢复已保存的管板型式、节点选中状态及右侧参数表。"""
+        try:
+            try:
+                self.get_DN_and_Di_from_parent()
+            except Exception:
+                pass
+
+            product_id = self.get_product_id()
+            if not product_id:
+                if retry < 8:
+                    QTimer.singleShot(200, lambda: self._restore_saved_plate_state(retry + 1))
+                return
+
+            saved_plate_type = self._get_saved_plate_type()
+            self._apply_plate_type_rule(saved_plate_type=saved_plate_type)
+
+            if not self.sheet_form_current_images or not self.sheet_form_image_labels:
+                if retry < 8:
+                    QTimer.singleShot(200, lambda: self._restore_saved_plate_state(retry + 1))
+                return
+
+            saved_node = self._get_saved_plate_node()
+            default_node = self._get_default_node_for_hx()
+            target_node = self._resolve_initial_node_name(saved_node, default_node)
+            click_index = self._find_image_index_for_node(target_node)
+
+            print(
+                f"[sheet_form_page] 恢复保存状态: product_id={product_id}, "
+                f"saved_node={saved_node}, default_node={default_node}, "
+                f"选中节点={target_node}, index={click_index}"
+            )
+            self._handle_image_click(None, click_index, restoring=True)
+        except Exception as e:
+            print(f"[sheet_form_page] 恢复保存状态失败: {e}")
+            traceback.print_exc()
 
     def _init_fallback_param_layout(self):
         """创建备用布局，防止初始化失败"""
@@ -1027,47 +1093,8 @@ class SheetFormPage(QWidget):
             #
             # 延迟检查父窗口的 heat_exchanger 值
             # 延迟检查父窗口的 heat_exchanger 值，并优先使用已保存的管板类型
-            def _delayed_check_heat_exchanger():
-                try:
-                    # 进入管板形式页面时，先从布管界面刷新一次关键参数
-                    try:
-                        self.get_DN_and_Di_from_parent()
-                    except Exception:
-                        pass
-
-                    # 1. 优先从产品设计活动表_管板形式表中获取已保存的管板类型
-                    saved_plate_type = self._get_saved_plate_type()
-                    print(f"[DEBUG 延迟检查] 已保存的管板类型: {saved_plate_type}")
-                    # 2. 依据 heat_exchanger 规则设置默认管板型式及可编辑性
-                    self._apply_plate_type_rule(saved_plate_type=saved_plate_type)
-
-                    # 4. 如果当前有图片，优先根据已保存节点模拟点击，自动加载参数
-                    if self.sheet_form_current_images and len(self.sheet_form_image_labels) > 0:
-                        saved_node = self._get_saved_plate_node()
-                        default_node = self._get_default_node_for_hx()
-                        # 优先已保存节点；无记录时用表1默认节点（如 BEM→e_a）；仍无则点第一张
-                        target_node = saved_node or default_node
-                        print(
-                            f"[DEBUG 延迟检查] 已保存节点={saved_node}, 默认节点={default_node}, "
-                            f"初始选中={target_node}"
-                        )
-
-                        click_index = 0
-                        if target_node:
-                            for idx, img_path in enumerate(self.sheet_form_current_images):
-                                base = os.path.splitext(os.path.basename(str(img_path)))[0]
-                                if base == target_node:
-                                    click_index = idx
-                                    break
-
-                        # 等价于用户单击对应图，加载参数表
-                        self._handle_image_click(None, click_index)
-
-                except Exception as e:
-                    print(f"[DEBUG 延迟检查] 发生异常: {e}")
-                    traceback.print_exc()
-            # 延迟 100 毫秒执行
-            QTimer.singleShot(100, _delayed_check_heat_exchanger)
+            # 页面创建后延迟恢复（productID 可能稍后才就绪）
+            QTimer.singleShot(100, lambda: self._restore_saved_plate_state())
             #
 
         except Exception as e:
@@ -1136,11 +1163,11 @@ class SheetFormPage(QWidget):
             print(f"[sheet_form_page] 获取productID时出错: {e}")
             return None
 
-    def _handle_image_click(self, event, index):
+    def _handle_image_click(self, event, index, restoring=False):
         # 方法内容保持不变
         try:
-            # 用户只读开关：只读时不允许任何操作（包括选节点）
-            if getattr(self, "_sheet_form_user_readonly", False):
+            # 用户只读开关：只读时不允许手动点选；恢复保存状态时仍加载参数表
+            if not restoring and getattr(self, "_sheet_form_user_readonly", False):
                 return
 
             # 每次点击图片前，尝试从父窗口刷新一次关键参数（DN、Di、是否以外径为基准、DL）

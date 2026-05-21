@@ -18488,6 +18488,16 @@ class TubeLayoutEditor(QMainWindow):
         # TODO 切换页面
         self.stacked_widget.setCurrentIndex(index)
 
+        # 切换到管板型式页：恢复上次保存的节点与参数表
+        if index == 0:
+            try:
+                if hasattr(self, "sheet_form_page") and hasattr(
+                    self.sheet_form_page, "_restore_saved_plate_state"
+                ):
+                    self.sheet_form_page._restore_saved_plate_state()
+            except Exception:
+                pass
+
         # 如果切换到轴向设计页面，实时刷新其基础参数
         try:
             target_widget = self.stacked_widget.currentWidget()
