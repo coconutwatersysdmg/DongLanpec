@@ -17858,78 +17858,88 @@ class TubeLayoutEditor(QMainWindow):
                     self.save_current_centers_to_product_json()
                 except Exception as e:
                     print(f"[actual_save_operation] 保存 productID.json 失败: {e}")
-                # 径向开孔
-                sql_list = self.build_sql_for_radial_holes()
-                if sql_list:
-                    for sql in sql_list:
-                        self.execute_sql(sql)
-                1  # TODO 布管数量存储
+                # 布管数量表（水平/竖直 + 显示）：单事务批量执行，顺序与原先逐条 execute_sql 一致
+                batch_hole_sql = []
                 sql_list = self.build_sql_for_tube_hole(tube_hole_data)
                 if sql_list:
-                    for sql in sql_list:
-                        self.execute_sql(sql)
-
+                    batch_hole_sql.extend(sql_list)
                 sql_list = self.build_sql_for_tube_hole_present(tube_hole_data)
                 if sql_list:
-                    for sql in sql_list:
-                        self.execute_sql(sql)
-                # TODO 布管参数存储
+                    batch_hole_sql.extend(sql_list)
+                if batch_hole_sql:
+                    try:
+                        self.execute_sql_batch(batch_hole_sql)
+                    except Exception as e:
+                        print(f"保存布管数量数据失败: {e}")
+                        import traceback
+                        traceback.print_exc()
+
+                # 布管参数表：build_sql_for_tube 内部已执行并 commit，勿再逐条 execute_sql（避免重复写库）
                 tube_data = self.get_current_tube_data()
-                sql_statements = self.build_sql_for_tube(tube_data)
-                if sql_statements:
-                    for statement in sql_statements:
-                        self.execute_sql(statement)
+                self.build_sql_for_tube(tube_data)
                 # 全部坐标存表，暂时注释掉
                 # sql = self.build_sql_for_coordinate()
                 # if sql:
-                #     for statement in sql:
-                #         self.execute_sql(statement)
+                #     self.execute_sql_batch(sql)
 
                 self.build_sql_for_component()
                 self.build_sql_for_screw_ring()
 
-                sql = self.build_sql_for_cross_pipes()
-                if sql:
-                    for statement in sql:
-                        self.execute_sql(statement)
+                # 交叉布管：build_sql_for_cross_pipes 内部已执行并 commit
+                self.build_sql_for_cross_pipes()
 
-                # build_sql_for_radial_holes 返回 [delete_sql] 或 [delete_sql, insert1, insert2, ...]，无 query_sql
-                sql_list = self.build_sql_for_radial_holes()
-                if sql_list:
+                # 径向开孔 + 布管计算结果 SQL：单事务批量（原先径向开孔会执行两遍，现保留一遍）
+                batch_tail_sql = []
+                try:
+                    sql_list = self.build_sql_for_radial_holes()
+                    if sql_list:
+                        batch_tail_sql.extend(sql_list)
+                except Exception as e:
+                    print(f"构建径向开孔 SQL 失败: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+                try:
+                    if self.heat_exchanger in ["AES", "BES"]:
+                        sql = piping_calculations.build_sql_for_floating_head_calc(
+                            self, create_product_connection
+                        )
+                        if sql:
+                            if isinstance(sql, (list, tuple)):
+                                batch_tail_sql.extend(sql)
+                            else:
+                                batch_tail_sql.append(sql)
+                    elif self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
+                        self.update_buguan_quantity()
+                        sql = piping_calculations.build_sql_for_u_tube_calc(
+                            self, create_product_connection
+                        )
+                        if sql:
+                            if isinstance(sql, (list, tuple)):
+                                batch_tail_sql.extend(sql)
+                            else:
+                                batch_tail_sql.append(sql)
+                    else:
+                        sql = piping_calculations.build_sql_for_floating_head_calc(
+                            self, create_product_connection
+                        )
+                        if sql:
+                            if isinstance(sql, (list, tuple)):
+                                batch_tail_sql.extend(sql)
+                            else:
+                                batch_tail_sql.append(sql)
+                except Exception as e:
+                    print(f"构建布管计算结果 SQL 失败: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+                if batch_tail_sql:
                     try:
-                        delete_sql = sql_list[0]
-                        insert_sqls = sql_list[1:] if len(sql_list) > 1 else []
-                        self.execute_sql(delete_sql)
-                        for s in insert_sqls:
-                            self.execute_sql(s)
+                        self.execute_sql_batch(batch_tail_sql)
                     except Exception as e:
-                        print(f"保存径向开孔数据失败: {e}")
+                        print(f"保存径向开孔/布管计算结果失败: {e}")
                         import traceback
                         traceback.print_exc()
-
-                # 当前圆心坐标
-                if self.heat_exchanger in ["AES", "BES"]:
-                    sql = piping_calculations.build_sql_for_floating_head_calc(
-                        self, create_product_connection
-                    )
-                    if sql:
-                        for statement in sql:
-                            self.execute_sql(statement)
-                elif self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
-                    self.update_buguan_quantity()
-                    sql = piping_calculations.build_sql_for_u_tube_calc(
-                        self, create_product_connection
-                    )
-                    if sql:
-                        for statement in sql:
-                            self.execute_sql(statement)
-                else:
-                    sql = piping_calculations.build_sql_for_floating_head_calc(
-                        self, create_product_connection
-                    )
-                    if sql:
-                        for statement in sql:
-                            self.execute_sql(statement)
 
             pass
         elif page_index == 3:  # 轴向设计页面
@@ -18025,16 +18035,17 @@ class TubeLayoutEditor(QMainWindow):
             if sql_list:
                 # 分割SQL语句，过滤空语句
                 sql_statements = [s.strip() for s in sql_list.split(";") if s.strip()]
-                for statement in sql_statements:
-                    self.execute_sql(statement + ";")  # 确保每条语句以分号结尾
+                normalized = [
+                    s if s.rstrip().endswith(";") else s + ";"
+                    for s in sql_statements
+                ]
+                self.execute_sql_batch(normalized)
             pass
         elif page_index == 0:
             tube_form_data = self.get_current_tube_form_data()
             sql_statements = self.build_sql_for_tube_form()
             if sql_statements:
-                # 执行SQL语句列表
-                for statement in sql_statements:
-                    self.execute_sql(statement)
+                self.execute_sql_batch(sql_statements)
             pass
         else:
             print("其他页面不执行")
@@ -18422,29 +18433,56 @@ class TubeLayoutEditor(QMainWindow):
         finally:
             conn.close()
 
-    def execute_sql(self, sql, fetch=False):
-        """执行SQL语句"""
+    def execute_sql_batch(self, sql_statements, fetch=False):
+        """在同一连接、同一事务中顺序执行多条 SQL，减少保存时的连接与 commit 开销。"""
+        if sql_statements is None:
+            return None if fetch else True
+        if isinstance(sql_statements, str):
+            sql_list = [sql_statements]
+        else:
+            try:
+                sql_list = list(sql_statements)
+            except TypeError:
+                sql_list = [sql_statements]
+        stmts = [str(s).strip() for s in sql_list if s is not None and str(s).strip()]
+        if not stmts:
+            return None if fetch else True
+        connection = None
         try:
             from modules.buguan.buguan_ziyong.database_utils import create_connection
 
             connection = create_connection()
+            if not connection:
+                return None
             cursor = connection.cursor()
-            cursor.execute(sql)
-
+            result = None
+            for sql in stmts:
+                cursor.execute(sql)
+                if fetch:
+                    result = cursor.fetchall()
             if fetch:
-                # 如果是查询操作，返回结果
-                result = cursor.fetchall()
-                connection.close()
                 return result
-            else:
-                # 如果是更新操作，提交事务
-                connection.commit()
-                connection.close()
+            connection.commit()
+            return True
         except Exception as e:
+            try:
+                if connection and getattr(connection, "open", False):
+                    connection.rollback()
+            except Exception:
+                pass
             QMessageBox.critical(self, "错误", f"保存数据时出错:\n{str(e)}")
             print("保存数据时出错")
-            if fetch:
-                return None
+            return None
+        finally:
+            try:
+                if connection and getattr(connection, "open", False):
+                    connection.close()
+            except Exception:
+                pass
+
+    def execute_sql(self, sql, fetch=False):
+        """执行单条 SQL（内部走批量接口，语义与原先单条执行+commit 一致）。"""
+        return self.execute_sql_batch(sql, fetch=fetch)
 
     def switch_page(self, index):
         # TODO 切换页面
@@ -24727,8 +24765,8 @@ class TubeLayoutEditor(QMainWindow):
         p2_start = QPointF(x1 + vx2 * r, y1 + vy2 * r)
         p2_end = QPointF(x2 + vx2 * r, y2 + vy2 * r)
 
-        # 绘制切线 - 设置为很细的线条（线宽改为1）
-        pen = QPen(QColor(0, 0, 139), 1)  # 线宽从2改为1，变得更细
+        # 与换热管轮廓一致：亮蓝 #42A5F5、线宽 4（见 _buguan_tube_pen）
+        pen = self._buguan_tube_pen()
         line1 = self.graphics_scene.addLine(QLineF(p1_start, p1_end), pen)
         line2 = self.graphics_scene.addLine(QLineF(p2_start, p2_end), pen)
 
@@ -24760,7 +24798,7 @@ class TubeLayoutEditor(QMainWindow):
             {
                 "type": "cross_pipe_tangents",
                 "points": points,
-                "line_width": 1,  # 记录修改后的线宽
+                "line_width": pen.width(),
                 "tube_diameter": do_value,
             }
         )
