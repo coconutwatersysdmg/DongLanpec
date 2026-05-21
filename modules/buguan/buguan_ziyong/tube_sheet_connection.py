@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (
     QTableWidgetItem, QHeaderView, QDialog, QApplication, QPushButton, QAbstractItemView
 )
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QBrush
-from PyQt5.QtCore import Qt, QSize, pyqtSignal
+from PyQt5.QtCore import Qt, QSize, pyqtSignal, QTimer
 import pymysql
 from pathlib import Path
 
@@ -177,8 +177,16 @@ class TubeSheetConnectionPage(QWidget):
         self.image_labels = []
         self.thumbnail_size = QSize(320, 220)
         self.setup_ui()
-        # 页面初始化后，尝试自动选中已保存的管板连接节点
-        self.auto_select_saved_connection()
+        # 页面创建后延迟恢复（productID 可能稍后才就绪）
+        QTimer.singleShot(100, lambda: self._restore_saved_connection_state())
+
+    def showEvent(self, event):
+        """每次进入管板连接页时恢复上次保存的节点与参数表。"""
+        super().showEvent(event)
+        try:
+            self._restore_saved_connection_state()
+        except Exception:
+            pass
 
     def get_product_id(self):
         try:
@@ -189,20 +197,41 @@ class TubeSheetConnectionPage(QWidget):
         except Exception:
             return None
 
-    def auto_select_saved_connection(self):
-        """根据产品ID自动选中已保存的管板连接方式和管板类型对应的图片"""
+    def _find_label_for_saved_connection(self, connection_type, tube_sheet_type):
+        """在图片列表中查找与库中记录匹配的缩略图。"""
+        conn_type = str(connection_type or "").strip()
+        ts_type = str(tube_sheet_type).strip() if tube_sheet_type is not None else ""
+        if not conn_type or not ts_type:
+            return None
+
+        for label in self.image_labels:
+            if (
+                str(getattr(label, "connection_type", "") or "").strip() == conn_type
+                and str(getattr(label, "tube_sheet_type", "") or "").strip() == ts_type
+            ):
+                return label
+
+        # 仅连接方式匹配时，退回该方式下第一张图
+        for label in self.image_labels:
+            if str(getattr(label, "connection_type", "") or "").strip() == conn_type:
+                return label
+        return None
+
+    def _restore_saved_connection_state(self, retry=0):
+        """根据产品ID恢复已保存的管板连接节点及右侧参数表。"""
+        if not self.image_labels:
+            if retry < 8:
+                QTimer.singleShot(200, lambda: self._restore_saved_connection_state(retry + 1))
+            return
+
         product_id = self.get_product_id()
         if not product_id:
-            # 如果没有产品ID，直接选择第一张图片作为默认
-            if self.image_labels:
-                self.select_image(self.image_labels[0])
+            if retry < 8:
+                QTimer.singleShot(200, lambda: self._restore_saved_connection_state(retry + 1))
             return
 
         conn = create_product_connection()
         if not conn:
-            # 如果无法连接产品库，同样选择第一张图片作为默认
-            if self.image_labels:
-                self.select_image(self.image_labels[0])
             return
 
         try:
@@ -213,47 +242,37 @@ class TubeSheetConnectionPage(QWidget):
                 WHERE 产品ID = %s
                 LIMIT 1
                 """
-                print(f"[调试] 自动选择已保存节点 - SQL: {sql}")
                 cur.execute(sql, (product_id,))
                 row = cur.fetchone()
-                if not row:
-                    print("[调试] 自动选择已保存节点 - 未找到该产品ID的记录")
-                    # 未找到任何记录，选中第一张图片作为默认
-                    if self.image_labels:
-                        self.select_image(self.image_labels[0])
-                    return
 
-                connection_type = row.get("管板连接方式") if isinstance(row, dict) else row[0]
-                tube_sheet_type = row.get("管板类型") if isinstance(row, dict) else row[1]
-                print(f"[调试] 自动选择已保存节点 - 连接方式: {connection_type}, 管板类型: {tube_sheet_type}")
+            if not row:
+                print("[tube_sheet_connection] 无已保存记录，保持当前界面")
+                return
 
-                if not connection_type or tube_sheet_type is None:
-                    # 记录不完整，同样退回选中第一张图片
-                    if self.image_labels:
-                        self.select_image(self.image_labels[0])
-                    return
+            connection_type = row.get("管板连接方式") if isinstance(row, dict) else row[0]
+            tube_sheet_type = row.get("管板类型") if isinstance(row, dict) else row[1]
+            print(
+                f"[tube_sheet_connection] 恢复保存状态: "
+                f"连接方式={connection_type}, 管板类型={tube_sheet_type}"
+            )
 
-                target_label = None
-                for label in self.image_labels:
-                    if (getattr(label, 'connection_type', None) == connection_type and
-                            getattr(label, 'tube_sheet_type', None) == str(tube_sheet_type)):
-                        target_label = label
-                        break
-
-                if target_label is not None:
-                    # 复用现有的选择逻辑
-                    self.select_image(target_label)
-                else:
-                    print("[调试] 自动选择已保存节点 - 未在图片列表中找到匹配的标签")
-                    # 有记录但找不到对应图片时，也退回选中第一张图片
-                    if self.image_labels:
-                        self.select_image(self.image_labels[0])
+            target_label = self._find_label_for_saved_connection(
+                connection_type, tube_sheet_type
+            )
+            if target_label is not None:
+                self.select_image(target_label, restoring=True)
+            else:
+                print("[tube_sheet_connection] 未找到匹配图片，不覆盖当前选择")
         except Exception as e:
-            print(f"[tube_sheet_connection] 自动选择已保存节点时发生错误: {str(e)}")
+            print(f"[tube_sheet_connection] 恢复保存状态失败: {e}")
             import traceback
             traceback.print_exc()
         finally:
             conn.close()
+
+    def auto_select_saved_connection(self):
+        """兼容旧调用：委托给统一恢复逻辑。"""
+        self._restore_saved_connection_state()
 
     def _get_param_from_parent(self, param_name):
         """从父窗口参数表读取指定参数的值"""
@@ -594,8 +613,9 @@ class TubeSheetConnectionPage(QWidget):
             result = filename
         return result
 
-    def select_image(self, label):
-        if getattr(self, "_tsc_user_readonly", False):
+    def select_image(self, label, restoring=False):
+        # 只读时禁止手动点选；程序化恢复保存状态时仍加载参数表
+        if not restoring and getattr(self, "_tsc_user_readonly", False):
             return
         if not hasattr(label, 'connection_type') or not hasattr(label, 'tube_sheet_type'):
             return

@@ -18498,6 +18498,16 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 pass
 
+        # 切换到管板连接页：恢复上次保存的节点与参数表
+        if index == 2:
+            try:
+                if hasattr(self, "tube_sheet_page") and hasattr(
+                    self.tube_sheet_page, "_restore_saved_connection_state"
+                ):
+                    self.tube_sheet_page._restore_saved_connection_state()
+            except Exception:
+                pass
+
         # 如果切换到轴向设计页面，实时刷新其基础参数
         try:
             target_widget = self.stacked_widget.currentWidget()
