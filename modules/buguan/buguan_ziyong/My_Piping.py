@@ -23992,6 +23992,93 @@ class TubeLayoutEditor(QMainWindow):
             # 通过setattr更新实例的对应变量
             setattr(self, var_name, updated_line)
 
+    def _has_any_x_cross_done(self):
+        """是否已完成任意一排上下（x 向）交叉布管。"""
+        return bool(getattr(self, "is_x_line1", False)) or bool(
+            getattr(self, "is_x_line2", False)
+        ) or bool(getattr(self, "is_x_line3", False))
+
+    def _has_any_y_cross_done(self):
+        """是否已完成任意一排左右（y 向）交叉布管。"""
+        return bool(getattr(self, "is_y_line1", False)) or bool(
+            getattr(self, "is_y_line2", False)
+        ) or bool(getattr(self, "is_y_line3", False))
+
+    def _classify_cross_selection_2(self, current_coords):
+        """两根参照管：判断为 x(上下) / y(左右) / None（与 on_cross_pipes_click 分支一致）。"""
+        if not current_coords or len(current_coords) != 2:
+            return None
+        c0, c1 = current_coords[0], current_coords[1]
+        for line in (1, 2, 3):
+            up = getattr(self, f"original_print_cross_x_up_line{line}", None) or []
+            down = getattr(self, f"original_print_cross_x_down_line{line}", None) or []
+            if (c0 in up and c1 in down) or (c0 in down and c1 in up):
+                return "x"
+        for line in (1, 2, 3):
+            left = getattr(self, f"original_print_cross_y_left_line{line}", None) or []
+            right = getattr(self, f"original_print_cross_y_right_line{line}", None) or []
+            if (c0 in left and c1 in right) or (c0 in right and c1 in left):
+                return "y"
+        return None
+
+    def _classify_cross_selection_4(
+        self,
+        x_up_count_line1,
+        x_down_count_line1,
+        y_left_count_line1,
+        y_right_count_line1,
+        x_up_count_line2,
+        x_down_count_line2,
+        y_left_count_line2,
+        y_right_count_line2,
+        x_up_count_line3,
+        x_down_count_line3,
+        y_left_count_line3,
+        y_right_count_line3,
+    ):
+        """四根参照管：判断为 x / y / None（与 on_cross_pipes_click 分支顺序一致）。"""
+        if x_up_count_line1 == 2 and x_down_count_line1 == 2:
+            return "x"
+        if y_left_count_line1 == 2 and y_right_count_line1 == 2:
+            return "y"
+        if x_up_count_line2 == 2 and x_down_count_line2 == 2:
+            return "x"
+        if y_left_count_line2 == 2 and y_right_count_line2 == 2:
+            return "y"
+        if x_up_count_line3 == 2 and x_down_count_line3 == 2:
+            return "x"
+        if y_left_count_line3 == 2 and y_right_count_line3 == 2:
+            return "y"
+        return None
+
+    def _block_cross_pipes_by_constraints(self, cross_kind):
+        """
+        管程分程 4.2 禁止上下交叉；已完成纵向/横向后禁止另一方向。
+        返回 True 表示已拦截（已弹窗并清除选中高亮）。
+        """
+        if cross_kind not in ("x", "y"):
+            return False
+        tube_pass = str(getattr(self, "tube_pass_form_value", "") or "").strip()
+        if cross_kind == "x" and tube_pass == "4.2":
+            QMessageBox.warning(
+                self, "选择错误", "当前管程分程形式不支持此类型交叉布管"
+            )
+            self.clear_selection_highlight()
+            return True
+        if cross_kind == "y" and self._has_any_x_cross_done():
+            QMessageBox.warning(
+                self, "选择错误", "当前已经进行纵向的交叉布管！"
+            )
+            self.clear_selection_highlight()
+            return True
+        if cross_kind == "x" and self._has_any_y_cross_done():
+            QMessageBox.warning(
+                self, "选择错误", "当前已经进行横向的交叉布管！"
+            )
+            self.clear_selection_highlight()
+            return True
+        return False
+
     # 交叉布管
     def on_cross_pipes_click(self):
 
@@ -24086,6 +24173,9 @@ class TubeLayoutEditor(QMainWindow):
                 # 转换坐标（假设已通过selected_to_current_coords获取实际坐标）
                 current_coords = self.selected_to_current_coords(self.selected_centers)
                 if current_coords:
+                    cross_kind_2 = self._classify_cross_selection_2(current_coords)
+                    if self._block_cross_pipes_by_constraints(cross_kind_2):
+                        return
                     # 判断两个坐标是否分别属于指定的线（顺序不限）
                     coord1_in_up = (
                             current_coords[0] in self.original_print_cross_x_up_line1
@@ -24411,6 +24501,22 @@ class TubeLayoutEditor(QMainWindow):
                     for coord in current_coords
                     if coord in self.original_print_cross_y_right_line3
                 )
+                cross_kind_4 = self._classify_cross_selection_4(
+                    x_up_count_line1,
+                    x_down_count_line1,
+                    y_left_count_line1,
+                    y_right_count_line1,
+                    x_up_count_line2,
+                    x_down_count_line2,
+                    y_left_count_line2,
+                    y_right_count_line2,
+                    x_up_count_line3,
+                    x_down_count_line3,
+                    y_left_count_line3,
+                    y_right_count_line3,
+                )
+                if self._block_cross_pipes_by_constraints(cross_kind_4):
+                    return
                 # x轴第一排
                 if x_up_count_line1 == 2 and x_down_count_line1 == 2:
                     if self.is_x_line1:
