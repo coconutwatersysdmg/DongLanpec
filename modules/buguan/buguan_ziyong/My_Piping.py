@@ -93,6 +93,7 @@ ENABLE_SCREW_RING = True
 
 # 布管图 UI 配色（对照示例图）
 _BUGUAN_TUBE_OUTLINE = QColor(66, 165, 245)  # 更亮蓝空心换热管 #42A5F5
+_BUGUAN_TUBE_LINE_WIDTH = 2  # 换热管圆与交叉布管线宽（曾加粗为 4，现略细）
 _BUGUAN_SHELL_RING_GREEN = QColor(102, 187, 106)  # 最大/次大外圆之间实心绿环 #66BB6A
 _BUGUAN_AXIS_X = QColor(255, 0, 0)
 _BUGUAN_AXIS_Y = QColor(0, 180, 0)
@@ -19276,7 +19277,7 @@ class TubeLayoutEditor(QMainWindow):
 
     def _buguan_tube_pen(self):
         pen = QPen(_BUGUAN_TUBE_OUTLINE)
-        pen.setWidth(4)
+        pen.setWidth(_BUGUAN_TUBE_LINE_WIDTH)
         pen.setCapStyle(Qt.RoundCap)
         return pen
 
@@ -24788,7 +24789,7 @@ class TubeLayoutEditor(QMainWindow):
         p2_start = QPointF(x1 + vx2 * r, y1 + vy2 * r)
         p2_end = QPointF(x2 + vx2 * r, y2 + vy2 * r)
 
-        # 与换热管轮廓一致：亮蓝 #42A5F5、线宽 4（见 _buguan_tube_pen）
+        # 与换热管轮廓一致：亮蓝 #42A5F5、线宽见 _BUGUAN_TUBE_LINE_WIDTH
         pen = self._buguan_tube_pen()
         line1 = self.graphics_scene.addLine(QLineF(p1_start, p1_end), pen)
         line2 = self.graphics_scene.addLine(QLineF(p2_start, p2_end), pen)
