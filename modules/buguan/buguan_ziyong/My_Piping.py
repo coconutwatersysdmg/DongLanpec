@@ -73,6 +73,7 @@ from modules.buguan.buguan_ziyong.component.center_dangguan import (
     build_center_dangguan as build_center_dangguan_new,
     delete_selected_center_dangguan as delete_selected_center_dangguan_new,
 )
+from modules.cailiaodingyi.controllers.combo import ComboDelegate
 
 # product_id = 'PD2025092421444001'
 product_id = "PD202509291"
@@ -1347,6 +1348,132 @@ class NoWheelComboBox(QComboBox):
         event.ignore()
 
 
+# 布管参数表：用 ComboDelegate 弹出编辑（点击单元格选值）；下列仍用常驻 cellWidget
+_PARAM_COMBO_CELL_WIDGET = frozenset(
+    {"换热管公称长度 LN", "管程分程形式", "拉杆直径"}
+)
+_PARAM_COMBO_DELEGATE = frozenset(
+    {
+        "分程布置形式",
+        "换热管排列方式",
+        "折流板切口方向",
+        "防冲板形式",
+        "放置位置",
+        "换热管外径 do",
+        "管程程数",
+        "换热管布置方式",
+        "滑道定位",
+        "拉杆形式",
+    }
+)
+
+
+class BuguanParamComboDelegate(ComboDelegate):
+    """布管左侧参数表参数值列：材料定义 ComboDelegate + 禁滚轮 + 变更回调。"""
+
+    def __init__(self, options, table=None, owner=None, on_change=None):
+        super().__init__(options, table)
+        self._owner = owner
+        self._on_change = on_change
+
+    def paint(self, painter, option, index):
+        if index.column() != 2:
+            super().paint(painter, option, index)
+            return
+
+        table = option.widget
+        if table is not None and table.cellWidget(index.row(), index.column()) is not None:
+            return
+
+        from PyQt5.QtGui import QPainter
+        from PyQt5.QtWidgets import QStyle
+
+        painter.save()
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        if option.state & QStyle.State_Selected:
+            painter.fillRect(option.rect, option.palette.highlight())
+
+        box_rect = option.rect.adjusted(5, 4, -5, -4)
+        editable = bool(index.flags() & Qt.ItemIsEditable)
+
+        painter.setBrush(QColor("#f5f7fa" if not editable else "#ffffff"))
+        painter.setPen(QPen(QColor("#dcdfe6"), 1))
+        painter.drawRoundedRect(box_rect, 4, 4)
+
+        text = "" if index.data(Qt.DisplayRole) is None else str(index.data(Qt.DisplayRole))
+        painter.setPen(QColor("#969696" if not editable else "#303133"))
+        arrow_w = 18
+        text_rect = box_rect.adjusted(10, 0, -arrow_w, 0)
+        painter.drawText(text_rect, Qt.AlignLeft | Qt.AlignVCenter, text)
+
+        if editable and self.options:
+            arrow_rect = box_rect.adjusted(box_rect.width() - arrow_w, 0, -6, 0)
+            painter.setPen(QColor("#909399"))
+            cx = arrow_rect.center().x()
+            cy = arrow_rect.center().y()
+            painter.drawLine(cx - 4, cy - 2, cx, cy + 2)
+            painter.drawLine(cx, cy + 2, cx + 4, cy - 2)
+        painter.restore()
+
+    def createEditor(self, parent, option, index):
+        if index.column() != 2:
+            return None
+        combo = NoWheelComboBox(parent)
+        combo.setEditable(False)
+        opts = list(dict.fromkeys(self.options or []))
+        combo.addItems(opts)
+        cur = index.data(Qt.EditRole) if index.data(Qt.EditRole) is not None else ""
+        i = combo.findText(str(cur).strip())
+        combo.setCurrentIndex(max(0, i))
+        QTimer.singleShot(0, combo.showPopup)
+        combo.activated.connect(lambda _=None: self._commit_and_close(combo))
+        return combo
+
+    def setModelData(self, editor, model, index):
+        old = index.data(Qt.EditRole)
+        new = editor.currentText()
+        try:
+            from PyQt5.QtCore import QSignalBlocker
+
+            _bk = QSignalBlocker(self.table) if self.table else None
+        except Exception:
+            _bk = None
+        try:
+            super().setModelData(editor, model, index)
+        finally:
+            try:
+                del _bk
+            except Exception:
+                pass
+        if self._on_change and str(old).strip() != str(new).strip():
+            self._on_change(index.row(), new)
+
+    def highlight_row(self, row):
+        if not self.table:
+            return
+        try:
+            from PyQt5.QtCore import QSignalBlocker
+
+            _bk = QSignalBlocker(self.table)
+        except Exception:
+            _bk = None
+        try:
+            for r in range(self.table.rowCount()):
+                for c in range(self.table.columnCount()):
+                    item = self.table.item(r, c)
+                    if item:
+                        item.setBackground(QColor("#ffffff"))
+            item = self.table.item(row, 2)
+            if item:
+                item.setBackground(QColor("#d0e7ff"))
+        finally:
+            try:
+                del _bk
+            except Exception:
+                pass
+
+
 class NoWheelTableWidget(QTableWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1503,6 +1630,8 @@ class TubeLayoutEditor(QMainWindow):
         self.original_param_values = {}
         self.modified_rows = set()
         self.is_loading_data = False
+        self._in_param_combo_callback = False
+        self._param_cascade_depth = 0
         self.center_dangguan = []
         self.center_dangban = []
         self.side_dangban = []
@@ -8589,6 +8718,12 @@ class TubeLayoutEditor(QMainWindow):
         if not hasattr(self, "param_table") or self.param_table is None:
             return
         try:
+            from PyQt5.QtCore import QSignalBlocker
+
+            _tb = QSignalBlocker(self.param_table)
+        except Exception:
+            _tb = None
+        try:
             for row in range(self.param_table.rowCount()):
                 name_item = self.param_table.item(row, 1)
                 if not name_item or name_item.text().strip() != "是否以外径为基准":
@@ -8598,7 +8733,6 @@ class TubeLayoutEditor(QMainWindow):
                     cw.setEditable(False)
                     cw.setEnabled(False)
                     cw.setFocusPolicy(Qt.NoFocus)
-                    # 在 QTableWidget 内，部分样式/布局刷新后禁用态偶发失效；吞掉鼠标更稳妥
                     try:
                         cw.setAttribute(Qt.WA_TransparentForMouseEvents, True)
                     except Exception:
@@ -8610,8 +8744,11 @@ class TubeLayoutEditor(QMainWindow):
                         it.setFlags(it.flags() & ~Qt.ItemIsEditable)
                         it.setForeground(QBrush(QColor(150, 150, 150)))
                 break
-        except Exception:
-            pass
+        finally:
+            try:
+                del _tb
+            except Exception:
+                pass
 
     def setup_modification_detection(self):
         """设置参数修改检测机制"""
@@ -8622,6 +8759,8 @@ class TubeLayoutEditor(QMainWindow):
         """参数表格单元格内容变化时的处理"""
         if self.is_loading_data or self._is_validating:
             return  # 防止初始化或验证过程中误触发
+        if getattr(self, "_param_cascade_depth", 0) > 0:
+            return
 
         row = item.row()
         column = item.column()
@@ -8665,16 +8804,40 @@ class TubeLayoutEditor(QMainWindow):
         col = 2
         item = self.param_table.item(row, col)
         if item:
-            item.setForeground(light_blue)  # 设置字体颜色为浅蓝色，背景保持不变
+            try:
+                from PyQt5.QtCore import QSignalBlocker
+
+                _bk = QSignalBlocker(self.param_table)
+            except Exception:
+                _bk = None
+            try:
+                item.setForeground(light_blue)
+            finally:
+                try:
+                    del _bk
+                except Exception:
+                    pass
 
     def reset_row_background(self, row):
         """重置行的背景色为默认（白色背景）"""
         default_brush = QBrush(QColor(255, 255, 255))  # 白色
 
-        for col in range(self.param_table.columnCount()):
-            item = self.param_table.item(row, col)
-            if item:
-                item.setBackground(default_brush)
+        try:
+            from PyQt5.QtCore import QSignalBlocker
+
+            _bk = QSignalBlocker(self.param_table)
+        except Exception:
+            _bk = None
+        try:
+            for col in range(self.param_table.columnCount()):
+                item = self.param_table.item(row, col)
+                if item:
+                    item.setBackground(default_brush)
+        finally:
+            try:
+                del _bk
+            except Exception:
+                pass
 
     def update_all_row_backgrounds(self):
         """更新所有行的背景色（根据修改状态）"""
@@ -8730,11 +8893,22 @@ class TubeLayoutEditor(QMainWindow):
                 except TypeError:
                     pass
                 # 为每个下拉框连接信号，使用lambda确保正确的row值传递
-                combo_widget.currentTextChanged.connect(
-                    lambda text, r=row: self.on_combobox_changed(r, text)
-                )
+                def _combo_text_changed(text, r=row):
+                    if getattr(self, "_param_cascade_depth", 0) > 0:
+                        return
+                    self.on_combobox_changed(r, text)
+
+                combo_widget.currentTextChanged.connect(_combo_text_changed)
 
     def update_lagan(self):
+        if getattr(self, "_param_cascade_depth", 0) > 1:
+            return
+        try:
+            from PyQt5.QtCore import QSignalBlocker
+
+            _table_blocker = QSignalBlocker(self.param_table)
+        except Exception:
+            _table_blocker = None
         try:
             # 如果正在加载数据，直接返回，不执行更新逻辑
             if hasattr(self, "is_loading_data") and self.is_loading_data:
@@ -8901,7 +9075,7 @@ class TubeLayoutEditor(QMainWindow):
                             if float(do_value).is_integer()
                             else str(do_value)
                         )
-                        lg_diameter_widget.setCurrentText(target_value)
+                        self._set_combo_current_text(lg_diameter_widget, target_value)
                         print(f"焊接拉杆直径已设置为: {target_value}")
 
                         # 获取编辑器并连接输入检查信号
@@ -8997,30 +9171,16 @@ class TubeLayoutEditor(QMainWindow):
                                 print(f"使用lg_current_value: {target_value}")
 
                         # 设置目标值
-                        current_index = lg_diameter_widget.findText(target_value)
-                        if current_index >= 0:
-                            lg_diameter_widget.setCurrentIndex(current_index)
-                            print(f"螺纹拉杆直径已设置为: {target_value}")
-                        else:
-                            print(
-                                f"警告: 在下拉框中未找到目标值 {target_value}，使用默认值"
-                            )
-                            default_index = lg_diameter_widget.findText(default_value)
-                            if default_index >= 0:
-                                lg_diameter_widget.setCurrentIndex(default_index)
+                        self._set_combo_current_text(lg_diameter_widget, target_value)
+                        print(f"螺纹拉杆直径已设置为: {target_value}")
                     else:
                         # 创建下拉框并添加选项（使用NoWheelComboBox禁用滚轮）
                         combo_box = NoWheelComboBox()
                         combo_box.addItems(thread_options)
-                        # 设置目标值
-                        current_index = combo_box.findText(target_value)
-                        if current_index >= 0:
-                            combo_box.setCurrentIndex(current_index)
-                        else:
-                            # 如果找不到目标值，使用默认值
-                            default_index = combo_box.findText(default_value)
-                            if default_index >= 0:
-                                combo_box.setCurrentIndex(default_index)
+                        self._set_combo_current_text(
+                            combo_box,
+                            target_value if combo_box.findText(target_value) >= 0 else default_value,
+                        )
                         self.param_table.setCellWidget(lg_diameter_row, 2, combo_box)
                         print(f"创建新下拉框并设置螺纹拉杆直径为: {target_value}")
 
@@ -9063,6 +9223,10 @@ class TubeLayoutEditor(QMainWindow):
         except Exception as e:
             print(f"update_lagan函数执行出错: {str(e)}")
         finally:
+            try:
+                del _table_blocker
+            except Exception:
+                pass
             # update_lagan 会重建拉杆直径等单元格；在表格内偶发影响其它列交互态，这里统一把外径基准行锁回只读
             try:
                 self._lock_outer_base_flag_param_cell()
@@ -9242,32 +9406,31 @@ class TubeLayoutEditor(QMainWindow):
             lg_widget = self.param_table.cellWidget(lg_row, 2)
 
             # 如果单元格是下拉框，则更新选择；否则创建下拉框
+            default_option = "螺纹拉杆" if do_value >= 19 else "焊接拉杆"
             if isinstance(lg_widget, QComboBox):
-                # 根据换热管外径确定默认选项
-                default_option = "螺纹拉杆" if do_value >= 19 else "焊接拉杆"
-
-                # 设置当前选择
-                current_index = lg_widget.findText(default_option)
-                if current_index >= 0:
-                    lg_widget.setCurrentIndex(current_index)
-                    print(f"已更新拉杆形式: {default_option}")
-            else:
-                # 创建下拉框
-                combo_box = QComboBox()
-                combo_box.addItems(["螺纹拉杆", "焊接拉杆"])
-
-                # 根据换热管外径设置默认选项
-                default_option = "螺纹拉杆" if do_value >= 19 else "焊接拉杆"
-                current_index = combo_box.findText(default_option)
-                if current_index >= 0:
-                    combo_box.setCurrentIndex(current_index)
-
-                # 设置下拉框到单元格
-                self.param_table.setCellWidget(lg_row, 2, combo_box)
+                self._set_combo_current_text(lg_widget, default_option)
                 print(f"已更新拉杆形式: {default_option}")
+            else:
+                lg_item = self.param_table.item(lg_row, 2)
+                if lg_item is not None:
+                    if lg_item.text().strip() != default_option:
+                        try:
+                            from PyQt5.QtCore import QSignalBlocker
 
-                # 连接信号，允许用户手动更改
-                combo_box.currentTextChanged.connect(lambda: self.handle_param_change())
+                            _bk = QSignalBlocker(self.param_table)
+                        except Exception:
+                            _bk = None
+                        try:
+                            lg_item.setText(default_option)
+                        finally:
+                            try:
+                                del _bk
+                            except Exception:
+                                pass
+                    print(f"已更新拉杆形式: {default_option}")
+                else:
+                    self._set_param_value_cell(lg_row, default_option, editable=True)
+                    print(f"已更新拉杆形式: {default_option}")
 
     def update_tube_layout_circle_dl(self):
         # 非首次打开时，加载阶段按要求保持布管参数表中的 DL，不自动重算
@@ -13302,6 +13465,9 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 return
 
+            if getattr(self, "_param_cascade_depth", 0) > 0:
+                return
+
             row = changed_item.row()
             param_name_item = self.param_table.item(row, 1)
             if not param_name_item:
@@ -14346,17 +14512,12 @@ class TubeLayoutEditor(QMainWindow):
                     f"[on_table_item_changed DEBUG] 读取并初始化 last_valid_values 出错: {e}"
                 )
 
-            # 1) 触发通用的下拉框逻辑（若适用）
-            try:
-                self._in_on_combobox_cascade = True
-                self.on_combobox_changed(row, param_value)
-            except Exception as e:
-                print(f"[on_table_item_changed] 调用 on_combobox_changed 出错: {e}")
-            finally:
+            # 1) 触发通用的下拉框逻辑（ComboDelegate 行由 setModelData 统一触发，此处跳过防重入）
+            if param_name not in _PARAM_COMBO_DELEGATE:
                 try:
-                    self._in_on_combobox_cascade = False
-                except Exception:
-                    pass
+                    self.on_combobox_changed(row, param_value)
+                except Exception as e:
+                    print(f"[on_table_item_changed] 调用 on_combobox_changed 出错: {e}")
 
             # 2) 验证输入合法性（你的现有函数）
             try:
@@ -15054,7 +15215,8 @@ class TubeLayoutEditor(QMainWindow):
                     # 使用闭包捕获当前行和下拉框实例，避免lambda变量引用问题
                     def create_combobox_callback(current_combo, current_row):
                         def callback(index):
-                            # 确保下拉框实例仍然存在
+                            if getattr(self, "_param_cascade_depth", 0) > 0:
+                                return
                             if current_combo and isinstance(current_combo, QComboBox):
                                 self.on_combobox_changed(
                                     current_row, current_combo.currentText()
@@ -15077,6 +15239,143 @@ class TubeLayoutEditor(QMainWindow):
             self._lock_outer_base_flag_param_cell()
         except Exception:
             pass
+
+    def _param_cascade_enter(self) -> bool:
+        """进入参数联动栈；仅最外层（depth 由 0→1）返回 True，嵌套调用须直接 return。"""
+        depth = getattr(self, "_param_cascade_depth", 0)
+        self._param_cascade_depth = depth + 1
+        return depth == 0
+
+    def _param_cascade_leave(self):
+        self._param_cascade_depth = max(0, getattr(self, "_param_cascade_depth", 1) - 1)
+
+    @staticmethod
+    def _set_combo_current_text(combo, text: str):
+        """程序写 QComboBox 时阻断其信号，避免级联触发 on_combobox_changed 死循环。"""
+        if not isinstance(combo, QComboBox):
+            return
+        target = str(text).strip()
+        try:
+            from PyQt5.QtCore import QSignalBlocker
+
+            _bk = QSignalBlocker(combo)
+        except Exception:
+            _bk = None
+        try:
+            idx = combo.findText(target)
+            if idx >= 0:
+                if combo.currentIndex() != idx:
+                    combo.setCurrentIndex(idx)
+            elif combo.currentText().strip() != target:
+                combo.setCurrentText(target)
+        finally:
+            try:
+                del _bk
+            except Exception:
+                pass
+
+    def _param_value_text(self, row: int) -> str:
+        if not hasattr(self, "param_table") or self.param_table is None:
+            return ""
+        w = self.param_table.cellWidget(row, 2)
+        if isinstance(w, QComboBox):
+            return w.currentText().strip()
+        it = self.param_table.item(row, 2)
+        return it.text().strip() if it else ""
+
+    def _set_param_value_cell(
+        self, row: int, text: str, *, editable: bool = True, gray: bool = False
+    ):
+        item = QTableWidgetItem(str(text) if text is not None else "")
+        flags = Qt.ItemIsEnabled | Qt.ItemIsSelectable
+        if editable:
+            flags |= Qt.ItemIsEditable
+        item.setFlags(flags)
+        item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        if gray:
+            item.setForeground(QBrush(QColor(150, 150, 150)))
+        self.param_table.setItem(row, 2, item)
+
+    def _build_param_combo_delegate_options(self, pname, param, params):
+        if pname == "分程布置形式":
+            return ["未选择", "形式1", "形式2", "形式3"]
+        if pname == "换热管排列方式":
+            return ["正三角形", "转角正三角形", "正方形", "转角正方形"]
+        if pname == "折流板切口方向":
+            return ["水平上下", "垂直左右"]
+        if pname == "拉杆形式":
+            return ["焊接拉杆", "螺纹拉杆"]
+        if pname == "滑道定位":
+            return ["滑道与管板焊接", "滑道与第一块折流板焊接"]
+        if pname == "放置位置":
+            return ["参照管中心连线", "参照管顶部连线"]
+        if pname == "换热管布置方式":
+            return ["对中", "跨中", "任意"]
+        if pname == "防冲板形式":
+            opts = ["平板形", "圆弧形"]
+            if ENABLE_DANGBAN_WELDED_OPTION:
+                opts.append("焊接式")
+            return opts
+        if pname == "换热管外径 do":
+            return [
+                "10", "12", "14", "16", "19", "20", "22", "25", "30", "32",
+                "35", "38", "45", "50", "55", "57",
+            ]
+        if pname == "管程程数":
+            if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU", "AES", "BES"]:
+                return ["2", "4", "6", "8", "10", "12"]
+            return ["1", "2", "4", "6", "8", "10", "12"]
+        return []
+
+    def _resolve_param_combo_delegate_value(self, pname, param, params, options):
+        param_value_str = (
+            str(param["参数值"]) if param.get("参数值") is not None else ""
+        ).strip()
+        if pname == "拉杆形式" and not param_value_str:
+            do_default = None
+            try:
+                for _p in params:
+                    if _p.get("参数名") == "换热管外径 do":
+                        v = _p.get("参数值")
+                        if v not in (None, ""):
+                            do_default = float(str(v).strip())
+                        break
+            except Exception:
+                do_default = None
+            if do_default is not None:
+                param_value_str = "螺纹拉杆" if do_default >= 19 else "焊接拉杆"
+        if pname == "管程程数":
+            if self.heat_exchanger in ["AES", "BES"] and param_value_str == "1":
+                param_value_str = "2"
+        if not param_value_str and options:
+            param_value_str = options[0]
+        elif param_value_str and options and param_value_str not in options:
+            if options:
+                param_value_str = options[0]
+        return param_value_str
+
+    def _setup_param_combo_delegate_cell(self, row, param, params):
+        pname = param["参数名"]
+        options = self._build_param_combo_delegate_options(pname, param, params)
+        value = self._resolve_param_combo_delegate_value(
+            pname, param, params, options
+        )
+        self._set_param_value_cell(row, value, editable=True)
+        delegate = BuguanParamComboDelegate(
+            options,
+            table=self.param_table,
+            owner=self,
+            on_change=self._on_param_combo_delegate_changed,
+        )
+        self.param_table.setItemDelegateForRow(row, delegate)
+        self.original_param_values[(row, 2)] = value
+        if pname == "管程程数":
+            self._tube_pass_count_row = row
+
+    def _on_param_combo_delegate_changed(self, row, text):
+        if self.is_loading_data or self._is_validating:
+            return
+        self.on_combobox_changed(row, text)
 
     def setup_parameters(self, params, setup_listeners=True):
         # ---- 补齐“滑道新增参数”（元件库默认表可能尚未配置）----
@@ -15169,6 +15468,24 @@ class TubeLayoutEditor(QMainWindow):
         self.tube_pass_form_value = ""
         self.tube_pass_combo = None
         self.tube_pass_form_column = 2
+        self._tube_pass_count_row = -1
+
+        special_params = [
+            "是否以外径为基准",
+            "分程布置形式",
+            "换热管排列方式",
+            "折流板切口方向",
+            "管程分程形式",
+            "防冲板形式",
+            "放置位置",
+            "换热管外径 do",
+            "管程程数",
+            "换热管布置方式",
+            "换热管公称长度 LN",
+            "滑道定位",
+            "拉杆形式",
+            "拉杆直径",
+        ]
 
         for row, param in enumerate(params):
             num_item = QTableWidgetItem(str(row + 1))
@@ -15185,25 +15502,20 @@ class TubeLayoutEditor(QMainWindow):
             if param["参数名"] in self.baffle_params_rows:
                 self.baffle_params_rows[param["参数名"]] = row
 
-            special_params = [
-                "是否以外径为基准",
-                "分程布置形式",
-                "换热管排列方式",
-                "折流板切口方向",
-                "管程分程形式",
-                "防冲板形式",
-                "放置位置",
-                "换热管外径 do",
-                "管程程数",
-                "换热管布置方式",
-                "换热管公称长度 LN",
-                "滑道定位",
-                "拉杆形式",
-                "拉杆直径",
-            ]
+            pname = param["参数名"]
 
-            if param["参数名"] in special_params:
-                if param["参数名"] in ["换热管公称长度 LN", "换热管公称长度 LN"]:
+            if pname in special_params:
+                if pname == "是否以外径为基准":
+                    val = (
+                        str(param["参数值"]).strip()
+                        if param.get("参数值") is not None
+                        else "否"
+                    )
+                    if val not in ("是", "否"):
+                        val = "否"
+                    self._set_param_value_cell(row, val, editable=False, gray=True)
+                    self.original_param_values[(row, 2)] = val
+                elif pname in ["换热管公称长度 LN", "换热管公称长度 LN"]:
                     combo = NoWheelComboBox()
                     combo.setEditable(True)
                     standard_lengths = [
@@ -15277,32 +15589,97 @@ class TubeLayoutEditor(QMainWindow):
                         combo.currentText() if isinstance(combo, QComboBox) else ""
                     )
                     self.original_param_values[(row, 2)] = current_value
-                else:
+                elif pname == "管程分程形式":
                     combo = NoWheelComboBox()
-                    is_diameter_based = param["参数名"] == "是否以外径为基准"
-                    dn_visible = param["参数名"] == "公称直径 DN"
+                    initial_tube_pattern = str(self.tube_pass_partition)
+                    self.tube_pass_form_combo = combo
+                    self.tube_pass_form_row = row
 
-                    if param["参数名"] == "是否以外径为基准":
-                        combo.addItems(["是", "否"])
-                    elif param["参数名"] == "分程布置形式":
-                        combo.addItems(["未选择", "形式1", "形式2", "形式3"])
-                    elif param["参数名"] == "换热管排列方式":
-                        combo.addItems(
-                            ["正三角形", "转角正三角形", "正方形", "转角正方形"]
+                    list_view = QListView()
+                    combo.setView(list_view)
+                    combo.setIconSize(QSize(100, 85))
+
+                    tube_pass_row = -1
+                    for r in range(self.param_table.rowCount()):
+                        if (
+                            self.param_table.item(r, 1)
+                            and self.param_table.item(r, 1).text() == "管程程数"
+                        ):
+                            tube_pass_row = r
+                            break
+
+                    if tube_pass_row != -1:
+                        self._tube_pass_count_row = tube_pass_row
+                        tube_pass_widget = self.param_table.cellWidget(
+                            tube_pass_row, 2
                         )
-                    elif param["参数名"] == "折流板切口方向":
-                        combo.addItems(["水平上下", "垂直左右"])
-                    elif param["参数名"] == "拉杆形式":
-                        combo.addItems(["焊接拉杆", "螺纹拉杆"])
-                    elif param["参数名"] == "滑道定位":
-                        combo.addItems(["滑道与管板焊接", "滑道与第一块折流板焊接"])
-                    elif param["参数名"] == "滑道形式":
-                        combo.addItems(["板式滑道", "圆钢条式滑道"])
-                    elif param["参数名"] == "导轨类型":
-                        combo.addItems(["支撑导轨1", "支撑导轨2"])
-                    elif param["参数名"] == "放置位置":
-                        combo.addItems(["参照管中心连线", "参照管顶部连线"])
-                    elif param["参数名"] == "管程程数":
+                        if isinstance(tube_pass_widget, QComboBox):
+                            self.tube_pass_combo = tube_pass_widget
+                            try:
+                                tube_pass_widget.currentIndexChanged.disconnect(
+                                    self.on_tube_pass_changed
+                                )
+                            except Exception:
+                                pass
+                            tube_pass_widget.currentIndexChanged.connect(
+                                self.on_tube_pass_changed
+                            )
+                            tube_pass = tube_pass_widget.currentText()
+                        else:
+                            self.tube_pass_combo = None
+                            tube_pass_item = self.param_table.item(
+                                tube_pass_row, 2
+                            )
+                            tube_pass = (
+                                tube_pass_item.text() if tube_pass_item else ""
+                            )
+
+                        self.load_tube_pass_images(combo, tube_pass)
+
+                        for i in range(combo.count()):
+                            item_data = combo.itemData(i)
+                            if item_data == initial_tube_pattern:
+                                combo.setCurrentIndex(i)
+                                self.tube_pass_form_value = initial_tube_pattern
+                                break
+                        else:
+                            index = combo.findText(initial_tube_pattern)
+                            if index >= 0:
+                                combo.setCurrentIndex(index)
+                                self.tube_pass_form_value = initial_tube_pattern
+
+                    combo.currentIndexChanged.connect(self.on_tube_pass_form_changed)
+                    self.param_table.setCellWidget(row, 2, combo)
+                    self._apply_param_combo_widget_style(combo, disabled=False)
+                    self.original_param_values[(row, 2)] = (
+                        str(param["参数值"]) if param["参数值"] is not None else ""
+                    )
+                elif pname == "拉杆直径":
+                    combo = NoWheelComboBox()
+                    combo.addItems(
+                        [
+                            "10", "12", "14", "16", "19", "20", "25", "27", "30",
+                            "32", "35", "38", "45", "50", "55", "57",
+                        ]
+                    )
+                    param_value_str = (
+                        str(param["参数值"]) if param["参数值"] is not None else ""
+                    )
+                    try:
+                        if param_value_str:
+                            combo.setCurrentText(param_value_str)
+                        elif combo.count() > 0:
+                            combo.setCurrentIndex(0)
+                    except Exception:
+                        for i in range(combo.count()):
+                            if combo.itemText(i) == param_value_str:
+                                combo.setCurrentIndex(i)
+                                break
+                    self.param_table.setCellWidget(row, 2, combo)
+                    self._apply_param_combo_widget_style(combo, disabled=False)
+                    self.original_param_values[(row, 2)] = param_value_str
+                elif pname in _PARAM_COMBO_DELEGATE:
+                    if pname == "管程程数":
                         tube_pass = self.get_tube_pass_count()
                         if tube_pass == "2":
                             self.tube_pass_form_value = "2"
@@ -15310,189 +15687,7 @@ class TubeLayoutEditor(QMainWindow):
                             self.tube_pass_form_value = "4.1"
                         elif tube_pass == "6":
                             self.tube_pass_form_value = "6.1"
-
-                        current_value = (
-                            str(param["参数值"]) if param["参数值"] is not None else ""
-                        )
-
-                        if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
-                            combo.addItems(["2", "4", "6", "8", "10", "12"])
-                        elif self.heat_exchanger in ["AES", "BES"]:
-                            combo.addItems(["2", "4", "6", "8", "10", "12"])
-                            if current_value == "1":
-                                combo.setCurrentIndex(0)
-                                self._original_values[(row, 2)] = "2"
-                            elif current_value and combo.findText(current_value) >= 0:
-                                combo.setCurrentText(current_value)
-                            else:
-                                combo.setCurrentIndex(0)
-                        else:
-                            combo.addItems(["1", "2", "4", "6", "8", "10", "12"])
-                            if current_value and combo.findText(current_value) >= 0:
-                                combo.setCurrentText(current_value)
-                            else:
-                                combo.setCurrentIndex(0)
-                    elif param["参数名"] == "换热管布置方式":
-                        combo.addItems(["对中", "跨中", "任意"])
-                    elif param["参数名"] == "拉杆直径":
-                        combo.addItems(
-                            [
-                                "10",
-                                "12",
-                                "14",
-                                "16",
-                                "19",
-                                "20",
-                                "25",
-                                "27",
-                                "30",
-                                "32",
-                                "35",
-                                "38",
-                                "45",
-                                "50",
-                                "55",
-                                "57",
-                            ]
-                        )
-                    elif param["参数名"] == "管程分程形式":
-                        initial_tube_pattern = str(self.tube_pass_partition)
-                        self.tube_pass_form_combo = combo
-                        self.tube_pass_form_row = row
-
-                        list_view = QListView()
-                        combo.setView(list_view)
-                        combo.setIconSize(QSize(100, 85))
-
-                        tube_pass_row = -1
-                        for r in range(self.param_table.rowCount()):
-                            if (
-                                    self.param_table.item(r, 1)
-                                    and self.param_table.item(r, 1).text() == "管程程数"
-                            ):
-                                tube_pass_row = r
-                                break
-
-                        if tube_pass_row != -1:
-                            tube_pass_widget = self.param_table.cellWidget(
-                                tube_pass_row, 2
-                            )
-                            if isinstance(tube_pass_widget, QComboBox):
-                                self.tube_pass_combo = tube_pass_widget
-                                tube_pass_widget.currentIndexChanged.connect(
-                                    self.on_tube_pass_changed
-                                )
-                                tube_pass = tube_pass_widget.currentText()
-                            else:
-                                tube_pass_item = self.param_table.item(tube_pass_row, 2)
-                                tube_pass = (
-                                    tube_pass_item.text() if tube_pass_item else ""
-                                )
-
-                            self.load_tube_pass_images(combo, tube_pass)
-
-                            for i in range(combo.count()):
-                                item_data = combo.itemData(i)
-                                if item_data == initial_tube_pattern:
-                                    combo.setCurrentIndex(i)
-                                    self.tube_pass_form_value = (
-                                        initial_tube_pattern  # 初始化值
-                                    )
-                                    break
-                            else:
-                                index = combo.findText(initial_tube_pattern)
-                                if index >= 0:
-                                    combo.setCurrentIndex(index)
-                                    self.tube_pass_form_value = (
-                                        initial_tube_pattern  # 初始化值
-                                    )
-
-                        # 添加信号连接：当下拉框选择变化时触发
-                        combo.currentIndexChanged.connect(
-                            self.on_tube_pass_form_changed
-                        )
-                    elif param["参数名"] == "防冲板形式":
-                        combo.addItems(["平板形", "圆弧形", "焊接式"])
-                    elif param["参数名"] == "换热管外径 do":
-                        combo.addItems(
-                            [
-                                "10",
-                                "12",
-                                "14",
-                                "16",
-                                "19",
-                                "20",
-                                "22",
-                                "25",
-                                "30",
-                                "32",
-                                "35",
-                                "38",
-                                "45",
-                                "50",
-                                "55",
-                                "57",
-                            ]
-                        )
-
-                    param_value_str = (
-                        str(param["参数值"]) if param["参数值"] is not None else ""
-                    )
-                    # 拉杆形式默认规则：do >= 19 -> 螺纹拉杆；do < 19 -> 焊接拉杆
-                    if param["参数名"] == "拉杆形式" and param_value_str.strip() == "":
-                        do_default = None
-                        try:
-                            for _p in params:
-                                if _p.get("参数名") == "换热管外径 do":
-                                    v = _p.get("参数值")
-                                    if v not in (None, ""):
-                                        do_default = float(str(v).strip())
-                                    break
-                        except Exception:
-                            do_default = None
-                        if do_default is not None:
-                            param_value_str = "螺纹拉杆" if do_default >= 19 else "焊接拉杆"
-
-                    try:
-                        if param_value_str:
-                            combo.setCurrentText(param_value_str)
-                        else:
-                            if combo.count() > 0:
-                                combo.setCurrentIndex(0)
-                    except:
-                        found = False
-                        for i in range(combo.count()):
-                            if combo.itemText(i) == param_value_str:
-                                combo.setCurrentIndex(i)
-                                found = True
-                                break
-                        if not found and combo.count() > 0:
-                            combo.setCurrentIndex(0)
-
-                    # 注意：此处不额外绑定 currentTextChanged/currentIndexChanged。
-                    # 统一由 setup_parameter_listeners() 内的 bind_combobox_listeners() 做一次性绑定，
-                    # 避免闭包 row 捕获错误/重复触发/错行联动。
-
-                    self.param_table.setCellWidget(row, 2, combo)
-                    # 附到表格后再锁：部分型式/布局下 setCellWidget 会刷新子控件状态，先锁再 attach 会失效
-                    if is_diameter_based:
-                        combo.setEditable(False)
-                        combo.setEnabled(False)
-                        combo.setFocusPolicy(Qt.NoFocus)
-                        try:
-                            combo.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-                        except Exception:
-                            pass
-                        self._apply_param_combo_widget_style(combo, disabled=True)
-                    elif dn_visible:
-                        combo.setEnabled(False)
-                        self._apply_param_combo_widget_style(combo, disabled=True)
-                    else:
-                        self._apply_param_combo_widget_style(combo, disabled=False)
-                    param_value_str = (
-                        str(param["参数值"]) if param["参数值"] is not None else ""
-                    )
-                    self.original_param_values[(row, 2)] = param_value_str
+                    self._setup_param_combo_delegate_cell(row, param, params)
 
             else:
                 param_value = param["参数值"]
@@ -15597,13 +15792,18 @@ class TubeLayoutEditor(QMainWindow):
         """处理参数表格中普通文本单元格的变化"""
         if self.is_loading_data or self._is_validating:
             return
+        if getattr(self, "_param_cascade_depth", 0) > 0:
+            return
 
         # 只处理参数值列（第2列）的变化
         if item.column() == 2:
             row = item.row()
             param_name_item = self.param_table.item(row, 1)
             if param_name_item:
-                param_name = param_name_item.text()
+                param_name = param_name_item.text().strip()
+                # ComboDelegate 行已在 setModelData 中走 on_combobox_changed，避免重复触发死循环
+                if param_name in _PARAM_COMBO_DELEGATE:
+                    return
                 param_value = item.text()
                 self.on_combobox_changed(row, param_value)
 
@@ -15759,13 +15959,19 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
-    def on_tube_pass_changed(self, index):
+    def on_tube_pass_changed(self, index=None):
         """当管程程数变化时，更新分程形式下拉框的图片"""
-        if self.tube_pass_form_combo and self.tube_pass_combo:
+        if not self.tube_pass_form_combo:
+            return
+        tube_pass = ""
+        if isinstance(getattr(self, "tube_pass_combo", None), QComboBox):
             tube_pass = self.tube_pass_combo.currentText()
-
-            self.load_tube_pass_images(self.tube_pass_form_combo, tube_pass)
-            self.update_partition_plate_center_distance()
+        elif getattr(self, "_tube_pass_count_row", -1) >= 0:
+            tube_pass = self._param_value_text(self._tube_pass_count_row)
+        if not tube_pass:
+            return
+        self.load_tube_pass_images(self.tube_pass_form_combo, tube_pass)
+        self.update_partition_plate_center_distance()
 
     def on_tube_pass_form_changed(self, index):
         """管程分程形式选择变化时，更新存储的参数值"""
@@ -15790,10 +15996,17 @@ class TubeLayoutEditor(QMainWindow):
     # TODO 在load_initial函数后触发的下拉框改变的监听事件
     def on_combobox_changed(self, row, value):
         """处理下拉框类型参数的变更事件及内容变化处理"""
-        # 首先执行原current_text版本的逻辑
         if self.is_loading_data or self._is_validating:
             return
+        if not self._param_cascade_enter():
+            return
+        try:
+            self._on_combobox_changed_impl(row, value)
+        finally:
+            self._param_cascade_leave()
 
+    def _on_combobox_changed_impl(self, row, value):
+        """on_combobox_changed 实际逻辑（须在级联栈最外层执行）。"""
         # 检查是否是程序自动更新（标记变量方法）
         param_name_item = self.param_table.item(row, 1)
         param_name_stripped = (
@@ -15882,11 +16095,11 @@ class TubeLayoutEditor(QMainWindow):
             return
 
         if param_name == "换热管外径 do":
-            # 获取当前选中的值
+            selected_value = str(value).strip()
             do_widget = self.param_table.cellWidget(row, 2)
             if isinstance(do_widget, QComboBox):
                 selected_value = do_widget.currentText()
-                print(f"选中的换热管外径: {selected_value}")
+            print(f"选中的换热管外径: {selected_value}")
 
             # 外径变化时，S 的手动覆盖标记必须失效，确保按新 do 重新推荐
             try:
@@ -19184,11 +19397,26 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
+    def _apply_param_table_edit_triggers(self):
+        """参数值列：单击即进入编辑（ComboDelegate 弹出下拉），无需双击。"""
+        if not hasattr(self, "param_table") or self.param_table is None:
+            return
+        try:
+            self.param_table.setEditTriggers(
+                QAbstractItemView.CurrentChanged
+                | QAbstractItemView.SelectedClicked
+                | QAbstractItemView.DoubleClicked
+                | QAbstractItemView.EditKeyPressed
+            )
+        except Exception:
+            pass
+
     def _apply_param_table_style(self):
         """左侧布管参数表样式（对照示例：浅灰表头、网格线、交替行）。"""
         if not hasattr(self, "param_table") or self.param_table is None:
             return
         try:
+            self._apply_param_table_edit_triggers()
             self.param_table.setAlternatingRowColors(True)
             self.param_table.setShowGrid(True)
             try:
