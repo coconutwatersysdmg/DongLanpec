@@ -3536,7 +3536,7 @@ class TubeLayoutEditor(QMainWindow):
                     print(f"关闭交叉布管查询连接时出错：{str(close_e)}")
 
     def load_initial_data(self):
-        # 打开管束即初始化：仅当通用数据表为「是」且布管参数表为「否」时在末尾允许 user_update_Di（见标志）
+        # 打开管束即初始化：通用数据表「是」且布管参数表「否」时，须在首次布管计算前执行 user_update_Di
         self.need_initial_user_update_di_for_outer_base = False
         if self.productID is None:
             QMessageBox.information(self, "提示", "请先创建项目!")
@@ -4941,18 +4941,21 @@ class TubeLayoutEditor(QMainWindow):
         # 在初始化期间关闭监听开关，避免触发不必要的信号处理
 
         with SignalBlocker(self.param_table):
+            # 须在 initial_operation（含 calculate_piping_layout 绘图）之前同步 Dis/DL，
+            # 否则首屏按旧 Dis（如设计数据 1400）布管，user_update_Di 改 717 后图形不会刷新。
+            _run_initial_user_update_di = (
+                not operation_record_exists_effective
+                or getattr(self, "need_initial_user_update_di_for_outer_base", False)
+            )
+            if _run_initial_user_update_di:
+                try:
+                    self.user_update_Di()
+                except Exception as _uud_e:
+                    print(f"[load_initial_data] 打开管束前 user_update_Di 失败: {_uud_e}")
             self.initial_operation()
             self.load_initial_tube_num()
             self.update_total_holes_count()
             self.update_diameter_visibility_by_outer_flag()
-            # 仅限“刚打开管束”这一步调用 user_update_Di：
-            # - 无有效操作记录：一定执行（恢复原逻辑）
-            # - 有有效操作记录：仅当通用数据表「是」且布管参数表「否」（need_initial_user_update_di_for_outer_base）时也执行
-            if (
-                    not operation_record_exists_effective
-                    or getattr(self, "need_initial_user_update_di_for_outer_base", False)
-            ):
-                self.user_update_Di()
         # 初始化完成后，监听开关自动恢复（在 with 块退出时）
         try:
             if hasattr(self, "update_lagan_standard_from_params"):
