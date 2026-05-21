@@ -177,6 +177,7 @@ class TubeSheetConnectionPage(QWidget):
         self.image_labels = []
         self.thumbnail_size = QSize(320, 220)
         self.setup_ui()
+        self._sync_tsc_widgets_enabled()
         # 页面创建后延迟恢复（productID 可能稍后才就绪）
         QTimer.singleShot(100, lambda: self._restore_saved_connection_state())
 
@@ -184,7 +185,8 @@ class TubeSheetConnectionPage(QWidget):
         """每次进入管板连接页时恢复上次保存的节点与参数表。"""
         super().showEvent(event)
         try:
-            self._restore_saved_connection_state()
+            if not getattr(self, "_tsc_user_readonly", False):
+                self._restore_saved_connection_state()
         except Exception:
             pass
 
@@ -577,13 +579,45 @@ class TubeSheetConnectionPage(QWidget):
         dlg = ImagePreviewDialog(image_path, self)
         dlg.exec_()
 
-    def _on_tsc_toggle_readonly(self, is_operation_on: bool):
-        """顶部开关。is_operation_on=True 表示可操作；False 表示只读。"""
-        self._tsc_user_readonly = (not bool(is_operation_on))
-        # 参数表禁用编辑
+    def _reload_tsc_params_for_selected_image(self, force=False):
+        """按当前选中的连接示意图重新填充右侧参数表。"""
+        try:
+            if not hasattr(self, "param_table") or self.param_table is None:
+                return
+            if not force and self.param_table.rowCount() > 0:
+                return
+            for label in self.image_labels:
+                if label.property("selected"):
+                    self.select_image(label, restoring=True)
+                    return
+            if self.image_labels:
+                self.select_image(self.image_labels[0], restoring=True)
+        except Exception:
+            pass
+
+    def _sync_tsc_widgets_enabled(self):
+        """只读时冻结整页（不可切换示意图、不可改参数）。"""
+        readonly = bool(getattr(self, "_tsc_user_readonly", False))
+        interactive = not readonly
+        try:
+            if hasattr(self, "image_scroll") and self.image_scroll is not None:
+                self.image_scroll.setEnabled(interactive)
+        except Exception:
+            pass
+        try:
+            for lbl in getattr(self, "image_labels", []) or []:
+                lbl.setEnabled(interactive)
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "param_frame") and self.param_frame is not None:
+                self.param_frame.setEnabled(interactive)
+        except Exception:
+            pass
         try:
             if hasattr(self, "param_table") and self.param_table is not None:
-                if self._tsc_user_readonly:
+                self.param_table.setEnabled(interactive)
+                if readonly:
                     self.param_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
                 else:
                     self.param_table.setEditTriggers(
@@ -593,6 +627,16 @@ class TubeSheetConnectionPage(QWidget):
                     )
         except Exception:
             pass
+
+    def _on_tsc_toggle_readonly(self, is_operation_on: bool):
+        """顶部开关。is_operation_on=True 表示可操作；False 表示只读（整页冻结）。"""
+        self._tsc_user_readonly = (not bool(is_operation_on))
+        self._sync_tsc_widgets_enabled()
+        if not self._tsc_user_readonly:
+            try:
+                self._reload_tsc_params_for_selected_image(force=False)
+            except Exception:
+                pass
 
     def infer_tube_sheet_type(self, filename):
         f = filename.lower()

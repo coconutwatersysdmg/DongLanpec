@@ -494,7 +494,8 @@ class SheetFormPage(QWidget):
         """页面显示时恢复上次保存的型式/节点及参数表。"""
         super().showEvent(event)
         try:
-            self._restore_saved_plate_state()
+            if not getattr(self, "_sheet_form_user_readonly", False):
+                self._restore_saved_plate_state()
             if (not self._sheet_form_combo_popup_done
                     and hasattr(self, 'sheet_form_connection_type_combo')
                     and self.sheet_form_connection_type_combo is not None
@@ -1111,27 +1112,88 @@ class SheetFormPage(QWidget):
             self._sheet_form_user_readonly = True
         self._apply_sheet_form_readonly_state()
 
-    def _apply_sheet_form_readonly_state(self):
-        """根据 _sheet_form_user_readonly 应用界面禁用/启用。"""
-        readonly = bool(getattr(self, "_sheet_form_user_readonly", False))
+    def _apply_plate_type_combo_enabled_from_rule(self):
+        """仅恢复型式下拉框可编辑性，不刷新图片、不清空参数表。"""
         try:
-            # 下拉框：只读时禁用；否则按规则决定（这里不直接 enable=True，交给 _apply_plate_type_rule）
-            if readonly:
+            if (
+                not hasattr(self, "sheet_form_connection_type_combo")
+                or self.sheet_form_connection_type_combo is None
+            ):
+                return
+            hx = getattr(self, "_sheet_form_hx_for_rule", None)
+            if not hx:
                 try:
-                    self.sheet_form_connection_type_combo.setEnabled(False)
+                    hx = self._get_heat_exchanger_from_product_db(self.get_product_id())
                 except Exception:
-                    pass
-            else:
-                try:
-                    self._apply_plate_type_rule(saved_plate_type=self._get_saved_plate_type())
-                except Exception:
-                    pass
+                    hx = None
+            if not hx:
+                hx = getattr(self.parent, "heat_exchanger", None)
+            _, allow_modify = self._resolve_plate_type_rule(hx)
+            self.sheet_form_connection_type_combo.setEnabled(allow_modify)
         except Exception:
             pass
 
-        # 参数表：只读时禁止编辑与交互编辑触发
+    def _get_selected_sheet_form_image_index(self):
+        """当前选中的管板节点图片索引，无选中返回 None。"""
+        try:
+            for idx, lbl in enumerate(self.sheet_form_image_labels):
+                if lbl.property("selected"):
+                    return idx
+        except Exception:
+            pass
+        return None
+
+    def _reload_sheet_form_params_for_selected_node(self, force=False):
+        """按当前选中节点重新填充右侧参数表（只读开关重新打开后使用）。"""
+        try:
+            if (
+                not hasattr(self, "sheet_form_param_table")
+                or self.sheet_form_param_table is None
+            ):
+                return
+            if not force and self.sheet_form_param_table.rowCount() > 0:
+                return
+            idx = self._get_selected_sheet_form_image_index()
+            if idx is not None and getattr(self, "sheet_form_current_images", None):
+                self._handle_image_click(None, idx, restoring=True)
+            else:
+                self._restore_saved_plate_state()
+        except Exception:
+            pass
+
+    def _sync_sheet_form_widgets_enabled(self):
+        """只读时冻结整页操作（不可切换型式/节点、不可改参数）；打开开关后才可交互。"""
+        readonly = bool(getattr(self, "_sheet_form_user_readonly", False))
+        interactive = not readonly
+        try:
+            if (
+                hasattr(self, "sheet_form_connection_type_combo")
+                and self.sheet_form_connection_type_combo is not None
+            ):
+                if readonly:
+                    self.sheet_form_connection_type_combo.setEnabled(False)
+                else:
+                    self._apply_plate_type_combo_enabled_from_rule()
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "image_scroll_area") and self.image_scroll_area is not None:
+                self.image_scroll_area.setEnabled(interactive)
+        except Exception:
+            pass
+        try:
+            for lbl in getattr(self, "sheet_form_image_labels", []) or []:
+                lbl.setEnabled(interactive)
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "sheet_form_param_frame") and self.sheet_form_param_frame is not None:
+                self.sheet_form_param_frame.setEnabled(interactive)
+        except Exception:
+            pass
         try:
             if hasattr(self, "sheet_form_param_table") and self.sheet_form_param_table is not None:
+                self.sheet_form_param_table.setEnabled(interactive)
                 if readonly:
                     self.sheet_form_param_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
                 else:
@@ -1142,6 +1204,17 @@ class SheetFormPage(QWidget):
                     )
         except Exception:
             pass
+
+    def _apply_sheet_form_readonly_state(self):
+        """根据 _sheet_form_user_readonly 应用界面禁用/启用。"""
+        readonly = bool(getattr(self, "_sheet_form_user_readonly", False))
+        self._sync_sheet_form_widgets_enabled()
+        # 重新打开开关：仅当参数表被意外清空时再按当前节点补填
+        if not readonly:
+            try:
+                self._reload_sheet_form_params_for_selected_node(force=False)
+            except Exception:
+                pass
 
     def get_product_id(self):
         # 方法内容保持不变
@@ -1449,6 +1522,8 @@ class SheetFormPage(QWidget):
     def _handle_image_double_click(self, event, index):
         """双击图片时，打开大图预览弹窗"""
         try:
+            if getattr(self, "_sheet_form_user_readonly", False):
+                return
             if index < 0 or index >= len(self.sheet_form_image_labels):
                 return
 
@@ -1505,6 +1580,8 @@ class SheetFormPage(QWidget):
     # -----------------------------------------------------------------
     def sheet_form_updates_image_path(self, index):
         print(f"[DEBUG] 调用 sheet_form_updates_image_path, index={index}")
+        if getattr(self, "_sheet_form_user_readonly", False):
+            return
         try:
             if index < 0:
                 return
@@ -1624,8 +1701,11 @@ class SheetFormPage(QWidget):
             for i in range(len(image_files)):
                 self.sheet_form_image_labels[i].show()
 
-            # 清空右侧参数区域
-            self._clear_param_layout()
+            # 仅切换管板型式（文件夹）时清空参数；同型式刷新（如只读开关）保留右侧表
+            prev_folder = getattr(self, "_sheet_form_folder_index", None)
+            self._sheet_form_folder_index = index
+            if prev_folder != index:
+                self._clear_param_layout()
 
         except Exception as e:
             print(f"更新图片路径时出错: {str(e)}")
@@ -1633,9 +1713,10 @@ class SheetFormPage(QWidget):
             traceback.print_exc()
 
         print(f"[DEBUG] 加载完成, 共加载 {len(self.sheet_form_current_images)} 张图片")
-
-
-
+        try:
+            self._sync_sheet_form_widgets_enabled()
+        except Exception:
+            pass
 
     def _safe_call(self, func):
         # 方法内容保持不变
