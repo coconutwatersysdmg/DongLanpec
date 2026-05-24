@@ -1,9 +1,21 @@
 """布管左侧参数表样式：供管板连接、管板型式等页复用。"""
 import os
 
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor, QPen, QPainter
-from PyQt5.QtWidgets import QStyledItemDelegate, QLineEdit, QStyle
+from PyQt5.QtCore import Qt, QTimer, QPersistentModelIndex, QObject, QEvent
+from PyQt5.QtGui import QColor, QPalette, QPen, QPainter
+from PyQt5.QtWidgets import (
+    QAbstractItemView,
+    QComboBox,
+    QStyledItemDelegate,
+    QLineEdit,
+    QStyle,
+)
+
+# 与元件定义 paradefine_newui.ui 中 QComboBox 一致
+PARAM_VALUE_BORDER_COLOR = "#CCCCCC"
+PARAM_VALUE_TEXT_COLOR = "#1f1f1f"
+PARAM_VALUE_SELECTION_BG = "#d9e6f7"
+PARAM_COMBO_ARROW_COLOR = "#808080"
 
 
 def _combo_arrow_stylesheet_url():
@@ -75,6 +87,134 @@ def get_param_combo_stylesheet(disabled=False):
             f"{popup}"
         )
     return f"QComboBox {{{base}}}{popup}"
+
+
+def apply_param_combo_widget_style(combo, disabled=False):
+    """为参数表 QComboBox 应用元件定义同款样式，并修正选中行后文字变白。"""
+    if not isinstance(combo, QComboBox):
+        return
+    combo.setStyleSheet(get_param_combo_stylesheet(disabled=disabled))
+    text_color = QColor("#969696" if disabled else PARAM_VALUE_TEXT_COLOR)
+    pal = combo.palette()
+    for group in (
+        QPalette.Active,
+        QPalette.Inactive,
+        QPalette.Disabled,
+    ):
+        pal.setColor(group, QPalette.Text, text_color)
+        pal.setColor(group, QPalette.ButtonText, text_color)
+        pal.setColor(group, QPalette.WindowText, text_color)
+        if group != QPalette.Disabled:
+            pal.setColor(group, QPalette.Highlight, QColor(PARAM_VALUE_SELECTION_BG))
+            pal.setColor(
+                group, QPalette.HighlightedText, QColor(PARAM_VALUE_TEXT_COLOR)
+            )
+    combo.setPalette(pal)
+    le = combo.lineEdit()
+    if le is not None:
+        le.setStyleSheet(
+            "border: none; background: transparent; padding: 0; margin: 0;"
+            f"color: {PARAM_VALUE_TEXT_COLOR};"
+            f"selection-background-color: {PARAM_VALUE_SELECTION_BG};"
+            f"selection-color: {PARAM_VALUE_TEXT_COLOR};"
+        )
+        le_pal = le.palette()
+        for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
+            le_pal.setColor(group, QPalette.Text, text_color)
+            if group != QPalette.Disabled:
+                le_pal.setColor(
+                    group, QPalette.HighlightedText, QColor(PARAM_VALUE_TEXT_COLOR)
+                )
+        le.setPalette(le_pal)
+
+
+def schedule_combo_show_popup(combo, delay_ms=50):
+    """延迟展开下拉列表，避免 table delegate 首次点击时被 mouseRelease 立刻关闭 editor。"""
+    if combo is None:
+        return
+
+    def _open():
+        try:
+            if combo.isVisible():
+                combo.setFocus(Qt.PopupFocusReason)
+                view = combo.view()
+                if view is not None and view.isVisible():
+                    return
+                combo.showPopup()
+        except Exception:
+            pass
+
+    QTimer.singleShot(delay_ms, _open)
+
+
+class _ComboAutoPopupFilter(QObject):
+    """editor 显示后自动展开下拉（与 schedule_combo_show_popup 双保险）。"""
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Show and isinstance(obj, QComboBox):
+            schedule_combo_show_popup(obj, delay_ms=0)
+        return False
+
+
+def install_combo_auto_popup(combo):
+    if combo is None:
+        return
+    filt = _ComboAutoPopupFilter(combo)
+    combo._buguan_auto_popup_filter = filt
+    combo.installEventFilter(filt)
+
+
+def buguan_param_table_combo_editor_event(
+    table, event, index, value_column=2, auto_popup=True
+):
+    """单击参数值列整格即进入编辑（不限箭头区域）。
+
+    返回 None 表示未处理，交回 super；True/False 表示已消费事件。
+    """
+    if index.column() != value_column:
+        return None
+    if not (index.flags() & Qt.ItemIsEditable):
+        return False
+    if event.type() != QEvent.MouseButtonRelease:
+        return None
+    if event.button() != Qt.LeftButton:
+        return False
+
+    persistent = QPersistentModelIndex(index)
+
+    def _open_editor():
+        try:
+            if table is None or not persistent.isValid():
+                return
+            table.setCurrentIndex(persistent)
+            if table.state() != QAbstractItemView.EditingState:
+                table.edit(persistent)
+            elif auto_popup:
+                ew = table.indexWidget(persistent)
+                if isinstance(ew, QComboBox):
+                    schedule_combo_show_popup(ew, delay_ms=0)
+        except Exception:
+            pass
+
+    QTimer.singleShot(0, _open_editor)
+    return True
+
+
+def paint_param_value_box(painter, box_rect, editable):
+    """绘制参数值列单元格外框（直角、#CCCCCC 边框）。"""
+    painter.setBrush(QColor("#f5f7fa" if not editable else "#ffffff"))
+    painter.setPen(QPen(QColor(PARAM_VALUE_BORDER_COLOR), 1))
+    painter.drawRect(box_rect)
+
+
+def paint_param_combo_chevron(painter, box_rect, arrow_w=14):
+    """绘制右侧灰色下拉箭头（与 combo_arrow_gray.svg 一致）。"""
+    arrow_rect = box_rect.adjusted(box_rect.width() - arrow_w, 0, -4, 0)
+    painter.setPen(QPen(QColor(PARAM_COMBO_ARROW_COLOR), 1.2))
+    cx = arrow_rect.center().x()
+    cy = arrow_rect.center().y()
+    painter.drawLine(cx - 4, cy - 2, cx, cy + 2)
+    painter.drawLine(cx, cy + 2, cx + 4, cy - 2)
 
 
 PARAM_TABLE_STYLE_SHEET = """
@@ -187,9 +327,7 @@ class ParamValueCellDelegate(QStyledItemDelegate):
         box_rect = option.rect.adjusted(5, 4, -5, -4)
         editable = bool(index.flags() & Qt.ItemIsEditable)
 
-        painter.setBrush(QColor("#f5f7fa" if not editable else "#ffffff"))
-        painter.setPen(QPen(QColor("#dcdfe6"), 1))
-        painter.drawRoundedRect(box_rect, 4, 4)
+        paint_param_value_box(painter, box_rect, editable)
 
         text = "" if index.data(Qt.DisplayRole) is None else str(index.data(Qt.DisplayRole))
         painter.setPen(QColor("#969696" if not editable else "#303133"))
