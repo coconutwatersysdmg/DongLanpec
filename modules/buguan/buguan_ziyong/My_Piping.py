@@ -66,6 +66,10 @@ from modules.buguan.buguan_ziyong import piping_calculations
 from modules.buguan.buguan_ziyong.json_process import parse_heat_exchanger_json
 from modules.buguan.buguan_ziyong.sheet_form_page import SheetFormPage
 from modules.buguan.buguan_ziyong.tube_sheet_connection import TubeSheetConnectionPage
+from modules.buguan.buguan_ziyong.buguan_param_table_style import (
+    PARAM_TABLE_STYLE_SHEET,
+    get_param_combo_stylesheet,
+)
 from modules.chanpinguanli.chanpinguanli_main import product_manager
 from modules.condition_input.view import check_project_and_product
 from modules.buguan.buguan_ziyong.component.center_dangguan import (
@@ -19100,75 +19104,42 @@ class TubeLayoutEditor(QMainWindow):
             pass
 
     def _param_combo_extra_stylesheet(self):
-        """弹出列表与内嵌文本颜色（不覆盖 ::drop-down，保留系统下拉箭头）。"""
-        return (
-            "QComboBox QAbstractItemView {"
-            "  border: 1px solid #dcdfe6;"
-            "  background-color: #ffffff;"
-            "  color: #303133;"
-            "  selection-background-color: #e3f2fd;"
-            "  selection-color: #212121;"
-            "  outline: 0;"
-            "}"
-            "QComboBox QLineEdit {"
-            "  color: #303133;"
-            "  selection-background-color: #b3d7ff;"
-            "  selection-color: #212121;"
-            "}"
-        )
+        """已由 get_param_combo_stylesheet 统一提供，保留方法避免外部引用报错。"""
+        return ""
 
     def _apply_param_combo_widget_style(self, combo, disabled=False):
         """统一参数表下拉框样式与调色板，避免行选中后文字变白。"""
         if not isinstance(combo, QComboBox):
             return
-        combo.setStyleSheet(self._param_value_widget_stylesheet(disabled=disabled))
-        text_color = QColor("#969696" if disabled else "#303133")
+        combo.setStyleSheet(get_param_combo_stylesheet(disabled=disabled))
+        text_color = QColor("#969696" if disabled else "#1f1f1f")
         pal = combo.palette()
         for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
             pal.setColor(group, QPalette.Text, text_color)
             pal.setColor(group, QPalette.ButtonText, text_color)
             pal.setColor(group, QPalette.WindowText, text_color)
             if group != QPalette.Disabled:
-                pal.setColor(group, QPalette.Highlight, QColor("#e3f2fd"))
-                pal.setColor(group, QPalette.HighlightedText, QColor("#212121"))
+                pal.setColor(group, QPalette.Highlight, QColor("#d9e6f7"))
+                pal.setColor(group, QPalette.HighlightedText, QColor("#1f1f1f"))
         combo.setPalette(pal)
         le = combo.lineEdit()
         if le is not None:
             le.setStyleSheet(
                 "border: none; background: transparent; padding: 0; margin: 0;"
-                "color: #303133;"
-                "selection-background-color: #b3d7ff;"
-                "selection-color: #212121;"
+                "color: #1f1f1f;"
+                "selection-background-color: #d9e6f7;"
+                "selection-color: #1f1f1f;"
             )
             le_pal = le.palette()
             for group in (QPalette.Active, QPalette.Inactive, QPalette.Disabled):
                 le_pal.setColor(group, QPalette.Text, text_color)
                 if group != QPalette.Disabled:
-                    le_pal.setColor(group, QPalette.HighlightedText, QColor("#212121"))
+                    le_pal.setColor(group, QPalette.HighlightedText, QColor("#1f1f1f"))
             le.setPalette(le_pal)
 
     def _param_value_widget_stylesheet(self, disabled=False):
-        """参数值列内嵌 QComboBox / QLineEdit 样式（与示例圆角输入框一致）。"""
-        base = (
-            "border: 1px solid #dcdfe6;"
-            "border-radius: 4px;"
-            "padding: 2px 28px 2px 10px;"
-            "background-color: #ffffff;"
-            "color: #303133;"
-            "font-size: 10pt;"
-            "min-height: 24px;"
-        )
-        extra = self._param_combo_extra_stylesheet()
-        if disabled:
-            return (
-                "QComboBox {"
-                f"{base}"
-                "background-color: #f5f7fa;"
-                "color: #969696;"
-                "}"
-                f"{extra}"
-            )
-        return "QComboBox {" f"{base}" "}" f"{extra}"
+        """参数值列内嵌 QComboBox 样式（与元件定义下拉框一致）。"""
+        return get_param_combo_stylesheet(disabled=disabled)
 
     def _refresh_param_table_value_widgets_style(self):
         """为参数值列已嵌入的下拉框应用圆角输入框样式。"""
@@ -19202,74 +19173,7 @@ class TubeLayoutEditor(QMainWindow):
             self.param_table.setItemDelegateForColumn(
                 2, self._param_value_cell_delegate
             )
-            self.param_table.setStyleSheet(
-                """
-                QTableWidget {
-                    gridline-color: #d4d4d4;
-                    background-color: #ffffff;
-                    border: 1px solid #bdbdbd;
-                    font-size: 10pt;
-                    selection-background-color: #e3f2fd;
-                    selection-color: #212121;
-                }
-                QTableWidget::item {
-                    padding: 4px 6px;
-                    border-bottom: 1px solid #eeeeee;
-                }
-                QTableWidget::item:alternate {
-                    background-color: #fafafa;
-                }
-                QTableWidget::item:selected {
-                    background-color: #e3f2fd;
-                    color: #212121;
-                }
-                QHeaderView::section {
-                    background-color: #f2f2f2;
-                    color: #222222;
-                    padding: 6px 4px;
-                    border: none;
-                    border-bottom: 1px solid #bdbdbd;
-                    border-right: 1px solid #e0e0e0;
-                    font-weight: 700;
-                    font-size: 10pt;
-                }
-                QTableWidget QWidget {
-                    background-color: transparent;
-                }
-                QTableWidget QLineEdit {
-                    border: 1px solid #dcdfe6;
-                    border-radius: 4px;
-                    padding: 2px 10px;
-                    background-color: #ffffff;
-                    color: #303133;
-                    font-size: 10pt;
-                    min-height: 24px;
-                }
-                QTableWidget QComboBox {
-                    border: 1px solid #dcdfe6;
-                    border-radius: 4px;
-                    padding: 2px 28px 2px 10px;
-                    background-color: #ffffff;
-                    color: #303133;
-                    font-size: 10pt;
-                    min-height: 24px;
-                }
-                QTableWidget QComboBox QAbstractItemView {
-                    color: #303133;
-                    selection-background-color: #e3f2fd;
-                    selection-color: #212121;
-                }
-                QTableWidget QComboBox QLineEdit {
-                    color: #303133;
-                    selection-background-color: #b3d7ff;
-                    selection-color: #212121;
-                }
-                QTableWidget QComboBox:disabled {
-                    background-color: #f5f7fa;
-                    color: #969696;
-                }
-                """
-            )
+            self.param_table.setStyleSheet(PARAM_TABLE_STYLE_SHEET)
             self._apply_bold_table_header(self.param_table, point_size=10)
             self._refresh_param_table_value_widgets_style()
         except Exception:

@@ -2,16 +2,66 @@ import sys
 import random
 import pymysql
 
-from PyQt5 import QtWidgets
+from PyQt5 import QtWidgets, uic
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QLabel, QLineEdit, QPushButton, QMessageBox, QDialog, QFormLayout,
                              QFrame)
 from PyQt5.QtGui import QPixmap, QFont
 from PyQt5.QtCore import Qt, QTimer
 import hashlib
+
+import mysql.connector
 import configparser
 import os
 
+
+def _ui_file(name: str) -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
+
+
+def _icon_file(name: str) -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "icons", name)
+
+
+def _setup_auth_header(dialog, logo_size=48):
+    """加载标题栏 logo 图标，标题单行显示。"""
+    title_label = getattr(dialog, "label_platform", None)
+    if title_label is not None:
+        title_label.setWordWrap(False)
+
+    logo_label = getattr(dialog, "label_logo", None)
+    if logo_label is None:
+        return
+    logo_path = _icon_file("logo.png")
+    if not os.path.exists(logo_path):
+        return
+    pixmap = QPixmap(logo_path)
+    if pixmap.isNull():
+        return
+    logo_label.setPixmap(
+        pixmap.scaled(logo_size, logo_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    )
+    logo_label.setFixedSize(logo_size, logo_size)
+
+
+def _place_dialog_center_right(dialog, offset_x=360, offset_y=60):
+    """将对话框置于屏幕居中，再向右、向下偏移。"""
+    screen = QApplication.primaryScreen()
+    if screen is None:
+        return
+    available = screen.availableGeometry()
+    frame = dialog.frameGeometry()
+    frame.moveCenter(available.center())
+    frame.translate(offset_x, offset_y)
+    if frame.right() > available.right():
+        frame.moveRight(available.right())
+    if frame.left() < available.left():
+        frame.moveLeft(available.left())
+    if frame.bottom() > available.bottom():
+        frame.moveBottom(available.bottom())
+    if frame.top() < available.top():
+        frame.moveTop(available.top())
+    dialog.move(frame.topLeft())
 
 
 def hash_password(password):
@@ -85,15 +135,23 @@ class RegisterDialog(QDialog):
     def __init__(self, db, parent=None):
         super().__init__(parent)
         self.db = db
-        # 注册界面尺寸
-        self.resize(1000, 800)
 
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
 
         # 生成验证码
         self.captcha = self.generate_captcha()
 
-        self.init_ui()
+        self.init_ui_from_ui()
+
+    def init_ui_from_ui(self):
+        """优先加载 register.ui；保留原 init_ui 代码作为回退。"""
+        uic.loadUi(_ui_file("register.ui"), self)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        _setup_auth_header(self)
+        self.refresh_captcha_btn.clicked.connect(self.refresh_captcha)
+        self.register_btn.clicked.connect(self.register)
+        self.captcha_display.setText(self.captcha)
+        self.setWindowTitle("注册")
 
     def generate_captcha(self):
         """生成4位随机数字验证码"""
@@ -243,8 +301,10 @@ class RegisterDialog(QDialog):
             QMessageBox.warning(self, "警告", "两次输入的密码不一致!")
             return
 
-        # 验证验证码
-        if captcha != self.captcha:
+        # 验证验证码：若当前 UI 隐藏验证码区域则跳过
+        captcha_container = getattr(self, "captcha_container", None)
+        captcha_enabled = True if captcha_container is None else captcha_container.isVisible()
+        if captcha_enabled and captcha != self.captcha:
             QMessageBox.warning(self, "警告", "验证码错误!")
             return
 
@@ -262,9 +322,30 @@ class LoginWindow(QtWidgets.QDialog):
         super().__init__()
         self.db = Database()
 
-        self.setWindowTitle("蓝滨过程装备数智化设计平台——登录")
-        self.resize(1000, 600)  # 调整为更合理的尺寸
-        self.init_ui()
+        self.init_ui_from_ui()
+
+    def init_ui_from_ui(self):
+        """优先加载 login.ui；保留原 init_ui 代码作为回退。"""
+        uic.loadUi(_ui_file("login.ui"), self)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        _setup_auth_header(self)
+        self.setWindowTitle("欢迎登录")
+        _place_dialog_center_right(self)
+
+        self.register_btn.clicked.connect(self.show_register)
+        self.login_btn.clicked.connect(self.login)
+        self.password_input.returnPressed.connect(self.login)
+
+        saved_username, saved_company, saved_password = load_login_info()
+        self.username_input.setText(saved_username)
+        self.company_input.setText(saved_company)
+        self.password_input.setText(saved_password)
+        self.remember_password_checkbox.setChecked(bool(saved_password))
+
+        self.login_btn.setDefault(True)
+        self.login_btn.setAutoDefault(True)
+        self.register_btn.setAutoDefault(False)
+        self.login_btn.setFocus()
 
     def init_ui(self):
         main_widget = QWidget()

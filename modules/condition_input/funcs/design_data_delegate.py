@@ -21,35 +21,44 @@ class DesignDataDelegate(QItemDelegate):
                     if hasattr(viewer, "_has_multi_conditions"):
                         has_data = viewer._has_multi_conditions
                 
-                # 有数据：深色（深蓝色），无数据：浅色（浅灰色）
+                # 有数据：较明显的蓝，无数据：非常淡的蓝（更像按钮底色）
                 if has_data:
-                    bg_color    = QColor(220, 235, 255)   # 浅蓝背景（你可以加深：比如 200,220,250）
-                    text_color = QColor(50, 100, 200)  # 深蓝色
-                    border_color = QColor(80, 130, 230)  # 稍浅的蓝色边框
+                    bg_color = QColor(220, 235, 255)     # 明显的浅蓝背景
+                    text_color = QColor(50, 100, 200)    # 深蓝色文字
+                    border_color = QColor(130, 170, 220) # 蓝色边框
                 else:
-                    text_color = QColor(150, 150, 150)  # 浅灰色（原色）
-                    border_color = QColor(200, 200, 200)  # 浅灰色边框（原色）
+                    bg_color = QColor(245, 248, 252)     # 非常淡的灰蓝色背景（参考截图）
+                    text_color = QColor(50, 50, 50)      # 深灰色/近黑色文字
+                    border_color = QColor(180, 195, 220) # 灰蓝色边框
                 
+                rect = option.rect
+                # 靠右，宽 65px（去掉省略号后可以窄一点）
+                self._badge_rect = QRect(rect.right() - 70, rect.top() + 3, 65, rect.height() - 6)
+
+                # 1. 先画实心背景
+                painter.fillRect(self._badge_rect, bg_color)
+                
+                # 2. 画边框
+                painter.setPen(border_color)
+                # adjusted(-1, -1) 是为了对齐，或者直接画 rect
+                painter.drawRect(self._badge_rect)
+                
+                # 3. 画文字
                 painter.setPen(text_color)
                 font = painter.font()
                 font.setBold(False)
-                font.setPointSize(8)
+                font.setPointSize(10) # 稍微大一点，去掉...之后空间够
                 painter.setFont(font)
-
-                rect = option.rect
-                # ✅ 保持和 paint 一致：靠右 80px 宽
-                self._badge_rect = QRect(rect.right() - 85, rect.top() + 2, 80, rect.height() - 4)
-
-                painter.drawText(self._badge_rect, Qt.AlignCenter, "多工况...")
-                painter.setPen(border_color)
-                painter.drawRect(self._badge_rect.adjusted(1, 1, -1, -1))
+                painter.drawText(self._badge_rect, Qt.AlignCenter, "多工况")
+                
                 painter.restore()
 
     def editorEvent(self, event, model, option, index):
         if event.type() == QEvent.MouseButtonRelease and index.column() == 1:
             cell_text = index.data(Qt.DisplayRole)
             if isinstance(cell_text, str) and "设计压力*" in cell_text:
-                rect = QRect(option.rect.right() - 85, option.rect.top() + 2, 80, option.rect.height() - 4)
+                # 保持与绘制时的矩形一致
+                rect = QRect(option.rect.right() - 70, option.rect.top() + 3, 65, option.rect.height() - 6)
                 if rect.contains(event.pos()):  # ✅ 仅点击标识框触发
                     print("[多工况] 点击了多工况标识")
                     # 找到 viewer 调用弹窗

@@ -43,8 +43,8 @@ class cpgl_Stats(QtWidgets.QWidget):
         # 使用绝对路径加载UI文件，避免工作目录变化导致的问题
         import os
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        ui_path = os.path.join(current_dir, "guanli.ui")
-        # ui_path = os.path.join(current_dir, "guanli_try.ui")
+        # ui_path = os.path.join(current_dir, "guanli.ui")
+        ui_path = os.path.join(current_dir, "guanli_new.ui")
         uic.loadUi(ui_path, self)
         # 强制给整个界面设置字体
         font = QtWidgets.QApplication.font()
@@ -472,9 +472,11 @@ class cpgl_Stats(QtWidgets.QWidget):
 
             # 👇 添加这一段代码
             for label in bianl.product_definition_group.findChildren(QtWidgets.QLabel):
-                label.setStyleSheet("background-color: transparent;")
+                if label.objectName() != "label_3":
+                    label.setStyleSheet("background-color: transparent;")
             for label in bianl.work_information_group.findChildren(QtWidgets.QLabel):
-                label.setStyleSheet("background-color: transparent;")
+                if label.objectName() != "label_4":
+                    label.setStyleSheet("background-color: transparent;")
         # 👇 添加这一行调用函数（必须放在控件都初始化之后）
         apply_project_info_keyboard_control()
 

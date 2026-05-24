@@ -1,6 +1,8 @@
 # modules/condition_input/funcs/multi_conditions_dialog.py
 import os
 from PyQt5.QtCore import Qt, QEvent
+# 0522新修改
+from PyQt5.QtGui import QFont
 from PyQt5 import uic
 from PyQt5.QtWidgets import (
     QDialog,
@@ -13,6 +15,12 @@ from PyQt5.QtWidgets import (
     QHeaderView,
 )
 from modules.condition_input.funcs.ctrl_helper import enable_full_undo
+from modules.condition_input.funcs.funcs_cdt_input import (
+    apply_table_style,
+    highlight_entire_row,
+    set_table_corner_label,
+    sync_table_row_height,
+)
 
 # PARAM_UNITS = ["MPa", "℃", "MPa", "℃", "℃", "MPa"]  # 按参数名称顺序给单位
 
@@ -24,6 +32,10 @@ db_config_1 = {
     'database': '产品设计活动库'
 }
 class MultiConditionsDialog(QDialog):
+    # 0522新修改：多工况弹窗布局（表格与按钮间距、初始加宽）
+    _TABLE_BUTTON_GAP = 100
+    _EXTRA_OPEN_WIDTH = 100
+
     PARAM_NAMES = [
         "设计压力*",
         "设计温度（最高）*",
@@ -34,7 +46,80 @@ class MultiConditionsDialog(QDialog):
     ]
     # 不再硬编码固定起点；改为按产品动态计算起点（见 _compute_multi_id_base）
 
-# 已改
+    # 0522新修改：仅表格与底部按钮区之间留固定间距
+    def _ensure_table_button_gap(self):
+        """表格与底部按钮之间固定 100px；下拉框-表格、确定-取消 保持默认紧凑间距。"""
+        from PyQt5.QtWidgets import QSpacerItem, QSizePolicy, QVBoxLayout, QHBoxLayout, QFrame
+
+        root = self.layout()
+        if root is None:
+            return
+        root.setSpacing(6)
+        inner = self.findChild(QVBoxLayout, "verticalLayout")
+        if inner is not None:
+            inner.setSpacing(6)
+        btn_row = self.findChild(QHBoxLayout, "horizontalLayout_2")
+        if btn_row is not None:
+            btn_row.setSpacing(6)
+
+        footer = self.findChild(QFrame, "frame_button_footer")
+        if footer is None:
+            footer = self._wrap_buttons_in_footer(btn_row)
+
+        gap_target = footer if footer is not None else (
+            btn_row.parentWidget() if btn_row is not None else None
+        )
+        if gap_target is None:
+            return
+        idx = root.indexOf(gap_target)
+        if idx > 0:
+            prev = root.itemAt(idx - 1)
+            if prev and prev.spacerItem():
+                if prev.spacerItem().sizeHint().height() >= self._TABLE_BUTTON_GAP - 5:
+                    return
+        if idx >= 0:
+            root.insertItem(
+                idx,
+                QSpacerItem(20, self._TABLE_BUTTON_GAP, QSizePolicy.Minimum, QSizePolicy.Fixed),
+            )
+
+    # 0522新修改：确定/取消按钮淡灰蓝底栏（兼容旧 ui）
+    def _wrap_buttons_in_footer(self, btn_row):
+        """旧版 ui 无底栏时，为确定/取消按钮补上淡灰蓝底色区域。"""
+        from PyQt5.QtWidgets import QFrame, QHBoxLayout
+
+        if btn_row is None:
+            return None
+        root = self.layout()
+        if root is None:
+            return None
+        idx = -1
+        for i in range(root.count()):
+            if root.itemAt(i).layout() is btn_row:
+                idx = i
+                break
+        if idx < 0:
+            return None
+
+        footer = QFrame(self)
+        footer.setObjectName("frame_button_footer")
+        footer.setFrameShape(QFrame.NoFrame)
+        footer.setStyleSheet(
+            "QFrame#frame_button_footer {"
+            " background-color: #f0f4f7;"
+            " border: none;"
+            " border-top: 1px solid #d0d8e5;"
+            "}"
+        )
+        footer_lay = QHBoxLayout(footer)
+        footer_lay.setSpacing(6)
+        footer_lay.setContentsMargins(12, 10, 12, 10)
+        while btn_row.count():
+            footer_lay.addItem(btn_row.takeAt(0))
+        root.removeItem(root.itemAt(idx))
+        root.insertWidget(idx, footer)
+        return footer
+
     def fill_table(self, gongkuang_no):
         data_map = self._data_cache.get(gongkuang_no, {})
         for r, pname in enumerate(self.PARAM_NAMES):
@@ -66,10 +151,13 @@ class MultiConditionsDialog(QDialog):
 
         # 加载 UI
         base_dir = os.path.dirname(os.path.abspath(__file__))
-        ui_path = os.path.join(os.path.dirname(base_dir), "mutigongkuang.ui")
+        ui_path = os.path.join(os.path.dirname(base_dir), "mutigongkuang_new.ui")
         if not os.path.exists(ui_path):
             ui_path = os.path.join(base_dir, "mutigongkuang.ui")
         uic.loadUi(ui_path, self)
+
+        # 0522新修改
+        self._ensure_table_button_gap()
 
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint | Qt.WindowMinMaxButtonsHint)
 
@@ -87,22 +175,38 @@ class MultiConditionsDialog(QDialog):
         self.tableWidget.setColumnCount(3)
         self.tableWidget.setHorizontalHeaderLabels(["参数单位","壳程数值", "管程数值"])
 
-        # 1107新修改
-        self.tableWidget.horizontalHeader().setStyleSheet("""
-            QHeaderView::section {
-                border-top: 0px;
-                border-left: 0px;
-                border-right: 1px solid #D3D3D3;
-                border-bottom: 1px solid #D3D3D3;
-                background-color: white;
-            }
-        """)
+        # 0522新修改
+        apply_table_style(self.tableWidget, keep_vertical_header=True)
+        parent_viewer = self.parent()
+        ref_table = getattr(parent_viewer, "tableWidget_design_data", None) if parent_viewer else None
+        if ref_table is not None:
+            self.tableWidget.setFont(ref_table.font())
+        set_table_corner_label(self.tableWidget, "参数名称")
+        font_metrics = self.tableWidget.fontMetrics()
+        self.tableWidget.horizontalHeader().setFixedHeight(font_metrics.height() + 12)
+        self.tableWidget.verticalHeader().setFixedWidth(font_metrics.width("设计温度（最高）*") + 24)
+        self.tableWidget.itemSelectionChanged.connect(
+            lambda: highlight_entire_row(self.tableWidget)
+        )
 
+        # 0522新修改
+        self.tableWidget.verticalHeader().setDefaultAlignment(Qt.AlignCenter)
+        normal_font = QFont(self.tableWidget.font())
+        normal_font.setBold(False)
         for r, name in enumerate(self.PARAM_NAMES):
-            self.tableWidget.setVerticalHeaderItem(r, QTableWidgetItem(name))
+            name_item = QTableWidgetItem(name)
+            name_item.setFont(normal_font)
+            name_item.setTextAlignment(Qt.AlignCenter)
+            self.tableWidget.setVerticalHeaderItem(r, name_item)
+            for c in range(self.tableWidget.columnCount()):
+                cell = self.tableWidget.item(r, c)
+                if cell:
+                    cell.setFont(normal_font)
+
+        # 0522新修改：行高与条件输入设计数据表一致
+        sync_table_row_height(self.tableWidget, ref_table)
 
         # ✅ 安装 undo + 校核代理（本地文件未恢复只读时不安装，避免代理下拉仍可编辑）
-        parent_viewer = self.parent()
         try:
             import modules.chanpinguanli.bianl as bianl
             self._readonly_local_files = bool(
@@ -124,6 +228,9 @@ class MultiConditionsDialog(QDialog):
             self.btnok.clicked.connect(self.save_current_gongkuang)
         else:
             print("[多工况] 警告：UI 中找不到 btnok 按钮")
+            
+        if hasattr(self, "btncanl"):
+            self.btncanl.clicked.connect(self.reject)
 
         # 默认加载工况1数据
         self.load_gongkuang_data(1)
@@ -132,29 +239,58 @@ class MultiConditionsDialog(QDialog):
         if self._readonly_local_files:
             self._apply_readonly_for_missing_local_files()
 
-        # ✅ 根据表格内容动态设置初始大小（高度正好能显示所有行）
-        vh = self.tableWidget.verticalHeader()
-        total_height = vh.length()  # 所有行高度之和
-        header_height = self.tableWidget.horizontalHeader().height()
-        frame = self.tableWidget.frameWidth() * 2
-        margin = 100  # 预留额外空间给下拉框、按钮
-
-        total_height = total_height + header_height + frame + margin
-
-        # 表格宽度
-        total_width = sum(self.tableWidget.columnWidth(c) for c in range(self.tableWidget.columnCount()))
-        total_width += self.tableWidget.verticalHeader().width() + frame + 50  # 适当留点余量
-
-        self.resize(total_width, total_height)
-
-        # ✅ 允许用户继续拖动缩放
-        self.setSizeGripEnabled(True)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-
-        # ✅ 表格自适应窗口
+        # 0522新修改：打开时按内容撑开窗口，放大后列宽仍自适应
         self.tableWidget.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.tableWidget.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.tableWidget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizeGripEnabled(True)
+        self._fit_dialog_size()
+        set_table_corner_label(self.tableWidget, "参数名称")
+
+    # 0522新修改：多工况弹窗初始尺寸（全部参数可见、保留放大自适应）
+    def _fit_dialog_size(self):
+        """打开时按行高/列宽撑开，使全部参数可见；不锁定最大尺寸，保留放大后自适应。"""
+        parent_viewer = self.parent()
+        ref_table = getattr(parent_viewer, "tableWidget_design_data", None) if parent_viewer else None
+        sync_table_row_height(self.tableWidget, ref_table)
+
+        hh = self.tableWidget.horizontalHeader()
+        vh = self.tableWidget.verticalHeader()
+        frame = self.tableWidget.frameWidth() * 2
+        cols = self.tableWidget.columnCount()
+        rows = self.tableWidget.rowCount()
+
+        table_h = sum(self.tableWidget.rowHeight(r) for r in range(rows))
+        table_h += hh.height() + frame
+
+        # 先按内容量宽度，再恢复 Stretch 以便放大窗口时列仍自适应
+        for c in range(cols):
+            hh.setSectionResizeMode(c, QHeaderView.ResizeToContents)
+        self.tableWidget.resizeColumnsToContents()
+        table_w = vh.width() + sum(self.tableWidget.columnWidth(c) for c in range(cols)) + frame + 8
+        for c in range(cols):
+            hh.setSectionResizeMode(c, QHeaderView.Stretch)
+
+        self.tableWidget.setMinimumHeight(table_h)
+        self.tableWidget.setMinimumWidth(table_w)
+        self.tableWidget.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.tableWidget.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        lay = self.layout()
+        if lay is not None:
+            lay.activate()
+            hint = lay.sizeHint()
+            self.resize(hint.width() + self._EXTRA_OPEN_WIDTH, hint.height())
+        else:
+            extra_h = 120
+            if hasattr(self, "combo_gongkuang"):
+                extra_h += self.combo_gongkuang.sizeHint().height() + 12
+            self.resize(table_w + 24 + self._EXTRA_OPEN_WIDTH, table_h + extra_h)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        set_table_corner_label(self.tableWidget, "参数名称")
+        self._fit_dialog_size()
 
     def _apply_table_readonly_only(self):
         """仅锁定表格与单元格内嵌控件（切换工况重新 fill 后需再调用）。"""

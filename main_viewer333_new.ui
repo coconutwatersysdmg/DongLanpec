@@ -1,0 +1,950 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Lanbin</class>
+ <widget class="QMainWindow" name="Lanbin">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1598</width>
+    <height>970</height>
+   </rect>
+  </property>
+  <!-- 0522新修改：窗口标题 -->
+  <property name="windowTitle">
+   <string>Donlanpec</string>
+  </property>
+  <property name="styleSheet">
+   <string notr="true">/* 竖直滚动条整体样式 */
+QScrollBar:vertical {
+    background-color: #f5f5f5;
+    width: 14px;
+    margin: 0px;
+}
+
+/* 滚动条滑块 */
+QScrollBar::handle:vertical {
+    background-color: #c4c4c4;
+    border-radius: 7px;
+    min-height: 30px;
+}
+
+/* 滑块悬浮 */
+QScrollBar::handle:vertical:hover {
+    background-color: #a0a0a0;
+}
+
+/* 滑块按下 */
+QScrollBar::handle:vertical:pressed {
+    background-color: #888888;
+}
+
+/* 滚动条上下箭头（隐藏） */
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    border: none;
+    background: none;
+    height: 0px;
+}
+
+/* 滚动条背景区域 */
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    background: none;
+}
+/* 水平滚动条整体样式 */
+QScrollBar:horizontal {
+    background-color: #f5f5f5;
+    height: 14px; /* 竖直是 width，水平是 height */
+    margin: 0px;
+}
+
+/* 水平滚动条滑块 */
+QScrollBar::handle:horizontal {
+    background-color: #c4c4c4;
+    border-radius: 7px;
+    min-width: 30px; /* 竖直是 min-height，水平是 min-width */
+}
+
+/* 水平滑块悬浮 */
+QScrollBar::handle:horizontal:hover {
+    background-color: #a0a0a0;
+}
+
+/* 水平滑块按下 */
+QScrollBar::handle:horizontal:pressed {
+    background-color: #888888;
+}
+
+/* 水平滚动条左右箭头（隐藏） */
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    border: none;
+    background: none;
+    width: 0px;
+}
+
+/* 水平滚动条背景区域 */
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
+    background: none;
+}</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <property name="styleSheet">
+    <string notr="true">QLabel, QLineEdit {
+    font-family: &quot;Microsoft YaHei UI&quot;, &quot;Microsoft YaHei&quot;, &quot;SimHei&quot;;
+    font-size: 13px;
+}
+QComboBox:disabled {
+    background-color: white;
+    color: #666;
+}</string>
+   </property>
+   <layout class="QVBoxLayout" name="verticalLayout_4">
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
+    <item>
+     <widget class="QFrame" name="frame_top_chrome">
+      <property name="styleSheet">
+       <string notr="true">QFrame#frame_title_bar {
+    background-color: #003366;
+    border: none;
+}
+QLabel#label_main_title {
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: bold;
+    background: transparent;
+}
+/* 0522新修改：顶部导航栏按钮（QToolButton 上下布局、16px 字号） */
+QFrame#frame_nav_strip {
+    background-color: #FFF;
+    border: none;
+    border-bottom: 1px solid #b8c9e8;
+}
+QFrame#frame_nav_strip QPushButton {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 6px 8px;
+    min-width: 78px;
+    min-height: 76px;
+    max-height: 92px;
+    font-size: 16px;
+    color: #003366;
+    font-family: &quot;Microsoft YaHei UI&quot;, &quot;Microsoft YaHei&quot;;
+}
+QFrame#frame_nav_strip QPushButton:hover {
+    background-color: #cfe0ff;
+    border-color: #9ebce0;
+}
+QFrame#frame_nav_strip QPushButton:pressed {
+    background-color: #ffe4c4;
+    border-color: #e8b896;
+}
+QFrame#frame_nav_strip QPushButton:disabled {
+    color: #999999;
+    background-color: #eef3f9;
+}
+QFrame#frame_nav_strip QToolButton {
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 6px 8px;
+    min-width: 78px;
+    min-height: 76px;
+    max-height: 92px;
+    font-size: 16px;
+    color: #003366;
+    font-family: &quot;Microsoft YaHei UI&quot;, &quot;Microsoft YaHei&quot;;
+}
+QFrame#frame_nav_strip QToolButton:hover {
+    background-color: #cfe0ff;
+    border-color: #9ebce0;
+}
+QFrame#frame_nav_strip QToolButton:pressed {
+    background-color: #ffe4c4;
+    border-color: #e8b896;
+}
+QFrame#frame_nav_strip QToolButton:disabled {
+    color: #999999;
+    background-color: #eef3f9;
+}
+/* 0522新修改：配置按钮下拉箭头右侧居中、加大 */
+QFrame#frame_nav_strip QToolButton#btn_config {
+    padding-right: 18px;
+}
+QFrame#frame_nav_strip QToolButton#btn_config::menu-indicator {
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    width: 14px;
+    height: 14px;
+    right: 2px;
+}
+QFrame#current_product {
+    background-color: #ffffff;
+    border: 1px solid #cccccc;
+    border-radius: 4px;
+}
+QFrame#current_product QLabel {
+    background-color: transparent;
+    font-size: 14px;
+}
+</string>
+      </property>
+      <property name="frameShape">
+       <enum>QFrame::NoFrame</enum>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_top_chrome">
+       <property name="spacing">
+        <number>0</number>
+       </property>
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QFrame" name="frame_nav_strip">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>98</height>
+          </size>
+         </property>
+         <property name="frameShape">
+          <enum>QFrame::NoFrame</enum>
+         </property>
+         <layout class="QHBoxLayout" name="horizontalLayout_nav_strip">
+          <property name="spacing">
+           <number>8</number>
+          </property>
+          <property name="leftMargin">
+           <number>8</number>
+          </property>
+          <property name="topMargin">
+           <number>6</number>
+          </property>
+          <property name="rightMargin">
+           <number>12</number>
+          </property>
+          <property name="bottomMargin">
+           <number>6</number>
+          </property>
+          <item>
+           <layout class="QHBoxLayout" name="horizontalLayout_nav_buttons">
+            <property name="spacing">
+             <number>4</number>
+            </property>
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QToolButton" name="btn_project">
+              <property name="text">
+               <string>项目产品管理</string>
+              </property>
+              <property name="icon">
+               <iconset>
+                <normaloff>icons/项目管理.png</normaloff>icons/项目管理.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>36</width>
+                <height>36</height>
+               </size>
+              </property>
+              <property name="autoRaise">
+               <bool>true</bool>
+              </property>
+              <property name="toolButtonStyle">
+               <enum>Qt::ToolButtonTextUnderIcon</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="btn_condition">
+              <property name="text">
+               <string>条件输入</string>
+              </property>
+              <property name="icon">
+               <iconset>
+                <normaloff>icons/表单组件-输入框.png</normaloff>icons/表单组件-输入框.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>36</width>
+                <height>36</height>
+               </size>
+              </property>
+              <property name="autoRaise">
+               <bool>true</bool>
+              </property>
+              <property name="toolButtonStyle">
+               <enum>Qt::ToolButtonTextUnderIcon</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="btn_material">
+              <property name="text">
+               <string>元件定义</string>
+              </property>
+              <property name="icon">
+               <iconset>
+                <normaloff>icons/元件定义.png</normaloff>icons/元件定义.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>36</width>
+                <height>36</height>
+               </size>
+              </property>
+              <property name="autoRaise">
+               <bool>true</bool>
+              </property>
+              <property name="toolButtonStyle">
+               <enum>Qt::ToolButtonTextUnderIcon</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="btn_pipe">
+              <property name="text">
+               <string>管口及附件定义</string>
+              </property>
+              <property name="icon">
+               <iconset>
+                <normaloff>icons/管口.png</normaloff>icons/管口.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>36</width>
+                <height>36</height>
+               </size>
+              </property>
+              <property name="autoRaise">
+               <bool>true</bool>
+              </property>
+              <property name="toolButtonStyle">
+               <enum>Qt::ToolButtonTextUnderIcon</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="btn_pipeDesign">
+              <property name="text">
+               <string>管束设计</string>
+              </property>
+              <property name="icon">
+               <iconset>
+                <normaloff>icons/建筑-管子.png</normaloff>icons/建筑-管子.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>36</width>
+                <height>36</height>
+               </size>
+              </property>
+              <property name="autoRaise">
+               <bool>true</bool>
+              </property>
+              <property name="toolButtonStyle">
+               <enum>Qt::ToolButtonTextUnderIcon</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="btn_3D">
+              <property name="text">
+               <string>模块化设计</string>
+              </property>
+              <property name="icon">
+               <iconset>
+                <normaloff>icons/3D建模.png</normaloff>icons/3D建模.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>36</width>
+                <height>36</height>
+               </size>
+              </property>
+              <property name="autoRaise">
+               <bool>true</bool>
+              </property>
+              <property name="toolButtonStyle">
+               <enum>Qt::ToolButtonTextUnderIcon</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="btn_cal">
+              <property name="text">
+               <string>设计运算</string>
+              </property>
+              <property name="icon">
+               <iconset>
+                <normaloff>icons/计算.png</normaloff>icons/计算.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>36</width>
+                <height>36</height>
+               </size>
+              </property>
+              <property name="autoRaise">
+               <bool>true</bool>
+              </property>
+              <property name="toolButtonStyle">
+               <enum>Qt::ToolButtonTextUnderIcon</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="btn_2D">
+              <property name="text">
+               <string>图纸绘制</string>
+              </property>
+              <property name="icon">
+               <iconset>
+                <normaloff>icons/图纸 (2).png</normaloff>icons/图纸 (2).png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>36</width>
+                <height>36</height>
+               </size>
+              </property>
+              <property name="autoRaise">
+               <bool>true</bool>
+              </property>
+              <property name="toolButtonStyle">
+               <enum>Qt::ToolButtonTextUnderIcon</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="btn_docs">
+              <property name="text">
+               <string>报告输出</string>
+              </property>
+              <property name="icon">
+               <iconset>
+                <normaloff>icons/三维建模.png</normaloff>icons/三维建模.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>36</width>
+                <height>36</height>
+               </size>
+              </property>
+              <property name="autoRaise">
+               <bool>true</bool>
+              </property>
+              <property name="toolButtonStyle">
+               <enum>Qt::ToolButtonTextUnderIcon</enum>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QToolButton" name="btn_config">
+              <property name="text">
+               <string>配置</string>
+              </property>
+              <property name="icon">
+               <iconset>
+                <normaloff>icons/另存为.png</normaloff>icons/另存为.png</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>36</width>
+                <height>36</height>
+               </size>
+              </property>
+              <property name="autoRaise">
+               <bool>true</bool>
+              </property>
+              <property name="popupMode">
+               <enum>QToolButton::InstantPopup</enum>
+              </property>
+              <property name="toolButtonStyle">
+               <enum>Qt::ToolButtonTextUnderIcon</enum>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer_nav">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>16</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QFrame" name="current_product">
+            <property name="minimumSize">
+             <size>
+              <width>380</width>
+              <height>76</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>520</width>
+              <height>16777215</height>
+             </size>
+            </property>
+            <property name="frameShape">
+             <enum>QFrame::NoFrame</enum>
+            </property>
+            <layout class="QGridLayout" name="verticalLayout_5">
+             <property name="leftMargin">
+              <number>14</number>
+             </property>
+             <property name="topMargin">
+              <number>10</number>
+             </property>
+             <property name="rightMargin">
+              <number>14</number>
+             </property>
+             <property name="bottomMargin">
+              <number>10</number>
+             </property>
+             <property name="horizontalSpacing">
+              <number>20</number>
+             </property>
+             <property name="verticalSpacing">
+              <number>6</number>
+             </property>
+             <item row="0" column="0">
+              <widget class="QLabel" name="label">
+               <property name="styleSheet">
+                <string notr="true">color: #555555;</string>
+               </property>
+               <property name="text">
+                <string>项目编号:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="1">
+              <widget class="QLabel" name="label_4">
+               <property name="styleSheet">
+                <string notr="true">color: #555555;</string>
+               </property>
+               <property name="text">
+                <string>设备位号:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="0" column="2">
+              <widget class="QLabel" name="label_6">
+               <property name="styleSheet">
+                <string notr="true">color: #555555;</string>
+               </property>
+               <property name="text">
+                <string>产品编号:</string>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="0">
+              <widget class="QLabel" name="label_product_name">
+               <property name="styleSheet">
+                <string notr="true">color: #333333;</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="1">
+              <widget class="QLabel" name="label_product_tag_numer">
+               <property name="styleSheet">
+                <string notr="true">color: #333333;</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+             <item row="1" column="2">
+              <widget class="QLabel" name="label_product_number">
+               <property name="styleSheet">
+                <string notr="true">color: #333333;</string>
+               </property>
+               <property name="text">
+                <string/>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
+    <item>
+     <widget class="QTabWidget" name="tabWidget">
+      <property name="sizePolicy">
+       <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+        <horstretch>1</horstretch>
+        <verstretch>1</verstretch>
+       </sizepolicy>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">font: 12pt &quot;Arial&quot;;
+background-color: #ffffff;</string>
+      </property>
+      <property name="currentIndex">
+       <number>0</number>
+      </property>
+      <property name="tabBarAutoHide">
+       <bool>false</bool>
+      </property>
+      <widget class="QWidget" name="tab">
+       <attribute name="title">
+        <string/>
+       </attribute>
+       <layout class="QGridLayout" name="gridLayout">
+        <item row="0" column="0">
+         <widget class="QLabel" name="label_2">
+          <property name="text">
+           <string/>
+          </property>
+          <property name="pixmap">
+           <pixmap>icons/mainpage.png</pixmap>
+          </property>
+          <property name="scaledContents">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLineEdit" name="line_tip">
+      <property name="minimumSize">
+       <size>
+        <width>0</width>
+        <height>26</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>16777215</width>
+        <height>26</height>
+       </size>
+      </property>
+      <property name="styleSheet">
+       <string notr="true">background-color: #fafafa;
+border: 1px solid #dddddd;</string>
+      </property>
+      <property name="dragEnabled">
+       <bool>false</bool>
+      </property>
+      <property name="readOnly">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <action name="actionyonghuxinxi">
+   <property name="text">
+    <string>用户信息</string>
+   </property>
+  </action>
+  <action name="action_4">
+   <property name="text">
+    <string>设置</string>
+   </property>
+  </action>
+  <action name="action_5">
+   <property name="text">
+    <string>退出</string>
+   </property>
+  </action>
+  <action name="action">
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/新建.png</normaloff>icons/新建.png</iconset>
+   </property>
+   <property name="text">
+    <string>新建项目</string>
+   </property>
+  </action>
+  <action name="action_2">
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/打开.png</normaloff>icons/打开.png</iconset>
+   </property>
+   <property name="text">
+    <string>打开项目</string>
+   </property>
+  </action>
+  <action name="action_3">
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/保存.png</normaloff>icons/保存.png</iconset>
+   </property>
+   <property name="text">
+    <string>保存项目</string>
+   </property>
+  </action>
+  <action name="action_6">
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/另存为.png</normaloff>icons/另存为.png</iconset>
+   </property>
+   <property name="text">
+    <string>另存为</string>
+   </property>
+  </action>
+  <action name="action_7">
+   <property name="text">
+    <string>导出</string>
+   </property>
+  </action>
+  <action name="action_8">
+   <property name="text">
+    <string>智动设计</string>
+   </property>
+  </action>
+  <action name="action_9">
+   <property name="text">
+    <string>灵活设计</string>
+   </property>
+  </action>
+  <action name="action_help_doc">
+   <property name="text">
+    <string>查看软件使用文档</string>
+   </property>
+  </action>
+  <action name="action_11">
+   <property name="text">
+    <string>故障排查</string>
+   </property>
+  </action>
+  <action name="action_12">
+   <property name="text">
+    <string>在线支持</string>
+   </property>
+  </action>
+  <action name="action_13">
+   <property name="text">
+    <string>本地离线帮助手册</string>
+   </property>
+  </action>
+  <action name="action_15">
+   <property name="text">
+    <string>界面</string>
+   </property>
+  </action>
+  <action name="action_16">
+   <property name="text">
+    <string>快捷键</string>
+   </property>
+  </action>
+  <action name="action_17">
+   <property name="text">
+    <string>存储路径</string>
+   </property>
+  </action>
+  <action name="action_18">
+   <property name="text">
+    <string>预定义</string>
+   </property>
+  </action>
+  <action name="action_14">
+   <property name="text">
+    <string>打印</string>
+   </property>
+  </action>
+  <action name="action_19">
+   <property name="text">
+    <string>退出</string>
+   </property>
+  </action>
+  <action name="action_20">
+   <property name="text">
+    <string>条件评审</string>
+   </property>
+  </action>
+  <action name="action_21">
+   <property name="text">
+    <string>方案评审</string>
+   </property>
+  </action>
+  <action name="action_22">
+   <property name="text">
+    <string>技术评审</string>
+   </property>
+  </action>
+  <action name="action_23">
+   <property name="text">
+    <string>结果评审</string>
+   </property>
+  </action>
+  <action name="action_24">
+   <property name="text">
+    <string>文件存档</string>
+   </property>
+  </action>
+  <action name="action_27">
+   <property name="text">
+    <string>二维图纸</string>
+   </property>
+  </action>
+  <action name="action_28">
+   <property name="text">
+    <string>三维模型</string>
+   </property>
+  </action>
+  <action name="action_29">
+   <property name="text">
+    <string>强度计算书</string>
+   </property>
+  </action>
+  <action name="action_30">
+   <property name="text">
+    <string>材料清单</string>
+   </property>
+  </action>
+  <action name="action_31">
+   <property name="text">
+    <string>一键全选</string>
+   </property>
+  </action>
+  <action name="action_32">
+   <property name="text">
+    <string>二维图纸</string>
+   </property>
+  </action>
+  <action name="action_33">
+   <property name="text">
+    <string>三维模型</string>
+   </property>
+  </action>
+  <action name="action_34">
+   <property name="text">
+    <string>强度计算书</string>
+   </property>
+  </action>
+  <action name="action_35">
+   <property name="text">
+    <string>材料清单</string>
+   </property>
+  </action>
+  <action name="action_36">
+   <property name="text">
+    <string>一键全选</string>
+   </property>
+  </action>
+  <action name="action_37">
+   <property name="text">
+    <string>实时翻译</string>
+   </property>
+  </action>
+  <action name="action_38">
+   <property name="text">
+    <string>专业术语校对</string>
+   </property>
+  </action>
+  <action name="action_39">
+   <property name="text">
+    <string>数据处理</string>
+   </property>
+  </action>
+  <action name="action_40">
+   <property name="text">
+    <string>审图</string>
+   </property>
+  </action>
+  <action name="action_41">
+   <property name="text">
+    <string>智能提示</string>
+   </property>
+  </action>
+  <action name="scheme_design">
+   <property name="text">
+    <string>方案设计</string>
+   </property>
+  </action>
+  <action name="detailed_deisign">
+   <property name="text">
+    <string>详细设计</string>
+   </property>
+  </action>
+  <action name="action_25">
+   <property name="text">
+    <string>实时翻译</string>
+   </property>
+  </action>
+  <action name="action_26">
+   <property name="text">
+    <string>文件存档</string>
+   </property>
+  </action>
+  <action name="action_undo">
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/撤销.png</normaloff>icons/撤销.png</iconset>
+   </property>
+   <property name="text">
+    <string>撤销</string>
+   </property>
+  </action>
+  <action name="action_redo">
+   <property name="icon">
+    <iconset>
+     <normaloff>icons/重做.png</normaloff>icons/重做.png</iconset>
+   </property>
+   <property name="text">
+    <string>重做</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

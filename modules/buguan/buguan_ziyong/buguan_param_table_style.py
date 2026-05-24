@@ -1,7 +1,81 @@
 """布管左侧参数表样式：供管板连接、管板型式等页复用。"""
+import os
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QPen, QPainter
 from PyQt5.QtWidgets import QStyledItemDelegate, QLineEdit, QStyle
+
+
+def _combo_arrow_stylesheet_url():
+    """元件定义同款灰色箭头 SVG，供 QSS url() 使用。"""
+    svg_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "..",
+        "..",
+        "cailiaodingyi",
+        "ui",
+        "combo_arrow_gray.svg",
+    )
+    return os.path.abspath(svg_path).replace("\\", "/")
+
+
+def _param_combo_popup_stylesheet():
+    """下拉弹出列表与内嵌 QLineEdit 样式（与元件定义一致）。"""
+    return (
+        "QComboBox::drop-down {"
+        "  subcontrol-origin: padding;"
+        "  subcontrol-position: top right;"
+        "  width: 14px;"
+        "  border: none;"
+        "  background: transparent;"
+        "}"
+        f"QComboBox::down-arrow {{"
+        f"  image: url({_combo_arrow_stylesheet_url()});"
+        "  width: 10px;"
+        "  height: 6px;"
+        "}"
+        "QComboBox QAbstractItemView {"
+        "  background-color: #ffffff;"
+        "  border: 1px solid #CCCCCC;"
+        "  color: #1f1f1f;"
+        "  selection-background-color: #d9e6f7;"
+        "  selection-color: #1f1f1f;"
+        "  outline: 0;"
+        "}"
+        "QComboBox QLineEdit {"
+        "  border: none;"
+        "  background: transparent;"
+        "  padding: 0;"
+        "  margin: 0;"
+        "  color: #1f1f1f;"
+        "  selection-background-color: #d9e6f7;"
+        "  selection-color: #1f1f1f;"
+        "}"
+    )
+
+
+def get_param_combo_stylesheet(disabled=False):
+    """参数表内嵌 QComboBox 样式（与元件定义下拉框一致）。"""
+    base = (
+        "background-color: #ffffff;"
+        "border: 1px solid #CCCCCC;"
+        "color: #1f1f1f;"
+        "font-size: 10pt;"
+        "min-height: 22px;"
+        "padding: 1px 16px 1px 4px;"
+    )
+    popup = _param_combo_popup_stylesheet()
+    if disabled:
+        return (
+            "QComboBox {"
+            f"{base}"
+            "background-color: #f5f7fa;"
+            "color: #969696;"
+            "}"
+            f"{popup}"
+        )
+    return f"QComboBox {{{base}}}{popup}"
+
 
 PARAM_TABLE_STYLE_SHEET = """
 QTableWidget {
@@ -46,29 +120,46 @@ QTableWidget QLineEdit {
     min-height: 24px;
 }
 QTableWidget QComboBox {
-    border: 1px solid #dcdfe6;
-    border-radius: 4px;
-    padding: 2px 28px 2px 10px;
+    border: 1px solid #CCCCCC;
+    padding: 1px 16px 1px 4px;
     background-color: #ffffff;
-    color: #303133;
+    color: #1f1f1f;
     font-size: 10pt;
-    min-height: 24px;
+    min-height: 22px;
+}
+QTableWidget QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 14px;
+    border: none;
+    background: transparent;
+}
+QTableWidget QComboBox::down-arrow {
+    image: url(__COMBO_ARROW_URL__);
+    width: 10px;
+    height: 6px;
 }
 QTableWidget QComboBox QAbstractItemView {
-    color: #303133;
-    selection-background-color: #e3f2fd;
-    selection-color: #212121;
+    background-color: #ffffff;
+    border: 1px solid #CCCCCC;
+    color: #1f1f1f;
+    selection-background-color: #d9e6f7;
+    selection-color: #1f1f1f;
 }
 QTableWidget QComboBox QLineEdit {
-    color: #303133;
-    selection-background-color: #b3d7ff;
-    selection-color: #212121;
+    border: none;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    color: #1f1f1f;
+    selection-background-color: #d9e6f7;
+    selection-color: #1f1f1f;
 }
 QTableWidget QComboBox:disabled {
     background-color: #f5f7fa;
     color: #969696;
 }
-"""
+""".replace("__COMBO_ARROW_URL__", _combo_arrow_stylesheet_url())
 
 
 class ParamValueCellDelegate(QStyledItemDelegate):

@@ -18,13 +18,14 @@ from modules.condition_input.funcs.funcs_cdt_input import load_design_data_if_ex
     render_coating_table, set_multilevel_headers, apply_table_style, highlight_missing_required_rows, \
     validate_required_fields, import_all_reference_data, save_local_condition_file, save_all_tables, \
     trigger_all_cross_table_relations, apply_design_data_dropdowns, apply_general_data_dropdowns, \
-    apply_trail_data_dropdowns, TrailTableComboDelegate, highlight_entire_row, shrink_index_column, shrink_unit_column,\
+    apply_trail_data_dropdowns, TrailTableComboDelegate, highlight_entire_row, shrink_index_column, shrink_unit_column, \
     get_ref_data_excel_path, fetch_all_mode_orders, capture_default_order, apply_mode_param_order, \
     restore_default_order, autofill_outer_diameter
 from modules.chanpinguanli.chanpinguanli_main import product_manager
 from modules.condition_input.funcs.design_data_delegate import DesignDataDelegate  # 根据实际路径调整
 # from modules.yudingyi.luoshuan import update_user_config_for_2_6_1
 from modules.chanpinguanli.project_confirm_btn import show_confirm_dialog
+
 product_id = None
 
 
@@ -38,7 +39,7 @@ def on_product_id_changed(new_id):
 product_manager.product_id_changed.connect(on_product_id_changed)
 
 
-#0903会议纪要 添加一个通用的检查函数，用于所有非项目管理界面
+# 0903会议纪要 添加一个通用的检查函数，用于所有非项目管理界面
 def check_project_and_product():
     """检查项目和产品状态的通用函数（修复变量引用问题）"""
     # 关键修改：直接通过bianl模块访问current_project_id
@@ -53,12 +54,13 @@ def check_project_and_product():
         return False, "请先创建至少一个产品！"
     return True, ""
 
+
 class DesignConditionInputViewer(QWidget):
     def __init__(self, line_tip=None):
         super().__init__()
 
         # ▼▼▼【核心修改 1】在最开始初始化状态变量 ▼▼▼
-        self._is_modified = False     # 关键！追踪界面数据是否被修改
+        self._is_modified = False  # 关键！追踪界面数据是否被修改
         self._local_condition_xlsx_missing = False  # 本地条件输入 xlsx 缺失（保存失败）时置 True
         self._is_loading_data = True  # 关键！开始初始化，标记为"正在加载"
         self.original_window_title = ""  # UI加载后赋值
@@ -76,7 +78,7 @@ class DesignConditionInputViewer(QWidget):
             return  # 立即返回
 
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        ui_path = os.path.join(current_dir, "viewer.ui")
+        ui_path = os.path.join(current_dir, "viewer_new.ui")
         uic.loadUi(ui_path, self)
         # ▼▼▼【修改点 1.2】UI加载后获取标题 ▼▼▼
         self.original_window_title = self.windowTitle()
@@ -277,7 +279,7 @@ class DesignConditionInputViewer(QWidget):
                     self._outer_base_last_val = cur
         except Exception:
             pass
-        
+
         # 0209新修改-多工况输入标识显示
         # ✅ 新增：多工况数据缓存初始化
         self._has_multi_conditions = False  # 缓存：是否有工况2/3的非空数据
@@ -288,7 +290,7 @@ class DesignConditionInputViewer(QWidget):
                 print(f"[多工况] 初始化检查失败: {e}")
 
     # 1014lxy
-    def mark_as_modified(self, item=None): # item参数设为可选
+    def mark_as_modified(self, item=None):  # item参数设为可选
         """当任何数据被用户改变时，将界面标记为已修改"""
         # 正在加载数据时，任何信号都忽略
         if self._is_loading_data:
@@ -315,22 +317,22 @@ class DesignConditionInputViewer(QWidget):
         """
         # 判断是否需要检查必填项
         need_check = self._should_check_required_fields()
-        
+
         if not need_check:
             # 不需要检查，直接允许关闭
             return True
-        
+
         # 需要检查必填项
         is_valid, missing_fields = self.only_check_validate_data()
-        
+
         if is_valid:
             # 必填项完整，允许关闭
             return True
-        
+
         # 必填项不完整，弹窗提示
         msg = ("以下必填项：\n" + "、".join(missing_fields) + "\n对应参数值不能为空。\n是否确认继续关闭？")
         reply = show_confirm_dialog(self, "提示", msg)
-        
+
         if reply:
             # 用户选择继续关闭
             return True
@@ -358,6 +360,7 @@ class DesignConditionInputViewer(QWidget):
             # 情况B：老产品（已保存到设计活动库）
             # 只有在有实质性修改时才需要检查
             return has_changes
+
     # 1106新修改
     # def _should_check_required_fields(self):
     #     """
@@ -425,7 +428,7 @@ class DesignConditionInputViewer(QWidget):
     #         print(f"自动保存失败，无法关闭: {e}")
     #         QMessageBox.critical(self, "保存失败", f"自动保存数据时发生错误，关闭操作已取消。\n\n错误信息: {e}")
     #         return False  # 返回失败，主窗口将中断关闭操作
-# lxy1014
+    # lxy1014
     def clear_line_tip(self):
         """5秒后自动清空line_tip的文本和样式（避免残留）"""
         # 先判断line_tip是否存在，防止空指针错误
@@ -487,9 +490,9 @@ class DesignConditionInputViewer(QWidget):
         )
 
         # === 记录默认顺序（用于保存/导出固定顺序写出）===
-        #capture_default_order(self.tableWidget_product_std)
+        # capture_default_order(self.tableWidget_product_std)
         capture_default_order(self.tableWidget_design_data)
-        #capture_default_order(self.tableWidget_general_data)
+        # capture_default_order(self.tableWidget_general_data)
 
         set_multilevel_headers(
             self.tableWidget_trail_data,
@@ -532,7 +535,7 @@ class DesignConditionInputViewer(QWidget):
         try:
             # 标记外径自动填充就绪，确保可以触发计算
             setattr(self, "_outer_autofill_ready", True)
-            
+
             # 触发一次外径自动填充，确保公式计算的外径值正确显示
             from modules.condition_input.funcs.funcs_cdt_input import autofill_outer_diameter
             autofill_outer_diameter(self)
@@ -601,7 +604,11 @@ class DesignConditionInputViewer(QWidget):
                 is_name_column = col_idx == 0
                 is_code_column = key == "规范/标准代号"
                 is_unit_column = key == "参数单位"  # 修改
-                if is_name_column:
+                # 0522新修改-ui修改
+                if key == "参数名称":
+                    item.setTextAlignment(Qt.AlignCenter)
+                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+                elif is_name_column:
                     item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
                     item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 elif is_unit_column:  # 修改
@@ -645,7 +652,7 @@ class DesignConditionInputViewer(QWidget):
         product_form = get_product_form_from_db(self.product_id)
 
         # 只对NEN\AEM和BEM产品应用
-        if product_form not in ['NEN','AEM','BEM','NEN(Head)']:
+        if product_form not in ['NEN', 'AEM', 'BEM', 'NEN(Head)']:
             return
 
         print(f"[DEBUG] 正在为NEN/NEN(Head)/AEM/BEM产品设置特殊只读单元格")
@@ -764,7 +771,6 @@ class DesignConditionInputViewer(QWidget):
                             print(f"[基准切否-刷新元件定义界面] 失败: {_e_ui}")
         except Exception as e:
             print(f"[封头类型代号联动更新] 失败: {e}")
-
 
         # 处理"外径系列"
         if row_series >= 0:
@@ -1009,7 +1015,7 @@ class DesignConditionInputViewer(QWidget):
             # 导入前阻塞信号，防止触发自动高亮 #1106新修改
             self.tableWidget_design_data.blockSignals(True)
             self.tableWidget_general_data.blockSignals(True)
-            
+
             try:
                 # 执行导入操作
                 import_all_reference_data(file_path, self)
@@ -1017,14 +1023,14 @@ class DesignConditionInputViewer(QWidget):
 
                 # 1112新修改-条件输入表格实质性变化：导入后不更新快照，让系统检测到这是相对于初始状态的变化
                 # 这样关闭界面时会提示保存
-                
+
                 # 0209新修改-多工况输入标识显示
                 # ✅ 导入参考数据后，检查多工况数据状态并刷新显示（因为可能导入了工况2/3数据）
                 try:
                     self.update_multi_conditions_status()
                 except Exception as e:
                     print(f"[多工况] 导入参考数据后检查失败: {e}")
-                
+
                 # 导入后清除所有高亮，确保不会显示缺失项高亮 #1106新修改
                 self.clear_all_highlights()
             finally:
@@ -1040,7 +1046,6 @@ class DesignConditionInputViewer(QWidget):
 
     def render_grouped_table(self, table_widget, grouped_data, headers, group_key_column=0):
         render_grouped_table(table_widget, grouped_data, headers, group_key_column)
-
 
     def only_check_validate_data(self, force=False):
         """
@@ -1068,14 +1073,14 @@ class DesignConditionInputViewer(QWidget):
                 highlight_missing_required_rows(self.tableWidget_general_data, missing_common)
 
                 # 返回 False，表示有未填写的必填项
-                return False,missing_fields
+                return False, missing_fields
 
             # 如果没有缺失项，则返回 True
-            return True,[]
+            return True, []
 
         except Exception as e:
             print(f"检查数据出错：{str(e)}")
-            return False,[]
+            return False, []
 
     # 这个方法现在只由他将输入界面的“确认”按钮调用 (force=True)
     # 1106新修改
@@ -1103,7 +1108,7 @@ class DesignConditionInputViewer(QWidget):
                 highlight_missing_required_rows(self.tableWidget_general_data, missing_common)
 
                 # 保留您的弹窗询问逻辑
-                if skip_confirm==False:
+                if skip_confirm == False:
                     msg = ("以下必填项：\n" + "、".join(missing_fields) + "\n对应参数值不能为空。\n是否确认继续保存？")
                     if not show_confirm_dialog(self, "提示", msg):
                         return (False, missing_fields)
@@ -1124,7 +1129,6 @@ class DesignConditionInputViewer(QWidget):
                     print(f"[条件输入保存] 已同步固定鞍座高度: 产品{self.product_id}")
             except Exception as e:
                 print(f"[条件输入保存] 鞍座高度同步失败: {e}")
-
 
             # 保存成功后清理状态
             self._validation_triggered = False
@@ -1194,7 +1198,7 @@ class DesignConditionInputViewer(QWidget):
 
         # 判断是否需要检查必填项
         need_check = self._should_check_required_fields()
-        
+
         if not need_check:
             # 不需要检查，直接允许关闭
             return (True, [])
@@ -1389,7 +1393,7 @@ class DesignConditionInputViewer(QWidget):
                 if not reply:
                     # 用户选择取消切换
                     return (False, missing_fields)
-            
+
             # 用户选择继续切换，需要保存数据
             try:
                 # 执行核心保存操作
@@ -1540,7 +1544,7 @@ class DesignConditionInputViewer(QWidget):
                 QMessageBox.critical(self, "导出失败", err_msg)
 
     # 1111新修改-2金属温度单元格不可编辑
-    #新增 模式切换处理函数
+    # 新增 模式切换处理函数
     def on_mode_changed(self, mode_name: str):
         """
         仅改变界面显示顺序；数据库与本地Excel保存仍使用默认顺序。
@@ -1553,13 +1557,13 @@ class DesignConditionInputViewer(QWidget):
         if mode_name == self._default_mode_name or mode_name.strip() == "":
             # 用"默认ID顺序"再排一次（就是 capture_default_order 记录那次的出现次序）
             # 使用 restore_default_order 严格按照原始顺序恢复，不使用必填项优先逻辑
-            #ids_std = getattr(self.tableWidget_product_std, "_default_param_ids", None)
-            #if ids_std:
-                #restore_default_order(self.tableWidget_product_std)
+            # ids_std = getattr(self.tableWidget_product_std, "_default_param_ids", None)
+            # if ids_std:
+            # restore_default_order(self.tableWidget_product_std)
             restore_default_order(self.tableWidget_design_data)
-            #ids_general = getattr(self.tableWidget_general_data, "_default_param_ids", None)
-            #if ids_general:
-                #restore_default_order(self.tableWidget_general_data)
+            # ids_general = getattr(self.tableWidget_general_data, "_default_param_ids", None)
+            # if ids_general:
+            # restore_default_order(self.tableWidget_general_data)
 
             ## 1111新修改-2金属温度单元格不可编辑
             # 切换到设计模式后，重新应用NEN/BEM产品的特殊只读单元格
@@ -1572,9 +1576,9 @@ class DesignConditionInputViewer(QWidget):
             return
 
         # 仅重排三张含“参数ID”的表
-        #apply_mode_param_order(self.tableWidget_product_std, target_ids)
+        # apply_mode_param_order(self.tableWidget_product_std, target_ids)
         apply_mode_param_order(self.tableWidget_design_data, target_ids)
-        #apply_mode_param_order(self.tableWidget_general_data, target_ids)
+        # apply_mode_param_order(self.tableWidget_general_data, target_ids)
 
         # ===== 新增：模式切换后，将设计数据表格的序号列设为不可编辑 =====
         print(f"[DEBUG] 正在设置设计数据表格（tableWidget_design_data）的序号列（第0列）为不可编辑")  # ✅ 调试打印
@@ -1636,7 +1640,7 @@ class DesignConditionInputViewer(QWidget):
         # 注意：如果用户在对话框中保存了数据，保存方法中已经会调用 update_multi_conditions_status
         # 但为了确保状态同步（即使没有保存），这里也检查一次
         self.update_multi_conditions_status()
-    
+
     # 0209新修改-多工况输入标识显示
     def _check_multi_conditions(self):
         """
@@ -1646,7 +1650,7 @@ class DesignConditionInputViewer(QWidget):
         if not self.product_id:
             self._has_multi_conditions = False
             return
-        
+
         try:
             from modules.condition_input.funcs.funcs_cdt_input import get_connection
             db_config_2 = {
@@ -1673,7 +1677,7 @@ class DesignConditionInputViewer(QWidget):
         except Exception as e:
             print(f"[多工况] 检查多工况数据失败: {e}")
             self._has_multi_conditions = False
-    
+
     def update_multi_conditions_status(self):
         """
         公共方法：更新多工况状态并刷新显示。
@@ -1693,18 +1697,18 @@ class DesignConditionInputViewer(QWidget):
         """提取表格的所有数据内容，用于快照比较（忽略行顺序）"""
         if not table_widget:
             return {}
-        
+
         data = {}
         row_count = table_widget.rowCount()
         col_count = table_widget.columnCount()
-        
+
         # 提取表头信息
         headers = []
         for col in range(col_count):
             header_item = table_widget.horizontalHeaderItem(col)
             headers.append(header_item.text() if header_item else f"Col_{col}")
         data['headers'] = headers
-        
+
         # 提取所有单元格数据，并按内容排序以忽略行顺序
         rows_data = []
         for row in range(row_count):
@@ -1714,11 +1718,11 @@ class DesignConditionInputViewer(QWidget):
                 cell_value = item.text() if item else ""
                 row_data.append(cell_value)
             rows_data.append(tuple(row_data))  # 转为tuple便于排序和比较
-        
+
         # 对行数据进行排序，这样即使行的顺序改变，只要内容相同就认为没有变化
         rows_data.sort()
         data['rows'] = rows_data
-        
+
         return data
 
     # 1112新修改-条件输入表格实质性变化
@@ -1731,11 +1735,11 @@ class DesignConditionInputViewer(QWidget):
             ('trail_data', self.tableWidget_trail_data),
             ('coating_data', self.tableWidget_coating_data)
         ]
-        
+
         for table_name, table_widget in tables:
             if table_widget:
                 self._initial_table_snapshots[table_name] = self._extract_table_data(table_widget)
-        
+
         print(f"[快照] 已保存 {len(self._initial_table_snapshots)} 个表格的初始状态快照")
 
     # 1112新修改-条件输入表格实质性变化
@@ -1748,7 +1752,7 @@ class DesignConditionInputViewer(QWidget):
         if not self._initial_table_snapshots:
             # 如果没有初始快照，认为没有变化
             return False
-        
+
         tables = [
             ('design_data', self.tableWidget_design_data),
             ('general_data', self.tableWidget_general_data),
@@ -1756,18 +1760,18 @@ class DesignConditionInputViewer(QWidget):
             ('trail_data', self.tableWidget_trail_data),
             ('coating_data', self.tableWidget_coating_data)
         ]
-        
+
         for table_name, table_widget in tables:
             if not table_widget:
                 continue
-                
+
             initial_data = self._initial_table_snapshots.get(table_name, {})
             current_data = self._extract_table_data(table_widget)
-            
+
             # 比较当前数据与初始数据
             if initial_data != current_data:
                 print(f"[快照] 检测到表格 {table_name} 发生实质性变化")
                 return True
-        
+
         print("[快照] 未检测到实质性变化")
         return False
