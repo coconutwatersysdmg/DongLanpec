@@ -4951,6 +4951,16 @@ class TubeLayoutEditor(QMainWindow):
                                 self.update_DN_Di()
                             except Exception as _ud_e:
                                 print(f"[load_initial_data] update_DN_Di: {_ud_e}")
+                            try:
+                                QTimer.singleShot(
+                                    0,
+                                    lambda: self._sync_divider_W_after_related_param_change(
+                                        suppress_warn=False,
+                                        tag="load_initial_data",
+                                    ),
+                                )
+                            except Exception as _w_e:
+                                print(f"[load_initial_data] 同步隔条位置尺寸 W 失败: {_w_e}")
 
                             # 定位输出：读回界面上实际显示的 DN/Dis/Dit（立即 + 延迟一拍）
                             try:
@@ -11000,7 +11010,9 @@ class TubeLayoutEditor(QMainWindow):
                 self.update_baffle_diameter()
                 self.update_tube_center_distance()
                 self.update_tube_layout_circle_dl()
-                self.update_divider_position_and_size()
+                self._sync_divider_W_after_related_param_change(
+                    tag="壳体内直径Dis(combo)"
+                )
             except Exception as e:
                 print(f"[_handle_dis_dit_combo_edit] 联动更新: {e}")
 
@@ -11796,6 +11808,31 @@ class TubeLayoutEditor(QMainWindow):
             except:
                 pass
             return False
+
+    def _sync_divider_W_after_related_param_change(self, *, suppress_warn=True, tag=""):
+        """
+        公称直径 DN / 管程程数 / 管程分程形式 / 换热管外径 do 变更后，
+        按 divider_position_mapping 刷新「隔条位置尺寸 W」。
+        """
+        if suppress_warn:
+            try:
+                from PyQt5.QtCore import QTimer
+
+                self._suppress_divider_W_warn = True
+
+                def _clear_w_warn_suppress():
+                    try:
+                        self._suppress_divider_W_warn = False
+                    except Exception:
+                        pass
+
+                QTimer.singleShot(1800, _clear_w_warn_suppress)
+            except Exception:
+                pass
+        try:
+            self.update_divider_position_and_size()
+        except Exception as e:
+            print(f"[_sync_divider_W] {tag} 更新隔条位置尺寸 W 失败: {e}")
 
     def update_divider_position_and_size(self):
         # TODO 更新隔条位置尺寸
@@ -12866,7 +12903,9 @@ class TubeLayoutEditor(QMainWindow):
                         self.update_baffle_diameter()
                         self.update_tube_center_distance()
                         self.update_tube_layout_circle_dl()
-                        self.update_divider_position_and_size()
+                        self._sync_divider_W_after_related_param_change(
+                            tag="update_DN_Di"
+                        )
                         print(f"[update_DN_Di] 已触发壳体内直径相关的联动函数")
                     except Exception as e:
                         print(f"[update_DN_Di] 触发联动函数时出错: {e}")
@@ -15197,9 +15236,10 @@ class TubeLayoutEditor(QMainWindow):
                         # except Exception as e:
                         #     print(f"[on_table_item_changed] user_update_Di 出错: {e}")
                         try:
-                            # 这里是更新公称直径触发的
-                            self.update_divider_position_and_size()
                             self.update_DN_Di()
+                            self._sync_divider_W_after_related_param_change(
+                                tag="公称直径DN(text)"
+                            )
                         except Exception as e:
                             print(
                                 f"[on_table_item_changed] update_divider/... 出错: {e}"
@@ -15227,7 +15267,9 @@ class TubeLayoutEditor(QMainWindow):
                                 self.update_baffle_diameter()
                                 self.update_tube_center_distance()
                                 self.update_tube_layout_circle_dl()
-                                self.update_divider_position_and_size()
+                                self._sync_divider_W_after_related_param_change(
+                                    tag=f"{param_name}(text)"
+                                )
                             except Exception as e:
                                 print(
                                     f"[on_table_item_changed] update tube layout 出错: {e}"
@@ -15391,19 +15433,18 @@ class TubeLayoutEditor(QMainWindow):
                         except Exception as e:
                             print(f"绘制折流板出错: {e}")
                     if param_name == "管程程数":
-                        self.tube_pass_form_value = {
-                            "1": "1.1",
-                            "2": "2.1",
-                            "4": "4.1",
-                            "6": "6.1",
-                        }.get(param_value, self.tube_pass_form_value)
+                        self.tube_pass_form_value = self._default_tube_pass_form_id(
+                            param_value
+                        )
                         print(
                             f"[on_table_item_changed] 管程分程形式: {self.tube_pass_form_value}"
                         )
                         try:
                             self.update_SN()
                             self._refresh_tube_pass_form_cell(param_value)
-                            self.update_divider_position_and_size()
+                            self._sync_divider_W_after_related_param_change(
+                                tag=f"管程程数(text)->{param_value}"
+                            )
                         except Exception as e:
                             print(f"[on_table_item_changed] 管程相关更新出错: {e}")
                 else:
@@ -15619,6 +15660,28 @@ class TubeLayoutEditor(QMainWindow):
         tube_pass = self.get_tube_pass_count() or ""
         self.load_tube_pass_images(combo, tube_pass)
 
+    def _default_tube_pass_form_id(self, tube_pass_text):
+        """
+        按管程程数与换热器型号返回默认管程分程形式（与保存/加载时空值兜底一致）。
+        AEU/BEU/AKU/BKU：4 管程→4.2，6 管程→6.2；其余型号：4.1 / 6.1。
+        """
+        tp = str(tube_pass_text or "").strip()
+        hx = str(getattr(self, "heat_exchanger", "") or "").strip()
+        fallback = str(getattr(self, "tube_pass_form_value", "") or "").strip()
+        if hx in ("AEU", "BEU", "AKU", "BKU"):
+            return {
+                "1": "1.1",
+                "2": "2.1",
+                "4": "4.2",
+                "6": "6.2",
+            }.get(tp, fallback)
+        return {
+            "1": "1.1",
+            "2": "2.1",
+            "4": "4.1",
+            "6": "6.1",
+        }.get(tp, fallback)
+
     def _refresh_tube_pass_form_cell(self, tube_pass_text=None):
         row = getattr(self, "_tube_pass_form_row", -1)
         if row < 0:
@@ -15627,18 +15690,20 @@ class TubeLayoutEditor(QMainWindow):
             return
         if tube_pass_text is None:
             tube_pass_text = self.get_tube_pass_count() or ""
-        new_id = {
-            "1": "1.1",
-            "2": "2.1",
-            "4": "4.1",
-            "6": "6.1",
-        }.get(str(tube_pass_text).strip(), self.tube_pass_form_value)
+        old_id = str(getattr(self, "tube_pass_form_value", "") or "").strip()
+        new_id = str(
+            self._default_tube_pass_form_id(str(tube_pass_text).strip()) or ""
+        ).strip()
         self.tube_pass_form_value = new_id
         self._set_param_value_text(row, new_id, trigger_change=False)
         try:
             self.param_table.viewport().update()
         except Exception:
             pass
+        if new_id and new_id != old_id:
+            self._sync_divider_W_after_related_param_change(
+                tag=f"refresh_tube_pass_form {old_id}->{new_id}"
+            )
 
     def validate_tube_length_text(self, text: str, row: int, original: str) -> str:
         if not text:
@@ -15843,12 +15908,7 @@ class TubeLayoutEditor(QMainWindow):
                     break
             if not tube_pass:
                 tube_pass = str(self.get_tube_pass_count() or "").strip()
-            initial = {
-                "1": "1.1",
-                "2": "2.1",
-                "4": "4.1",
-                "6": "6.1",
-            }.get(tube_pass, "")
+            initial = self._default_tube_pass_form_id(tube_pass)
         self.tube_pass_form_value = initial
         self._tube_pass_form_row = row
         self.tube_pass_form_combo = None
@@ -15869,7 +15929,9 @@ class TubeLayoutEditor(QMainWindow):
             return
         try:
             self.update_SN()
-            self.update_divider_position_and_size()
+            self._sync_divider_W_after_related_param_change(
+                tag=f"tube_pass_form_delegate {identifier}"
+            )
         finally:
             self._param_cascade_leave()
 
@@ -16027,12 +16089,9 @@ class TubeLayoutEditor(QMainWindow):
                 elif pname in _PARAM_COMBO_DELEGATE:
                     if pname == "管程程数":
                         tube_pass = self.get_tube_pass_count()
-                        if tube_pass == "2":
-                            self.tube_pass_form_value = "2"
-                        elif tube_pass == "4":
-                            self.tube_pass_form_value = "4.1"
-                        elif tube_pass == "6":
-                            self.tube_pass_form_value = "6.1"
+                        self.tube_pass_form_value = self._default_tube_pass_form_id(
+                            tube_pass
+                        )
                     self._setup_param_combo_delegate_cell(row, param, params)
 
             else:
@@ -16177,6 +16236,17 @@ class TubeLayoutEditor(QMainWindow):
             tube_pass = combo.currentText()
             # 更新SN参数
             self.update_SN()
+            try:
+                self.update_partition_plate_center_distance()
+            except Exception as e:
+                print(f"[on_tube_pass_combo_changed] 分程隔板中心距更新失败: {e}")
+            try:
+                self._refresh_tube_pass_form_cell(tube_pass)
+            except Exception as e:
+                print(f"[on_tube_pass_combo_changed] 刷新管程分程形式失败: {e}")
+            self._sync_divider_W_after_related_param_change(
+                tag=f"on_tube_pass_combo_changed tube_pass={tube_pass}"
+            )
 
             # 更新管程分程形式的图片
             if self.tube_pass_form_combo:
@@ -16305,6 +16375,9 @@ class TubeLayoutEditor(QMainWindow):
             return
         self._refresh_tube_pass_form_cell(tube_pass)
         self.update_partition_plate_center_distance()
+        self._sync_divider_W_after_related_param_change(
+            tag=f"on_tube_pass_changed tube_pass={tube_pass}"
+        )
 
     def on_tube_pass_form_changed(self, index):
         """管程分程形式选择变化时，更新存储的参数值"""
@@ -16316,7 +16389,9 @@ class TubeLayoutEditor(QMainWindow):
                 self.tube_pass_form_value = selected_value
                 print(f"管程分程形式已更新为: {self.tube_pass_form_value}")
                 self.update_SN()
-                self.update_divider_position_and_size()
+                self._sync_divider_W_after_related_param_change(
+                    tag=f"on_tube_pass_form_changed {selected_value}"
+                )
 
                 # 如果需要，可以在这里添加其他需要触发的逻辑
                 # 例如：self.some_other_function()
@@ -16453,7 +16528,13 @@ class TubeLayoutEditor(QMainWindow):
             except Exception as e:
                 print(f"[on_combobox_changed] do变更后刷新拉杆标准摘要失败: {e}")
             self.update_partition_plate_center_distance()
-            self.update_divider_position_and_size()
+            self._sync_divider_W_after_related_param_change(tag="换热管外径do")
+        elif param_name == "公称直径 DN":
+            try:
+                self.update_DN_Di()
+            except Exception as e:
+                print(f"[on_combobox_changed] update_DN_Di 失败: {e}")
+            self._sync_divider_W_after_related_param_change(tag="公称直径DN")
         elif param_name == "换热管排列方式":
             # 排列方式变化：推荐 S 需要随之刷新，且用户对 S 的手动覆盖应失效
             try:
@@ -16550,13 +16631,10 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 tube_pass_text = str(value).strip()
 
-            # 管程程数变化：更新管程分程形式值及对应图片
-            self.tube_pass_form_value = {
-                "1": "1.1",
-                "2": "2.1",
-                "4": "4.1",
-                "6": "6.1",
-            }.get(tube_pass_text, self.tube_pass_form_value)
+            # 管程程数变化：更新管程分程形式值及对应图片（AEU/BEU/AKU/BKU 的 6 管程默认 6.2）
+            self.tube_pass_form_value = self._default_tube_pass_form_id(
+                tube_pass_text
+            )
             print(f"当前管程分程形式: {self.tube_pass_form_value}")
 
             # 交互前移：当管程程数改为1且型号为AEM/BEM/NEN时，立即询问是否置0固定管板槽宽/槽深
@@ -16593,28 +16671,16 @@ class TubeLayoutEditor(QMainWindow):
                 self._reset_fixed_tubesheet_on_tube_pass_one = False
                 self._tube_pass_one_prompt_shown = False
 
-            # 管程程数切换会触发 W 的联动重算（中间可能短暂写入 0.00），
-            # 这里临时抑制 W 的“手动输入范围弹窗”，避免误弹/重复弹。
-            try:
-                from PyQt5.QtCore import QTimer
-                self._suppress_divider_W_warn = True
-
-                def _clear_w_warn_suppress_after_tube_pass_change():
-                    try:
-                        self._suppress_divider_W_warn = False
-                    except Exception:
-                        pass
-
-                QTimer.singleShot(1800, _clear_w_warn_suppress_after_tube_pass_change)
-            except Exception:
-                pass
-
             self.update_SN()
             self.update_partition_plate_center_distance()
             try:
                 self._refresh_tube_pass_form_cell(tube_pass_text)
             except Exception as _e:
                 print(f"[管程程数] 刷新管程分程形式失败: {_e}")
+            # _refresh 内若分程形式未变则不会刷 W，此处再统一同步一次
+            self._sync_divider_W_after_related_param_change(
+                tag=f"管程程数->{tube_pass_text}"
+            )
         elif param_name == "滑道形式":
             try:
                 self._apply_slipway_form_and_guide_visibility()
@@ -16632,6 +16698,13 @@ class TubeLayoutEditor(QMainWindow):
                 self.param_table.viewport().update()
             except Exception:
                 pass
+            try:
+                self.update_SN()
+            except Exception as e:
+                print(f"[on_combobox_changed] update_SN(分程形式) 失败: {e}")
+            self._sync_divider_W_after_related_param_change(
+                tag=f"管程分程形式->{self.tube_pass_form_value}"
+            )
         elif param_name == "折流板切口方向":
             # 获取当前选中的值
             do_widget = self.param_table.cellWidget(row, 2)
@@ -23555,7 +23628,7 @@ class TubeLayoutEditor(QMainWindow):
             self, current_coords, print_cross_y_left, print_cross_y_right, row
     ):
         # 获取选择的中心点编号（实际坐标传入，参数名从selected_centers改为current_coords，匹配需求）
-        global valid_distance
+        
         result = self.get_selected_y_center_numbers(
             current_coords, print_cross_y_left, print_cross_y_right, row
         )
@@ -24098,7 +24171,7 @@ class TubeLayoutEditor(QMainWindow):
         return pair_x_info_up, pair_x_info_down
 
     def cross_y_4_pipes(self, current_coords, print_cross_y_left, print_cross_y_right):
-        global valid_distance
+        
         result = self.get_selected_y_4_center_numbers(
             current_coords, print_cross_y_left, print_cross_y_right
         )
@@ -24469,7 +24542,7 @@ class TubeLayoutEditor(QMainWindow):
 
     def _block_cross_pipes_by_constraints(self, cross_kind):
         """
-        管程分程 4.2 禁止上下交叉；已完成纵向/横向后禁止另一方向。
+        管程分程 4.2 禁止上下（x 向）交叉；已完成横向（x）/纵向（y）后禁止另一方向。
         返回 True 表示已拦截（已弹窗并清除选中高亮）。
         """
         if cross_kind not in ("x", "y"):
@@ -24483,13 +24556,13 @@ class TubeLayoutEditor(QMainWindow):
             return True
         if cross_kind == "y" and self._has_any_x_cross_done():
             QMessageBox.warning(
-                self, "选择错误", "当前已经进行纵向的交叉布管！"
+                self, "选择错误", "当前已经进行横向的交叉布管！"
             )
             self.clear_selection_highlight()
             return True
         if cross_kind == "x" and self._has_any_y_cross_done():
             QMessageBox.warning(
-                self, "选择错误", "当前已经进行横向的交叉布管！"
+                self, "选择错误", "当前已经进行纵向的交叉布管！"
             )
             self.clear_selection_highlight()
             return True
@@ -27624,23 +27697,7 @@ class TubeLayoutEditor(QMainWindow):
         ):
             # 获取管程数
             tube_num = self.get_tube_pass_count()
-
-            # 根据heat_exchanger和tube_num设置默认值
-            if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
-                if tube_num == "2":
-                    self.tube_pass_form_value = "2.1"
-                elif tube_num == "4":
-                    self.tube_pass_form_value = "4.2"
-                elif tube_num == "6":
-                    self.tube_pass_form_value = "6.2"
-            else:
-                # 不属于AEU/BEU的情况
-                if tube_num == "2":
-                    self.tube_pass_form_value = "2.1"
-                elif tube_num == "4":
-                    self.tube_pass_form_value = "4.1"
-                elif tube_num == "6":
-                    self.tube_pass_form_value = "6.1"
+            self.tube_pass_form_value = self._default_tube_pass_form_id(tube_num)
 
         if hasattr(self, "tube_pass_form_value") and self.tube_pass_form_value:
             param_name = "管程分程形式"
