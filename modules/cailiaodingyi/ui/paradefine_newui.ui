@@ -77,6 +77,11 @@ QTabWidget::pane {
     top: -1px;
 }
 
+/* 标签靠左、不拉伸铺满（必须用 QTabWidget::tab-bar，QTabBar{alignment} 无效） */
+QTabWidget::tab-bar {
+    alignment: left;
+}
+
 QTabBar::tab {
     background-color: #f6f8fb;
     color: #333333;
@@ -90,10 +95,16 @@ QTabBar::tab:selected {
     color: #1f1f1f;
 }
 
+QGroupBox#groupBox {
+    padding: 0px;
+    margin-top: 0px;
+}
+
 QLabel#label_4 {
-    background-color: #fafbfc;
-    border: 1px solid #CCCCCC;
+    background-color: #ffffff;
+    border: none;
     color: #8a97a8;
+    padding: 0px;
 }
 
 QPushButton {
@@ -107,8 +118,11 @@ QPushButton:hover {
     background-color: #edf2f8;
 }
 
+QLineEdit#lineEdit {
+    min-width: 170px;
+}
+
 QLineEdit,
-QLineEdit#lineEdit,
 QLineEdit#lineEdit_2 {
     background-color: #ffffff;
     border: 1px solid #CCCCCC;
@@ -160,6 +174,23 @@ QPushButton#pushButton_15 {
     min-width: 54px;
     min-height: 28px;
     padding: 4px 14px;
+}
+
+/* Tab 右键菜单：避免悬停时文字与背景同色导致看不见 */
+QMenu {
+    background-color: #ffffff;
+    border: 1px solid #CCCCCC;
+    color: #1f1f1f;
+}
+
+QMenu::item {
+    color: #1f1f1f;
+    padding: 6px 24px;
+}
+
+QMenu::item:selected {
+    background-color: #d9e6f7;
+    color: #1f1f1f;
 }</string>
   </property>
   <layout class="QHBoxLayout" name="horizontalLayout_13">
@@ -210,7 +241,7 @@ QPushButton#pushButton_15 {
           </spacer>
          </item>
          <item>
-          <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0">
+          <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,1">
            <item>
             <widget class="QLabel" name="label_2">
              <property name="text">
@@ -219,7 +250,20 @@ QPushButton#pushButton_15 {
             </widget>
            </item>
            <item>
-            <widget class="QLineEdit" name="lineEdit"/>
+            <widget class="QLineEdit" name="lineEdit">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+               <horstretch>1</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="minimumSize">
+              <size>
+               <width>200</width>
+               <height>0</height>
+              </size>
+             </property>
+            </widget>
            </item>
           </layout>
          </item>
@@ -706,9 +750,9 @@ QPushButton#pushButton_15 {
       </layout>
      </item>
      <item>
-      <layout class="QVBoxLayout" name="verticalLayout_8" stretch="2,5">
+      <layout class="QVBoxLayout" name="verticalLayout_8" stretch="2,4">
        <item>
-        <layout class="QVBoxLayout" name="verticalLayout_7">
+        <layout class="QVBoxLayout" name="verticalLayout_7" stretch="0,1">
          <item>
           <widget class="QLabel" name="label_6">
            <property name="text">
@@ -717,17 +761,33 @@ QPushButton#pushButton_15 {
           </widget>
          </item>
          <item>
-          <layout class="QHBoxLayout" name="horizontalLayout_6">
-           <item>
-            <widget class="QGroupBox" name="groupBox">
-             <property name="title">
-              <string/>
-             </property>
-             <layout class="QHBoxLayout" name="horizontalLayout_5">
-              <item>
-               <widget class="QLabel" name="label_4">
+          <widget class="QGroupBox" name="groupBox">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="title">
+            <string/>
+           </property>
+           <layout class="QHBoxLayout" name="horizontalLayout_5">
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QLabel" name="label_4">
                 <property name="sizePolicy">
-                 <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                 <sizepolicy hsizetype="Expanding" vsizetype="Ignored">
                   <horstretch>0</horstretch>
                   <verstretch>0</verstretch>
                  </sizepolicy>
@@ -736,22 +796,20 @@ QPushButton#pushButton_15 {
                  <string>TextLabel</string>
                 </property>
                 <property name="scaledContents">
-                 <bool>true</bool>
+                 <bool>false</bool>
                 </property>
                 <property name="alignment">
                  <set>Qt::AlignCenter</set>
                 </property>
-               </widget>
-              </item>
-             </layout>
-            </widget>
-           </item>
-          </layout>
+             </widget>
+            </item>
+           </layout>
+          </widget>
          </item>
         </layout>
        </item>
        <item>
-        <layout class="QVBoxLayout" name="verticalLayout_6">
+        <layout class="QVBoxLayout" name="verticalLayout_6" stretch="0,1,0">
          <item>
           <widget class="QLabel" name="label_5">
            <property name="text">
@@ -761,6 +819,12 @@ QPushButton#pushButton_15 {
          </item>
          <item>
           <widget class="QStackedWidget" name="stackedWidget">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="currentIndex">
             <number>0</number>
            </property>
@@ -781,7 +845,7 @@ QPushButton#pushButton_15 {
                       <item>
                        <widget class="QTabWidget" name="tabWidget">
                         <property name="currentIndex">
-                         <number>1</number>
+                         <number>0</number>
                         </property>
                         <widget class="QWidget" name="tab">
                          <attribute name="title">
@@ -1025,9 +1089,15 @@ QPushButton#pushButton_15 {
                </property>
                <layout class="QHBoxLayout" name="horizontalLayout_16">
                 <item>
-                 <layout class="QVBoxLayout" name="verticalLayout_5" stretch="20,0,1">
+                 <layout class="QVBoxLayout" name="verticalLayout_5" stretch="20,1">
                   <item>
                    <widget class="QTableWidget" name="tableWidget_para">
+                    <property name="sizePolicy">
+                     <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                      <horstretch>0</horstretch>
+                      <verstretch>0</verstretch>
+                     </sizepolicy>
+                    </property>
                     <attribute name="verticalHeaderVisible">
                      <bool>false</bool>
                     </attribute>
@@ -1047,19 +1117,6 @@ QPushButton#pushButton_15 {
                      </property>
                     </column>
                    </widget>
-                  </item>
-                  <item>
-                   <spacer name="verticalSpacer">
-                    <property name="orientation">
-                     <enum>Qt::Vertical</enum>
-                    </property>
-                    <property name="sizeHint" stdset="0">
-                     <size>
-                      <width>20</width>
-                      <height>40</height>
-                     </size>
-                    </property>
-                   </spacer>
                   </item>
                   <item>
                    <layout class="QHBoxLayout" name="horizontalLayout_11">

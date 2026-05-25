@@ -91,8 +91,8 @@ QTabBar::tab:selected {
 }
 
 QLabel#label_4 {
-    background-color: #fafbfc;
-    border: 1px solid #CCCCCC;
+    background-color: #ffffff;
+    border: none;
     color: #8a97a8;
 }
 
@@ -108,7 +108,8 @@ QPushButton:hover {
 }
 
 QLineEdit,
-QComboBox {
+QLineEdit#lineEdit,
+QLineEdit#lineEdit_2 {
     background-color: #ffffff;
     border: 1px solid #CCCCCC;
     color: #1f1f1f;
@@ -116,32 +117,34 @@ QComboBox {
     padding: 0px 4px;
 }
 
-QComboBox#comboBox_template,
-QLineEdit#lineEdit,
-QLineEdit#lineEdit_2 {
+/* 所有下拉框统一：外框 #CCCCCC，右侧箭头区透明无底边，避免系统灰底黑边 */
+QComboBox {
     background-color: #ffffff;
-    border: 1px solid #BFBFBF;
+    border: 1px solid #CCCCCC;
     color: #1f1f1f;
     min-height: 22px;
-    padding: 0px 4px;
+    padding: 1px 16px 1px 4px;
 }
 
-QComboBox#comboBox_template {
-    padding-right: 18px;
-}
-
-QComboBox#comboBox_template::drop-down {
+QComboBox::drop-down {
     subcontrol-origin: padding;
     subcontrol-position: top right;
-    width: 18px;
-    border: 0px;
+    width: 14px;
+    border: none;
     background: transparent;
 }
 
-QComboBox#comboBox_template::down-arrow {
+QComboBox::down-arrow {
     image: url(modules/cailiaodingyi/ui/combo_arrow_gray.svg);
     width: 10px;
     height: 6px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #ffffff;
+    border: 1px solid #CCCCCC;
+    selection-background-color: #d9e6f7;
+    selection-color: #1f1f1f;
 }
 
 QPushButton#pushButton_6,
@@ -703,7 +706,7 @@ QPushButton#pushButton_15 {
       </layout>
      </item>
      <item>
-      <layout class="QVBoxLayout" name="verticalLayout_8" stretch="2,5">
+      <layout class="QVBoxLayout" name="verticalLayout_8" stretch="1,2">
        <item>
         <layout class="QVBoxLayout" name="verticalLayout_7">
          <item>

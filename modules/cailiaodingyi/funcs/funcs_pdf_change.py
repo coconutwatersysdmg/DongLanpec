@@ -2433,6 +2433,30 @@ def query_template_codes(product_id):
 
 
 
+def query_buguan_param_value(product_id, param_name):
+    """从产品设计活动表_布管参数表读取指定参数值（如管程程数）。"""
+    if not product_id or not (param_name or "").strip():
+        return None
+    conn = get_connection(**db_config_1)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 参数值
+                FROM 产品设计活动表_布管参数表
+                WHERE 产品ID = %s AND 参数名 = %s
+                LIMIT 1
+                """,
+                (product_id, str(param_name).strip()),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None
+            return row.get("参数值") if isinstance(row, dict) else row[0]
+    finally:
+        conn.close()
+
+
 def query_extra_param_value(product_id, param_name):
     """从 `产品设计活动表_元件附加参数表` 读取换热管外径"""
     conn = get_connection(**db_config_1)

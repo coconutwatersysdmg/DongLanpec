@@ -338,7 +338,8 @@ class DesignParameterDefineInputerViewer(QWidget):
         # self.init_widgets()  # 获取所有控件、绑定事件
         # self.product_id = product_id
 
-        self.ui = uic.loadUi("modules/cailiaodingyi/ui/paradefine.ui", self)  # 加载UI文件
+        # self.ui = uic.loadUi("modules/cailiaodingyi/ui/paradefine.ui", self)  # 加载UI文件
+        self.ui = uic.loadUi("modules/cailiaodingyi/ui/paradefine_newui.ui", self)  # 加载UI文件
         self.init_widgets()  # 获取所有控件、绑定事件
         self.product_id = product_id
         print("self.product_id", self.product_id)
@@ -3765,10 +3766,10 @@ class DesignParameterDefineInputerViewer(QWidget):
                 }
                 self.render_data_to_table(element_original_info)
 
-                # 渲染示意图
+                # 渲染示意图（布局可能未稳定，统一走延迟刷新）
                 self.image_paths = [item.get('零件示意图', '') for item in element_original_info]
                 if self.image_paths:
-                    self.display_image(self.image_paths[0])
+                    self._schedule_part_image_refresh()
 
             self.comboBox_template.currentTextChanged.connect(_update_lineEdit_enabled)
             self._template_signal_connected = True
@@ -3893,10 +3894,8 @@ class DesignParameterDefineInputerViewer(QWidget):
         }
         self.render_data_to_table(element_original_info)
 
-        # 示意图
+        # 示意图路径先记录，等右侧布局全部建完后再刷新（避免切换产品后图被缩成一小块）
         self.image_paths = [item.get('零件示意图', '') for item in element_original_info]
-        if self.image_paths:
-            QTimer.singleShot(1, lambda: self.display_image(self.image_paths[0]))
 
         # 取当前/默认 tab 的标题
         if self.guankou_tabWidget.count() > 0:
@@ -3953,6 +3952,26 @@ class DesignParameterDefineInputerViewer(QWidget):
             schedule_readonly_for_element_define_viewer(self)
         except Exception as _e_ro:
             print(f"[load_original_data] schedule readonly: {_e_ro}")
+
+        self._schedule_part_image_refresh()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        path = getattr(self, "_last_part_image_path", None)
+        if not path:
+            paths = getattr(self, "image_paths", None) or []
+            path = paths[0] if paths else None
+        if path:
+            QTimer.singleShot(0, lambda p=path: self.display_image(p))
+
+    def _schedule_part_image_refresh(self):
+        """在布局稳定后多次尝试刷新示意图（切换产品/重建 tab 后尤为重要）。"""
+        paths = getattr(self, "image_paths", None) or []
+        if not paths or not paths[0]:
+            return
+        path = paths[0]
+        for delay in (0, 80, 200, 400):
+            QTimer.singleShot(delay, lambda p=path: self.display_image(p))
 
     def _apply_parts_list_weighted_widths(self):
         """
@@ -4799,7 +4818,32 @@ class DesignParameterDefineInputerViewer(QWidget):
         else:
             print("No row selected")
 
-    def display_image(self, image_path):
+    def _part_image_target_size(self):
+        """布局未完成时用示意图容器尺寸，避免示意图缩成一小块。"""
+        label = self.label_part_image
+        if label is None:
+            return None
+
+        def _ok(sz):
+            return sz.width() > 120 and sz.height() > 120
+
+        candidates = [label.size(), label.geometry().size()]
+        w = label.parentWidget()
+        while w is not None:
+            if w.objectName() == "groupBox":
+                candidates.append(w.size())
+                candidates.append(w.contentsRect().size())
+                break
+            w = w.parentWidget()
+        for sz in candidates:
+            if _ok(sz):
+                return sz
+        for sz in candidates:
+            if sz.width() > 0 and sz.height() > 0:
+                return sz
+        return None
+
+    def display_image(self, image_path, _retry=0):
         if not image_path:
             self.label_part_image.clear()
             return
@@ -4823,22 +4867,23 @@ class DesignParameterDefineInputerViewer(QWidget):
             self.label_part_image.clear()
             return
 
-        # ✅ 获取控件实际尺寸
-        label_size = self.label_part_image.size()
-        if label_size.width() <= 0 or label_size.height() <= 0:
-            print("[提示] QLabel 尺寸未准备好，跳过")
+        label_size = self._part_image_target_size()
+        if label_size is None:
+            if _retry < 30:
+                QTimer.singleShot(80, lambda p=image_path, r=_retry + 1: self.display_image(p, r))
+            else:
+                print("[提示] QLabel 尺寸未准备好，跳过")
             return
 
-        # ✅ 使用 Qt.SmoothTransformation 进行平滑缩放
         scaled_pixmap = pixmap.scaled(
             label_size,
             Qt.KeepAspectRatio,
             Qt.SmoothTransformation
         )
 
-        # ✅ 设置图片
         self.label_part_image.setPixmap(scaled_pixmap)
         self.label_part_image.setAlignment(Qt.AlignCenter)
+        self._last_part_image_path = image_path
 
     #
     # def render_guankou_param_table(self, table: QTableWidget, guankou_param_info):

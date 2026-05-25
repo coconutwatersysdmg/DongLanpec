@@ -42,7 +42,7 @@ from modules.cailiaodingyi.funcs.funcs_pdf_change import (
     fetch_template_element_materials, diff_product_vs_template, query_tube_specs_by_level_and_od,
     map_gasket_name_code, map_gasket_type_code_from_db,
     query_gasket_D_d_d1_from_size, get_dn_for_gasket, get_pn_for_gasket, resolve_gasket_dimensions,
-    query_extra_param_value, query_gasket_material_options_by_type_std, db_config_1, db_config_2, sync_baffle_thickness_to_db,
+    query_extra_param_value, query_buguan_param_value, query_gasket_material_options_by_type_std, db_config_1, db_config_2, sync_baffle_thickness_to_db,
     update_spacer_tube_status_to_undefined, restore_spacer_tube_status_to_defined,load_updated_fastener_define_data,
     update_element_name_data,
     DEBUG_VERBOSE_DEFINE_UI,
@@ -70,6 +70,22 @@ from modules.condition_input.funcs.funcs_cdt_input import (
     sync_opening_weld_joint_coeff_to_guankou_param,
     set_manual_flag as set_opening_manual_flag,
 )
+
+_LINE_TIP_BASE_STYLE = (
+    "background-color: #fafafa; border: 1px solid #dddddd; "
+    "font-size: 24px; font-family: \"华文中宋\"; padding: 10px 12px;"
+)
+
+
+def _apply_line_tip_color(tip, color=None):
+    """仅改提示文字颜色，不覆盖提示栏高度与字号。"""
+    if not tip:
+        return
+    base = getattr(tip, "_line_tip_base_style", None)
+    if base is None:
+        mw = tip.window()
+        base = getattr(mw, "_line_tip_base_style", _LINE_TIP_BASE_STYLE)
+    tip.setStyleSheet(f"{base} color: {color};" if color else base)
 
 
 def apply_combobox_to_table(table: QTableWidget, column_data_map: dict, viewer_instance, category_label: str):
@@ -2438,7 +2454,7 @@ def render_common_material_editor(viewer_instance):
             # 立即显示我们的提示
             try:
                 tip.setText(msg)
-                tip.setStyleSheet("color: orange;")
+                _apply_line_tip_color(tip, "orange")
             except Exception:
                 pass
 
@@ -2493,7 +2509,7 @@ def render_common_material_editor(viewer_instance):
                         0,
                         lambda: (
                             tip.setText(msg),
-                            tip.setStyleSheet("color: orange;"),
+                            _apply_line_tip_color(tip, "orange"),
                             QTimer.singleShot(5000, lambda: tip.setText(""))
                         ),
                     )
@@ -2879,7 +2895,7 @@ def _handle_table_click_impl(viewer_instance, row, col):
                 tip = getattr(viewer_instance, "line_tip", None)
                 if tip:
                     tip.setText("无管口附件，保持当前元件")
-                    tip.setStyleSheet("color: orange;")
+                    _apply_line_tip_color(tip, "orange")
             except Exception:
                 pass
 
@@ -3997,7 +4013,7 @@ def show_pressure_level_tips_dialog(parent, tips_dict: dict):
         parent.line_tip.setText("未获取到管口压力等级提示信息")
         parent.line_tip.setToolTip("未获取到管口压力等级提示信息")
         parent.line_tip.setStatusTip("未获取到管口压力等级提示信息")
-        parent.line_tip.setStyleSheet("color: orange;")
+        parent.line__apply_line_tip_color(tip, "orange")
         return
 
     # 合并所有提示信息
@@ -4017,7 +4033,7 @@ def show_pressure_level_tips_dialog(parent, tips_dict: dict):
         parent.line_tip.setText(elided_text)
         parent.line_tip.setToolTip(full_message)  # 鼠标悬停显示完整内容
         parent.line_tip.setStatusTip(full_message)  # 状态栏也显示完整内容
-        parent.line_tip.setStyleSheet("color: orange;")
+        parent.line__apply_line_tip_color(tip, "orange")
 
     except Exception as e:
         error_message = f"显示压力等级提示失败: {str(e)}"
@@ -4292,6 +4308,39 @@ ZHUIKE_PARAM_ALPHA2 = "偏心锥壳与筒体间夹角小值 α2"
 
 YANBAN_ELEMENT_NAME = "堰板"
 YANBAN_PARAM_HEIGHT_H = "堰板高度h"
+
+GUANXIANG_PINGGAI_ELEMENT_NAME = "管箱平盖"
+SLOT_DEPTH_PARAM_NAME = "隔板槽深度"
+
+
+def _is_guanxiang_pinggai_element(element_name: str) -> bool:
+    """管箱平盖及其前后端命名（如 AEM 的「前端管箱平盖」「后端管箱平盖」）。"""
+    n = (element_name or "").strip()
+    if not n:
+        return False
+    if n == GUANXIANG_PINGGAI_ELEMENT_NAME:
+        return True
+    if n.startswith("前端"):
+        n = n[2:]
+    elif n.startswith("后端"):
+        n = n[2:]
+    return n == GUANXIANG_PINGGAI_ELEMENT_NAME
+
+
+def _is_buguan_tube_pass_count_one(product_id) -> bool:
+    """布管参数表管程程数为 1 时，管箱平盖隔板槽深度在元件定义界面只读置灰（写库由管束模块负责）。"""
+    if not product_id:
+        return False
+    try:
+        raw = query_buguan_param_value(product_id, "管程程数")
+        if raw is None:
+            return False
+        s = str(raw).strip()
+        if s == "1":
+            return True
+        return int(float(s)) == 1
+    except Exception:
+        return False
 
 
 def _parse_shell_design_pressure_mpa(product_id) -> Optional[float]:
@@ -4734,6 +4783,38 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
         it.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
         return it
 
+    def _style_readonly_gray_row(row_idx: int) -> None:
+        gray = QBrush(QColor(236, 236, 236))
+        dim = QColor(110, 110, 110)
+        for c in range(table.columnCount()):
+            itc = table.item(row_idx, c)
+            if itc is None:
+                continue
+            itc.setBackground(gray)
+            try:
+                itc.setForeground(dim)
+            except Exception:
+                pass
+
+    def _apply_slot_depth_locked_by_tube_pass_one() -> bool:
+        """管程程数=1：隔板槽深度只读置灰，显示库中已有值（管束模块负责写 0，此处不写库）。"""
+        pid = getattr(viewer_instance, "product_id", None)
+        ele = getattr(table, "_element_name", "") or _current_element_name()
+        if not _is_guanxiang_pinggai_element(ele) or not _is_buguan_tube_pass_count_one(pid):
+            return False
+        r_slot = find_row_by_param_name(table, SLOT_DEPTH_PARAM_NAME, param_col)
+        if r_slot is None:
+            return False
+        itv = table.item(r_slot, value_col)
+        cur_text = (itv.text().strip() if itv else "") or "0"
+        table.setItemDelegateForRow(r_slot, None)
+        if table.cellWidget(r_slot, value_col):
+            table.setCellWidget(r_slot, value_col, None)
+        ensure_readonly_item(r_slot, value_col, cur_text)
+        table.item(r_slot, value_col).setText(cur_text)
+        _style_readonly_gray_row(r_slot)
+        return True
+
     # 法兰密封面 → 密封面高度（仅 UI；两参同时存在时生效，不区分元件名）
     # 与产品规则一致：平 RF=3；突面 RF=2；FF=0；其余列出的凹凸榫槽/环连接=6（NB 与 HG 字面量均支持）。
     _FLANGESEAL_HEIGHT_THREE_MM = ("平密封面RF",)
@@ -4881,6 +4962,22 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                 table.setItemDelegateForRow(
                     row, NumericDelegate("range", pname, minmax_h, allowed_texts=allowed_h)
                 )
+                continue
+
+            if (
+                pname == SLOT_DEPTH_PARAM_NAME
+                and _is_guanxiang_pinggai_element(_ele)
+                and _is_buguan_tube_pass_count_one(getattr(viewer_instance, "product_id", None))
+            ):
+                cur_text = table.item(row, value_col).text().strip() if table.item(row, value_col) else ""
+                if not cur_text:
+                    cur_text = "0"
+                table.setItemDelegateForRow(row, None)
+                if table.cellWidget(row, value_col):
+                    table.setCellWidget(row, value_col, None)
+                ensure_readonly_item(row, value_col, cur_text)
+                table.item(row, value_col).setText(cur_text)
+                _style_readonly_gray_row(row)
                 continue
 
             if (pname in gt0_params) or (pname in ge0_params) or (pname in range_params):
@@ -5039,6 +5136,8 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
         table._gasket_type_changing = False
         table._gasket_standard_changing = False
         table._gasket_nominal_pressure_changing = False
+        # 装配凸台高度→隔板槽深度：缓存初值，避免加载/装代理后误触发 itemChanged 用凸台高度覆盖库中槽深
+        table._last_assembly_boss_height = _v("装配凸台高度")
     except Exception:
         pass
 
@@ -5529,7 +5628,13 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
 
         # ==== 装配凸台高度 → 隔板槽深度（仅 UI：两参数同时存在时，装配凸台高度改为任意值后槽深与之一致） ====
         if pname == "装配凸台高度":
+            if _is_buguan_tube_pass_count_one(getattr(viewer_instance, "product_id", None)):
+                table._last_assembly_boss_height = val
+                return
             try:
+                last_boss = getattr(table, "_last_assembly_boss_height", None)
+                if last_boss is not None and str(val).strip() == str(last_boss).strip():
+                    return
                 r_slot = find_row_by_param_name(table, "隔板槽深度", param_col)
                 if r_slot is None:
                     r_slot = find_row_by_param_name(table, "隔板槽深度", param_col, fuzzy=True)
@@ -5555,6 +5660,7 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                                 tm.setData(ix, val)
                     finally:
                         table.blockSignals(False)
+                table._last_assembly_boss_height = val
             except Exception as e:
                 print(f"[装配凸台高度→隔板槽深度联动] {e}")
 
@@ -5968,14 +6074,14 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
                 if tip:
                     pn_tip = getattr(table, "_pn_validation_tip", None)
                     if pn_tip:
-                        tip.setStyleSheet("color:red;")
+                        _apply_line_tip_color(tip, "red")
                         tip.setText(pn_tip)
                         try:
                             setattr(table, "_pn_validation_tip", None)
                         except Exception:
                             pass
                     else:
-                        tip.setStyleSheet("color:orange;" if spec.get("nonstd", True) else "color:;")
+                        _apply_line_tip_color(tip, "orange" if spec.get("nonstd", True) else None)
                         tip.setText("垫片尺寸将由程序推荐，用户可手动更改。" if spec.get("nonstd", True) else "")
 
 
@@ -6051,6 +6157,63 @@ def apply_paramname_combobox(table: QTableWidget, param_col: int, value_col: int
             print(f"[拉杆型式引导带入] 失败：{e}")
 
     QTimer.singleShot(0, _bootstrap_tierod_by_db)
+
+    # 进页后以库为准恢复隔板槽深度（避免装配凸台高度联动在加载阶段覆盖手工改库的值）
+    def _bootstrap_slot_depth_from_db():
+        try:
+            pid = getattr(viewer_instance, "product_id", None)
+            ci = getattr(viewer_instance, "clicked_element_data", {}) or {}
+            eid = ci.get("元件ID", "")
+            if not (pid and eid):
+                return
+            r_slot = find_row_by_param_name(table, "隔板槽深度", param_col)
+            r_boss = find_row_by_param_name(table, "装配凸台高度", param_col)
+            if r_slot is None or r_boss is None:
+                return
+            # 管程程数=1：只读置灰，不写库（0 由管束模块写入元件附加参数表）
+            if _apply_slot_depth_locked_by_tube_pass_one():
+                it_boss = table.item(r_boss, value_col)
+                table._last_assembly_boss_height = (
+                    (it_boss.text() if it_boss else "") or ""
+                ).strip()
+                return
+            conn = get_connection(**db_config_1)
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT 参数值 FROM 产品设计活动表_元件附加参数表
+                        WHERE 产品ID = %s AND 元件ID = %s AND 参数名称 = %s
+                        LIMIT 1
+                        """,
+                        (pid, eid, "隔板槽深度"),
+                    )
+                    row = cur.fetchone()
+            finally:
+                conn.close()
+            if not row:
+                return
+            db_val = (
+                (row.get("参数值") if isinstance(row, dict) else row[0]) or ""
+            )
+            db_val = str(db_val).strip()
+            table.blockSignals(True)
+            try:
+                ensure_editable_item(r_slot, value_col, db_val)
+                table.item(r_slot, value_col).setText(db_val)
+                w = table.cellWidget(r_slot, value_col)
+                if isinstance(w, QLineEdit):
+                    w.setText(db_val)
+            finally:
+                table.blockSignals(False)
+            it_boss = table.item(r_boss, value_col)
+            table._last_assembly_boss_height = (
+                (it_boss.text() if it_boss else "") or ""
+            ).strip()
+        except Exception as e:
+            print(f"[隔板槽深度-库值恢复] 失败: {e}")
+
+    QTimer.singleShot(0, _bootstrap_slot_depth_from_db)
 
     if readonly_local_missing and viewer_instance is not None:
         try:
