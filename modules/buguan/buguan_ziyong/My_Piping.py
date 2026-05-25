@@ -2248,6 +2248,10 @@ class TubeLayoutEditor(QMainWindow):
         self.create_body()
         self.create_footer()
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.update_cross_pipe_button_state()
+
     def create_header(self):
         """创建选项卡标题"""
         self.header = QTabWidget()
@@ -2638,26 +2642,72 @@ class TubeLayoutEditor(QMainWindow):
         center_layout.addWidget(self.graphics_container)
 
         self.action_bar = QHBoxLayout()
-        self.action_bar.addStretch()
+        self.action_bar.setSpacing(8)
 
-        actions = ["布管", "交叉布管", "删除交叉布管", "全屏", "操作记录"]
-        for action in actions:
+        action_button_style = (
+            "QPushButton {"
+            "  background-color: #ffffff;"
+            "  border: 1px solid #d0d0d0;"
+            "  border-radius: 4px;"
+            "  padding: 5px 12px;"
+            "  color: #222222;"
+            "  font-size: 12pt;"
+            "}"
+            "QPushButton:hover {"
+            "  background-color: #f2f2f2;"
+            "}"
+            "QPushButton:pressed {"
+            "  background-color: #e0e0e0;"
+            "}"
+            "QPushButton:disabled {"
+            "  background-color: #f5f5f5;"
+            "  color: #999999;"
+            "}"
+        )
+
+        icon_dir = os.path.join(current_dir, "static", "布管等按钮图标")
+        left_actions = [
+            ("布管", "布管.png", self.on_buguan_bt_click),
+            ("交叉布管", "交叉布管.png", self.on_cross_pipes_click),
+            ("删除交叉布管", "删除交叉布管.png", self.clear_cross_pipe_lines),
+            ("保存", "保存.png", self.save_data),
+        ]
+        for action, icon_file, handler in left_actions:
             btn = QPushButton(action)
-            btn.setStyleSheet("padding: 5px 10px;")
-            btn.adjustSize()
+            btn.setStyleSheet(action_button_style)
+            icon_path = os.path.join(icon_dir, icon_file)
+            if os.path.exists(icon_path):
+                btn.setIcon(QIcon(icon_path))
+                btn.setIconSize(QSize(20, 20))
+            btn.clicked.connect(handler)
+            if action == "保存":
+                self.save_btn = btn
+            elif action == "交叉布管":
+                self.btn_cross_pipe = btn
+                btn.setObjectName("crossPipeButton")
+                btn.setEnabled(False)
+            elif action == "删除交叉布管":
+                self.btn_cross_pipe_del = btn
+                btn.setObjectName("crossPipeDelButton")
+                btn.setEnabled(False)
             self.action_bar.addWidget(btn)
 
-            if action == "布管":
-                btn.clicked.connect(self.on_buguan_bt_click)
-            elif action == "全屏":
+        self.update_cross_pipe_button_state()
+
+        self.action_bar.addStretch()
+
+        right_actions = [
+            ("预览", self.show_preview),
+            ("全屏", self.handle_fullscreen_toggle),
+            ("操作记录", self.on_show_operations_click),
+        ]
+        for action, handler in right_actions:
+            btn = QPushButton(action)
+            btn.setStyleSheet(action_button_style)
+            if action == "全屏":
                 btn.setObjectName("fullscreenButton")
-                btn.clicked.connect(lambda: self.handle_fullscreen_toggle())
-            elif action == "操作记录":
-                btn.clicked.connect(self.on_show_operations_click)
-            elif action == "删除交叉布管":
-                btn.clicked.connect(self.clear_cross_pipe_lines)
-            elif action == "交叉布管":
-                btn.clicked.connect(self.on_cross_pipes_click)
+            btn.clicked.connect(handler)
+            self.action_bar.addWidget(btn)
 
         center_layout.addLayout(self.action_bar)
 
@@ -3079,6 +3129,29 @@ class TubeLayoutEditor(QMainWindow):
             # 出错时不影响其它功能
             pass
 
+    def update_cross_pipe_button_state(self, product_type_str=None):
+        """根据产品型式刷新交叉布管/删除交叉布管按钮的可用状态（仅 AEU/BEU/AKU/BKU 可用）"""
+        try:
+            cross_btn = getattr(self, "btn_cross_pipe", None)
+            cross_del_btn = getattr(self, "btn_cross_pipe_del", None)
+            if cross_btn is None:
+                cross_btn = self.findChild(QPushButton, "crossPipeButton")
+            if cross_del_btn is None:
+                cross_del_btn = self.findChild(QPushButton, "crossPipeDelButton")
+            if cross_btn is None or cross_del_btn is None:
+                return
+            if product_type_str is None:
+                product_type_str = getattr(self, "heat_exchanger", None)
+            product_type_str = str(product_type_str or "").strip().upper()
+            cross_allowed = product_type_str in ("AEU", "BEU", "AKU", "BKU")
+            tooltip = "" if cross_allowed else "浮头式产品不支持交叉布管功能"
+            cross_btn.setEnabled(cross_allowed)
+            cross_btn.setToolTip(tooltip)
+            cross_del_btn.setEnabled(cross_allowed)
+            cross_del_btn.setToolTip(tooltip)
+        except Exception as e:
+            print(f"[update_cross_pipe_button_state] 更新失败: {e}")
+
     def find_cross_pipes_info(self):
         self.coord_x_line1_2 = []
         self.coord_y_line1_2 = []
@@ -3236,6 +3309,7 @@ class TubeLayoutEditor(QMainWindow):
 
         self.isBlock = False
         self.heat_exchanger = None
+        self.update_cross_pipe_button_state()
         # 打开管束阶段用：操作记录表是否“有效存在”
         # 规则：有记录 + 布管参数表 DN 与设计数据表「公称直径*」按换热器型式取用的那一列一致 =>
         #       AKU/BKU 取 管程数值（空则回退壳程）；其它型式取 壳程数值（空则回退管程）。
@@ -3268,10 +3342,11 @@ class TubeLayoutEditor(QMainWindow):
                 if result and isinstance(result, dict) and "产品型式" in result:
                     product_type = result["产品型式"]
                     if product_type is not None and product_type.strip():
-                        self.heat_exchanger = product_type.strip()
-                        # 更新吊环螺钉按钮可用状态
+                        self.heat_exchanger = product_type.strip().upper()
+                        # 更新吊环螺钉、交叉布管按钮可用状态
                         if hasattr(self, "update_screw_ring_button_state"):
                             self.update_screw_ring_button_state()
+                        self.update_cross_pipe_button_state()
                         # print(f"成功查询到产品型式: {self.heat_exchanger}，已赋值给self.heat_exchanger")
                     else:
                         print(f"查询到的产品型式为空值（产品ID: {self.productID}）")
@@ -4665,6 +4740,10 @@ class TubeLayoutEditor(QMainWindow):
 
         QTimer.singleShot(0, _defer_lock_outer_after_load)
         QTimer.singleShot(150, _defer_lock_outer_after_load)
+
+        self.update_cross_pipe_button_state()
+        QTimer.singleShot(0, self.update_cross_pipe_button_state)
+        QTimer.singleShot(200, self.update_cross_pipe_button_state)
 
     def initial_operation(self):
         # 先根据产品ID从产品设计活动表_管口表读取管口代号及所属元件，存成全局数据字典
@@ -6209,6 +6288,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 参数验证
         if Di is None or do is None:
+            self.update_cross_pipe_button_state()
             QMessageBox.warning(
                 self, "提示", "请先输入壳体内直径 Dis 和换热管外径 do 两个参数。"
             )
@@ -6218,6 +6298,8 @@ class TubeLayoutEditor(QMainWindow):
         heat_exchanger_type = (
             self.heat_exchanger if hasattr(self, "heat_exchanger") else ""
         )
+        if heat_exchanger_type:
+            heat_exchanger_type = str(heat_exchanger_type).strip().upper()
         if not heat_exchanger_type and self.productID:
 
             conn = None
@@ -6234,11 +6316,14 @@ class TubeLayoutEditor(QMainWindow):
                             # 更新吊环螺钉按钮可用状态
                             if hasattr(self, "update_screw_ring_button_state"):
                                 self.update_screw_ring_button_state()
+                            self.update_cross_pipe_button_state()
             except pymysql.MySQLError as e:
                 print(f"数据库查询产品型式失败: {e}")
             finally:
                 if conn and conn.open:
                     conn.close()
+
+        self.update_cross_pipe_button_state(heat_exchanger_type)
 
         # 仅当 布管限定圆 DL > 壳体内直径 Dis 时调用 update_tube_layout_circle_dl 重算并回写；
         # DL <= Dis 时不重算，布管入参沿用参数表当前值。
@@ -6858,37 +6943,7 @@ class TubeLayoutEditor(QMainWindow):
             ) = self.group_centers_by_y(self.global_centers)
             self.update_tube_nums()
 
-            # TODO 根据产品型式设置交叉布管按钮状态
-            cross_pipe_btn = None
-            cross_pipe_del_btn = None
-            # 遍历中心布局中的所有按钮
-            for i in range(self.action_bar.count()):
-                item = self.action_bar.itemAt(i)
-                if item.widget() and isinstance(item.widget(), QPushButton):
-                    if item.widget().text() == "交叉布管":
-                        cross_pipe_btn = item.widget()
-                    elif item.widget().text() == "删除交叉布管":
-                        cross_pipe_del_btn = item.widget()
-
-            # 如果找到按钮，根据产品型式设置可用状态
-            if cross_pipe_btn is not None:
-                if product_type_str not in ["AEU", "BEU", "AKU", "BKU"]:
-                    cross_pipe_btn.setEnabled(False)
-                    cross_pipe_btn.setToolTip("浮头式产品不支持交叉布管功能")
-                else:
-                    cross_pipe_btn.setEnabled(True)
-                    cross_pipe_btn.setToolTip("")
-            else:
-                print("警告：未找到交叉布管按钮")
-            if cross_pipe_del_btn is not None:
-                if product_type_str not in ["AEU", "BEU", "AKU", "BKU"]:
-                    cross_pipe_del_btn.setEnabled(False)
-                    cross_pipe_del_btn.setToolTip("浮头式产品不支持交叉布管功能")
-                else:
-                    cross_pipe_del_btn.setEnabled(True)
-                    cross_pipe_del_btn.setToolTip("")
-            else:
-                print("警告：未找到交叉布管按钮")
+            self.update_cross_pipe_button_state(product_type_str)
             self.update_total_lagan_count()
 
             return result
@@ -6947,6 +7002,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 参数验证
         if Di is None or do is None:
+            self.update_cross_pipe_button_state()
             QMessageBox.warning(
                 self, "提示", "请先输入壳体内直径 Dis 和换热管外径 do 两个参数。"
             )
@@ -6956,6 +7012,8 @@ class TubeLayoutEditor(QMainWindow):
         heat_exchanger_type = (
             self.heat_exchanger if hasattr(self, "heat_exchanger") else ""
         )
+        if heat_exchanger_type:
+            heat_exchanger_type = str(heat_exchanger_type).strip().upper()
         if not heat_exchanger_type and self.productID:
 
             conn = None
@@ -6969,11 +7027,16 @@ class TubeLayoutEditor(QMainWindow):
                         if result and "产品型式" in result:
                             heat_exchanger_type = result["产品型式"].strip().upper()
                             self.heat_exchanger = heat_exchanger_type
+                            if hasattr(self, "update_screw_ring_button_state"):
+                                self.update_screw_ring_button_state()
+                            self.update_cross_pipe_button_state()
             except pymysql.MySQLError as e:
                 print(f"数据库查询产品型式失败: {e}")
             finally:
                 if conn and conn.open:
                     conn.close()
+
+        self.update_cross_pipe_button_state(heat_exchanger_type)
 
         try:
             if (
@@ -16159,55 +16222,34 @@ class TubeLayoutEditor(QMainWindow):
         # 重新添加stretch
         self.footer_layout.addStretch()
 
-        # 仅在非"管-板连接"页面显示完整按钮
-        if self.header.currentIndex() == 1:  # 0是"布管"页面的索引
-            buttons = ["预览", "保存", "取消"]
-            for btn_text in buttons:
-                btn = QPushButton(btn_text)
-                btn.setFixedSize(80, 30)
-                btn.setStyleSheet(
-                    """
-                    QPushButton {
-                        background-color: #f0f0f0;
-                        border: 1px solid #ccc;
-                        border-radius: 4px;
-                    }
-                    QPushButton:hover {
-                        background-color: #e0e0e0;
-                        border: 1px solid #aaa;
-                    }
-                    QPushButton:pressed {
-                        background-color: #d0d0d0;
-                    }
-                """
-                )
-                if btn_text == "预览":
-                    btn.clicked.connect(self.show_preview)
-                elif btn_text == "保存":
-                    btn.clicked.connect(self.save_data)  # 添加保存按钮点击事件
-                self.footer_layout.addWidget(btn)
-        else:
-            # 在"管-板连接"页面只显示保存按钮
-            save_btn = QPushButton("保存")
-            save_btn.setFixedSize(80, 30)
-            save_btn.setStyleSheet(
-                """
-                QPushButton {
-                    background-color: #f0f0f0;
-                    border: 1px solid #ccc;
-                    border-radius: 4px;
-                }
-                QPushButton:hover {
-                    background-color: #e0e0e0;
-                    border: 1px solid #aaa;
-                }
-                QPushButton:pressed {
-                    background-color: #d0d0d0;
-                }
+        # 布管页面：预览/保存已移至操作栏，隐藏底部区域
+        if self.header.currentIndex() == 1:
+            self.footer_frame.setVisible(False)
+            return
+
+        self.footer_frame.setVisible(True)
+
+        # 其他页面只显示保存按钮
+        save_btn = QPushButton("保存")
+        save_btn.setFixedSize(80, 30)
+        save_btn.setStyleSheet(
             """
-            )
-            save_btn.clicked.connect(self.save_data)  # 添加保存按钮点击事件
-            self.footer_layout.addWidget(save_btn)
+            QPushButton {
+                background-color: #f0f0f0;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background-color: #e0e0e0;
+                border: 1px solid #aaa;
+            }
+            QPushButton:pressed {
+                background-color: #d0d0d0;
+            }
+        """
+        )
+        save_btn.clicked.connect(self.save_data)
+        self.footer_layout.addWidget(save_btn)
 
     # 10/27 修改，布管界面点击确认按钮时，根据公称直径、拉杆直径和拉杆数量跳出提示
     # 获取公称直径的值
@@ -18190,6 +18232,9 @@ class TubeLayoutEditor(QMainWindow):
     def switch_page(self, index):
         # TODO 切换页面
         self.stacked_widget.setCurrentIndex(index)
+
+        if index == 1:
+            self.update_cross_pipe_button_state()
 
         # 如果切换到轴向设计页面，实时刷新其基础参数
         try:
