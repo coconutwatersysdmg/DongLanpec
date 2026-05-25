@@ -2203,6 +2203,19 @@ class TubeLayoutEditor(QMainWindow):
             if header_item:
                 header_item.setToolTip(header_text)
 
+    def _set_hole_distribution_table_readonly(self):
+        """右侧管孔数量表：禁止编辑，保留可选中。"""
+        if not hasattr(self, "hole_distribution_table"):
+            return
+        table = self.hole_distribution_table
+        table.setEditTriggers(QTableWidget.NoEditTriggers)
+        readonly_flags = Qt.ItemIsSelectable | Qt.ItemIsEnabled
+        for row in range(table.rowCount()):
+            for col in range(table.columnCount()):
+                item = table.item(row, col)
+                if item is not None:
+                    item.setFlags(readonly_flags)
+
     def update_total_lagan_count(self):
         """更新拉杆要求/已有数量显示。"""
         lagan_list = getattr(self, "lagan_info", []) or []
@@ -2818,6 +2831,8 @@ class TubeLayoutEditor(QMainWindow):
             self.hole_distribution_table.setItem(
                 row, 2, QTableWidgetItem(str(holes_down))
             )
+
+        self._set_hole_distribution_table_readonly()
 
         right_layout.addWidget(self.hole_distribution_table, 1)
 
@@ -21203,6 +21218,7 @@ class TubeLayoutEditor(QMainWindow):
                 else:
                     # 如果单元格不存在，创建一个临时项来设置背景
                     temp_item = QTableWidgetItem()
+                    temp_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                     temp_item.setBackground(QBrush(QColor(173, 216, 230)))
                     self.hole_distribution_table.setItem(row, col, temp_item)
 
@@ -21299,6 +21315,7 @@ class TubeLayoutEditor(QMainWindow):
                     item.setBackground(QBrush(QColor(173, 216, 230)))  # LightBlue
                 else:
                     temp_item = QTableWidgetItem()
+                    temp_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                     temp_item.setBackground(QBrush(QColor(173, 216, 230)))
                     self.hole_distribution_table.setItem(row, col, temp_item)
 
@@ -27670,6 +27687,8 @@ class TubeLayoutEditor(QMainWindow):
             # 按列排列
             self.update_tube_nums_x()
 
+        self._set_hole_distribution_table_readonly()
+
     def load_initial_tube_num(self):
         """从产品设计活动库的布管数量表加载初始管孔数量数据"""
         # 检查产品ID是否有效
@@ -27738,6 +27757,7 @@ class TubeLayoutEditor(QMainWindow):
                             right_table.setItem(row, 2, holes_down_item)
 
                     # print("已从数据库加载布管数量数据到右侧表格")
+                    self._set_hole_distribution_table_readonly()
                 else:
                     print(
                         f"未查询到产品ID为{self.productID}的布管数量数据，保持表格原状"
