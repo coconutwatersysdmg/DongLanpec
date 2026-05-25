@@ -15911,6 +15911,13 @@ class TubeLayoutEditor(QMainWindow):
                 selected_value = do_widget.currentText()
             self.draw_baffle_plates()
 
+    def _tubebox_flat_cover_component_name(self):
+        """管程侧平盖元件名称：AEM/NEN 为前端管箱平盖，其余型式为管箱平盖。"""
+        hx = getattr(self, "heat_exchanger", None)
+        if hx in ("AEM", "NEN", "NEN(Head)"):
+            return "前端管箱平盖"
+        return "管箱平盖"
+
     def _apply_fixed_tubesheet_slots_zero_immediately(self):
         """管程切到1并确认后，立即将固定管板相关槽参数置0。"""
         try:
@@ -15934,14 +15941,16 @@ class TubeLayoutEditor(QMainWindow):
                             (product_id, "固定管板", pname),
                         )
 
-                    cursor.execute(
-                        """
-                        UPDATE 产品设计活动表_元件附加参数表
-                        SET 参数值 = '0'
-                        WHERE 产品ID = %s AND 元件名称 = %s AND 参数名称 = %s
-                        """,
-                        (product_id, "管箱平盖", "隔板槽深度"),
-                    )
+                    flat_cover_component = self._tubebox_flat_cover_component_name()
+                    for groove_param in ("隔板槽深度", "平盖分程隔板槽深度"):
+                        cursor.execute(
+                            """
+                            UPDATE 产品设计活动表_元件附加参数表
+                            SET 参数值 = '0'
+                            WHERE 产品ID = %s AND 元件名称 = %s AND 参数名称 = %s
+                            """,
+                            (product_id, flat_cover_component, groove_param),
+                        )
 
                     if (
                         getattr(self, "heat_exchanger", None) == "BEM"
@@ -26858,29 +26867,21 @@ class TubeLayoutEditor(QMainWindow):
                 f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}')"
             )
 
-        # 管程=1 时，仅当用户此前明确同意（改管程时弹窗）才更新固定管板的“管程侧分程隔板槽深度/槽宽”为0
+        # 管程=1 时，将固定管板管程侧槽深/槽宽及管箱平盖（或前端管箱平盖）槽深更新为 0
         if is_tube_pass_one:
-            should_reset_fixed_tubesheet = bool(
-                getattr(self, "_reset_fixed_tubesheet_on_tube_pass_one", False)
-            )
-
-            if should_reset_fixed_tubesheet:
-                safe_component_name = escape_str("固定管板")
-                reset_params = (
-                    "管程侧分程隔板槽深度",
-                    "管程侧分程隔板槽宽度",
-                )
-                for param_name in reset_params:
-                    safe_param_name = escape_str(param_name)
-                    sql_statements.append(
-                        f"UPDATE {component_table} SET `参数值` = '0' "
-                        f"WHERE `产品ID` = '{safe_productID}' AND `元件名称` = '{safe_component_name}' AND `参数名称` = '{safe_param_name}'"
-                    )
-            safe_component_name = escape_str("管箱平盖")
+            safe_component_name = escape_str("固定管板")
             reset_params = (
-                "隔板槽深度"
+                "管程侧分程隔板槽深度",
+                "管程侧分程隔板槽宽度",
             )
             for param_name in reset_params:
+                safe_param_name = escape_str(param_name)
+                sql_statements.append(
+                    f"UPDATE {component_table} SET `参数值` = '0' "
+                    f"WHERE `产品ID` = '{safe_productID}' AND `元件名称` = '{safe_component_name}' AND `参数名称` = '{safe_param_name}'"
+                )
+            safe_component_name = escape_str(self._tubebox_flat_cover_component_name())
+            for param_name in ("隔板槽深度", "平盖分程隔板槽深度"):
                 safe_param_name = escape_str(param_name)
                 sql_statements.append(
                     f"UPDATE {component_table} SET `参数值` = '0' "
