@@ -17164,6 +17164,19 @@ class TubeLayoutEditor(QMainWindow):
         result = "; ".join(sql_statements) if sql_statements else None
         return result
 
+    @staticmethod
+    def _vertical_col_key(x, tol=1e-3):
+        """竖直表按列分组键：与 group_centers_by_x 一致，用 abs(x) 量化避免浮点拆列。"""
+        return int(round(abs(float(x)) / tol))
+
+    def _unique_positive_x_by_col_key(self, centers, tol=1e-3):
+        """竖直表 R 计算：按列键去重后的 x 坐标（升序）。"""
+        keys = set()
+        for x, _y in centers:
+            if float(x) >= 0:
+                keys.add(self._vertical_col_key(x, tol))
+        return sorted(k * tol for k in keys)
+
     def build_sql_for_tube_hole(self, tube_hole_data):
         self.sorted_current_centers_left, self.sorted_current_centers_right = (
             self.group_centers_by_x(self.current_centers)
@@ -17213,61 +17226,35 @@ class TubeLayoutEditor(QMainWindow):
             values = []
 
             # 直接从 global_centers 和 current_centers 计算列分组
-            # 使用临时变量避免覆盖类属性
+            # 与 group_centers_by_x 一致：统一用 abs(x) 列键，左右对称列占同一行
             from collections import defaultdict
 
             tol = 1e-3
 
-            # 1. 从 global_centers 获取所有列的键（满布状态）
-            global_left_keys = set()
-            global_right_keys = set()
+            # 1. 满布状态的所有列键
+            global_col_keys = set()
             for x, y in self.global_centers:
-                if x < 0:
-                    x_key = int(round(-x / tol))
-                    global_left_keys.add(x_key)
-                else:
-                    x_key = int(round(x / tol))
-                    global_right_keys.add(x_key)
+                global_col_keys.add(self._vertical_col_key(x, tol))
 
-            # 2. 从 current_centers 按列分组（当前状态）
+            # 2. 当前状态按列键分组
             current_left_groups = defaultdict(list)
             current_right_groups = defaultdict(list)
             for x, y in self.current_centers:
-                if x < 0:
-                    x_key = int(round(-x / tol))
-                    current_left_groups[x_key].append((x, y))
+                col_key = self._vertical_col_key(x, tol)
+                if float(x) < 0:
+                    current_left_groups[col_key].append((x, y))
                 else:
-                    x_key = int(round(x / tol))
-                    current_right_groups[x_key].append((x, y))
+                    current_right_groups[col_key].append((x, y))
 
-            # 3. 使用满布状态的所有列键
-            sorted_left_keys = sorted(global_left_keys)
-            sorted_right_keys = sorted(global_right_keys)
+            sorted_col_keys = sorted(global_col_keys)
 
-            # 4. 计算总列数（左右两侧的最大值）
-            row_count = max(len(sorted_left_keys), len(sorted_right_keys))
-
-            # print(f"[build_sql_for_tube_hole] 满布状态 - 左侧列数={len(sorted_left_keys)}, 右侧列数={len(sorted_right_keys)}")
-            # print(f"[build_sql_for_tube_hole] 总列数（基于满布状态）={row_count}")
-
-            # 5. 遍历所有列（包括空列）
-            for i in range(row_count):
+            # 3. 遍历所有列（包括空列）
+            for i, col_key in enumerate(sorted_col_keys):
                 # 行号（从1开始）
                 line_num = str(i + 1)
 
-                # 左侧管孔数量：从当前状态中获取
-                if i < len(sorted_left_keys):
-                    left_key = sorted_left_keys[i]
-                    holes_left = len(current_left_groups.get(left_key, []))
-                else:
-                    holes_left = 0
-
-                # 右侧管孔数量：从当前状态中获取
-                if i < len(sorted_right_keys):
-                    right_key = sorted_right_keys[i]
-                    holes_right = len(current_right_groups.get(right_key, []))
-                else:
-                    holes_right = 0
+                holes_left = len(current_left_groups.get(col_key, []))
+                holes_right = len(current_right_groups.get(col_key, []))
 
                 # 转义单引号防止SQL注入
                 safe_line_num = line_num.replace("'", "''")
@@ -17865,14 +17852,10 @@ class TubeLayoutEditor(QMainWindow):
             self.min_distance_col = 0
             return
 
-        # 使用竖直表：提取 x >= 0 的坐标，并转 float
-        x_values = [float(x) for (x, y) in self.current_centers if float(x) >= 0]
-        if not x_values:
+        unique_x_sorted = self._unique_positive_x_by_col_key(self.current_centers)
+        if not unique_x_sorted:
             self.min_distance_col = 0
             return
-
-        # 去重并升序排序（管孔数量小的R值越大，所以直径按升序排序）
-        unique_x_sorted = sorted(set(x_values))
 
         diameters = [x * 2 for x in unique_x_sorted]
 
@@ -17904,14 +17887,10 @@ class TubeLayoutEditor(QMainWindow):
 
         if use_vertical_table:
 
-            # 使用竖直表：提取 x >= 0 的坐标，并转 float
-            x_values = [float(x) for (x, y) in self.current_centers if float(x) >= 0]
-            if not x_values:
+            unique_x_sorted = self._unique_positive_x_by_col_key(self.current_centers)
+            if not unique_x_sorted:
                 # QMessageBox.information(self, "提示", "没有找到 x >= 0 的布管坐标。")
                 return None
-
-            # 去重并升序排序（管孔数量小的R值越大，所以直径按升序排序）
-            unique_x_sorted = sorted(set(x_values))
 
             diameters = [x * 2 for x in unique_x_sorted]
 
@@ -18112,85 +18091,6 @@ class TubeLayoutEditor(QMainWindow):
                         except Exception:
                             # 任意转换/计算错误，跳过该排列
                             continue
-            # ==========================================================
-            # 特殊规则：
-            # 当 产品设计活动表_布管参数表 中：
-            #   换热管排列方式 = 转角正方形
-            #   管程程数 = 4
-            # 且当前更新的是 产品设计活动表_布管数量表_竖直 时，
-            # 竖直表中每一排的 U 形弯半径 R，
-            # 在前一排 R 的基础上增加：0.5 * 换热管中心距S * sqrt(3)
-            # ==========================================================
-            if use_vertical_table:
-                try:
-                    cursor.execute("""
-                        SELECT 参数名, 参数值
-                        FROM 产品设计活动表_布管参数表
-                        WHERE 产品ID = %s
-                          AND 参数名 IN (
-                              '换热管排列方式',
-                              '管程程数',
-                              '管程数',
-                              '换热管中心距 S'
-                          )
-                    """, (product_id,))
-
-                    param_rows = cursor.fetchall()
-                    param_map = {
-                        str(name).strip(): value
-                        for name, value in param_rows
-                        if name is not None
-                    }
-
-                    arrange_type = str(param_map.get("换热管排列方式", "") or "").strip()
-
-                    pass_count_raw = (
-                        param_map.get("管程程数")
-                        or param_map.get("管程数")
-                        or tube_num
-                    )
-                    pass_count_text = str(pass_count_raw or "").strip()
-                    pass_count_match = re.search(r"\d+", pass_count_text)
-                    pass_count_val = pass_count_match.group(0) if pass_count_match else pass_count_text
-
-                    s_raw = (
-                        param_map.get("换热管中心距 S")
-                    )
-
-                    s_match = re.search(r"[-+]?\d+(?:\.\d+)?", str(s_raw or ""))
-                    s_value = float(s_match.group(0)) if s_match else None
-
-                    if arrange_type == "转角正三角形" and pass_count_val == "4" and s_value is not None:
-                        step_r = math.sqrt(0.5 * s_value * 3)
-
-                        # 只处理管孔数量不为 0 的行；数量为 0 的行仍保持 R=0
-                        valid_lines = [
-                            ln for ln in rows_sorted
-                            if row_quantity_map.get(ln, 0) not in (0, None)
-                        ]
-
-                        if valid_lines:
-                            first_line = valid_lines[0]
-
-                            # 第一排保留原来已经算出的 R，后续每排在前一排基础上递增
-                            try:
-                                prev_r = float(updates.get(first_line, 0) or 0)
-                            except Exception:
-                                prev_r = 0
-
-                            updates[first_line] = prev_r
-
-                            for ln in valid_lines[1:]:
-                                prev_r = prev_r + step_r
-                                updates[ln] = prev_r
-
-                            print(
-                                f"[调试] 转角正方形+4管程：已按 0.5*S*sqrt(3) 更新竖直表R，"
-                                f"S={s_value}, step={step_r}, 有效行数={len(valid_lines)}"
-                            )
-
-                except Exception as e:
-                    print(f"[调试] 转角正方形+4管程 R 特殊规则处理失败：{e}")
             # 8. 执行更新 —— 只更新 updates 中存在的行/列
 
             update_sql = (
