@@ -14504,6 +14504,136 @@ class TubeLayoutEditor(QMainWindow):
                             f"[on_table_item_changed] Dis/Dit 同步(Dit→Dis)失败: {_dit_sync_e}"
                         )
 
+                # 2.6) 专项校验：布管限定圆 DL 不得大于换热器计算方法的自动计算值
+                if param_name == "布管限定圆 DL":
+                    try:
+                        from PyQt5.QtWidgets import QMessageBox
+                        from PyQt5.QtCore import QSignalBlocker as _QSB, QTimer
+
+                        cur_dl_text = str(param_value).strip()
+
+                        # 初始化"上一次合法 DL 文本"
+                        if not hasattr(self, "_last_valid_dl_text"):
+                            try:
+                                self._last_valid_dl_text = str(
+                                    self.original_param_values.get((row, 2), "")
+                                ).strip()
+                            except Exception:
+                                self._last_valid_dl_text = ""
+
+                        # 解析用户输入
+                        try:
+                            cur_dl_val = float(cur_dl_text) if cur_dl_text != "" else None
+                        except Exception:
+                            cur_dl_val = None
+
+                        # 读取当前 Di（壳体内直径 Dis）和 do（换热管外径）
+                        def _read_param_float(pname):
+                            for _r in range(self.param_table.rowCount()):
+                                _it = self.param_table.item(_r, 1)
+                                if _it and _it.text().strip() == pname:
+                                    _w = self.param_table.cellWidget(_r, 2)
+                                    if isinstance(_w, QComboBox):
+                                        _t = _w.currentText().strip()
+                                    else:
+                                        _ti = self.param_table.item(_r, 2)
+                                        _t = _ti.text().strip() if _ti else ""
+                                    try:
+                                        return float(_t)
+                                    except Exception:
+                                        return None
+                            return None
+
+                        _di_val = _read_param_float("壳体内直径 Dis")
+                        _do_val = _read_param_float("换热管外径 do") or self.get_tube_do()
+                        try:
+                            _do_val = float(str(_do_val).strip()) if _do_val not in (None, "") else None
+                        except Exception:
+                            _do_val = None
+
+                        # 根据换热器型号计算 DL 上限
+                        _dl_limit = None
+                        if _di_val is not None and _do_val is not None and _di_val > 0 and _do_val > 0:
+                            _hx = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
+                            if _hx in ("AES", "BES"):
+                                if _di_val < 700:
+                                    _b_n, _b_1 = 10.0, 3.0
+                                elif _di_val <= 1200:
+                                    _b_n, _b_1 = 13.0, 5.0
+                                elif _di_val <= 2000:
+                                    _b_n, _b_1 = 16.0, 6.0
+                                else:
+                                    _b_n, _b_1 = 20.0, 7.0
+                                _b = 4.0 if _di_val < 1000 else 5.0
+                                _b_2 = _b_n + 1.5
+                                _dl_limit = _di_val - 2 * (_b_1 + _b_2 + _b)
+                            else:
+                                # AEU/BEU/AEM/BEM/AKU/BKU/NEN 等：DL = Di - 2*b3
+                                _b3 = max(0.25 * _do_val, 8.0)
+                                _dl_limit = _di_val - 2 * _b3
+
+                        # 仅当能算出上限时才做校验
+                        if cur_dl_val is not None and _dl_limit is not None and cur_dl_val > _dl_limit:
+                            print(
+                                f"[DL_LIMIT] 用户输入 DL={cur_dl_val} > 计算上限 {_dl_limit:.1f}，触发回滚"
+                            )
+                            # 弹窗限频：0.8s 内同一违规值只弹一次；回滚始终立即执行
+                            try:
+                                import time as _time
+                                _now = _time.monotonic()
+                                _last_warn = float(getattr(self, "_last_dl_limit_warn_time", 0.0) or 0.0)
+                            except Exception:
+                                _now = None
+                                _last_warn = 0.0
+
+                            def _show_dl_warn():
+                                try:
+                                    QMessageBox.warning(
+                                        self,
+                                        "提示",
+                                        "您输入的布管限定圆数值已超限，请重新输入!",
+                                    )
+                                except Exception:
+                                    pass
+
+                            if _now is None or (_now - _last_warn) > 0.8:
+                                try:
+                                    self._last_dl_limit_warn_time = _now if _now is not None else 0.0
+                                except Exception:
+                                    pass
+                                # 异步弹窗，避免 itemChanged 内同步阻塞引发连弹
+                                try:
+                                    QTimer.singleShot(0, _show_dl_warn)
+                                except Exception:
+                                    _show_dl_warn()
+
+                            # 立即回滚（不受弹窗限频影响）
+                            rollback_dl = getattr(self, "_last_valid_dl_text", "").strip()
+                            if rollback_dl == "":
+                                try:
+                                    rollback_dl = str(
+                                        self.original_param_values.get((row, 2), "")
+                                    ).strip()
+                                except Exception:
+                                    rollback_dl = ""
+                            _blocker = None
+                            try:
+                                _blocker = _QSB(self.param_table)
+                                changed_item.setText(rollback_dl)
+                            except Exception:
+                                try:
+                                    changed_item.setText(rollback_dl)
+                                except Exception:
+                                    pass
+                            finally:
+                                _blocker = None
+                            return
+                        elif cur_dl_val is not None:
+                            # 合法：更新缓存
+                            self._last_valid_dl_text = cur_dl_text
+                    except Exception as _dl_limit_e:
+                        print(f"[on_table_item_changed] DL 计算上限校验失败: {_dl_limit_e}")
+
                 _need_di_dl_check = param_name in (
                     "壳体内直径 Dis",
                     "布管限定圆 DL",

@@ -483,6 +483,7 @@ class SheetFormPage(QWidget):
         self.Di = None  # 初始化全局变量：壳体内直径 Dis
         self.use_outer_diameter_base = None  # "是否以外径为基准"的当前值
         self.DL = None  # 布管限定圆 DL
+        self._last_valid_DL = None  # 上一次合法的 DL 值
         # 参数表程序化更新保护：避免初始化/联动时误判为“手动修改”
         self._sheet_form_programmatic_update = False
         self.setup_ui()
@@ -640,7 +641,7 @@ class SheetFormPage(QWidget):
             pass
 
     def _on_sheet_form_param_item_changed(self, item):
-        """参数表手动改值后高亮蓝色。"""
+        """参数表手动改值后高亮蓝色，并对 '布管限定圆 DL' 进行数值限制检查。"""
         try:
             if getattr(self, "_sheet_form_programmatic_update", False):
                 return
@@ -653,7 +654,41 @@ class SheetFormPage(QWidget):
             flags = item.flags()
             if not (flags & Qt.ItemIsEditable):
                 return
+            # 高亮变蓝
             self._mark_sheet_form_value_blue(item.row(), 1)
+            # 检查是否为布管限定圆 DL 参数
+            param_name_item = self.sheet_form_param_table.item(item.row(), 0)
+            param_name = None
+            if param_name_item:
+                try:
+                    param_name = param_name_item.data(Qt.UserRole)
+                except Exception:
+                    param_name = None
+                if not param_name:
+                    param_name = param_name_item.text()
+            if param_name and str(param_name).strip() == "布管限定圆 DL":
+                # 获取用户输入的数值
+                try:
+                    user_val = float(item.text())
+                except Exception:
+                    QMessageBox.warning(self, "提示", "您输入的布管限定圆数值已超限，请重新输入!")
+                    with SignalBlocker(self.sheet_form_param_table):
+                        item.setText(str(self._last_valid_DL) if hasattr(self, "_last_valid_DL") else "")
+                    return
+                # 计算允许的上限（当前壳体内直径 Dis）
+                limit = getattr(self, "Di", None)
+                if limit is not None:
+                    try:
+                        limit = float(limit)
+                    except Exception:
+                        limit = None
+                if limit is not None and user_val > limit:
+                    QMessageBox.warning(self, "提示", "您输入的布管限定圆数值已超限，请重新输入!")
+                    with SignalBlocker(self.sheet_form_param_table):
+                        item.setText(str(self._last_valid_DL) if hasattr(self, "_last_valid_DL") else "")
+                    return
+                # 合法值，更新缓存
+                self._last_valid_DL = user_val
         except Exception:
             pass
 
