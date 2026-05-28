@@ -2241,7 +2241,7 @@ class TubeLayoutEditor(QMainWindow):
             QMainWindow { background-color: #f0f0f0; }
             QFrame { background-color: white; border-radius: 5px; }
             QTableWidget { border: 1px solid #d0d0d0; }
-            QHeaderView::section { background-color: #e0e0e0; padding: 5px; }
+            QHeaderView::section { background-color: #f0f0f0; padding: 5px 4px; font-weight: bold; color: #333333; border: none; border-right: 1px solid #d0d0d0; border-bottom: 1px solid #d0d0d0; }
             QPushButton { 
                 background-color: #e0e0e0; border: 1px solid #d0d0d0;
                 border-radius: 3px; padding: 5px 10px;
