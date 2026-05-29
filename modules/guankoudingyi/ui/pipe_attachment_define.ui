@@ -669,7 +669,7 @@ QPushButton:disabled {
           <number>6</number>
          </property>
          <item>
-          <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,0,0,0,0,7,1,1">
+          <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,0,0,0,0,0,0,0,0">
            <property name="spacing">
             <number>20</number>
            </property>
@@ -677,7 +677,7 @@ QPushButton:disabled {
             <number>20</number>
            </property>
            <property name="rightMargin">
-            <number>20</number>
+            <number>0</number>
            </property>
            <item>
             <widget class="QPushButton" name="pic_anshizhizuo">
@@ -798,7 +798,7 @@ QPushButton:disabled {
             <widget class="QPushButton" name="pushButton_attachment_delete">
              <property name="maximumSize">
               <size>
-               <width>110</width>
+               <width>16777215</width>
                <height>16777215</height>
               </size>
              </property>
@@ -848,7 +848,7 @@ QPushButton:disabled {
             <widget class="QPushButton" name="pushButton_attachment_copy">
              <property name="maximumSize">
               <size>
-               <width>110</width>
+               <width>16777215</width>
                <height>16777215</height>
               </size>
              </property>

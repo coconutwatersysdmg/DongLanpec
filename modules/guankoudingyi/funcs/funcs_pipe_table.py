@@ -239,6 +239,13 @@ def read_pipe_temp(stats_widget, belong_type, belong_version, product_id):
         check_last_row_and_add_new(stats_widget)
         stats_widget.adjust_pipe_column_width()
         set_pipe_function_column_readonly(stats_widget)
+        try:
+            from modules.guankoudingyi.funcs.funcs_pipe_comboBox_value import \
+                apply_pipe_row_column_locks_by_belong
+            for rr in range(table_pipe.rowCount() - 1):
+                apply_pipe_row_column_locks_by_belong(stats_widget, rr)
+        except Exception as e:
+            print(f"[ERROR] 同步管口列锁定状态失败: {e}")
         # 设置默认管口不可删除
         set_default_pipe_cannot_be_deleted(stats_widget)
 

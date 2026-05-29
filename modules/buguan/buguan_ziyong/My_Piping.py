@@ -6164,6 +6164,56 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
+    def _commit_param_table_cell_editor(self, row, editor_widget):
+        """将参数表第 row 行第 2 列正在编辑的委托编辑器内容写入单元格。
+
+        与 ``_commit_param_table_open_editor`` 相同思路：回车被 eventFilter 拦截后 Qt 不会自动
+        ``editingFinished``，须显式 ``setModelData``；随后用 ``NoHint`` 关编辑器，避免
+        ``SubmitModelCache`` 与随后 ``setCurrentCell`` 叠加导致提交被撤销。
+        """
+        from PyQt5.QtWidgets import QAbstractItemView
+
+        tbl = getattr(self, "param_table", None)
+        if tbl is None or row < 0 or editor_widget is None:
+            return False
+
+        text = ""
+        try:
+            if hasattr(editor_widget, "text"):
+                text = str(editor_widget.text()).strip()
+            elif hasattr(editor_widget, "value"):
+                text = str(editor_widget.value()).strip()
+        except Exception:
+            text = ""
+
+        idx = tbl.model().index(row, 2)
+        if not idx.isValid():
+            return False
+
+        delegate = tbl.itemDelegate(idx)
+        if delegate is not None:
+            try:
+                delegate.setModelData(editor_widget, tbl.model(), idx)
+            except Exception:
+                pass
+
+        item = tbl.item(row, 2)
+        if item is not None and text != "" and item.text().strip() != text:
+            try:
+                item.setText(text)
+            except Exception:
+                pass
+
+        if tbl.state() == QAbstractItemView.EditingState:
+            ew = tbl.indexWidget(idx)
+            if ew is None:
+                ew = editor_widget
+            try:
+                tbl.closeEditor(ew, QAbstractItemDelegate.NoHint)
+            except Exception:
+                pass
+        return True
+
     def _safe_disconnect_param_table_item_changed(self):
         """断开 param_table.itemChanged 的全部连接。
 
@@ -47042,6 +47092,8 @@ class TubeLayoutEditor(QMainWindow):
             if cw.isEditable():
                 le = cw.lineEdit()
                 if le is not None:
+                    # 避免上一格回车跳转后 lineEdit 仍残留未提交的文本（如 180 误写入本行）
+                    le.setText(cw.currentText())
                     le.setFocus(Qt.OtherFocusReason)
                     le.selectAll()
 
@@ -47055,13 +47107,23 @@ class TubeLayoutEditor(QMainWindow):
         row = self._param_value_row_for_col2_widget(combo)
         if row < 0 or not self._param_value_row_enter_jumpable(row):
             return False
+        if combo.isEditable() and combo.lineEdit() is not None:
+            txt = combo.lineEdit().text().strip()
+            if txt != combo.currentText().strip():
+                combo.setCurrentText(txt)
         next_row = self._find_next_editable_param_value_row(row)
-        if next_row >= 0:
-            tbl.setCurrentCell(next_row, 2)
-            tbl.setFocus(Qt.OtherFocusReason)
-            self._focus_param_value_cell(next_row)
-        else:
-            tbl.setFocus(Qt.OtherFocusReason)
+
+        def _go():
+            if next_row >= 0:
+                tbl.setCurrentCell(next_row, 2)
+                tbl.setFocus(Qt.OtherFocusReason)
+                self._focus_param_value_cell(next_row)
+            else:
+                tbl.setFocus(Qt.OtherFocusReason)
+
+        from PyQt5.QtCore import QTimer
+
+        QTimer.singleShot(0, _go)
         return True
 
     def _handle_param_table_value_enter_commit_and_next(self, editor_widget):
@@ -47093,25 +47155,24 @@ class TubeLayoutEditor(QMainWindow):
             row = idx.row()
         if not self._param_value_row_enter_jumpable(row):
             return False
+        if not self._commit_param_table_cell_editor(row, editor_widget):
+            return False
+
         next_row = self._find_next_editable_param_value_row(row)
-        if next_row >= 0:
-            tbl.setCurrentCell(next_row, 2)
-            tbl.setFocus(Qt.OtherFocusReason)
-            self._focus_param_value_cell(next_row)
-        else:
-            try:
-                tbl.closeEditor(
-                    editor_widget, QAbstractItemDelegate.SubmitModelCache
-                )
-            except Exception:
-                try:
-                    del_idx = tbl.model().index(row, 2)
-                    dlg = tbl.itemDelegate(del_idx)
-                    if dlg is not None:
-                        dlg.setModelData(editor_widget, tbl.model(), del_idx)
-                except Exception:
-                    pass
-            tbl.setFocus(Qt.OtherFocusReason)
+
+        def _go():
+            if next_row >= 0:
+                tbl.setCurrentCell(next_row, 2)
+                tbl.setFocus(Qt.OtherFocusReason)
+                self._focus_param_value_cell(next_row)
+            else:
+                tbl.setFocus(Qt.OtherFocusReason)
+
+        from PyQt5.QtCore import QTimer
+
+        # 等本格 itemChanged / calculate_piping 等同步逻辑跑完再切格，避免下一格编辑器
+        # 被 _commit_param_table_open_editor 误提交或把本格刚写入的值冲掉
+        QTimer.singleShot(0, _go)
         return True
 
     def enable_scene_click_capture(self):
