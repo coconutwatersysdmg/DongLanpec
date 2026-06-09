@@ -2219,8 +2219,11 @@ class TubeLayoutEditor(QMainWindow):
     def update_total_lagan_count(self):
         """更新拉杆要求/已有数量显示。"""
         lagan_list = getattr(self, "lagan_info", []) or []
+        # 只使用一种自由拉杆列表计数，避免重复计数
+        red_abs_list = getattr(self, "red_dangban_abs", []) or []
         red_list = getattr(self, "red_dangban", []) or []
-        total = len(lagan_list) + len(red_list)
+        free_count = len(red_abs_list) if red_abs_list else len(red_list)
+        total = len(lagan_list) + free_count
         std = self._get_lagan_required_count()
         self.current_lagan_standard_required = std
         if hasattr(self, "lagan_required_label"):
