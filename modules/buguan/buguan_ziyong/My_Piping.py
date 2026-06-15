@@ -79,7 +79,7 @@ product_id = "PD202509291"
 # product_id = 'PD2026011316323301'
 
 # TODO 轴向设计页面开关
-ENABLE_AXIAL_DESIGN_PAGE = True
+ENABLE_AXIAL_DESIGN_PAGE = False
 
 # TODO 防冲板形式“焊接式”选项开关
 ENABLE_DANGBAN_WELDED_OPTION = True
@@ -2298,9 +2298,9 @@ class TubeLayoutEditor(QMainWindow):
             self.axial_design_page = QWidget(self)
             _layout = QVBoxLayout(self.axial_design_page)
             _layout.setContentsMargins(0, 0, 0, 0)
-            _layout.addWidget(
-                QLabel("轴向设计功能暂未开发完成", self.axial_design_page)
-            )
+            # _layout.addWidget(
+            #     QLabel("轴向设计功能暂未开发完成", self.axial_design_page)
+            # )
             _layout.addStretch(1)
         self.stacked_widget.addWidget(self.axial_design_page)
 
