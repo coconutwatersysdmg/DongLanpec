@@ -1294,6 +1294,17 @@ def none_tube_centers(height_0_180, height_90_270, Di, do, centers):
     return current_centers
 
 
+def nonbaffle_removed_centers(height_0_180, height_90_270, Di, do, centers):
+    """返回处于非布管区域内的圆心列表（绝对坐标）。"""
+    remaining = none_tube_centers(height_0_180, height_90_270, Di, do, centers)
+    remaining_keys = {(round(x, 2), round(y, 2)) for x, y in remaining}
+    return [
+        c
+        for c in centers
+        if (round(c[0], 2), round(c[1], 2)) not in remaining_keys
+    ]
+
+
 # TODO 此处初始化
 
 
@@ -6997,6 +7008,13 @@ class TubeLayoutEditor(QMainWindow):
             self.global_centers = result["centers"]
             centers = self.global_centers
             self.none_tube(height_0_180, height_90_270, Di, do, centers)
+            try:
+                self._sync_applied_nonbaffle_chord_heights(
+                    height_0_180 if height_0_180 is not None else 0,
+                    height_90_270 if height_90_270 is not None else 0,
+                )
+            except Exception as _sync_chord_e:
+                print(f"[calculate_piping_layout] sync applied chord: {_sync_chord_e}")
             # self.draw_baffle_plates()
 
             # 强制刷新场景
@@ -14329,6 +14347,15 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception as e:
                     print(f"[on_table_item_changed] 弦高范围校验失败: {e}")
 
+            if param_name in (
+                "非布管区域弦高（0°/180°）",
+                "非布管区域弦高（90°/270°）",
+            ):
+                try:
+                    self._apply_nonbaffle_chord_tube_update()
+                except Exception as e:
+                    print(f"[on_table_item_changed] 非布管弦高删/恢复失败: {e}")
+
             # 2.2.1) 额外校验：分程隔板两侧相邻管中心距（水平）不得小于预定义规定值
             if param_name == "分程隔板两侧相邻管中心距（水平）":
                 try:
@@ -16164,6 +16191,138 @@ class TubeLayoutEditor(QMainWindow):
                     pass
         except Exception:
             return False
+
+    def _read_param_table_value(self, param_name):
+        """读取左侧参数表指定参数名的当前文本值。"""
+        table = getattr(self, "param_table", None)
+        if table is None:
+            return ""
+        target = str(param_name).strip()
+        for row in range(table.rowCount()):
+            name_item = table.item(row, 1)
+            if not name_item or name_item.text().strip() != target:
+                continue
+            w = table.cellWidget(row, 2)
+            if isinstance(w, QComboBox):
+                return w.currentText().strip()
+            it = table.item(row, 2)
+            return it.text().strip() if it else ""
+        return ""
+
+    def _read_nonbaffle_chord_params(self):
+        """读取非布管弦高及 Dis/do；缺参或非法时返回 None。"""
+        try:
+            dis_text = self._read_param_table_value("壳体内直径 Dis")
+            do_text = self._read_param_table_value("换热管外径 do")
+            h0_text = self._read_param_table_value("非布管区域弦高（0°/180°）")
+            h90_text = self._read_param_table_value("非布管区域弦高（90°/270°）")
+            Di = float(dis_text) if dis_text else None
+            do = float(do_text) if do_text else None
+            h0 = float(h0_text) if h0_text != "" else 0.0
+            h90 = float(h90_text) if h90_text != "" else 0.0
+            if Di is None or do is None:
+                return None
+            return h0, h90, Di, do
+        except (ValueError, TypeError):
+            return None
+
+    def _sync_applied_nonbaffle_chord_heights(self, height_0_180, height_90_270):
+        """记录当前已应用到场景的非布管弦高（用于 diff 删/恢复）。"""
+        self._last_applied_chord_0_180 = float(height_0_180)
+        self._last_applied_chord_90_270 = float(height_90_270)
+
+    @staticmethod
+    def _nonbaffle_coord_key(coord):
+        return (round(float(coord[0]), 2), round(float(coord[1]), 2))
+
+    def _abs_coords_to_relative_labels(self, abs_coords):
+        """绝对坐标列表 → 相对行列标签，供 delete_huanreguan / build_huanreguan 使用。"""
+        rel_coords = []
+        for abs_c in abs_coords or []:
+            rel = self.actual_to_selected_coords(abs_c)
+            if rel:
+                rel_coords.append(rel)
+        return rel_coords
+
+    def _apply_nonbaffle_chord_tube_update(self):
+        """
+        非布管区域弦高变更后：增大则删管，减小则 build_huanreguan 恢复。
+        在参数表单元格提交（失焦/回车）且校验通过后调用。
+        """
+        if not getattr(self, "has_piped", False):
+            return
+        if getattr(self, "_nonbaffle_chord_update_in_progress", False):
+            return
+        if getattr(self, "is_loading_data", False) or getattr(
+            self, "_is_validating", False
+        ):
+            return
+
+        global_centers = getattr(self, "global_centers", None)
+        if not global_centers:
+            return
+
+        params = self._read_nonbaffle_chord_params()
+        if params is None:
+            return
+        height_0_180, height_90_270, Di, do = params
+
+        if not hasattr(self, "_last_applied_chord_0_180"):
+            self._sync_applied_nonbaffle_chord_heights(height_0_180, height_90_270)
+            return
+
+        old_h0 = float(self._last_applied_chord_0_180)
+        old_h90 = float(self._last_applied_chord_90_270)
+        if old_h0 == float(height_0_180) and old_h90 == float(height_90_270):
+            return
+
+        old_removed = nonbaffle_removed_centers(
+            old_h0, old_h90, Di, do, global_centers
+        )
+        new_removed = nonbaffle_removed_centers(
+            height_0_180, height_90_270, Di, do, global_centers
+        )
+        old_keys = {self._nonbaffle_coord_key(c) for c in old_removed}
+        new_keys = {self._nonbaffle_coord_key(c) for c in new_removed}
+        to_delete_keys = new_keys - old_keys
+        to_restore_keys = old_keys - new_keys
+
+        to_delete = [
+            c for c in new_removed if self._nonbaffle_coord_key(c) in to_delete_keys
+        ]
+        to_restore_abs = [
+            c
+            for c in global_centers
+            if self._nonbaffle_coord_key(c) in to_restore_keys
+        ]
+
+        self._nonbaffle_chord_update_in_progress = True
+        try:
+            if to_restore_abs:
+                rel_restore = self._abs_coords_to_relative_labels(to_restore_abs)
+                if rel_restore:
+                    self.build_huanreguan(rel_restore)
+
+            if to_delete:
+                rel_delete = self._abs_coords_to_relative_labels(to_delete)
+                if rel_delete:
+                    self.delete_huanreguan(rel_delete)
+
+            self.current_centers = none_tube_centers(
+                height_0_180, height_90_270, Di, do, global_centers
+            )
+            try:
+                self._sync_current_centers_lagan()
+            except Exception:
+                pass
+            try:
+                self.update_tube_nums()
+            except Exception:
+                pass
+
+            self._sync_applied_nonbaffle_chord_heights(height_0_180, height_90_270)
+        finally:
+            self._nonbaffle_chord_update_in_progress = False
 
     def none_tube(self, height_0_180, height_90_270, Di, do, centers):
 
