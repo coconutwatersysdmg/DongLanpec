@@ -2051,7 +2051,11 @@ class TubeLayoutEditor(QMainWindow):
 
     def setup_param_listeners(self):
         """为参数表格添加变化监听，实时更新参数列表"""
-        # 监听表格内容变化
+        # 监听表格内容变化（先断开避免与 setup_parameter_listeners 叠加重复触发）
+        try:
+            self.param_table.itemChanged.disconnect(self.update_leftpad_params)
+        except Exception:
+            pass
         self.param_table.itemChanged.connect(self.update_leftpad_params)
         # 遍历表格，为下拉框添加监听
         row_count = self.param_table.rowCount()
@@ -3425,6 +3429,8 @@ class TubeLayoutEditor(QMainWindow):
         # 定义全局隐藏参数列表（存储为实例变量）
         self.hidden_params = [
             "滑道定位",
+            "滑道切边长度",
+            "滑道切边高度",
             "滑道形式",
             "导轨类型",
             "圆钢规格",
@@ -3931,10 +3937,12 @@ class TubeLayoutEditor(QMainWindow):
                                     "放置位置",
                                     "防冲板厚度",
                                     "滑道定位",
+                                    "滑道切边长度",
+                                    "滑道切边高度",
                                     "滑道高度",
                                     "滑道厚度",
                                     "滑道与竖直中心线夹角",
-                                    "切边长度 L1",
+                                    "切边长度 L1", 
                                     "切边高度 h",
                                     "换热管外径 do",
                                     "中间挡板厚度",
@@ -5183,7 +5191,15 @@ class TubeLayoutEditor(QMainWindow):
 
         try:
             if is_arranged_huadao == 1:
-                self.build_huadao("滑道与管板焊接", height, thickness, angle, 50, 15)
+                cut_len = self._read_param_table_float("滑道切边长度")
+                cut_h = self._read_param_table_float("滑道切边高度")
+                if cut_len is None:
+                    cut_len = 50.0
+                if cut_h is None:
+                    cut_h = 15.0
+                self.build_huadao(
+                    "滑道与管板焊接", height, thickness, angle, cut_len, cut_h
+                )
         except Exception as e:
             print(f"构建滑道时出错: {str(e)}")
 
@@ -7961,7 +7977,7 @@ class TubeLayoutEditor(QMainWindow):
         """
         注释规则联动：
         ① 滑道形式=板式滑道 -> 隐藏“圆钢规格”
-        ② 滑道形式=圆钢条式滑道 -> 隐藏“滑道高度/滑道厚度/滑道与竖直中心线夹角”
+        ② 滑道形式=圆钢条式滑道 -> 隐藏“滑道高度/滑道厚度/滑道与竖直中心线夹角/滑道切边长度/滑道切边高度”
         ③ heat_exchanger=AKU/BKU -> 显示“导轨类型”，默认值“支撑导轨1”
         ④ 其他型式 -> 隐藏“导轨类型”
         """
@@ -8001,24 +8017,20 @@ class TubeLayoutEditor(QMainWindow):
         if rs_row != -1:
             self.set_param_visibility(rs_row, visible=bool(is_round), force=True)
 
-        # 滑道高度/厚度/夹角
+        # 滑道高度/厚度/夹角/切边
         h_row = _find_row("滑道高度")
         t_row = _find_row("滑道厚度")
         a_row = _find_row("滑道与竖直中心线夹角")
+        cl_row = _find_row("滑道切边长度")
+        ch_row = _find_row("滑道切边高度")
         if is_round:
-            if h_row != -1:
-                self.set_param_visibility(h_row, visible=False, force=True)
-            if t_row != -1:
-                self.set_param_visibility(t_row, visible=False, force=True)
-            if a_row != -1:
-                self.set_param_visibility(a_row, visible=False, force=True)
+            for r in (h_row, t_row, a_row, cl_row, ch_row):
+                if r != -1:
+                    self.set_param_visibility(r, visible=False, force=True)
         else:
-            if h_row != -1:
-                self.set_param_visibility(h_row, visible=True, force=True)
-            if t_row != -1:
-                self.set_param_visibility(t_row, visible=True, force=True)
-            if a_row != -1:
-                self.set_param_visibility(a_row, visible=True, force=True)
+            for r in (h_row, t_row, a_row, cl_row, ch_row):
+                if r != -1:
+                    self.set_param_visibility(r, visible=True, force=True)
 
         # 导轨类型（按产品型式）
         gr_row = _find_row("导轨类型")
@@ -13270,6 +13282,26 @@ class TubeLayoutEditor(QMainWindow):
                         and param_name == "圆钢规格"
                 ):
                     return
+                if (
+                        getattr(self, "_suppress_slipway_cut_length_warn", False)
+                        and param_name == "滑道切边长度"
+                ):
+                    return
+                if (
+                        getattr(self, "_suppress_slipway_cut_height_warn", False)
+                        and param_name == "滑道切边高度"
+                ):
+                    return
+                if (
+                        getattr(self, "_slipway_cut_length_warn_in_progress", False)
+                        and param_name == "滑道切边长度"
+                ):
+                    return
+                if (
+                        getattr(self, "_slipway_cut_height_warn_in_progress", False)
+                        and param_name == "滑道切边高度"
+                ):
+                    return
                 # 重要：换热管壁厚 δ 的非法回滚必须始终执行。
                 # 这里不再用 *_in_progress 直接 return（会导致第二次非法输入不弹窗也不回滚，随后联动逻辑卡顿）。
                 if (
@@ -13432,14 +13464,17 @@ class TubeLayoutEditor(QMainWindow):
                                 self._is_programmatic_update = False
                             except Exception:
                                 pass
-                            # 重连 itemChanged
+                            # 重连 itemChanged（统一走 setup_parameter_listeners，避免局部 connect 叠加）
                             if disconnected:
                                 try:
-                                    self.param_table.itemChanged.connect(
-                                        on_table_item_changed
-                                    )
+                                    self.setup_parameter_listeners()
                                 except Exception:
-                                    pass
+                                    try:
+                                        self.param_table.itemChanged.connect(
+                                            on_table_item_changed
+                                        )
+                                    except Exception:
+                                        pass
                         # 同步原值基线
                         try:
                             if hasattr(self, "original_param_values"):
@@ -13850,6 +13885,72 @@ class TubeLayoutEditor(QMainWindow):
                         self._last_valid_slipway_thickness_text = cur_text
                 except Exception as e:
                     print(f"[on_table_item_changed] 滑道厚度校验失败: {e}")
+
+            # 提前单独处理：滑道切边长度下限约束（>= 0，非法直接回滚默认值 50）
+            if param_name == "滑道切边长度":
+                try:
+                    from PyQt5.QtWidgets import QMessageBox
+                    from PyQt5.QtCore import QTimer, QSignalBlocker
+
+                    cur_text = str(param_value).strip()
+                    if cur_text == "":
+                        return
+                    try:
+                        cut_len_val = float(cur_text)
+                    except Exception:
+                        return
+
+                    if cut_len_val < 0:
+                        QMessageBox.warning(
+                            self, "提示", "滑道切边长度不应小于 0"
+                        )
+                        self._suppress_slipway_cut_length_warn = True
+                        try:
+                            with QSignalBlocker(self.param_table):
+                                changed_item.setText("50")
+                        finally:
+                            QTimer.singleShot(
+                                600,
+                                lambda: setattr(
+                                    self, "_suppress_slipway_cut_length_warn", False
+                                ),
+                            )
+                        return
+                except Exception as e:
+                    print(f"[on_table_item_changed] 滑道切边长度校验失败: {e}")
+
+            # 提前单独处理：滑道切边高度下限约束（>= 0，非法直接回滚默认值 15）
+            if param_name == "滑道切边高度":
+                try:
+                    from PyQt5.QtWidgets import QMessageBox
+                    from PyQt5.QtCore import QTimer, QSignalBlocker
+
+                    cur_text = str(param_value).strip()
+                    if cur_text == "":
+                        return
+                    try:
+                        cut_height_val = float(cur_text)
+                    except Exception:
+                        return
+
+                    if cut_height_val < 0:
+                        QMessageBox.warning(
+                            self, "提示", "滑道切边高度不应小于 0"
+                        )
+                        self._suppress_slipway_cut_height_warn = True
+                        try:
+                            with QSignalBlocker(self.param_table):
+                                changed_item.setText("15")
+                        finally:
+                            QTimer.singleShot(
+                                600,
+                                lambda: setattr(
+                                    self, "_suppress_slipway_cut_height_warn", False
+                                ),
+                            )
+                        return
+                except Exception as e:
+                    print(f"[on_table_item_changed] 滑道切边高度校验失败: {e}")
 
             # 提前单独处理：换热管壁厚 δ 约束（0 < δ <= do/2）
             if param_name == "换热管壁厚 δ":
@@ -15114,6 +15215,8 @@ class TubeLayoutEditor(QMainWindow):
                 # 导轨类型：仅 AKU/BKU 显示，但参数本身需要存在以便保存/联动
                 _add_if_missing("导轨类型", "支撑导轨1", "")
                 _add_if_missing("圆钢规格", "12", "mm")
+                _add_if_missing("滑道切边长度", "50", "mm")
+                _add_if_missing("滑道切边高度", "15", "mm")
                 _add_if_missing("放置位置", "参照管中心连线", "")
         except Exception:
             pass
@@ -15521,6 +15624,14 @@ class TubeLayoutEditor(QMainWindow):
                     else:
                         v = defaults.get("thickness", "")
                     display_value = "" if v == "" else str(v)
+                elif param["参数名"] == "滑道切边长度" and (
+                    param_value is None or str(param_value).strip() == ""
+                ):
+                    display_value = "50"
+                elif param["参数名"] == "滑道切边高度" and (
+                    param_value is None or str(param_value).strip() == ""
+                ):
+                    display_value = "15"
                 elif param_value is None:
                     display_value = ""
                 else:
@@ -15608,7 +15719,27 @@ class TubeLayoutEditor(QMainWindow):
             row = item.row()
             param_name_item = self.param_table.item(row, 1)
             if param_name_item:
-                param_name = param_name_item.text()
+                param_name = param_name_item.text().strip()
+                if (
+                    getattr(self, "_suppress_slipway_cut_length_warn", False)
+                    and param_name == "滑道切边长度"
+                ):
+                    return
+                if (
+                    getattr(self, "_suppress_slipway_cut_height_warn", False)
+                    and param_name == "滑道切边高度"
+                ):
+                    return
+                if (
+                    getattr(self, "_slipway_cut_length_warn_in_progress", False)
+                    and param_name == "滑道切边长度"
+                ):
+                    return
+                if (
+                    getattr(self, "_slipway_cut_height_warn_in_progress", False)
+                    and param_name == "滑道切边高度"
+                ):
+                    return
                 param_value = item.text()
                 self.on_combobox_changed(row, param_value)
 
@@ -18722,6 +18853,8 @@ class TubeLayoutEditor(QMainWindow):
         hidden_params = [
             "滑道定位",
             "滑道高度",
+            "滑道切边长度",
+            "滑道切边高度",
             "滑道厚度",
             "滑道与竖直中心线夹角",
             "旁路挡板厚度",
@@ -26837,6 +26970,8 @@ class TubeLayoutEditor(QMainWindow):
             "滑道定位": "滑道定位",
             "滑道高度": "滑道高度",
             "滑道厚度": "滑道厚度",
+            "滑道切边长度": "滑道切边长度",
+            "滑道切边高度": "滑道切边高度",
             "滑道与竖直中心线夹角": "滑道与竖直中心线夹角",
             "切边长度 L1": "切边长度 L1",
             "切边高度 h": "切边高度 h",
@@ -26854,6 +26989,8 @@ class TubeLayoutEditor(QMainWindow):
             "防冲板折边角度": None,
             "防冲板宽度": None,
             "滑道定位": None,
+            "滑道切边长度": None,
+            "滑道切边高度": None,
             "滑道高度": None,
             "滑道厚度": None,
             "滑道与竖直中心线夹角": None,
@@ -39624,8 +39761,8 @@ class TubeLayoutEditor(QMainWindow):
             "滑道高度": "",
             "滑道厚度": "",
             "滑道与竖直中心线夹角": "",
-            "切边长度 L1": "",
-            "切边高度 h": "",
+            "滑道切边长度": "50",
+            "滑道切边高度": "15",
         }
         try:
             for row in range(self.param_table.rowCount()):
@@ -39662,8 +39799,8 @@ class TubeLayoutEditor(QMainWindow):
             "滑道高度",
             "滑道厚度",
             "滑道与竖直中心线夹角",
-            "切边长度 L1",
-            "切边高度 h",
+            "滑道切边长度",
+            "滑道切边高度",
         ]:
             container = QWidget()
             row_layout = QHBoxLayout(container)
@@ -39711,8 +39848,14 @@ class TubeLayoutEditor(QMainWindow):
                     c.setVisible(bool(is_round))
             except Exception:
                 pass
-            # 高/厚/角：圆钢条式隐藏
-            for k in ["滑道高度", "滑道厚度", "滑道与竖直中心线夹角"]:
+            # 高/厚/角/切边：圆钢条式隐藏
+            for k in [
+                "滑道高度",
+                "滑道厚度",
+                "滑道与竖直中心线夹角",
+                "滑道切边长度",
+                "滑道切边高度",
+            ]:
                 try:
                     c = row_containers.get(k)
                     if c is not None:
@@ -39856,6 +39999,24 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception:
                     pass
 
+                for cut_key, cut_msg, cut_default in [
+                    ("滑道切边长度", "滑道切边长度不应小于 0", "50"),
+                    ("滑道切边高度", "滑道切边高度不应小于 0", "15"),
+                ]:
+                    cut_text = input_widgets[cut_key].text().strip() or cut_default
+                    try:
+                        cut_val = float(cut_text)
+                    except Exception:
+                        QMessageBox.warning(
+                            dialog, "输入错误", f"请输入有效的{cut_key}"
+                        )
+                        return
+                    if cut_val < 0:
+                        QMessageBox.warning(dialog, "提示", cut_msg)
+                        input_widgets[cut_key].setText(cut_default)
+                        return
+                    input_widgets[cut_key].setText(cut_text)
+
             # 同步参数表（含滑道形式/圆钢/导轨，避免仅改可见项）
             sync_param_table("滑道定位", input_widgets["滑道定位"].currentText())
             sync_param_table("滑道形式", input_widgets["滑道形式"].currentText())
@@ -39872,8 +40033,8 @@ class TubeLayoutEditor(QMainWindow):
                 "滑道高度",
                 "滑道厚度",
                 "滑道与竖直中心线夹角",
-                "切边长度 L1",
-                "切边高度 h",
+                "滑道切边长度",
+                "滑道切边高度",
             ]:
                 sync_param_table(key, input_widgets[key].text())
 
@@ -39885,8 +40046,12 @@ class TubeLayoutEditor(QMainWindow):
                     "angle": _eff_line("滑道与竖直中心线夹角")
                     if is_round
                     else input_widgets["滑道与竖直中心线夹角"].text(),
-                    "cut_length": input_widgets["切边长度 L1"].text(),
-                    "cut_height": input_widgets["切边高度 h"].text(),
+                    "cut_length": _eff_line("滑道切边长度")
+                    if is_round
+                    else (input_widgets["滑道切边长度"].text().strip() or "50"),
+                    "cut_height": _eff_line("滑道切边高度")
+                    if is_round
+                    else (input_widgets["滑道切边高度"].text().strip() or "15"),
                 }
                 self.build_huadao(**params)
             except Exception:
@@ -40039,8 +40204,8 @@ class TubeLayoutEditor(QMainWindow):
             "滑道高度",
             "滑道厚度",
             "滑道与竖直中心线夹角",
-            "切边长度 L1",
-            "切边高度 h",
+            "滑道切边长度",
+            "滑道切边高度",
         ]
 
         for row in range(self.param_table.rowCount()):
@@ -40116,7 +40281,13 @@ class TubeLayoutEditor(QMainWindow):
                     c.setVisible(bool(is_round))
             except Exception:
                 pass
-            for k in ["滑道高度", "滑道厚度", "滑道与竖直中心线夹角"]:
+            for k in [
+                "滑道高度",
+                "滑道厚度",
+                "滑道与竖直中心线夹角",
+                "滑道切边长度",
+                "滑道切边高度",
+            ]:
                 try:
                     c = row_containers.get(k)
                     if c is not None:
@@ -40227,6 +40398,25 @@ class TubeLayoutEditor(QMainWindow):
                 except ValueError:
                     pass
 
+                for cut_key, cut_msg, cut_default in [
+                    ("滑道切边长度", "滑道切边长度不应小于 0", "50"),
+                    ("滑道切边高度", "滑道切边高度不应小于 0", "15"),
+                ]:
+                    cut_text = input_widgets[cut_key].text().strip() or cut_default
+                    try:
+                        cut_val = float(cut_text)
+                    except Exception:
+                        QMessageBox.warning(
+                            dialog, "输入错误", f"请输入有效的{cut_key}"
+                        )
+                        return
+                    if cut_val < 0:
+                        QMessageBox.warning(dialog, "提示", cut_msg)
+                        input_widgets[cut_key].setText(cut_default)
+                        self.clear_selection_highlight()
+                        return
+                    input_widgets[cut_key].setText(cut_text)
+
             if temp_centers is not None:
                 self.current_centers = temp_centers.copy()
             if temp_centers_lagan is not None:
@@ -40264,8 +40454,12 @@ class TubeLayoutEditor(QMainWindow):
                 "angle": _eff_line("滑道与竖直中心线夹角")
                 if is_round
                 else input_widgets["滑道与竖直中心线夹角"].text(),
-                "cut_length": input_widgets["切边长度 L1"].text(),
-                "cut_height": input_widgets["切边高度 h"].text(),
+                "cut_length": _eff_line("滑道切边长度")
+                if is_round
+                else (input_widgets["滑道切边长度"].text().strip() or "50"),
+                "cut_height": _eff_line("滑道切边高度")
+                if is_round
+                else (input_widgets["滑道切边高度"].text().strip() or "15"),
             }
             self.build_huadao(**params)
             dialog.accept()
