@@ -1,5 +1,3 @@
-"""法兰/元件配置窗口 — 三块布局：参数表 | 操作记录 | 预定义面板。"""
-
 import json
 import os
 import sys
@@ -119,20 +117,6 @@ DICT_SECTION_KEY = "法兰"
 
 CALC_RESULT_JSON_NAME = "计算结果.json"
 
-PREDEFINED_FIELD_KEYS = (
-    "是否考虑液柱静压力",
-    "设计模式",
-    "筛选模式",
-    "结构预定义",
-    "结构预定义_法兰盘厚度比下限",
-    "结构预定义_法兰盘厚度比上限",
-    "任意式法兰按活套法兰计算",
-    "对焊法兰圆角半径系数",
-    "对焊法兰圆角半径最小值",
-    "对焊法兰厚度比下限",
-    "对焊法兰厚度比上限",
-)
-
 RIGHT_PANEL_STYLE = """
 QGroupBox {
     font-size: 9pt;
@@ -177,10 +161,8 @@ class ConfigWindow(QtWidgets.QDialog):
         super().__init__(parent)
         self.setWindowTitle("配置")
         self._loading = True
-        self._loading_predef = False
         self._original_values = {}
         self._param_row_by_name = {}
-        self._predefined_by_name = {}
         self.dict_out_datas = self._empty_dict_out()
         self._apply_window_size(parent)
         self._build_ui()
@@ -290,10 +272,6 @@ class ConfigWindow(QtWidgets.QDialog):
 
         self.param_table.showEvent = _on_show
 
-        self.param_table.itemSelectionChanged.connect(
-            self._on_param_row_selection_changed
-        )
-
         layout.addWidget(self.param_table)
         return frame
 
@@ -307,9 +285,6 @@ class ConfigWindow(QtWidgets.QDialog):
         self._loading = False
         self._restore_param_table_column_widths()
         self._rebuild_dict_out_datas()
-        if self.param_table.rowCount() > 0:
-            self.param_table.selectRow(0)
-            self._load_predefined_for_row(0)
 
     @staticmethod
     def _project_root_dir():
@@ -345,31 +320,14 @@ class ConfigWindow(QtWidgets.QDialog):
         self.param_table.setRowCount(0)
         self._param_row_by_name.clear()
         self._original_values.clear()
-        self._predefined_by_name.clear()
         self.dict_out_datas = self._empty_dict_out()
 
     @staticmethod
     def _empty_dict_out():
         return {
             "DictOutDatas": {
-                DICT_SECTION_KEY: {"Datas": []},
+                DICT_SECTION_KEY: {},
             }
-        }
-
-    @staticmethod
-    def _default_predefined_fields():
-        return {
-            "是否考虑液柱静压力": "false",
-            "设计模式": "设计法兰",
-            "筛选模式": "成型重量最小",
-            "结构预定义": "true",
-            "结构预定义_法兰盘厚度比下限": "0.3",
-            "结构预定义_法兰盘厚度比上限": "0.9",
-            "任意式法兰按活套法兰计算": "false",
-            "对焊法兰圆角半径系数": "0.25",
-            "对焊法兰圆角半径最小值": "10",
-            "对焊法兰厚度比下限": "1.5",
-            "对焊法兰厚度比上限": "4",
         }
 
     def _collect_predefined_fields(self):
@@ -393,111 +351,35 @@ class ConfigWindow(QtWidgets.QDialog):
             "对焊法兰厚度比上限": self.edit_weld_thickness_max.text().strip(),
         }
 
-    def _apply_predefined_to_panel(self, predef):
-        self.chk_hydrostatic.setChecked(
-            predef.get("是否考虑液柱静压力") == "true"
-        )
-        self.combo_design_mode.setCurrentText(
-            predef.get("设计模式", "设计法兰")
-        )
-        self.combo_filter_mode.setCurrentText(
-            predef.get("筛选模式", "成型重量最小")
-        )
-        self.chk_struct_predef.setChecked(predef.get("结构预定义") == "true")
-        self.edit_struct_ratio_min.setText(
-            predef.get("结构预定义_法兰盘厚度比下限", "0.3")
-        )
-        self.edit_struct_ratio_max.setText(
-            predef.get("结构预定义_法兰盘厚度比上限", "0.9")
-        )
-        self.chk_loose_flange.setChecked(
-            predef.get("任意式法兰按活套法兰计算") == "true"
-        )
-        self.edit_weld_corner_factor.setText(
-            predef.get("对焊法兰圆角半径系数", "0.25")
-        )
-        self.edit_weld_corner_min.setText(
-            predef.get("对焊法兰圆角半径最小值", "10")
-        )
-        self.edit_weld_thickness_min.setText(
-            predef.get("对焊法兰厚度比下限", "1.5")
-        )
-        self.edit_weld_thickness_max.setText(
-            predef.get("对焊法兰厚度比上限", "4")
-        )
-
-    def _load_predefined_for_row(self, row):
-        name = self._param_name_at(row)
-        if not name:
-            return
-        predef = self._predefined_by_name.get(
-            name, self._default_predefined_fields()
-        )
-        self._loading_predef = True
-        try:
-            self._apply_predefined_to_panel(predef)
-        finally:
-            self._loading_predef = False
-
-    def _on_param_row_selection_changed(self):
-        if self._loading:
-            return
-        row = self.param_table.currentRow()
-        if row < 0:
-            return
-        self._load_predefined_for_row(row)
-
     def _rebuild_dict_out_datas(self):
-        datas = []
+        section = {}
         for row in range(self.param_table.rowCount()):
             name = self._param_name_at(row)
             if not name:
                 continue
-            value = self._get_combo_value(name)
-            predef = self._predefined_by_name.get(
-                name, self._default_predefined_fields()
-            )
-            entry = {"Name": name, "Value": value}
-            entry.update(predef)
-            datas.append(entry)
+            section[name] = self._get_combo_value(name)
+        section.update(self._collect_predefined_fields())
         self.dict_out_datas = {
             "DictOutDatas": {
-                DICT_SECTION_KEY: {"Datas": datas},
+                DICT_SECTION_KEY: section,
             }
         }
 
-    def _update_dict_entry_for_row(self, row):
+    def _update_dict_param_value(self, row):
         name = self._param_name_at(row)
         if not name:
             return
-        value = self._get_combo_value(name)
-        predef = self._predefined_by_name.get(
-            name, self._default_predefined_fields()
+        self.dict_out_datas["DictOutDatas"][DICT_SECTION_KEY][name] = (
+            self._get_combo_value(name)
         )
-        section = self.dict_out_datas["DictOutDatas"][DICT_SECTION_KEY]
-        for entry in section["Datas"]:
-            if entry.get("Name") == name:
-                entry["Value"] = value
-                for key in PREDEFINED_FIELD_KEYS:
-                    entry[key] = predef.get(key, "")
-                return
-        entry = {"Name": name, "Value": value}
-        entry.update(predef)
-        section["Datas"].append(entry)
 
     def _on_predefined_changed(self, *_args):
-        if self._loading or self._loading_predef:
+        if self._loading:
             return
         if self.param_table.rowCount() == 0:
             return
-        row = self.param_table.currentRow()
-        if row < 0:
-            return
-        name = self._param_name_at(row)
-        if not name:
-            return
-        self._predefined_by_name[name] = self._collect_predefined_fields()
-        self._update_dict_entry_for_row(row)
+        section = self.dict_out_datas["DictOutDatas"][DICT_SECTION_KEY]
+        section.update(self._collect_predefined_fields())
 
     def _bind_predefined_signals(self):
         self.chk_hydrostatic.stateChanged.connect(self._on_predefined_changed)
@@ -524,12 +406,10 @@ class ConfigWindow(QtWidgets.QDialog):
         return name, default, ctrl_type, extra
 
     def _populate_param_table(self):
-        defaults = self._default_predefined_fields()
         self.param_table.setRowCount(len(PARAM_ROWS))
         for row, row_def in enumerate(PARAM_ROWS):
             name, default, ctrl_type, extra = self._parse_row_def(row_def)
             self._param_row_by_name[name] = row
-            self._predefined_by_name[name] = dict(defaults)
 
             num_item = QtWidgets.QTableWidgetItem(str(row + 1))
             num_item.setFlags(num_item.flags() & ~Qt.ItemIsEditable)
@@ -749,7 +629,7 @@ class ConfigWindow(QtWidgets.QDialog):
         if param_name:
             self._append_operation_log(row, param_name, new_value)
         self._original_values[key] = new_value
-        self._update_dict_entry_for_row(row)
+        self._update_dict_param_value(row)
 
     # ------------------------------------------------------------------ 中
     def _build_center_panel(self):
