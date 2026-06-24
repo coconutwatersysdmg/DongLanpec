@@ -1,0 +1,38 @@
+{
+  "DictOutDatas": {
+    "法兰": {
+      "Datas": [
+        {
+          "Name": "管程程数",
+          "Value": "2",
+          "considerHydrostaticPressure": "false",
+          "designMode": "设计法兰",
+          "filterMode": "成型重量最小",
+          "structPredefineEnabled": "true",
+          "structFlangeThicknessRatioMin": "0.3",
+          "structFlangeThicknessRatioMax": "0.9",
+          "looseFlangeCalc": "false",
+          "weldNeckCornerRadiusFactor": "0.25",
+          "weldNeckCornerRadiusMinMm": "10",
+          "weldNeckThicknessRatioMin": "1.5",
+          "weldNeckThicknessRatioMax": "4"
+        },
+        {
+          "Name": "法兰公称直径",
+          "Value": "1000",
+          "considerHydrostaticPressure": "false",
+          "designMode": "设计法兰",
+          "filterMode": "成型重量最小",
+          "structPredefineEnabled": "true",
+          "structFlangeThicknessRatioMin": "0.3",
+          "structFlangeThicknessRatioMax": "0.9",
+          "looseFlangeCalc": "false",
+          "weldNeckCornerRadiusFactor": "0.25",
+          "weldNeckCornerRadiusMinMm": "10",
+          "weldNeckThicknessRatioMin": "1.5",
+          "weldNeckThicknessRatioMax": "4"
+        }
+      ]
+    }
+  }
+}

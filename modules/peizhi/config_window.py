@@ -1,5 +1,9 @@
 """法兰/元件配置窗口 — 三块布局：参数表 | 操作记录 | 预定义面板。"""
 
+import json
+import os
+import sys
+
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QComboBox, QHeaderView, QTableWidget, QAbstractItemView
@@ -111,6 +115,24 @@ MATERIAL_TYPE_GRADE_LINKS = {
     "法兰对接元件材料类型": "法兰对接元件材料牌号",
 }
 
+DICT_SECTION_KEY = "法兰"
+
+CALC_RESULT_JSON_NAME = "计算结果.json"
+
+PREDEFINED_FIELD_KEYS = (
+    "是否考虑液柱静压力",
+    "设计模式",
+    "筛选模式",
+    "结构预定义",
+    "结构预定义_法兰盘厚度比下限",
+    "结构预定义_法兰盘厚度比上限",
+    "任意式法兰按活套法兰计算",
+    "对焊法兰圆角半径系数",
+    "对焊法兰圆角半径最小值",
+    "对焊法兰厚度比下限",
+    "对焊法兰厚度比上限",
+)
+
 RIGHT_PANEL_STYLE = """
 QGroupBox {
     font-size: 9pt;
@@ -155,8 +177,11 @@ class ConfigWindow(QtWidgets.QDialog):
         super().__init__(parent)
         self.setWindowTitle("配置")
         self._loading = True
+        self._loading_predef = False
         self._original_values = {}
         self._param_row_by_name = {}
+        self._predefined_by_name = {}
+        self.dict_out_datas = self._empty_dict_out()
         self._apply_window_size(parent)
         self._build_ui()
         self._loading = False
@@ -215,17 +240,28 @@ class ConfigWindow(QtWidgets.QDialog):
             "}"
             "QPushButton:hover { background-color: #d0d0d0; }"
         )
-        for text in ("新建", "计算", "导出"):
-            btn = QtWidgets.QPushButton(text)
-            btn.setFixedHeight(30)
-            btn.setStyleSheet(btn_style)
-            btn_row.addWidget(btn)
+        self.btn_new = QtWidgets.QPushButton("新建")
+        self.btn_new.setFixedHeight(30)
+        self.btn_new.setStyleSheet(btn_style)
+        self.btn_new.clicked.connect(self._on_new_click)
+        btn_row.addWidget(self.btn_new)
+
+        self.btn_calc = QtWidgets.QPushButton("计算")
+        self.btn_calc.setFixedHeight(30)
+        self.btn_calc.setStyleSheet(btn_style)
+        self.btn_calc.clicked.connect(self._on_calc_click)
+        btn_row.addWidget(self.btn_calc)
+
+        self.btn_export = QtWidgets.QPushButton("导出")
+        self.btn_export.setFixedHeight(30)
+        self.btn_export.setStyleSheet(btn_style)
+        btn_row.addWidget(self.btn_export)
         btn_row.addStretch()
         layout.addLayout(btn_row)
 
         self.param_table = NoWheelTableWidget()
-        self.param_table.setColumnCount(4)
-        self.param_table.setHorizontalHeaderLabels(["序号", "参数名", "参数值", "单位"])
+        self.param_table.setColumnCount(3)
+        self.param_table.setHorizontalHeaderLabels(["序号", "设计参数", "参数值"])
         self.param_table.verticalHeader().setVisible(False)
         self.param_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.param_table.setSelectionMode(QTableWidget.SingleSelection)
@@ -241,11 +277,9 @@ class ConfigWindow(QtWidgets.QDialog):
         header.setSectionResizeMode(0, QHeaderView.Interactive)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
         header.setSectionResizeMode(2, QHeaderView.Interactive)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
 
-        self._populate_param_table()
+        self.param_table.setRowCount(0)
         apply_buguan_param_table_style(self.param_table, value_column_index=2)
-        self._setup_material_linkages()
 
         orig_show = self.param_table.showEvent
 
@@ -256,21 +290,246 @@ class ConfigWindow(QtWidgets.QDialog):
 
         self.param_table.showEvent = _on_show
 
+        self.param_table.itemSelectionChanged.connect(
+            self._on_param_row_selection_changed
+        )
+
         layout.addWidget(self.param_table)
         return frame
+
+    def _on_new_click(self):
+        """新建：加载默认参数表数据。"""
+        self._loading = True
+        self._clear_param_table()
+        self.op_log.clear()
+        self._populate_param_table()
+        self._setup_material_linkages()
+        self._loading = False
+        self._restore_param_table_column_widths()
+        self._rebuild_dict_out_datas()
+        if self.param_table.rowCount() > 0:
+            self.param_table.selectRow(0)
+            self._load_predefined_for_row(0)
+
+    @staticmethod
+    def _project_root_dir():
+        """与 main.py 同级目录（源码：包根；打包：可执行文件目录）。"""
+        if getattr(sys, "frozen", False):
+            return os.path.dirname(sys.executable)
+        return os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+
+    def _calc_result_json_path(self):
+        return os.path.join(self._project_root_dir(), CALC_RESULT_JSON_NAME)
+
+    def _on_calc_click(self):
+        """计算：将当前数据字典写入根目录 计算结果.json（已存在则覆盖更新）。"""
+        if self.param_table.rowCount() == 0:
+            QtWidgets.QMessageBox.warning(
+                self, "提示", "请先点击「新建」加载参数后再计算。"
+            )
+            return
+        self._rebuild_dict_out_datas()
+        path = self._calc_result_json_path()
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self.dict_out_datas, f, ensure_ascii=False, indent=2)
+        except OSError as e:
+            QtWidgets.QMessageBox.critical(
+                self, "保存失败", f"无法写入 {path}：{e}"
+            )
+            return
+
+    def _clear_param_table(self):
+        self.param_table.setRowCount(0)
+        self._param_row_by_name.clear()
+        self._original_values.clear()
+        self._predefined_by_name.clear()
+        self.dict_out_datas = self._empty_dict_out()
+
+    @staticmethod
+    def _empty_dict_out():
+        return {
+            "DictOutDatas": {
+                DICT_SECTION_KEY: {"Datas": []},
+            }
+        }
+
+    @staticmethod
+    def _default_predefined_fields():
+        return {
+            "是否考虑液柱静压力": "false",
+            "设计模式": "设计法兰",
+            "筛选模式": "成型重量最小",
+            "结构预定义": "true",
+            "结构预定义_法兰盘厚度比下限": "0.3",
+            "结构预定义_法兰盘厚度比上限": "0.9",
+            "任意式法兰按活套法兰计算": "false",
+            "对焊法兰圆角半径系数": "0.25",
+            "对焊法兰圆角半径最小值": "10",
+            "对焊法兰厚度比下限": "1.5",
+            "对焊法兰厚度比上限": "4",
+        }
+
+    def _collect_predefined_fields(self):
+        return {
+            "是否考虑液柱静压力": (
+                "true" if self.chk_hydrostatic.isChecked() else "false"
+            ),
+            "设计模式": self.combo_design_mode.currentText(),
+            "筛选模式": self.combo_filter_mode.currentText(),
+            "结构预定义": (
+                "true" if self.chk_struct_predef.isChecked() else "false"
+            ),
+            "结构预定义_法兰盘厚度比下限": self.edit_struct_ratio_min.text().strip(),
+            "结构预定义_法兰盘厚度比上限": self.edit_struct_ratio_max.text().strip(),
+            "任意式法兰按活套法兰计算": (
+                "true" if self.chk_loose_flange.isChecked() else "false"
+            ),
+            "对焊法兰圆角半径系数": self.edit_weld_corner_factor.text().strip(),
+            "对焊法兰圆角半径最小值": self.edit_weld_corner_min.text().strip(),
+            "对焊法兰厚度比下限": self.edit_weld_thickness_min.text().strip(),
+            "对焊法兰厚度比上限": self.edit_weld_thickness_max.text().strip(),
+        }
+
+    def _apply_predefined_to_panel(self, predef):
+        self.chk_hydrostatic.setChecked(
+            predef.get("是否考虑液柱静压力") == "true"
+        )
+        self.combo_design_mode.setCurrentText(
+            predef.get("设计模式", "设计法兰")
+        )
+        self.combo_filter_mode.setCurrentText(
+            predef.get("筛选模式", "成型重量最小")
+        )
+        self.chk_struct_predef.setChecked(predef.get("结构预定义") == "true")
+        self.edit_struct_ratio_min.setText(
+            predef.get("结构预定义_法兰盘厚度比下限", "0.3")
+        )
+        self.edit_struct_ratio_max.setText(
+            predef.get("结构预定义_法兰盘厚度比上限", "0.9")
+        )
+        self.chk_loose_flange.setChecked(
+            predef.get("任意式法兰按活套法兰计算") == "true"
+        )
+        self.edit_weld_corner_factor.setText(
+            predef.get("对焊法兰圆角半径系数", "0.25")
+        )
+        self.edit_weld_corner_min.setText(
+            predef.get("对焊法兰圆角半径最小值", "10")
+        )
+        self.edit_weld_thickness_min.setText(
+            predef.get("对焊法兰厚度比下限", "1.5")
+        )
+        self.edit_weld_thickness_max.setText(
+            predef.get("对焊法兰厚度比上限", "4")
+        )
+
+    def _load_predefined_for_row(self, row):
+        name = self._param_name_at(row)
+        if not name:
+            return
+        predef = self._predefined_by_name.get(
+            name, self._default_predefined_fields()
+        )
+        self._loading_predef = True
+        try:
+            self._apply_predefined_to_panel(predef)
+        finally:
+            self._loading_predef = False
+
+    def _on_param_row_selection_changed(self):
+        if self._loading:
+            return
+        row = self.param_table.currentRow()
+        if row < 0:
+            return
+        self._load_predefined_for_row(row)
+
+    def _rebuild_dict_out_datas(self):
+        datas = []
+        for row in range(self.param_table.rowCount()):
+            name = self._param_name_at(row)
+            if not name:
+                continue
+            value = self._get_combo_value(name)
+            predef = self._predefined_by_name.get(
+                name, self._default_predefined_fields()
+            )
+            entry = {"Name": name, "Value": value}
+            entry.update(predef)
+            datas.append(entry)
+        self.dict_out_datas = {
+            "DictOutDatas": {
+                DICT_SECTION_KEY: {"Datas": datas},
+            }
+        }
+
+    def _update_dict_entry_for_row(self, row):
+        name = self._param_name_at(row)
+        if not name:
+            return
+        value = self._get_combo_value(name)
+        predef = self._predefined_by_name.get(
+            name, self._default_predefined_fields()
+        )
+        section = self.dict_out_datas["DictOutDatas"][DICT_SECTION_KEY]
+        for entry in section["Datas"]:
+            if entry.get("Name") == name:
+                entry["Value"] = value
+                for key in PREDEFINED_FIELD_KEYS:
+                    entry[key] = predef.get(key, "")
+                return
+        entry = {"Name": name, "Value": value}
+        entry.update(predef)
+        section["Datas"].append(entry)
+
+    def _on_predefined_changed(self, *_args):
+        if self._loading or self._loading_predef:
+            return
+        if self.param_table.rowCount() == 0:
+            return
+        row = self.param_table.currentRow()
+        if row < 0:
+            return
+        name = self._param_name_at(row)
+        if not name:
+            return
+        self._predefined_by_name[name] = self._collect_predefined_fields()
+        self._update_dict_entry_for_row(row)
+
+    def _bind_predefined_signals(self):
+        self.chk_hydrostatic.stateChanged.connect(self._on_predefined_changed)
+        self.chk_struct_predef.stateChanged.connect(self._on_predefined_changed)
+        self.chk_loose_flange.stateChanged.connect(self._on_predefined_changed)
+        self.combo_design_mode.currentTextChanged.connect(self._on_predefined_changed)
+        self.combo_filter_mode.currentTextChanged.connect(self._on_predefined_changed)
+
+        for edit in (
+            self.edit_struct_ratio_min,
+            self.edit_struct_ratio_max,
+            self.edit_weld_corner_factor,
+            self.edit_weld_corner_min,
+            self.edit_weld_thickness_min,
+            self.edit_weld_thickness_max,
+        ):
+            edit.editingFinished.connect(self._on_predefined_changed)
+            edit.returnPressed.connect(self._on_predefined_changed)
 
     @staticmethod
     def _parse_row_def(row_def):
         name, default, ctrl_type = row_def[0], row_def[1], row_def[2]
         extra = row_def[3] if len(row_def) > 3 else None
-        unit = row_def[4] if len(row_def) > 4 else ""
-        return name, default, ctrl_type, extra, unit
+        return name, default, ctrl_type, extra
 
     def _populate_param_table(self):
+        defaults = self._default_predefined_fields()
         self.param_table.setRowCount(len(PARAM_ROWS))
         for row, row_def in enumerate(PARAM_ROWS):
-            name, default, ctrl_type, extra, unit = self._parse_row_def(row_def)
+            name, default, ctrl_type, extra = self._parse_row_def(row_def)
             self._param_row_by_name[name] = row
+            self._predefined_by_name[name] = dict(defaults)
 
             num_item = QtWidgets.QTableWidgetItem(str(row + 1))
             num_item.setFlags(num_item.flags() & ~Qt.ItemIsEditable)
@@ -294,11 +553,6 @@ class ConfigWindow(QtWidgets.QDialog):
                 edit = self._create_text_cell(row, default)
                 self.param_table.setCellWidget(row, 2, edit)
                 self._original_values[(row, 2)] = default
-
-            unit_item = QtWidgets.QTableWidgetItem(unit)
-            unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
-            unit_item.setTextAlignment(Qt.AlignCenter)
-            self.param_table.setItem(row, 3, unit_item)
 
     def _create_param_combo(self, row, name, default, ctrl_type, extra):
         combo = NoWheelComboBox()
@@ -467,10 +721,9 @@ class ConfigWindow(QtWidgets.QDialog):
         total = self.param_table.viewport().width()
         if total <= 0:
             return
-        self.param_table.setColumnWidth(0, int(total * 0.1))
-        self.param_table.setColumnWidth(1, int(total * 0.55))
-        self.param_table.setColumnWidth(2, int(total * 0.25))
-        self.param_table.setColumnWidth(3, int(total * 0.1))
+        self.param_table.setColumnWidth(0, int(total * 0.10))
+        self.param_table.setColumnWidth(1, int(total * 0.52))
+        self.param_table.setColumnWidth(2, int(total * 0.38))
 
     def _param_name_at(self, row):
         item = self.param_table.item(row, 1)
@@ -496,6 +749,7 @@ class ConfigWindow(QtWidgets.QDialog):
         if param_name:
             self._append_operation_log(row, param_name, new_value)
         self._original_values[key] = new_value
+        self._update_dict_entry_for_row(row)
 
     # ------------------------------------------------------------------ 中
     def _build_center_panel(self):
@@ -568,31 +822,29 @@ class ConfigWindow(QtWidgets.QDialog):
         self.chk_struct_predef = QtWidgets.QCheckBox("结构预定义")
         self.chk_struct_predef.setChecked(True)
         g_layout.addWidget(self.chk_struct_predef)
-        g_layout.addWidget(
-            self._inline_range_row(
-                "0.3",
-                "0.9",
-                "≤ 法兰盘厚度 δ / 法兰总高度 H ≤",
-                left_margin=22,
-            )
+        struct_row, self.edit_struct_ratio_min, self.edit_struct_ratio_max = self._inline_range_row(
+            "0.3",
+            "0.9",
+            "≤ 法兰盘厚度 δ / 法兰总高度 H ≤",
+            left_margin=22,
         )
+        g_layout.addWidget(struct_row)
 
         # 5. 任意式法兰按活套法兰计算
         self.chk_loose_flange = QtWidgets.QCheckBox("任意式法兰按活套法兰计算")
         g_layout.addWidget(self.chk_loose_flange)
 
         # 6. 对焊法兰圆角半径
-        g_layout.addWidget(
-            self._inline_mixed_row(
-                [
-                    ("label", "对焊法兰圆角半径 r ≥"),
-                    ("edit", "0.25", 48),
-                    ("label", "δ1，且不小于"),
-                    ("edit", "10", 48),
-                    ("label", "mm"),
-                ]
-            )
+        weld_row, self.edit_weld_corner_factor, self.edit_weld_corner_min = self._inline_mixed_row(
+            [
+                ("label", "对焊法兰圆角半径 r ≥"),
+                ("edit", "0.25", 48),
+                ("label", "δ1，且不小于"),
+                ("edit", "10", 48),
+                ("label", "mm"),
+            ]
         )
+        g_layout.addWidget(weld_row)
 
         # 7. 大小端有效厚度比值说明
         ratio_title = QtWidgets.QLabel(
@@ -602,9 +854,10 @@ class ConfigWindow(QtWidgets.QDialog):
         g_layout.addWidget(ratio_title)
 
         # 8. δ1/δ0 范围
-        g_layout.addWidget(
-            self._inline_range_row("1.5", "4", "≤ δ1 / δ0 ≤")
+        thickness_row, self.edit_weld_thickness_min, self.edit_weld_thickness_max = self._inline_range_row(
+            "1.5", "4", "≤ δ1 / δ0 ≤"
         )
+        g_layout.addWidget(thickness_row)
 
         # 9. 注释
         footer = QtWidgets.QLabel(
@@ -613,6 +866,8 @@ class ConfigWindow(QtWidgets.QDialog):
         footer.setWordWrap(True)
         footer.setStyleSheet("color: #666666; font-size: 8pt;")
         g_layout.addWidget(footer)
+
+        self._bind_predefined_signals()
 
         layout.addWidget(group)
         layout.addStretch()
@@ -653,15 +908,16 @@ class ConfigWindow(QtWidgets.QDialog):
         h.addWidget(high_edit)
         h.addStretch()
         outer.addWidget(inner, 1)
-        return row
+        return row, low_edit, high_edit
 
     @staticmethod
     def _inline_mixed_row(parts):
-        """parts: ('label', text) | ('edit', default, width)"""
+        """parts: ('label', text) | ('edit', default, width)。返回 (行容器, 第1个输入框, 第2个输入框)。"""
         row = QtWidgets.QWidget()
         h = QtWidgets.QHBoxLayout(row)
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(4)
+        edits = []
         for part in parts:
             if part[0] == "label":
                 h.addWidget(QtWidgets.QLabel(part[1]))
@@ -670,8 +926,11 @@ class ConfigWindow(QtWidgets.QDialog):
                 edit.setFixedWidth(part[2])
                 edit.setAlignment(Qt.AlignCenter)
                 h.addWidget(edit)
+                edits.append(edit)
         h.addStretch()
-        return row
+        first_edit = edits[0] if len(edits) > 0 else QtWidgets.QLineEdit(row)
+        second_edit = edits[1] if len(edits) > 1 else QtWidgets.QLineEdit(row)
+        return row, first_edit, second_edit
 
 
 def show_config_window(parent=None):
