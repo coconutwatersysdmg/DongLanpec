@@ -381,9 +381,17 @@ class ConfigWindow(QtWidgets.QDialog):
         section = self.dict_out_datas["DictOutDatas"][DICT_SECTION_KEY]
         section.update(self._collect_predefined_fields())
 
+    def _sync_struct_predef_edits_enabled(self):
+        enabled = self.chk_struct_predef.isChecked()
+        self.edit_struct_ratio_min.setEnabled(enabled)
+        self.edit_struct_ratio_max.setEnabled(enabled)
+
     def _bind_predefined_signals(self):
         self.chk_hydrostatic.stateChanged.connect(self._on_predefined_changed)
         self.chk_struct_predef.stateChanged.connect(self._on_predefined_changed)
+        self.chk_struct_predef.stateChanged.connect(
+            self._sync_struct_predef_edits_enabled
+        )
         self.chk_loose_flange.stateChanged.connect(self._on_predefined_changed)
         self.combo_design_mode.currentTextChanged.connect(self._on_predefined_changed)
         self.combo_filter_mode.currentTextChanged.connect(self._on_predefined_changed)
@@ -748,6 +756,7 @@ class ConfigWindow(QtWidgets.QDialog):
         g_layout.addWidget(footer)
 
         self._bind_predefined_signals()
+        self._sync_struct_predef_edits_enabled()
 
         layout.addWidget(group)
         layout.addStretch()
