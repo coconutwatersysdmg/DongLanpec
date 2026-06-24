@@ -471,6 +471,7 @@ class UserPage(QWidget):
 from modules.chanpinguanli.chanpinguanli_main import product_manager
 from modules.chanpinguanli.common_usage import get_mysql_connection_product, get_mysql_connection_active
 from modules.chanpinguanli.project_confirm_btn import show_confirm_dialog
+from modules.peizhi.config_window import show_config_window
 
 
 def on_product_id_changed(new_id):
@@ -791,6 +792,11 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             print(f"[font menu] init failed: {e}")
 
+        try:
+            self._init_config_menu()
+        except Exception as e:
+            print(f"[config menu] init failed: {e}")
+
         # 获取图片控件并添加点击事件
         self.login_image = self.findChild(QLabel, "label_2")  # 替换为你的图片控件的实际对象名称
         if self.login_image:
@@ -936,6 +942,45 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # 保留引用，避免被 GC
         self._font_scale_actions = (act_big, act_default, act_small)
+
+    def _get_config_menu(self):
+        """获取或创建「配置」按钮/菜单栏的下拉菜单。"""
+        btn_config = self.findChild(QtWidgets.QToolButton, "btn_config")
+        if btn_config:
+            menu = btn_config.menu()
+            if menu is None:
+                menu = QtWidgets.QMenu(self)
+                btn_config.setMenu(menu)
+                btn_config.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+
+                act_18 = self.findChild(QtWidgets.QAction, "action_18")
+                if act_18:
+                    menu.addAction(act_18)
+
+                prefs_menu = menu.addMenu("偏好设置")
+                prefs_menu.setObjectName("menu")
+                for act_name in ["action_15", "action_16", "action_17"]:
+                    act = self.findChild(QtWidgets.QAction, act_name)
+                    if act:
+                        prefs_menu.addAction(act)
+                prefs_menu.addSeparator()
+            return menu
+
+        return self.findChild(QtWidgets.QMenu, "config")
+
+    def _init_config_menu(self):
+        """在配置下拉菜单中增加「配置」项，打开三块布局窗口。"""
+        config_menu = self._get_config_menu()
+        if config_menu is None:
+            return
+
+        if getattr(self, "_action_config_window", None) is not None:
+            return
+
+        act_config = QtWidgets.QAction("配置", self)
+        act_config.triggered.connect(lambda: show_config_window(self))
+        config_menu.addAction(act_config)
+        self._action_config_window = act_config
 
     def _font_scale_custom(self, ctrl: "_FontScaleController"):
         # 用百分比表达更直观：60%~160%
