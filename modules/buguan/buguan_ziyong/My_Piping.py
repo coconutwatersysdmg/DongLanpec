@@ -63,7 +63,7 @@ from modules.buguan.buguan_ziyong.variable import (
 from modules.buguan.buguan_ziyong.api import run_layout_tube_calculate
 from modules.buguan.buguan_ziyong import piping_calculations
 from modules.buguan.buguan_ziyong.json_process import parse_heat_exchanger_json
-from modules.buguan.buguan_ziyong.sheet_form_page import SheetFormPage
+from modules.buguan.buguan_ziyong.sheet_form_page import SheetFormPage, _PLATE_OLD_TO_NEW_BY_NODE
 from modules.buguan.buguan_ziyong.tube_sheet_connection import TubeSheetConnectionPage
 from modules.chanpinguanli.chanpinguanli_main import product_manager
 import modules.buguan.buguan_ziyong.qiaotineizhijing as qtzj
@@ -9370,6 +9370,25 @@ class TubeLayoutEditor(QMainWindow):
                                 return _norm_params_dict.get(nak)
                     return None
 
+                _plate_type_key = str(snapshot.get("plate_type") or "").strip()
+                _old_to_new = _PLATE_OLD_TO_NEW_BY_NODE.get(_plate_type_key, {})
+
+                def _get_formula_old(*old_symbols):
+                    """按公式中的旧代号取参，优先匹配全改名后的新代号。"""
+                    keys = []
+                    for old_sym in old_symbols:
+                        if old_sym is None:
+                            continue
+                        old_s = str(old_sym).strip()
+                        if not old_s:
+                            continue
+                        new_s = _old_to_new.get(old_s)
+                        if new_s and new_s not in keys:
+                            keys.append(new_s)
+                        if old_s not in keys:
+                            keys.append(old_s)
+                    return _get_any(*keys) if keys else None
+
                 # b 型管板的 c 节点处理
                 if main_category == "b" and str(node_name).lower() == "c":
                     # 从快照中获取 n、e、R（历史兼容：g/h/f）
@@ -9743,7 +9762,7 @@ class TubeLayoutEditor(QMainWindow):
                     if node_lower == "a":
                         # e-a 节点：DL = min{(Dis - 2 * c), (Dis - 2 * b3), (Dit - 2 * b3)}
                         # 需要参数：c
-                        c_raw = _get_any("d3", "c")
+                        c_raw = _get_formula_old("c")
                         if c_raw is None:
                             print("[update_tube_layout_circle_dl] e-a 节点快照中缺少 c，回退到原逻辑计算 DL")
                             dl_value = _calc_dl_by_type(di_value, do_value)
@@ -9771,8 +9790,8 @@ class TubeLayoutEditor(QMainWindow):
                     elif node_lower == "b":
                         # e-b 节点：DL = min{(Dis - 2 * b - 2 * j), (Dis - 2 * b3), (Dit - 2 * b3)}
                         # 需要参数：b, j
-                        b_raw = _get_any("b", "d")
-                        j_raw = _get_any("e", "j")
+                        b_raw = _get_formula_old("d")
+                        j_raw = _get_formula_old("j")
                         if b_raw is None or j_raw is None:
                             print("[update_tube_layout_circle_dl] e-b 节点快照中缺少 b 或 j，回退到原逻辑计算 DL")
                             dl_value = _calc_dl_by_type(di_value, do_value)
@@ -9801,8 +9820,8 @@ class TubeLayoutEditor(QMainWindow):
                     elif node_lower == "c":
                         # e-c 节点：DL = min{(Dis - 2 * b - 2 * j), (Dis - 2 * b3), (Dit - 2 * b3)}
                         # 需要参数：b, j (与 e-b 相同)
-                        b_raw = _get_any("b", "d")
-                        j_raw = _get_any("e", "j")
+                        b_raw = _get_formula_old("e")
+                        j_raw = _get_formula_old("j")
                         if b_raw is None or j_raw is None:
                             print("[update_tube_layout_circle_dl] e-c 节点快照中缺少 b 或 j，回退到原逻辑计算 DL")
                             dl_value = _calc_dl_by_type(di_value, do_value)
@@ -9831,11 +9850,11 @@ class TubeLayoutEditor(QMainWindow):
                     elif node_lower == "d":
                         # e-d 节点：DL = min{[Dis - 2 * ((b / cosf + c) * tanf + b) - 2 * j], (Dis - 2 * b3), (Dit - 2 * b3)}
                         # 需要参数：b, c, j, cosf, tanf
-                        b_raw = _get_any("b", "d")
-                        c_raw = _get_any("d1", "c")
-                        j_raw = _get_any("e", "j")
-                        cosf_raw = _get_any("cosf")
-                        tanf_raw = _get_any("tanf")
+                        b_raw = _get_formula_old("d")
+                        c_raw = _get_formula_old("c")
+                        j_raw = _get_formula_old("j")
+                        cosf_raw = _get_formula_old("e")
+                        tanf_raw = _get_formula_old("f")
                         if b_raw is None or c_raw is None or j_raw is None or cosf_raw is None or tanf_raw is None:
                             print("[update_tube_layout_circle_dl] e-d 节点快照中缺少 b/c/j/cosf/tanf，回退到原逻辑计算 DL")
                             dl_value = _calc_dl_by_type(di_value, do_value)
@@ -9888,11 +9907,11 @@ class TubeLayoutEditor(QMainWindow):
                     elif node_lower == "e":
                         # e-e 节点：DL = min{[Dis - 2 * ((b / cosc + k) * tanc + b) - 2 * j], (Dis - 2 * b3), (Dit - 2 * b3)}
                         # 需要参数：b, k, j, cosc, tanc
-                        b_raw = _get_any("b", "e")
-                        k_raw = _get_any("d2", "k")
-                        j_raw = _get_any("e", "j")
-                        cosc_raw = _get_any("cosc")
-                        tanc_raw = _get_any("tanc")
+                        b_raw = _get_formula_old("e")
+                        k_raw = _get_formula_old("k")
+                        j_raw = _get_formula_old("j")
+                        cosc_raw = _get_formula_old("c")
+                        tanc_raw = _get_formula_old("f")
                         if b_raw is None or k_raw is None or j_raw is None or cosc_raw is None or tanc_raw is None:
                             print("[update_tube_layout_circle_dl] e-e 节点快照中缺少 b/k/j/cosc/tanc，回退到原逻辑计算 DL")
                             dl_value = _calc_dl_by_type(di_value, do_value)
@@ -9945,8 +9964,8 @@ class TubeLayoutEditor(QMainWindow):
                     elif node_lower == "f":
                         # e-f 节点：DL = min{(Dis - 4 * a - 2 * e), (Dis - 2 * b3), (Dit - 2 * b3)}
                         # 需要参数：a, e
-                        a_raw = _get_any("R1", "a")
-                        e_raw = _get_any("e", "p")
+                        a_raw = _get_formula_old("a")
+                        e_raw = _get_formula_old("e")
                         if a_raw is None or e_raw is None:
                             print("[update_tube_layout_circle_dl] e-f 节点快照中缺少 a 或 e，回退到原逻辑计算 DL")
                             dl_value = _calc_dl_by_type(di_value, do_value)
@@ -18603,6 +18622,111 @@ class TubeLayoutEditor(QMainWindow):
             if fetch:
                 return None
 
+    def _sync_tube_sheet_snapshot_and_update_dl(self):
+        """从管板形式页同步参数快照，并在命中特殊节点时重算布管限定圆 DL。"""
+        plate_type = None
+        full_params = []
+
+        if hasattr(self, "sheet_form_page") and hasattr(
+                self.sheet_form_page, "get_current_tube_form_data"
+        ):
+            try:
+                full_params = self.sheet_form_page.get_current_tube_form_data() or []
+            except Exception as e:
+                print(f"[My_Piping] 获取当前管板形式参数时出错: {e}")
+                full_params = []
+
+        for name, value in full_params:
+            if str(name).strip() == "管板类型":
+                plate_type = str(value).strip()
+                break
+
+        main_category = None
+        node_name = None
+        if plate_type:
+            parts = plate_type.split("_", 1)
+            if len(parts) >= 1 and parts[0]:
+                main_category = parts[0].lower()
+            if len(parts) == 2 and parts[1]:
+                node_name = parts[1].lower()
+
+        self.is_suitable_tube_sheet = (
+            ((main_category == "b") and (node_name in ["c", "d", "e", "h", "a"]))
+            or
+            ((main_category == "e") and (node_name in ["a", "b", "c", "d", "e", "f", "b"]))
+            if main_category
+            else False
+        )
+
+        try:
+            update_is_suitable_tube_sheet(self.is_suitable_tube_sheet)
+        except Exception:
+            pass
+
+        try:
+            print(
+                f"[My_Piping] plate_type={plate_type!r}, "
+                f"main_category={main_category!r}, node_name={node_name!r}, "
+                f"is_suitable_tube_sheet={self.is_suitable_tube_sheet}, "
+                f"full_params_len={len(full_params) if full_params else 0}"
+            )
+        except Exception:
+            pass
+
+        if self.is_suitable_tube_sheet and full_params:
+            print("[My_Piping] 命中特殊管板节点分支，准备保存快照并重算 DL。")
+
+            filtered_params = [
+                (name, value)
+                for name, value in full_params
+                if str(name).strip() != "管板类型"
+            ]
+
+            snapshot = {
+                "plate_type": plate_type,
+                "main_category": main_category,
+                "node_name": node_name,
+                "params": filtered_params,
+            }
+
+            try:
+                self.tube_sheet_params_snapshot = snapshot
+            except Exception:
+                pass
+            try:
+                update_tube_sheet_params_snapshot(snapshot)
+            except Exception:
+                pass
+
+            prev_suppress = getattr(self, "_suppress_open_s_dl_autoupdate", False)
+            if prev_suppress:
+                print("[My_Piping] 管板形式变更：临时允许 DL 自动重算（覆盖加载阶段抑制）")
+            self._suppress_open_s_dl_autoupdate = False
+            try:
+                self.update_tube_layout_circle_dl()
+            except Exception as e:
+                print(f"[My_Piping] 根据管板形式快照更新 DL 时发生异常: {e}")
+            finally:
+                self._suppress_open_s_dl_autoupdate = prev_suppress
+        else:
+            print("[My_Piping] 未命中特殊管板节点分支，清空管板参数快照。")
+            try:
+                self.tube_sheet_params_snapshot = {}
+            except Exception:
+                pass
+            try:
+                update_tube_sheet_params_snapshot({})
+            except Exception:
+                pass
+
+        try:
+            from pprint import pformat
+
+            snapshot_for_print = getattr(self, "tube_sheet_params_snapshot", {}) or {}
+            print("当前管板形式：\n" + pformat(snapshot_for_print))
+        except Exception:
+            pass
+
     def switch_page(self, index):
         # TODO 切换页面
         self.stacked_widget.setCurrentIndex(index)
@@ -18629,167 +18753,7 @@ class TubeLayoutEditor(QMainWindow):
         # 如果切换到“布管”tab（索引1），检查当前管板形式并按需获取参数
         try:
             if index == 1:
-
-                plate_type = None
-                full_params = []
-
-                # 从管板形式页面获取当前所有管板参数（包括管板类型）
-                if hasattr(self, "sheet_form_page") and hasattr(
-                        self.sheet_form_page, "get_current_tube_form_data"
-                ):
-                    try:
-                        full_params = (
-                                self.sheet_form_page.get_current_tube_form_data() or []
-                        )
-                    except Exception as e:
-                        print(f"[My_Piping] 获取当前管板形式参数时出错: {e}")
-                        full_params = []
-
-                # 从参数列表中提取管板类型
-                for name, value in full_params:
-                    if str(name).strip() == "管板类型":
-                        plate_type = str(value).strip()
-                        break
-
-                # 解析管板类型，识别是否为 b 型管板的 c/e/h 节点（例如 b_c、b_e、b_h）
-                main_category = None  # 管板大类（例如 b）
-                node_name = None  # 具体节点名（例如 c、d、e）
-                if plate_type:
-                    parts = plate_type.split("_", 1)
-                    if len(parts) >= 1 and parts[0]:
-                        main_category = parts[0].lower()
-                    if len(parts) == 2 and parts[1]:
-                        node_name = parts[1].lower()
-
-                # 仅当为 b 型管板的 c/e/h 节点或 e 型管板的节点时才作为特殊情况处理
-                self.is_suitable_tube_sheet = (
-                    ((main_category == "b") and (node_name in ["c", "d", "e", "h","a"]))
-                    or
-                    ((main_category == "e") and (node_name in ["a", "b", "c", "d","e","f","b"]))
-                    if main_category
-                    else False
-                )
-
-                # 每次切到布管 tab 都同步更新全局 is_suitable_tube_sheet
-                try:
-                    update_is_suitable_tube_sheet(self.is_suitable_tube_sheet)
-                except Exception:
-                    pass
-
-                # print(
-                #     f"[My_Piping] 当前管板类型: {plate_type if plate_type else '未获得'}，"
-                #     f"所属大类: {main_category if main_category else '未知'}，"
-                #     f"节点: {node_name if node_name else '未知'}，"
-                #     f"是否为 b 型 c/e/h 节点: {self.is_suitable_tube_sheet}"
-                # )
-
-                # 调试：打印当前识别到的管板类型与节点、参数数量
-                try:
-                    print(
-                        f"[My_Piping] plate_type={plate_type!r}, "
-                        f"main_category={main_category!r}, node_name={node_name!r}, "
-                        f"is_suitable_tube_sheet={self.is_suitable_tube_sheet}, "
-                        f"full_params_len={len(full_params) if full_params else 0}"
-                    )
-                except Exception:
-                    pass
-
-                # 若为 b 型管板的 c/e/h 节点，则输出当前所有管板参数，并保存快照
-                if self.is_suitable_tube_sheet and full_params:
-                    print("[My_Piping] 命中 b 型 c/d/e 节点分支，准备保存快照。")
-
-                    # 构造当前管板参数快照，包含节点信息
-                    # 同时过滤掉名称为“管板类型”的那一条参数
-                    filtered_params = [
-                        (name, value)
-                        for name, value in full_params
-                        if str(name).strip() != "管板类型"
-                    ]
-
-                    snapshot = {
-                        "plate_type": plate_type,
-                        "main_category": main_category,
-                        "node_name": node_name,
-                        "params": filtered_params,  # 确保是可序列化的列表
-                    }
-
-                    # 保存到实例属性和全局变量
-                    try:
-                        self.tube_sheet_params_snapshot = snapshot
-                    except Exception:
-                        pass
-                    try:
-                        update_tube_sheet_params_snapshot(snapshot)
-                    except Exception:
-                        pass
-
-                    # 立即根据最新快照更新布管限定圆 DL
-                    try:
-                        _cur_di = None
-                        _cur_dl = None
-                        try:
-                            for _r in range(self.param_table.rowCount()):
-                                _name_item = self.param_table.item(_r, 1)
-                                if not _name_item:
-                                    continue
-                                _pname = _name_item.text().strip()
-                                if _pname not in ("壳体内直径 Dis", "布管限定圆 DL"):
-                                    continue
-                                _w = self.param_table.cellWidget(_r, 2)
-                                if _w and isinstance(_w, QComboBox):
-                                    _txt = _w.currentText().strip()
-                                else:
-                                    _it = self.param_table.item(_r, 2)
-                                    _txt = _it.text().strip() if _it else ""
-                                if _txt == "":
-                                    continue
-                                try:
-                                    _v = float(_txt)
-                                except Exception:
-                                    continue
-                                if _pname == "壳体内直径 Dis":
-                                    _cur_di = _v
-                                elif _pname == "布管限定圆 DL":
-                                    _cur_dl = _v
-                        except Exception:
-                            pass
-
-                        # 与布管前逻辑一致：仅当 DL > Dis 时才自动重算并覆盖
-                        if _cur_di is not None and _cur_dl is not None and _cur_dl > _cur_di:
-                            self.update_tube_layout_circle_dl()
-                    except Exception as e:
-                        print(
-                            f"[My_Piping] 根据 b 型 c/d/e/h 节点快照更新 DL 时发生异常: {e}"
-                        )
-
-                    # for name, value in full_params:
-                    #     print(f"[My_Piping] 管板参数 - {name}: {value}")
-                else:
-                    # 不是 b 型 c/d/e 节点或未获取到参数时，清空参数快照
-                    print("[My_Piping] 未命中 b 型 c/d/e 节点分支，清空管板参数快照。")
-                    try:
-                        self.tube_sheet_params_snapshot = {}
-                    except Exception:
-                        pass
-                    try:
-                        update_tube_sheet_params_snapshot({})
-                    except Exception:
-                        pass
-
-                    # print("[My_Piping] 当前管板类型不是 b 型的 c/d/e 节点，或未获取到管板参数，本次不做额外处理。")
-
-                try:
-                    from pprint import pformat
-
-                    print("当前管板形式：\n" + pformat(tube_sheet_params_snapshot))
-                    # plate_type = tube_sheet_params_snapshot.get("plate_type")
-                    # main_category = tube_sheet_params_snapshot.get("main_category")
-                    # node_name = tube_sheet_params_snapshot.get("node_name")  # 节点
-                    # params = tube_sheet_params_snapshot.get("params", []) or []
-                    # for name, value in params:
-                    #     print(f"[My_Piping] 全局列表参数 - {name}: {value}")
-                except Exception:
-                    pass
+                self._sync_tube_sheet_snapshot_and_update_dl()
         except Exception as e:
             print(f"[My_Piping] 切换到布管 tab 时检查管板形式发生异常: {e}")
 

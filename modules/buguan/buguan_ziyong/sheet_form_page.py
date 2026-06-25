@@ -484,6 +484,10 @@ class SheetFormPage(QWidget):
         self.use_outer_diameter_base = None  # "是否以外径为基准"的当前值
         self.DL = None  # 布管限定圆 DL
         self._last_valid_DL = None  # 上一次合法的 DL 值
+        # 同一会话内保留用户选中的管板节点，避免切 tab 后被数据库默认值覆盖
+        self._sheet_form_state_initialized = False
+        self._session_selected_node = None
+        self._sheet_form_restored_product_id = None
         # 参数表程序化更新保护：避免初始化/联动时误判为“手动修改”
         self._sheet_form_programmatic_update = False
         self.setup_ui()
@@ -492,11 +496,23 @@ class SheetFormPage(QWidget):
             self._init_fallback_param_layout()
 
     def showEvent(self, event):
-        """页面显示时恢复上次保存的型式/节点及参数表。"""
+        """页面显示时恢复型式/节点；同一会话内切 tab 保留用户当前选中，不重复读库。"""
         super().showEvent(event)
         try:
+            current_pid = self.get_product_id()
+            if self._sheet_form_restored_product_id != current_pid:
+                self._sheet_form_state_initialized = False
+                self._session_selected_node = None
+                self._sheet_form_restored_product_id = current_pid
+
             if not getattr(self, "_sheet_form_user_readonly", False):
-                self._restore_saved_plate_state()
+                if not self._sheet_form_state_initialized:
+                    self._restore_saved_plate_state()
+                elif self._session_selected_node:
+                    idx = self._find_image_index_for_node(self._session_selected_node)
+                    self._handle_image_click(
+                        None, idx, restoring=True, skip_sync=True
+                    )
             if (not self._sheet_form_combo_popup_done
                     and hasattr(self, 'sheet_form_connection_type_combo')
                     and self.sheet_form_connection_type_combo is not None
@@ -842,7 +858,9 @@ class SheetFormPage(QWidget):
                 f"saved_node={saved_node}, default_node={default_node}, "
                 f"选中节点={target_node}, index={click_index}"
             )
-            self._handle_image_click(None, click_index, restoring=True)
+            self._session_selected_node = target_node
+            self._handle_image_click(None, click_index, restoring=True, skip_sync=True)
+            self._sheet_form_state_initialized = True
         except Exception as e:
             print(f"[sheet_form_page] 恢复保存状态失败: {e}")
             traceback.print_exc()
@@ -1129,8 +1147,15 @@ class SheetFormPage(QWidget):
             #
             # 延迟检查父窗口的 heat_exchanger 值
             # 延迟检查父窗口的 heat_exchanger 值，并优先使用已保存的管板类型
-            # 页面创建后延迟恢复（productID 可能稍后才就绪）
-            QTimer.singleShot(100, lambda: self._restore_saved_plate_state())
+            # 页面创建后延迟恢复（productID 可能稍后才就绪）；若 showEvent 已恢复则跳过
+            QTimer.singleShot(
+                100,
+                lambda: (
+                    self._restore_saved_plate_state()
+                    if not self._sheet_form_state_initialized
+                    else None
+                ),
+            )
             #
 
         except Exception as e:
@@ -1190,7 +1215,7 @@ class SheetFormPage(QWidget):
                 return
             idx = self._get_selected_sheet_form_image_index()
             if idx is not None and getattr(self, "sheet_form_current_images", None):
-                self._handle_image_click(None, idx, restoring=True)
+                self._handle_image_click(None, idx, restoring=True, skip_sync=True)
             else:
                 self._restore_saved_plate_state()
         except Exception:
@@ -1271,7 +1296,7 @@ class SheetFormPage(QWidget):
             print(f"[sheet_form_page] 获取productID时出错: {e}")
             return None
 
-    def _handle_image_click(self, event, index, restoring=False):
+    def _handle_image_click(self, event, index, restoring=False, skip_sync=False):
         # 方法内容保持不变
         try:
             # 用户只读开关：只读时不允许手动点选；恢复保存状态时仍加载参数表
@@ -1313,6 +1338,10 @@ class SheetFormPage(QWidget):
             # 输出选中的图片名称（不带扩展名）
             image_name_without_ext = os.path.splitext(clicked_image)[0]
             print(f"选中节点: {image_name_without_ext}")
+
+            if not restoring:
+                self._session_selected_node = image_name_without_ext
+                self._sheet_form_state_initialized = True
             
             # 输出产品ID
             product_id = self.get_product_id()
@@ -1544,9 +1573,17 @@ class SheetFormPage(QWidget):
                 finally:
                     self._sheet_form_programmatic_update = False
 
-                # 点击图片后同步更新父窗口的sheet_form_param_layout
+                # 点击图片后同步更新父窗口的sheet_form_param_layout，并重算布管限定圆 DL
+                # 程序化恢复（读库/切 tab 回显）时不重算，避免覆盖用户已选节点对应的 DL
                 if self.parent:
                     self.parent.sheet_form_param_layout = self.get_current_tube_form_data()
+                    if not skip_sync and hasattr(
+                        self.parent, "_sync_tube_sheet_snapshot_and_update_dl"
+                    ):
+                        try:
+                            self.parent._sync_tube_sheet_snapshot_and_update_dl()
+                        except Exception as sync_err:
+                            print(f"[sheet_form_page] 同步管板快照并重算 DL 失败: {sync_err}")
             else:
                 # 如果没有参数，显示空表格
                 self.sheet_form_param_table.setRowCount(0)
