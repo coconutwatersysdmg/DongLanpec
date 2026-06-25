@@ -14685,11 +14685,11 @@ class TubeLayoutEditor(QMainWindow):
                             f"[on_table_item_changed] Dis/Dit 同步(Dit→Dis)失败: {_dit_sync_e}"
                         )
 
-                # 2.6) 专项校验：布管限定圆 DL 不得大于换热器计算方法的自动计算值
+                # 2.6) 专项校验：布管限定圆 DL 超出标准推荐值时提示，但允许用户保留输入
                 if param_name == "布管限定圆 DL":
                     try:
                         from PyQt5.QtWidgets import QMessageBox
-                        from PyQt5.QtCore import QSignalBlocker as _QSB, QTimer
+                        from PyQt5.QtCore import QTimer
 
                         cur_dl_text = str(param_value).strip()
 
@@ -14732,7 +14732,7 @@ class TubeLayoutEditor(QMainWindow):
                         except Exception:
                             _do_val = None
 
-                        # 根据换热器型号计算 DL 上限
+                        # 根据换热器型号计算 DL 标准推荐值
                         _dl_limit = None
                         if _di_val is not None and _do_val is not None and _di_val > 0 and _do_val > 0:
                             _hx = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
@@ -14753,12 +14753,12 @@ class TubeLayoutEditor(QMainWindow):
                                 _b3 = max(0.25 * _do_val, 8.0)
                                 _dl_limit = _di_val - 2 * _b3
 
-                        # 仅当能算出上限时才做校验
+                        # 超出标准推荐值：提示但允许保留；其余情况正常更新缓存
                         if cur_dl_val is not None and _dl_limit is not None and cur_dl_val > _dl_limit:
                             print(
-                                f"[DL_LIMIT] 用户输入 DL={cur_dl_val} > 计算上限 {_dl_limit:.1f}，触发回滚"
+                                f"[DL_LIMIT] 用户输入 DL={cur_dl_val} > 标准推荐值 {_dl_limit:.1f}，已提示并保留"
                             )
-                            # 弹窗限频：0.8s 内同一违规值只弹一次；回滚始终立即执行
+                            # 弹窗限频：0.8s 内只弹一次
                             try:
                                 import time as _time
                                 _now = _time.monotonic()
@@ -14772,7 +14772,7 @@ class TubeLayoutEditor(QMainWindow):
                                     QMessageBox.warning(
                                         self,
                                         "提示",
-                                        "您输入的布管限定圆数值已超限，请重新输入!",
+                                        "输入值已超出标准要求",
                                     )
                                 except Exception:
                                     pass
@@ -14782,38 +14782,15 @@ class TubeLayoutEditor(QMainWindow):
                                     self._last_dl_limit_warn_time = _now if _now is not None else 0.0
                                 except Exception:
                                     pass
-                                # 异步弹窗，避免 itemChanged 内同步阻塞引发连弹
                                 try:
                                     QTimer.singleShot(0, _show_dl_warn)
                                 except Exception:
                                     _show_dl_warn()
 
-                            # 立即回滚（不受弹窗限频影响）
-                            rollback_dl = getattr(self, "_last_valid_dl_text", "").strip()
-                            if rollback_dl == "":
-                                try:
-                                    rollback_dl = str(
-                                        self.original_param_values.get((row, 2), "")
-                                    ).strip()
-                                except Exception:
-                                    rollback_dl = ""
-                            _blocker = None
-                            try:
-                                _blocker = _QSB(self.param_table)
-                                changed_item.setText(rollback_dl)
-                            except Exception:
-                                try:
-                                    changed_item.setText(rollback_dl)
-                                except Exception:
-                                    pass
-                            finally:
-                                _blocker = None
-                            return
-                        elif cur_dl_val is not None:
-                            # 合法：更新缓存
+                        if cur_dl_val is not None:
                             self._last_valid_dl_text = cur_dl_text
                     except Exception as _dl_limit_e:
-                        print(f"[on_table_item_changed] DL 计算上限校验失败: {_dl_limit_e}")
+                        print(f"[on_table_item_changed] DL 标准推荐值校验失败: {_dl_limit_e}")
 
                 _need_di_dl_check = param_name in (
                     "壳体内直径 Dis",
