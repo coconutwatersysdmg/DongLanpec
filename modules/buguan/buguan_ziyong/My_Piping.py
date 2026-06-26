@@ -2231,14 +2231,21 @@ class TubeLayoutEditor(QMainWindow):
                 if item is not None:
                     item.setFlags(readonly_flags)
 
-    def update_total_lagan_count(self):
-        """更新拉杆要求/已有数量显示。"""
+    def _get_total_lagan_count(self):
+        """普通拉杆 + 自由拉杆总数（与左下角「标准要求数量/已有数量」统计一致）。"""
         lagan_list = getattr(self, "lagan_info", []) or []
-        # 只使用一种自由拉杆列表计数，避免重复计数
         red_abs_list = getattr(self, "red_dangban_abs", []) or []
         red_list = getattr(self, "red_dangban", []) or []
         free_count = len(red_abs_list) if red_abs_list else len(red_list)
-        total = len(lagan_list) + free_count
+        if isinstance(lagan_list, (list, tuple)):
+            return len(lagan_list) + free_count
+        if isinstance(lagan_list, int):
+            return int(lagan_list) + free_count
+        return free_count
+
+    def update_total_lagan_count(self):
+        """更新拉杆要求/已有数量显示。"""
+        total = self._get_total_lagan_count()
         std = self._get_lagan_required_count()
         self.current_lagan_standard_required = std
         if hasattr(self, "lagan_required_label"):
@@ -16844,16 +16851,9 @@ class TubeLayoutEditor(QMainWindow):
             # === 1️⃣ 获取参数 ===
             gongcheng_zhijing = self.get_gongchengzhijing_count()
             lagan_zhijing = self.get_laganzhijing_count()
-            lagan_info = getattr(self, "lagan_info", None)
 
-            # === 2️⃣ 计算已有拉杆数量 ===
-            red_list = getattr(self, "red_dangban", []) or []
-            if isinstance(lagan_info, (list, tuple)):
-                lagan_count = len(lagan_info) + len(red_list)
-            elif isinstance(lagan_info, int):
-                lagan_count = int(lagan_info) + len(red_list)
-            else:
-                lagan_count = len(red_list)
+            # === 2️⃣ 计算已有拉杆数量（普通拉杆 + 自由拉杆，与左下角统计一致）===
+            lagan_count = self._get_total_lagan_count()
 
             # === 3️⃣ 类型转换并验证有效性 ===
             try:
