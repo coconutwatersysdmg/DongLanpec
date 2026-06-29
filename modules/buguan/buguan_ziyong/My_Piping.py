@@ -827,6 +827,8 @@ class ClickableCircleItem(QGraphicsEllipseItem):
         self.paired_rod = None  # 配对拉杆引用
         self.original_selected_center = None  # 存储原始选中坐标
         self.position = None  # 存储拉杆的绝对坐标（用于普通拉杆）
+        self.symmetry_group_id = None  # 自由拉杆对称组 ID（同批添加相同）
+        self.free_lagan_diameter = None  # 自由拉杆直径（参数值）
 
     def set_paired_rod(self, rod):
         """设置配对拉杆（双向绑定）"""
@@ -1342,6 +1344,8 @@ class TubeLayoutEditor(QMainWindow):
         self.all_params = []
         self.red_dangban = []
         self.red_dangban_abs = []
+        self.free_lagan_info = []  # 自由拉杆结构化记录（含 symmetry_group_id）
+        self._free_lagan_group_seq = 0
         self.screw_ring_num = 0
         # 当前管板参数快照（包含节点信息），与 variable.tube_sheet_params_snapshot 对应
         self.tube_sheet_params_snapshot = {}
@@ -2236,6 +2240,7 @@ class TubeLayoutEditor(QMainWindow):
         self.lagan_info = []
         self.red_dangban = []
         self.red_dangban_abs = []
+        self.free_lagan_info = []
         try:
             self.selected_side_rods = []
         except Exception:
@@ -2272,10 +2277,46 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
+    def _next_free_lagan_group_id(self):
+        if not hasattr(self, "_free_lagan_group_seq"):
+            self._free_lagan_group_seq = 0
+        self._free_lagan_group_seq += 1
+        return f"fg_{self._free_lagan_group_seq}"
+
+    def _apply_free_lagan_metadata(self, rod, diameter, symmetry_group_id=None):
+        """为自由拉杆图元写入对称组 ID 与直径。"""
+        if symmetry_group_id is None:
+            symmetry_group_id = self._next_free_lagan_group_id()
+        elif isinstance(symmetry_group_id, str) and symmetry_group_id.startswith("fg_"):
+            try:
+                seq = int(symmetry_group_id.split("_", 1)[1])
+                if not hasattr(self, "_free_lagan_group_seq"):
+                    self._free_lagan_group_seq = 0
+                self._free_lagan_group_seq = max(self._free_lagan_group_seq, seq)
+            except Exception:
+                pass
+        try:
+            rod.symmetry_group_id = symmetry_group_id
+            rod.free_lagan_diameter = float(diameter)
+        except Exception:
+            pass
+        return symmetry_group_id
+
+    def _get_side_rod_abs_center(self, rod, precision=6):
+        try:
+            rr = rod.rect()
+            return (
+                round(float(rr.center().x()), precision),
+                round(float(rr.center().y()), precision),
+            )
+        except Exception:
+            return None
+
     def _sync_free_lagan_lists_from_scene(self):
-        """从场景同步自由拉杆坐标列表，与保存/重载逻辑一致。"""
+        """从场景同步自由拉杆坐标列表及 free_lagan_info，与保存/重载逻辑一致。"""
         abs_centers = []
         relative_centers = []
+        free_lagan_info = []
         try:
             scene = getattr(self, "graphics_scene", None)
             if scene:
@@ -2284,14 +2325,29 @@ class TubeLayoutEditor(QMainWindow):
                         continue
                     try:
                         r = it.rect()
-                        abs_centers.append(
-                            (float(r.center().x()), float(r.center().y()))
+                        abs_coord = (
+                            float(r.center().x()),
+                            float(r.center().y()),
                         )
+                        abs_centers.append(abs_coord)
                     except Exception:
-                        pass
+                        abs_coord = None
                     rel = getattr(it, "original_selected_center", None)
                     if rel is not None and rel not in relative_centers:
                         relative_centers.append(rel)
+                    if abs_coord is not None:
+                        free_lagan_info.append(
+                            {
+                                "abs_coord": abs_coord,
+                                "rel_coord": rel,
+                                "diameter": getattr(
+                                    it, "free_lagan_diameter", None
+                                ),
+                                "symmetry_group_id": getattr(
+                                    it, "symmetry_group_id", None
+                                ),
+                            }
+                        )
         except Exception:
             pass
 
@@ -2300,6 +2356,7 @@ class TubeLayoutEditor(QMainWindow):
         else:
             self.red_dangban_abs = []
         self.red_dangban = list(relative_centers)
+        self.free_lagan_info = free_lagan_info
 
     def _get_free_lagan_count(self):
         """自由拉杆数量：优先统计场景图元，与保存前重建列表逻辑一致。"""
@@ -3179,6 +3236,7 @@ class TubeLayoutEditor(QMainWindow):
             6: "impingement_plate_2_centers",  # 折边式防冲板
             7: "del_centers",  # 删除的圆心
             8: "slide_selected_centers",  # 与滑道干涉的换热管
+            10: "free_lagan_info",  # 自由拉杆结构化数据（含 symmetry_group_id）
         }
         # 初始化所有结果为空白列表
         results = {value: [] for _, value in element_mapping.items()}
@@ -5220,19 +5278,62 @@ class TubeLayoutEditor(QMainWindow):
 
         # 收集超出折流/支持板外径的坐标，最后统一提示
         invalid_centers = []
-        for center in parsed_side_abs_centers:
-            result = self.build_free_form_lagan(
-                selected_centers=[],
-                lagan_length=self.lagan_length,
-                lagan_coord=center,
-            )
-            if result is False:
-                invalid_centers.append(center)
-        for center in legacy_side_rel_centers:
-            result = self.build_free_form_lagan([center], self.lagan_length)
-            # 如果返回 False，说明超出范围
-            if result is False:
-                invalid_centers.append(center)
+
+        free_lagan_info_raw = all_coords.get("free_lagan_info", [])
+        free_lagan_records = []
+        try:
+            import ast
+
+            if isinstance(free_lagan_info_raw, str) and free_lagan_info_raw.strip():
+                free_lagan_info_raw = ast.literal_eval(free_lagan_info_raw)
+            if isinstance(free_lagan_info_raw, list):
+                free_lagan_records = free_lagan_info_raw
+        except Exception as e:
+            print(f"转换 free_lagan_info 时出错: {e}")
+            free_lagan_records = []
+
+        if free_lagan_records:
+            for rec in free_lagan_records:
+                if not isinstance(rec, dict):
+                    continue
+                abs_coord = rec.get("abs_coord")
+                rel_coord = rec.get("rel_coord")
+                group_id = rec.get("symmetry_group_id")
+                dia = rec.get("diameter") or self.lagan_length
+                build_kwargs = {
+                    "lagan_length": dia,
+                    "symmetry_group_id": group_id,
+                }
+                if abs_coord is not None:
+                    build_kwargs["lagan_coord"] = abs_coord
+                    build_kwargs["selected_centers"] = (
+                        [rel_coord] if rel_coord is not None else []
+                    )
+                elif rel_coord is not None:
+                    build_kwargs["selected_centers"] = [rel_coord]
+                else:
+                    continue
+                result = self.build_free_form_lagan(**build_kwargs)
+                if result is False:
+                    invalid_centers.append(abs_coord or rel_coord)
+        else:
+            for center in parsed_side_abs_centers:
+                result = self.build_free_form_lagan(
+                    selected_centers=[],
+                    lagan_length=self.lagan_length,
+                    lagan_coord=center,
+                    symmetry_group_id=self._next_free_lagan_group_id(),
+                )
+                if result is False:
+                    invalid_centers.append(center)
+            for center in legacy_side_rel_centers:
+                result = self.build_free_form_lagan(
+                    [center],
+                    self.lagan_length,
+                    symmetry_group_id=self._next_free_lagan_group_id(),
+                )
+                if result is False:
+                    invalid_centers.append(center)
 
         # 如果有超出范围的坐标，统一提示一次
         if invalid_centers:
@@ -25381,6 +25482,8 @@ class TubeLayoutEditor(QMainWindow):
             red_pen.setWidth(1)
             red_brush = QBrush(Qt.red)
 
+            convert_group_id = self._next_free_lagan_group_id()
+
             # 依次为每个 entry 生成一个或多个自由拉杆（考虑对称）
             for ent in entry_list:
                 base_cx = ent["cx"]
@@ -25409,6 +25512,9 @@ class TubeLayoutEditor(QMainWindow):
                     lagan_rod.original_brush = red_brush
                     lagan_rod.original_selected_center = (row_label, col_label)
                     lagan_rod.setZValue(20)
+                    self._apply_free_lagan_metadata(
+                        lagan_rod, diameter, symmetry_group_id=convert_group_id
+                    )
                     if hasattr(self, "graphics_scene") and self.graphics_scene is not None:
                         self.graphics_scene.addItem(lagan_rod)
 
@@ -25419,6 +25525,11 @@ class TubeLayoutEditor(QMainWindow):
                         coord_pair = (cx, cy)
                         if coord_pair not in self.red_dangban_abs:
                             self.red_dangban_abs.append(coord_pair)
+                        rel_coord = (row_label, col_label)
+                        if not hasattr(self, "red_dangban"):
+                            self.red_dangban = []
+                        if rel_coord not in self.red_dangban:
+                            self.red_dangban.append(rel_coord)
                     except Exception as e:
                         print(
                             f"[convert_center_dangguan_to_free_lagan] 写入 self.red_dangban_abs 失败: {e}"
@@ -25431,6 +25542,7 @@ class TubeLayoutEditor(QMainWindow):
             try:
                 if hasattr(self, "update_total_lagan_count"):
                     self.update_total_lagan_count()
+                self._sync_free_lagan_lists_from_scene()
             except Exception:
                 pass
 
@@ -26813,7 +26925,7 @@ class TubeLayoutEditor(QMainWindow):
                 rel_coord = self.actual_to_selected_coords((cx, cy))
             
             # 辅助函数：手动创建侧拉杆（自由拉杆）
-            def _create_side_lagan_manually(cx, cy, lagan_length):
+            def _create_side_lagan_manually(cx, cy, lagan_length, group_id):
                 """手动创建侧拉杆（自由拉杆）的辅助函数"""
                 from PyQt5.QtCore import QRectF
                 from PyQt5.QtGui import QPen, QBrush, QColor
@@ -26835,6 +26947,9 @@ class TubeLayoutEditor(QMainWindow):
                 lagan_rod.original_pen = red_pen
                 lagan_rod.original_brush = red_brush
                 lagan_rod.setZValue(20)
+                applied_gid = self._apply_free_lagan_metadata(
+                    lagan_rod, lagan_length, symmetry_group_id=group_id
+                )
                 self.graphics_scene.addItem(lagan_rod)
                 
                 # 更新操作记录
@@ -26845,6 +26960,7 @@ class TubeLayoutEditor(QMainWindow):
                     "coord": (cx, cy),
                     "radius": lagan_radius,
                     "diameter": lagan_length,
+                    "symmetry_group_id": applied_gid,
                 })
                 self.update_total_lagan_count()
                 print(f"[screw_ring_to_lagan] 已手动创建侧拉杆（自由拉杆，绝对坐标），坐标: ({cx:.3f}, {cy:.3f})")
@@ -26887,6 +27003,7 @@ class TubeLayoutEditor(QMainWindow):
                             unique_coords.append(coord)
                     
                     lagan_length = getattr(self, "r", 10.0) * 2  # 获取拉杆直径
+                    screw_ring_group_id = self._next_free_lagan_group_id()
                     
                     # 对每个对称位置创建侧拉杆
                     for scx, scy in unique_coords:
@@ -26897,15 +27014,23 @@ class TubeLayoutEditor(QMainWindow):
                         
                         if rel_coord_for_free:
                             # 有相对坐标，尝试使用 build_free_form_lagan
-                            result = self.build_free_form_lagan([rel_coord_for_free], lagan_length)
+                            result = self.build_free_form_lagan(
+                                [rel_coord_for_free],
+                                lagan_length,
+                                symmetry_group_id=screw_ring_group_id,
+                            )
                             if result is False or result is None:
                                 # build_free_form_lagan 失败，手动创建
-                                _create_side_lagan_manually(scx, scy, lagan_length)
+                                _create_side_lagan_manually(
+                                    scx, scy, lagan_length, screw_ring_group_id
+                                )
                             else:
                                 print(f"[screw_ring_to_lagan] 已通过 build_free_form_lagan 创建侧拉杆，绝对坐标: ({scx:.3f}, {scy:.3f})")
                         else:
                             # 无相对坐标，直接手动创建
-                            _create_side_lagan_manually(scx, scy, lagan_length)
+                            _create_side_lagan_manually(
+                                scx, scy, lagan_length, screw_ring_group_id
+                            )
                     
                     print(f"[screw_ring_to_lagan] 已将吊环螺钉 {screw_ring_id} 转换为侧拉杆（自由拉杆），对称后坐标数量: {len(unique_coords)}, 原始坐标: ({cx:.3f}, {cy:.3f})")
             except Exception as e:
@@ -27477,6 +27602,7 @@ class TubeLayoutEditor(QMainWindow):
                 component_mappings = [
                     ("lagan_info", 0, "len"),  # 拉杆：坐标数量
                     ("red_dangban_abs", 1, "len_x2"),  # 最左最右拉杆：使用绝对坐标存储
+                    ("free_lagan_info", 10, "len"),  # 自由拉杆结构化数据
                     (
                         "center_dangban",
                         4,
@@ -27539,6 +27665,12 @@ class TubeLayoutEditor(QMainWindow):
                                 self.red_dangban_abs = []
                             except Exception:
                                 pass
+                    elif var_name == "free_lagan_info":
+                        try:
+                            self._sync_free_lagan_lists_from_scene()
+                        except Exception:
+                            pass
+                        comp_data = getattr(self, "free_lagan_info", []) or []
 
                     # 使用str()而非json.dumps()来保持元组格式
                     coords_str = str(comp_data) if comp_data is not None else str([])
@@ -33277,9 +33409,15 @@ class TubeLayoutEditor(QMainWindow):
         print(
             f"[on_free_form_lagan_click] 无弹窗模式，方式={arrange_mode}，直径={lagan_length}，准备逐点构建自由拉杆，选中个数={len(selected_centers)}"
         )
+        batch_group_id = self._next_free_lagan_group_id()
         invalid_centers = []
         for center in selected_centers:
-            okflag = self.build_free_form_lagan([center], lagan_length, arrange_mode=arrange_mode)
+            okflag = self.build_free_form_lagan(
+                [center],
+                lagan_length,
+                arrange_mode=arrange_mode,
+                symmetry_group_id=batch_group_id,
+            )
             if okflag is False:
                 invalid_centers.append(center)
 
@@ -33314,6 +33452,7 @@ class TubeLayoutEditor(QMainWindow):
 
         self.selected_centers = []
         self.clear_selection_highlight()
+        self._sync_free_lagan_lists_from_scene()
         return
 
         # ---------- 弹窗 ----------
@@ -33541,9 +33680,12 @@ class TubeLayoutEditor(QMainWindow):
         )
 
         # 逐点构建，收集越界
+        batch_group_id = self._next_free_lagan_group_id()
         invalid_centers = []
         for center in selected_centers:
-            okflag = self.build_free_form_lagan([center], lagan_length)
+            okflag = self.build_free_form_lagan(
+                [center], lagan_length, symmetry_group_id=batch_group_id
+            )
             if okflag is False:
                 invalid_centers.append(center)
 
@@ -33584,6 +33726,7 @@ class TubeLayoutEditor(QMainWindow):
 
         self.selected_centers = []
         self.clear_selection_highlight()
+        self._sync_free_lagan_lists_from_scene()
 
     def edit_free_lagan(self, lagan_item):
         self.operation_order += 1
@@ -34208,13 +34351,15 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             QMessageBox.warning(self, "错误", "拉杆直径无效")
             return
+        rebuild_group_id = self._next_free_lagan_group_id()
         for center in centers_to_process:
-            self.build_free_form_lagan([center], lagan_length)
+            self.build_free_form_lagan(
+                [center], lagan_length, symmetry_group_id=rebuild_group_id
+            )
 
     def delete_selected_side_rods(self):
         self.operation_order += 1
-        """删除选中的最左最右拉杆，支持对称模式下删除所有相关拉杆"""
-        # 确保 selected_side_rods 列表存在
+        """删除选中的自由拉杆；对称模式下按 symmetry_group_id 删除同组拉杆。"""
         if not hasattr(self, "selected_side_rods"):
             self.selected_side_rods = []
 
@@ -34226,109 +34371,59 @@ class TubeLayoutEditor(QMainWindow):
             f"[delete_selected_side_rods] 开始删除，选中拉杆数量: {len(self.selected_side_rods)}"
         )
 
-        # 存储要删除的拉杆坐标信息
-        rods_to_remove_info = []
-
-        # 找出选中拉杆对应的坐标信息
-        for rod in self.selected_side_rods:
-            if hasattr(rod, "original_selected_center"):
-                rod_info = rod.original_selected_center
-                rods_to_remove_info.append(rod_info)
-
-        # 去重
-        rods_to_remove_info = list(set(rods_to_remove_info))
-
-        if not rods_to_remove_info:
-            return
-
-        # 复制选中列表避免迭代中修改
         rods_to_remove = list(self.selected_side_rods)
-        removed_rods = set()
+        group_ids = set()
+        for rod in rods_to_remove:
+            gid = getattr(rod, "symmetry_group_id", None)
+            if gid:
+                group_ids.add(gid)
 
-        # 收集所有需要删除的拉杆
-        all_rods_to_remove = set(rods_to_remove)
+        all_rods_to_remove = []
+        seen_ids = set()
 
-        # 如果是对称模式，获取所有对称坐标（左右、上下、中心对称，最多4个）
-        if self.isSymmetry:
-            try:
-                # 使用 judge_linkage 获取所有对称坐标（包括左右、上下、中心对称）
-                all_symmetric_coords = self.judge_linkage(rods_to_remove_info)
-                rods_to_remove_info = all_symmetric_coords
-                print(
-                    f"[delete_selected_side_rods] 对称模式，找到所有对称坐标（最多4个）: {rods_to_remove_info}"
-                )
-
-                # 通过坐标在场景中查找所有相关的拉杆（包括对称的）
-                for item in self.graphics_scene.items():
-                    # 使用类型名检查，避免 ClickableCircleItem 未定义的问题
-                    if (
-                            hasattr(item, "__class__")
-                            and item.__class__.__name__ == "ClickableCircleItem"
-                            and hasattr(item, "is_side_rod")
-                            and item.is_side_rod
-                            and hasattr(item, "original_selected_center")
-                    ):
-
-                        item_coord = item.original_selected_center
-                        # 检查这个拉杆坐标是否在要删除的坐标列表中
-                        if item_coord in rods_to_remove_info:
-                            all_rods_to_remove.add(item)
-                            # 同时添加其配对拉杆（如果存在）
-                            if hasattr(item, "paired_rod") and item.paired_rod:
-                                all_rods_to_remove.add(item.paired_rod)
-            except Exception as e:
-                # 出错时继续使用原始坐标，不中断删除操作
-                print(f"[delete_selected_side_rods] 获取对称坐标时出错: {e}")
-                import traceback
-
-                traceback.print_exc()
-        else:
-            # 非对称模式：只删除选中的拉杆，不查找对称的
+        if self.isSymmetry and group_ids:
             print(
-                f"[delete_selected_side_rods] 非对称模式，只删除选中的 {len(rods_to_remove)} 个拉杆"
+                f"[delete_selected_side_rods] 对称模式，按 symmetry_group_id 删除: {sorted(group_ids)}"
             )
+            for item in self.graphics_scene.items():
+                if not (
+                    getattr(item, "__class__", None)
+                    and item.__class__.__name__ == "ClickableCircleItem"
+                    and getattr(item, "is_side_rod", False)
+                ):
+                    continue
+                item_gid = getattr(item, "symmetry_group_id", None)
+                if item_gid not in group_ids:
+                    continue
+                item_key = id(item)
+                if item_key in seen_ids:
+                    continue
+                seen_ids.add(item_key)
+                all_rods_to_remove.append(item)
+        else:
+            if self.isSymmetry and not group_ids:
+                print(
+                    "[delete_selected_side_rods] 对称模式但无 symmetry_group_id，仅删除选中项"
+                )
+            else:
+                print(
+                    f"[delete_selected_side_rods] 非对称模式，只删除选中的 {len(rods_to_remove)} 个拉杆"
+                )
+            for rod in rods_to_remove:
+                item_key = id(rod)
+                if item_key not in seen_ids:
+                    seen_ids.add(item_key)
+                    all_rods_to_remove.append(rod)
 
-        # 删除所有相关的拉杆图形项
         deleted_count = 0
         for rod in all_rods_to_remove:
-            if rod in removed_rods:
-                continue
-
-            # 从场景中移除拉杆
             if rod.scene() == self.graphics_scene:
                 self.graphics_scene.removeItem(rod)
                 deleted_count += 1
                 print(
-                    f"[delete_selected_side_rods] 删除拉杆，坐标: {getattr(rod, 'original_selected_center', 'N/A')}"
+                    f"[delete_selected_side_rods] 删除拉杆，group_id={getattr(rod, 'symmetry_group_id', None)}, "
+                    f"abs={self._get_side_rod_abs_center(rod)}"
                 )
-            removed_rods.add(rod)
-
-            # 移除配对拉杆（如果存在且尚未被移除）
-            if (
-                    hasattr(rod, "paired_rod")
-                    and rod.paired_rod
-                    and rod.paired_rod not in removed_rods
-            ):
-
-                if rod.paired_rod.scene() == self.graphics_scene:
-                    self.graphics_scene.removeItem(rod.paired_rod)
-                removed_rods.add(rod.paired_rod)
-
-            # 从red_dangban列表中移除对应的坐标
-            if (
-                    hasattr(rod, "original_selected_center")
-                    and rod.original_selected_center
-            ):
-                if rod.original_selected_center in self.red_dangban:
-                    self.red_dangban.remove(rod.original_selected_center)
-            try:
-                if hasattr(self, "red_dangban_abs") and isinstance(self.red_dangban_abs, list):
-                    rr = rod.rect()
-                    abs_coord = (float(rr.center().x()), float(rr.center().y()))
-                    if abs_coord in self.red_dangban_abs:
-                        self.red_dangban_abs.remove(abs_coord)
-            except Exception:
-                pass
 
         self._sync_free_lagan_lists_from_scene()
         self.update_total_lagan_count()
@@ -34350,6 +34445,7 @@ class TubeLayoutEditor(QMainWindow):
             lagan_length=None,
             arrange_mode="row",
             lagan_coord=None,
+            symmetry_group_id=None,
     ):
         self.operation_order += 1
         """
@@ -34630,6 +34726,10 @@ class TubeLayoutEditor(QMainWindow):
         lagan_rod.setZValue(20)
         self.graphics_scene.addItem(lagan_rod)
 
+        applied_group_id = self._apply_free_lagan_metadata(
+            lagan_rod, lagan_length, symmetry_group_id=symmetry_group_id
+        )
+
         # 维护自由拉杆坐标缓存：相对坐标（兼容旧逻辑）+绝对坐标（新存储）
         if not hasattr(self, "red_dangban"):
             self.red_dangban = []
@@ -34658,6 +34758,7 @@ class TubeLayoutEditor(QMainWindow):
                 "coord": (lagan_x, lagan_y),
                 "radius": lagan_radius,
                 "diameter": lagan_length,
+                "symmetry_group_id": applied_group_id,
             }
         )
         self.update_total_lagan_count()
