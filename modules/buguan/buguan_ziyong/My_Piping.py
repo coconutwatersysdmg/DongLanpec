@@ -2231,12 +2231,104 @@ class TubeLayoutEditor(QMainWindow):
                 if item is not None:
                     item.setFlags(readonly_flags)
 
+    def _reset_all_lagan_state_for_buguan(self, clear_scene=True):
+        """布管前/后重置拉杆状态：普通拉杆 + 自由拉杆均清零。"""
+        self.lagan_info = []
+        self.red_dangban = []
+        self.red_dangban_abs = []
+        try:
+            self.selected_side_rods = []
+        except Exception:
+            pass
+        try:
+            self.selected_lagans = []
+        except Exception:
+            pass
+
+        if clear_scene:
+            scene = getattr(self, "graphics_scene", None)
+            if scene is not None:
+                to_remove = []
+                for it in list(scene.items()):
+                    try:
+                        if getattr(it, "is_lagan", False) or getattr(
+                            it, "is_side_rod", False
+                        ):
+                            to_remove.append(it)
+                    except Exception:
+                        continue
+                for it in to_remove:
+                    try:
+                        scene.removeItem(it)
+                    except Exception:
+                        pass
+
+        try:
+            self._sync_current_centers_lagan(reason="reset_all_lagan_state_for_buguan")
+        except Exception:
+            pass
+        try:
+            self._sync_free_lagan_lists_from_scene()
+        except Exception:
+            pass
+
+    def _sync_free_lagan_lists_from_scene(self):
+        """从场景同步自由拉杆坐标列表，与保存/重载逻辑一致。"""
+        abs_centers = []
+        relative_centers = []
+        try:
+            scene = getattr(self, "graphics_scene", None)
+            if scene:
+                for it in scene.items():
+                    if not getattr(it, "is_side_rod", False):
+                        continue
+                    try:
+                        r = it.rect()
+                        abs_centers.append(
+                            (float(r.center().x()), float(r.center().y()))
+                        )
+                    except Exception:
+                        pass
+                    rel = getattr(it, "original_selected_center", None)
+                    if rel is not None and rel not in relative_centers:
+                        relative_centers.append(rel)
+        except Exception:
+            pass
+
+        if abs_centers:
+            self.red_dangban_abs = list(dict.fromkeys(abs_centers))
+        else:
+            self.red_dangban_abs = []
+        self.red_dangban = list(relative_centers)
+
+    def _get_free_lagan_count(self):
+        """自由拉杆数量：优先统计场景图元，与保存前重建列表逻辑一致。"""
+        abs_centers = []
+        try:
+            scene = getattr(self, "graphics_scene", None)
+            if scene:
+                for it in scene.items():
+                    if getattr(it, "is_side_rod", False):
+                        try:
+                            r = it.rect()
+                            abs_centers.append(
+                                (float(r.center().x()), float(r.center().y()))
+                            )
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+        if abs_centers:
+            return len(dict.fromkeys(abs_centers))
+
+        red_abs_list = getattr(self, "red_dangban_abs", []) or []
+        red_list = getattr(self, "red_dangban", []) or []
+        return len(red_abs_list) if red_abs_list else len(red_list)
+
     def _get_total_lagan_count(self):
         """普通拉杆 + 自由拉杆总数（与左下角「标准要求数量/已有数量」统计一致）。"""
         lagan_list = getattr(self, "lagan_info", []) or []
-        red_abs_list = getattr(self, "red_dangban_abs", []) or []
-        red_list = getattr(self, "red_dangban", []) or []
-        free_count = len(red_abs_list) if red_abs_list else len(red_list)
+        free_count = self._get_free_lagan_count()
         if isinstance(lagan_list, (list, tuple)):
             return len(lagan_list) + free_count
         if isinstance(lagan_list, int):
@@ -20970,6 +21062,12 @@ class TubeLayoutEditor(QMainWindow):
                 _clear_cross_pipe_cache_before_buguan,
             )
 
+            # 布管前清零拉杆（普通 + 自由），避免沿用上一次的列表/图元
+            _safe_step(
+                "reset lagan state before buguan",
+                self._reset_all_lagan_state_for_buguan,
+            )
+
             # 2) 计算布管（核心）
             result = _safe_step("calculate_piping_layout", self.calculate_piping_layout)
 
@@ -21036,34 +21134,17 @@ class TubeLayoutEditor(QMainWindow):
                     ) = self.group_centers_by_y(self.global_centers)
                 _safe_step("group_centers_by_y(global_centers)", _rebuild_full_rows)
 
-            # 5) 更新左下角拉杆统计（依赖 UI 组件存在）
-            _safe_step("update_total_lagan_count(1)", self.update_total_lagan_count)
-
-            # 6) 重置大量状态（这些字段会影响后续交互；逐块保护）
+            # 5) 重置大量状态（这些字段会影响后续交互；逐块保护）
             _safe_step("reset selected_centers", setattr, self, "selected_centers", [])
 
-            # 6.1) 先清理场景中普通拉杆图元（包括可视区外“幽灵拉杆”），避免后续保存误写回数据库
-            def _clear_lagan_items_from_scene():
-                if not hasattr(self, "graphics_scene") or self.graphics_scene is None:
-                    return
-                to_remove = []
-                for it in list(self.graphics_scene.items()):
-                    try:
-                        if getattr(it, "is_lagan", False) and not getattr(it, "is_side_rod", False):
-                            to_remove.append(it)
-                    except Exception:
-                        continue
-                for it in to_remove:
-                    try:
-                        self.graphics_scene.removeItem(it)
-                    except Exception:
-                        pass
-            _safe_step("clear lagan items from scene", _clear_lagan_items_from_scene)
+            # 6) 再次清零拉杆状态（含自由拉杆图元与 red_dangban_abs）
+            _safe_step(
+                "reset lagan state after buguan",
+                self._reset_all_lagan_state_for_buguan,
+            )
 
             # 其余状态清零（尽量不触发 setter）
             for attr, default in [
-                ("lagan_info", []),
-                ("red_dangban", []),
                 ("center_dangban", []),
                 ("center_dangguan", []),
                 ("center_dangguan_num", 0),
@@ -33931,6 +34012,7 @@ class TubeLayoutEditor(QMainWindow):
                 if lagan_item.paired_rod.scene() == self.graphics_scene:
                     self.graphics_scene.removeItem(lagan_item.paired_rod)
             
+            self._sync_free_lagan_lists_from_scene()
             # 更新计数
             self.update_total_lagan_count()
             
@@ -34247,6 +34329,8 @@ class TubeLayoutEditor(QMainWindow):
                         self.red_dangban_abs.remove(abs_coord)
             except Exception:
                 pass
+
+        self._sync_free_lagan_lists_from_scene()
         self.update_total_lagan_count()
 
         # 清空选中列表
