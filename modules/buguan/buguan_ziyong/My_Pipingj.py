@@ -32122,78 +32122,6 @@ class TubeLayoutEditor(QMainWindow):
                 return item
         return None
 
-    def _find_tube_at_position(self, coord, candidate_radius, tolerance=1e-4):
-        """查找与候选自由拉杆圆相交的现存换热管圆心。"""
-        try:
-            target_x, target_y = float(coord[0]), float(coord[1])
-            candidate_radius = float(candidate_radius)
-            tube_radius = float(getattr(self, "r", 0) or 0)
-        except (TypeError, ValueError, IndexError, OverflowError):
-            return None
-        if candidate_radius <= 0 or tube_radius <= 0:
-            return None
-
-        for tube_coord in list(getattr(self, "current_centers", []) or []):
-            try:
-                tube_x, tube_y = float(tube_coord[0]), float(tube_coord[1])
-            except (TypeError, ValueError, IndexError, OverflowError):
-                continue
-            dx = tube_x - target_x
-            dy = tube_y - target_y
-            minimum_distance = candidate_radius + tube_radius
-            if dx * dx + dy * dy < (minimum_distance - tolerance) ** 2:
-                return tube_x, tube_y
-        return None
-
-    def _is_free_rod_position_external(self, coord, tolerance=1e-6):
-        """自由拉杆圆心必须位于全部换热管圆心的凸包之外。"""
-        try:
-            target = float(coord[0]), float(coord[1])
-            points = sorted(
-                {
-                    (float(x), float(y))
-                    for x, y in (getattr(self, "global_centers", []) or [])
-                }
-            )
-        except Exception:
-            return False
-        if len(points) < 3:
-            return False
-
-        def cross(origin, point_a, point_b):
-            return (
-                    (point_a[0] - origin[0]) * (point_b[1] - origin[1])
-                    - (point_a[1] - origin[1]) * (point_b[0] - origin[0])
-            )
-
-        lower = []
-        for point in points:
-            while (
-                    len(lower) >= 2
-                    and cross(lower[-2], lower[-1], point) <= 0
-            ):
-                lower.pop()
-            lower.append(point)
-
-        upper = []
-        for point in reversed(points):
-            while (
-                    len(upper) >= 2
-                    and cross(upper[-2], upper[-1], point) <= 0
-            ):
-                upper.pop()
-            upper.append(point)
-
-        hull = lower[:-1] + upper[:-1]
-        if len(hull) < 3:
-            return False
-
-        return any(
-            cross(hull[index], hull[(index + 1) % len(hull)], target)
-            < -tolerance
-            for index in range(len(hull))
-        )
-
     def build_lagan(self, selected_centers, suppress_conflict_warning=False):
         self.operation_order += 1
         if not selected_centers:
@@ -32233,10 +32161,6 @@ class TubeLayoutEditor(QMainWindow):
 
         if not selected_centers_list:
             return []
-
-        # 对称分布中，位于 x/y 轴上的点会映射出重复坐标。
-        # 同一次构建必须先去重，避免重复绘制或误报位置冲突。
-        selected_centers_list = list(dict.fromkeys(selected_centers_list))
 
         # 准备坐标分组数据（用于相对→绝对转换）
         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = (
@@ -33407,20 +33331,17 @@ class TubeLayoutEditor(QMainWindow):
         else:
             selected_centers = list(self.selected_centers)
 
-        # x/y 轴上的参照点在对称扩展后可能重复；同一次操作只处理一次。
-        selected_centers = list(
-            dict.fromkeys(
-                tuple(center)
-                for center in selected_centers
-                if isinstance(center, (list, tuple)) and len(center) == 2
-            )
-        )
-
         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = (
             self.group_centers_by_y(self.global_centers)
         )
         self.sorted_current_centers_up, self.sorted_current_centers_down = (
             self.group_centers_by_y(self.current_centers)
+        )
+        self.full_sorted_current_centers_left, self.full_sorted_current_centers_right = (
+            self.group_centers_by_x(self.global_centers)
+        )
+        self.sorted_current_centers_left, self.sorted_current_centers_right = (
+            self.group_centers_by_x(self.current_centers)
         )
 
         print(
@@ -33436,7 +33357,7 @@ class TubeLayoutEditor(QMainWindow):
             QMessageBox.warning(
                 self,
                 "警告",
-                "部分位置与现存换热管/拉杆重叠，或外径空间不足，未进行布置。",
+                "部分位置空间不足或已存在普通拉杆/自由拉杆，未重复布置。",
             )
 
         target_color = QColor(173, 216, 230)
@@ -34535,6 +34456,360 @@ class TubeLayoutEditor(QMainWindow):
         if hasattr(self, "graphics_view") and self.graphics_view:
             self.graphics_view.viewport().update()
 
+    def _find_global_column_centers(self, abs_x, tol=1e-3):
+        """满布列分组：一列横跨上下象限的全部换热管，按 y 升序返回。"""
+        try:
+            ax = float(abs_x)
+        except (TypeError, ValueError):
+            return None
+
+        (
+            self.full_sorted_current_centers_left,
+            self.full_sorted_current_centers_right,
+        ) = self.group_centers_by_x(self.global_centers)
+
+        if ax < 0:
+            centers_group = getattr(self, "full_sorted_current_centers_left", []) or []
+            x_key = int(round(-ax / tol))
+        else:
+            centers_group = getattr(self, "full_sorted_current_centers_right", []) or []
+            x_key = int(round(ax / tol))
+
+        centers_col = None
+        best_dx = None
+        for col in centers_group:
+            if not col:
+                continue
+            col_x = float(col[0][0])
+            if ax < 0:
+                col_key = int(round(-col_x / tol))
+            else:
+                col_key = int(round(col_x / tol))
+            if not (col_key == x_key or abs(col_x - ax) < max(tol, 0.5)):
+                continue
+            dx = abs(col_x - ax)
+            if best_dx is None or dx < best_dx:
+                best_dx = dx
+                centers_col = list(col)
+
+        if not centers_col:
+            all_centers = list(getattr(self, "global_centers", []) or [])
+            x_pitch_tol = max(float(getattr(self, "r", 10) or 10) * 0.35, 1.0)
+            centers_col = [
+                p for p in all_centers if abs(float(p[0]) - ax) <= x_pitch_tol
+            ]
+
+        if not centers_col:
+            return None
+        return sorted(centers_col, key=lambda p: float(p[1]))
+
+    def _get_column_groups_by_abs_x(self, abs_x):
+        """按参照管绝对 x 取左/右列分组（对称点 col_label 符号可能与 x 不一致）。"""
+        (
+            self.full_sorted_current_centers_left,
+            self.full_sorted_current_centers_right,
+        ) = self.group_centers_by_x(self.global_centers)
+        if float(abs_x) < 0:
+            return getattr(self, "full_sorted_current_centers_left", []) or []
+        return getattr(self, "full_sorted_current_centers_right", []) or []
+
+    def _get_tallest_column_y_extent(self, column_groups):
+        """取同侧管数最多的满布列，用上下管簇端点作为列顶/列底。"""
+        pop_col = None
+        best_n = 0
+        for col in column_groups or []:
+            n = len(col) if col else 0
+            if n > best_n:
+                best_n = n
+                pop_col = col
+        if not pop_col:
+            return None, None
+        return self._cluster_endpoints(pop_col, axis="y")
+
+    def _get_column_y_extent_for_free_lagan(self, abs_x, col_sorted):
+        """物理列偏短时，回退到同侧管数最多的满布列端点。"""
+        lo_p, hi_p = (None, None)
+        if col_sorted:
+            lo_p, hi_p = self._cluster_endpoints(col_sorted, axis="y")
+        side_cols = self._get_column_groups_by_abs_x(abs_x)
+        lo_m, hi_m = self._get_tallest_column_y_extent(side_cols)
+        if lo_p is None or hi_p is None:
+            return lo_m, hi_m
+        if lo_m is None or hi_m is None:
+            return lo_p, hi_p
+        if (hi_p - lo_p) < (hi_m - lo_m) * 0.85:
+            return lo_m, hi_m
+        return lo_p, hi_p
+
+    def _find_column_centers_for_free_lagan(self, abs_x, col_label):
+        """按列布置：优先物理 x 列，兜底 col_label 逻辑列。"""
+        col_at_x = self._find_global_column_centers(abs_x)
+        if col_at_x and len(col_at_x) >= 2:
+            return sorted(col_at_x, key=lambda p: float(p[1]))
+        return self._find_logical_column_centers(col_label)
+
+    def _get_row_groups_by_abs_y(self, abs_y):
+        """按参照管绝对 y 取上/下行分组。"""
+        (
+            self.full_sorted_current_centers_up,
+            self.full_sorted_current_centers_down,
+        ) = self.group_centers_by_y(self.global_centers)
+        if float(abs_y) >= 0:
+            return getattr(self, "full_sorted_current_centers_up", []) or []
+        return getattr(self, "full_sorted_current_centers_down", []) or []
+
+    def _get_tallest_row_x_extent(self, row_groups):
+        """取同半区管数最多的满布行，用左右管簇端点作为行左/行右。"""
+        pop_row = None
+        best_n = 0
+        for row in row_groups or []:
+            n = len(row) if row else 0
+            if n > best_n:
+                best_n = n
+                pop_row = row
+        if not pop_row:
+            return None, None
+        return self._cluster_endpoints(pop_row, axis="x")
+
+    def _get_row_x_extent_for_free_lagan(self, abs_y, row_sorted):
+        """物理行偏短时，回退到同半区管数最多的满布行端点。"""
+        lo_p, hi_p = (None, None)
+        if row_sorted:
+            lo_p, hi_p = self._cluster_endpoints(row_sorted, axis="x")
+        half_rows = self._get_row_groups_by_abs_y(abs_y)
+        lo_m, hi_m = self._get_tallest_row_x_extent(half_rows)
+        if lo_p is None or hi_p is None:
+            return lo_m, hi_m
+        if lo_m is None or hi_m is None:
+            return lo_p, hi_p
+        if (hi_p - lo_p) < (hi_m - lo_m) * 0.85:
+            return lo_m, hi_m
+        return lo_p, hi_p
+
+    def _find_row_centers_for_free_lagan(self, abs_y, row_label):
+        """按行布置：优先物理 y 行，兜底 row_label 逻辑行。"""
+        row_at_y = self._find_global_row_centers(abs_y)
+        if row_at_y and len(row_at_y) >= 2:
+            return sorted(row_at_y, key=lambda p: float(p[0]))
+        return self._find_logical_row_centers(row_label)
+
+    def _find_logical_column_centers(self, col_label):
+        """按列布置：用 col_label 取满布逻辑列（含错位各行的全部管心）。"""
+        try:
+            col_idx = abs(int(col_label)) - 1
+        except (TypeError, ValueError):
+            return None
+        if col_idx < 0:
+            return None
+
+        (
+            self.full_sorted_current_centers_left,
+            self.full_sorted_current_centers_right,
+        ) = self.group_centers_by_x(self.global_centers)
+
+        if col_label > 0:
+            centers_col = list(
+                (getattr(self, "full_sorted_current_centers_right", []) or [])[
+                    col_idx
+                ]
+                if col_idx
+                < len(
+                    getattr(self, "full_sorted_current_centers_right", []) or []
+                )
+                else []
+            )
+        else:
+            centers_col = list(
+                (getattr(self, "full_sorted_current_centers_left", []) or [])[
+                    col_idx
+                ]
+                if col_idx
+                < len(
+                    getattr(self, "full_sorted_current_centers_left", []) or []
+                )
+                else []
+            )
+
+        if not centers_col:
+            return None
+        return sorted(centers_col, key=lambda p: float(p[1]))
+
+    def _find_logical_row_centers(self, row_label):
+        """按行布置：用 row_label 取满布逻辑行（含错位各列的全部管心）。"""
+        try:
+            row_idx = abs(int(row_label)) - 1
+        except (TypeError, ValueError):
+            return None
+        if row_idx < 0:
+            return None
+
+        (
+            self.full_sorted_current_centers_up,
+            self.full_sorted_current_centers_down,
+        ) = self.group_centers_by_y(self.global_centers)
+
+        if row_label > 0:
+            centers_row = list(
+                (getattr(self, "full_sorted_current_centers_up", []) or [])[row_idx]
+                if row_idx
+                < len(getattr(self, "full_sorted_current_centers_up", []) or [])
+                else []
+            )
+        else:
+            centers_row = list(
+                (getattr(self, "full_sorted_current_centers_down", []) or [])[
+                    row_idx
+                ]
+                if row_idx
+                < len(
+                    getattr(self, "full_sorted_current_centers_down", []) or []
+                )
+                else []
+            )
+
+        if not centers_row:
+            return None
+        return sorted(centers_row, key=lambda p: float(p[0]))
+
+    def _find_global_row_centers(self, abs_y, tol=1e-3):
+        """满布行分组：一行横跨左右象限的全部换热管，按 x 升序返回。"""
+        try:
+            ay = float(abs_y)
+        except (TypeError, ValueError):
+            return None
+
+        (
+            self.full_sorted_current_centers_up,
+            self.full_sorted_current_centers_down,
+        ) = self.group_centers_by_y(self.global_centers)
+
+        if ay >= 0:
+            centers_group = getattr(self, "full_sorted_current_centers_up", []) or []
+        else:
+            centers_group = getattr(self, "full_sorted_current_centers_down", []) or []
+        y_key = int(round(abs(ay) / tol))
+
+        centers_row = None
+        best_dy = None
+        for row in centers_group:
+            if not row:
+                continue
+            row_y = float(row[0][1])
+            row_key = int(round(abs(row_y) / tol))
+            if not (row_key == y_key or abs(row_y - ay) < max(tol, 0.5)):
+                continue
+            dy = abs(row_y - ay)
+            if best_dy is None or dy < best_dy:
+                best_dy = dy
+                centers_row = list(row)
+
+        if not centers_row:
+            all_centers = list(getattr(self, "global_centers", []) or [])
+            y_pitch_tol = max(float(getattr(self, "r", 10) or 10) * 0.35, 1.0)
+            centers_row = [
+                p for p in all_centers if abs(float(p[1]) - ay) <= y_pitch_tol
+            ]
+
+        if not centers_row:
+            return None
+        return sorted(centers_row, key=lambda p: float(p[0]))
+
+    def _tubes_at_coord(self, tube_centers, anchor, axis="y"):
+        """按参照管 x/y 过滤同列/同行管心；不足两根时回退整组。"""
+        if not tube_centers:
+            return []
+        pitch_tol = max(float(getattr(self, "r", 10) or 10) * 0.35, 1.0)
+        try:
+            anchor_val = float(anchor)
+        except (TypeError, ValueError):
+            return list(tube_centers)
+        if axis == "y":
+            filtered = [
+                p for p in tube_centers if abs(float(p[0]) - anchor_val) <= pitch_tol
+            ]
+        else:
+            filtered = [
+                p for p in tube_centers if abs(float(p[1]) - anchor_val) <= pitch_tol
+            ]
+        return filtered if len(filtered) >= 2 else list(tube_centers)
+
+    def _cluster_endpoints(self, tube_centers, axis="y"):
+        """
+        上下/左右管簇各自的最外端（列：下簇最小 y、上簇最大 y；行同理）。
+        返回 (lo_end, hi_end)；仅单簇时退化为整组 min/max。
+        """
+        if not tube_centers:
+            return None, None
+        if axis == "y":
+            vals = [float(p[1]) for p in tube_centers]
+            lower = [v for v in vals if v < -1e-6]
+            upper = [v for v in vals if v > 1e-6]
+            if lower and upper:
+                return min(lower), max(upper)
+            return min(vals), max(vals)
+        vals = [float(p[0]) for p in tube_centers]
+        left = [v for v in vals if v < -1e-6]
+        right = [v for v in vals if v > 1e-6]
+        if left and right:
+            return min(left), max(right)
+        return min(vals), max(vals)
+
+    def _is_free_lagan_endpoint_in_baffle_slot(self, x, y, tube_centers, axis="y"):
+        """
+        自由拉杆端点是否落在隔板槽空档。
+        仅判定上下/左右管簇之间的空档；列/行最外端外侧不算入槽。
+        """
+        try:
+            cx, cy = float(x), float(y)
+        except (TypeError, ValueError):
+            return False
+        if not tube_centers:
+            return False
+
+        if axis == "y":
+            lower = [float(p[1]) for p in tube_centers if float(p[1]) < -1e-6]
+            upper = [float(p[1]) for p in tube_centers if float(p[1]) > 1e-6]
+            if upper and lower:
+                gap_lo = max(lower)
+                gap_hi = min(upper)
+                return gap_lo < cy < gap_hi
+        else:
+            left = [float(p[0]) for p in tube_centers if float(p[0]) < -1e-6]
+            right = [float(p[0]) for p in tube_centers if float(p[0]) > 1e-6]
+            if left and right:
+                gap_lo = max(left)
+                gap_hi = min(right)
+                return gap_lo < cx < gap_hi
+        return False
+
+    def _is_in_partition_slot_gap(self, x, y, tube_centers, axis="y"):
+        """判断坐标是否落在隔板槽空档（列：上下管场之间；行：左右管场之间）。"""
+        if self._is_free_lagan_endpoint_in_baffle_slot(x, y, tube_centers, axis=axis):
+            return True
+        try:
+            cx, cy = float(x), float(y)
+        except (TypeError, ValueError):
+            return False
+        if not tube_centers:
+            return False
+
+        try:
+            w_coord = self.get_y_pair_by_W()
+        except Exception:
+            w_coord = None
+        if w_coord is None:
+            try:
+                w_str = self.get_getiao()
+                w_coord = float(w_str) if w_str not in (None, "") else None
+            except Exception:
+                w_coord = None
+        if w_coord is not None and w_coord > 0:
+            if axis == "y" and abs(cy) < w_coord:
+                return True
+            if axis == "x" and abs(cx) < w_coord:
+                return True
+        return False
+
     def build_free_form_lagan(
             self,
             selected_centers=None,
@@ -34650,123 +34925,163 @@ class TubeLayoutEditor(QMainWindow):
 
             selected_abs_x, selected_abs_y = current_coords[0]
 
-        if lagan_coord is None:
-            # 普通拉杆作为参照时，以图元的实际圆心覆盖相对标签换算结果。
-            # 隔条位置尺寸变化后，相对行列索引可能发生偏移，但实际位置不会。
-            for selected_rod in list(getattr(self, "selected_lagans", []) or []):
-                if not getattr(selected_rod, "is_selected", False):
-                    continue
-                selected_rel = getattr(
-                    selected_rod, "original_selected_center", None
-                )
-                if selected_rel is not None:
-                    try:
-                        if tuple(selected_rel) != (row_label, col_label):
-                            continue
-                    except TypeError:
-                        continue
-                try:
-                    center = selected_rod.mapToScene(
-                        selected_rod.rect().center()
-                    )
-                    selected_abs_x = float(center.x())
-                    selected_abs_y = float(center.y())
-                    break
-                except Exception:
-                    pass
-
-            try:
-                baffle_radius = float(self.get_Baffle_OD()) / 2.0
-            except (TypeError, ValueError):
-                print("[build_free_form_lagan] 无法获取有效的折流/支持板外径")
+        if lagan_coord is None and str(arrange_mode).lower() == "col":
+            # 按列：物理 x 定左右侧与管列；列端取同侧跨度最大的满布列（对称短列对齐满高列）。
+            if col_label is None:
+                print("[build_free_form_lagan][col] 缺少 col_label")
+                self.clear_selection_highlight()
                 return False
 
-            # 绘制直径实际使用换热管外径 do；同时兼顾参数中的拉杆直径，
-            # 保证最终圆完整位于折流/支持板外径以内。
-            candidate_radius = max(float(do), float(lagan_length)) / 2.0
-            available_radius = baffle_radius - candidate_radius
-            if available_radius <= 0:
-                print("[build_free_form_lagan] 折流/支持板内无可用布置空间")
+            col_sorted = self._find_column_centers_for_free_lagan(
+                selected_abs_x, col_label
+            )
+            if not col_sorted or len(col_sorted) < 2:
+                print("[build_free_form_lagan][col] 未找到有效满布列或管数不足")
+                self.clear_selection_highlight()
                 return False
 
-            if str(arrange_mode).lower() == "col":
-                lagan_x = float(selected_abs_x)
-                remaining = available_radius ** 2 - lagan_x ** 2
-                if remaining < 0:
-                    print("[build_free_form_lagan][col] 参照列超出可用圆范围")
-                    return False
-                outer_y = math.sqrt(max(0.0, remaining))
-                lagan_y = outer_y if float(selected_abs_y) >= 0 else -outer_y
+            coord1 = col_sorted[0]
+            coord2 = col_sorted[1]
+            S = math.sqrt(
+                (float(coord2[0]) - float(coord1[0])) ** 2
+                + (float(coord2[1]) - float(coord1[1])) ** 2
+            )
+            side_cols = self._get_column_groups_by_abs_x(selected_abs_x)
+            y_bottom, y_top = self._get_column_y_extent_for_free_lagan(
+                selected_abs_x, col_sorted
+            )
+            if y_bottom is None or y_top is None:
+                y_bottom = float(col_sorted[0][1])
+                y_top = float(col_sorted[-1][1])
+            lagan_x = float(selected_abs_x)
+            lagan_y_bottom = y_bottom - S
+            lagan_y_top = y_top + S
+
+            if row_label is not None and int(row_label) < 0:
+                lagan_y = lagan_y_bottom
+                side = "bottom"
             else:
-                lagan_y = float(selected_abs_y)
-                remaining = available_radius ** 2 - lagan_y ** 2
-                if remaining < 0:
-                    print("[build_free_form_lagan][row] 参照行超出可用圆范围")
+                lagan_y = lagan_y_top
+                side = "top"
+
+            slot_tubes = []
+            for col in side_cols:
+                if col:
+                    slot_tubes.extend(col)
+
+            flipped = False
+            if self._is_free_lagan_endpoint_in_baffle_slot(
+                lagan_x, lagan_y, slot_tubes or col_sorted, axis="y"
+            ):
+                lagan_y_alt = lagan_y_top if side == "bottom" else lagan_y_bottom
+                if self._is_free_lagan_endpoint_in_baffle_slot(
+                    lagan_x, lagan_y_alt, slot_tubes or col_sorted, axis="y"
+                ):
+                    print(
+                        f"[build_free_form_lagan][col] 列顶/列底外侧均在隔板槽空档，"
+                        f"跳过 ({lagan_x:.3f},{lagan_y:.3f}) / ({lagan_x:.3f},{lagan_y_alt:.3f})"
+                    )
+                    self.clear_selection_highlight()
                     return False
-                outer_x = math.sqrt(max(0.0, remaining))
-                lagan_x = outer_x if float(selected_abs_x) >= 0 else -outer_x
+                lagan_y = lagan_y_alt
+                side = "top" if side == "bottom" else "bottom"
+                flipped = True
 
             print(
-                f"[build_free_form_lagan] 方式={arrange_mode}, "
-                f"参照实际坐标=({selected_abs_x:.3f}, {selected_abs_y:.3f}), "
-                f"外径圆目标=({lagan_x:.3f}, {lagan_y:.3f})"
+                f"[build_free_form_lagan][col] 参照({selected_abs_x:.3f},{selected_abs_y:.3f}) "
+                f"col_label={col_label} row_label={row_label} side={side} flipped={flipped} "
+                f"列y=[{y_bottom:.3f},{y_top:.3f}] S={S:.3f} "
+                f"-> ({lagan_x:.3f},{lagan_y:.3f})"
             )
+        elif lagan_coord is None:
+            # 按行：物理 y 定上/下半区与管行；行端取同半区跨度最大的满布行。
+            if row_label is None:
+                print("[build_free_form_lagan][row] 缺少 row_label")
+                self.clear_selection_highlight()
+                return False
 
-        # 仅在恢复旧的绝对坐标时过滤隔条内部遗留数据。
-        # 当前新位置直接由折流/支持板外径圆计算，不再依赖管孔分组。
-        if (
-                lagan_coord is not None
-                and not self._is_free_rod_position_external((lagan_x, lagan_y))
-        ):
+            row_sorted = self._find_row_centers_for_free_lagan(
+                selected_abs_y, row_label
+            )
+            if not row_sorted or len(row_sorted) < 2:
+                print("[build_free_form_lagan][row] 未找到有效满布行或管数不足")
+                self.clear_selection_highlight()
+                return False
+
+            coord1 = row_sorted[0]
+            coord2 = row_sorted[1]
+            S = math.sqrt(
+                (float(coord2[0]) - float(coord1[0])) ** 2
+                + (float(coord2[1]) - float(coord1[1])) ** 2
+            )
+            half_rows = self._get_row_groups_by_abs_y(selected_abs_y)
+            x_left, x_right = self._get_row_x_extent_for_free_lagan(
+                selected_abs_y, row_sorted
+            )
+            if x_left is None or x_right is None:
+                x_left = float(row_sorted[0][0])
+                x_right = float(row_sorted[-1][0])
+            lagan_y = float(selected_abs_y)
+            lagan_x_left = x_left - S
+            lagan_x_right = x_right + S
+
+            if col_label is not None and int(col_label) < 0:
+                lagan_x = lagan_x_left
+                side = "left"
+            else:
+                lagan_x = lagan_x_right
+                side = "right"
+
+            slot_tubes = []
+            for row in half_rows:
+                if row:
+                    slot_tubes.extend(row)
+
+            flipped = False
+            if self._is_free_lagan_endpoint_in_baffle_slot(
+                lagan_x, lagan_y, slot_tubes or row_sorted, axis="x"
+            ):
+                lagan_x_alt = lagan_x_right if side == "left" else lagan_x_left
+                if self._is_free_lagan_endpoint_in_baffle_slot(
+                    lagan_x_alt, lagan_y, slot_tubes or row_sorted, axis="x"
+                ):
+                    print(
+                        f"[build_free_form_lagan][row] 行左/行右外侧均在隔板槽空档，"
+                        f"跳过 ({lagan_x:.3f},{lagan_y:.3f}) / ({lagan_x_alt:.3f},{lagan_y:.3f})"
+                    )
+                    self.clear_selection_highlight()
+                    return False
+                lagan_x = lagan_x_alt
+                side = "right" if side == "left" else "left"
+                flipped = True
+
             print(
-                f"[build_free_form_lagan] 位置 ({lagan_x:.3f}, {lagan_y:.3f}) "
-                f"为旧的内部自由拉杆坐标，恢复时跳过"
+                f"[build_free_form_lagan][row] 参照({selected_abs_x:.3f},{selected_abs_y:.3f}) "
+                f"row_label={row_label} col_label={col_label} side={side} flipped={flipped} "
+                f"行x=[{x_left:.3f},{x_right:.3f}] S={S:.3f} "
+                f"-> ({lagan_x:.3f},{lagan_y:.3f})"
             )
-            self.clear_selection_highlight()
-            return False
 
-        conflicting_tube = self._find_tube_at_position(
-            (lagan_x, lagan_y),
-            candidate_radius=float(do) / 2.0,
-        )
-        if conflicting_tube is not None:
-            print(
-                f"[build_free_form_lagan] 位置 ({lagan_x:.3f}, {lagan_y:.3f}) "
-                f"与现存换热管 ({conflicting_tube[0]:.3f}, "
-                f"{conflicting_tube[1]:.3f}) 重叠，跳过绘制"
-            )
-            self.clear_selection_highlight()
-            return False
-
-        # 普通拉杆与自由拉杆不能占用同一个实际位置。
-        existing_rod = self._find_rod_at_position(
-            (lagan_x, lagan_y),
-            candidate_radius=float(do) / 2.0,
-        )
+        # 普通拉杆与自由拉杆不能占用同一个实际位置（圆心重合判定，避免邻管误报）。
+        existing_rod = self._find_rod_at_position((lagan_x, lagan_y), tolerance=0.5)
         if existing_rod is not None:
-            if getattr(existing_rod, "is_side_rod", False):
+            print(
+                f"[build_free_form_lagan] 位置 ({lagan_x:.3f}, {lagan_y:.3f}) "
+                f"已存在{'自由拉杆' if getattr(existing_rod, 'is_side_rod', False) else '普通拉杆'}，跳过绘制"
+            )
+            self.clear_selection_highlight()
+            return False
+
+        # 按列/按行自动布置在管板端外侧，已做隔板槽与重叠校验，不再做折流板外径内含判定。
+        # 仅当外部直接给定 lagan_coord 时保留原校验。
+        if lagan_coord is not None:
+            lagan_coord = [(lagan_x, lagan_y)]
+            if not self.can_place_lagan_without_intersect(lagan_coord, float(do)):
                 print(
-                    f"[build_free_form_lagan] 位置 ({lagan_x:.3f}, {lagan_y:.3f}) "
-                    f"已有自由拉杆，跳过绘制并提示"
+                    f"[build_free_form_lagan] 拉杆位置 ({lagan_x:.2f}, {lagan_y:.2f}) 超出折流/支持板外径，跳过绘制"
                 )
                 self.clear_selection_highlight()
                 return False
-            print(
-                f"[build_free_form_lagan] 位置 ({lagan_x:.3f}, {lagan_y:.3f}) "
-                f"已存在普通拉杆，跳过绘制"
-            )
-            self.clear_selection_highlight()
-            return False
-
-        # 调用 can_place_lagan_without_intersect 判断是否与折流/支持板外径相交
-        lagan_coord = [(lagan_x, lagan_y)]
-        if not self.can_place_lagan_without_intersect(lagan_coord, lagan_length):
-            # 返回 False 表示超出范围，不弹窗，由调用者统一处理
-            print(
-                f"[build_free_form_lagan] 拉杆位置 ({lagan_x:.2f}, {lagan_y:.2f}) 超出折流/支持板外径，跳过绘制"
-            )
-            self.clear_selection_highlight()
-            return False  # 返回 False 表示失败
 
         # 不相交，绘制红色实心圆
         red_pen = QPen(Qt.red)
