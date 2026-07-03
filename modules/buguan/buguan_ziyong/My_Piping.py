@@ -33328,6 +33328,7 @@ class TubeLayoutEditor(QMainWindow):
             QComboBox,
             QPushButton,
             QTableWidgetItem,
+            QMessageBox,
         )
         from PyQt5.QtGui import QColor
         from PyQt5.QtWidgets import QGraphicsEllipseItem
@@ -33506,11 +33507,17 @@ class TubeLayoutEditor(QMainWindow):
             lagan_length = float(default_dia)
 
         if not hasattr(self, "selected_centers") or not self.selected_centers:
-            QMessageBox.warning(self, "提示", "请先选中一个换热管孔作为参照管！")
-            return
-
-        # 仅允许单个参照管
-        if len(self.selected_centers) != 1:
+            selected_lagans = [
+                it
+                for it in getattr(self, "selected_lagans", []) or []
+                if getattr(it, "is_selected", False)
+            ]
+            if len(selected_lagans) != 1:
+                QMessageBox.warning(
+                    self, "提示", "请先选中一个换热管孔或普通拉杆作为参照！"
+                )
+                return
+        elif len(self.selected_centers) != 1:
             QMessageBox.warning(self, "提示", "请先选中一个换热管孔作为参照管！")
             self.clear_selection_highlight()
             return
@@ -33549,46 +33556,38 @@ class TubeLayoutEditor(QMainWindow):
         if mode_dlg.exec_() != QDialog.Accepted:
             return
 
-        # 对称分布：按四象限扩展；非对称：只处理单个
-        if self.isSymmetry:
-            selected_centers = list(self.judge_linkage(self.selected_centers))
-        else:
-            selected_centers = list(self.selected_centers)
-
-        # x/y 轴上的参照点在对称扩展后可能重复；同一次操作只处理一次。
-        selected_centers = list(
-            dict.fromkeys(
-                tuple(center)
-                for center in selected_centers
-                if isinstance(center, (list, tuple)) and len(center) == 2
+        ref = self._resolve_free_lagan_reference()
+        if ref is None:
+            QMessageBox.warning(
+                self, "提示", "无法获取参照管/拉杆坐标，请重新选择后再试。"
             )
+            self.clear_selection_highlight()
+            return
+        ref_x, ref_y, row_label, col_label = ref
+
+        print(
+            f"[on_free_form_lagan_click] 方式={arrange_mode}，对称={self.isSymmetry}，"
+            f"直径={lagan_length}，参照=({ref_x:.3f},{ref_y:.3f})"
+        )
+        self._execute_free_lagan_batch(
+            arrange_mode=arrange_mode,
+            ref_x=ref_x,
+            ref_y=ref_y,
+            row_label=row_label,
+            col_label=col_label,
+            is_symmetry=bool(self.isSymmetry),
+            lagan_length=lagan_length,
+            clear_highlight=False,
         )
 
+        target_color = QColor(173, 216, 230)
         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = (
             self.group_centers_by_y(self.global_centers)
         )
-        self.sorted_current_centers_up, self.sorted_current_centers_down = (
-            self.group_centers_by_y(self.current_centers)
-        )
-
-        print(
-            f"[on_free_form_lagan_click] 无弹窗模式，方式={arrange_mode}，直径={lagan_length}，准备逐点构建自由拉杆，选中个数={len(selected_centers)}"
-        )
-        invalid_centers = []
-        for center in selected_centers:
-            okflag = self.build_free_form_lagan([center], lagan_length, arrange_mode=arrange_mode)
-            if okflag is False:
-                invalid_centers.append(center)
-
-        if invalid_centers:
-            QMessageBox.warning(
-                self,
-                "警告",
-                "部分位置与现存换热管/拉杆重叠，或外径空间不足，未进行布置。",
-            )
-
-        target_color = QColor(173, 216, 230)
-        for row_label, col_label in self.selected_centers:
+        marker_refs = list(getattr(self, "selected_centers", []) or [])
+        if not marker_refs and row_label is not None and col_label is not None:
+            marker_refs = [(row_label, col_label)]
+        for row_label, col_label in marker_refs:
             try:
                 if row_label > 0:
                     centers_group = self.full_sorted_current_centers_up
@@ -34937,6 +34936,349 @@ class TubeLayoutEditor(QMainWindow):
                 return gap_lo < cx < gap_hi
         return False
 
+    def _free_lagan_pitch_tol(self):
+        return max(float(getattr(self, "r", 10) or 10) * 0.35, 1.0)
+
+    def _free_lagan_tubes_in_column(self, abs_x):
+        tol = self._free_lagan_pitch_tol()
+        try:
+            ax = float(abs_x)
+        except (TypeError, ValueError):
+            return []
+        return [
+            (float(x), float(y))
+            for x, y in (getattr(self, "global_centers", []) or [])
+            if abs(float(x) - ax) <= tol
+        ]
+
+    def _free_lagan_tubes_in_row(self, abs_y):
+        tol = self._free_lagan_pitch_tol()
+        try:
+            ay = float(abs_y)
+        except (TypeError, ValueError):
+            return []
+        return [
+            (float(x), float(y))
+            for x, y in (getattr(self, "global_centers", []) or [])
+            if abs(float(y) - ay) <= tol
+        ]
+
+    def _free_lagan_adjacent_pitch(self, tubes, axis):
+        import math
+
+        if not tubes or len(tubes) < 2:
+            return None
+        if axis == "col":
+            pts = sorted(tubes, key=lambda p: float(p[1]))
+        else:
+            pts = sorted(tubes, key=lambda p: float(p[0]))
+        dists = []
+        for i in range(len(pts) - 1):
+            x1, y1 = pts[i]
+            x2, y2 = pts[i + 1]
+            d = math.hypot(float(x2) - float(x1), float(y2) - float(y1))
+            if d > 1e-3:
+                dists.append(d)
+        return min(dists) if dists else None
+
+    @staticmethod
+    def _free_lagan_dedupe_coords(coords):
+        seen = set()
+        out = []
+        for x, y in coords:
+            key = (round(float(x), 4), round(float(y), 4))
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append((float(x), float(y)))
+        return out
+
+    def _free_lagan_col_offset(self, anchor_x, anchor_y, pitch_s):
+        if float(anchor_y) >= 0:
+            return float(anchor_x), float(anchor_y) + float(pitch_s)
+        return float(anchor_x), float(anchor_y) - float(pitch_s)
+
+    def _free_lagan_row_offset(self, anchor_x, anchor_y, pitch_s):
+        if float(anchor_x) >= 0:
+            return float(anchor_x) + float(pitch_s), float(anchor_y)
+        return float(anchor_x) - float(pitch_s), float(anchor_y)
+
+    def _compute_free_lagan_col_targets(self, ref_x, ref_y, is_symmetry):
+        targets = []
+        ref_tubes = self._free_lagan_tubes_in_column(ref_x)
+        if not ref_tubes:
+            return targets
+
+        if is_symmetry:
+            col_x = float(ref_tubes[0][0])
+            col_xs = [col_x]
+            sym_tubes = self._free_lagan_tubes_in_column(-col_x)
+            if sym_tubes:
+                col_xs.append(float(sym_tubes[0][0]))
+            else:
+                col_xs.append(-col_x)
+            for cx in sorted(set(col_xs), key=lambda v: abs(float(v))):
+                tubes = self._free_lagan_tubes_in_column(cx)
+                if len(tubes) < 2:
+                    continue
+                pitch_s = self._free_lagan_adjacent_pitch(tubes, "col")
+                if pitch_s is None:
+                    continue
+                upper = [p for p in tubes if float(p[1]) > 1e-6]
+                lower = [p for p in tubes if float(p[1]) < -1e-6]
+                if upper:
+                    ax, ay = max(upper, key=lambda p: float(p[1]))
+                    targets.append(self._free_lagan_col_offset(ax, ay, pitch_s))
+                if lower:
+                    ax, ay = min(lower, key=lambda p: float(p[1]))
+                    targets.append(self._free_lagan_col_offset(ax, ay, pitch_s))
+        else:
+            tubes = ref_tubes
+            same_half = [
+                p for p in tubes if (float(p[1]) >= 0) == (float(ref_y) >= 0)
+            ] or list(tubes)
+            if not same_half:
+                return targets
+            ax, ay = max(same_half, key=lambda p: abs(float(p[1])))
+            pitch_s = self._free_lagan_adjacent_pitch(tubes, "col")
+            if pitch_s is None:
+                return targets
+            targets.append(self._free_lagan_col_offset(ax, ay, pitch_s))
+        return self._free_lagan_dedupe_coords(targets)
+
+    def _compute_free_lagan_row_targets(self, ref_x, ref_y, is_symmetry):
+        targets = []
+        ref_tubes = self._free_lagan_tubes_in_row(ref_y)
+        if not ref_tubes:
+            return targets
+
+        if is_symmetry:
+            row_y = float(ref_tubes[0][1])
+            row_ys = [row_y]
+            sym_tubes = self._free_lagan_tubes_in_row(-row_y)
+            if sym_tubes:
+                row_ys.append(float(sym_tubes[0][1]))
+            else:
+                row_ys.append(-row_y)
+            for ry in sorted(set(row_ys), key=lambda v: abs(float(v))):
+                tubes = self._free_lagan_tubes_in_row(ry)
+                if len(tubes) < 2:
+                    continue
+                pitch_s = self._free_lagan_adjacent_pitch(tubes, "row")
+                if pitch_s is None:
+                    continue
+                ax, ay = min(tubes, key=lambda p: float(p[0]))
+                targets.append(self._free_lagan_row_offset(ax, ay, pitch_s))
+                ax, ay = max(tubes, key=lambda p: float(p[0]))
+                targets.append(self._free_lagan_row_offset(ax, ay, pitch_s))
+        else:
+            tubes = ref_tubes
+            same_half = [
+                p for p in tubes if (float(p[0]) >= 0) == (float(ref_x) >= 0)
+            ] or list(tubes)
+            if not same_half:
+                return targets
+            ax, ay = max(same_half, key=lambda p: abs(float(p[0])))
+            pitch_s = self._free_lagan_adjacent_pitch(tubes, "row")
+            if pitch_s is None:
+                return targets
+            targets.append(self._free_lagan_row_offset(ax, ay, pitch_s))
+        return self._free_lagan_dedupe_coords(targets)
+
+    def _compute_free_lagan_targets(self, arrange_mode, ref_x, ref_y, is_symmetry):
+        mode = str(arrange_mode or "row").lower()
+        if mode == "col":
+            return self._compute_free_lagan_col_targets(ref_x, ref_y, is_symmetry)
+        return self._compute_free_lagan_row_targets(ref_x, ref_y, is_symmetry)
+
+    def _validate_free_lagan_targets(self, targets, draw_diameter, lagan_length):
+        from PyQt5.QtWidgets import QMessageBox
+
+        if not targets:
+            QMessageBox.warning(
+                self,
+                "提示",
+                "部分位置空间不足或已存在普通拉杆/自由拉杆，不进行布置。",
+            )
+            return False
+
+        errors = []
+        tube_r = float(draw_diameter) / 2.0
+        center_tol = 0.5
+
+        for idx, (tx, ty) in enumerate(targets, start=1):
+            label = f"位置{idx} ({tx:.3f}, {ty:.3f})"
+            tube_hit = self._find_tube_at_position((tx, ty), tube_r, tolerance=center_tol)
+            if tube_hit is not None:
+                errors.append(f"{label}：与换热管重叠")
+                continue
+            rod_hit = self._find_rod_at_position((tx, ty), tube_r, tolerance=center_tol)
+            if rod_hit is not None and getattr(rod_hit, "is_side_rod", False):
+                errors.append(f"{label}：已有自由拉杆")
+                continue
+            if rod_hit is not None and getattr(rod_hit, "is_lagan", False):
+                errors.append(f"{label}：已有普通拉杆")
+                continue
+            if not self.can_place_lagan_without_intersect([(tx, ty)], draw_diameter):
+                errors.append(f"{label}：超出折流/支持板外径范围")
+
+        if errors:
+            QMessageBox.warning(
+                self,
+                "提示",
+                "部分位置空间不足或已存在普通拉杆/自由拉杆，不进行布置。",
+            )
+            return False
+        return True
+
+    def _draw_free_lagan_at(
+            self,
+            lagan_x,
+            lagan_y,
+            lagan_length,
+            draw_diameter,
+            row_label=None,
+            col_label=None,
+    ):
+        from PyQt5.QtCore import QRectF, Qt
+        from PyQt5.QtGui import QPen, QBrush, QColor
+
+        red_pen = QPen(Qt.red)
+        red_pen.setWidth(1)
+        red_brush = QBrush(Qt.red)
+        lagan_radius = float(draw_diameter) / 2.0
+
+        lagan_rect = QRectF(
+            lagan_x - lagan_radius,
+            lagan_y - lagan_radius,
+            float(draw_diameter),
+            float(draw_diameter),
+        )
+        lagan_rod = ClickableCircleItem(lagan_rect, is_side_rod=True, editor=self)
+        lagan_rod.is_side_rod = True
+        lagan_rod.is_lagan = False
+        lagan_rod.setPen(red_pen)
+        lagan_rod.setBrush(red_brush)
+        lagan_rod.original_pen = red_pen
+        lagan_rod.original_brush = red_brush
+        lagan_rod.original_selected_center = (
+            (row_label, col_label)
+            if (row_label is not None and col_label is not None)
+            else None
+        )
+        lagan_rod.setZValue(20)
+        self.graphics_scene.addItem(lagan_rod)
+
+        if not hasattr(self, "red_dangban"):
+            self.red_dangban = []
+        if not hasattr(self, "red_dangban_abs"):
+            self.red_dangban_abs = []
+
+        relative_coord = (
+            (row_label, col_label)
+            if (row_label is not None and col_label is not None)
+            else None
+        )
+        if relative_coord is not None and relative_coord not in self.red_dangban:
+            self.red_dangban.append(relative_coord)
+        abs_coord = (float(lagan_x), float(lagan_y))
+        if abs_coord not in self.red_dangban_abs:
+            self.red_dangban_abs.append(abs_coord)
+
+        if not hasattr(self, "operations"):
+            self.operations = []
+        self.operations.append(
+            {
+                "type": "small_block",
+                "row": row_label,
+                "coord": (float(lagan_x), float(lagan_y)),
+                "radius": lagan_radius,
+                "diameter": float(lagan_length),
+            }
+        )
+
+    def _resolve_free_lagan_reference(self):
+        """解析当前选中的参照换热管或普通拉杆，返回 (x, y, row_label, col_label)。"""
+        row_label = col_label = None
+        abs_x = abs_y = None
+
+        if getattr(self, "selected_centers", None) and len(self.selected_centers) == 1:
+            row_label, col_label = self.selected_centers[0]
+            coords = self.selected_to_current_coords([(row_label, col_label)])
+            if coords:
+                abs_x, abs_y = coords[0]
+
+        if abs_x is None:
+            selected_lagans = [
+                it
+                for it in getattr(self, "selected_lagans", []) or []
+                if getattr(it, "is_selected", False)
+            ]
+            if len(selected_lagans) == 1:
+                rod = selected_lagans[0]
+                rel = getattr(rod, "original_selected_center", None)
+                if isinstance(rel, (list, tuple)) and len(rel) == 2:
+                    row_label, col_label = rel
+                try:
+                    c = rod.mapToScene(rod.rect().center())
+                    abs_x, abs_y = float(c.x()), float(c.y())
+                except Exception:
+                    pass
+
+        if abs_x is None or abs_y is None:
+            return None
+        return float(abs_x), float(abs_y), row_label, col_label
+
+    def _execute_free_lagan_batch(
+            self,
+            arrange_mode,
+            ref_x,
+            ref_y,
+            row_label,
+            col_label,
+            is_symmetry,
+            lagan_length,
+            clear_highlight=True,
+    ):
+        do_str = self.get_tube_do()
+        if do_str is None:
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "错误", "未找到换热管外径 do 参数")
+            if clear_highlight:
+                self.clear_selection_highlight()
+            return False
+        try:
+            do = float(do_str)
+            lagan_length = float(lagan_length)
+        except (TypeError, ValueError):
+            from PyQt5.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "错误", "拉杆直径或换热管外径格式错误")
+            if clear_highlight:
+                self.clear_selection_highlight()
+            return False
+
+        targets = self._compute_free_lagan_targets(
+            arrange_mode, ref_x, ref_y, bool(is_symmetry)
+        )
+        print(
+            f"[free_lagan_batch] mode={arrange_mode} symmetry={is_symmetry} "
+            f"ref=({ref_x:.3f},{ref_y:.3f}) targets={targets}"
+        )
+        if not self._validate_free_lagan_targets(targets, do, lagan_length):
+            if clear_highlight:
+                self.clear_selection_highlight()
+            return False
+
+        self.operation_order += 1
+        for tx, ty in targets:
+            self._draw_free_lagan_at(
+                tx, ty, lagan_length, do, row_label, col_label
+            )
+        self.update_total_lagan_count()
+        if clear_highlight:
+            self.clear_selection_highlight()
+        return True
+
     def build_free_form_lagan(
             self,
             selected_centers=None,
@@ -34944,7 +35286,6 @@ class TubeLayoutEditor(QMainWindow):
             arrange_mode="row",
             lagan_coord=None,
     ):
-        self.operation_order += 1
         """
         绘制自由形式拉杆（侧拉杆）
         
@@ -34956,8 +35297,6 @@ class TubeLayoutEditor(QMainWindow):
 
         if lagan_coord is None and not selected_centers:
             return
-
-        user_supplied_coord = lagan_coord is not None
 
         # 验证 lagan_length
         try:
@@ -35055,8 +35394,6 @@ class TubeLayoutEditor(QMainWindow):
             selected_abs_x, selected_abs_y = current_coords[0]
 
         if lagan_coord is None:
-            # 普通拉杆作为参照时，以图元的实际圆心覆盖相对标签换算结果。
-            # 隔条位置尺寸变化后，相对行列索引可能发生偏移，但实际位置不会。
             for selected_rod in list(getattr(self, "selected_lagans", []) or []):
                 if not getattr(selected_rod, "is_selected", False):
                     continue
@@ -35079,180 +35416,18 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception:
                     pass
 
-            if str(arrange_mode).lower() == "col":
-                pitch_tol = max(float(getattr(self, "r", 10) or 10) * 0.35, 1.0)
-                centers = list(getattr(self, "global_centers", []) or [])
+            return self._execute_free_lagan_batch(
+                arrange_mode=arrange_mode,
+                ref_x=selected_abs_x,
+                ref_y=selected_abs_y,
+                row_label=row_label,
+                col_label=col_label,
+                is_symmetry=False,
+                lagan_length=lagan_length,
+            )
 
-                line = [
-                    (float(x), float(y))
-                    for x, y in centers
-                    if abs(float(x) - float(selected_abs_x)) <= pitch_tol
-                ]
-                dists = [
-                    math.hypot(x - float(selected_abs_x), y - float(selected_abs_y))
-                    for x, y in line
-                    if math.hypot(x - float(selected_abs_x), y - float(selected_abs_y))
-                    > 1e-3
-                ]
-                S = min(dists) if dists else None
-                if S is None:
-                    col_sorted = self._find_column_centers_for_free_lagan(
-                        selected_abs_x, col_label
-                    )
-                    if col_sorted and len(col_sorted) >= 2:
-                        coord1 = col_sorted[0]
-                        coord2 = col_sorted[1]
-                        S = math.sqrt(
-                            (float(coord2[0]) - float(coord1[0])) ** 2
-                            + (float(coord2[1]) - float(coord1[1])) ** 2
-                        )
-                if S is None:
-                    try:
-                        s_val = float(getattr(self, "input_json", {}).get("LB_S", 0))
-                        if s_val > 0:
-                            S = s_val
-                    except (TypeError, ValueError, AttributeError):
-                        pass
-                if S is None:
-                    table = getattr(self, "param_table", None)
-                    if table is not None:
-                        for row in range(table.rowCount()):
-                            name_item = table.item(row, 1)
-                            if name_item and name_item.text().strip() == "换热管中心距 S":
-                                value_item = table.item(row, 2)
-                                if value_item and value_item.text().strip():
-                                    try:
-                                        S = float(value_item.text().strip())
-                                        break
-                                    except ValueError:
-                                        pass
-                if S is None or S <= 0:
-                    print("[build_free_form_lagan][col] 无法确定管间距 S")
-                    self.clear_selection_highlight()
-                    return False
-
-                col_sorted = self._find_column_centers_for_free_lagan(
-                    selected_abs_x, col_label
-                )
-                slot_tubes = list(line) if line else (col_sorted or [])
-
-                lagan_x = float(selected_abs_x)
-                # 上下由参照管物理 y 决定：相对参照管偏移 S（不用整列最外端）
-                if float(selected_abs_y) >= 0:
-                    lagan_y = float(selected_abs_y) + S
-                    side = "top"
-                else:
-                    lagan_y = float(selected_abs_y) - S
-                    side = "bottom"
-
-                flipped = False
-                if self._is_free_lagan_endpoint_in_baffle_slot(
-                    lagan_x, lagan_y, slot_tubes, axis="y"
-                ):
-                    lagan_y_alt = (
-                        float(selected_abs_y) - S
-                        if side == "top"
-                        else float(selected_abs_y) + S
-                    )
-                    if not self._is_free_lagan_endpoint_in_baffle_slot(
-                        lagan_x, lagan_y_alt, slot_tubes, axis="y"
-                    ):
-                        lagan_y = lagan_y_alt
-                        side = "bottom" if side == "top" else "top"
-                        flipped = True
-                    elif col_sorted and len(col_sorted) >= 2:
-                        y_bottom, y_top = self._get_column_y_extent_for_free_lagan(
-                            selected_abs_x, col_sorted
-                        )
-                        if y_bottom is None or y_top is None:
-                            y_bottom = float(col_sorted[0][1])
-                            y_top = float(col_sorted[-1][1])
-                        lagan_y_top = y_top + S
-                        lagan_y_bottom = y_bottom - S
-                        lagan_y_fb = (
-                            lagan_y_top if float(selected_abs_y) >= 0 else lagan_y_bottom
-                        )
-                        if not self._is_free_lagan_endpoint_in_baffle_slot(
-                            lagan_x, lagan_y_fb, slot_tubes, axis="y"
-                        ):
-                            lagan_y = lagan_y_fb
-                            side = "top" if lagan_y_fb == lagan_y_top else "bottom"
-                            flipped = True
-                        else:
-                            print(
-                                f"[build_free_form_lagan][col] 参照管±S与列端±S均在隔板槽空档，跳过"
-                            )
-                            self.clear_selection_highlight()
-                            return False
-                    else:
-                        print(
-                            f"[build_free_form_lagan][col] 目标 ({lagan_x:.3f},{lagan_y:.3f}) "
-                            f"在隔板槽空档且无法翻转，跳过"
-                        )
-                        self.clear_selection_highlight()
-                        return False
-
-                print(
-                    f"[build_free_form_lagan][col] 参照({selected_abs_x:.3f},{selected_abs_y:.3f}) "
-                    f"col_label={col_label} row_label={row_label} side={side} flipped={flipped} "
-                    f"S={S:.3f} -> ({lagan_x:.3f},{lagan_y:.3f})"
-                )
-            else:
-                # 按行：在参照管同行外侧偏移一个管间距 S（相对参照管，不用整行最外端）
-                pitch_tol = max(float(getattr(self, "r", 10) or 10) * 0.35, 1.0)
-                centers = list(getattr(self, "global_centers", []) or [])
-
-                line = [
-                    (float(x), float(y))
-                    for x, y in centers
-                    if abs(float(y) - float(selected_abs_y)) <= pitch_tol
-                ]
-                dists = [
-                    math.hypot(x - float(selected_abs_x), y - float(selected_abs_y))
-                    for x, y in line
-                    if math.hypot(x - float(selected_abs_x), y - float(selected_abs_y))
-                    > 1e-3
-                ]
-                S = min(dists) if dists else None
-                if S is None:
-                    try:
-                        s_val = float(getattr(self, "input_json", {}).get("LB_S", 0))
-                        if s_val > 0:
-                            S = s_val
-                    except (TypeError, ValueError, AttributeError):
-                        pass
-                if S is None:
-                    table = getattr(self, "param_table", None)
-                    if table is not None:
-                        for row in range(table.rowCount()):
-                            name_item = table.item(row, 1)
-                            if name_item and name_item.text().strip() == "换热管中心距 S":
-                                value_item = table.item(row, 2)
-                                if value_item and value_item.text().strip():
-                                    try:
-                                        S = float(value_item.text().strip())
-                                        break
-                                    except ValueError:
-                                        pass
-                if S is None or S <= 0:
-                    print("[build_free_form_lagan][row] 无法确定管间距 S")
-                    self.clear_selection_highlight()
-                    return False
-
-                lagan_y = float(selected_abs_y)
-                # 左右由参照管物理 x 决定（col_label 与 x 符号在正三角形等布局下不一致）
-                if float(selected_abs_x) >= 0:
-                    lagan_x = float(selected_abs_x) + S
-                    side = "right"
-                else:
-                    lagan_x = float(selected_abs_x) - S
-                    side = "left"
-
-                print(
-                    f"[build_free_form_lagan][row] 参照({selected_abs_x:.3f},{selected_abs_y:.3f}) "
-                    f"row_label={row_label} col_label={col_label} side={side} S={S:.3f} "
-                    f"-> ({lagan_x:.3f},{lagan_y:.3f})"
-                )
+        # 以下为 lagan_coord 恢复/指定坐标路径
+        self.operation_order += 1
 
         # 仅在恢复旧的绝对坐标时过滤隔条内部遗留数据。
         if (
@@ -35288,10 +35463,10 @@ class TubeLayoutEditor(QMainWindow):
             if getattr(existing_rod, "is_side_rod", False):
                 print(
                     f"[build_free_form_lagan] 位置 ({lagan_x:.3f}, {lagan_y:.3f}) "
-                    f"已有自由拉杆，跳过绘制并提示"
+                    f"已有自由拉杆（同列目标位置一致），跳过重复绘制"
                 )
                 self.clear_selection_highlight()
-                return False
+                return True
             print(
                 f"[build_free_form_lagan] 位置 ({lagan_x:.3f}, {lagan_y:.3f}) "
                 f"已存在普通拉杆，跳过绘制"
@@ -35299,81 +35474,19 @@ class TubeLayoutEditor(QMainWindow):
             self.clear_selection_highlight()
             return False
 
-        # 按列/按行自动布置在管板端外侧，已做隔板槽与重叠校验；仅外部给定坐标时校验折流板外径。
-        if user_supplied_coord:
-            lagan_coord_check = [(lagan_x, lagan_y)]
-            if not self.can_place_lagan_without_intersect(lagan_coord_check, lagan_length):
-                print(
-                    f"[build_free_form_lagan] 拉杆位置 ({lagan_x:.2f}, {lagan_y:.2f}) 超出折流/支持板外径，跳过绘制"
-                )
-                self.clear_selection_highlight()
-                return False
+        # 按列/按行自动布置：恢复指定坐标时也校验折流板外径。
+        if not self.can_place_lagan_without_intersect([(lagan_x, lagan_y)], do):
+            print(
+                f"[build_free_form_lagan] 拉杆位置 ({lagan_x:.2f}, {lagan_y:.2f}) 超出折流/支持板外径，跳过绘制"
+            )
+            self.clear_selection_highlight()
+            return False
 
-        # 不相交，绘制红色实心圆
-        red_pen = QPen(Qt.red)
-        red_pen.setWidth(1)
-        red_brush = QBrush(Qt.red)
-        # 按需求：自由拉杆“绘制尺寸”使用换热管外径 do；参数中的拉杆直径值仍保持原逻辑
-        draw_diameter = float(do)
-        lagan_radius = draw_diameter / 2.0
-
-        # 创建拉杆圆（使用ClickableCircleItem）
-        lagan_rect = QRectF(
-            lagan_x - lagan_radius, lagan_y - lagan_radius, draw_diameter, draw_diameter
-        )
-        lagan_rod = ClickableCircleItem(lagan_rect, is_side_rod=True, editor=self)
-        # 明确标记为侧拉杆，确保 mousePressEvent 使用 is_side_rod 分支
-        lagan_rod.is_side_rod = True
-        lagan_rod.is_lagan = False
-        # 提前设置画笔和画刷，并提升到前景，避免被其他椭圆遮挡导致无法点击
-        lagan_rod.setPen(red_pen)
-        lagan_rod.setBrush(red_brush)
-        lagan_rod.original_pen = red_pen
-        lagan_rod.original_brush = red_brush  # 确保清高亮时恢复为实心红色
-        lagan_rod.original_selected_center = (
-            (row_label, col_label)
-            if (row_label is not None and col_label is not None)
-            else None
-        )
-        lagan_rod.setZValue(20)
-        self.graphics_scene.addItem(lagan_rod)
-
-        # 维护自由拉杆坐标缓存：相对坐标（兼容旧逻辑）+绝对坐标（新存储）
-        if not hasattr(self, "red_dangban"):
-            self.red_dangban = []
-        if not hasattr(self, "red_dangban_abs"):
-            self.red_dangban_abs = []
-
-        # 检查是否重复
-        relative_coord = (
-            (row_label, col_label)
-            if (row_label is not None and col_label is not None)
-            else None
-        )
-        if relative_coord is not None and relative_coord not in self.red_dangban:
-            self.red_dangban.append(relative_coord)
-        abs_coord = (float(lagan_x), float(lagan_y))
-        if abs_coord not in self.red_dangban_abs:
-            self.red_dangban_abs.append(abs_coord)
-
-        # 记录操作
-        if not hasattr(self, "operations"):
-            self.operations = []
-        self.operations.append(
-            {
-                "type": "small_block",
-                "row": row_label,
-                "coord": (lagan_x, lagan_y),
-                "radius": lagan_radius,
-                "diameter": lagan_length,
-            }
+        self._draw_free_lagan_at(
+            lagan_x, lagan_y, lagan_length, do, row_label, col_label
         )
         self.update_total_lagan_count()
-
-        # 清除选中高亮
         self.clear_selection_highlight()
-
-        # 返回 True 表示成功绘制
         return True
 
 
