@@ -12407,6 +12407,21 @@ class TubeLayoutEditor(QMainWindow):
 
     def update_partition_plate_center_distance(self):
         """更新分程隔板两侧相邻管中心距（竖直）和（水平）- 严格匹配附件9文档数据"""
+        sn_param_names = {
+            "分程隔板两侧相邻管中心距（竖直）",
+            "分程隔板两侧相邻管中心距（水平）",
+        }
+        prev_programmatic = getattr(self, "_is_programmatic_update", False)
+        prev_programmatic_params = set(getattr(self, "_programmatic_update_params", set()) or [])
+        self._is_programmatic_update = True
+        self._programmatic_update_params = prev_programmatic_params | sn_param_names
+        try:
+            self._update_partition_plate_center_distance_impl()
+        finally:
+            self._programmatic_update_params = prev_programmatic_params
+            self._is_programmatic_update = prev_programmatic
+
+    def _update_partition_plate_center_distance_impl(self):
         # 监听应随着公称直径、换热管外径、管程分程形式改变触发
         # 1. 定位关键参数行：换热管外径、排列方式、管程数、竖直中心距、水平中心距
         target_params = {
@@ -14130,6 +14145,15 @@ class TubeLayoutEditor(QMainWindow):
                     except Exception:
                         pass
 
+                    # 管程/分程联动级联中，W 会临时写入 0.00；Sn 行也可能先显示旧值 0 再被程序刷新。
+                    if getattr(self, "_in_on_combobox_cascade", False):
+                        return
+                    if (
+                            getattr(self, "_is_programmatic_update", False)
+                            and param_name in getattr(self, "_programmatic_update_params", set())
+                    ):
+                        return
+
                     cur_text = str(param_value).strip()
 
                     # 为两个参数分别维护“最近合法值”
@@ -15132,6 +15156,7 @@ class TubeLayoutEditor(QMainWindow):
                             f"[on_table_item_changed] 管程分程形式: {self.tube_pass_form_value}"
                         )
                         try:
+                            self.update_partition_plate_center_distance()
                             self.update_SN()
                             if (
                                     hasattr(self, "tube_pass_form_combo")
@@ -15939,6 +15964,7 @@ class TubeLayoutEditor(QMainWindow):
             if selected_value:
                 self.tube_pass_form_value = selected_value
                 print(f"管程分程形式已更新为: {self.tube_pass_form_value}")
+                self.update_partition_plate_center_distance()
                 self.update_SN()
                 self.update_divider_position_and_size()
 
@@ -16226,8 +16252,8 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 pass
 
-            self.update_SN()
             self.update_partition_plate_center_distance()
+            self.update_SN()
             # 刷新“管程分程形式”下拉框的图片（切换管程程数时必须同步）
             try:
                 form_row = -1
