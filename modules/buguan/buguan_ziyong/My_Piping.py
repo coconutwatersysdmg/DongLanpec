@@ -1711,6 +1711,11 @@ class TubeLayoutEditor(QMainWindow):
         if len(self.selected_centers) == 2:
             distance = self.calculate_distance(self.selected_centers)
             message = f"您选中的两个换热管孔的间距为 {distance: .4f} mm。"
+            actual_coords = self.selected_to_current_coords(self.selected_centers[:2])
+            print(message)
+            if actual_coords:
+                (x1, y1), (x2, y2) = actual_coords
+                print(f"圆心1坐标: ({x1:.4f}, {y1:.4f}), 圆心2坐标: ({x2:.4f}, {y2:.4f})")
 
             try:
                 self.line_tip.setText(message)
@@ -2024,6 +2029,11 @@ class TubeLayoutEditor(QMainWindow):
 
             dist = math.hypot(x1 - x2, y1 - y2)
             message = f"您选中的换热管孔和自由拉杆的间距为  {dist:.4f} mm。"
+            print(message)
+            print(
+                f"换热管孔圆心坐标: ({x2:.4f}, {y2:.4f}), "
+                f"自由拉杆圆心坐标: ({x1:.4f}, {y1:.4f})"
+            )
             try:
                 self.line_tip.setText(message)
                 self.line_tip.setStyleSheet("color: black;")
@@ -2041,7 +2051,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 QTimer.singleShot(5000, _clear_if_same)
             except AttributeError:
-                print(message)
+                pass
         except Exception:
             # 静默捕获
             pass
@@ -21056,14 +21066,18 @@ class TubeLayoutEditor(QMainWindow):
             # 6) 重置大量状态（这些字段会影响后续交互；逐块保护）
             _safe_step("reset selected_centers", setattr, self, "selected_centers", [])
 
-            # 6.1) 先清理场景中普通拉杆图元（包括可视区外“幽灵拉杆”），避免后续保存误写回数据库
+            # 6.1) 先清理场景中普通拉杆、自由拉杆图元（包括可视区外“幽灵拉杆”），避免后续保存误写回数据库
             def _clear_lagan_items_from_scene():
                 if not hasattr(self, "graphics_scene") or self.graphics_scene is None:
                     return
                 to_remove = []
                 for it in list(self.graphics_scene.items()):
                     try:
-                        if getattr(it, "is_lagan", False) and not getattr(it, "is_side_rod", False):
+                        if getattr(it, "is_lagan", False) and not getattr(
+                            it, "is_side_rod", False
+                        ):
+                            to_remove.append(it)
+                        elif getattr(it, "is_side_rod", False):
                             to_remove.append(it)
                     except Exception:
                         continue
@@ -21078,6 +21092,8 @@ class TubeLayoutEditor(QMainWindow):
             for attr, default in [
                 ("lagan_info", []),
                 ("red_dangban", []),
+                ("red_dangban_abs", []),
+                ("selected_side_rods", []),
                 ("center_dangban", []),
                 ("center_dangguan", []),
                 ("center_dangguan_num", 0),
@@ -21111,6 +21127,15 @@ class TubeLayoutEditor(QMainWindow):
                 ("_impingement_plate_auto_id", 0),
             ]:
                 _safe_step(f"reset {attr}", setattr, self, attr, default)
+
+            def _clear_free_lagan_operations():
+                if not hasattr(self, "operations") or not self.operations:
+                    return
+                self.operations = [
+                    op for op in self.operations if op.get("type") != "small_block"
+                ]
+
+            _safe_step("clear free lagan operations", _clear_free_lagan_operations)
 
             # 7) 径向开孔字典：只清空字典，不清除图形项（避免访问已销毁的Qt对象导致崩溃）
             # 图形项会在后续重新绘制时自动替换
@@ -34675,45 +34700,82 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception:
                     pass
 
-            try:
-                baffle_radius = float(self.get_Baffle_OD()) / 2.0
-            except (TypeError, ValueError):
-                print("[build_free_form_lagan] 无法获取有效的折流/支持板外径")
-                return False
+            pitch_tol = max(float(getattr(self, "r", 10) or 10) * 0.35, 1.0)
+            centers = list(getattr(self, "global_centers", []) or [])
 
-            # 绘制直径实际使用换热管外径 do；同时兼顾参数中的拉杆直径，
-            # 保证最终圆完整位于折流/支持板外径以内。
-            candidate_radius = max(float(do), float(lagan_length)) / 2.0
-            available_radius = baffle_radius - candidate_radius
-            if available_radius <= 0:
-                print("[build_free_form_lagan] 折流/支持板内无可用布置空间")
-                return False
+            def _nearest_line_pitch(ref_x, ref_y, axis):
+                """取参照管在同列/同行中最近邻管的中心距作为 S。"""
+                if axis == "col":
+                    line = [
+                        (float(x), float(y))
+                        for x, y in centers
+                        if abs(float(x) - float(ref_x)) <= pitch_tol
+                    ]
+                else:
+                    line = [
+                        (float(x), float(y))
+                        for x, y in centers
+                        if abs(float(y) - float(ref_y)) <= pitch_tol
+                    ]
+                dists = [
+                    math.hypot(x - float(ref_x), y - float(ref_y))
+                    for x, y in line
+                    if math.hypot(x - float(ref_x), y - float(ref_y)) > 1e-3
+                ]
+                return min(dists) if dists else None
+
+            def _fallback_pitch():
+                try:
+                    s_val = float(getattr(self, "input_json", {}).get("LB_S", 0))
+                    if s_val > 0:
+                        return s_val
+                except (TypeError, ValueError, AttributeError):
+                    pass
+                table = getattr(self, "param_table", None)
+                if table is not None:
+                    for row in range(table.rowCount()):
+                        name_item = table.item(row, 1)
+                        if name_item and name_item.text().strip() == "换热管中心距 S":
+                            value_item = table.item(row, 2)
+                            if value_item and value_item.text().strip():
+                                try:
+                                    return float(value_item.text().strip())
+                                except ValueError:
+                                    pass
+                return None
 
             if str(arrange_mode).lower() == "col":
+                S = _nearest_line_pitch(selected_abs_x, selected_abs_y, "col")
+                if S is None:
+                    S = _fallback_pitch()
+                if S is None or S <= 0:
+                    print("[build_free_form_lagan][col] 无法确定管间距 S")
+                    return False
                 lagan_x = float(selected_abs_x)
-                remaining = available_radius ** 2 - lagan_x ** 2
-                if remaining < 0:
-                    print("[build_free_form_lagan][col] 参照列超出可用圆范围")
-                    return False
-                outer_y = math.sqrt(max(0.0, remaining))
-                lagan_y = outer_y if float(selected_abs_y) >= 0 else -outer_y
+                if float(selected_abs_y) >= 0:
+                    lagan_y = float(selected_abs_y) + S
+                else:
+                    lagan_y = float(selected_abs_y) - S
             else:
-                lagan_y = float(selected_abs_y)
-                remaining = available_radius ** 2 - lagan_y ** 2
-                if remaining < 0:
-                    print("[build_free_form_lagan][row] 参照行超出可用圆范围")
+                S = _nearest_line_pitch(selected_abs_x, selected_abs_y, "row")
+                if S is None:
+                    S = _fallback_pitch()
+                if S is None or S <= 0:
+                    print("[build_free_form_lagan][row] 无法确定管间距 S")
                     return False
-                outer_x = math.sqrt(max(0.0, remaining))
-                lagan_x = outer_x if float(selected_abs_x) >= 0 else -outer_x
+                lagan_y = float(selected_abs_y)
+                if float(selected_abs_x) >= 0:
+                    lagan_x = float(selected_abs_x) + S
+                else:
+                    lagan_x = float(selected_abs_x) - S
 
             print(
                 f"[build_free_form_lagan] 方式={arrange_mode}, "
-                f"参照实际坐标=({selected_abs_x:.3f}, {selected_abs_y:.3f}), "
-                f"外径圆目标=({lagan_x:.3f}, {lagan_y:.3f})"
+                f"参照=({selected_abs_x:.3f}, {selected_abs_y:.3f}), S={S:.3f}, "
+                f"目标=({lagan_x:.3f}, {lagan_y:.3f})"
             )
 
         # 仅在恢复旧的绝对坐标时过滤隔条内部遗留数据。
-        # 当前新位置直接由折流/支持板外径圆计算，不再依赖管孔分组。
         if (
                 lagan_coord is not None
                 and not self._is_free_rod_position_external((lagan_x, lagan_y))
