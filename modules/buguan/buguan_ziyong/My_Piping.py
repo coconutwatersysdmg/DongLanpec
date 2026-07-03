@@ -861,6 +861,14 @@ class ClickableCircleItem(QGraphicsEllipseItem):
                             print(
                                 f"[ClickableCircleItem] 添加拉杆到选中列表，当前选中数量: {len(self.editor.selected_side_rods)}"
                             )
+                        try:
+                            c = self.mapToScene(self.rect().center())
+                            if hasattr(self.editor, "print_selected_circle_center"):
+                                self.editor.print_selected_circle_center(
+                                    "自由拉杆", float(c.x()), float(c.y())
+                                )
+                        except Exception:
+                            pass
                     else:
                         if self in self.editor.selected_side_rods:
                             self.editor.selected_side_rods.remove(self)
@@ -948,6 +956,10 @@ class ClickableCircleItem(QGraphicsEllipseItem):
                         cur = [coord for coord in cur if coord not in rel_list]
 
                     editor.selected_centers = cur
+                    if self.is_selected and hasattr(
+                            editor, "print_selected_circle_center"
+                    ):
+                        editor.print_selected_circle_center("普通拉杆", cx, cy)
                     print(
                         f"[ClickableCircleItem] 普通拉杆"
                         f"{'选中' if self.is_selected else '取消选中'}，"
@@ -1306,6 +1318,9 @@ def nonbaffle_removed_centers(height_0_180, height_90_270, Di, do, centers):
 
 
 class TubeLayoutEditor(QMainWindow):
+    # 行/列分组容差(mm)：坐标差绝对值≤此值视为同一行/列（与 group_centers_by_x/y 注释一致）
+    AXIS_GROUP_TOL = 1.0
+
     def __init__(self, line_tip=None):
         # 注意：必须在super().__init__()之前检查，避免创建不必要的窗口
         print("准备检查项目和产品状态...")
@@ -1629,6 +1644,20 @@ class TubeLayoutEditor(QMainWindow):
                             abs_y_display = -float(abs_y)
                         except Exception:
                             abs_y_display = abs_y
+                        # 单选换热管时在控制台输出圆心坐标（普通拉杆/自由拉杆各自处理）
+                        try:
+                            lagan_n = len(getattr(self, "selected_lagans", []) or [])
+                            side_n = sum(
+                                1
+                                for it in getattr(self, "selected_side_rods", []) or []
+                                if getattr(it, "is_selected", False)
+                            )
+                            if lagan_n == 0 and side_n == 0:
+                                self.print_selected_circle_center(
+                                    "换热管", abs_x, abs_y
+                                )
+                        except Exception:
+                            pass
                         message = (
                             f"您当前选中的换热管孔坐标为 ({float(abs_x):.4f}, {abs_y_display:.4f})"
                         )
@@ -1706,6 +1735,15 @@ class TubeLayoutEditor(QMainWindow):
         """取消注册回调函数"""
         if callback in self.selected_centers_changed_callbacks:
             self.selected_centers_changed_callbacks.remove(callback)
+
+    def print_selected_circle_center(self, item_type, x, y):
+        """单选时在控制台输出圆心坐标。"""
+        try:
+            print(
+                f"[选中{item_type}] 圆心坐标: ({float(x):.4f}, {float(y):.4f})"
+            )
+        except Exception:
+            pass
 
     def show_distance(self):
         if len(self.selected_centers) == 2:
@@ -7033,6 +7071,7 @@ class TubeLayoutEditor(QMainWindow):
 
             self.target_list = target_list
             self.global_centers = result["centers"]
+            self._invalidate_axis_cluster_cache()
             centers = self.global_centers
 
             # 计算非布管区域
@@ -7053,6 +7092,7 @@ class TubeLayoutEditor(QMainWindow):
 
             # 重新计算并绘制非布管区域和挡板
             self.global_centers = result["centers"]
+            self._invalidate_axis_cluster_cache()
             centers = self.global_centers
             self.none_tube(height_0_180, height_90_270, Di, do, centers)
             try:
@@ -17684,17 +17724,95 @@ class TubeLayoutEditor(QMainWindow):
         return result
 
     @staticmethod
-    def _vertical_col_key(x, tol=1e-3):
-        """竖直表按列分组键：与 group_centers_by_x 一致，用 abs(x) 量化避免浮点拆列。"""
-        return int(round(abs(float(x)) / tol))
+    def _build_axis_cluster_reps(abs_values, merge_tol=1.0):
+        """将绝对坐标值按 merge_tol 合并为簇，返回升序簇代表值列表。"""
+        if not abs_values:
+            return []
+        sorted_vals = sorted(float(v) for v in abs_values)
+        reps = [sorted_vals[0]]
+        for v in sorted_vals[1:]:
+            if v - reps[-1] > float(merge_tol) + 1e-9:
+                reps.append(v)
+        return reps
 
-    def _unique_positive_x_by_col_key(self, centers, tol=1e-3):
+    @staticmethod
+    def _nearest_axis_cluster_key(abs_value, cluster_reps, merge_tol=1.0):
+        """返回 abs_value 在容差内最近簇的下标；无匹配则返回 None。"""
+        abs_v = abs(float(abs_value))
+        best_i = None
+        best_d = None
+        for i, rep in enumerate(cluster_reps):
+            d = abs(abs_v - rep)
+            if d <= float(merge_tol) + 1e-9:
+                if best_d is None or d < best_d:
+                    best_i = i
+                    best_d = d
+        return best_i
+
+    def _get_x_cluster_reps(self, merge_tol=None):
+        """满布 global_centers 上的列簇代表（带缓存）。"""
+        if merge_tol is None:
+            merge_tol = self.AXIS_GROUP_TOL
+        gc = getattr(self, "global_centers", None) or []
+        cache = getattr(self, "_x_cluster_reps_cache", None)
+        cache_key = (float(merge_tol), len(gc))
+        if cache and cache[0] == cache_key:
+            return cache[1]
+        abs_x = [abs(float(x)) for x, _y in gc]
+        reps = self._build_axis_cluster_reps(abs_x, merge_tol)
+        self._x_cluster_reps_cache = (cache_key, reps)
+        return reps
+
+    def _get_y_cluster_reps(self, merge_tol=None):
+        """满布 global_centers 上的行簇代表（带缓存）。"""
+        if merge_tol is None:
+            merge_tol = self.AXIS_GROUP_TOL
+        gc = getattr(self, "global_centers", None) or []
+        cache = getattr(self, "_y_cluster_reps_cache", None)
+        cache_key = (float(merge_tol), len(gc))
+        if cache and cache[0] == cache_key:
+            return cache[1]
+        abs_y = [abs(float(y)) for _x, y in gc]
+        reps = self._build_axis_cluster_reps(abs_y, merge_tol)
+        self._y_cluster_reps_cache = (cache_key, reps)
+        return reps
+
+    def _invalidate_axis_cluster_cache(self):
+        """global_centers 变更后清除行/列簇缓存。"""
+        self._x_cluster_reps_cache = None
+        self._y_cluster_reps_cache = None
+        try:
+            self._coord_to_col_cache_key = None
+        except Exception:
+            pass
+
+    def _vertical_col_key(self, x, merge_tol=None):
+        """竖直表按列分组键：与 group_centers_by_x 一致，容差内视为同一列。"""
+        if merge_tol is None:
+            merge_tol = self.AXIS_GROUP_TOL
+        reps = self._get_x_cluster_reps(merge_tol)
+        if not reps:
+            return 0
+        key = self._nearest_axis_cluster_key(abs(float(x)), reps, merge_tol)
+        if key is None:
+            key = min(
+                range(len(reps)),
+                key=lambda i: abs(abs(float(x)) - reps[i]),
+            )
+        return key
+
+    def _unique_positive_x_by_col_key(self, centers, merge_tol=None):
         """竖直表 R 计算：按列键去重后的 x 坐标（升序）。"""
+        if merge_tol is None:
+            merge_tol = self.AXIS_GROUP_TOL
+        reps = self._get_x_cluster_reps(merge_tol)
         keys = set()
         for x, _y in centers:
             if float(x) >= 0:
-                keys.add(self._vertical_col_key(x, tol))
-        return sorted(k * tol for k in keys)
+                k = self._nearest_axis_cluster_key(abs(float(x)), reps, merge_tol)
+                if k is not None:
+                    keys.add(k)
+        return [reps[k] for k in sorted(keys)]
 
     def build_sql_for_tube_hole(self, tube_hole_data):
         self.sorted_current_centers_left, self.sorted_current_centers_right = (
@@ -17748,18 +17866,17 @@ class TubeLayoutEditor(QMainWindow):
             # 与 group_centers_by_x 一致：统一用 abs(x) 列键，左右对称列占同一行
             from collections import defaultdict
 
-            tol = 1e-3
+            merge_tol = self.AXIS_GROUP_TOL
+            master_reps = self._get_x_cluster_reps(merge_tol)
 
-            # 1. 满布状态的所有列键
-            global_col_keys = set()
-            for x, y in self.global_centers:
-                global_col_keys.add(self._vertical_col_key(x, tol))
+            # 1. 满布状态的所有列键（簇下标）
+            global_col_keys = set(range(len(master_reps)))
 
             # 2. 当前状态按列键分组
             current_left_groups = defaultdict(list)
             current_right_groups = defaultdict(list)
             for x, y in self.current_centers:
-                col_key = self._vertical_col_key(x, tol)
+                col_key = self._vertical_col_key(x, merge_tol)
                 if float(x) < 0:
                     current_left_groups[col_key].append((x, y))
                 else:
@@ -21237,64 +21354,52 @@ class TubeLayoutEditor(QMainWindow):
         return None
 
     def group_centers_by_y(
-            self, centers: List[Tuple[float, float]], tol: float = 1e-3
+            self, centers: List[Tuple[float, float]], merge_tol: float = None
     ) -> Tuple[List[List[Tuple[float, float]]], List[List[Tuple[float, float]]]]:
         """
-        将 centers 分别按 y>0 和 y<0 分组，y 相近（在 tol 范围内）视为同一组，并对每组按 x 坐标升序排列。
+        将 centers 分别按 y>0 和 y<0 分组，|y| 差值绝对值≤merge_tol 视为同一行，并对每组按 x 坐标升序排列。
         返回一个元组：(positive_groups, negative_groups)
         始终保持与满布状态相同的行数结构，缺失的行用空列表填充
         特殊处理：当管程分程形式为4.3或6.2时，最中间一行只有正行，没有对称的负行
         """
         from collections import defaultdict
 
+        if merge_tol is None:
+            merge_tol = self.AXIS_GROUP_TOL
+
         # 获取当前管程分程形式
         is_special_layout = hasattr(
             self, "tube_pass_form_value"
         ) and self.tube_pass_form_value in ["4.3", "6.2", "1.1"]
 
-        # 获取满布状态的行键作为参考
-        full_pos_keys = set()
-        full_neg_keys = set()
+        master_reps = self._get_y_cluster_reps(merge_tol)
 
-        # 如果存在满布状态数据，获取其行键
-        if hasattr(self, "full_sorted_current_centers_up") and hasattr(
-                self, "full_sorted_current_centers_down"
-        ):
-            # 获取满布状态的行键
-            for row in self.full_sorted_current_centers_up:
-                if row:  # 确保行不为空
-                    y = row[0][1]  # 取该行第一个点的y坐标
-                    full_pos_keys.add(int(round(abs(y) / tol)))
-
-            for row in self.full_sorted_current_centers_down:
-                if row:  # 确保行不为空
-                    y = row[0][1]  # 取该行第一个点的y坐标
-                    full_neg_keys.add(int(round(abs(y) / tol)))
+        def _y_row_key(y_val):
+            key = self._nearest_axis_cluster_key(abs(float(y_val)), master_reps, merge_tol)
+            if key is None and master_reps:
+                key = min(
+                    range(len(master_reps)),
+                    key=lambda i: abs(abs(float(y_val)) - master_reps[i]),
+                )
+            return key if key is not None else 0
 
         # 处理当前传入的圆心
         pos_groups = defaultdict(list)
         neg_groups = defaultdict(list)
 
         for x, y in centers:
-            y_key = int(round(abs(y) / tol))
+            y_key = _y_row_key(y)
             if y >= 0:
                 pos_groups[y_key].append((x, y))
             else:
                 neg_groups[y_key].append((x, y))
 
-        # 合并满布状态的行键和当前行键
-        all_pos_keys = (
-            full_pos_keys.union(pos_groups.keys())
-            if full_pos_keys
-            else sorted(pos_groups.keys())
-        )
-        all_neg_keys = (
-            full_neg_keys.union(neg_groups.keys())
-            if full_neg_keys
-            else sorted(neg_groups.keys())
-        )
+        # 满布行结构：按 global 簇下标 0..n-1
+        all_pos_keys = set(range(len(master_reps))) if master_reps else set(pos_groups.keys())
+        all_neg_keys = set(range(len(master_reps))) if master_reps else set(neg_groups.keys())
+        all_pos_keys.update(pos_groups.keys())
+        all_neg_keys.update(neg_groups.keys())
 
-        # 对每组按 x 坐标排序，并按 y 绝对值从小到大排列
         sorted_pos_keys = sorted(all_pos_keys)
         sorted_neg_keys = sorted(all_neg_keys)
 
@@ -21371,59 +21476,51 @@ class TubeLayoutEditor(QMainWindow):
         return edge_centers
 
     def group_centers_by_x(
-            self, centers: List[Tuple[float, float]], tol: float = 1e-3
+            self, centers: List[Tuple[float, float]], merge_tol: float = None
     ) -> Tuple[List[List[Tuple[float, float]]], List[List[Tuple[float, float]]]]:
         """
         按照 x 坐标将圆心分组为列，并分为左侧（x<0）和右侧（x>=0）
-        1. x坐标差值绝对值≤1的点算同一列
+        1. x坐标差值绝对值≤merge_tol(默认1mm)的点算同一列
         2. 左右对称的列（x和-x）算同一组，放在同一行
         3. 始终保持与满布状态相同的列数结构，缺失的列用空列表填充
         """
         from collections import defaultdict
+
+        if merge_tol is None:
+            merge_tol = self.AXIS_GROUP_TOL
 
         # 获取当前管程分程形式
         is_special_layout = hasattr(
             self, "tube_pass_form_value"
         ) and self.tube_pass_form_value in ["1.1", "2.1", "4.1", "4.3", "6.1"]
 
+        master_reps = self._get_x_cluster_reps(merge_tol)
+
+        def _x_col_key(x_val):
+            key = self._nearest_axis_cluster_key(abs(float(x_val)), master_reps, merge_tol)
+            if key is None and master_reps:
+                key = min(
+                    range(len(master_reps)),
+                    key=lambda i: abs(abs(float(x_val)) - master_reps[i]),
+                )
+            return key if key is not None else 0
+
         # 处理当前传入的圆心
         left_groups = defaultdict(list)
         right_groups = defaultdict(list)
 
         for x, y in centers:
-            x_key = int(round(abs(x) / tol))  # 使用x坐标的绝对值作为键
+            x_key = _x_col_key(x)
             if x < 0:
                 left_groups[x_key].append((x, y))
             else:
                 right_groups[x_key].append((x, y))
 
-        # 获取满布状态的列键作为参考
-        full_keys_set = set()
+        # 满布列结构：按 global 簇下标 0..n-1
+        all_keys_set = set(range(len(master_reps))) if master_reps else set()
+        all_keys_set.update(left_groups.keys())
+        all_keys_set.update(right_groups.keys())
 
-        # 如果存在满布状态数据，获取其列键
-        if hasattr(self, "full_sorted_current_centers_left") and hasattr(
-                self, "full_sorted_current_centers_right"
-        ):
-            # 获取满布状态的列键（x坐标的绝对值）
-            for col in self.full_sorted_current_centers_left:
-                if col:  # 确保列不为空
-                    x = col[0][0]  # 取该列第一个点的x坐标
-                    full_keys_set.add(int(round(abs(x) / tol)))
-
-            for col in self.full_sorted_current_centers_right:
-                if col:  # 确保列不为空
-                    x = col[0][0]  # 取该列第一个点的x坐标
-                    full_keys_set.add(int(round(abs(x) / tol)))
-
-        # 获取当前状态的列键
-        current_keys_set = set()
-        current_keys_set.update(left_groups.keys())
-        current_keys_set.update(right_groups.keys())
-
-        # 合并满布状态和当前状态的列键
-        all_keys_set = full_keys_set.union(current_keys_set) if full_keys_set else current_keys_set
-
-        # 按x绝对值从小到大排序
         sorted_keys = sorted(all_keys_set)
 
         # 构建结果
