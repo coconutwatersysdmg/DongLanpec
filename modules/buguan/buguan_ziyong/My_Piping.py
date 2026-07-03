@@ -35110,7 +35110,13 @@ class TubeLayoutEditor(QMainWindow):
                 lagan_y_bottom = y_bottom - S
                 lagan_y_top = y_top + S
 
-                if row_label is not None and int(row_label) < 0:
+                if float(selected_abs_y) < -1e-6:
+                    lagan_y = lagan_y_bottom
+                    side = "bottom"
+                elif float(selected_abs_y) > 1e-6:
+                    lagan_y = lagan_y_top
+                    side = "top"
+                elif row_label is not None and int(row_label) < 0:
                     lagan_y = lagan_y_bottom
                     side = "bottom"
                 else:
@@ -35148,71 +35154,59 @@ class TubeLayoutEditor(QMainWindow):
                     f"-> ({lagan_x:.3f},{lagan_y:.3f})"
                 )
             else:
-                if row_label is None:
-                    print("[build_free_form_lagan][row] 缺少 row_label")
+                # 按行：在参照管同行外侧偏移一个管间距 S（相对参照管，不用整行最外端）
+                pitch_tol = max(float(getattr(self, "r", 10) or 10) * 0.35, 1.0)
+                centers = list(getattr(self, "global_centers", []) or [])
+
+                line = [
+                    (float(x), float(y))
+                    for x, y in centers
+                    if abs(float(y) - float(selected_abs_y)) <= pitch_tol
+                ]
+                dists = [
+                    math.hypot(x - float(selected_abs_x), y - float(selected_abs_y))
+                    for x, y in line
+                    if math.hypot(x - float(selected_abs_x), y - float(selected_abs_y))
+                    > 1e-3
+                ]
+                S = min(dists) if dists else None
+                if S is None:
+                    try:
+                        s_val = float(getattr(self, "input_json", {}).get("LB_S", 0))
+                        if s_val > 0:
+                            S = s_val
+                    except (TypeError, ValueError, AttributeError):
+                        pass
+                if S is None:
+                    table = getattr(self, "param_table", None)
+                    if table is not None:
+                        for row in range(table.rowCount()):
+                            name_item = table.item(row, 1)
+                            if name_item and name_item.text().strip() == "换热管中心距 S":
+                                value_item = table.item(row, 2)
+                                if value_item and value_item.text().strip():
+                                    try:
+                                        S = float(value_item.text().strip())
+                                        break
+                                    except ValueError:
+                                        pass
+                if S is None or S <= 0:
+                    print("[build_free_form_lagan][row] 无法确定管间距 S")
                     self.clear_selection_highlight()
                     return False
 
-                row_sorted = self._find_row_centers_for_free_lagan(
-                    selected_abs_y, row_label
-                )
-                if not row_sorted or len(row_sorted) < 2:
-                    print("[build_free_form_lagan][row] 未找到有效满布行或管数不足")
-                    self.clear_selection_highlight()
-                    return False
-
-                coord1 = row_sorted[0]
-                coord2 = row_sorted[1]
-                S = math.sqrt(
-                    (float(coord2[0]) - float(coord1[0])) ** 2
-                    + (float(coord2[1]) - float(coord1[1])) ** 2
-                )
-                half_rows = self._get_row_groups_by_abs_y(selected_abs_y)
-                x_left, x_right = self._get_row_x_extent_for_free_lagan(
-                    selected_abs_y, row_sorted
-                )
-                if x_left is None or x_right is None:
-                    x_left = float(row_sorted[0][0])
-                    x_right = float(row_sorted[-1][0])
                 lagan_y = float(selected_abs_y)
-                lagan_x_left = x_left - S
-                lagan_x_right = x_right + S
-
-                if col_label is not None and int(col_label) < 0:
-                    lagan_x = lagan_x_left
-                    side = "left"
-                else:
-                    lagan_x = lagan_x_right
+                # 左右由参照管物理 x 决定（col_label 与 x 符号在正三角形等布局下不一致）
+                if float(selected_abs_x) >= 0:
+                    lagan_x = float(selected_abs_x) + S
                     side = "right"
-
-                slot_tubes = []
-                for row in half_rows:
-                    if row:
-                        slot_tubes.extend(row)
-
-                flipped = False
-                if self._is_free_lagan_endpoint_in_baffle_slot(
-                    lagan_x, lagan_y, slot_tubes or row_sorted, axis="x"
-                ):
-                    lagan_x_alt = lagan_x_right if side == "left" else lagan_x_left
-                    if self._is_free_lagan_endpoint_in_baffle_slot(
-                        lagan_x_alt, lagan_y, slot_tubes or row_sorted, axis="x"
-                    ):
-                        print(
-                            f"[build_free_form_lagan][row] 行左/行右外侧均在隔板槽空档，"
-                            f"跳过 ({lagan_x:.3f},{lagan_y:.3f}) / "
-                            f"({lagan_x_alt:.3f},{lagan_y:.3f})"
-                        )
-                        self.clear_selection_highlight()
-                        return False
-                    lagan_x = lagan_x_alt
-                    side = "right" if side == "left" else "left"
-                    flipped = True
+                else:
+                    lagan_x = float(selected_abs_x) - S
+                    side = "left"
 
                 print(
                     f"[build_free_form_lagan][row] 参照({selected_abs_x:.3f},{selected_abs_y:.3f}) "
-                    f"row_label={row_label} col_label={col_label} side={side} flipped={flipped} "
-                    f"行x=[{x_left:.3f},{x_right:.3f}] S={S:.3f} "
+                    f"row_label={row_label} col_label={col_label} side={side} S={S:.3f} "
                     f"-> ({lagan_x:.3f},{lagan_y:.3f})"
                 )
 
