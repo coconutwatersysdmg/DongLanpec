@@ -5140,6 +5140,9 @@ class TubeLayoutEditor(QMainWindow):
                 self.slide_selected_centers = []
         elif not self.slide_selected_centers:
             self.slide_selected_centers = []
+        # del_centers 已复现全部删除状态；若保留 slide_selected_centers，
+        # build_huadao 会误将滑道干涉管（及错误对称管）补回。
+        self.slide_selected_centers = []
         # delete_centers=self.actual_to_selected_coords(del_centers)
         # 将字符串形式的坐标列表转换为真正的列表
         if side_dangban_centers and isinstance(side_dangban_centers, str):
@@ -41468,7 +41471,15 @@ class TubeLayoutEditor(QMainWindow):
 
         self.isHuadao = True
         if self.slide_selected_centers:
-            all_centers = self.judge_linkage_x(self.slide_selected_centers)
+            tube_num = self.get_tube_pass_count()
+            if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
+                all_centers = self.judge_linkage_x(self.slide_selected_centers)
+            elif (
+                    tube_num == "4" or tube_num == "6"
+            ) and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
+                all_centers = self.judge_linkage_y(self.slide_selected_centers)
+            else:
+                all_centers = list(self.slide_selected_centers)
             self.build_huanreguan(all_centers)
             actual_centers = self.selected_to_current_coords(all_centers)
             self.del_centers = [
