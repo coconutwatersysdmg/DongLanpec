@@ -2282,15 +2282,25 @@ class TubeLayoutEditor(QMainWindow):
         # red_dangban_abs 在删除、转换或旧数据加载时可能短暂残留。
         scene = getattr(self, "graphics_scene", None)
         if scene is not None:
-            total = 0
             try:
+                seen = set()
                 for item in scene.items():
-                    if (
+                    if not (
                             getattr(item, "is_lagan", False)
                             or getattr(item, "is_side_rod", False)
                     ):
-                        total += 1
-                return total
+                        continue
+                    try:
+                        center = item.mapToScene(item.rect().center())
+                        seen.add(
+                            (
+                                round(float(center.x()), 6),
+                                round(float(center.y()), 6),
+                            )
+                        )
+                    except Exception:
+                        pass
+                return len(seen)
             except Exception:
                 pass
 
@@ -25263,6 +25273,7 @@ class TubeLayoutEditor(QMainWindow):
 
             if self.isSymmetry:
                 selected = list(self.judge_linkage(self.selected_centers))
+                selected = self._dedupe_centers_by_absolute(selected)
             else:
                 tubeline = self.get_tube_pass_count()
                 if tubeline == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
@@ -32385,6 +32396,9 @@ class TubeLayoutEditor(QMainWindow):
         # 对称分布中，位于 x/y 轴上的点会映射出重复坐标。
         # 同一次构建必须先去重，避免重复绘制或误报位置冲突。
         selected_centers_list = list(dict.fromkeys(selected_centers_list))
+        selected_centers_list = self._dedupe_centers_by_absolute(
+            selected_centers_list
+        )
 
         # 准备坐标分组数据（用于相对→绝对转换）
         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = (
@@ -32775,6 +32789,9 @@ class TubeLayoutEditor(QMainWindow):
                             continue
                         x, y = self.full_sorted_current_centers_down[row_idx][col_idx]
 
+                    if self._find_rod_at_position((x, y)) is not None:
+                        continue
+
                     # 使用 ClickableCircleItem 绘制普通拉杆，使其支持选中和双击编辑
                     from PyQt5.QtCore import QRectF
 
@@ -32819,6 +32836,9 @@ class TubeLayoutEditor(QMainWindow):
             for coord in abs_coords_direct:
                 try:
                     x, y = coord
+                    if self._find_rod_at_position((x, y)) is not None:
+                        continue
+
                     # 使用 ClickableCircleItem 绘制普通拉杆，使其支持选中和双击编辑
                     from PyQt5.QtCore import QRectF
 
@@ -32932,12 +32952,36 @@ class TubeLayoutEditor(QMainWindow):
         # 没有找到相同的坐标，返回 True
         return True
 
+    def _dedupe_centers_by_absolute(self, centers_list):
+        """相对坐标按映射后的绝对坐标去重（对称展开后轴上点可能重复）。"""
+        if not centers_list:
+            return []
+        seen = set()
+        result = []
+        for item in centers_list:
+            if not (isinstance(item, (list, tuple)) and len(item) == 2):
+                continue
+            actual_list = self.selected_to_current_coords([item])
+            if actual_list:
+                ax, ay = actual_list[0]
+                key = (round(float(ax), 6), round(float(ay), 6))
+                if key in seen:
+                    continue
+                seen.add(key)
+            elif item in seen:
+                continue
+            else:
+                seen.add(item)
+            result.append(item)
+        return result
+
     def _expand_centers_by_linkage(self, centers_list):
         """按对称/联动规则扩展坐标列表，与删除中心部件时逻辑一致（24733-24755）。"""
         if not centers_list:
             return list(centers_list) if centers_list is not None else []
         if self.isSymmetry:
-            return list(self.judge_linkage(centers_list))
+            expanded = list(self.judge_linkage(centers_list))
+            return self._dedupe_centers_by_absolute(expanded)
         tubeline_num = self.get_tube_pass_count()
         if tubeline_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
             return list(self.judge_linkage_x(centers_list))
