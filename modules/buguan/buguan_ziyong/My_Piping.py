@@ -3054,6 +3054,24 @@ class TubeLayoutEditor(QMainWindow):
 
         return self.tube_hole_data
 
+    @staticmethod
+    def _dedupe_tube_data_by_param_name(tube_data):
+        """按参数名去重，同名保留列表中最后一条（与界面自上而下、靠后行优先一致）。"""
+        if not tube_data:
+            return tube_data
+        deduped = {}
+        order = []
+        for data in tube_data:
+            if not isinstance(data, dict):
+                continue
+            name = str(data.get("参数名", "")).strip()
+            if not name or name == "N/A":
+                continue
+            if name not in deduped:
+                order.append(name)
+            deduped[name] = data
+        return [deduped[name] for name in order]
+
     def get_current_tube_data(self):
         """TODO 获取左侧参数表格的当前数据列表"""
         self.tube_data = []
@@ -3077,6 +3095,7 @@ class TubeLayoutEditor(QMainWindow):
 
             data = {"参数名": t_name, "参数值": t_value, "单位": t_unit}
             self.tube_data.append(data)
+        self.tube_data = self._dedupe_tube_data_by_param_name(self.tube_data)
         return self.tube_data
 
     def restore_param_table_column_widths(self):
@@ -3411,12 +3430,51 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception as close_e:
                     print(f"关闭交叉布管查询连接时出错：{str(close_e)}")
 
+    def _dedupe_buguan_params_by_product_id(self, product_id=None):
+        """删除布管参数表中同一产品、同一参数名的重复行，保留布管参数ID最大的一条。"""
+        product_id = product_id or getattr(self, "productID", None)
+        if not product_id:
+            return
+        conn = None
+        try:
+            conn = create_product_connection()
+            if not conn:
+                return
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    DELETE t1 FROM `产品设计活动表_布管参数表` t1
+                    INNER JOIN `产品设计活动表_布管参数表` t2
+                        ON t1.`产品ID` = t2.`产品ID`
+                       AND t1.`参数名` = t2.`参数名`
+                       AND t1.`布管参数ID` < t2.`布管参数ID`
+                    WHERE t1.`产品ID` = %s
+                    """,
+                    (product_id,),
+                )
+                deleted = cursor.rowcount
+            conn.commit()
+            if deleted:
+                print(
+                    f"[_dedupe_buguan_params_by_product_id] 产品 {product_id} "
+                    f"已清理重复布管参数 {deleted} 条"
+                )
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            print(f"[_dedupe_buguan_params_by_product_id] 清理失败: {e}")
+        finally:
+            if conn and conn.open:
+                conn.close()
+
     def load_initial_data(self):
         # 打开管束即初始化：仅当通用数据表为「是」且布管参数表为「否」时在末尾允许 user_update_Di（见标志）
         self.need_initial_user_update_di_for_outer_base = False
         if self.productID is None:
             QMessageBox.information(self, "提示", "请先创建项目!")
             return  # 关键修复：如果productID为None，直接返回，避免后续错误
+        # 打开模块时自愈：清除其他入口可能造成的同名参数重复，避免读到“多套”数据
+        self._dedupe_buguan_params_by_product_id(self.productID)
         print("加载初始数据")
 
         self.isBlock = False
@@ -27046,6 +27104,8 @@ class TubeLayoutEditor(QMainWindow):
     def build_sql_for_tube(self, tube_data):
         if not tube_data:
             return None
+
+        tube_data = self._dedupe_tube_data_by_param_name(tube_data)
 
         table_name = "`产品设计活动表_布管参数表`"
         component_table = "`产品设计活动表_元件附加参数表`"
