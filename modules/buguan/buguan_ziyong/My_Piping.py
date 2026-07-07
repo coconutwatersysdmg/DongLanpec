@@ -1414,6 +1414,7 @@ class TubeLayoutEditor(QMainWindow):
         self.global_centers = []
         self.DN = None
         self.slipway_centers = []
+        self.true_slipway_centers = []  # 与滑道绿色图形真正几何干涉的换热管（绝对坐标）
         self.block_thickness = 15
         self.sheet_form_current_images = None
         self.setWindowTitle("布管参数设计")
@@ -1666,6 +1667,155 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 pass
         return out
+
+    def _true_slipway_key_set(self):
+        return {
+            (round(float(x), 6), round(float(y), 6))
+            for x, y in (getattr(self, "true_slipway_centers", None) or [])
+        }
+
+    def _expand_single_center_linkage(self, rel_coord):
+        tube_num = self.get_tube_pass_count()
+        if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
+            return self.judge_linkage_x([rel_coord])
+        return self.judge_linkage_y([rel_coord])
+
+    def _coord_hits_true_slipway(self, coord):
+        true_set = self._true_slipway_key_set()
+        if not true_set or not coord:
+            return False
+        try:
+            a, b = coord[0], coord[1]
+        except Exception:
+            return False
+        if isinstance(a, int) and isinstance(b, int):
+            expanded = self._expand_single_center_linkage((int(a), int(b)))
+            abs_list = self.selected_to_current_coords(expanded) or []
+        else:
+            abs_list = [(float(a), float(b))]
+        return any(
+            (round(float(x), 6), round(float(y), 6)) in true_set
+            for x, y in abs_list
+        )
+
+    def _filter_coords_blocked_by_true_slipway(
+        self, centers, suppress_warning=False
+    ):
+        """剔除与 true_slipway_centers 干涉的坐标（含对称联动），返回 (allowed, had_blocked)。"""
+        if not centers:
+            return [], False
+        if not getattr(self, "true_slipway_centers", None):
+            return list(centers), False
+
+        allowed = []
+        had_blocked = False
+        for coord in centers:
+            if self._coord_hits_true_slipway(coord):
+                had_blocked = True
+            else:
+                allowed.append(coord)
+
+        if had_blocked and not suppress_warning:
+            from PyQt5.QtWidgets import QMessageBox
+
+            QMessageBox.warning(
+                self,
+                "提示",
+                "部分位置与滑道干涉，不允许添加换热管/拉杆",
+            )
+            self.clear_selection_highlight()
+
+        return allowed, had_blocked
+
+    @staticmethod
+    def _point_in_convex_polygon(point, polygon):
+        x, y = point
+        if len(polygon) < 3:
+            return False
+
+        def cross(o, a, b):
+            return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+        c_vals = [
+            cross(polygon[i], polygon[(i + 1) % len(polygon)], point)
+            for i in range(len(polygon))
+        ]
+        has_neg = any(v < -1e-8 for v in c_vals)
+        has_pos = any(v > 1e-8 for v in c_vals)
+        return not (has_neg and has_pos)
+
+    @staticmethod
+    def _point_to_segment_distance(point, seg_start, seg_end):
+        x, y = point
+        x1, y1 = seg_start
+        x2, y2 = seg_end
+        dx = x2 - x1
+        dy = y2 - y1
+        if dx == 0 and dy == 0:
+            return math.hypot(x - x1, y - y1)
+        t = ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy)
+        t = max(0.0, min(1.0, t))
+        proj_x = x1 + t * dx
+        proj_y = y1 + t * dy
+        return math.hypot(x - proj_x, y - proj_y)
+
+    def _tube_intersects_slide_rect(self, center, radius, slide_corners):
+        if not center or not slide_corners:
+            return False
+        try:
+            cx, cy = float(center[0]), float(center[1])
+            r = float(radius)
+        except Exception:
+            return False
+        if self._point_in_convex_polygon((cx, cy), slide_corners):
+            return True
+        for i in range(len(slide_corners)):
+            p1 = slide_corners[i]
+            p2 = slide_corners[(i + 1) % len(slide_corners)]
+            if self._point_to_segment_distance((cx, cy), p1, p2) <= r + 1e-8:
+                return True
+        return False
+
+    def _collect_geometric_slipway_hits(self, slide_corners, tube_centers, tube_radius):
+        hits = []
+        for center in tube_centers or []:
+            if self._tube_intersects_slide_rect(center, tube_radius, slide_corners):
+                hits.append(center)
+        return hits
+
+    def _apply_slipway_linkage_abs(self, abs_centers):
+        if not abs_centers:
+            return []
+        rel = []
+        for c in abs_centers:
+            rc = self.actual_to_selected_coords(c)
+            if rc is not None:
+                rel.append(rc)
+        if not rel:
+            return self._normalize_slipway_abs_centers(abs_centers)
+        tube_num = self.get_tube_pass_count()
+        if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
+            expanded_rel = self.judge_linkage_x(rel)
+        else:
+            expanded_rel = self.judge_linkage_y(rel)
+        abs_expanded = self.selected_to_current_coords(expanded_rel) or []
+        return self._normalize_slipway_abs_centers(abs_expanded)
+
+    def _update_true_slipway_centers(
+        self, slide_corners1, slide_corners2, tube_centers, tube_diameter
+    ):
+        """按滑道矩形几何干涉 + 对称联动，更新 true_slipway_centers。"""
+        try:
+            radius = float(tube_diameter) / 2.0
+        except Exception:
+            radius = float(getattr(self, "r", 0) or 0)
+        hits = []
+        for corners in (slide_corners1, slide_corners2):
+            hits.extend(
+                self._collect_geometric_slipway_hits(corners, tube_centers, radius)
+            )
+        hits = self._normalize_slipway_abs_centers(hits)
+        self.true_slipway_centers = self._apply_slipway_linkage_abs(hits)
 
     def _read_slipway_draw_params(self):
         """读取滑道绘制参数（高度/厚度/夹角）。"""
@@ -3334,6 +3484,7 @@ class TubeLayoutEditor(QMainWindow):
             6: "impingement_plate_2_centers",  # 折边式防冲板
             7: "del_centers",  # 删除的圆心
             8: "slipway_centers",  # 滑道干涉删除的换热管（绝对坐标）
+            10: "true_slipway_centers",  # 与滑道图形真正几何干涉的换热管（绝对坐标）
         }
         # 初始化所有结果为空白列表
         results = {value: [] for _, value in element_mapping.items()}
@@ -5302,6 +5453,9 @@ class TubeLayoutEditor(QMainWindow):
         del_centers = all_coords.get("del_centers", [])
         self.slipway_centers = self._parse_slipway_centers_from_db(
             all_coords.get("slipway_centers", [])
+        )
+        self.true_slipway_centers = self._parse_slipway_centers_from_db(
+            all_coords.get("true_slipway_centers", [])
         )
         self.slide_selected_centers = []
         # self.del_centers = del_centers
@@ -21346,6 +21500,10 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception:
                     pass
                 try:
+                    self.true_slipway_centers = []
+                except Exception:
+                    pass
+                try:
                     self.slide_selected_centers = []
                 except Exception:
                     pass
@@ -21470,6 +21628,7 @@ class TubeLayoutEditor(QMainWindow):
                 ("impingement_plate_del_centers", []),
                 ("isHuadao", False),
                 ("slipway_centers", []),
+                ("true_slipway_centers", []),
                 ("slide_selected_centers", []),
                 ("interfering_tubes1", []),
                 ("interfering_tubes2", []),
@@ -27829,6 +27988,11 @@ class TubeLayoutEditor(QMainWindow):
                         8,
                         "len",
                     ),  # 滑道干涉删除的换热管（绝对坐标）
+                    (
+                        "true_slipway_centers",
+                        10,
+                        "len",
+                    ),  # 与滑道图形真正几何干涉的换热管（绝对坐标）
                 ]
 
                 is_huadao = getattr(self, "isHuadao", False)
@@ -31131,6 +31295,13 @@ class TubeLayoutEditor(QMainWindow):
         if not selected_centers:
             return
 
+        if not getattr(self, "is_loading_data", False):
+            selected_centers, _ = self._filter_coords_blocked_by_true_slipway(
+                selected_centers
+            )
+            if not selected_centers:
+                return
+
         # 保证必要属性存在
         if not hasattr(self, "huanreguan"):
             self.huanreguan = []
@@ -32615,6 +32786,14 @@ class TubeLayoutEditor(QMainWindow):
         selected_centers_list = self._dedupe_centers_by_absolute(
             selected_centers_list
         )
+
+        if not getattr(self, "is_loading_data", False):
+            selected_centers_list, _ = self._filter_coords_blocked_by_true_slipway(
+                selected_centers_list,
+                suppress_warning=suppress_conflict_warning,
+            )
+            if not selected_centers_list:
+                return None
 
         # 准备坐标分组数据（用于相对→绝对转换）
         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = (
@@ -41672,6 +41851,7 @@ class TubeLayoutEditor(QMainWindow):
         self.update_total_holes_count()
         self.update_tube_nums()
         self.slide_selected_centers = []
+        self.true_slipway_centers = []
 
         # 如果没有滑道了，重置标志
         if not self.green_slide_items:
@@ -41798,6 +41978,7 @@ class TubeLayoutEditor(QMainWindow):
             # 初始化滑道中心列表（复现模式保留已加载的 slipway_centers）
             if not skip_interference_delete:
                 self.slipway_centers = []
+                self.true_slipway_centers = []
             all_interfering_y_coords = set()  # 收集所有存在干涉的y坐标
 
             outer_radius = base_circle_diameter / 2
@@ -42001,6 +42182,19 @@ class TubeLayoutEditor(QMainWindow):
             )
             self.interfering_tubes1 = interfering_tubes1
             self.interfering_tubes2 = interfering_tubes2
+
+            # 真正与滑道绿色图形几何干涉的管位（含对称联动）
+            if not skip_interference_delete:
+                combined_for_geom = list(
+                    set((self.current_centers or []) + (self.lagan_info or []))
+                )
+            else:
+                combined_for_geom = list(getattr(self, "global_centers", None) or [])
+                if not combined_for_geom:
+                    combined_for_geom = list(self.current_centers or [])
+            self._update_true_slipway_centers(
+                slide_corners1, slide_corners2, combined_for_geom, do
+            )
 
             # 合并所有干涉的y坐标
             all_interfering_y_coords = interfering_y_coords1.union(
