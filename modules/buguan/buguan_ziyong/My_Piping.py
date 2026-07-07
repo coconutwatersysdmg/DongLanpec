@@ -1607,6 +1607,127 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 pass
 
+    def _parse_slipway_centers_from_db(self, coord_raw):
+        """将布管元件表类型8的坐标解析为绝对坐标列表（兼容旧版相对坐标）。"""
+        import ast
+
+        if coord_raw is None or coord_raw == "" or coord_raw == "[]":
+            return []
+        if isinstance(coord_raw, str):
+            try:
+                coord_raw = ast.literal_eval(coord_raw.strip())
+            except Exception:
+                return []
+        if not isinstance(coord_raw, list):
+            return []
+
+        parsed = []
+        is_relative = None
+        for item in coord_raw:
+            if not (isinstance(item, (list, tuple)) and len(item) >= 2):
+                continue
+            try:
+                a, b = item[0], item[1]
+                if is_relative is None:
+                    is_relative = isinstance(a, int) and isinstance(b, int)
+                parsed.append((a, b))
+            except Exception:
+                continue
+        if not parsed:
+            return []
+
+        if is_relative:
+            rel_list = []
+            for a, b in parsed:
+                try:
+                    rel_list.append((int(a), int(b)))
+                except Exception:
+                    rel_list.append((a, b))
+            abs_list = self.selected_to_current_coords(rel_list) or []
+            return self._normalize_slipway_abs_centers(abs_list)
+
+        return self._normalize_slipway_abs_centers(parsed)
+
+    def _normalize_slipway_abs_centers(self, centers):
+        """slipway 绝对坐标去重（key6）。"""
+
+        def key6(x, y):
+            return (round(float(x), 6), round(float(y), 6))
+
+        seen = set()
+        out = []
+        for c in centers or []:
+            try:
+                if isinstance(c, (list, tuple)) and len(c) >= 2:
+                    k = key6(c[0], c[1])
+                    if k not in seen:
+                        seen.add(k)
+                        out.append((float(c[0]), float(c[1])))
+            except Exception:
+                pass
+        return out
+
+    def _read_slipway_draw_params(self):
+        """读取滑道绘制参数（高度/厚度/夹角）。"""
+        height = thickness = angle = None
+        try:
+            ij = getattr(self, "input_json", None)
+            if isinstance(ij, dict):
+                height = ij.get("LB_SlipWayHeight")
+                thickness = ij.get("LB_SlipWayThick")
+                angle = ij.get("LB_SlipWayAngle")
+        except Exception:
+            pass
+        try:
+            if height is None:
+                height = self._read_param_table_float("滑道高度")
+            if thickness is None:
+                thickness = self._read_param_table_float("滑道厚度")
+            if angle is None:
+                angle = self._read_param_table_float("滑道与竖直中心线夹角")
+        except Exception:
+            pass
+        try:
+            if height is None or thickness is None or angle is None:
+                return None
+            return float(height), float(thickness), float(angle)
+        except Exception:
+            return None
+
+    def _remove_tubes_for_slipway_restore(self):
+        """按 slipway_centers 删除换热管（不写入 del_centers）。"""
+        centers = self._normalize_slipway_abs_centers(
+            getattr(self, "slipway_centers", None) or []
+        )
+        if not centers:
+            return
+        self.delete_huanreguan(centers, for_slipway=True)
+
+    def restore_slipway_from_saved(self):
+        """
+        打开/重载复现滑道：先按库中 slipway_centers 删管，再仅绘制滑道（不重算干涉）。
+        """
+        if not getattr(self, "slipway_centers", None):
+            return False
+        params = self._read_slipway_draw_params()
+        self._remove_tubes_for_slipway_restore()
+        if not params:
+            print("[restore_slipway_from_saved] 缺少滑道参数，已删管但未绘制滑道")
+            return False
+        height, thickness, angle = params
+        self.isHuadao = True
+        self.draw_slide_with_params(
+            height, thickness, angle, skip_interference_delete=True
+        )
+        # 供界面双击改参时 build_huadao 按原逻辑先补回再重绘
+        centers = []
+        for coord in getattr(self, "slipway_centers", None) or []:
+            converted = self.actual_to_selected_coords(coord)
+            if converted is not None:
+                centers.append(converted)
+        self.slide_selected_centers = centers
+        return True
+
     def handle_symmetric_layout(self, state):
         if state == Qt.Checked:
             self.isSymmetry = True
@@ -3212,7 +3333,7 @@ class TubeLayoutEditor(QMainWindow):
             5: "impingement_plate_1_centers",  # 平板式防冲板
             6: "impingement_plate_2_centers",  # 折边式防冲板
             7: "del_centers",  # 删除的圆心
-            8: "slide_selected_centers",  # 与滑道干涉的换热管
+            8: "slipway_centers",  # 滑道干涉删除的换热管（绝对坐标）
         }
         # 初始化所有结果为空白列表
         results = {value: [] for _, value in element_mapping.items()}
@@ -3229,6 +3350,7 @@ class TubeLayoutEditor(QMainWindow):
                     """
 
                     element_types = tuple(element_mapping.keys())
+                    product_id = getattr(self, "productID", None)
                     cursor.execute(query, (product_id, element_types))
 
                     # 一次性获取所有结果（而不是fetchone）
@@ -5178,22 +5300,12 @@ class TubeLayoutEditor(QMainWindow):
         impingement_plate_1_centers = all_coords.get("impingement_plate_1_centers", "")
         impingement_plate_2_centers = all_coords.get("impingement_plate_2_centers", "")
         del_centers = all_coords.get("del_centers", [])
-        self.slide_selected_centers = all_coords.get("slide_selected_centers", [])
+        self.slipway_centers = self._parse_slipway_centers_from_db(
+            all_coords.get("slipway_centers", [])
+        )
+        self.slide_selected_centers = []
         # self.del_centers = del_centers
         self.delete_huanreguan(del_centers)
-        # 将字符串形式的坐标列表转换为真正的列表
-        if self.slide_selected_centers and isinstance(self.slide_selected_centers, str):
-            try:
-                import ast
-
-                self.slide_selected_centers = ast.literal_eval(
-                    self.slide_selected_centers
-                )
-            except (ValueError, SyntaxError) as e:
-                print(f"转换slide_selected_centers时出错: {e}")
-                self.slide_selected_centers = []
-        elif not self.slide_selected_centers:
-            self.slide_selected_centers = []
         # delete_centers=self.actual_to_selected_coords(del_centers)
         # 将字符串形式的坐标列表转换为真正的列表
         if side_dangban_centers and isinstance(side_dangban_centers, str):
@@ -5330,9 +5442,7 @@ class TubeLayoutEditor(QMainWindow):
                     cut_len = 50.0
                 if cut_h is None:
                     cut_h = 15.0
-                self.build_huadao(
-                    "滑道与管板焊接", height, thickness, angle, cut_len, cut_h
-                )
+                self.restore_slipway_from_saved()
         except Exception as e:
             print(f"构建滑道时出错: {str(e)}")
 
@@ -21197,6 +21307,59 @@ class TubeLayoutEditor(QMainWindow):
                 _clear_cross_pipe_cache_before_buguan,
             )
 
+            # 布管前清除滑道图元与状态（须在 calculate_piping_layout 之前，避免旧滑道残留或被复现）
+            def _clear_slipway_before_buguan():
+                try:
+                    for item in list(getattr(self, "green_slide_items", None) or []):
+                        try:
+                            if item.scene() == self.graphics_scene:
+                                self.graphics_scene.removeItem(item)
+                        except Exception:
+                            continue
+                except Exception:
+                    pass
+                try:
+                    if hasattr(self, "graphics_scene") and self.graphics_scene is not None:
+                        for item in list(self.graphics_scene.items()):
+                            try:
+                                if getattr(item, "is_slide", False):
+                                    if item.scene() == self.graphics_scene:
+                                        self.graphics_scene.removeItem(item)
+                            except Exception:
+                                continue
+                except Exception:
+                    pass
+                try:
+                    self.green_slide_items = []
+                except Exception:
+                    pass
+                try:
+                    self.selected_slides = []
+                except Exception:
+                    pass
+                try:
+                    self.isHuadao = False
+                except Exception:
+                    pass
+                try:
+                    self.slipway_centers = []
+                except Exception:
+                    pass
+                try:
+                    self.slide_selected_centers = []
+                except Exception:
+                    pass
+                try:
+                    self.interfering_tubes1 = []
+                    self.interfering_tubes2 = []
+                except Exception:
+                    pass
+
+            _safe_step(
+                "clear slipway graphics/cache before buguan",
+                _clear_slipway_before_buguan,
+            )
+
             # 2) 计算布管（核心）
             result = _safe_step("calculate_piping_layout", self.calculate_piping_layout)
 
@@ -21306,6 +21469,7 @@ class TubeLayoutEditor(QMainWindow):
                 ("impingement_plate_2", []),
                 ("impingement_plate_del_centers", []),
                 ("isHuadao", False),
+                ("slipway_centers", []),
                 ("slide_selected_centers", []),
                 ("interfering_tubes1", []),
                 ("interfering_tubes2", []),
@@ -27661,10 +27825,10 @@ class TubeLayoutEditor(QMainWindow):
                         "len",
                     ),  # 圆弧形防冲板：嵌套列表长度（小列表个数）
                     (
-                        "slide_selected_centers",
+                        "slipway_centers",
                         8,
                         "len",
-                    ),  # 与滑道干涉的换热管：坐标数量
+                    ),  # 滑道干涉删除的换热管（绝对坐标）
                 ]
 
                 is_huadao = getattr(self, "isHuadao", False)
@@ -31101,7 +31265,7 @@ class TubeLayoutEditor(QMainWindow):
             return
 
     # TODO 删除换热管
-    def delete_huanreguan(self, selected_centers):
+    def delete_huanreguan(self, selected_centers, for_slipway=False):
         self.operation_order += 1
         """
         删除换热管（修复版）：
@@ -31185,7 +31349,8 @@ class TubeLayoutEditor(QMainWindow):
             # 绝对坐标，直接使用（确保格式正确）
             actual_centers = selected_centers
 
-        self.del_centers = list(set(self.del_centers) | set(actual_centers))
+        if not for_slipway:
+            self.del_centers = list(set(self.del_centers) | set(actual_centers))
 
         # 用于相对→绝对
         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = (
@@ -41545,7 +41710,7 @@ class TubeLayoutEditor(QMainWindow):
             QMessageBox.warning(self, "参数错误", f"请输入有效的数值参数: {str(e)}")
             self.clear_selection_highlight()
 
-    def draw_slide_with_params(self, height, thickness, angle):
+    def draw_slide_with_params(self, height, thickness, angle, skip_interference_delete=False):
         try:
             if hasattr(self, "green_slide_items"):
                 for item in list(self.green_slide_items):
@@ -41630,8 +41795,9 @@ class TubeLayoutEditor(QMainWindow):
             # 兼容旧字段：后续 operations 里仍记录 DN，这里用“实际绘制基准圆直径”代替
             DN = base_circle_diameter
 
-            # 初始化滑道中心列表
-            self.slipway_centers = []
+            # 初始化滑道中心列表（复现模式保留已加载的 slipway_centers）
+            if not skip_interference_delete:
+                self.slipway_centers = []
             all_interfering_y_coords = set()  # 收集所有存在干涉的y坐标
 
             outer_radius = base_circle_diameter / 2
@@ -41841,12 +42007,10 @@ class TubeLayoutEditor(QMainWindow):
                 interfering_y_coords2
             )
 
-            # 处理所有干涉的管子（按行删除）- 在绘制滑道之前执行
-            if all_interfering_y_coords:
+            # 处理所有干涉的管子（按行删除）- 仅界面布置时执行；复现时不重算干涉
+            if (not skip_interference_delete) and all_interfering_y_coords:
                 # 【核心修改】：计算self.current_centers与lagan_centers的合集
-                # 转换lagan_info到当前坐标系统
                 lagan_centers = self.selected_to_current_coords(self.lagan_info)
-                # 合并两个列表的坐标（去重处理）
                 combined_centers = list(set(self.current_centers + self.lagan_info))
 
                 # 收集所有在干涉行上的换热管（从合集中筛选）
@@ -41872,12 +42036,10 @@ class TubeLayoutEditor(QMainWindow):
                     center for center in self.lagan_info if center not in slipway_set
                 ]
 
-                # 统一重算 current_centers_lagan = current_centers + lagan_info
                 self._sync_current_centers_lagan()
 
-                # 坐标转换
+                # 相对坐标 + 对称联动后 delete_huanreguan（界面布置原逻辑）
                 centers = []
-
                 for coord in self.slipway_centers:
                     converted = self.actual_to_selected_coords(coord)
                     if converted is not None:
@@ -41885,50 +42047,18 @@ class TubeLayoutEditor(QMainWindow):
 
                 self.slide_selected_centers = centers
 
-                # # 转换 lagan_info 中的每个坐标到标签坐标
-                # lagan_selected = []
-                # for coord in self.lagan_info:
-                #     converted = self.actual_to_selected_coords(coord)
-                #     if converted is not None:
-                #         lagan_selected.append(converted)
-                #
-                # # 更新self.lagan_info：删除第四象限坐标中在第一象限有对应版本的坐标
-                # centers_set = set(centers)
-                # updated_lagan_info = []
-                # for coord in lagan_selected:
-                #     x, y = coord
-                #     # 如果是第四象限坐标（x为正，y为负）
-                #     if x > 0 and y < 0:
-                #         # 转换为第一象限版本
-                #         first_quadrant_version = (x, -y)
-                #         # 如果第一象限版本在centers中存在，则不添加到更新后的列表中
-                #         if first_quadrant_version not in centers_set:
-                #             updated_lagan_info.append(coord)
-                #     else:
-                #         # 其他象限的坐标直接保留
-                #         updated_lagan_info.append(coord)
-                #
-                # # 将标签坐标转换回实际坐标
-                # updated_lagan_actual = []
-                # for coord in updated_lagan_info:
-                #     converted = self.selected_to_current_coords([coord])
-                #     if converted:
-                #         updated_lagan_actual.extend(converted)
-                #
-                # self.lagan_info = updated_lagan_actual
-
-                # 执行删除（保留原逻辑不变）
                 if centers:
                     tube_num = self.get_tube_pass_count()
-                    if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
+                    if tube_num == "2" and self.heat_exchanger in [
+                        "AEU",
+                        "BEU",
+                        "AKU",
+                        "BKU",
+                    ]:
                         all_centers = self.judge_linkage_x(centers)
-                        # print("滑道干涉删除换热管")
-                        # print(all_centers)
                         self.delete_huanreguan(all_centers)
                     else:
                         all_centers = self.judge_linkage_y(centers)
-                        # print("滑道干涉删除换热管")
-                        # print(all_centers)
                         self.delete_huanreguan(all_centers)
                 else:
                     print("未删除换热管")
