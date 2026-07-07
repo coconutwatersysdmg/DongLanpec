@@ -1553,6 +1553,60 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
+    def _prune_slipway_centers_overlapping_current(self):
+        """
+        slipway_centers 记录滑道干涉删除的换热管绝对坐标；
+        current_centers 记录当前仍存在的换热管。
+        二者不应重合：若重合说明 slipway_centers 残留过期数据，
+        从 slipway_centers 剔除即可，绝不修改 current_centers。
+        """
+        try:
+            slipway = list(getattr(self, "slipway_centers", None) or [])
+        except Exception:
+            slipway = []
+        if not slipway:
+            return
+
+        try:
+            current = list(getattr(self, "current_centers", None) or [])
+        except Exception:
+            current = []
+
+        def key6(x, y):
+            return (round(float(x), 6), round(float(y), 6))
+
+        current_keys = set()
+        for c in current:
+            try:
+                if isinstance(c, (list, tuple)) and len(c) >= 2:
+                    current_keys.add(key6(c[0], c[1]))
+            except Exception:
+                pass
+
+        pruned = []
+        removed = 0
+        for c in slipway:
+            try:
+                if not (isinstance(c, (list, tuple)) and len(c) >= 2):
+                    pruned.append(c)
+                    continue
+                if key6(c[0], c[1]) in current_keys:
+                    removed += 1
+                    continue
+                pruned.append(c)
+            except Exception:
+                pruned.append(c)
+
+        self.slipway_centers = pruned
+        if removed:
+            try:
+                print(
+                    f"[slipway] 从 slipway_centers 剔除与 current_centers 重合的 {removed} 个坐标",
+                    flush=True,
+                )
+            except Exception:
+                pass
+
     def handle_symmetric_layout(self, state):
         if state == Qt.Checked:
             self.isSymmetry = True
@@ -3054,24 +3108,6 @@ class TubeLayoutEditor(QMainWindow):
 
         return self.tube_hole_data
 
-    @staticmethod
-    def _dedupe_tube_data_by_param_name(tube_data):
-        """按参数名去重，同名保留列表中最后一条（与界面自上而下、靠后行优先一致）。"""
-        if not tube_data:
-            return tube_data
-        deduped = {}
-        order = []
-        for data in tube_data:
-            if not isinstance(data, dict):
-                continue
-            name = str(data.get("参数名", "")).strip()
-            if not name or name == "N/A":
-                continue
-            if name not in deduped:
-                order.append(name)
-            deduped[name] = data
-        return [deduped[name] for name in order]
-
     def get_current_tube_data(self):
         """TODO 获取左侧参数表格的当前数据列表"""
         self.tube_data = []
@@ -3095,7 +3131,6 @@ class TubeLayoutEditor(QMainWindow):
 
             data = {"参数名": t_name, "参数值": t_value, "单位": t_unit}
             self.tube_data.append(data)
-        self.tube_data = self._dedupe_tube_data_by_param_name(self.tube_data)
         return self.tube_data
 
     def restore_param_table_column_widths(self):
@@ -3430,51 +3465,12 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception as close_e:
                     print(f"关闭交叉布管查询连接时出错：{str(close_e)}")
 
-    def _dedupe_buguan_params_by_product_id(self, product_id=None):
-        """删除布管参数表中同一产品、同一参数名的重复行，保留布管参数ID最大的一条。"""
-        product_id = product_id or getattr(self, "productID", None)
-        if not product_id:
-            return
-        conn = None
-        try:
-            conn = create_product_connection()
-            if not conn:
-                return
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    """
-                    DELETE t1 FROM `产品设计活动表_布管参数表` t1
-                    INNER JOIN `产品设计活动表_布管参数表` t2
-                        ON t1.`产品ID` = t2.`产品ID`
-                       AND t1.`参数名` = t2.`参数名`
-                       AND t1.`布管参数ID` < t2.`布管参数ID`
-                    WHERE t1.`产品ID` = %s
-                    """,
-                    (product_id,),
-                )
-                deleted = cursor.rowcount
-            conn.commit()
-            if deleted:
-                print(
-                    f"[_dedupe_buguan_params_by_product_id] 产品 {product_id} "
-                    f"已清理重复布管参数 {deleted} 条"
-                )
-        except Exception as e:
-            if conn:
-                conn.rollback()
-            print(f"[_dedupe_buguan_params_by_product_id] 清理失败: {e}")
-        finally:
-            if conn and conn.open:
-                conn.close()
-
     def load_initial_data(self):
         # 打开管束即初始化：仅当通用数据表为「是」且布管参数表为「否」时在末尾允许 user_update_Di（见标志）
         self.need_initial_user_update_di_for_outer_base = False
         if self.productID is None:
             QMessageBox.information(self, "提示", "请先创建项目!")
             return  # 关键修复：如果productID为None，直接返回，避免后续错误
-        # 打开模块时自愈：清除其他入口可能造成的同名参数重复，避免读到“多套”数据
-        self._dedupe_buguan_params_by_product_id(self.productID)
         print("加载初始数据")
 
         self.isBlock = False
@@ -5198,9 +5194,6 @@ class TubeLayoutEditor(QMainWindow):
                 self.slide_selected_centers = []
         elif not self.slide_selected_centers:
             self.slide_selected_centers = []
-        # del_centers 已复现全部删除状态；若保留 slide_selected_centers，
-        # build_huadao 会误将滑道干涉管（及错误对称管）补回。
-        self.slide_selected_centers = []
         # delete_centers=self.actual_to_selected_coords(del_centers)
         # 将字符串形式的坐标列表转换为真正的列表
         if side_dangban_centers and isinstance(side_dangban_centers, str):
@@ -18293,7 +18286,8 @@ class TubeLayoutEditor(QMainWindow):
                 if not silent:
                     QMessageBox.warning(self, "提示", "还未布管", QMessageBox.Ok)
             else:
-                slipway_set = set(self.slipway_centers)
+                # slipway_centers 与 current_centers 不同步时，只清理 slipway_centers，不动 current_centers
+                self._prune_slipway_centers_overlapping_current()
                 # 暂时取消管口检查
                 # # 保存前校验：所有管口必须设置径向开孔
                 # try:
@@ -18332,11 +18326,6 @@ class TubeLayoutEditor(QMainWindow):
                 #     self, "提示", "径向开孔校验失败，请确认！", QMessageBox.Ok
                 # )
                 # return
-                self.current_centers = [
-                    center
-                    for center in self.current_centers
-                    if center not in slipway_set
-                ]
                 # TODO 获取管口数量分布表格数据
                 tube_hole_data = self.get_current_tube_hole_data()
                 tube_data = self.get_current_tube_data()
@@ -25357,7 +25346,8 @@ class TubeLayoutEditor(QMainWindow):
                 f"[on_lagan_click] 直径={new_dia}，准备调用 build_lagan，selected_centers: {selected}"
             )
             updated = self.build_lagan(selected)
-            self.current_centers = updated
+            if updated is not None:
+                self.current_centers = updated
             self.clear_selection_highlight()
 
         ok.clicked.connect(apply_and_close)
@@ -27104,8 +27094,6 @@ class TubeLayoutEditor(QMainWindow):
     def build_sql_for_tube(self, tube_data):
         if not tube_data:
             return None
-
-        tube_data = self._dedupe_tube_data_by_param_name(tube_data)
 
         table_name = "`产品设计活动表_布管参数表`"
         component_table = "`产品设计活动表_元件附加参数表`"
@@ -32419,7 +32407,7 @@ class TubeLayoutEditor(QMainWindow):
     def build_lagan(self, selected_centers, suppress_conflict_warning=False):
         self.operation_order += 1
         if not selected_centers:
-            return []
+            return None
 
         import ast
 
@@ -32454,7 +32442,7 @@ class TubeLayoutEditor(QMainWindow):
             selected_centers_list = []
 
         if not selected_centers_list:
-            return []
+            return None
 
         # 对称分布中，位于 x/y 轴上的点会映射出重复坐标。
         # 同一次构建必须先去重，避免重复绘制或误报位置冲突。
@@ -32516,7 +32504,7 @@ class TubeLayoutEditor(QMainWindow):
         all_abs_coords = abs_coords + [key6(x, y) for x, y in abs_coords_direct]
 
         if not all_abs_coords:
-            return []
+            return None
 
         # 普通拉杆与自由拉杆共用同一套实际位置占位规则。
         # 任一位置已有拉杆图元时，不允许再次放置另一种拉杆。
@@ -32576,7 +32564,7 @@ class TubeLayoutEditor(QMainWindow):
             if not all_abs_coords:
                 self.clear_selection_highlight()
                 self.selected_centers = []
-                return []
+                return None
 
         # 删除与转为拉杆的换热管相关的交叉布管线（参考 delete_huanreguan 的逻辑）
         if hasattr(self, "cross_pipe_lines") and self.cross_pipe_lines:
@@ -32796,7 +32784,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 如果删除后没有有效坐标了，直接返回
                 if not all_abs_coords:
                     self.selected_centers = []
-                    return []
+                    return None
 
         # ========== 更新 self.lagan_info（统一存储绝对坐标） ==========
         # 合并已有的绝对坐标和新的绝对坐标，去重
@@ -41531,15 +41519,7 @@ class TubeLayoutEditor(QMainWindow):
 
         self.isHuadao = True
         if self.slide_selected_centers:
-            tube_num = self.get_tube_pass_count()
-            if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
-                all_centers = self.judge_linkage_x(self.slide_selected_centers)
-            elif (
-                    tube_num == "4" or tube_num == "6"
-            ) and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
-                all_centers = self.judge_linkage_y(self.slide_selected_centers)
-            else:
-                all_centers = list(self.slide_selected_centers)
+            all_centers = self.judge_linkage_x(self.slide_selected_centers)
             self.build_huanreguan(all_centers)
             actual_centers = self.selected_to_current_coords(all_centers)
             self.del_centers = [
