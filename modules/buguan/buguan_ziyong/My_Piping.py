@@ -2976,8 +2976,7 @@ class TubeLayoutEditor(QMainWindow):
         btn6.setStyleSheet(toolbar_button_style)
         btn6.setIcon(QIcon(icon_path6))
         btn6.setIconSize(QSize(20, 20))
-        initial_centers = self.current_centers.copy()
-        btn6.clicked.connect(lambda: self.on_green_slide_click(initial_centers))
+        btn6.clicked.connect(self.on_green_slide_click)
         self.toolbar_row1_layout.addWidget(btn6)
 
         btn7 = QPushButton("吊环螺钉")
@@ -31375,7 +31374,7 @@ class TubeLayoutEditor(QMainWindow):
 
 
     # TODO 添加换热管
-    def build_huanreguan(self, selected_centers):
+    def build_huanreguan(self, selected_centers, skip_slipway_block=False):
         actual_centers=self.selected_to_current_coords(selected_centers)
         print(actual_centers)
         self.operation_order += 1
@@ -31396,7 +31395,7 @@ class TubeLayoutEditor(QMainWindow):
         if not selected_centers:
             return
 
-        if not getattr(self, "is_loading_data", False):
+        if not getattr(self, "is_loading_data", False) and not skip_slipway_block:
             selected_centers, _ = self._filter_coords_blocked_by_true_slipway(
                 selected_centers
             )
@@ -41562,17 +41561,8 @@ class TubeLayoutEditor(QMainWindow):
             print("已清除所有交叉布管连线")
 
     # 滑道功能
-    def on_green_slide_click(self, initial_centers=None):
+    def on_green_slide_click(self):
         """处理滑道点击事件，弹出参数输入对话框"""
-        temp_centers = (
-            initial_centers.copy() if initial_centers else self.current_centers.copy()
-        )
-        temp_centers_lagan = (
-            initial_centers.copy()
-            if initial_centers
-            else self.current_centers_lagan.copy()
-        )
-
         # 创建对话框
         dialog = QDialog(self)
         dialog.setWindowTitle("滑道参数设置")
@@ -41803,11 +41793,6 @@ class TubeLayoutEditor(QMainWindow):
                         return
                     input_widgets[cut_key].setText(cut_text)
 
-            if temp_centers is not None:
-                self.current_centers = temp_centers.copy()
-            if temp_centers_lagan is not None:
-                self.current_centers_lagan = temp_centers_lagan.copy()
-
             # 更新参数表中的值
             for row in range(self.param_table.rowCount()):
                 param_name = self.param_table.item(row, 1).text()
@@ -41965,8 +41950,10 @@ class TubeLayoutEditor(QMainWindow):
 
         self.isHuadao = True
         if self.slide_selected_centers:
+            # 重绘前补回干涉管：true_slipway_centers 仍是上一版滑道几何，不能拦截内部恢复
+            self.true_slipway_centers = []
             all_centers = self.judge_linkage_x(self.slide_selected_centers)
-            self.build_huanreguan(all_centers)
+            self.build_huanreguan(all_centers, skip_slipway_block=True)
             actual_centers = self.selected_to_current_coords(all_centers)
             self.del_centers = [
                 coord for coord in self.del_centers if coord not in actual_centers
