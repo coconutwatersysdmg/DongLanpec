@@ -1668,6 +1668,70 @@ class TubeLayoutEditor(QMainWindow):
                 pass
         return out
 
+    def _canonical_buguan_param_name(self, param_name):
+        """布管参数名归一（AKU/BKU 壳体小端内直径 → 壳体内直径 Dis）。"""
+        name = str(param_name or "").strip()
+        try:
+            hx = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
+            if hx in ("AKU", "BKU") and name == "壳体小端内直径":
+                return "壳体内直径 Dis"
+        except Exception:
+            pass
+        if name.startswith("是否以外径为基准"):
+            return "是否以外径为基准"
+        return name
+
+    @staticmethod
+    def _buguan_param_value_nonempty(val):
+        if val is None:
+            return False
+        return str(val).strip() != ""
+
+    def _dedupe_buguan_params(self, params):
+        """
+        布管参数列表去重：同一归一化参数名只保留一条。
+        优先保留非空参数值；均非空时保留后出现的一条（视为较新）。
+        """
+        if not params:
+            return []
+        merged = {}
+        order = []
+        for p in params:
+            if not isinstance(p, dict):
+                continue
+            raw_name = p.get("参数名")
+            if raw_name is None:
+                continue
+            canon = self._canonical_buguan_param_name(raw_name)
+            entry = {
+                "参数名": canon,
+                "参数值": p.get("参数值"),
+                "单位": p.get("单位", ""),
+            }
+            if canon not in merged:
+                merged[canon] = entry
+                order.append(canon)
+                continue
+            old = merged[canon]
+            old_ok = self._buguan_param_value_nonempty(old.get("参数值"))
+            new_ok = self._buguan_param_value_nonempty(entry.get("参数值"))
+            if new_ok and not old_ok:
+                merged[canon] = entry
+            elif new_ok and old_ok:
+                merged[canon] = entry
+        out = [merged[k] for k in order]
+        removed = len(params) - len(out)
+        if removed > 0:
+            try:
+                print(
+                    f"[布管参数去重] 产品 {getattr(self, 'productID', '')} "
+                    f"合并重复参数 {removed} 项",
+                    flush=True,
+                )
+            except Exception:
+                pass
+        return out
+
     def _true_slipway_key_set(self):
         return {
             (round(float(x), 6), round(float(y), 6))
@@ -3402,6 +3466,10 @@ class TubeLayoutEditor(QMainWindow):
 
             data = {"参数名": t_name, "参数值": t_value, "单位": t_unit}
             self.tube_data.append(data)
+        try:
+            self.tube_data = self._dedupe_buguan_params(self.tube_data)
+        except Exception:
+            pass
         return self.tube_data
 
     def restore_param_table_column_widths(self):
@@ -3904,6 +3972,13 @@ class TubeLayoutEditor(QMainWindow):
 
                     cursor.execute(query, (self.productID,))
                     product_params = cursor.fetchall()
+                    try:
+                        if product_params:
+                            product_params = self._dedupe_buguan_params(
+                                list(product_params)
+                            )
+                    except Exception as _dedupe_e:
+                        print(f"[load_initial_data] 布管参数去重失败: {_dedupe_e}")
 
                     # 通用数据表「是」且布管参数表仍为「否」→ 与界面覆盖同源（见下方 elif 是否以外径为基准）
                     try:
@@ -4615,6 +4690,9 @@ class TubeLayoutEditor(QMainWindow):
                                     processed_params[i]["参数值"] = "16"
 
                         if processed_params:
+                            processed_params = self._dedupe_buguan_params(
+                                processed_params
+                            )
                             self.setup_parameters(
                                 processed_params, setup_listeners=False
                             )
@@ -5134,6 +5212,9 @@ class TubeLayoutEditor(QMainWindow):
                                 print("未计算出有效DL值，不更新参数")
 
                             if processed_params:
+                                processed_params = self._dedupe_buguan_params(
+                                    processed_params
+                                )
                                 self.side_dangban_length = 0
                                 self.setup_parameters(
                                     processed_params, setup_listeners=False
@@ -15623,6 +15704,12 @@ class TubeLayoutEditor(QMainWindow):
             pass
 
     def setup_parameters(self, params, setup_listeners=True):
+        # 杜绝左侧参数表出现同名/AKU·BKU Dis 双名重复行（仅合并展示用列表，不改库）
+        try:
+            if isinstance(params, list):
+                params = self._dedupe_buguan_params(params)
+        except Exception as _dedupe_setup_e:
+            print(f"[setup_parameters] 布管参数去重失败: {_dedupe_setup_e}")
         # ---- 补齐“滑道新增参数”（元件库默认表可能尚未配置）----
         # 确保左侧参数表一定存在这三项，才能做显示/隐藏联动与保存链路。
         try:
