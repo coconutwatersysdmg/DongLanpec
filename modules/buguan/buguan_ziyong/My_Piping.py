@@ -4159,6 +4159,18 @@ class TubeLayoutEditor(QMainWindow):
                                                     cursor.execute(
                                                         delete_query, (self.productID,)
                                                     )
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管操作记录表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管中间挡板表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
+                                                    delete_query = """DELETE FROM 产品设计活动表_布管吊环螺钉表 WHERE 产品ID = %s"""
+                                                    cursor.execute(
+                                                        delete_query, (self.productID,)
+                                                    )
 
                                                     check_query = """SELECT 1 FROM 产品设计活动表_布管管口表 WHERE 产品ID = %s LIMIT 1"""
                                                     cursor.execute(
@@ -4173,7 +4185,9 @@ class TubeLayoutEditor(QMainWindow):
 
                                                     product_conn.commit()
                                                     print(
-                                                        f"已删除产品ID为{self.productID}的布管元件表、交叉布管表、防冲板表、焊接式防冲板表、旁路挡板表所有数据"
+                                                        f"已删除产品ID为{self.productID}的布管元件表、交叉布管表、"
+                                                        f"防冲板表、焊接式防冲板表、旁路挡板表、操作记录表、"
+                                                        f"中间挡板表、吊环螺钉表所有数据"
                                                     )
                                                 except Exception as e:
                                                     # 发生错误时回滚事务
