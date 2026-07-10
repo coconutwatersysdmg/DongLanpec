@@ -434,8 +434,7 @@ class ZoomableGraphicsView(QGraphicsView):
                     mx, my = float(scene_pos.x()), float(scene_pos.y())
                     # 选择上下两组中心列表
                     centers = None
-                    if hasattr(editor, "fu"
-                                       "ll_sorted_current_centers_up") and hasattr(
+                    if hasattr(editor, "full_sorted_current_centers_up") and hasattr(
                             editor, "full_sorted_current_centers_down"
                     ):
                         if my >= 0:
@@ -1920,21 +1919,15 @@ class TubeLayoutEditor(QMainWindow):
 
     def restore_slipway_from_saved(self):
         """
-        打开/重载复现滑道：有库中 slipway_centers 时先删管；没有干涉删管记录也应仅按参数绘制滑道。
+        打开/重载复现滑道：若有 slipway_centers 则先删管，再仅绘制滑道（不重算干涉）。
+        slipway_centers 为空时（如用户先手动删干涉管再布置滑道）仍按参数绘制滑道。
         """
         params = self._read_slipway_draw_params()
-        saved_centers = self._normalize_slipway_abs_centers(
-            getattr(self, "slipway_centers", None) or []
-        )
-        self.slipway_centers = saved_centers
-        if saved_centers:
-            self._remove_tubes_for_slipway_restore()
         if not params:
-            if saved_centers:
-                print("[restore_slipway_from_saved] 缺少滑道参数，已删管但未绘制滑道")
-            else:
-                print("[restore_slipway_from_saved] 缺少滑道参数，未绘制滑道")
+            print("[restore_slipway_from_saved] 缺少滑道参数，无法绘制滑道")
             return False
+        if getattr(self, "slipway_centers", None):
+            self._remove_tubes_for_slipway_restore()
         height, thickness, angle = params
         self.isHuadao = True
         self.draw_slide_with_params(
@@ -1942,7 +1935,7 @@ class TubeLayoutEditor(QMainWindow):
         )
         # 供界面双击改参时 build_huadao 按原逻辑先补回再重绘
         centers = []
-        for coord in saved_centers:
+        for coord in getattr(self, "slipway_centers", None) or []:
             converted = self.actual_to_selected_coords(coord)
             if converted is not None:
                 centers.append(converted)
