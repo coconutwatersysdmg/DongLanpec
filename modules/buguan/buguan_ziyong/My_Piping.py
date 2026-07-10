@@ -1919,15 +1919,15 @@ class TubeLayoutEditor(QMainWindow):
 
     def restore_slipway_from_saved(self):
         """
-        打开/重载复现滑道：先按库中 slipway_centers 删管，再仅绘制滑道（不重算干涉）。
+        打开/重载复现滑道：若有 slipway_centers 则先删管，再仅绘制滑道（不重算干涉）。
+        slipway_centers 为空时（如用户先手动删干涉管再布置滑道）仍按参数绘制滑道。
         """
-        if not getattr(self, "slipway_centers", None):
-            return False
         params = self._read_slipway_draw_params()
-        self._remove_tubes_for_slipway_restore()
         if not params:
-            print("[restore_slipway_from_saved] 缺少滑道参数，已删管但未绘制滑道")
+            print("[restore_slipway_from_saved] 缺少滑道参数，无法绘制滑道")
             return False
+        if getattr(self, "slipway_centers", None):
+            self._remove_tubes_for_slipway_restore()
         height, thickness, angle = params
         self.isHuadao = True
         self.draw_slide_with_params(
