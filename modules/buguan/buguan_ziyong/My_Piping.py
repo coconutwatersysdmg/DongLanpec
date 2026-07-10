@@ -20486,7 +20486,7 @@ class TubeLayoutEditor(QMainWindow):
             # "BPBThick": "旁路挡板厚度",
             # 按需求：S 仅按 do+排列方式 对应表联动，不使用后端 output_data 回写覆盖
             "S": "换热管中心距 S",
-            # "W": "隔条位置尺寸 W"
+            "W": "隔条位置尺寸 W"
         }
 
         # 遍历所有需要更新的参数
