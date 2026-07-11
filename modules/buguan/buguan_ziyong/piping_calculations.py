@@ -17,8 +17,8 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
             editor.current_centers, (list, set, tuple)
     ):
         return None
-    if not hasattr(editor, "global_centers") or not isinstance(
-            editor.global_centers, (list, set, tuple)
+    if not hasattr(editor, "current_centers_lagan") or not isinstance(
+            editor.current_centers_lagan, (list, set, tuple)
     ):
         return None
     try:
@@ -33,14 +33,14 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
     except (ValueError, TypeError):
         return None
     try:
-        global_coords = []
-        for global_coord in editor.global_centers:
+        current_centers_lagans = []
+        for global_coord in editor.current_centers_lagan:
             if len(global_coord) >= 2:
                 x = float(global_coord[0])
                 y = float(global_coord[1])
-                global_coords.append((x, y))
-        print(global_coords,"global")
-        if not global_coords:
+                current_centers_lagans.append((x, y))
+        print(current_centers_lagans,"global")
+        if not current_centers_lagans:
             return None
     except (ValueError, TypeError):
         return None
@@ -484,8 +484,8 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
                         max_dist = dist
         return round(max_dist, 3)
 
-    if global_coords:
-        max_radius = max(math.hypot(x, y) for x, y in global_coords)
+    if current_centers_lagans:
+        max_radius = max(math.hypot(x, y) for x, y in current_centers_lagans)
         calc_results["实际布管区域最大直径"] = str(round(max_radius * 2 + do_value, 3))
 
         max_height = 0.0
@@ -497,7 +497,7 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
             # 同一列：x 相同，统计这一列的 y 跨度 -> 高度
             x_groups = _dd(list)
 
-            for x, y in global_coords:
+            for x, y in current_centers_lagans:
                 y_groups[round(y, 6)].append(x)
                 x_groups[round(x, 6)].append(y)
 
@@ -530,8 +530,8 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
                 max_height = (max(col_spans) if col_spans else 0.0) + do_value
 
         else:
-            x_values = [x for x, _ in global_coords]
-            y_values = [y for _, y in global_coords]
+            x_values = [x for x, _ in current_centers_lagans]
+            y_values = [y for _, y in current_centers_lagans]
             max_width = (max(x_values) - min(x_values)) + do_value
             max_height = (max(y_values) - min(y_values)) + do_value
 
@@ -601,20 +601,20 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
     except (ValueError, TypeError):
         return None
 
-    if not hasattr(editor, "global_centers") or not isinstance(
-            editor.global_centers, (list, set, tuple)
+    if not hasattr(editor, "current_centers_lagan") or not isinstance(
+            editor.current_centers_lagan, (list, set, tuple)
     ):
         return None
 
     try:
-        global_coords = []
-        for global_coord in editor.global_centers:
+        current_centers_lagans = []
+        for global_coord in editor.current_centers_lagan:
             if len(global_coord) >= 2:
                 x = float(global_coord[0])
                 y = float(global_coord[1])
-                global_coords.append((x, y))
-        print(global_coords,"global")
-        if not global_coords:
+                current_centers_lagans.append((x, y))
+        print(current_centers_lagans,"global")
+        if not current_centers_lagans:
             return None
     except (ValueError, TypeError):
         return None
@@ -989,8 +989,8 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
                         max_dist = dist
         return round(max_dist, 3)
 
-    if global_coords:
-        max_radius = max(math.hypot(x, y) for x, y in global_coords)
+    if current_centers_lagans:
+        max_radius = max(math.hypot(x, y) for x, y in current_centers_lagans)
         calc_results["实际布管区域最大直径"] = str(round(max_radius * 2 + do_value, 3))
 
         max_height = 0.0
@@ -1002,7 +1002,7 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
             # 同一列：x 相同，统计这一列的 y 跨度 -> 高度
             x_groups = _dd(list)
 
-            for x, y in global_coords:
+            for x, y in current_centers_lagans:
                 y_groups[round(y, 6)].append(x)
                 x_groups[round(x, 6)].append(y)
 
@@ -1035,8 +1035,8 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
                 max_height = (max(col_spans) if col_spans else 0.0) + do_value
 
         else:
-            x_values = [x for x, _ in global_coords]
-            y_values = [y for _, y in global_coords]
+            x_values = [x for x, _ in current_centers_lagans]
+            y_values = [y for _, y in current_centers_lagans]
             max_width = (max(x_values) - min(x_values)) + do_value
             max_height = (max(y_values) - min(y_values)) + do_value
 
@@ -1119,8 +1119,8 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
                 [(x, y) for x, y in filtered_coords if abs(y - max_below_y) < 1e-6]
             )
         calc_results["'十字'交叉沿水平隔板槽单侧的排管根数"] = str(len(selected_coords_cross))
-        max_dist_cross = get_max_distance(selected_coords_cross)
-        calc_results["'十字'交叉沿水平隔板槽单侧管排1最两端管孔中心距"] = str(max_dist_cross)
+        # max_dist_cross = get_max_distance(selected_coords_cross)
+        # calc_results["'十字'交叉沿水平隔板槽单侧管排1最两端管孔中心距"] = str(max_dist_cross)
 
     if fenchengxingshi in ("4.3", "6.2", "6.1", "4.2"):
         selected_coords_vertical = []
@@ -1169,6 +1169,7 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
     if fenchengxingshi in ("4.1", "4.3", "6.1", "6.2"):
         try:
             strange_tube_result = editor.calculate_strange_tube()
+            print(strange_tube_result,"strange_tube_result")
             if isinstance(strange_tube_result, (list, tuple)) and len(
                     strange_tube_result
             ) >= 4:
@@ -1256,7 +1257,17 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
                 calc_results["'丁字'交叉沿水平隔板槽连续侧的排管根数"] = len(
                     selected_coords_cross
                 )
-
+            if fenchengxingshi == "6.2":
+                calc_results["'丁字'交叉沿水平隔板槽连续侧的排管根数"] = "0"
+                calc_results["'丁字'交叉沿水平隔板槽不连续侧的排管根数"] = "0"
+                calc_results[
+                    "'十字'交叉沿水平隔板槽单侧管排1最两端管孔中心距"
+                ] = calc_results[
+                    "'丁字'交叉沿水平隔板槽不连续侧管排1最两端管孔中心距"
+                ]
+                calc_results[
+                    "'丁字'交叉沿水平隔板槽不连续侧管排1最两端管孔中心距"
+                ] = "0"
         except Exception:
             calc_results["'丁字'交叉沿水平隔板槽连续侧的排管根数"] = "0"
             calc_results["'丁字'交叉沿水平隔板槽不连续侧的排管根数"] = "0"
