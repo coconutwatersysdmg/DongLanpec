@@ -2851,6 +2851,12 @@ class TubeLayoutEditor(QMainWindow):
         self.param_table.showEvent = (
             lambda event: self.restore_param_table_column_widths()
         )
+        # Excel 式编辑：单击选中，回车进入编辑；直接输入字符也可编辑（禁用双击编辑）
+        self.param_table.setEditTriggers(
+            QAbstractItemView.AnyKeyPressed | QAbstractItemView.EditKeyPressed
+        )
+        self.param_table.installEventFilter(self)
+        self.param_table.viewport().installEventFilter(self)
         param_layout.addWidget(self.param_table)
 
         # 左侧参数值列：编辑时回车跳到下一可编辑数值格（不再用回车触发布管）
@@ -48794,6 +48800,24 @@ class TubeLayoutEditor(QMainWindow):
                 return r
         return -1
 
+    def _handle_param_table_enter_start_edit(self):
+        """参数表未进入编辑时按回车：进入当前行参数值列编辑（先单击选中再回车）。"""
+        from PyQt5.QtWidgets import QAbstractItemView
+
+        tbl = getattr(self, "param_table", None)
+        if tbl is None or tbl.state() == QAbstractItemView.EditingState:
+            return False
+
+        row, col = tbl.currentRow(), tbl.currentColumn()
+        if row < 0:
+            return False
+        if col != 2:
+            tbl.setCurrentCell(row, 2)
+        if not self._param_value_row_enter_jumpable(row):
+            return False
+        self._focus_param_value_cell(row)
+        return True
+
     def _focus_param_value_cell(self, row):
         """将焦点落到第 row 行参数值列（文本格进入编辑；下拉框获焦，可编辑时选中 lineEdit 全文）。"""
         tbl = getattr(self, "param_table", None)
@@ -48915,6 +48939,14 @@ class TubeLayoutEditor(QMainWindow):
             if isinstance(event, QKeyEvent):
                 key = event.key()
                 if key in (Qt.Key_Return, Qt.Key_Enter):
+                    tbl = getattr(self, "param_table", None)
+                    if tbl is not None and obj in (tbl, tbl.viewport()):
+                        from PyQt5.QtWidgets import QAbstractItemView
+
+                        if tbl.state() != QAbstractItemView.EditingState:
+                            if self._handle_param_table_enter_start_edit():
+                                event.accept()
+                                return True
                     if isinstance(obj, QComboBox) and getattr(self, "param_table", None) is not None:
                         if self.param_table.isAncestorOf(obj):
                             if self._param_value_row_for_col2_widget(obj) >= 0:
