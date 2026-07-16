@@ -219,6 +219,92 @@ class TubeSheetConnectionPage(QWidget):
                 return label
         return None
 
+    def _get_fixed_tubesheet_cladding_flag(self, product_id=None):
+        """
+        从元件附加参数表读取固定管板「管程侧是否添加覆层」。
+        返回 "是" / "否" / None（查不到或失败）。
+        """
+        pid = product_id if product_id is not None else self.get_product_id()
+        if not pid:
+            return None
+
+        conn = create_product_connection()
+        if not conn:
+            return None
+
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT 参数值
+                    FROM 产品设计活动表_元件附加参数表
+                    WHERE 产品ID = %s
+                      AND 元件名称 = %s
+                      AND 参数名称 = %s
+                    LIMIT 1
+                    """,
+                    (pid, "固定管板", "管程侧是否添加覆层"),
+                )
+                row = cur.fetchone()
+            if not row:
+                print(
+                    "[tube_sheet_connection] 未找到固定管板"
+                    "「管程侧是否添加覆层」参数"
+                )
+                return None
+            value = row.get("参数值") if isinstance(row, dict) else row[0]
+            value = str(value).strip() if value is not None else ""
+            print(
+                f"[tube_sheet_connection] 固定管板管程侧是否添加覆层={value!r}"
+            )
+            if value in ("是", "否"):
+                return value
+            return None
+        except Exception as e:
+            print(f"[tube_sheet_connection] 读取覆层参数失败: {e}")
+            return None
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+    def _apply_default_connection_by_cladding(self, product_id=None):
+        """
+        无已保存管板连接记录时，按固定管板覆层开关选默认示意图：
+        - 否 → 强度焊接加贴胀管孔结构 + 无覆层（整体，管板类型 0）
+        - 是 → 强度焊接加贴胀管孔结构 + 有覆层（复合，管板类型 1）
+        """
+        flag = self._get_fixed_tubesheet_cladding_flag(product_id)
+        if flag == "是":
+            tube_sheet_type = "1"
+        elif flag == "否":
+            tube_sheet_type = "0"
+        else:
+            print(
+                "[tube_sheet_connection] 覆层参数无效，不应用默认选中"
+            )
+            return False
+
+        connection_type = "强度焊接加贴胀管孔结构"
+        target_label = self._find_label_for_saved_connection(
+            connection_type, tube_sheet_type
+        )
+        if target_label is None:
+            print(
+                f"[tube_sheet_connection] 未找到默认图片: "
+                f"{connection_type}, 管板类型={tube_sheet_type}"
+            )
+            return False
+
+        print(
+            f"[tube_sheet_connection] 应用默认选中: "
+            f"连接方式={connection_type}, 管板类型={tube_sheet_type} "
+            f"(覆层={flag})"
+        )
+        self.select_image(target_label, restoring=True)
+        return True
+
     def _restore_saved_connection_state(self, retry=0):
         """根据产品ID恢复已保存的管板连接节点及右侧参数表。"""
         if not self.image_labels:
@@ -248,7 +334,11 @@ class TubeSheetConnectionPage(QWidget):
                 row = cur.fetchone()
 
             if not row:
-                print("[tube_sheet_connection] 无已保存记录，保持当前界面")
+                print(
+                    "[tube_sheet_connection] 无已保存记录，"
+                    "按固定管板覆层参数应用默认选中"
+                )
+                self._apply_default_connection_by_cladding(product_id)
                 return
 
             connection_type = row.get("管板连接方式") if isinstance(row, dict) else row[0]
