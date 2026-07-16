@@ -42490,23 +42490,32 @@ class TubeLayoutEditor(QMainWindow):
 
         if not hasattr(self, "selected_slides") or not self.selected_slides:
             return
+
+        # 删除滑道时需补回此前因干涉删掉的换热管；
+        # true_slipway_centers 仍是旧滑道几何，必须先清空并用 skip_slipway_block，
+        # 否则会误报“与滑道干涉，不允许添加换热管/拉杆”并拦截恢复。
+        self.true_slipway_centers = []
+        self.slipway_centers = []
+
         for coord in self.interfering_tubes1:
             processed_coord1 = self.actual_to_selected_coords(coord)
-            self.build_huanreguan([processed_coord1])
+            if processed_coord1:
+                self.build_huanreguan([processed_coord1], skip_slipway_block=True)
         for coord in self.interfering_tubes2:
             processed_coord2 = self.actual_to_selected_coords(coord)
-            self.build_huanreguan([processed_coord2])
+            if processed_coord2:
+                self.build_huanreguan([processed_coord2], skip_slipway_block=True)
         tube_num = self.get_tube_pass_count()
         if tube_num == "2" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
             all_centers = self.judge_linkage_x(self.slide_selected_centers)
-            self.build_huanreguan(all_centers)
+            self.build_huanreguan(all_centers, skip_slipway_block=True)
         elif (
                 tube_num == "4" or tube_num == "6" and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]
         ):
             all_centers = self.judge_linkage_y(self.slide_selected_centers)
-            self.build_huanreguan(all_centers)
+            self.build_huanreguan(all_centers, skip_slipway_block=True)
         else:
-            self.build_huanreguan(self.slide_selected_centers)
+            self.build_huanreguan(self.slide_selected_centers, skip_slipway_block=True)
 
         self.interfering_tubes1 = []
         self.interfering_tubes2 = []
@@ -42555,7 +42564,7 @@ class TubeLayoutEditor(QMainWindow):
 
             # 绘制恢复的换热管
             if relative_tubes:
-                self.build_huanreguan(relative_tubes)
+                self.build_huanreguan(relative_tubes, skip_slipway_block=True)
 
                 # 更新当前圆心列表
                 for tube in tubes_to_restore:
@@ -42574,6 +42583,7 @@ class TubeLayoutEditor(QMainWindow):
         self.update_tube_nums()
         self.slide_selected_centers = []
         self.true_slipway_centers = []
+        self.slipway_centers = []
 
         # 如果没有滑道了，重置标志
         if not self.green_slide_items:
