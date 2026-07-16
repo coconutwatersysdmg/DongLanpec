@@ -298,6 +298,13 @@ def delete_selected_lagans(editor=None):
     # 清空选中列表
     editor.selected_lagans = []
 
+    # 同步清理“由中间挡管转换”的坐标缓存
+    try:
+        if hasattr(editor, "_remove_converted_lagan_coords"):
+            editor._remove_converted_lagan_coords(coords_to_remove)
+    except Exception:
+        pass
+
     # 更新操作记录
     if hasattr(editor, 'operations') and editor.operations:
         editor.operations = [op for op in editor.operations 
