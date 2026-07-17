@@ -2779,6 +2779,24 @@ class TubeLayoutEditor(QMainWindow):
     def showEvent(self, event):
         super().showEvent(event)
         self.update_cross_pipe_button_state()
+        try:
+            self._align_side_table_bottoms()
+        except Exception:
+            pass
+
+    def _align_side_table_bottoms(self):
+        """右侧数量表底部留白，与左侧拉杆摘要行等高，使两侧表框底边平齐。"""
+        spacer = getattr(self, "right_table_bottom_spacer", None)
+        lagan = getattr(self, "lagan_summary_container", None)
+        if spacer is None or lagan is None:
+            return
+        h = lagan.height()
+        if h <= 1:
+            h = lagan.sizeHint().height()
+        if h <= 1:
+            h = lagan.minimumSizeHint().height()
+        if h > 1:
+            spacer.setFixedHeight(h)
 
     def create_header(self):
         """创建选项卡标题"""
@@ -3362,6 +3380,13 @@ class TubeLayoutEditor(QMainWindow):
 
         right_layout.addWidget(self.hole_distribution_table, 1)
 
+        # 底部占位：高度与左侧「拉杆标准数量」行一致，使左右表框底边平齐
+        self.right_table_bottom_spacer = QWidget()
+        self.right_table_bottom_spacer.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed
+        )
+        right_layout.addWidget(self.right_table_bottom_spacer)
+
         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = (
             self.group_centers_by_y(self.global_centers)
         )
@@ -3386,6 +3411,8 @@ class TubeLayoutEditor(QMainWindow):
         # ✅ 关键修改：页面进入 stacked_widget 后，post-layout 强制覆盖右表列宽
         QTimer.singleShot(0, self.update_right_table_column_widths)
         QTimer.singleShot(50, self.update_right_table_column_widths)
+        QTimer.singleShot(0, self._align_side_table_bottoms)
+        QTimer.singleShot(50, self._align_side_table_bottoms)
 
         self.enable_scene_click_capture()
 
