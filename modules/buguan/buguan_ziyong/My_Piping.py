@@ -3203,7 +3203,6 @@ class TubeLayoutEditor(QMainWindow):
             ("布管", "布管.png", self.on_buguan_bt_click),
             ("交叉布管", "交叉布管.png", self.on_cross_pipes_click),
             ("删除交叉布管", "删除交叉布管.png", self.clear_cross_pipe_lines),
-            ("保存", "保存.png", self.save_data),
         ]
         for action, icon_file, handler in left_actions:
             btn = QPushButton(action)
@@ -3213,9 +3212,7 @@ class TubeLayoutEditor(QMainWindow):
                 btn.setIcon(QIcon(icon_path))
                 btn.setIconSize(QSize(20, 20))
             btn.clicked.connect(handler)
-            if action == "保存":
-                self.save_btn = btn
-            elif action == "交叉布管":
+            if action == "交叉布管":
                 self.btn_cross_pipe = btn
                 btn.setObjectName("crossPipeButton")
                 btn.setEnabled(False)
@@ -17390,43 +17387,58 @@ class TubeLayoutEditor(QMainWindow):
         return self.tube_form_data
 
     def update_footer_buttons(self):
-        """更新底部按钮显示"""
-        # 清除现有的所有按钮
-        for i in reversed(range(self.footer_layout.count())):
-            item = self.footer_layout.itemAt(i)
-            if item.widget():
-                item.widget().deleteLater()
+        """更新底部按钮显示：保存按钮固定在界面右下角（样式与产品管理一致）。"""
+        while self.footer_layout.count():
+            item = self.footer_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
 
-        # 重新添加stretch
         self.footer_layout.addStretch()
-
-        # 布管页面：预览/保存已移至操作栏，隐藏底部区域
-        if self.header.currentIndex() == 1:
-            self.footer_frame.setVisible(False)
-            return
-
         self.footer_frame.setVisible(True)
+        self.footer_frame.setStyleSheet(
+            "background-color: transparent; border: none;"
+        )
 
-        # 其他页面只显示保存按钮
+        # 与产品管理界面（guanli_new.ui）保存按钮样式保持一致
         save_btn = QPushButton("保存")
-        save_btn.setFixedSize(80, 30)
+        icon_path = os.path.join(
+            project_root, "modules", "chanpinguanli", "icons", "保存.png"
+        )
+        if os.path.exists(icon_path):
+            save_btn.setIcon(QIcon(icon_path))
         save_btn.setStyleSheet(
             """
             QPushButton {
-                background-color: #f0f0f0;
-                border: 1px solid #ccc;
-                border-radius: 4px;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #ffffff, stop: 1 #e8edf5);
+                border: 1px solid #b8c8e0;
+                border-radius: 0px;
+                color: #000000;
+                font-size: 17px;
+                padding: 8px 20px;
+                text-align: center;
+                min-width: 65px;
             }
             QPushButton:hover {
-                background-color: #e0e0e0;
-                border: 1px solid #aaa;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #f0f4fa, stop: 1 #d8e0ed);
+                border-color: #9ab0d0;
             }
             QPushButton:pressed {
-                background-color: #d0d0d0;
+                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                            stop: 0 #e0e6f0, stop: 1 #c8d2e0);
+                border-color: #7a90b0;
             }
-        """
+            QPushButton:disabled {
+                background: #f5f7fa;
+                color: #888888;
+                border-color: #d0d8e5;
+            }
+            """
         )
         save_btn.clicked.connect(self.save_data)
+        self.save_btn = save_btn
         self.footer_layout.addWidget(save_btn)
 
     # 10/27 修改，布管界面点击确认按钮时，根据公称直径、拉杆直径和拉杆数量跳出提示
@@ -19522,19 +19534,16 @@ class TubeLayoutEditor(QMainWindow):
         self.update_footer_buttons()
 
     def create_footer(self):
-        """创建底部按钮区域"""
+        """创建底部按钮区域（保存按钮靠右，样式与产品管理一致）"""
         self.footer_frame = QFrame()
         self.footer_frame.setStyleSheet(
-            "background-color: #e0e0e0; border-radius: 5px;"
+            "background-color: transparent; border: none;"
         )
         self.footer_layout = QHBoxLayout(self.footer_frame)
-        self.footer_frame.setVisible(True)  # 确保始终可见
-        self.footer_layout.setContentsMargins(10, 10, 10, 10)
+        self.footer_frame.setVisible(True)
+        self.footer_layout.setContentsMargins(10, 8, 12, 8)
 
-        # 添加一个可伸缩的空白空间，将按钮推到右侧
-        self.footer_layout.addStretch()
-
-        # 初始化按钮
+        # 初始化按钮（内部会 addStretch 并将保存按钮推到右下角）
         self.update_footer_buttons()
 
         self.main_layout.addWidget(self.footer_frame)
