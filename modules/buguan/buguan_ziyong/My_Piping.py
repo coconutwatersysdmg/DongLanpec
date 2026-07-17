@@ -16069,7 +16069,7 @@ class TubeLayoutEditor(QMainWindow):
                     elif param["参数名"] == "滑道定位":
                         combo.addItems(["滑道与管板焊接", "滑道与第一块折流板焊接"])
                     elif param["参数名"] == "滑道形式":
-                        combo.addItems(["板式滑道", "圆钢条式滑道"])
+                        combo.addItems(["板式滑道", "圆钢滑道"])
                     elif param["参数名"] == "滑道数量":
                         combo.addItems(["1", "2"])
                     elif param["参数名"] == "导轨类型":
@@ -16228,6 +16228,12 @@ class TubeLayoutEditor(QMainWindow):
                             param_value_str = "螺纹拉杆" if do_default >= 19 else "焊接拉杆"
                     elif param["参数名"] == "滑道数量" and param_value_str.strip() == "":
                         param_value_str = "2"
+                    elif (
+                        param["参数名"] == "滑道形式"
+                        and param_value_str.strip() == "圆钢条式滑道"
+                    ):
+                        # 兼容旧参数名：圆钢条式滑道 → 圆钢滑道
+                        param_value_str = "圆钢滑道"
 
                     try:
                         if param_value_str:
@@ -41672,7 +41678,7 @@ class TubeLayoutEditor(QMainWindow):
 
         input_widgets = {}
         slide_location_options = ["滑道与管板焊接", "滑道与第一块折流板焊接"]
-        slipway_form_options = ["板式滑道", "圆钢条式滑道"]
+        slipway_form_options = ["板式滑道", "圆钢滑道"]
         slipway_count_options = ["1", "2"]
         guide_rail_options = ["支撑导轨1", "支撑导轨2"]
         row_containers = {}
@@ -41704,8 +41710,11 @@ class TubeLayoutEditor(QMainWindow):
             elif param == "滑道形式":
                 combo = QComboBox()
                 combo.addItems(slipway_form_options)
-                if default_values.get(param, "") in slipway_form_options:
-                    combo.setCurrentText(default_values[param])
+                form_default = default_values.get(param, "")
+                if form_default == "圆钢条式滑道":
+                    form_default = "圆钢滑道"
+                if form_default in slipway_form_options:
+                    combo.setCurrentText(form_default)
                 input_widgets[param] = combo
                 row_layout.addWidget(combo)
             elif param == "滑道数量":
@@ -41740,7 +41749,7 @@ class TubeLayoutEditor(QMainWindow):
                 count_val = input_widgets["滑道数量"].currentText().strip()
             except Exception:
                 count_val = "2"
-            is_round = form == "圆钢条式滑道"
+            is_round = form in ("圆钢滑道", "圆钢条式滑道")
             is_plate = form == "板式滑道"
             show_azimuth = bool(is_plate) and count_val == "1"
             # 圆钢规格：仅圆钢条式显示
@@ -41848,7 +41857,7 @@ class TubeLayoutEditor(QMainWindow):
                 form = input_widgets["滑道形式"].currentText().strip()
             except Exception:
                 form = ""
-            is_round = form == "圆钢条式滑道"
+            is_round = form in ("圆钢滑道", "圆钢条式滑道")
 
             def _eff_line(key):
                 t = input_widgets[key].text().strip()
@@ -42166,7 +42175,7 @@ class TubeLayoutEditor(QMainWindow):
         input_widgets = {}
         # 定义滑道定位的选项列表
         slide_location_options = ["滑道与管板焊接", "滑道与第一块折流板焊接"]
-        slipway_form_options = ["板式滑道", "圆钢条式滑道"]
+        slipway_form_options = ["板式滑道", "圆钢滑道"]
         slipway_count_options = ["1", "2"]
         guide_rail_options = ["支撑导轨1", "支撑导轨2"]
 
@@ -42191,8 +42200,11 @@ class TubeLayoutEditor(QMainWindow):
             elif param == "滑道形式":
                 combo = QComboBox()
                 combo.addItems(slipway_form_options)
-                if default_values.get(param, "") in slipway_form_options:
-                    combo.setCurrentText(default_values[param])
+                form_default = default_values.get(param, "")
+                if form_default == "圆钢条式滑道":
+                    form_default = "圆钢滑道"
+                if form_default in slipway_form_options:
+                    combo.setCurrentText(form_default)
                 input_widgets[param] = combo
                 row_layout.addWidget(label)
                 row_layout.addWidget(combo)
@@ -42235,7 +42247,7 @@ class TubeLayoutEditor(QMainWindow):
                 count_val = input_widgets["滑道数量"].currentText().strip()
             except Exception:
                 count_val = "2"
-            is_round = form == "圆钢条式滑道"
+            is_round = form in ("圆钢滑道", "圆钢条式滑道")
             is_plate = form == "板式滑道"
             show_azimuth = bool(is_plate) and count_val == "1"
             try:
@@ -42306,7 +42318,7 @@ class TubeLayoutEditor(QMainWindow):
                 form = input_widgets["滑道形式"].currentText().strip()
             except Exception:
                 form = ""
-            is_round = form == "圆钢条式滑道"
+            is_round = form in ("圆钢滑道", "圆钢条式滑道")
 
             def _eff_line(key):
                 t = input_widgets[key].text().strip()

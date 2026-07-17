@@ -8470,7 +8470,7 @@ class TubeLayoutEditor(QMainWindow):
         """
         注释规则联动：
         ① 滑道形式=板式滑道 -> 隐藏“圆钢规格”
-        ② 滑道形式=圆钢条式滑道 -> 隐藏“滑道高度/滑道厚度/滑道与竖直中心线夹角/滑道切边长度/滑道切边高度”
+        ② 滑道形式=圆钢滑道 -> 隐藏“滑道高度/滑道厚度/滑道与竖直中心线夹角/滑道切边长度/滑道切边高度”
         ③ heat_exchanger=AKU/BKU -> 显示“导轨类型”，默认值“支撑导轨1”
         ④ 其他型式 -> 隐藏“导轨类型”
         """
@@ -8503,7 +8503,7 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             form_val = ""
 
-        is_round = form_val.strip() == "圆钢条式滑道"
+        is_round = form_val.strip() == "圆钢滑道"
 
         # 圆钢规格
         rs_row = _find_row("圆钢规格")
@@ -15928,7 +15928,7 @@ class TubeLayoutEditor(QMainWindow):
                     elif param["参数名"] == "滑道定位":
                         combo.addItems(["滑道与管板焊接", "滑道与第一块折流板焊接"])
                     elif param["参数名"] == "滑道形式":
-                        combo.addItems(["板式滑道", "圆钢条式滑道"])
+                        combo.addItems(["板式滑道", "圆钢滑道"])
                     elif param["参数名"] == "导轨类型":
                         combo.addItems(["支撑导轨1", "支撑导轨2"])
                     elif param["参数名"] == "放置位置":
@@ -41173,7 +41173,7 @@ class TubeLayoutEditor(QMainWindow):
 
         input_widgets = {}
         slide_location_options = ["滑道与管板焊接", "滑道与第一块折流板焊接"]
-        slipway_form_options = ["板式滑道", "圆钢条式滑道"]
+        slipway_form_options = ["板式滑道", "圆钢滑道"]
         guide_rail_options = ["支撑导轨1", "支撑导轨2"]
         row_containers = {}
         for param in [
@@ -41225,7 +41225,7 @@ class TubeLayoutEditor(QMainWindow):
                 form = input_widgets["滑道形式"].currentText().strip()
             except Exception:
                 form = ""
-            is_round = form == "圆钢条式滑道"
+            is_round = form == "圆钢滑道"
             # 圆钢规格：仅圆钢条式显示
             try:
                 c = row_containers.get("圆钢规格")
@@ -41310,7 +41310,7 @@ class TubeLayoutEditor(QMainWindow):
                 form = input_widgets["滑道形式"].currentText().strip()
             except Exception:
                 form = ""
-            is_round = form == "圆钢条式滑道"
+            is_round = form == "圆钢滑道"
 
             def _eff_line(key):
                 t = input_widgets[key].text().strip()
@@ -41598,7 +41598,7 @@ class TubeLayoutEditor(QMainWindow):
         input_widgets = {}
         # 定义滑道定位的选项列表
         slide_location_options = ["滑道与管板焊接", "滑道与第一块折流板焊接"]
-        slipway_form_options = ["板式滑道", "圆钢条式滑道"]
+        slipway_form_options = ["板式滑道", "圆钢滑道"]
         guide_rail_options = ["支撑导轨1", "支撑导轨2"]
 
         row_containers = {}
@@ -41650,7 +41650,7 @@ class TubeLayoutEditor(QMainWindow):
                 form = input_widgets["滑道形式"].currentText().strip()
             except Exception:
                 form = ""
-            is_round = form == "圆钢条式滑道"
+            is_round = form == "圆钢滑道"
             try:
                 c = row_containers.get("圆钢规格")
                 if c is not None:
@@ -41701,7 +41701,7 @@ class TubeLayoutEditor(QMainWindow):
                 form = input_widgets["滑道形式"].currentText().strip()
             except Exception:
                 form = ""
-            is_round = form == "圆钢条式滑道"
+            is_round = form == "圆钢滑道"
 
             def _eff_line(key):
                 t = input_widgets[key].text().strip()
