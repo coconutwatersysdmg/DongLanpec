@@ -8,8 +8,10 @@ from PyQt5.QtCore import Qt, QSize, QTimer, QRect, pyqtSignal
 from PyQt5.QtGui import QPixmap, QFont, QIcon, QPainter, QColor, QBrush
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
                              QGridLayout, QFrame, QListWidget, QListWidgetItem, QLineEdit, QComboBox, QSizePolicy,
-                             QTableWidget, QTableWidgetItem, QHeaderView, QDialog, QApplication, QStyledItemDelegate,
+                             QTableWidget, QTableWidgetItem, QHeaderView, QApplication, QStyledItemDelegate,
                              QPushButton, QAbstractItemView)
+from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
+from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 import pymysql
 
 from .buguan_param_table_style import apply_buguan_param_table_style
@@ -137,7 +139,7 @@ def create_component_connection():
             cursorclass=pymysql.cursors.DictCursor
         )
     except pymysql.MySQLError as e:
-        from PyQt5.QtWidgets import QMessageBox
+        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
         QMessageBox.critical(None, "数据库错误", f"连接元件库失败: {e}")
         return None
 
@@ -154,7 +156,7 @@ def create_product_connection():
             cursorclass=pymysql.cursors.DictCursor
         )
     except pymysql.MySQLError as e:
-        from PyQt5.QtWidgets import QMessageBox
+        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
         QMessageBox.critical(None, "数据库错误", f"连接产品设计活动库失败: {e}")
         return None
 

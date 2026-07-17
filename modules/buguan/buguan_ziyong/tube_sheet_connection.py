@@ -1,9 +1,11 @@
 # 10/19 3
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QFrame,
-    QLineEdit, QGridLayout, QMessageBox, QScrollBar, QTableWidget,
-    QTableWidgetItem, QHeaderView, QDialog, QApplication, QPushButton, QAbstractItemView
+    QLineEdit, QGridLayout, QScrollBar, QTableWidget,
+    QTableWidgetItem, QHeaderView, QApplication, QPushButton, QAbstractItemView
 )
+from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
+from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QBrush
 from PyQt5.QtCore import Qt, QSize, pyqtSignal, QTimer
 import pymysql

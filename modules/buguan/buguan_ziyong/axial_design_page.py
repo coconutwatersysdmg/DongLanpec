@@ -1,9 +1,10 @@
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QHBoxLayout, QVBoxLayout, QTableWidget, QTableWidgetItem,
     QHeaderView, QLabel, QGraphicsView, QGraphicsScene, QSizePolicy, QComboBox,
-    QAbstractItemView, QPushButton, QDialog, QScrollArea, QGridLayout, QGraphicsTextItem,
+    QAbstractItemView, QPushButton, QScrollArea, QGridLayout, QGraphicsTextItem,
     QGraphicsRectItem
 )
+from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 from PyQt5.QtCore import Qt, QTimer, QSize, QRectF
 from PyQt5.QtGui import QBrush, QColor, QPen, QIcon, QPixmap, QFont, QPainterPath
 import sys
@@ -217,10 +218,14 @@ class AutoAddDialog(QDialog):
         layout.addWidget(self.table)
 
         # 确定/取消按钮
+        from modules.buguan.buguan_ziyong.ui_style import BUGUAN_BUTTON_QSS
+
         btn_layout = QHBoxLayout()
         btn_layout.addStretch(1)
         btn_ok = QPushButton("确定", self)
         btn_cancel = QPushButton("取消", self)
+        btn_ok.setStyleSheet(BUGUAN_BUTTON_QSS)
+        btn_cancel.setStyleSheet(BUGUAN_BUTTON_QSS)
         btn_ok.clicked.connect(self.accept)
         btn_cancel.clicked.connect(self.reject)
         btn_layout.addWidget(btn_ok)
@@ -486,17 +491,9 @@ class AxialDesignPage(QWidget):
         button_layout.setContentsMargins(0, 0, 0, 0)
         button_layout.setSpacing(10)
         button_layout.addStretch(1)
-        btn_style = (
-            "QPushButton {"
-            " background-color: white;"
-            " border: 1px solid #C0C0C0;"
-            " border-radius: 3px;"
-            " padding: 4px;"
-            "}"
-            "QPushButton:hover {"
-            " background-color: #F5F5F5;"
-            "}"
-        )
+        from modules.buguan.buguan_ziyong.ui_style import BUGUAN_BUTTON_QSS
+
+        btn_style = BUGUAN_BUTTON_QSS
 
         self.btn_add_row = QPushButton()
         self.btn_add_row.setIcon(QIcon("modules/buguan/buguan_ziyong/static/axial_design/add.png"))

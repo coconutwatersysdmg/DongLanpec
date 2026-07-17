@@ -41,13 +41,14 @@ from PyQt5.QtWidgets import (
     QGraphicsPathItem,
     QGraphicsItem,
     QGridLayout,
-    QMessageBox,
     QComboBox,
     QStyledItemDelegate,
     QAbstractSpinBox,
     QAbstractItemDelegate,
     QApplication,
 )
+from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
+from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 from modules.buguan.buguan_ziyong.axial_design_page import AxialDesignPage
 from modules.buguan.buguan_ziyong.database_utils import create_activity_connection
 from modules.buguan.buguan_ziyong.variable import (
@@ -1098,7 +1099,6 @@ class ClickableRadialHoleItem(QGraphicsEllipseItem):
 
 # 预览对话框 -----------------------------------------------------
 from PyQt5.QtWidgets import (
-    QDialog,
     QVBoxLayout,
     QTableWidget,
     QTableWidgetItem,
@@ -1106,6 +1106,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QAbstractItemView,
 )
+from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap
 
@@ -1803,7 +1804,7 @@ class TubeLayoutEditor(QMainWindow):
                 allowed.append(coord)
 
         if had_blocked and not suppress_warning:
-            from PyQt5.QtWidgets import QMessageBox
+            from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
             QMessageBox.warning(
                 self,
@@ -3195,35 +3196,10 @@ class TubeLayoutEditor(QMainWindow):
         self.action_bar = QHBoxLayout()
         self.action_bar.setSpacing(8)
 
-        # 与产品管理/保存按钮样式保持一致
-        action_button_style = (
-            "QPushButton {"
-            "  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,"
-            "                              stop: 0 #ffffff, stop: 1 #e8edf5);"
-            "  border: 1px solid #b8c8e0;"
-            "  border-radius: 0px;"
-            "  color: #000000;"
-            "  font-size: 17px;"
-            "  padding: 8px 20px;"
-            "  text-align: center;"
-            "  min-width: 65px;"
-            "}"
-            "QPushButton:hover {"
-            "  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,"
-            "                              stop: 0 #f0f4fa, stop: 1 #d8e0ed);"
-            "  border-color: #9ab0d0;"
-            "}"
-            "QPushButton:pressed {"
-            "  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,"
-            "                              stop: 0 #e0e6f0, stop: 1 #c8d2e0);"
-            "  border-color: #7a90b0;"
-            "}"
-            "QPushButton:disabled {"
-            "  background: #f5f7fa;"
-            "  color: #888888;"
-            "  border-color: #d0d8e5;"
-            "}"
-        )
+        # 与产品管理/保存按钮样式保持一致（总控）
+        from modules.buguan.buguan_ziyong.ui_style import BUGUAN_BUTTON_QSS
+
+        action_button_style = BUGUAN_BUTTON_QSS
 
         icon_dir = os.path.join(current_dir, "static", "布管等按钮图标")
         left_actions = [
@@ -11306,7 +11282,8 @@ class TubeLayoutEditor(QMainWindow):
         """
         # 全局异常捕获，确保函数执行出错时不会导致程序闪退
         try:
-            from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QComboBox
+            from PyQt5.QtWidgets import QTableWidgetItem, QComboBox
+            from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
             from PyQt5.QtCore import QCoreApplication, QSignalBlocker
             import traceback
 
@@ -14004,7 +13981,7 @@ class TubeLayoutEditor(QMainWindow):
                     except Exception:
                         pass
 
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                     if od_val <= 0:
                         QMessageBox.warning(
@@ -14110,7 +14087,7 @@ class TubeLayoutEditor(QMainWindow):
             # 提前单独处理：中间挡板厚度下限约束（0 < thickness）
             if param_name == "中间挡板厚度":
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                     cur_text = str(param_value).strip()
 
@@ -14164,7 +14141,7 @@ class TubeLayoutEditor(QMainWindow):
             # 提前单独处理：旁路挡板厚度下限约束（thickness > 0）
             if param_name == "旁路挡板厚度":
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                     cur_text = str(param_value).strip()
                     if not hasattr(self, "_last_valid_side_baffle_thickness_text"):
@@ -14221,7 +14198,7 @@ class TubeLayoutEditor(QMainWindow):
             # 提前单独处理：圆钢规格下限约束（0 < spec）
             if param_name == "圆钢规格":
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                     cur_text = str(param_value).strip()
                     if not hasattr(self, "_last_valid_round_steel_spec_text"):
@@ -14263,7 +14240,7 @@ class TubeLayoutEditor(QMainWindow):
             # 提前单独处理：滑道高度范围约束 + 低于预定义确认
             if param_name == "滑道高度":
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                     from PyQt5.QtCore import QTimer
 
                     cur_text = str(param_value).strip()
@@ -14394,7 +14371,7 @@ class TubeLayoutEditor(QMainWindow):
             # 提前单独处理：滑道厚度下限约束（0 < thickness）+ 低于预定义确认
             if param_name == "滑道厚度":
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                     from PyQt5.QtCore import QTimer
 
                     cur_text = str(param_value).strip()
@@ -14500,7 +14477,7 @@ class TubeLayoutEditor(QMainWindow):
             # 提前单独处理：滑道切边长度下限约束（>= 0，非法直接回滚默认值 50）
             if param_name == "滑道切边长度":
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                     from PyQt5.QtCore import QTimer, QSignalBlocker
 
                     cur_text = str(param_value).strip()
@@ -14533,7 +14510,7 @@ class TubeLayoutEditor(QMainWindow):
             # 提前单独处理：滑道切边高度下限约束（>= 0，非法直接回滚默认值 15）
             if param_name == "滑道切边高度":
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                     from PyQt5.QtCore import QTimer, QSignalBlocker
 
                     cur_text = str(param_value).strip()
@@ -14566,7 +14543,7 @@ class TubeLayoutEditor(QMainWindow):
             # 滑道方位角：0° ≤ 方位角 ＜ 360°
             if param_name == "滑道方位角":
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                     from PyQt5.QtCore import QTimer, QSignalBlocker
 
                     cur_text = str(param_value).strip()
@@ -14619,7 +14596,7 @@ class TubeLayoutEditor(QMainWindow):
             # 提前单独处理：换热管壁厚 δ 约束（0 < δ <= do/2）
             if param_name == "换热管壁厚 δ":
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                     from PyQt5.QtCore import QTimer, QSignalBlocker
 
                     cur_text = str(param_value).strip()
@@ -14734,7 +14711,7 @@ class TubeLayoutEditor(QMainWindow):
                 "分程隔板两侧相邻管中心距（水平）",
             ]:
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                     from PyQt5.QtCore import QTimer, QSignalBlocker
 
                     # 参数行被隐藏时（界面不显示），不应参与校验/弹窗/回滚
@@ -14844,7 +14821,7 @@ class TubeLayoutEditor(QMainWindow):
                         pass
                     return
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                 except Exception:
                     QMessageBox = None
 
@@ -15014,7 +14991,7 @@ class TubeLayoutEditor(QMainWindow):
                 "非布管区域弦高（90°/270°）",
             ]:
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                     from PyQt5.QtCore import QTimer
 
                     cur_text = str(param_value).strip()
@@ -15153,7 +15130,7 @@ class TubeLayoutEditor(QMainWindow):
                             and expected_min > 0
                             and new_snh < expected_min
                     ):
-                        from PyQt5.QtWidgets import QMessageBox
+                        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                         from PyQt5.QtCore import QTimer
 
                         # 去重：只有“新的违规输入值”才允许弹窗
@@ -15258,7 +15235,7 @@ class TubeLayoutEditor(QMainWindow):
                     # 软限制：S 不宜小于 1.25 * do（用户手动输入过小需要确认）
 
                     if do_val is not None and do_val > 0 and new_s < 1.25 * do_val:
-                        from PyQt5.QtWidgets import QMessageBox
+                        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                         from PyQt5.QtCore import QTimer
 
                         # ========= 全局 bool 逻辑（按你的要求梳理后实现）=========
@@ -15361,7 +15338,7 @@ class TubeLayoutEditor(QMainWindow):
                 # 2.6) 专项校验：布管限定圆 DL 超出标准推荐值时提示，但允许用户保留输入
                 if param_name == "布管限定圆 DL":
                     try:
-                        from PyQt5.QtWidgets import QMessageBox
+                        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                         from PyQt5.QtCore import QTimer
 
                         cur_dl_text = str(param_value).strip()
@@ -15631,7 +15608,7 @@ class TubeLayoutEditor(QMainWindow):
                                     except Exception:
                                         od_val = None
                                     if od_val is not None and od_val > di_val:
-                                        from PyQt5.QtWidgets import QMessageBox
+                                        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                                         # 置抑制标志，避免二次弹窗
                                         try:
@@ -17424,6 +17401,8 @@ class TubeLayoutEditor(QMainWindow):
 
     def update_footer_buttons(self):
         """更新底部按钮显示：保存按钮固定在界面右下角（样式与产品管理一致）。"""
+        from modules.buguan.buguan_ziyong.ui_style import BUGUAN_BUTTON_QSS
+
         while self.footer_layout.count():
             item = self.footer_layout.takeAt(0)
             widget = item.widget()
@@ -17443,36 +17422,7 @@ class TubeLayoutEditor(QMainWindow):
         )
         if os.path.exists(icon_path):
             save_btn.setIcon(QIcon(icon_path))
-        save_btn.setStyleSheet(
-            """
-            QPushButton {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                            stop: 0 #ffffff, stop: 1 #e8edf5);
-                border: 1px solid #b8c8e0;
-                border-radius: 0px;
-                color: #000000;
-                font-size: 17px;
-                padding: 8px 20px;
-                text-align: center;
-                min-width: 65px;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                            stop: 0 #f0f4fa, stop: 1 #d8e0ed);
-                border-color: #9ab0d0;
-            }
-            QPushButton:pressed {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                            stop: 0 #e0e6f0, stop: 1 #c8d2e0);
-                border-color: #7a90b0;
-            }
-            QPushButton:disabled {
-                background: #f5f7fa;
-                color: #888888;
-                border-color: #d0d8e5;
-            }
-            """
-        )
+        save_btn.setStyleSheet(BUGUAN_BUTTON_QSS)
         save_btn.clicked.connect(self.save_data)
         self.save_btn = save_btn
         self.footer_layout.addWidget(save_btn)
@@ -17571,7 +17521,8 @@ class TubeLayoutEditor(QMainWindow):
         在保存前检查公称直径、拉杆直径和 self.lagan_info（拉杆数量）之间的关系，
         若数量不足则弹窗提示。
         """
-        from PyQt5.QtWidgets import QMessageBox, QPushButton
+        from PyQt5.QtWidgets import QPushButton
+        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
         try:
             # === 1️⃣ 获取参数 ===
@@ -17680,7 +17631,7 @@ class TubeLayoutEditor(QMainWindow):
 
         if not tip_ok:
             try:
-                from PyQt5.QtWidgets import QMessageBox
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                 QMessageBox.information(self, "提示", message)
             except Exception as e2:
@@ -17770,7 +17721,7 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception:
                     pass
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                     QMessageBox.information(self, "提示", "数据保存成功！")
                 except Exception:
@@ -20848,7 +20799,8 @@ class TubeLayoutEditor(QMainWindow):
             因此在真正开始 calculate_piping_layout 之前，先做一次 S 的合规校验。
             """
             try:
-                from PyQt5.QtWidgets import QMessageBox, QComboBox, QTableWidgetItem
+                from PyQt5.QtWidgets import QComboBox, QTableWidgetItem
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
             except Exception:
                 return True
 
@@ -21048,7 +21000,8 @@ class TubeLayoutEditor(QMainWindow):
             规则：0 < δ <= do/2
             """
             try:
-                from PyQt5.QtWidgets import QMessageBox, QComboBox, QTableWidgetItem
+                from PyQt5.QtWidgets import QComboBox, QTableWidgetItem
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
             except Exception:
                 return True
 
@@ -21198,7 +21151,8 @@ class TubeLayoutEditor(QMainWindow):
             因此在真正开始 calculate_piping_layout 之前，先做一次 Sn(水平) 的确认校验。
             """
             try:
-                from PyQt5.QtWidgets import QMessageBox, QComboBox, QTableWidgetItem
+                from PyQt5.QtWidgets import QComboBox, QTableWidgetItem
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
             except Exception:
                 return True
 
@@ -21346,7 +21300,8 @@ class TubeLayoutEditor(QMainWindow):
             0 < W < DL/2
             """
             try:
-                from PyQt5.QtWidgets import QMessageBox, QComboBox, QTableWidgetItem
+                from PyQt5.QtWidgets import QComboBox, QTableWidgetItem
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
             except Exception:
                 return True
 
@@ -21478,7 +21433,8 @@ class TubeLayoutEditor(QMainWindow):
             0 <= 值 <= DL/2
             """
             try:
-                from PyQt5.QtWidgets import QMessageBox, QComboBox, QTableWidgetItem
+                from PyQt5.QtWidgets import QComboBox, QTableWidgetItem
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
             except Exception:
                 return True
 
@@ -25547,7 +25503,6 @@ class TubeLayoutEditor(QMainWindow):
             print(f"[on_lagan_click] 中间挡管转拉杆前置判断出错: {e}")
 
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QHBoxLayout,
             QLabel,
@@ -25555,6 +25510,7 @@ class TubeLayoutEditor(QMainWindow):
             QPushButton,
             QTableWidgetItem,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 
         # ---------- 工具函数 ----------
         def find_row_by_name(name: str):
@@ -26526,7 +26482,6 @@ class TubeLayoutEditor(QMainWindow):
     def edit_lagan_params_dialog_only(self):
         self.operation_order += 1
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QHBoxLayout,
             QLabel,
@@ -26534,6 +26489,7 @@ class TubeLayoutEditor(QMainWindow):
             QPushButton,
             QTableWidgetItem,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 
         def find_row_by_name(name: str):
             rc = self.param_table.rowCount()
@@ -26809,7 +26765,7 @@ class TubeLayoutEditor(QMainWindow):
             - 吊环圆直径 = 当前"吊环螺钉规格"对应的直径（例如 M20 → 20）
             - 利用坐标反推角度/中心距，复用 build_screw_ring（会自动写入 screw_ring_dic）
             """
-            from PyQt5.QtWidgets import QMessageBox
+            from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
             import math
             import re
             from modules.buguan.buguan_ziyong.component.lagan import delete_selected_lagans
@@ -26932,7 +26888,7 @@ class TubeLayoutEditor(QMainWindow):
             - 走完整流程（边缘管检查、删除换热管等）
             - 弹出径向开孔对话框
             """
-            from PyQt5.QtWidgets import QMessageBox
+            from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
             from modules.buguan.buguan_ziyong.component.lagan import delete_selected_lagans
 
             # 确保 selected_lagans 存在
@@ -27128,13 +27084,13 @@ class TubeLayoutEditor(QMainWindow):
 
             # 弹出径向开孔对话框（复用 on_radial_holes_click 的对话框代码）
             from PyQt5.QtWidgets import (
-                QDialog,
                 QVBoxLayout,
                 QHBoxLayout,
                 QLabel,
                 QComboBox,
                 QDialogButtonBox,
             )
+            from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 
             def _coord_equal(a, b, t=1e-6):
                 try:
@@ -27292,7 +27248,7 @@ class TubeLayoutEditor(QMainWindow):
         :param screw_ring_id: 吊环螺钉ID
         :return: True 表示已执行并弹出径向开孔对话框，False 表示未执行或失败
         """
-        from PyQt5.QtWidgets import QMessageBox
+        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
         if screw_ring_id is None:
             QMessageBox.warning(self, "提示", "未找到吊环螺钉ID")
@@ -27375,13 +27331,13 @@ class TubeLayoutEditor(QMainWindow):
         self.delete_huanreguan(selected_centers)
 
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QHBoxLayout,
             QLabel,
             QComboBox,
             QDialogButtonBox,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 
         def _coord_equal(a, b, t=1e-6):
             try:
@@ -27543,7 +27499,6 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QHBoxLayout,
             QLabel,
@@ -27551,6 +27506,7 @@ class TubeLayoutEditor(QMainWindow):
             QPushButton,
             QTableWidgetItem,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 
         def find_row_by_name(name: str):
             rc = self.param_table.rowCount()
@@ -27829,33 +27785,33 @@ class TubeLayoutEditor(QMainWindow):
         def screw_ring_to_lagan():
             """转为拉杆：删除吊环螺钉，在相同位置添加拉杆"""
             if screw_ring_id is None:
-                from PyQt5.QtWidgets import QMessageBox
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                 QMessageBox.warning(dlg, "提示", "未找到吊环螺钉ID")
                 return
             
             # 获取吊环螺钉信息
             if not hasattr(self, "screw_ring_dic") or not isinstance(self.screw_ring_dic, dict):
-                from PyQt5.QtWidgets import QMessageBox
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                 QMessageBox.warning(dlg, "提示", "吊环螺钉数据字典不存在")
                 return
             
             ring_info = self.screw_ring_dic.get(screw_ring_id)
             if not isinstance(ring_info, dict):
-                from PyQt5.QtWidgets import QMessageBox
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                 QMessageBox.warning(dlg, "提示", "未找到对应的吊环螺钉信息")
                 return
             
             # 获取吊环螺钉的中心坐标
             center_coord = ring_info.get("center")
             if not center_coord or len(center_coord) != 2:
-                from PyQt5.QtWidgets import QMessageBox
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                 QMessageBox.warning(dlg, "提示", "吊环螺钉坐标信息无效")
                 return
             
             try:
                 cx, cy = float(center_coord[0]), float(center_coord[1])
             except (TypeError, ValueError):
-                from PyQt5.QtWidgets import QMessageBox
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                 QMessageBox.warning(dlg, "提示", "吊环螺钉坐标格式错误")
                 return
             
@@ -28002,7 +27958,7 @@ class TubeLayoutEditor(QMainWindow):
                 print(f"[screw_ring_to_lagan] 添加拉杆失败: {e}")
                 import traceback
                 traceback.print_exc()
-                from PyQt5.QtWidgets import QMessageBox
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
                 QMessageBox.warning(dlg, "错误", f"添加拉杆失败: {str(e)}")
                 return
             
@@ -29466,13 +29422,13 @@ class TubeLayoutEditor(QMainWindow):
         self.delete_huanreguan(selected_centers)
 
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QHBoxLayout,
             QLabel,
             QComboBox,
             QDialogButtonBox,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 
         def _coord_equal(a, b, t=1e-6):
             try:
@@ -30010,14 +29966,13 @@ class TubeLayoutEditor(QMainWindow):
     def edit_radial_hole(self, radial_hole_item):
         """编辑径向开孔参数（双击时调用）"""
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QHBoxLayout,
             QLabel,
             QComboBox,
             QDialogButtonBox,
-            QMessageBox,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
         
         center_coord = radial_hole_item.center_coord
         
@@ -30238,7 +30193,7 @@ class TubeLayoutEditor(QMainWindow):
         """
         import math
         import re
-        from PyQt5.QtWidgets import QMessageBox
+        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
         def _coord_equal(a, b, t=1e-6):
             try:
@@ -30506,7 +30461,6 @@ class TubeLayoutEditor(QMainWindow):
         # ---------- 构造对话框 ----------
         try:
             from PyQt5.QtWidgets import (
-                QDialog,
                 QVBoxLayout,
                 QHBoxLayout,
                 QTableWidget,
@@ -30515,6 +30469,7 @@ class TubeLayoutEditor(QMainWindow):
                 QPushButton,
                 QComboBox as _QComboBoxForDialog,
             )
+            from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
             from PyQt5.QtCore import Qt
             from PyQt5.QtGui import QPixmap
         except Exception:
@@ -31113,7 +31068,7 @@ class TubeLayoutEditor(QMainWindow):
             if baffle_diameter <= 0:
                 set_warning("折流/支持板外径必须是大于0的数字!")
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                     warn_key = ("折流/支持板外径", "LE_ZERO")
                     if last_dialog_warn_key["key"] != warn_key:
@@ -31130,7 +31085,7 @@ class TubeLayoutEditor(QMainWindow):
             if max_od is not None and baffle_diameter > max_od:
                 set_warning(f"折流/支持板的外径不应大于{max_od:.1f}mm，请重新输入!")
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                     warn_key = ("折流/支持板外径", f"{baffle_diameter:.3f}", f"{max_od:.3f}")
                     if last_dialog_warn_key["key"] != warn_key:
@@ -31149,7 +31104,7 @@ class TubeLayoutEditor(QMainWindow):
             if spacing_val is not None and spacing_val <= 0:
                 set_warning("折流/支持板间距必须是大于0的数字!")
                 try:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                     warn_key = ("折流/支持板间距", "LE_ZERO")
                     if last_dialog_warn_key["key"] != warn_key:
@@ -33504,7 +33459,7 @@ class TubeLayoutEditor(QMainWindow):
                     not getattr(self, "is_loading_data", False)
                     and not suppress_conflict_warning
             ):
-                from PyQt5.QtWidgets import QMessageBox
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                 QMessageBox.warning(
                     self,
@@ -33738,7 +33693,7 @@ class TubeLayoutEditor(QMainWindow):
             ]
 
             if overlapping_indices or overlapping_direct:
-                from PyQt5.QtWidgets import QMessageBox
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                 total_conflicts = len(overlapping_indices) + len(overlapping_direct)
                 if not suppress_conflict_warning:
@@ -34399,15 +34354,14 @@ class TubeLayoutEditor(QMainWindow):
     def on_free_form_lagan_click(self):
         """自由拉杆（弹窗用下拉框；直径随形式联动；写回参数表时阻断信号，避免被刷成10）"""
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QHBoxLayout,
             QLabel,
             QComboBox,
             QPushButton,
             QTableWidgetItem,
-            QMessageBox,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
         from PyQt5.QtGui import QColor
         from PyQt5.QtWidgets import QGraphicsEllipseItem
         from PyQt5.QtCore import QPointF
@@ -34962,15 +34916,14 @@ class TubeLayoutEditor(QMainWindow):
     def edit_free_lagan(self, lagan_item):
         self.operation_order += 1
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QHBoxLayout,
             QLabel,
             QComboBox,
             QPushButton,
             QTableWidgetItem,
-            QMessageBox,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 
         # 小工具
         def find_row_by_name(name: str):
@@ -35242,7 +35195,7 @@ class TubeLayoutEditor(QMainWindow):
             - 吊环圆直径 = 当前“吊环螺钉规格”对应的直径（例如 M20 → 20）
             - 利用坐标反推角度/中心距，复用 build_screw_ring（会自动写入 screw_ring_dic）
             """
-            from PyQt5.QtWidgets import QMessageBox
+            from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
             import math
             import re
 
@@ -35348,14 +35301,13 @@ class TubeLayoutEditor(QMainWindow):
             - 直接弹出径向开孔对话框（跳过边缘管检查、不删除换热管）
             """
             from PyQt5.QtWidgets import (
-                QDialog,
                 QVBoxLayout,
                 QHBoxLayout,
                 QLabel,
                 QComboBox,
                 QDialogButtonBox,
-                QMessageBox,
             )
+            from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 
             # 获取当前自由拉杆的场景坐标
             try:
@@ -36170,7 +36122,7 @@ class TubeLayoutEditor(QMainWindow):
         return self._compute_free_lagan_row_targets(ref_x, ref_y, is_symmetry)
 
     def _validate_free_lagan_targets(self, targets, draw_diameter, lagan_length):
-        from PyQt5.QtWidgets import QMessageBox
+        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
         if not targets:
             QMessageBox.warning(
@@ -36320,7 +36272,7 @@ class TubeLayoutEditor(QMainWindow):
     ):
         do_str = self.get_tube_do()
         if do_str is None:
-            from PyQt5.QtWidgets import QMessageBox
+            from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
             QMessageBox.warning(self, "错误", "未找到换热管外径 do 参数")
             if clear_highlight:
                 self.clear_selection_highlight()
@@ -36329,7 +36281,7 @@ class TubeLayoutEditor(QMainWindow):
             do = float(do_str)
             lagan_length = float(lagan_length)
         except (TypeError, ValueError):
-            from PyQt5.QtWidgets import QMessageBox
+            from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
             QMessageBox.warning(self, "错误", "拉杆直径或换热管外径格式错误")
             if clear_highlight:
                 self.clear_selection_highlight()
@@ -36371,7 +36323,7 @@ class TubeLayoutEditor(QMainWindow):
             selected_centers: 相对坐标列表，如 [(row_label, col_label)]
             lagan_length: 拉杆直径
         """
-        from PyQt5.QtWidgets import QMessageBox
+        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
         if lagan_coord is None and not selected_centers:
             return
@@ -36570,7 +36522,7 @@ class TubeLayoutEditor(QMainWindow):
 
     def on_center_block_click(self):
         """中间挡管功能（使用新函数）"""
-        from PyQt5.QtWidgets import QMessageBox
+        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
         # 互转：选中由中间挡管转换而来的拉杆时，直接恢复为中间挡管
         try:
@@ -39002,16 +38954,15 @@ class TubeLayoutEditor(QMainWindow):
     def on_side_block_click(self):
         """旁路挡板"""
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QLabel,
             QLineEdit,
             QPushButton,
             QHBoxLayout,
-            QMessageBox,
             QComboBox,
             QTableWidgetItem,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
         import math
 
         # 检查是否选择了参考换热管
@@ -39450,7 +39401,7 @@ class TubeLayoutEditor(QMainWindow):
             float: 旁路挡板长度，如果用户取消操作则返回 None
         """
         import math
-        from PyQt5.QtWidgets import QMessageBox
+        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
         
         # 获取基础参数
         do = self.get_tube_do()
@@ -39779,7 +39730,7 @@ class TubeLayoutEditor(QMainWindow):
             float: 旁路挡板长度，如果用户取消操作则返回 None
         """
         import math
-        from PyQt5.QtWidgets import QMessageBox
+        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
         
         # 获取基础参数
         do = self.get_tube_do()
@@ -41136,16 +41087,15 @@ class TubeLayoutEditor(QMainWindow):
     def edit_side_block(self, block_item):
         self.operation_order += 1
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QHBoxLayout,
             QLabel,
             QLineEdit,
             QPushButton,
-            QMessageBox,
             QComboBox,
             QTableWidgetItem,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 
         # 1) 从参数表读取默认厚度
         param_row = -1
@@ -41675,15 +41625,14 @@ class TubeLayoutEditor(QMainWindow):
     def edit_slide(self, slide_item):
         self.operation_order += 1
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QHBoxLayout,
             QLabel,
             QLineEdit,
             QPushButton,
             QComboBox,
-            QMessageBox,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 
         # 读取当前参数表默认值
         default_values = {
@@ -42538,7 +42487,7 @@ class TubeLayoutEditor(QMainWindow):
 
         layout.addLayout(button_layout)
         # 确保导入QMessageBox
-        from PyQt5.QtWidgets import QMessageBox
+        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
         dialog.exec_()
 
@@ -43607,7 +43556,6 @@ class TubeLayoutEditor(QMainWindow):
     def on_dangban_click(self):
         """防冲板"""
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QLabel,
             QComboBox,
@@ -43615,8 +43563,8 @@ class TubeLayoutEditor(QMainWindow):
             QGridLayout,
             QHBoxLayout,
             QPushButton,
-            QMessageBox,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 
         self.sorted_current_centers_up, self.sorted_current_centers_down = (
             self.group_centers_by_y(self.current_centers)
@@ -43637,7 +43585,7 @@ class TubeLayoutEditor(QMainWindow):
                 not hasattr(self, "selected_centers")
                 or len(self.selected_centers) not in (0, 2)
         ):
-            from PyQt5.QtWidgets import QMessageBox
+            from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
             QMessageBox.warning(self, "提示", "选择换热管的数量不正确！")
             self.clear_selection_highlight()
@@ -44181,7 +44129,8 @@ class TubeLayoutEditor(QMainWindow):
 
         from PyQt5.QtCore import QPointF
         from PyQt5.QtGui import QPen, QColor, QPainterPath
-        from PyQt5.QtWidgets import QMessageBox, QGraphicsEllipseItem
+        from PyQt5.QtWidgets import QGraphicsEllipseItem
+        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
         import math
         import ast
 
@@ -44271,7 +44220,7 @@ class TubeLayoutEditor(QMainWindow):
             if computed_width is not None and computed_width > 0:
                 self.impingement_plate_thick = computed_width
             if len(selected_centers) != 2:
-                from PyQt5.QtWidgets import QMessageBox
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                 QMessageBox.warning(self, "提示", "选择换热管的数量不正确！")
                 self.clear_selection_highlight()
@@ -44558,7 +44507,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 检查是否超出大圆范围
                 if point1_distance > R_inner or point2_distance > R_inner:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                     problem_points = []
                     if point1_distance > R_inner:
@@ -44736,7 +44685,7 @@ class TubeLayoutEditor(QMainWindow):
             if computed_width is not None and computed_width > 0:
                 self.impingement_plate_thick = computed_width
             if len(selected_centers) != 2:
-                from PyQt5.QtWidgets import QMessageBox
+                from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                 QMessageBox.warning(self, "提示", "选择换热管的数量不正确！")
                 self.clear_selection_highlight()
@@ -44973,7 +44922,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 检查是否超出大圆范围
                 if P_distance > R_inner or Q_distance > R_inner:
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                     problem_points = []
                     if P_distance > R_inner:
@@ -45536,7 +45485,6 @@ class TubeLayoutEditor(QMainWindow):
     def edit_baffle(self, baffle_item):
         self.operation_order += 1
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QLabel,
             QComboBox,
@@ -45545,6 +45493,7 @@ class TubeLayoutEditor(QMainWindow):
             QHBoxLayout,
             QPushButton,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 
         # 读取当前参数表中的初始值工具
         def get_param_value(name):
@@ -46092,7 +46041,6 @@ class TubeLayoutEditor(QMainWindow):
             pass
         
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QLabel,
             QLineEdit,
@@ -46101,6 +46049,7 @@ class TubeLayoutEditor(QMainWindow):
             QComboBox,
             QTableWidgetItem,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 
         # 定义需要获取的参数及其默认值
         params = {
@@ -46671,7 +46620,7 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 在真正绘制前，先检查所有位置是否与现有元件（含已有吊环螺钉）干涉
                     import math
-                    from PyQt5.QtWidgets import QMessageBox
+                    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
                     # 角度步长：360° / count；整体以“起始方位角”作为偏移量
                     step = 360.0 / count
@@ -47325,16 +47274,15 @@ class TubeLayoutEditor(QMainWindow):
     def on_center_dangban_click(self):
         """中间挡板（仅允许在分程隔板两侧的换热管之间绘制）"""
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QLabel,
             QLineEdit,
             QPushButton,
             QHBoxLayout,
-            QMessageBox,
             QComboBox,
             QTableWidgetItem,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
         import ast
 
         def _get_layout_param(key, default=0.0):
@@ -48221,7 +48169,7 @@ class TubeLayoutEditor(QMainWindow):
         added_pairs: 内部对称去重集合（frozenset），用于避免跨递归重复绘制/统计
         """
         from PyQt5.QtGui import QPen, QBrush, QColor, QPainterPath
-        from PyQt5.QtWidgets import QMessageBox
+        from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
         import ast, math
 
         # 更新坐标分组（确保使用最新的current_centers）
@@ -48709,7 +48657,6 @@ class TubeLayoutEditor(QMainWindow):
     def edit_center_dangban(self, dangban_item):
         self.operation_order += 1
         from PyQt5.QtWidgets import (
-            QDialog,
             QVBoxLayout,
             QHBoxLayout,
             QLabel,
@@ -48717,8 +48664,8 @@ class TubeLayoutEditor(QMainWindow):
             QPushButton,
             QComboBox,
             QTableWidgetItem,
-            QMessageBox,
         )
+        from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 
         # 读取默认厚度
         param_row = -1

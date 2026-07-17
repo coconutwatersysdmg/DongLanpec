@@ -8,7 +8,8 @@
 import ast
 from PyQt5.QtCore import Qt, QPointF
 from PyQt5.QtGui import QPen, QBrush, QColor, QPainterPath
-from PyQt5.QtWidgets import QGraphicsEllipseItem, QMessageBox
+from PyQt5.QtWidgets import QGraphicsEllipseItem
+from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
 
 # 导入全局变量和辅助函数
 from ..variable import (

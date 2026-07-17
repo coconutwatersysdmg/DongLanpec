@@ -1,10 +1,15 @@
-"""项目管理及其关联页面共用的按钮、弹窗样式。"""
+"""布管界面弹窗/按钮样式总控（按钮与项目管理 guanli_new.ui 完全一致）。
 
-from PyQt5.QtWidgets import QApplication, QMessageBox, QPushButton
+用法::
+    from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
+    from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
+"""
+
+from PyQt5.QtWidgets import QApplication, QDialog, QMessageBox, QPushButton
 
 
-# 与 guanli_new.ui 中的 QPushButton 样式保持一致。
-CHANPINGUANLI_BUTTON_QSS = """
+# 与 modules/chanpinguanli/guanli_new.ui / ui_style.CHANPINGUANLI_BUTTON_QSS 完全一致，勿擅自改大
+BUGUAN_BUTTON_QSS = """
 QPushButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
                                 stop: 0 #ffffff, stop: 1 #e8edf5);
@@ -37,20 +42,49 @@ QPushButton:disabled {
 """
 
 
-CHANPINGUANLI_DIALOG_QSS = """
+# 弹窗内容略放大便于阅读；按钮仍复用上面的项目管理原尺寸样式
+BUGUAN_DIALOG_QSS = """
 QDialog, QMessageBox {
     background-color: #ffffff;
     color: #000000;
-    font-size: 14px;
+    font-size: 16px;
 }
 
 QMessageBox QLabel {
     background: transparent;
     color: #000000;
-    font-size: 14px;
-    min-width: 280px;
+    font-size: 16px;
+    min-width: 320px;
 }
-""" + CHANPINGUANLI_BUTTON_QSS
+
+QDialog QLabel {
+    background: transparent;
+    color: #000000;
+    font-size: 16px;
+}
+
+QDialog QComboBox {
+    background-color: #ffffff;
+    border: 1px solid #b8c8e0;
+    border-radius: 0px;
+    padding: 4px 8px;
+    min-height: 28px;
+    font-size: 16px;
+}
+
+QDialog QComboBox QAbstractItemView {
+    font-size: 16px;
+}
+
+QDialog QLineEdit {
+    background-color: #ffffff;
+    border: 1px solid #b8c8e0;
+    border-radius: 0px;
+    padding: 4px 8px;
+    min-height: 28px;
+    font-size: 16px;
+}
+""" + BUGUAN_BUTTON_QSS
 
 
 _BUTTON_CN_LABELS = {
@@ -65,16 +99,24 @@ _BUTTON_CN_LABELS = {
 }
 
 
-def apply_chanpinguanli_font(widget):
-    """与项目管理 main2.py 一致，继承应用当前实际字体。"""
+def apply_buguan_font(widget):
+    """与项目管理一致：继承应用当前实际字体，不额外放大。"""
     widget.setFont(QApplication.font())
     return widget
 
 
-def apply_chanpinguanli_dialog_style(dialog):
-    """为 QMessageBox、QDialog 等弹窗应用项目管理视觉样式。"""
-    apply_chanpinguanli_font(dialog)
-    dialog.setStyleSheet(CHANPINGUANLI_DIALOG_QSS)
+def apply_buguan_button_style(button):
+    """给单个按钮套用与产品管理保存按钮一致的样式。"""
+    if button is None:
+        return button
+    button.setStyleSheet(BUGUAN_BUTTON_QSS)
+    return button
+
+
+def apply_buguan_dialog_style(dialog):
+    """为 QMessageBox / QDialog 等弹窗应用布管统一视觉样式。"""
+    apply_buguan_font(dialog)
+    dialog.setStyleSheet(BUGUAN_DIALOG_QSS)
     return dialog
 
 
@@ -87,32 +129,29 @@ def localize_messagebox_buttons(msg_box):
     return msg_box
 
 
-def show_chanpinguanli_message(parent, icon, title, text, button_text="确认"):
-    """显示项目管理风格的单按钮消息框。"""
-    msg_box = QMessageBox(parent)
-    msg_box.setWindowTitle(title)
-    msg_box.setText(str(text))
-    msg_box.setIcon(icon)
+class StyledDialog(QDialog):
+    """布管参数/提示类弹窗总控。直接 `as QDialog` 替换即可。"""
 
-    confirm_button = QPushButton(button_text)
-    msg_box.addButton(confirm_button, QMessageBox.AcceptRole)
-    apply_chanpinguanli_dialog_style(msg_box)
-    msg_box.exec_()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        apply_buguan_dialog_style(self)
+
+    def exec_(self):
+        apply_buguan_dialog_style(self)
+        return super().exec_()
+
 
 class StyledMessageBox(QMessageBox):
     """
-    项目管理风格消息框总控。
+    布管消息框总控。
 
-    用法（推荐，布管等模块可直接替换导入）::
-        from modules.chanpinguanli.ui_style import StyledMessageBox as QMessageBox
-
-    兼容 QMessageBox.warning / information / critical / question 静态接口，
-    以及 `QMessageBox()` 直接构造；返回值与原生 QMessageBox 一致。
+    兼容 QMessageBox.warning / information / critical / question，
+    以及 `QMessageBox()` 直接构造；返回值与原生一致。
     """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        apply_chanpinguanli_dialog_style(self)
+        apply_buguan_dialog_style(self)
 
     @staticmethod
     def _exec_standard(parent, icon, title, text, buttons, defaultButton):
@@ -124,7 +163,7 @@ class StyledMessageBox(QMessageBox):
         if defaultButton != QMessageBox.NoButton:
             box.setDefaultButton(defaultButton)
         localize_messagebox_buttons(box)
-        apply_chanpinguanli_dialog_style(box)
+        apply_buguan_dialog_style(box)
         return box.exec_()
 
     @staticmethod
@@ -176,8 +215,6 @@ class StyledMessageBox(QMessageBox):
         )
 
     def exec_(self):
-        """构造后手动 addButton / setStandardButtons 的场景，弹出前再刷一次样式。"""
         localize_messagebox_buttons(self)
-        apply_chanpinguanli_dialog_style(self)
+        apply_buguan_dialog_style(self)
         return super().exec_()
-
