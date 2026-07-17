@@ -2900,7 +2900,7 @@ class TubeLayoutEditor(QMainWindow):
         lagan_layout.setSpacing(2)
         self.lagan_required_label = QLabel("拉杆标准要求数量-/已有数量0")
         self.lagan_required_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-        self.lagan_required_label.setStyleSheet("font-size: 18px; color: #222;")
+        self.lagan_required_label.setStyleSheet("font-size: 22px; color: #222;")
         self.lagan_required_label.setTextFormat(Qt.RichText)
         lagan_layout.addWidget(self.lagan_required_label)
         param_layout.addWidget(self.lagan_summary_container)
@@ -3177,24 +3177,33 @@ class TubeLayoutEditor(QMainWindow):
         self.action_bar = QHBoxLayout()
         self.action_bar.setSpacing(8)
 
+        # 与产品管理/保存按钮样式保持一致
         action_button_style = (
             "QPushButton {"
-            "  background-color: #ffffff;"
-            "  border: 1px solid #d0d0d0;"
-            "  border-radius: 4px;"
-            "  padding: 5px 12px;"
-            "  color: #222222;"
-            "  font-size: 12pt;"
+            "  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,"
+            "                              stop: 0 #ffffff, stop: 1 #e8edf5);"
+            "  border: 1px solid #b8c8e0;"
+            "  border-radius: 0px;"
+            "  color: #000000;"
+            "  font-size: 17px;"
+            "  padding: 8px 20px;"
+            "  text-align: center;"
+            "  min-width: 65px;"
             "}"
             "QPushButton:hover {"
-            "  background-color: #f2f2f2;"
+            "  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,"
+            "                              stop: 0 #f0f4fa, stop: 1 #d8e0ed);"
+            "  border-color: #9ab0d0;"
             "}"
             "QPushButton:pressed {"
-            "  background-color: #e0e0e0;"
+            "  background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,"
+            "                              stop: 0 #e0e6f0, stop: 1 #c8d2e0);"
+            "  border-color: #7a90b0;"
             "}"
             "QPushButton:disabled {"
-            "  background-color: #f5f5f5;"
-            "  color: #999999;"
+            "  background: #f5f7fa;"
+            "  color: #888888;"
+            "  border-color: #d0d8e5;"
             "}"
         )
 
