@@ -214,113 +214,100 @@ class StyledDialog(QDialog):
         return super().exec_()
 
 
-class _BuguanPromptDialog(QDialog):
+class StyledMessageBox(QMessageBox):
     """
-    提示/警告/询问弹窗。
-    布局对齐批量替换：白底、默认边距、正文、右下角按钮。
+    布管提示/警告总控。
+
+    原生 QMessageBox + 蓝色问号图标；
+    按钮文案中文「确认/取消」，外观用 BUGUAN_DIALOG_BUTTON_QSS（与参数弹窗一致）。
+    返回值与原生标准按钮一致，便于现有 `== QMessageBox.Yes` 判断。
     """
 
-    def __init__(self, parent, title, text, buttons, defaultButton):
-        super().__init__(parent)
-        self._result = QMessageBox.Cancel
-        self.setModal(True)
-        self.setWindowTitle("" if title is None else str(title))
-        apply_buguan_dialog_style(self)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-        root = QVBoxLayout(self)
-        # 接近 Qt 默认 / 批量替换的边距体感
-        root.setContentsMargins(12, 12, 12, 12)
-        root.setSpacing(12)
+    @staticmethod
+    def _exec_standard(parent, icon, title, text, buttons, defaultButton):
+        """
+        用原生 QMessageBox 弹出，保留系统蓝色问号图标。
+        对齐 modules.chanpinguanli.project_confirm_btn.show_confirm_dialog。
+        """
+        # 警告/提示/询问统一用 Question（蓝底白问号）
+        if icon in (QMessageBox.Warning, QMessageBox.Question, QMessageBox.Information):
+            use_icon = QMessageBox.Question
+        else:
+            use_icon = icon
 
-        msg = QLabel("" if text is None else str(text))
-        msg.setWordWrap(True)
-        msg.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        msg.setMinimumWidth(280)
-        msg.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        root.addWidget(msg)
-
-        root.addStretch(1)
-
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(8)
-        btn_row.addStretch(1)
+        box = QMessageBox(parent)
+        box.setIcon(use_icon)
+        box.setWindowTitle("" if title is None else str(title))
+        box.setText("" if text is None else str(text))
 
         try:
             flags = int(buttons)
         except Exception:
             flags = int(QMessageBox.Ok)
 
-        created = []
-        for std in _BUTTON_ORDER:
+        has_yes = bool(flags & int(QMessageBox.Yes))
+        has_no = bool(flags & int(QMessageBox.No))
+        has_ok = bool(flags & int(QMessageBox.Ok))
+        has_cancel = bool(flags & int(QMessageBox.Cancel))
+
+        created = []  # (return_std, button)
+
+        # 确认类：Yes 或 仅 Ok
+        if has_yes or has_ok:
+            btn_yes = QPushButton("确认")
+            box.addButton(btn_yes, QMessageBox.YesRole)
+            # 有 Yes 时返回 Yes（兼容 reply == QMessageBox.Yes）；仅 Ok 时返回 Ok
+            created.append((QMessageBox.Yes if has_yes else QMessageBox.Ok, btn_yes))
+
+        # 取消类：No 或 Cancel
+        if has_no or has_cancel:
+            btn_no = QPushButton("取消")
+            box.addButton(btn_no, QMessageBox.NoRole)
+            created.append((QMessageBox.No if has_no else QMessageBox.Cancel, btn_no))
+
+        # 其它标准按钮
+        extra = (
+            (QMessageBox.Retry, "重试", QMessageBox.AcceptRole),
+            (QMessageBox.Ignore, "忽略", QMessageBox.AcceptRole),
+            (QMessageBox.Abort, "中止", QMessageBox.RejectRole),
+            (QMessageBox.Close, "关闭", QMessageBox.RejectRole),
+        )
+        for std, label, role in extra:
             if flags & int(std):
-                label = _BUTTON_CN_LABELS.get(std, "确定")
                 btn = QPushButton(label)
-                apply_buguan_dialog_button_style(btn)
-                btn.clicked.connect(lambda _=False, s=std: self._on_click(s))
-                btn_row.addWidget(btn)
+                box.addButton(btn, role)
                 created.append((std, btn))
 
         if not created:
-            btn = QPushButton("确定")
+            btn_yes = QPushButton("确认")
+            box.addButton(btn_yes, QMessageBox.YesRole)
+            created.append((QMessageBox.Ok, btn_yes))
+
+        # 按钮外观与参数弹窗确定/取消一致（不要用系统纯文字分隔按钮）
+        for _, btn in created:
             apply_buguan_dialog_button_style(btn)
-            btn.clicked.connect(lambda: self._on_click(QMessageBox.Ok))
-            btn_row.addWidget(btn)
-            created.append((QMessageBox.Ok, btn))
 
-        root.addLayout(btn_row)
-
+        # 默认按钮
         default = defaultButton
-        if default == QMessageBox.NoButton and created:
-            # 单按钮默认第一个；多按钮时优先确定/是
+        if default == QMessageBox.NoButton:
             default = created[0][0]
-            for std, _btn in created:
-                if std in (QMessageBox.Ok, QMessageBox.Yes):
-                    default = std
-                    break
-        for std, btn in created:
-            if std == default:
-                btn.setDefault(True)
-                btn.setFocus()
+        for ret, btn in created:
+            if ret == default or (
+                default in (QMessageBox.Ok, QMessageBox.Yes)
+                and ret in (QMessageBox.Ok, QMessageBox.Yes)
+            ):
+                box.setDefaultButton(btn)
                 break
 
-        self.adjustSize()
-        self.resize(max(self.width(), 360), max(self.height(), 120))
-
-    def _on_click(self, std_btn):
-        self._result = std_btn
-        if std_btn in (
-            QMessageBox.Yes,
-            QMessageBox.Ok,
-            QMessageBox.Retry,
-            QMessageBox.Ignore,
-        ):
-            self.accept()
-        else:
-            self.reject()
-
-    def exec_result(self):
-        self.exec_()
-        return self._result
-
-
-class StyledMessageBox(QMessageBox):
-    """
-    布管消息框总控。
-    warning / information / critical / question → 批量替换同款自定义弹窗。
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        try:
-            self.setStyleSheet(BUGUAN_DIALOG_QSS)
-        except Exception:
-            pass
-
-    @staticmethod
-    def _exec_standard(parent, icon, title, text, buttons, defaultButton):
-        _ = icon
-        dlg = _BuguanPromptDialog(parent, title, text, buttons, defaultButton)
-        return dlg.exec_result()
+        box.exec_()
+        clicked = box.clickedButton()
+        for ret, btn in created:
+            if clicked is btn:
+                return ret
+        return QMessageBox.Cancel
 
     @staticmethod
     def information(
@@ -371,9 +358,30 @@ class StyledMessageBox(QMessageBox):
         )
 
     def exec_(self):
-        localize_messagebox_buttons(self)
+        # 直接构造的场景：补蓝色问号 + 中文按钮，不套自定义灰白 QSS（以免盖掉系统图标）
         try:
-            self.setStyleSheet(BUGUAN_DIALOG_QSS)
+            if self.icon() in (
+                QMessageBox.NoIcon,
+                QMessageBox.Warning,
+                QMessageBox.Information,
+            ):
+                self.setIcon(QMessageBox.Question)
+        except Exception:
+            pass
+        localize_messagebox_buttons(self)
+        # 手动 addButton 的自定义按钮也尽量中文化，并统一按钮样式
+        try:
+            for btn in self.buttons():
+                t = btn.text().strip()
+                if t in ("OK", "&OK", "Ok"):
+                    btn.setText("确认")
+                elif t in ("Yes", "&Yes"):
+                    btn.setText("确认")
+                elif t in ("No", "&No"):
+                    btn.setText("取消")
+                elif t in ("Cancel", "&Cancel"):
+                    btn.setText("取消")
+                apply_buguan_dialog_button_style(btn)
         except Exception:
             pass
         return super().exec_()
