@@ -4,7 +4,11 @@ from PyQt5.QtWidgets import (
     QAbstractItemView, QPushButton, QScrollArea, QGridLayout, QGraphicsTextItem,
     QGraphicsRectItem
 )
-from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
+from modules.buguan.buguan_ziyong.ui_style import (
+    StyledDialog as QDialog,
+    BUGUAN_BUTTON_QSS,
+    BUGUAN_DIALOG_BUTTON_QSS,
+)
 from PyQt5.QtCore import Qt, QTimer, QSize, QRectF
 from PyQt5.QtGui import QBrush, QColor, QPen, QIcon, QPixmap, QFont, QPainterPath
 import sys
@@ -218,7 +222,6 @@ class AutoAddDialog(QDialog):
         layout.addWidget(self.table)
 
         # 确定/取消按钮（弹窗内：批量替换同款）
-        from modules.buguan.buguan_ziyong.ui_style import BUGUAN_DIALOG_BUTTON_QSS
 
         btn_layout = QHBoxLayout()
         btn_layout.addStretch(1)
@@ -491,7 +494,6 @@ class AxialDesignPage(QWidget):
         button_layout.setContentsMargins(0, 0, 0, 0)
         button_layout.setSpacing(10)
         button_layout.addStretch(1)
-        from modules.buguan.buguan_ziyong.ui_style import BUGUAN_BUTTON_QSS
 
         btn_style = BUGUAN_BUTTON_QSS
 
