@@ -14,6 +14,37 @@ def generate_unique_tab_id():
     """生成唯一的Tab_ID（时间戳+随机数）"""
     return f"TAB_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
 
+
+def collect_ordered_guankou_categories(guankou_para_info):
+    """按模板/附加参数数据中首次出现顺序收集所属分类（不硬编码管程/壳程）。"""
+    ordered = []
+    seen = set()
+    for item in guankou_para_info or []:
+        if not isinstance(item, dict):
+            continue
+        category = str(item.get("所属分类") or item.get("类别") or "").strip()
+        if not category or category in seen:
+            continue
+        seen.add(category)
+        ordered.append(category)
+    return ordered
+
+
+def infer_guankou_base_tab_count(categories, product_type=None):
+    """
+    推断“初始 tab”最少保留数量：
+    - 管壳式热交换器 / 分类名含管程或壳程 → 至少 2
+    - 容器等单分类场景 → 至少 1
+    """
+    cats = [str(c).strip() for c in (categories or []) if str(c).strip()]
+    pt = str(product_type or "").strip()
+    if any(c in ("管口材料分类-管程", "管口材料分类-壳程") for c in cats):
+        return 2
+    if "热交换器" in pt or "换热器" in pt:
+        return 2
+    return 1 if cats else 1
+
+
 db_config_1 = {
     'host': 'localhost',
     'port': 3306,
@@ -290,8 +321,8 @@ def insert_element_data(element_original_info, product_id, template_name):
                 sql = """
                     INSERT INTO 产品设计活动表_元件材料表
                     (元件ID, 元件名称, 材料类型, 材料牌号, 材料标准, 
-                     供货状态, 有无覆层, 定义状态, 所处部件, 元件示意图, 产品ID, 模板名称)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     供货状态, 有无覆层, 定义状态, 所处部件, 元件示意图, 产品ID, 模板名称, 是否显示)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 cursor.execute(sql, (
                     item['元件ID'],
@@ -305,7 +336,8 @@ def insert_element_data(element_original_info, product_id, template_name):
                     item['所属部件'],
                     item['零件示意图'],
                     product_id,
-                    template_name
+                    template_name,
+                    '是',
                 ))
 
             # 提交事务
@@ -317,45 +349,6 @@ def insert_element_data(element_original_info, product_id, template_name):
         connection.close()
 
 
-def insert_guankou_material_data(material_info, product_id, template_name):
-    """将管口材料定义数据插入到数据库中，同时插入产品ID"""
-    connection = get_connection(**db_config_1)
-    try:
-        with connection.cursor() as cursor:
-            # 先查看是否存在该产品ID对应的数据
-            cursor.execute("SELECT COUNT(*) FROM 产品设计活动表_管口零件材料表 WHERE 产品ID = %s", (product_id,))
-            result = cursor.fetchone()  # 获取查询结果
-            if result['COUNT(*)'] > 0:
-                print(f"产品ID {product_id} 对应的数据已存在，跳过插入！")
-                return  # 如果数据已存在，直接返回，不插入
-
-            for item in material_info:
-                # 插入数据到管口材料定义表
-                sql = """
-                    INSERT INTO 产品设计活动表_管口零件材料表
-                    (管口零件ID, 零件名称, 材料类型, 材料牌号, 材料标准, 供货状态, 产品ID, 模板名称, 类别, 元件示意图)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                """
-                cursor.execute(sql, (
-                    item['管口零件ID'],
-                    item['零件名称'],
-                    item['材料类型'],
-                    item['材料牌号'],
-                    item['材料标准'],
-                    item['供货状态'],
-                    product_id,
-                    template_name,
-                    "管口材料分类1",
-                    item['元件示意图']
-                ))
-
-            # 提交事务
-            connection.commit()
-            # print("管口数据已成功插入数据库！")
-    except pymysql.MySQLError as err:  # 使用 pymysql.MySQLError 来捕获异常
-        print(f"插入数据时出错: {err}")
-    finally:
-        connection.close()
 
 
 def query_template_guankou_para_data(template_id):
@@ -376,123 +369,56 @@ def query_template_guankou_para_data(template_id):
 
 
 def insert_guankou_para_data(product_id, guankou_para_info, template_name, template_id=None):
-    """将材料库的管口参数插入产品设计活动库中，自动删除旧数据
-    注意：确保至少有两个分类（管口材料分类1和管口材料分类2）
-    
-    Args:
-        product_id: 产品ID
-        guankou_para_info: 从模板库查询的管口参数数据
-        template_name: 模板名称
-        template_id: 模板ID（可选，用于查询"管口材料分类2"的数据）
+    """将材料库的管口参数插入产品设计活动库中，自动删除旧数据。
+
+    分类完全以模板库 管口附加参数表.所属分类 为准：
+    - 换热器模板通常有「管口材料分类-管程/壳程」
+    - 容器模板通常只有「管口材料分类1」
+    不再强制补齐壳程分类。
     """
     connection = get_connection(**db_config_1)
     try:
         with connection.cursor() as cursor:
-            # ✅ 先删除旧数据
             cursor.execute(
                 "DELETE FROM 产品设计活动表_管口附加参数表 WHERE 产品ID = %s",
                 (product_id,)
             )
             print(f"[清除] 已删除产品ID {product_id} 的旧管口参数数据")
 
-            # 按所属分类分组，为每个分类生成唯一的Tab_ID
-            category_tab_map = {}  # {所属分类: Tab_ID}
-            
-            # 收集所有出现的分类（使用set去重）
-            seen_categories = set()
-            for item in guankou_para_info:
-                category = item.get('所属分类', '管口材料分类-管程')
-                seen_categories.add(category)
-            
-            # ✅ 确保至少有两个分类：管口材料分类-管程和管口材料分类-壳程
-            if "管口材料分类-管程" not in seen_categories:
-                seen_categories.add("管口材料分类-管程")
-            if "管口材料分类-壳程" not in seen_categories:
-                seen_categories.add("管口材料分类-壳程")
-            
-            # ✅ 按固定顺序生成Tab_ID：先管程，再壳程，最后是其他分类
-            # 确保"管口材料分类-管程"的Tab_ID总是最小的
-            ordered_categories = []
-            if "管口材料分类-管程" in seen_categories:
-                ordered_categories.append("管口材料分类-管程")
-            if "管口材料分类-壳程" in seen_categories:
-                ordered_categories.append("管口材料分类-壳程")
-            # 添加其他分类（按字母顺序，确保一致性）
-            other_categories = sorted([c for c in seen_categories if c not in ["管口材料分类-管程", "管口材料分类-壳程"]])
-            ordered_categories.extend(other_categories)
-            
-            # ✅ 按顺序为每个分类生成Tab_ID（确保分类1的Tab_ID更小）
-            # 为了确保字符串排序时分类1的Tab_ID更小，我们需要确保时间戳或随机数部分有差异
+            ordered_categories = collect_ordered_guankou_categories(guankou_para_info)
+            if not ordered_categories:
+                print(f"[警告] 模板未提供任何管口附加参数分类（template_id={template_id}）")
+                connection.commit()
+                return
+
+            category_tab_map = {}
             base_timestamp = int(time.time() * 1000)
             for idx, category in enumerate(ordered_categories):
-                # 为每个分类使用递增的时间戳，确保先生成的Tab_ID更小
-                # 分类1使用base_timestamp，分类2使用base_timestamp+1，以此类推
-                timestamp = base_timestamp + idx
-                random_num = random.randint(1000, 9999)
-                category_tab_map[category] = f"TAB_{timestamp}_{random_num}"
+                category_tab_map[category] = f"TAB_{base_timestamp + idx}_{random.randint(1000, 9999)}"
                 print(f"[初始化] 为分类 {category} 生成Tab_ID: {category_tab_map[category]}")
-            
-            # 插入模板数据
+
+            default_category = ordered_categories[0]
             for item in guankou_para_info:
-                category = item.get('所属分类', '管口材料分类-管程')
-                
-                sql = """
+                category = str(item.get("所属分类") or "").strip() or default_category
+                if category not in category_tab_map:
+                    category_tab_map[category] = f"TAB_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+                cursor.execute(
+                    """
                     INSERT INTO 产品设计活动表_管口附加参数表
                     (管口零件参数ID, 产品ID, 参数名称, 参数值, 参数单位, 类别, Tab_ID, 模板名称)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-                """
-                cursor.execute(sql, (
-                    item['管口附加参数ID'],
-                    product_id,
-                    item['参数名称'],
-                    item['参数数值'],
-                    item['参数单位'],
-                    category,
-                    category_tab_map[category],
-                    template_name
-                ))
-            
-            # ✅ 如果模板数据中没有"管口材料分类-壳程"，从模板库查询"管口材料分类-壳程"的数据
-            if "管口材料分类-壳程" not in [item.get('所属分类', '管口材料分类-管程') for item in guankou_para_info]:
-                # 如果提供了template_id，从模板库查询"管口材料分类2"的数据
-                if template_id:
-                    # 从模板库查询"管口材料分类2"的数据
-                    connection_template = get_connection(**db_config_2)
-                    try:
-                        with connection_template.cursor() as cursor_template:
-                            sql_template = """
-                                SELECT 管口附加参数ID, 参数名称, 参数数值, 参数单位, 所属分类
-                                FROM 管口附加参数表
-                                WHERE 模板ID = %s AND 所属分类 = '管口材料分类-壳程';
-                            """
-                            cursor_template.execute(sql_template, (template_id,))
-                            category2_items = cursor_template.fetchall()
-                            
-                            if category2_items:
-                                # 插入"管口材料分类2"的数据（和分类1一样的方式）
-                                for item in category2_items:
-                                    sql = """
-                                        INSERT INTO 产品设计活动表_管口附加参数表
-                                        (管口零件参数ID, 产品ID, 参数名称, 参数值, 参数单位, 类别, Tab_ID, 模板名称)
-                                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-                                    """
-                                    cursor.execute(sql, (
-                                        item['管口附加参数ID'],
-                                        product_id,
-                                        item['参数名称'],
-                                        item['参数数值'],
-                                        item['参数单位'],
-                                    '管口材料分类-壳程',
-                                    category_tab_map['管口材料分类-壳程'],
-                                        template_name
-                                    ))
-                                print(f"[初始化] 从模板库为管口材料分类-壳程插入了 {len(category2_items)} 条数据")
-                            else:
-                                print(f"[警告] 模板库中没有找到管口材料分类-壳程的数据（模板ID: {template_id}）")
-                    finally:
-                        connection_template.close()
-                else:
-                    print(f"[警告] 未提供template_id，无法从模板库查询管口材料分类-壳程的数据")
+                    """,
+                    (
+                        item["管口附加参数ID"],
+                        product_id,
+                        item["参数名称"],
+                        item["参数数值"],
+                        item["参数单位"],
+                        category,
+                        category_tab_map[category],
+                        template_name,
+                    ),
+                )
 
             connection.commit()
             print(f"✅ 管口零件参数信息已重新插入，分类: {list(category_tab_map.keys())}")
@@ -705,7 +631,7 @@ def insert_all_guankou_param(all_guankou_param_data, category_label, product_id,
         connection.close()
 
 
-def load_element_info(product_id):
+def load_element_info(product_id, only_visible=False):
     # 查询活动库里的零件列表
     connection = get_connection(**db_config_1)
     try:
@@ -722,10 +648,13 @@ def load_element_info(product_id):
                     定义状态 AS 是否定义, 
                     所处部件 AS 所属部件,
                     元件示意图 AS 零件示意图,
-                    模板名称
+                    模板名称,
+                    是否显示
                 FROM 产品设计活动表_元件材料表
                 WHERE 产品ID = %s
                 """
+            if only_visible:
+                sql += " AND (是否显示 IS NULL OR 是否显示 = '' OR 是否显示 = '是')"
             cursor.execute(sql, (product_id, ))
             result = cursor.fetchall()
             return result
@@ -1541,26 +1470,55 @@ def query_guankou_default(product_form, product_type):
     finally:
         connection.close()
 
-def _component_to_material_category(component):
-    """根据管口所属元件判断材料分类：管程/管箱→管口材料分类-管程，壳程/壳体→管口材料分类-壳程"""
-    s = str(component or '')
-    if '管程' in s or '管箱' in s:
-        return '管口材料分类-管程'
-    # BES/BEM 等型式里常见“外头盖圆筒/外头盖…”：实际应归入壳程侧材料分类
-    # 否则会导致“材料分类=None”，从而不默认落到壳程 Tab。
-    if '壳程' in s or '壳体' in s or '外头盖' in s:
-        return '管口材料分类-壳程'
+def _component_to_material_category(component, available_categories=None):
+    """根据管口所属元件 + 当前产品可用分类，解析材料分类。
+
+    - 仅 1 个可用分类（容器）→ 全部归入该分类
+    - 存在管程/壳程分类（换热器）→ 按所属元件关键字映射
+    """
+    cats = [str(c).strip() for c in (available_categories or []) if str(c).strip()]
+    if len(cats) == 1:
+        return cats[0]
+
+    s = str(component or "")
+    tube_name = "管口材料分类-管程"
+    shell_name = "管口材料分类-壳程"
+
+    if "管程" in s or "管箱" in s or "管板" in s:
+        if not cats or tube_name in cats:
+            return tube_name
+        for c in cats:
+            if "管程" in c:
+                return c
+    if "壳程" in s or "壳体" in s or "外头盖" in s or "锥壳" in s:
+        if not cats or shell_name in cats:
+            return shell_name
+        for c in cats:
+            if "壳程" in c:
+                return c
+
+    if cats:
+        return cats[0]
     return None
 
 
-def insert_guankou_info(product_id, guankou_info, product_form=None, product_type=None):
+def insert_guankou_info(product_id, guankou_info, product_form=None, product_type=None,
+                        available_categories=None):
     """将元件库/产品表的管口信息插入管口类别表中，自动删除旧数据
 
     材料分类依据 管口所属元件（不再用管口功能）：
       1) 优先从 产品设计活动表_管口表 读 管口代号、管口所属元件 → 材料分类
       2) 若 1) 无，从 guankou_info 的 管口所属元件
       3) 若仍无，且提供 product_form/product_type，从 元件库.管口默认表 读 管口所属元件
+
+    available_categories: 当前产品管口附加参数表中的分类列表；容器单分类时全部归入该类。
     """
+    if available_categories is None:
+        try:
+            available_categories = query_all_guankou_categories(product_id) or []
+        except Exception:
+            available_categories = []
+
     connection = get_connection(**db_config_1)
     try:
         with connection.cursor(pymysql.cursors.DictCursor) as cursor:
@@ -1586,7 +1544,7 @@ def insert_guankou_info(product_id, guankou_info, product_form=None, product_typ
                     comp = row.get('管口所属元件', '')
                     if not code:
                         continue
-                    cat = _component_to_material_category(comp)
+                    cat = _component_to_material_category(comp, available_categories)
                     if cat:
                         guankou_code_to_category[code] = cat
                 if guankou_rows:
@@ -1607,7 +1565,7 @@ def insert_guankou_info(product_id, guankou_info, product_form=None, product_typ
                         comp = (item[2] if len(item) > 2 else '') or ''
                     if not code:
                         continue
-                    cat = _component_to_material_category(comp)
+                    cat = _component_to_material_category(comp, available_categories)
                     if cat:
                         guankou_code_to_category[code] = cat
 
@@ -1627,7 +1585,7 @@ def insert_guankou_info(product_id, guankou_info, product_form=None, product_typ
                             comp = row.get('管口所属元件', '')
                             if not code:
                                 continue
-                            cat = _component_to_material_category(comp)
+                            cat = _component_to_material_category(comp, available_categories)
                             if cat:
                                 guankou_code_to_category[code] = cat
                         print(f"[管口分配] 从管口默认表(管口所属元件)查询到 {len(guankou_code_to_category)} 个管口的材料分类映射")
@@ -1656,6 +1614,8 @@ def insert_guankou_info(product_id, guankou_info, product_form=None, product_typ
                     component = item[2] if len(item) > 2 else ''
 
                 material_category = guankou_code_to_category.get(code)
+                if not material_category:
+                    material_category = _component_to_material_category(component, available_categories)
 
                 if not material_category and code:
                     print(f"[警告] 管口代号 {code} 未找到对应的管口所属元件映射，材料分类为 None")

@@ -248,6 +248,53 @@ class MaterialInstantDelegate(ComboDelegate):
         super().setModelData(editor, model, index)
 
 
+class StructuralSteelMaterialDelegate(MaterialInstantDelegate):
+    """
+    结构钢材料四字段专用：
+    - 仅在用户 activated 选择时写回并联动（避免 currentIndexChanged 在展开下拉时误提交）
+    - setModelData 后强制刷新视图，确保单元格立即显示所选值
+    """
+    def createEditor(self, parent, option, index):
+        ed = QComboBox(parent)
+        ed.setEditable(False)
+
+        opts = self.options or []
+        if not opts or (opts and opts[0] != ""):
+            opts = [""] + list(dict.fromkeys(opts))
+        ed.addItems(opts)
+        if self.table:
+            self.highlight_row(index.row())
+
+        cur = index.data() or ""
+        i = ed.findText(cur)
+        ed.blockSignals(True)
+        ed.setCurrentIndex(max(0, i))
+        ed.blockSignals(False)
+
+        QTimer.singleShot(0, ed.showPopup)
+
+        def _commit_and_close():
+            self.commitData.emit(ed)
+            self.closeEditor.emit(ed, QStyledItemDelegate.NoHint)
+            if self.table:
+                r, c = index.row(), index.column()
+                self.table.setCurrentCell(r, c)
+            if self.on_pick:
+                r, c = index.row(), index.column()
+                new_text = ed.currentText()
+                QtCore.QTimer.singleShot(0, lambda: self.on_pick(self.field_name, new_text, r, c))
+
+        ed.activated.connect(lambda _=None: _commit_and_close())
+        return ed
+
+    def setModelData(self, editor, model, index):
+        super().setModelData(editor, model, index)
+        if self.table:
+            r, c = index.row(), index.column()
+            self.table.setCurrentCell(r, c)
+            self.table.viewport().update()
+
+
 
 
 

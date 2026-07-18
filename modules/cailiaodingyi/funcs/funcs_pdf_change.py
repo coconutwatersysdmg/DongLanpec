@@ -26,6 +26,23 @@ db_config_2 = {
     'database': '材料库'
 }
 
+db_config_config = {
+    'host': 'localhost',
+    'port': 3306,
+    'user': 'root',
+    'password': '123456',
+    'database': '配置库'
+}
+
+CLADDING_GROOVE_DEPTH_CONFIG_ID = "1.1.2"
+CLADDING_GROOVE_DEPTH_LEGACY_DEFAULT = "2"
+QIUGUANXING_FENGTOU_ELEMENT_NAME = "球冠形封头"
+QIUGUAN_GROOVE_DEPTH_CONFIG_ENABLED_ID = "1.5.5"
+QIUGUAN_GROOVE_DN_THRESHOLD_CONFIG_ID = "1.5.5.1"
+_CLADDING_GROOVE_DEPTH_FROM_CONFIG_CACHE = None
+_QIUGUAN_GROOVE_CONFIG_ENABLED_CACHE = None
+_QIUGUAN_GROOVE_DN_THRESHOLD_CACHE = None
+
 # 元件定义界面冗长调试输出总开关（默认关闭；开发排查时在下方置 True）
 # 控制：垫片尺寸/PN 计算、[DBG] 垫片联动、支座/铭牌/保温的合并表与支座联动、[铭牌附属元件显隐]、[保温装置-螺柱型式显隐]、
 # [DBG][fastener_render]/[DBG][fastener_data]、材料组识别与 get_options_for_param 的[警告]、
@@ -43,6 +60,105 @@ _GASKET_DIM_CACHE = {}
 _FLANGE_MATERIAL_CACHE = {}
 _COMPUTE_PN_CACHE = {}
 _PRODUCT_FORM_CACHE = {}
+
+# 元件名称对照表：别名名称 -> 标准名称（材料库规则沿用换热器命名）
+_COMPONENT_NAME_ALIAS_LOADED = False
+_ALIAS_TO_STANDARD: Dict[str, str] = {}
+_STANDARD_TO_ALIASES: Dict[str, List[str]] = {}
+
+
+def invalidate_component_name_alias_cache():
+    global _COMPONENT_NAME_ALIAS_LOADED
+    _COMPONENT_NAME_ALIAS_LOADED = False
+    _ALIAS_TO_STANDARD.clear()
+    _STANDARD_TO_ALIASES.clear()
+
+
+def _load_component_name_alias_maps(force_reload: bool = False):
+    global _COMPONENT_NAME_ALIAS_LOADED, _ALIAS_TO_STANDARD, _STANDARD_TO_ALIASES
+    if _COMPONENT_NAME_ALIAS_LOADED and not force_reload:
+        return
+    alias_to_std: Dict[str, str] = {}
+    std_to_aliases: Dict[str, List[str]] = {}
+    conn = get_connection(**db_config_2)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 别名名称, 标准名称 FROM 元件名称对照表")
+            rows = cur.fetchall() or []
+        for row in rows:
+            if isinstance(row, dict):
+                alias = (row.get("别名名称") or "").strip()
+                std = (row.get("标准名称") or "").strip()
+            else:
+                alias = (row[0] or "").strip() if len(row) > 0 else ""
+                std = (row[1] or "").strip() if len(row) > 1 else ""
+            if not alias or not std:
+                continue
+            alias_to_std[alias] = std
+            std_to_aliases.setdefault(std, [])
+            if alias not in std_to_aliases[std]:
+                std_to_aliases[std].append(alias)
+    except Exception as e:
+        print(f"[元件名称对照] 加载失败: {e}")
+        return
+    finally:
+        conn.close()
+    _ALIAS_TO_STANDARD = alias_to_std
+    _STANDARD_TO_ALIASES = std_to_aliases
+    _COMPONENT_NAME_ALIAS_LOADED = True
+
+
+def resolve_to_standard_name(name: str) -> str:
+    """查材料库配置前：别名 -> 标准名称；已是标准名或未配置则原样返回。"""
+    n = (name or "").strip()
+    if not n:
+        return ""
+    _load_component_name_alias_maps()
+    # 对照表后建/后改时，避免进程内缓存一直为空
+    if not _ALIAS_TO_STANDARD:
+        _load_component_name_alias_maps(force_reload=True)
+    return _ALIAS_TO_STANDARD.get(n, n)
+
+
+def resolve_element_name_candidates(name: str) -> List[str]:
+    """查产品设计活动库时：依次尝试输入名、标准名及全部别名。"""
+    n = (name or "").strip()
+    if not n:
+        return []
+    _load_component_name_alias_maps()
+    std = _ALIAS_TO_STANDARD.get(n, n)
+    candidates: List[str] = []
+    for c in (n, std, *(_STANDARD_TO_ALIASES.get(std, []))):
+        if c and c not in candidates:
+            candidates.append(c)
+    return candidates
+
+
+def find_product_element_ids_by_name(product_id: str, element_name: str) -> List[Any]:
+    """按元件名称在产品库中查找元件ID（兼容别名/标准名）。"""
+    if not product_id or not (element_name or "").strip():
+        return []
+    ids: List[Any] = []
+    conn = get_connection(**db_config_1)
+    try:
+        with conn.cursor() as cur:
+            for candidate in resolve_element_name_candidates(element_name):
+                cur.execute(
+                    """
+                    SELECT 元件ID
+                    FROM 产品设计活动表_元件材料表
+                    WHERE 产品ID = %s AND 元件名称 = %s
+                    """,
+                    (product_id, candidate),
+                )
+                for row in cur.fetchall() or []:
+                    eid = row.get("元件ID") if isinstance(row, dict) else row[0]
+                    if eid and eid not in ids:
+                        ids.append(eid)
+    finally:
+        conn.close()
+    return ids
+
 
 def get_program_recommend_reset_param_names() -> Set[str]:
     """
@@ -163,40 +279,42 @@ def load_guankou_para_data(guankou_id, product_id, category_label=None):
         connection.close()
 
 
-def insert_or_update_element_data(element_original_info, product_id, template_name):
-    """根据产品ID判断是否更新数据，如果存在模板名称不同则删除原记录并插入新数据"""
+def insert_or_update_element_data(element_original_info, product_id, template_name, force_reload=False):
+    """根据产品ID判断是否更新数据，如果存在模板名称不同则删除原记录并插入新数据。
+    force_reload=True 时强制按新模板重建（模板切换场景，避免早退导致可见元件材料未写入）。
+    """
     connection = get_connection(**db_config_1)
     try:
         with connection.cursor() as cursor:
-            # 查询元件材料表是否存在该产品ID对应的模板
-            cursor.execute("""
-                SELECT COUNT(*) 
-                FROM 产品设计活动表_元件材料表 
-                WHERE 产品ID = %s AND 模板名称 = %s
-            """, (product_id, template_name, ))
-            result = cursor.fetchone()  # 获取查询结果
-            print(f"更换模板后的零件列表{result['COUNT(*)']}")
-
-            # 如果找到该产品ID的模板名称的记录则保留
-            if result['COUNT(*)'] > 0:
-                return
-
-            # 如果没找到该产品ID的模板名称的记录，先删除原模板对应的产品零件信息
-            if result['COUNT(*)'] == 0:
-                print(f"产品ID {product_id} 对应的记录已存在，模板名称不同，执行删除操作")
+            if not force_reload:
+                # 查询元件材料表是否存在该产品ID对应的模板
                 cursor.execute("""
-                    DELETE FROM 产品设计活动表_元件材料表 
-                    WHERE 产品ID = %s
-                """, (product_id, ))
-                print(f"已删除产品ID为:{product_id}的零件列表信息")
+                    SELECT COUNT(*) 
+                    FROM 产品设计活动表_元件材料表 
+                    WHERE 产品ID = %s AND 模板名称 = %s
+                """, (product_id, template_name, ))
+                result = cursor.fetchone()  # 获取查询结果
+                print(f"更换模板后的零件列表{result['COUNT(*)']}")
+
+                # 如果找到该产品ID的模板名称的记录则保留
+                if result['COUNT(*)'] > 0:
+                    return
+
+            # 强制重建，或模板名称不同：先删除原记录再插入
+            print(f"产品ID {product_id} 执行元件材料表重建，模板={template_name}，force={force_reload}")
+            cursor.execute("""
+                DELETE FROM 产品设计活动表_元件材料表 
+                WHERE 产品ID = %s
+            """, (product_id, ))
+            print(f"已删除产品ID为:{product_id}的零件列表信息")
 
             for item in element_original_info:
                 # 插入当前模板对应的零件信息
                 sql = """
                     INSERT INTO 产品设计活动表_元件材料表 
                     (元件ID, 元件名称, 材料类型, 材料牌号, 材料标准, 
-                     供货状态, 有无覆层, 定义状态, 所处部件, 元件示意图, 产品ID, 模板名称)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     供货状态, 有无覆层, 定义状态, 所处部件, 元件示意图, 产品ID, 模板名称, 是否显示)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 cursor.execute(sql, (
                     item['元件ID'],
@@ -210,7 +328,8 @@ def insert_or_update_element_data(element_original_info, product_id, template_na
                     item['所属部件'],
                     item['零件示意图'],
                     product_id,
-                    template_name
+                    template_name,
+                    '是',
                 ))
 
             # 提交事务
@@ -276,223 +395,81 @@ def insert_or_update_element_data(element_original_info, product_id, template_na
 
 
 def insert_or_update_guankou_para_data(product_id, guankou_para_info, template_name, template_id=None):
-    """根据产品ID判断是否更新数据，如果存在模板名称不同则删除原记录并插入新数据
-    注意：保留现有的Tab_ID，如果不存在则生成新的Tab_ID
-    确保至少有两个分类（管口材料分类1和管口材料分类2）
-    
-    Args:
-        product_id: 产品ID
-        guankou_para_info: 从模板库查询的管口参数数据
-        template_name: 模板名称
-        template_id: 模板ID（可选，用于查询"管口材料分类2"的数据）
+    """根据产品ID判断是否更新数据，如果存在则删除原记录并插入新数据。
+
+    分类完全以模板库 管口附加参数表.所属分类 为准，不再强制补齐壳程分类。
     """
-    from modules.cailiaodingyi.funcs.funcs_pdf_input import generate_unique_tab_id
-    
+    from modules.cailiaodingyi.funcs.funcs_pdf_input import (
+        collect_ordered_guankou_categories,
+    )
+    import time
+    import random
+
     connection = get_connection(**db_config_1)
     try:
         with connection.cursor() as cursor:
-            # ✅ 关键：在删除之前先查询并保存现有的Tab_ID映射
-            cursor.execute("""
-                SELECT DISTINCT 类别, Tab_ID 
-                FROM 产品设计活动表_管口附加参数表 
-                WHERE 产品ID = %s AND Tab_ID IS NOT NULL AND Tab_ID != ''
-            """, (product_id,))
-            existing_tab_map = {row['类别']: row['Tab_ID'] for row in cursor.fetchall()}
-            print(f"[切换模板] 查询到现有Tab_ID映射: {existing_tab_map}")
-            
-            # ✅ 调试：打印模板数据中的分类信息
-            categories_in_guankou_para_info = set()
-            for item in guankou_para_info:
-                category = item.get('所属分类', '管口材料分类-管程')
-                categories_in_guankou_para_info.add(category)
+            categories_in_guankou_para_info = set(collect_ordered_guankou_categories(guankou_para_info))
             print(f"[切换模板] 模板数据(guankou_para_info)中的分类: {categories_in_guankou_para_info}")
             print(f"[切换模板] 模板数据总数: {len(guankou_para_info)}")
-            
-            # 查询管口材料参数数据表中是否存在该产品ID对应的管口材料参数信息
-            cursor.execute("SELECT COUNT(*) FROM 产品设计活动表_管口附加参数表 WHERE 产品ID = %s ", (product_id,))
-            result = cursor.fetchone() # 获取查询结果
 
-            # 如果找到该产品ID对应的管口材料参数信息,进行删除操作
-            if result['COUNT(*)'] > 0:
+            cursor.execute(
+                "SELECT COUNT(*) FROM 产品设计活动表_管口附加参数表 WHERE 产品ID = %s ",
+                (product_id,),
+            )
+            result = cursor.fetchone()
+
+            if result["COUNT(*)"] > 0:
                 print(f"产品ID {product_id} 对应的管口材料参数信息已存在，执行删除操作")
-                cursor.execute("""
-                                    DELETE FROM 产品设计活动表_管口附加参数表
-                                    WHERE 产品ID = %s
-                                """, (product_id,))
+                cursor.execute(
+                    """
+                    DELETE FROM 产品设计活动表_管口附加参数表
+                    WHERE 产品ID = %s
+                    """,
+                    (product_id,),
+                )
                 print(f"已删除产品ID:{product_id}的管口零件")
-            # ⚠️ 注意：既然已经把当前产品的管口参数记录全部清空，
-                # 之前查询到的 existing_tab_map（来自旧数据）就不再可靠。
-                # 如果继续“保留壳程的旧 Tab_ID、只为管程生成新 Tab_ID”，
-                # 在你刚才描述的场景（先删管程 tab，再切换模板）下，
-                # 会出现“壳程沿用老 Tab_ID、管程用新的更大的 Tab_ID”，导致重新进入时按 Tab_ID/ID 排序顺序颠倒。
-                #
-                # 因此这里显式丢弃旧映射，后续统一按 ordered_categories 顺序为所有分类重新生成 Tab_ID：
-                existing_tab_map = {}
 
-            # 按所属分类分组，为每个分类保留或生成Tab_ID
-            category_tab_map = {}  # {所属分类: Tab_ID}
-            
-            # ✅ 先收集所有分类，确保"管口材料分类1"和"管口材料分类2"都有Tab_ID
-            categories_in_data = set()
-            for item in guankou_para_info:
-                category = item.get('所属分类', '管口材料分类-管程')
-                categories_in_data.add(category)
-            
-            # ✅ 确保至少有两个分类：管口材料分类-管程和管口材料分类-壳程
-            if "管口材料分类-管程" not in categories_in_data:
-                categories_in_data.add("管口材料分类-管程")
-            if "管口材料分类-壳程" not in categories_in_data:
-                categories_in_data.add("管口材料分类-壳程")
-            
-            # ✅ 按固定顺序生成Tab_ID：先管程，再壳程，最后是其他分类
-            ordered_categories = []
-            if "管口材料分类-管程" in categories_in_data:
-                ordered_categories.append("管口材料分类-管程")
-            if "管口材料分类-壳程" in categories_in_data:
-                ordered_categories.append("管口材料分类-壳程")
-            other_categories = sorted([c for c in categories_in_data if c not in ["管口材料分类-管程", "管口材料分类-壳程"]])
-            ordered_categories.extend(other_categories)
-            
-            # ✅ 按顺序为每个分类生成Tab_ID（确保分类1的Tab_ID更小）
-            import time
-            import random
+            ordered_categories = collect_ordered_guankou_categories(guankou_para_info)
+            if not ordered_categories:
+                print(f"[警告] 切换模板时模板未提供管口附加参数分类（template_id={template_id}）")
+                connection.commit()
+                return
+
+            category_tab_map = {}
             base_timestamp = int(time.time() * 1000)
             for idx, category in enumerate(ordered_categories):
-                if category in existing_tab_map:
-                    category_tab_map[category] = existing_tab_map[category]
-                    print(f"[切换模板] 保留类别 {category} 的Tab_ID: {existing_tab_map[category]}")
-                else:
-                    # 为每个分类使用递增的时间戳，确保先生成的Tab_ID更小
-                    timestamp = base_timestamp + idx
-                    random_num = random.randint(1000, 9999)
-                    category_tab_map[category] = f"TAB_{timestamp}_{random_num}"
-                    print(f"[切换模板] 为类别 {category} 生成新Tab_ID: {category_tab_map[category]}")
-            
-            # ✅ 插入模板数据（guankou_para_info已经包含了模板库中该模板ID下的所有数据）
-            # 先插入所有从模板库查询到的数据（包括"管口材料分类1"和"管口材料分类2"）
-            # 统计模板数据中的分类
-            categories_in_template = set()
+                category_tab_map[category] = f"TAB_{base_timestamp + idx}_{random.randint(1000, 9999)}"
+                print(f"[切换模板] 为类别 {category} 生成新Tab_ID: {category_tab_map[category]}")
+
+            default_category = ordered_categories[0]
+            print(f"[切换模板] 模板数据中的分类: {set(ordered_categories)}")
+
             for item in guankou_para_info:
-                category = item.get('所属分类', '管口材料分类-管程')
-                categories_in_template.add(category)
-            print(f"[切换模板] 模板数据中的分类: {categories_in_template}")
-            
-            for item in guankou_para_info:
-                category = item.get('所属分类', '管口材料分类-管程')
-                
-                # 插入当前模板对应的管口零件参数信息
-                sql = """
-                        INSERT INTO 产品设计活动表_管口附加参数表
-                        (管口零件参数ID, 产品ID, 参数名称, 参数值, 参数单位, 类别, Tab_ID, 模板名称)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+                category = str(item.get("所属分类") or "").strip() or default_category
+                if category not in category_tab_map:
+                    category_tab_map[category] = f"TAB_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+
+                cursor.execute(
                     """
-                cursor.execute(sql, (
-                    item['管口附加参数ID'],
-                    product_id,
-                    item['参数名称'],
-                    item['参数数值'],  # ✅ 使用模板库中的实际参数值
-                    item['参数单位'],
-                    category,
-                    category_tab_map[category],
-                    template_name
-                ))
-            
-            # ✅ 检查是否已经插入了"管口材料分类-壳程"的数据
-            # guankou_para_info是从query_template_guankou_para_data查询的，应该包含模板库中该模板ID下的所有数据
-            has_category2_in_template = "管口材料分类-壳程" in categories_in_template
-            print(f"[切换模板] 模板数据中是否包含管口材料分类-壳程: {has_category2_in_template}")
-            
-            # ✅ 如果模板数据中没有"管口材料分类-壳程"，说明模板库中确实没有这个分类的数据
-            # 此时需要从模板库再次查询确认，如果确实没有，则从"管口材料分类-管程"复制参数结构（参数值为空）
-            if not has_category2_in_template:
-                # 如果提供了template_id，从模板库查询"管口材料分类2"的数据
-                if template_id:
-                    # 从模板库查询"管口材料分类2"的数据
-                    connection_template = None
-                    category2_items = []
-                    try:
-                        connection_template = get_connection(**db_config_2)
-                        with connection_template.cursor() as cursor_template:
-                            sql_template = """
-                                SELECT 管口附加参数ID, 参数名称, 参数数值, 参数单位, 所属分类
-                                FROM 管口附加参数表
-                                WHERE 模板ID = %s AND 所属分类 = '管口材料分类-壳程';
-                            """
-                            cursor_template.execute(sql_template, (template_id,))
-                            category2_items = cursor_template.fetchall()
-                    except Exception as e:
-                        print(f"[错误] 查询管口材料分类2的数据时出错: {e}")
-                        import traceback
-                        traceback.print_exc()
-                    finally:
-                        if connection_template:
-                            try:
-                                connection_template.close()
-                            except Exception as e:
-                                print(f"[警告] 关闭模板库连接时出错: {e}")
-                    
-                    if category2_items:
-                        # 插入"管口材料分类-壳程"的数据（和管程一样的方式，使用模板库中的实际数据）
-                        for item in category2_items:
-                            sql = """
-                                INSERT INTO 产品设计活动表_管口附加参数表
-                                (管口零件参数ID, 产品ID, 参数名称, 参数值, 参数单位, 类别, Tab_ID, 模板名称)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-                            """
-                            cursor.execute(sql, (
-                                item['管口附加参数ID'],
-                                product_id,
-                                item['参数名称'],
-                                item['参数数值'],  # ✅ 使用模板库中的实际参数值
-                                item['参数单位'],
-                                '管口材料分类-壳程',
-                                category_tab_map['管口材料分类-壳程'],
-                                template_name
-                            ))
-                        print(f"[切换模板] 从模板库为管口材料分类-壳程插入了 {len(category2_items)} 条数据")
-                    else:
-                        # ✅ 如果模板库中确实没有"管口材料分类-壳程"，从"管口材料分类-管程"复制参数结构（参数值为空）
-                        print(f"[切换模板] 模板库中没有找到管口材料分类-壳程的数据，从管口材料分类-管程复制参数结构")
-                        category1_items = [item for item in guankou_para_info if item.get('所属分类', '管口材料分类-管程') == '管口材料分类-管程']
-                        
-                        if category1_items:
-                            # 获取当前已插入的最大管口零件参数ID
-                            cursor.execute("""
-                                SELECT MAX(CAST(管口零件参数ID AS UNSIGNED)) as max_id
-                                FROM 产品设计活动表_管口附加参数表
-                                WHERE 产品ID = %s
-                            """, (product_id,))
-                            max_id_result = cursor.fetchone()
-                            max_id = max_id_result['max_id'] if max_id_result and max_id_result['max_id'] else 0
-                            
-                            # 从max_id+1开始生成新的ID
-                            next_param_id = max_id + 1
-                            
-                            for item in category1_items:
-                                sql = """
-                                    INSERT INTO 产品设计活动表_管口附加参数表
-                                    (管口零件参数ID, 产品ID, 参数名称, 参数值, 参数单位, 类别, Tab_ID, 模板名称)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
-                                """
-                                cursor.execute(sql, (
-                                    str(next_param_id),
-                                    product_id,
-                                    item['参数名称'],  # 相同的参数名称
-                                    '',  # 参数值为空
-                                    item['参数单位'],  # 相同的参数单位
-                                    '管口材料分类-壳程',
-                                    category_tab_map['管口材料分类-壳程'],
-                                    template_name
-                                ))
-                                next_param_id += 1
-                            print(f"[切换模板] 为管口材料分类-壳程创建了 {len(category1_items)} 条空数据记录（从管程复制结构）")
-                else:
-                    print(f"[警告] 未提供template_id，无法从模板库查询管口材料分类-壳程的数据")
-            
-            # 提交事务
+                    INSERT INTO 产品设计活动表_管口附加参数表
+                    (管口零件参数ID, 产品ID, 参数名称, 参数值, 参数单位, 类别, Tab_ID, 模板名称)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+                    """,
+                    (
+                        item["管口附加参数ID"],
+                        product_id,
+                        item["参数名称"],
+                        item["参数数值"],
+                        item["参数单位"],
+                        category,
+                        category_tab_map[category],
+                        template_name,
+                    ),
+                )
+
             connection.commit()
-            print(f"✅ 管口零件参数信息已成功插入数据库（保留Tab_ID映射: {category_tab_map}）")
-    except Exception as err:  # 捕获所有异常，防止程序崩溃
+            print(f"✅ 管口零件参数信息已成功插入数据库（Tab_ID映射: {category_tab_map}）")
+    except Exception as err:
         print(f"❌ 插入管口零件参数数据时出错: {err}")
         import traceback
         traceback.print_exc()
@@ -958,6 +935,101 @@ def update_guankou_define_status(product_id, element_name, define_status): #已�
 
 
 
+#6.12覆层新增
+def _param_cell_text(table, row, col):
+    if row is None or row < 0:
+        return ""
+    try:
+        from PyQt5.QtWidgets import QComboBox, QLineEdit
+        w = table.cellWidget(row, col)
+        if w is not None:
+            if isinstance(w, QComboBox):
+                return w.currentText().strip()
+            if isinstance(w, QLineEdit):
+                return w.text().strip()
+    except Exception:
+        pass
+    it = table.item(row, col)
+    return (it.text().strip() if it else "")
+
+
+def _cladding_names_for_switch(switch_name: str):
+    """由覆层开关名推导材料类型、焊接凹槽深度参数名。"""
+    if switch_name == "是否添加覆层":
+        return "覆层材料类型", "存在覆层时的焊接凹槽深度"
+    if switch_name.endswith("是否添加覆层"):
+        prefix = switch_name[: -len("是否添加覆层")]
+        return f"{prefix}覆层材料类型", f"{prefix}存在覆层时的焊接凹槽深度"
+    return None, None
+
+
+def update_cladding_groove_depth_visibility(table, param_col=0, value_col=1, control_field=None):
+    """
+    焊接凹槽深度：覆层开关=是 且 覆层材料类型=钢板/板材 时显示，否则隐藏（仅隐藏，不清空）。
+    球冠形封头额外要求配置库 user_config(1.5.5)=True，且覆层材料类型=钢板/板材。
+    显示时：仅材料类型刚变为适用类型或当前为空时写入默认值，保留手改/库值。
+    control_field 指定时只刷新对应覆层组；为 None 时刷新表中存在的全部覆层组。
+    """
+    if table is None:
+        return
+
+    element_name = _element_name_from_table(table)
+
+    switches = [control_field] if control_field else [
+        "是否添加覆层",
+        "管程侧是否添加覆层",
+        "壳程侧是否添加覆层",
+        "配对法兰是否添加覆层",
+    ]
+
+    def _find_row(name):
+        if not name:
+            return None
+        for r in range(table.rowCount()):
+            it = table.item(r, param_col)
+            if it and it.text().strip() == name:
+                return r
+        return None
+
+    def _set_cell_text(row, col, text: str):
+        w = table.cellWidget(row, col)
+        if isinstance(w, QComboBox):
+            w.setCurrentText(text)
+            return
+        if isinstance(w, QLineEdit):
+            w.setText(text)
+            return
+        it = table.item(row, col)
+        if it is None:
+            it = QTableWidgetItem(text)
+            from PyQt5.QtCore import Qt
+            it.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row, col, it)
+        else:
+            it.setText(text)
+
+    for switch_name in switches:
+        if not switch_name:
+            continue
+        type_name, groove_name = _cladding_names_for_switch(switch_name)
+        if not groove_name:
+            continue
+        r_groove = _find_row(groove_name)
+        if r_groove is None:
+            continue
+        r_sw = _find_row(switch_name)
+        r_type = _find_row(type_name)
+        covering = (_param_cell_text(table, r_sw, value_col) == "是") if r_sw is not None else False
+        type_val = _param_cell_text(table, r_type, value_col) if r_type is not None else ""
+        show = _should_show_cladding_groove_depth(element_name, covering, type_val)
+        table.setRowHidden(r_groove, not show)
+        cur_groove = _param_cell_text(table, r_groove, value_col)
+        new_depth = cladding_groove_depth_default_if_needed(
+            table, type_name, type_val, cur_groove, covering=covering
+        )
+        if show and new_depth:
+            _set_cell_text(r_groove, value_col, new_depth)
+
 
 def toggle_covering_fields(table, combo, control_field):
     """
@@ -968,7 +1040,6 @@ def toggle_covering_fields(table, combo, control_field):
         "是否添加覆层": [
             "覆层材料类型", "覆层材料牌号", "覆层材料级别",
             "覆层材料标准", "覆层成型工艺", "覆层使用状态", "覆层厚度",
-            "存在覆层时的焊接凹槽深度"
         ],
         "管程侧是否添加覆层": [
             "管程侧覆层材料类型", "管程侧覆层材料牌号", "管程侧覆层材料级别",
@@ -1004,6 +1075,8 @@ def toggle_covering_fields(table, combo, control_field):
             #         item = table.item(row, 1)
             #         if item:
             #             item.setText("")
+    # 6.12覆层新增
+    update_cladding_groove_depth_visibility(table, param_col=0, value_col=1, control_field=control_field)
 
 
 
@@ -1403,6 +1476,248 @@ def is_all_guankou_parts_defined(product_id: int) -> bool:
         connection.close()
 
 
+#6.12覆层新增
+def default_cladding_thickness_by_material_type(type_value: str) -> str:
+    """覆层材料类型 → 覆层厚度 UI 默认值（仅界面联动，不写库）。"""
+    v = (type_value or "").strip()
+    if v in ("钢板", "板材"):
+        return "3"
+    if v == "焊材":
+        return "6"
+    return ""
+
+
+def cladding_thickness_default_if_needed(
+    table, type_field_key: str, type_value: str, current_text: str
+) -> str:
+    """
+    覆层厚度：仅当材料类型变更或当前单元格为空时返回默认厚度；否则返回空串（保留手改/库值）。
+    在 table._cladding_prev_types 记录各覆层组材料类型的上一次取值。
+    """
+    v = (type_value or "").strip()
+    if not type_field_key:
+        return ""
+    _prev_map = getattr(table, "_cladding_prev_types", None)
+    if _prev_map is None:
+        _prev_map = {}
+        setattr(table, "_cladding_prev_types", _prev_map)
+    prev_v = _prev_map.get(type_field_key)
+    if prev_v is None:
+        prev_v = v
+    type_changed = (prev_v != v)
+    _prev_map[type_field_key] = v
+    default_th = default_cladding_thickness_by_material_type(v)
+    if not default_th:
+        return ""
+    cur = (current_text or "").strip()
+    if type_changed or not cur:
+        return default_th
+    return ""
+
+
+def _get_user_config_value(config_id: str):
+    """从配置库 user_config 表读取指定 id 的 value。"""
+    try:
+        conn = get_connection(**db_config_config)
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT value FROM user_config WHERE id = %s LIMIT 1", (config_id,))
+                row = cursor.fetchone()
+                if not row:
+                    return None
+                return row.get("value") if isinstance(row, dict) else row[0]
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"[读取user_config失败] id={config_id}, 错误: {e}")
+        return None
+
+
+def _is_truthy_config_value(value) -> bool:
+    """将 user_config.value 解析为布尔值。"""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value == 1
+    if value is None:
+        return False
+
+    text = str(value).strip()
+    if not text:
+        return False
+
+    lower_text = text.lower()
+    if lower_text in {"true", "1", "yes", "y", "on"}:
+        return True
+    if lower_text in {"false", "0", "no", "n", "off", "none", "null"}:
+        return False
+
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, bool):
+            return parsed
+        if isinstance(parsed, (int, float)):
+            return parsed == 1
+        if isinstance(parsed, str):
+            return parsed.strip().lower() in {"true", "1", "yes", "y", "on"}
+    except Exception:
+        pass
+    return False
+
+
+def _parse_numeric_value(val) -> Optional[float]:
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s:
+        return None
+    s = s.replace("，", ",")
+    m = re.search(r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?", s)
+    if not m:
+        return None
+    try:
+        return float(m.group(0))
+    except Exception:
+        return None
+
+
+def _qiuguan_groove_depth_config_enabled() -> bool:
+    """球冠形封头：配置库 user_config(id=1.5.5) 是否为 True。"""
+    global _QIUGUAN_GROOVE_CONFIG_ENABLED_CACHE
+    if _QIUGUAN_GROOVE_CONFIG_ENABLED_CACHE is None:
+        _QIUGUAN_GROOVE_CONFIG_ENABLED_CACHE = _is_truthy_config_value(
+            _get_user_config_value(QIUGUAN_GROOVE_DEPTH_CONFIG_ENABLED_ID)
+        )
+    return _QIUGUAN_GROOVE_CONFIG_ENABLED_CACHE
+
+
+def _qiuguan_groove_dn_threshold() -> Optional[float]:
+    """球冠形封头：配置库 user_config(id=1.5.5.1) 的公称直径阈值。"""
+    global _QIUGUAN_GROOVE_DN_THRESHOLD_CACHE
+    if _QIUGUAN_GROOVE_DN_THRESHOLD_CACHE is None:
+        _QIUGUAN_GROOVE_DN_THRESHOLD_CACHE = _parse_numeric_value(
+            _get_user_config_value(QIUGUAN_GROOVE_DN_THRESHOLD_CONFIG_ID)
+        )
+    return _QIUGUAN_GROOVE_DN_THRESHOLD_CACHE
+
+
+def _product_id_from_table(table) -> str:
+    viewer = getattr(table, "_viewer_instance", None)
+    if viewer is not None:
+        pid = getattr(viewer, "product_id", None)
+        if pid is not None and str(pid).strip():
+            return str(pid).strip()
+    pid = getattr(table, "_product_id", None)
+    return str(pid).strip() if pid is not None and str(pid).strip() else ""
+
+
+def _get_tube_side_nominal_diameter(product_id: str) -> Optional[float]:
+    """从设计数据表读取公称直径行的管程数值。"""
+    if not product_id:
+        return None
+    try:
+        design_map = get_design_params_by_product_id(product_id) or {}
+    except Exception:
+        return None
+    for pname in ("公称直径*", "公称直径"):
+        row = design_map.get(pname)
+        if not row:
+            continue
+        parsed = _parse_numeric_value(row.get("管程数值"))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _is_qiuguanxing_fengtou_element(element_name: str) -> bool:
+    return (element_name or "").strip() == QIUGUANXING_FENGTOU_ELEMENT_NAME
+
+
+def _cladding_groove_plate_types(element_name: str) -> Tuple[str, ...]:
+    return ("钢板", "板材")
+
+
+def _should_show_cladding_groove_depth(element_name: str, covering: bool, type_val: str) -> bool:
+    v = (type_val or "").strip()
+    plate_types = _cladding_groove_plate_types(element_name)
+    if not covering or v not in plate_types:
+        return False
+    if _is_qiuguanxing_fengtou_element(element_name):
+        return _qiuguan_groove_depth_config_enabled()
+    return True
+
+
+def _default_qiuguan_cladding_groove_depth(product_id: str = None) -> str:
+    """
+    球冠形封头焊接凹槽深度默认值：
+    管程公称直径 > user_config(1.5.5.1) → user_config(1.1.2)；否则 → 0。
+    """
+    dn = _get_tube_side_nominal_diameter(product_id)
+    threshold = _qiuguan_groove_dn_threshold()
+    if dn is not None and threshold is not None and dn > threshold:
+        return _resolve_cladding_groove_depth_from_user_config()
+    return "0"
+
+
+def _resolve_cladding_groove_depth_from_user_config() -> str:
+    """从配置库 user_config(id=1.1.2) 读取覆层焊接凹槽深度默认值（带缓存）。"""
+    global _CLADDING_GROOVE_DEPTH_FROM_CONFIG_CACHE
+    if _CLADDING_GROOVE_DEPTH_FROM_CONFIG_CACHE is not None:
+        return _CLADDING_GROOVE_DEPTH_FROM_CONFIG_CACHE
+    val = _get_user_config_value(CLADDING_GROOVE_DEPTH_CONFIG_ID)
+    if val is not None and str(val).strip():
+        _CLADDING_GROOVE_DEPTH_FROM_CONFIG_CACHE = str(val).strip()
+    else:
+        _CLADDING_GROOVE_DEPTH_FROM_CONFIG_CACHE = CLADDING_GROOVE_DEPTH_LEGACY_DEFAULT
+    return _CLADDING_GROOVE_DEPTH_FROM_CONFIG_CACHE
+
+
+def default_cladding_groove_depth(element_name: str = None, product_id: str = None) -> str:
+    """
+    存在覆层时的焊接凹槽深度 UI 默认值。
+    球冠形封头：按 1.5.5 / 管程公称直径 / 1.5.5.1 / 1.1.2 规则计算；
+    其余元件从配置库 user_config(id=1.1.2) 读取。
+    """
+    name = (element_name or "").strip()
+    if name == QIUGUANXING_FENGTOU_ELEMENT_NAME:
+        return _default_qiuguan_cladding_groove_depth(product_id)
+    return _resolve_cladding_groove_depth_from_user_config()
+
+
+def _element_name_from_table(table) -> str:
+    raw = (getattr(table, "_element_name", "") or "").strip()
+    return resolve_to_standard_name(raw) if raw else raw
+
+
+def cladding_groove_depth_default_if_needed(
+    table, type_field_key: str, type_value: str, current_text: str, *, covering: bool
+) -> str:
+    """
+    焊接凹槽深度：覆层=是 且 材料类型满足显示条件时，仅当「刚变为适用类型」或当前为空时返回默认值；
+    否则返回空串（保留手改/库值）。使用独立 prev 键，避免与覆层厚度联动互相覆盖。
+    """
+    v = (type_value or "").strip()
+    if not type_field_key:
+        return ""
+    element_name = _element_name_from_table(table)
+    plate_types = _cladding_groove_plate_types(element_name)
+    grove_key = f"{type_field_key}::groove"
+    _prev_map = getattr(table, "_cladding_prev_types", None)
+    if _prev_map is None:
+        _prev_map = {}
+        setattr(table, "_cladding_prev_types", _prev_map)
+    prev_v = _prev_map.get(grove_key)
+    if prev_v is None:
+        prev_v = v
+    _prev_map[grove_key] = v
+    if not _should_show_cladding_groove_depth(element_name, covering, v):
+        return ""
+    became_plate = (v in plate_types) and (prev_v not in plate_types)
+    cur = (current_text or "").strip()
+    if became_plate or not cur:
+        return default_cladding_groove_depth(element_name, _product_id_from_table(table))
+    return ""
+
 
 def get_filtered_material_options(selected: dict) -> dict:
     """根据当前已选字段，查询数据库，返回所有材料字段的可选项"""
@@ -1431,6 +1746,86 @@ def get_filtered_material_options(selected: dict) -> dict:
         return {col: sorted(result[col]) for col in material_fields}
     finally:
         connection.close()
+
+
+def uses_structural_steel_material(element_name: str) -> bool:
+    """查结构钢材料元件表白名单：命中则走结构钢材料表逻辑，否则走原材料表。"""
+    name = (element_name or "").strip()
+    if not name:
+        return False
+    conn = get_connection(**db_config_2)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM `结构钢材料元件表` WHERE `元件名称` = %s LIMIT 1",
+                (name,),
+            )
+            return cur.fetchone() is not None
+    except Exception as e:
+        print(f"[结构钢材料] 白名单查询失败: element={name}, err={e}")
+        return False
+    finally:
+        conn.close()
+
+
+def get_structural_steel_material_options(selected: dict = None) -> dict:
+    """
+    结构钢材料表候选：
+      - 材料类型 / 材料标准 / 供货状态：独立 DISTINCT（暂不互相级联）
+      - 材料牌号：已选供货状态时按供货状态过滤；未选时返回全部牌号
+    """
+    selected = selected or {}
+    material_fields = ['材料类型', '材料牌号', '材料标准', '供货状态']
+    conn = get_connection(**db_config_2)
+    try:
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            result = {col: set() for col in material_fields}
+            for field in ('材料类型', '材料标准', '供货状态'):
+                cursor.execute(
+                    f"""
+                    SELECT DISTINCT `{field}` AS val
+                    FROM `结构钢材料表`
+                    WHERE `{field}` IS NOT NULL AND `{field}` <> ''
+                    ORDER BY `{field}`
+                    """
+                )
+                for row in cursor.fetchall() or []:
+                    val = str(row.get('val') or '').strip()
+                    if val:
+                        result[field].add(val)
+
+            status = str(selected.get('供货状态') or '').strip()
+            if status:
+                cursor.execute(
+                    """
+                    SELECT DISTINCT `材料牌号` AS val
+                    FROM `结构钢材料表`
+                    WHERE `供货状态` = %s
+                      AND `材料牌号` IS NOT NULL AND `材料牌号` <> ''
+                    ORDER BY `材料牌号`
+                    """,
+                    (status,),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT DISTINCT `材料牌号` AS val
+                    FROM `结构钢材料表`
+                    WHERE `材料牌号` IS NOT NULL AND `材料牌号` <> ''
+                    ORDER BY `材料牌号`
+                    """
+                )
+            for row in cursor.fetchall() or []:
+                val = str(row.get('val') or '').strip()
+                if val:
+                    result['材料牌号'].add(val)
+
+            return {col: sorted(result[col]) for col in material_fields}
+    except Exception as e:
+        print(f"[结构钢材料] 候选查询失败: selected={selected}, err={e}")
+        return {col: [] for col in material_fields}
+    finally:
+        conn.close()
 
 
 def save_image(component_id, image_path, product_id):
@@ -2254,11 +2649,15 @@ def update_element_name_data(product_id, element_name, param_name, param_value):
     conn = get_connection(**db_config_1)
     try:
         with conn.cursor() as cursor:
-            cursor.execute("""
-                UPDATE 产品设计活动表_元件附加参数表
-                SET 参数值 = %s
-                WHERE 产品ID = %s AND 元件名称 = %s AND 参数名称 = %s
-            """, (param_value, product_id, element_name, param_name))
+            for candidate in resolve_element_name_candidates(element_name):
+                cursor.execute("""
+                    UPDATE 产品设计活动表_元件附加参数表
+                    SET 参数值 = %s
+                    WHERE 产品ID = %s AND 元件名称 = %s AND 参数名称 = %s
+                """, (param_value, product_id, candidate, param_name))
+                if cursor.rowcount:
+                    conn.commit()
+                    return
         conn.commit()
     finally:
         conn.close()
@@ -2330,7 +2729,8 @@ def sync_flange_params_when_outer_base_inner(product_id):
             continue
 
         cm = dep_def.get(key_tpl) or {}
-        new_face = (cm.get(ename) or "").strip()
+        std_ename = resolve_to_standard_name(ename)
+        new_face = (cm.get(std_ename) or cm.get(ename) or "").strip()
         if not new_face or new_face not in nb_face_opts:
             new_face = nb_face_opts[0] if nb_face_opts else ""
 
@@ -2656,6 +3056,8 @@ def evaluate_visibility_rules_from_db(element_name: str,
     if not element_name:
         return {}
 
+    element_name = resolve_to_standard_name(element_name)
+
     # A. 取当前 UI 值（PARAM）
     if values is None:
         values = {}
@@ -2804,6 +3206,7 @@ def query_required_paramlist_csv(part_name: str) -> set:
     从【元件已定义参数表】读取该元件的必填参数（CSV），返回【清洗后的】set[str]
     兼容中文逗号/英文逗号/顿号分隔；不写死别名，一律做通用清洗。
     """
+    part_name = resolve_to_standard_name(part_name)
     conn = get_connection(**db_config_2)
     try:
         with conn.cursor() as cur:
@@ -3041,10 +3444,11 @@ def query_guankou_codes(product_id, category_label):
 
 
 # === 读取：产品设计活动库 → 当前产品的"元件材料"快照 ===
-def fetch_product_element_materials(product_id):
+def fetch_product_element_materials(product_id, only_visible=False):
     """
     从『产品设计活动库_元件材料表』按产品ID取：元件名称、材料类型、材料牌号、材料标准、供货状态、是否覆层
     返回 {元件名称: {字段: 值}}
+    only_visible=True 时仅包含结构树中显示的元件（是否显示=是），用于模板切换差异对比。
     """
     connection = get_connection(**db_config_1)  # 和你现有一致
     try:
@@ -3060,6 +3464,8 @@ def fetch_product_element_materials(product_id):
             FROM 产品设计活动表_元件材料表
             WHERE 产品ID = %s
             """
+            if only_visible:
+                sql += " AND (是否显示 IS NULL OR 是否显示 = '' OR 是否显示 = '是')"
             cursor.execute(sql, (product_id,))
             rows = cursor.fetchall()
             data = {}
@@ -3384,13 +3790,66 @@ def get_dn_by_side(product_id: str, side: str) -> str:
     return ""
 
 
+def parse_gasket_option_field(raw) -> list:
+    """
+    将垫片定义表「金属材料/填充材料」字段解析为下拉选项 list。
+    支持：JSON 数组、普通字符串、空/—。
+    """
+    if raw is None:
+        return []
+    s = str(raw).strip()
+    if not s or s in ("—", "-", "－", "None", "null"):
+        return []
+    try:
+        j = json.loads(s)
+        if isinstance(j, list):
+            return [str(x).strip() for x in j if str(x).strip()]
+        if isinstance(j, str) and j.strip():
+            return [j.strip()]
+    except Exception:
+        pass
+    return [s]
+
+
+def _gasket_definition_row_to_props(row: dict) -> dict:
+    """从垫片定义表单行提取 y/m 与金属/填充材料候选及默认值（第一项为默认）。"""
+    if not row:
+        return {}
+
+    def _fmt(v):
+        return "" if v in (None, "") else str(v)
+
+    metal_raw = row.get("金属材料")
+    if metal_raw in (None, ""):
+        metal_raw = row.get("金属材料名称")
+    filler_raw = row.get("填充材料")
+    if filler_raw in (None, ""):
+        filler_raw = row.get("填充材料名称")
+
+    metal_opts = parse_gasket_option_field(metal_raw)
+    filler_opts = parse_gasket_option_field(filler_raw)
+
+    return {
+        "垫片比压力y": _fmt(row.get("垫片比压力y")),
+        "垫片系数m": _fmt(row.get("垫片系数m")),
+        "金属材料候选": metal_opts,
+        "填充材料候选": filler_opts,
+        "金属材料": metal_opts[0] if metal_opts else "",
+        "填充材料": filler_opts[0] if filler_opts else "",
+    }
+
+
 def query_gasket_material_options_by_type_std(gasket_type: str, gasket_standard: str, gasket_material: str = "") -> dict:
     """
     返回:
     {
-        "垫片材料候选": ["柔性石墨", "金属缠绕", ...],  # 供"垫片材料"下拉用
-        "垫片比压力y": "3.0",                      # 可空
-        "垫片系数m": "1.0"                         # 可空
+        "垫片材料候选": ["柔性石墨", ...],
+        "垫片比压力y": "3.0",
+        "垫片系数m": "1.0",
+        "金属材料候选": ["S30408", ...],   # 可空
+        "填充材料候选": ["柔性石墨", ...], # 可空
+        "金属材料": "S30408",              # 默认第一项
+        "填充材料": "柔性石墨",
     }
     取不到返回 {}
     """
@@ -3399,6 +3858,14 @@ def query_gasket_material_options_by_type_std(gasket_type: str, gasket_standard:
     gm = (gasket_material or "").strip()
     if not (t and st) and not gm:
         return {}
+
+    _row_sql = """
+        SELECT 垫片比压力y, 垫片系数m, 金属材料, 填充材料
+        FROM 垫片定义表
+        WHERE {where}
+        ORDER BY CASE WHEN 垫片标准=%s THEN 0 ELSE 1 END
+        LIMIT 1
+    """
 
     conn = get_connection(**db_config_2)  # 材料库
     try:
@@ -3413,58 +3880,46 @@ def query_gasket_material_options_by_type_std(gasket_type: str, gasket_standard:
                     ORDER BY 垫片材料
                 """
                 cur.execute(sql_mats, (t, st, f"%{st}%"))
-                mats = [ (row.get("垫片材料") or "").strip() for row in cur.fetchall() if (row.get("垫片材料") or "").strip() ]
+                mats = [(row.get("垫片材料") or "").strip() for row in cur.fetchall() if (row.get("垫片材料") or "").strip()]
 
-            # 取 y/m（优先精确命中当前材料；未命中则回退类型+标准）
-            ym = {}
+            row = {}
 
             # 1) 类型+标准+材料 优先
             if t and st and gm:
-                sql_ym = """
-                    SELECT 垫片比压力y, 垫片系数m
-                    FROM 垫片定义表
-                    WHERE 垫片类型=%s AND (垫片标准=%s OR 垫片标准 LIKE %s) AND 垫片材料=%s
-                    ORDER BY CASE WHEN 垫片标准=%s THEN 0 ELSE 1 END
-                    LIMIT 1
-                """
-                cur.execute(sql_ym, (t, st, f"%{st}%", gm, st))
-                ym = cur.fetchone() or {}
+                cur.execute(
+                    _row_sql.format(
+                        where="垫片类型=%s AND (垫片标准=%s OR 垫片标准 LIKE %s) AND 垫片材料=%s"
+                    ),
+                    (t, st, f"%{st}%", gm, st),
+                )
+                row = cur.fetchone() or {}
 
             # 2) 类型+标准 回退
-            if (not ym) and t and st:
+            if (not row) and t and st:
                 cur.execute(
-                    """
-                    SELECT 垫片比压力y, 垫片系数m
-                    FROM 垫片定义表
-                    WHERE 垫片类型=%s AND (垫片标准=%s OR 垫片标准 LIKE %s)
-                    ORDER BY CASE WHEN 垫片标准=%s THEN 0 ELSE 1 END
-                    LIMIT 1
-                    """,
+                    _row_sql.format(
+                        where="垫片类型=%s AND (垫片标准=%s OR 垫片标准 LIKE %s)"
+                    ),
                     (t, st, f"%{st}%", st),
                 )
-                ym = cur.fetchone() or {}
+                row = cur.fetchone() or {}
 
             # 3) 仅按材料查（当类型/标准缺失或前面未命中）
-            if (not ym) and gm:
+            if (not row) and gm:
                 cur.execute(
                     """
-                    SELECT 垫片比压力y, 垫片系数m
+                    SELECT 垫片比压力y, 垫片系数m, 金属材料, 填充材料
                     FROM 垫片定义表
                     WHERE 垫片材料=%s
                     LIMIT 1
                     """,
                     (gm,),
                 )
-                ym = cur.fetchone() or {}
+                row = cur.fetchone() or {}
 
-            def _fmt(v):
-                return "" if v in (None, "") else str(v)
-
-            return {
-                "垫片材料候选": list(dict.fromkeys(mats)),  # 去重保序
-                "垫片比压力y": _fmt(ym.get("垫片比压力y")),
-                "垫片系数m": _fmt(ym.get("垫片系数m")),
-            }
+            props = _gasket_definition_row_to_props(row)
+            props["垫片材料候选"] = list(dict.fromkeys(mats))
+            return props
     finally:
         conn.close()
 
@@ -3640,6 +4095,7 @@ def get_gasket_mapping(gasket_name: str, product_id: str = "") -> dict:
     res = {"flange": "", "flange_side": "", "gasket_side": ""}
     if not gasket_name:
         return res
+    gasket_name = resolve_to_standard_name(gasket_name)
     product_form = get_product_form_by_product_id(product_id)
     key = (gasket_name.strip(), str(product_form or "").strip().upper())
     if key in _GASKET_MAPPING_CACHE:
@@ -3680,6 +4136,7 @@ def get_gasket_mappings_all(gasket_name: str, product_id: str = "") -> list:
     res = []
     if not gasket_name:
         return res
+    gasket_name = resolve_to_standard_name(gasket_name)
     product_form = get_product_form_by_product_id(product_id)
     key = (gasket_name.strip(), str(product_form or "").strip().upper())
     if key in _GASKET_MAPPINGS_ALL_CACHE:
@@ -3727,7 +4184,8 @@ def get_dn_for_gasket(product_id: str, gasket_name: str) -> str:
     """
     m = get_gasket_mapping(gasket_name or "", product_id=product_id)
     gasket_side = m.get("gasket_side", "")
-    if gasket_side == "参数定义" and (gasket_name or "").strip() == "外头盖垫片":
+    gasket_std = resolve_to_standard_name(gasket_name or "")
+    if gasket_side == "参数定义" and gasket_std == "外头盖垫片":
         return get_dn_for_outer_head_cylinder(product_id)
     return get_dn_by_side(product_id, gasket_side)
 
@@ -3788,7 +4246,7 @@ def map_gasket_name_code(gasket_name: str) -> str:
     """
     直接用本地字典做名称->代号映射；没有就返回空串
     """
-    return _GASKET_NAME_CODE_MAP.get((gasket_name or "").strip(), "")
+    return _GASKET_NAME_CODE_MAP.get(resolve_to_standard_name(gasket_name or ""), "")
 
 
 
@@ -3880,20 +4338,24 @@ def query_gasket_D_d_d1_from_size(*, dn: str, pn: str, cs_code: str, st_abbr: st
 
 
 def query_element_name_param_value(product_id: str, element_name: str, param_name: str):
+    param_name = (param_name or "").strip()
     conn = get_connection(**db_config_1)
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT 参数值
-                FROM 产品设计活动表_元件附加参数表
-                WHERE 产品ID = %s AND 元件名称 = %s AND 参数名称 = %s
-                LIMIT 1
-                """,
-                (product_id, (element_name or "").strip(), (param_name or "").strip())
-            )
-            row = cur.fetchone()
-            return None if not row else row.get("参数值")
+            for candidate in resolve_element_name_candidates(element_name):
+                cur.execute(
+                    """
+                    SELECT 参数值
+                    FROM 产品设计活动表_元件附加参数表
+                    WHERE 产品ID = %s AND 元件名称 = %s AND 参数名称 = %s
+                    LIMIT 1
+                    """,
+                    (product_id, candidate, param_name),
+                )
+                row = cur.fetchone()
+                if row is not None:
+                    return row.get("参数值")
+            return None
     finally:
         conn.close()
 
@@ -3968,7 +4430,7 @@ def compute_pn_for_gasket(product_id: str, gasket_name: str):
             pn_map[flange_name] = pv
             pn_vals.append(pv)
     pn_inline = None
-    if (gasket_name or "").strip() == "平盖垫片":
+    if resolve_to_standard_name(gasket_name or "") == "平盖垫片":
         if "管箱法兰" in pn_map:
             pn_inline = pn_map.get("管箱法兰")
             if DEBUG_VERBOSE_DEFINE_UI:
@@ -4083,33 +4545,34 @@ def _get_flange_material_by_name(product_id: str, flange_name: str) -> str:
     conn = get_connection(**db_config_1)
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT 元件ID
-                FROM 产品设计活动表_元件材料表
-                WHERE 产品ID = %s AND 元件名称 = %s
-                """,
-                (product_id, flange_name)
-            )
-            rows = cur.fetchall() or []
-            for r in rows:
-                eid = r.get("元件ID")
-                if not eid:
-                    continue
+            for candidate in resolve_element_name_candidates(flange_name):
                 cur.execute(
                     """
-                    SELECT 参数值
-                    FROM 产品设计活动表_元件附加参数表
-                    WHERE 产品ID = %s AND 元件ID = %s AND 参数名称 = '材料牌号'
-                    LIMIT 1
+                    SELECT 元件ID
+                    FROM 产品设计活动表_元件材料表
+                    WHERE 产品ID = %s AND 元件名称 = %s
                     """,
-                    (product_id, eid)
+                    (product_id, candidate),
                 )
-                row2 = cur.fetchone()
-                if row2 and row2.get("参数值"):
-                    val = str(row2.get("参数值")).strip()
-                    _FLANGE_MATERIAL_CACHE[key] = val
-                    return val
+                rows = cur.fetchall() or []
+                for r in rows:
+                    eid = r.get("元件ID")
+                    if not eid:
+                        continue
+                    cur.execute(
+                        """
+                        SELECT 参数值
+                        FROM 产品设计活动表_元件附加参数表
+                        WHERE 产品ID = %s AND 元件ID = %s AND 参数名称 = '材料牌号'
+                        LIMIT 1
+                        """,
+                        (product_id, eid),
+                    )
+                    row2 = cur.fetchone()
+                    if row2 and row2.get("参数值"):
+                        val = str(row2.get("参数值")).strip()
+                        _FLANGE_MATERIAL_CACHE[key] = val
+                        return val
             _FLANGE_MATERIAL_CACHE[key] = ""
             return ""
     finally:
@@ -4265,101 +4728,6 @@ def restore_spacer_tube_status_to_defined(product_id: str):
         conn.rollback()
     finally:
         conn.close()
-
-
-
-def get_template_merged_para_element_ids(template_id):
-    """获取模板中所有有附加参数合并表的元件ID列表"""
-    connection = get_connection(**db_config_2)
-    try:
-        with connection.cursor() as cursor:
-            sql = """
-            SELECT DISTINCT 元件ID
-            FROM 元件附加参数合并表
-            WHERE 模板ID = %s
-            """
-            cursor.execute(sql, (template_id,))
-            result = cursor.fetchall()
-            return [row['元件ID'] for row in result]
-    finally:
-        connection.close()
-
-
-
-
-def insert_or_update_element_merged_para_data(product_id, element_id, merged_para_info, template_name):
-    """将元件附加参数合并表数据插入到产品活动库"""
-    if not merged_para_info:
-        print(f"[元件附加参数合并表] 元件 {element_id} 没有附加参数数据，跳过插入")
-        return
-
-    connection = get_connection(**db_config_1)
-    try:
-        with connection.cursor() as cursor:
-            # 先删除该元件的现有数据
-            cursor.execute("""
-                DELETE FROM 产品设计活动表_元件附加参数合并表
-                WHERE 产品ID = %s AND 元件ID = %s
-            """, (product_id, element_id))
-
-            # 插入新数据
-            insert_count = 0
-            for item in merged_para_info:
-                cursor.execute("""
-                    INSERT INTO 产品设计活动表_元件附加参数合并表
-                    (产品ID, 元件ID, 参数名称, 参数值, 参数单位, Tab分类, 模板名称, 模板ID)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    product_id,
-                    element_id,
-                    item.get('参数名称', ''),
-                    item.get('参数值', ''),
-                    item.get('参数单位', ''),
-                    item.get('Tab分类', ''),
-                    template_name,
-                    item.get('模板ID')
-                ))
-                insert_count += 1
-
-            connection.commit()
-            print(f"[元件附加参数合并表] 成功插入 {insert_count} 条 {element_id} 的附加参数数据")
-
-    except Exception as e:
-        print(f"[元件附加参数合并表] 插入失败: {e}")
-        connection.rollback()
-    finally:
-        connection.close()
-
-
-
-
-
-def batch_insert_element_merged_para_data(product_id, template_id, template_name):
-    """批量处理模板中所有有附加参数合并表的元件"""
-    # 获取所有需要处理的元件ID
-    element_ids = get_template_merged_para_element_ids(template_id)
-
-    if not element_ids:
-        print(f"[批量处理] 模板 {template_id} 没有找到需要处理的元件")
-        return
-
-    print(f"[批量处理] 开始处理 {len(element_ids)} 个元件的附加参数合并表数据: {element_ids}")
-
-    for element_id in element_ids:
-        try:
-            # 查询该元件的附加参数合并表数据
-            merged_para_info = query_template_element_merged_para_data(template_id, element_id)
-
-            # 插入到产品活动库
-            insert_or_update_element_merged_para_data(product_id, element_id, merged_para_info, template_name)
-
-        except Exception as e:
-            print(f"[批量处理] 处理元件 {element_id} 失败: {e}")
-            continue
-
-    print(f"[批量处理] 完成所有元件的附加参数合并表数据处理")
-
-
 
 
 # 11.16设备法兰

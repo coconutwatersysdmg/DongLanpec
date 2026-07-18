@@ -9,13 +9,25 @@ from PyQt5.QtCore import Qt, QEvent, QTimer
 from PyQt5.QtGui import QFont, QColor
 from PyQt5.QtWidgets import QTableWidgetItem, QHeaderView, QAbstractItemView, QTableWidget, QTabWidget, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QMessageBox, QComboBox, QMenu
 from modules.cailiaodingyi.controllers.add_tab import PlusTabManager
+from modules.cailiaodingyi.controllers.style import exec_message_box, show_warning
 
 from modules.cailiaodingyi.controllers.checkcombo import CheckComboDelegate
 from modules.cailiaodingyi.controllers.combo import ComboPopupEventFilter, MultiSelectRowComboDelegate, ComboDelegate, NonNegativeDoubleDelegate
 from modules.cailiaodingyi.funcs.funcs_pdf_input import db_config_1, db_config_2, get_options_for_param
 from modules.cailiaodingyi.funcs.funcs_pdf_render import _set_table_tooltips, _install_tooltip_updater
-from modules.cailiaodingyi.funcs.funcs_pdf_change import get_filtered_material_options, DEBUG_VERBOSE_DEFINE_UI
-from modules.cailiaodingyi.controllers.datamanager import install_material_delegate_linkage, MaterialInstantDelegate, _apply_forging_visibility
+from modules.cailiaodingyi.funcs.funcs_pdf_change import (
+    get_filtered_material_options,
+    default_cladding_thickness_by_material_type,
+    cladding_thickness_default_if_needed,
+    update_cladding_groove_depth_visibility,
+    DEBUG_VERBOSE_DEFINE_UI,
+)
+from modules.cailiaodingyi.controllers.datamanager import (
+    install_material_delegate_linkage,
+    MaterialInstantDelegate,
+    _apply_forging_visibility,
+    refresh_attachment_schematic_image,
+)
 import pymysql
 
 # 材料库配置（用于查询管口附件折叠表）
@@ -692,6 +704,16 @@ def render_attachment_param_to_ui(viewer_instance, element_id, target_tab_name=N
             # 从其他元件切换到管口附件时，应该默认显示第一个tab页
             tab_widget.setCurrentIndex(0)
 
+    # 刷新当前 Tab 对应的元件示意图
+    try:
+        cur_idx = tab_widget.currentIndex()
+        if 0 <= cur_idx < tab_widget.count():
+            cur_tab = tab_widget.tabText(cur_idx).strip()
+            if cur_tab not in {"+", "＋"}:
+                refresh_attachment_schematic_image(viewer_instance, cur_tab)
+    except Exception as e:
+        print(f"[管口附件示意图] 初始渲染后刷新失败: {e}")
+
 
 def _read_param_values_from_table(table, param_data):
     """从表格中读取参数值（用于复制到新tab页）"""
@@ -816,7 +838,7 @@ def _add_attachment_tab_from_current(viewer_instance, src_idx, src_name):
             import traceback
             traceback.print_exc()
             try:
-                QMessageBox.warning(viewer_instance, "错误", f"创建新tab页失败：{e}")
+                show_warning(viewer_instance, "错误", f"创建新tab页失败：{e}")
             except:
                 pass
     except Exception as outer_e:
@@ -1632,9 +1654,11 @@ def _apply_cladding_type_logic_for_attachment_table(
     *,
     has_covering: bool,
     type_value: str,
+    type_param: str = "",
     level_param: str,
     status_param: str,
     process_param: str,
+    thickness_param: str = "",  #6.12覆层新增
 ):
     """
     参照管口元件覆层逻辑：
@@ -1681,30 +1705,46 @@ def _apply_cladding_type_logic_for_attachment_table(
         if process_row is not None:
             table.setRowHidden(process_row, False)
 
+    # 6.12覆层新增
+    if thickness_param:
+        thickness_row = _find_first_row_by_param(table, param_col, thickness_param)
+        if thickness_row is not None:
+            cur = _get_cell_text(table, thickness_row, value_col)
+            type_key = type_param or level_param.replace("覆层材料级别", "覆层材料类型")
+            new_th = cladding_thickness_default_if_needed(
+                table, type_key, v, cur
+            )
+            if new_th:
+                _ensure_editable_value_cell(table, thickness_row, value_col)
+                _set_cell_text(table, thickness_row, value_col, new_th)
+
 
 def _install_attachment_flange_cladding_linkage(table, param_col: int, value_col: int, viewer_instance=None):
     """
-    在“接管法兰配对法兰”附件页中，为“接管法兰覆层”相关字段安装：
+    在“接管法兰配对法兰”附件页中，为“配对法兰覆层”相关字段安装：
       - 是否添加覆层 → 显示/隐藏覆层字段并在隐藏时清空值
-      - 覆层材料类型 → 覆层材料牌号/材料标准联动（同材料四字段的过滤逻辑），并驱动成型工艺/级别/使用状态显隐
+      - 覆层材料类型/牌号/标准等 → 下拉候选项优先从参数表读取（与普通元件覆层组一致）
+      - 覆层材料类型变更 → 驱动成型工艺/级别/使用状态显隐
       - 覆层厚度(mm) → >=0 的数值代理
 
     注意：管口附件页的写库在“确定”按钮触发，这里只做 UI 级联与候选项联动。
     """
-    toggle_name = "接管法兰是否添加覆层"
-    type_name = "接管法兰覆层材料类型"
-    brand_name = "接管法兰覆层材料牌号"
-    std_name = "接管法兰覆层材料标准"
-    level_name = "接管法兰覆层材料级别"
-    process_name = "接管法兰覆层成型工艺"
-    status_name = "接管法兰覆层使用状态"
-    thickness_name = "接管法兰覆层厚度(mm)"
+    toggle_name = "配对法兰是否添加覆层"
+    type_name = "配对法兰覆层材料类型"
+    brand_name = "配对法兰覆层材料牌号"
+    std_name = "配对法兰覆层材料标准"
+    level_name = "配对法兰覆层材料级别"
+    process_name = "配对法兰覆层成型工艺"
+    status_name = "配对法兰覆层使用状态"
+    thickness_name = "配对法兰覆层厚度(mm)"
+    groove_name = "配对法兰存在覆层时的焊接凹槽深度"  #6.12覆层新增
 
     toggle_row = _find_first_row_by_param(table, param_col, toggle_name)
     type_row = _find_first_row_by_param(table, param_col, type_name)
     brand_row = _find_first_row_by_param(table, param_col, brand_name)
     std_row = _find_first_row_by_param(table, param_col, std_name)
     thickness_row = _find_first_row_by_param(table, param_col, thickness_name)
+    groove_row = _find_first_row_by_param(table, param_col, groove_name)   #6.12覆层新增
 
     # 如果这套字段在当前tab不存在，直接跳过
     if toggle_row is None and type_row is None:
@@ -1713,12 +1753,11 @@ def _install_attachment_flange_cladding_linkage(table, param_col: int, value_col
     dependent_names = [
         type_name,
         brand_name,
-        "接管法兰覆层材料级别",
+        level_name,
         std_name,
         process_name,
         status_name,
         thickness_name,
-        "接管法兰覆层材料类型",
     ]
 
     # 统一找出依赖字段行
@@ -1741,6 +1780,14 @@ def _install_attachment_flange_cladding_linkage(table, param_col: int, value_col
                 s.add(rr)
             else:
                 s.discard(rr)
+
+    # 6.12覆层新增
+    def _sync_groove_visibility():
+        update_cladding_groove_depth_visibility(
+            table, param_col, value_col, control_field=toggle_name
+        )
+        if groove_row is not None:
+            _mark_forced_hidden([groove_row], table.isRowHidden(groove_row))
 
     # --- 1) 覆层开关（是/否） ---
     if toggle_row is not None:
@@ -1766,9 +1813,11 @@ def _install_attachment_flange_cladding_linkage(table, param_col: int, value_col
                     value_col,
                     has_covering=True,
                     type_value=cur_type,
+                    type_param=type_name,
                     level_param=level_name,
                     status_param=status_name,
                     process_param=process_name,
+                    thickness_param=thickness_name,  #6.12覆层新增
                 )
                 # 材料类型=焊材时，级别/使用状态仍需保持隐藏，避免被分组展开放出来
                 level_row = _find_first_row_by_param(table, param_col, level_name)
@@ -1778,6 +1827,7 @@ def _install_attachment_flange_cladding_linkage(table, param_col: int, value_col
                     type_hides = [level_row, status_row]
                 _mark_forced_hidden([level_row, status_row], False)
                 _mark_forced_hidden(type_hides, True)
+            _sync_groove_visibility()   #6.12覆层新增
             table.viewport().update()
 
         table.setItemDelegateForRow(
@@ -1809,12 +1859,14 @@ def _install_attachment_flange_cladding_linkage(table, param_col: int, value_col
                     opts.append(s)
             table.setItemDelegateForRow(row_idx, MaterialInstantDelegate(opts, table, field_name, on_pick))
 
-        def _opts_for_brand(tval: str):
-            return (get_filtered_material_options({"材料类型": tval} if tval else {}) or {}).get("材料牌号", []) or []
+        # 6.12覆层新增
+        def _opts_for_brand(_tval: str):
+            # 覆层牌号候选项来自参数表（钢板/焊材共用同一套配置，不按材料库级联）
+            return get_options_for_param(brand_name) or []
 
-        def _opts_for_std(tval: str, bval: str):
-            basis = {k: v for k, v in {"材料类型": tval, "材料牌号": bval}.items() if v}
-            return (get_filtered_material_options(basis) or {}).get("材料标准", []) or []
+        # 6.12覆层新增
+        def _opts_for_std(_tval: str, _bval: str):
+            return get_options_for_param(std_name) or []
 
         def _on_pick_cladding(field_name: str, new_text: str, row: int, col: int):
             # 覆层是否开启（用于门控后续“展开/强制值”逻辑）
@@ -1842,9 +1894,11 @@ def _install_attachment_flange_cladding_linkage(table, param_col: int, value_col
                     value_col,
                     has_covering=has_covering,
                     type_value=new_text,
+                    type_param=type_name,
                     level_param=level_name,
                     status_param=status_name,
                     process_param=process_name,
+                    thickness_param=thickness_name,  #6.12覆层新增
                 )
                 # 材料类型导致的额外隐藏（焊材隐藏级别/使用状态）也要参与“强制隐藏”集合
                 level_row = _find_first_row_by_param(table, param_col, level_name)
@@ -1852,6 +1906,7 @@ def _install_attachment_flange_cladding_linkage(table, param_col: int, value_col
                 _mark_forced_hidden([level_row, status_row], False)
                 if has_covering and (new_text or "").strip() == "焊材":
                     _mark_forced_hidden([level_row, status_row], True)
+                _sync_groove_visibility()    #6.12覆层新增
             elif field_name == brand_name:
                 if brand_row is not None:
                     _set_cell_text(table, brand_row, value_col, new_text)
@@ -1887,9 +1942,11 @@ def _install_attachment_flange_cladding_linkage(table, param_col: int, value_col
                 value_col,
                 has_covering=has_covering_init,
                 type_value=cur_t,
+                type_param=type_name,
                 level_param=level_name,
                 status_param=status_name,
                 process_param=process_name,
+                thickness_param=thickness_name,  #6.12覆层新增
             )
             # 初始化时同步一次“强制隐藏”集合，避免首次点分组标题时把覆层控制隐藏项展开
             level_row = _find_first_row_by_param(table, param_col, level_name)
@@ -1900,6 +1957,7 @@ def _install_attachment_flange_cladding_linkage(table, param_col: int, value_col
                 _mark_forced_hidden(dep_rows, False)
                 if (cur_t or "").strip() == "焊材":
                     _mark_forced_hidden([level_row, status_row], True)
+            _sync_groove_visibility()   #6.12覆层新增
         except Exception:
             pass
 
@@ -2099,12 +2157,12 @@ def _render_attachment_table_data(table, attachment_type, guankou_codes, param_d
         import traceback
         traceback.print_exc()
 
-    # 安装“接管法兰覆层”相关字段的联动逻辑（仅在存在这些行时生效）
+    # 安装“配对法兰覆层”相关字段的联动逻辑（仅在存在这些行时生效）
     try:
         _install_attachment_flange_cladding_linkage(table, param_col=0, value_col=1, viewer_instance=viewer_instance)
-        _dbg_print(f"[DBG][attachment_render] 接管法兰覆层联动逻辑安装完成")
+        _dbg_print(f"[DBG][attachment_render] 配对法兰覆层联动逻辑安装完成")
     except Exception as e:
-        print(f"[DBG][attachment_render] 安装接管法兰覆层联动逻辑失败: {e}")
+        print(f"[DBG][attachment_render] 安装配对法兰覆层联动逻辑失败: {e}")
         import traceback
         traceback.print_exc()
 
@@ -2393,7 +2451,7 @@ def on_clear_attachment_param_update(viewer_instance):
     btn_ok = box.addButton("确认", QMessageBox.YesRole)
     btn_cancel = box.addButton("取消", QMessageBox.NoRole)
     box.setDefaultButton(btn_cancel)
-    box.exec_()
+    exec_message_box(box)
     if box.clickedButton() is not btn_ok:
         print("[清空] 用户取消操作")
         return
@@ -2522,14 +2580,14 @@ def on_confirm_attachment_param_update(viewer_instance):
     if tab_widget is None:
         box = QMessageBox(QMessageBox.Warning, "错误", "未找到管口附件Tab控件", QMessageBox.NoButton, viewer_instance)
         box.addButton("确认", QMessageBox.AcceptRole)
-        box.exec_()
+        exec_message_box(box)
         return
     
     cur_idx = tab_widget.currentIndex()
     if cur_idx < 0:
         box = QMessageBox(QMessageBox.Warning, "错误", "未选择Tab页", QMessageBox.NoButton, viewer_instance)
         box.addButton("确认", QMessageBox.AcceptRole)
-        box.exec_()
+        exec_message_box(box)
         return
     
     tab_name = tab_widget.tabText(cur_idx).strip()
@@ -2537,14 +2595,14 @@ def on_confirm_attachment_param_update(viewer_instance):
     if table is None:
         box = QMessageBox(QMessageBox.Warning, "错误", f"未找到 {tab_name} 的参数表", QMessageBox.NoButton, viewer_instance)
         box.addButton("确认", QMessageBox.AcceptRole)
-        box.exec_()
+        exec_message_box(box)
         return
     
     product_id = getattr(viewer_instance, "product_id", None)
     if not product_id:
         box = QMessageBox(QMessageBox.Warning, "错误", "未找到产品ID", QMessageBox.NoButton, viewer_instance)
         box.addButton("确认", QMessageBox.AcceptRole)
-        box.exec_()
+        exec_message_box(box)
         return
     
     # 2) 从表格中读取数据并更新到数据库
@@ -2684,7 +2742,7 @@ def on_confirm_attachment_param_update(viewer_instance):
         traceback.print_exc()
         box = QMessageBox(QMessageBox.Warning, "错误", f"保存失败：{e}", QMessageBox.NoButton, viewer_instance)
         box.addButton("确认", QMessageBox.AcceptRole)
-        box.exec_()
+        exec_message_box(box)
         _set_tip(viewer_instance, f"保存失败：{e}", success=False)
 
 
@@ -2746,7 +2804,7 @@ def _remove_attachment_tab(viewer_instance, index):
     if real_count <= 1:
         box = QMessageBox(QMessageBox.Information, "提示", "至少保留一个管口附件分类，不能删除最后一个 tab", QMessageBox.NoButton, tab_widget)
         box.addButton("确认", QMessageBox.AcceptRole)
-        box.exec_()
+        exec_message_box(box)
         def clear_removing_flag_after_dialog():
             viewer_instance._is_removing_attachment_tab = False
         QTimer.singleShot(200, clear_removing_flag_after_dialog)
@@ -2840,6 +2898,12 @@ def _on_attachment_tab_changed(viewer_instance, index: int):
         print(f"[管口附件] Tab页数据刷新失败: {e}")
         import traceback
         traceback.print_exc()
+
+    # 切换 Tab 时刷新元件示意图
+    try:
+        refresh_attachment_schematic_image(viewer_instance, tab_name)
+    except Exception as e:
+        print(f"[管口附件示意图] Tab切换刷新失败: {e}")
 
 
 def _refresh_attachment_tab_pipe_code_options(viewer_instance, table, tab_name):

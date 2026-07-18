@@ -27,6 +27,9 @@ from modules.condition_input.funcs.funcs_cdt_input import clear_manual_flags_for
 
 
 def handle_template_change(viewer_instance, index):
+    if getattr(viewer_instance, "_template_reverting", False):
+        return
+
     print("handle_template_change called with index:", index)
     selected_template = viewer_instance.comboBox_template.itemText(index).strip()
     # 特殊处理：如果模板名称为空字符串，则设置为"None"
@@ -82,7 +85,7 @@ def init_template_combo_hooks(self):
     self.current_template_name = self.comboBox_template.currentText().strip()
     self._template_prev_index = self.comboBox_template.currentIndex()
     self._template_reverting = False
-    self.comboBox_template.currentIndexChanged.connect(
+    self.comboBox_template.activated.connect(
         lambda idx: handle_template_change(self, idx)
     )
 

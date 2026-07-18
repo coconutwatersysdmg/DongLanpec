@@ -107,15 +107,35 @@ QLabel#label_4 {
     padding: 0px;
 }
 
+/* 与项目管理 guanli_new.ui / ui_style.py 按钮样式一致 */
 QPushButton {
-    background-color: #f8fafc;
-    color: #1f1f1f;
-    border: 1px solid #CCCCCC;
-    padding: 3px 12px;
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #ffffff, stop: 1 #e8edf5);
+    border: 1px solid #b8c8e0;
+    border-radius: 0px;
+    color: #000000;
+    font-size: 17px;
+    padding: 8px 20px;
+    text-align: center;
+    min-width: 65px;
 }
 
 QPushButton:hover {
-    background-color: #edf2f8;
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #f0f4fa, stop: 1 #d8e0ed);
+    border-color: #9ab0d0;
+}
+
+QPushButton:pressed {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #e0e6f0, stop: 1 #c8d2e0);
+    border-color: #7a90b0;
+}
+
+QPushButton:disabled {
+    background: #f5f7fa;
+    color: #888888;
+    border-color: #d0d8e5;
 }
 
 QLineEdit#lineEdit {
@@ -161,20 +181,7 @@ QComboBox QAbstractItemView {
     selection-color: #1f1f1f;
 }
 
-QPushButton#pushButton_6,
-QPushButton#pushButton_7,
-QPushButton#pushButton_8,
-QPushButton#pushButton_9,
-QPushButton#pushButton_10,
-QPushButton#pushButton_11,
-QPushButton#pushButton_12,
-QPushButton#pushButton_13,
-QPushButton#pushButton_14,
-QPushButton#pushButton_15 {
-    min-width: 54px;
-    min-height: 28px;
-    padding: 4px 14px;
-}
+/* 详细定义底部「清空/确定」沿用全局 QPushButton 项目管理样式 */
 
 /* Tab 右键菜单：避免悬停时文字与背景同色导致看不见 */
 QMenu {
@@ -206,7 +213,7 @@ QMenu::item:selected {
         </widget>
        </item>
        <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_4" stretch="2,1,2,1,1,1,2,0">
+        <layout class="QHBoxLayout" name="horizontalLayout_4" stretch="2,0,2,0,0,0,0,0,3">
          <item>
           <layout class="QHBoxLayout" name="horizontalLayout">
            <item>
@@ -232,9 +239,12 @@ QMenu::item:selected {
            <property name="orientation">
             <enum>Qt::Horizontal</enum>
            </property>
+           <property name="sizeType">
+            <enum>QSizePolicy::Fixed</enum>
+           </property>
            <property name="sizeHint" stdset="0">
             <size>
-             <width>40</width>
+             <width>16</width>
              <height>20</height>
             </size>
            </property>
@@ -272,53 +282,65 @@ QMenu::item:selected {
            <property name="orientation">
             <enum>Qt::Horizontal</enum>
            </property>
+           <property name="sizeType">
+            <enum>QSizePolicy::Fixed</enum>
+           </property>
            <property name="sizeHint" stdset="0">
             <size>
-             <width>40</width>
+             <width>12</width>
              <height>20</height>
             </size>
            </property>
           </spacer>
          </item>
          <item>
-          <spacer name="horizontalSpacer_6">
+          <widget class="QPushButton" name="pushButton_structure_tree">
+           <property name="text">
+            <string>结构树</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_structure_tree">
            <property name="orientation">
             <enum>Qt::Horizontal</enum>
            </property>
+           <property name="sizeType">
+            <enum>QSizePolicy::Fixed</enum>
+           </property>
            <property name="sizeHint" stdset="0">
             <size>
-             <width>20</width>
+             <width>8</width>
              <height>20</height>
             </size>
            </property>
           </spacer>
          </item>
          <item>
-          <layout class="QHBoxLayout" name="horizontalLayout_batch_replace">
-           <item>
-            <widget class="QPushButton" name="pushButton_batch_replace">
-             <property name="text">
-              <string>批量替换</string>
-             </property>
-            </widget>
-           </item>
-          </layout>
+          <widget class="QPushButton" name="pushButton_batch_replace">
+           <property name="text">
+            <string>批量替换</string>
+           </property>
+          </widget>
          </item>
          <item>
           <spacer name="horizontalSpacer_batch_replace">
            <property name="orientation">
             <enum>Qt::Horizontal</enum>
            </property>
+           <property name="sizeType">
+            <enum>QSizePolicy::Fixed</enum>
+           </property>
            <property name="sizeHint" stdset="0">
             <size>
-             <width>20</width>
+             <width>12</width>
              <height>20</height>
             </size>
            </property>
           </spacer>
          </item>
          <item>
-          <layout class="QHBoxLayout" name="horizontalLayout_3">
+          <layout class="QHBoxLayout" name="horizontalLayout_3" stretch="0,1">
            <item>
             <widget class="QLabel" name="label_3">
              <property name="text">
@@ -327,7 +349,14 @@ QMenu::item:selected {
             </widget>
            </item>
            <item>
-            <widget class="QLineEdit" name="lineEdit_2"/>
+            <widget class="QLineEdit" name="lineEdit_2">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+               <horstretch>1</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+            </widget>
            </item>
           </layout>
          </item>

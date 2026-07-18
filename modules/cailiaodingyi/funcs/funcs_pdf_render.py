@@ -15,7 +15,8 @@ from modules.cailiaodingyi.controllers.combo import ComboDelegate, ComboPopupEve
     BulkFillDynamicOptionsDelegate, MultiSelectRowComboDelegate, MultiSelectDynamicOptionsDelegate
 from modules.cailiaodingyi.funcs.funcs_pdf_change import get_filtered_material_options, get_fastener_bolt_type_options, \
     get_fastener_component_options_by_template_id, load_updated_fastener_define_data, \
-    get_fastener_root_series_options, DEBUG_VERBOSE_DEFINE_UI
+    get_fastener_root_series_options, default_cladding_thickness_by_material_type, default_cladding_groove_depth, \
+    DEBUG_VERBOSE_DEFINE_UI
 from modules.condition_input.funcs.funcs_cdt_input import get_opening_weld_joint_default
 from modules.cailiaodingyi.funcs.funcs_pdf_input import load_guankou_param_structure_from_db, load_dropdown_options, \
     query_unassigned_codes, query_codes_for_tab_raw,get_fastener_param_structure_from_db
@@ -529,8 +530,276 @@ def install_reinforcement_group_toggle(
     print(f"[补强圈切换] 已安装，开关行={toggle_row}，受控行={reinforcement_rows}")
 
 
+def install_guankou_forging_level_toggle(
+    table,
+    *,
+    param_col=0,
+    value_cols=(1, 2, 3),
+    forging_opts=None,
+):
+    """
+    管口元件：接管/接管法兰材料类型 → 锻件级别显隐与按列可编辑控制。
+    - 三列中只要有一列材料类型为「钢锻件」，整行显示；
+    - 非钢锻件列：不可编辑且 UI 清空；
+    - 钢锻件列：可编辑，显示值来自数据库/用户输入，不在 UI 层写死默认值。
+    """
+    if not table or table.rowCount() == 0:
+        return
+
+    forging_opts = [str(x).strip() for x in (forging_opts or []) if str(x).strip()]
+
+    def _find_row(name: str) -> int:
+        for r in range(table.rowCount()):
+            it = table.item(r, param_col)
+            if it and it.text().strip() == name:
+                return r
+        return -1
+
+    def _get_text(r: int, c: int) -> str:
+        w = table.cellWidget(r, c)
+        if isinstance(w, QComboBox):
+            return w.currentText().strip()
+        if isinstance(w, QLineEdit):
+            return w.text().strip()
+        it = table.item(r, c)
+        return (it.text().strip() if it else "")
+
+    def _set_text(r: int, c: int, txt: str):
+        it = table.item(r, c)
+        if it is None:
+            it = QTableWidgetItem(txt)
+            it.setTextAlignment(Qt.AlignCenter)
+            table.setItem(r, c, it)
+        else:
+            it.setText(txt or "")
+
+    def _clear_cell(r: int, c: int):
+        w = table.cellWidget(r, c)
+        if isinstance(w, QComboBox):
+            if w.findText("") >= 0:
+                w.setCurrentText("")
+            elif w.count():
+                w.setCurrentIndex(0)
+        elif isinstance(w, QLineEdit):
+            w.clear()
+        else:
+            _set_text(r, c, "")
+
+    def _set_cell_enabled(r: int, c: int, enabled: bool):
+        w = table.cellWidget(r, c)
+        if w is not None:
+            try:
+                w.setEnabled(enabled)
+            except Exception:
+                pass
+
+        it = table.item(r, c)
+        if it is None:
+            it = QTableWidgetItem(_get_text(r, c))
+            it.setTextAlignment(Qt.AlignCenter)
+            table.setItem(r, c, it)
+
+        flags = it.flags()
+        if enabled:
+            flags |= Qt.ItemIsEditable | Qt.ItemIsEnabled | Qt.ItemIsSelectable
+            it.setBackground(Qt.white)
+            it.setForeground(Qt.black)
+        else:
+            flags &= ~Qt.ItemIsEditable
+        it.setFlags(flags)
+
+    pairs = (
+        ("接管材料类型", "接管锻件级别"),
+        ("接管法兰材料类型", "接管法兰锻件级别"),
+    )
+
+    watchers = []
+    for type_name, forging_name in pairs:
+        type_row = _find_row(type_name)
+        forging_row = _find_row(forging_name)
+        if type_row < 0 or forging_row < 0:
+            continue
+
+        if forging_opts:
+            try:
+                table.setItemDelegateForRow(forging_row, MultiSelectRowComboDelegate(forging_opts, table))
+            except Exception:
+                pass
+
+        def make_refresh(_type_row, _forging_row):
+            def _refresh():
+                type_vals = [_get_text(_type_row, c) for c in value_cols]
+                show = any(tv == "钢锻件" for tv in type_vals)
+                table.setRowHidden(_forging_row, not show)
+
+                for cc in value_cols:
+                    idx = cc - value_cols[0]
+                    tv = type_vals[idx] if idx < len(type_vals) else ""
+                    if show and tv == "钢锻件":
+                        _set_cell_enabled(_forging_row, cc, True)
+                    else:
+                        _set_cell_enabled(_forging_row, cc, False)
+                        _clear_cell(_forging_row, cc)
+
+                table.viewport().update()
+
+            return _refresh
+
+        watchers.append({
+            "type_row": type_row,
+            "forging_row": forging_row,
+            "refresh": make_refresh(type_row, forging_row),
+        })
+
+    if not watchers:
+        return
+
+    for w in watchers:
+        w["refresh"]()
+
+    model = table.model()
+    old = getattr(table, "_guankou_forging_toggle_conn", None)
+    if old:
+        try:
+            model.dataChanged.disconnect(old)
+        except Exception:
+            pass
+
+    watch_rows = {w["type_row"] for w in watchers}
+    watch_cols = set(value_cols)
+
+    def _on_data_changed(topLeft, bottomRight, roles=None):
+        for r in range(topLeft.row(), bottomRight.row() + 1):
+            if r not in watch_rows:
+                continue
+            for c in range(topLeft.column(), bottomRight.column() + 1):
+                if c not in watch_cols:
+                    continue
+                for w in watchers:
+                    if r == w["type_row"]:
+                        w["refresh"]()
+                        return
+
+    model.dataChanged.connect(_on_data_changed)
+    table._guankou_forging_toggle_conn = _on_data_changed
+
+    def _refresh_all_forging_groups():
+        for w in watchers:
+            w["refresh"]()
+
+    table._guankou_forging_refresh_all = _refresh_all_forging_groups
+    print(f"[管口锻件级别] 已安装，组数={len(watchers)}")
+
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QComboBox, QLineEdit, QTableWidgetItem
+#6.12覆层新增
+def _resolve_groove_rows(name2row, groove_base: str):
+    """
+    管口焊接凹槽深度：优先按 基名+1/2/3 三行（每行对应一列管口）。
+    仅当不存在分列行时，才回退到 4列单行（基名）。
+    """
+    if not groove_base:
+        return None, None
+    split = []
+    for i in (1, 2, 3):
+        key = f"{groove_base}{i}"
+        if key in name2row:
+            split.append((i, name2row[key]))
+    if split:
+        return "split", split
+    if groove_base in name2row:
+        return "unified", name2row[groove_base]
+    return None, None
+
+
+def _hide_groove_rows(table, groove_mode, groove_data):
+    if groove_mode == "unified" and groove_data is not None and groove_data >= 0:
+        table.setRowHidden(groove_data, True)
+    elif groove_mode == "split" and groove_data:
+        for _, rr in groove_data:
+            table.setRowHidden(rr, True)
+
+
+def _table_param_names(table, param_col=0):
+    names = set()
+    for r in range(table.rowCount()):
+        it = table.item(r, param_col)
+        if it:
+            names.add(it.text().strip())
+    return names
+
+
+def _guankou_groove_has_data(groove_base, display_map, guankou_para_info):
+    if groove_base in display_map:
+        return True
+    for item in guankou_para_info or []:
+        n = str(item.get("参数名称") or "").strip()
+        if n == groove_base:
+            return True
+        suffix = n[len(groove_base):] if n.startswith(groove_base) else ""
+        if suffix in ("1", "2", "3"):
+            return True
+    return False
+
+
+def _find_row_after_thickness(table, *thickness_names):
+    insert_at = table.rowCount()
+    for r in range(table.rowCount()):
+        it = table.item(r, 0)
+        if it and it.text().strip() in thickness_names:
+            insert_at = r + 1
+            break
+    return insert_at
+
+
+def _insert_guankou_groove_split_rows(table, insert_at, groove_base, display_map, numeric_rows):
+    """
+    补插 基名+1/2/3 三行：每行只在该列管口对应列放值，按行独立显隐（非整列禁用）。
+    """
+    value_map = display_map.get(groove_base, {})
+    if not isinstance(value_map, dict):
+        value_map = {}
+    for i in (1, 2, 3):
+        table.insertRow(insert_at)
+        pname = f"{groove_base}{i}"
+        label_item = QTableWidgetItem(pname)
+        label_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+        table.setItem(insert_at, 0, label_item)
+        for col in range(1, 4):
+            val = value_map.get(i, "") if col == i else ""
+            item = QTableWidgetItem(str(val))
+            item.setTextAlignment(Qt.AlignCenter)
+            item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
+            table.setItem(insert_at, col, item)
+        numeric_rows.append((insert_at, "ge0", pname))
+        insert_at += 1
+
+
+def _inject_guankou_groove_rows(table, display_map, guankou_para_info, numeric_rows):
+    """
+    活动库已有 深度1/2/3 数据但管口参数表未配置时，补插三行分列凹槽深度。
+    """
+    rendered = _table_param_names(table)
+    specs = (
+        (
+            "接管存在覆层时的焊接凹槽深度",
+            ("接管覆层厚度(mm)", "接管覆层厚度"),
+        ),
+        (
+            "接管法兰存在覆层时的焊接凹槽深度",
+            ("接管法兰覆层厚度(mm)", "接管法兰覆层厚度"),
+        ),
+    )
+    for groove_base, thickness_names in specs:
+        if groove_base in rendered or any(f"{groove_base}{i}" in rendered for i in (1, 2, 3)):
+            continue
+        has_thickness = any(n in rendered for n in thickness_names)
+        if not has_thickness and not _guankou_groove_has_data(groove_base, display_map, guankou_para_info):
+            continue
+        insert_at = _find_row_after_thickness(table, *thickness_names)
+        _insert_guankou_groove_split_rows(table, insert_at, groove_base, display_map, numeric_rows)
+
 
 def install_overlay_group_toggle(
     table,
@@ -627,6 +896,7 @@ def install_overlay_group_toggle(
         process_name   = g.get("process_name", "")
         thickness_name = g.get("thickness_name", "")
         thickness_min  = float(g.get("thickness_min", 0.0))
+        groove_name    = g.get("groove_name", "")  #6.12覆层新增
 
         process_plate_options = list(g.get("process_plate_options", ["轧制复合", "爆炸焊接"]))
         process_plate_default = g.get("process_plate_default", "爆炸焊接")
@@ -650,17 +920,25 @@ def install_overlay_group_toggle(
         status_row   = name2row.get(status_name, -1) if status_name else -1
         process_row  = name2row.get(process_name,-1) if process_name else -1
         thickness_row = name2row.get(thickness_name, -1) if thickness_name else -1
+        groove_mode, groove_data = _resolve_groove_rows(name2row, groove_name)  #6.12覆层新增
 
         if not overlay_rows and toggle_row < 0 and (
-            type_row < 0 and grade_row < 0 and status_row < 0 and process_row < 0 and thickness_row < 0
+            type_row < 0 and grade_row < 0 and status_row < 0 and process_row < 0
+            and thickness_row < 0 and not groove_mode  #6.12覆层新增
         ):
             continue
 
         # --- 生成刷新函数（注意参数顺序） ---
+        _prev_types = (
+            [_get_text(type_row, c) for c in value_cols]
+            if type_row >= 0 else [""] * len(value_cols)
+        )
+
         def make_refresh(_toggle_row, _type_row, _grade_row, _status_row, _process_row,
-                         _thickness_row, _thickness_min, _overlay_rows,
+                         _thickness_row, _groove_mode, _groove_data, _thickness_min, _overlay_rows,  #6.12覆层新增
                          _plate_values, _weld_values,
-                         _p_plate_opts, _p_plate_def, _p_weld_opts, _p_weld_def):
+                         _p_plate_opts, _p_plate_def, _p_weld_opts, _p_weld_def,
+                         _prev_types):
             def _refresh():
                 # 1) 覆层开关：整块显隐
                 has_overlay = True
@@ -675,6 +953,12 @@ def install_overlay_group_toggle(
                     #         _clear_cell(rr, cc)
 
                 if not has_overlay:
+                    _hide_groove_rows(table, _groove_mode, _groove_data) #6.12覆层新增
+                    if _type_row >= 0:
+                        _off_types = [_get_text(_type_row, c) for c in value_cols]
+                        for i, _c in enumerate(value_cols):
+                            if i < len(_prev_types):
+                                _prev_types[i] = _off_types[i] if i < len(_off_types) else ""
                     table.viewport().update()
                     return
 
@@ -750,14 +1034,65 @@ def install_overlay_group_toggle(
                                 _set_text(_process_row, cc, _p_plate_def)  # 若不想改默认可注释
                         else:
                             pass
+                # 6.12覆层新增
+                # 2.4 覆层厚度（按列默认值：仅类型变更或当前为空时写入，保留用户手改值）
+                if _thickness_row >= 0:
+                    for cc in value_cols:
+                        t = _get_text(_type_row, cc) if _type_row >= 0 else ""
+                        default_th = default_cladding_thickness_by_material_type(t)
+                        if default_th:
+                            idx = cc - value_cols[0]
+                            prev_t = _prev_types[idx] if idx < len(_prev_types) else ""
+                            if t != prev_t or not _get_text(_thickness_row, cc):
+                                _set_text(_thickness_row, cc, default_th)
+
+                # 2.5 焊接凹槽深度（覆层=是 且 对应列材料类型=钢板/板材）
+                types = [_get_text(_type_row, c) for c in value_cols] if _type_row >= 0 else []
+                _groove_default = default_cladding_groove_depth()
+                if _groove_mode == "split" and _groove_data:
+                    # 基名+1/2/3：每行是独立参数，仅控制该行显隐（不禁用整列其它参数）
+                    for col_i, gro_row in _groove_data:
+                        idx = col_i - 1
+                        t = types[idx] if idx < len(types) else ""
+                        hide_row = t not in _plate_values
+                        table.setRowHidden(gro_row, hide_row)
+                        if hide_row:
+                            for cc in value_cols:
+                                _clear_cell(gro_row, cc)
+                        else:
+                            prev_t = _prev_types[idx] if idx < len(_prev_types) else ""
+                            became_plate = (t in _plate_values) and (prev_t not in _plate_values)
+                            if became_plate or not _get_text(gro_row, col_i):
+                                _set_text(gro_row, col_i, _groove_default)
+                elif _groove_mode == "unified" and _groove_data is not None and _groove_data >= 0:
+                    # 4列单行：整行至少一列钢板则显示；焊材列禁用并清空；钢板列写配置默认（不覆盖手改值）
+                    any_plate = any(t in _plate_values for t in types)
+                    table.setRowHidden(_groove_data, not any_plate)
+                    for cc in value_cols:
+                        idx = cc - value_cols[0]
+                        t = types[idx] if idx < len(types) else ""
+                        enabled = any_plate and (t in _plate_values)
+                        _set_cell_enabled(_groove_data, cc, enabled)
+                        if not enabled:
+                            _clear_cell(_groove_data, cc)
+                        else:
+                            prev_t = _prev_types[idx] if idx < len(_prev_types) else ""
+                            became_plate = (t in _plate_values) and (prev_t not in _plate_values)
+                            if became_plate or not _get_text(_groove_data, cc):
+                                _set_text(_groove_data, cc, _groove_default)
+
+                for i, _c in enumerate(value_cols):
+                    if i < len(_prev_types):
+                        _prev_types[i] = types[i] if i < len(types) else ""
 
             return _refresh
 
         rf = make_refresh(
             toggle_row, type_row, grade_row, status_row, process_row,
-            thickness_row, thickness_min, overlay_rows,
+            thickness_row, groove_mode, groove_data, thickness_min, overlay_rows,  #6.12覆层新增
             plate_values, weld_values,
-            process_plate_options, process_plate_default, process_weld_options, process_weld_default
+            process_plate_options, process_plate_default, process_weld_options, process_weld_default,
+            _prev_types,
         )
 
         watchers.append({
@@ -845,6 +1180,13 @@ def install_overlay_group_toggle(
 
     model.dataChanged.connect(_on_data_changed)
     table._overlay_toggle_conn = _on_data_changed
+
+    # 6.12覆层新增
+    def _refresh_all_overlay_groups():
+        for w in watchers:
+            w["refresh"]()
+
+    table._overlay_group_refresh_all = _refresh_all_overlay_groups
 
 
 def install_selection_debug(table):
@@ -940,6 +1282,11 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
                         it.setBackground(hl)
 
         def createEditor(self, parent, option, index):
+            # 6.12覆层新增
+            if self.table:
+                it = self.table.item(index.row(), index.column())
+                if it is None or not (it.flags() & Qt.ItemIsEditable):
+                    return None
             self._targets_cache = self._snapshot_targets(index.row())
 
             if self.table:
@@ -1119,6 +1466,8 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
         "接管焊缝金属截面积(mm²)",
         "接管覆层厚度(mm)",
         "接管法兰覆层厚度(mm)",
+        "接管存在覆层时的焊接凹槽深度",
+        "接管法兰存在覆层时的焊接凹槽深度",  #6.12覆层新增
     }
     NUM_GT0 = set()  # 需要“严格 >0”的名字可以丢到这里
 
@@ -1227,6 +1576,8 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
         if param_name in NUM_GE0 or param_name in NUM_GT0:
             rule = "ge0" if param_name in NUM_GE0 else "gt0"
             numeric_rows.append((row, rule, param_name))
+    # 6.12覆层新增
+    _inject_guankou_groove_rows(table, display_map, guankou_para_info, numeric_rows)
 
     # 表头自适应
     header = table.horizontalHeader()
@@ -1237,31 +1588,31 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
     # === 严格分组识别（只保留满四项的组） ===
     groups, row2field, row2group = find_material_groups_fuzzy_strict(table)
     found_rows = sorted(row2field.keys())
+    found_set = set(found_rows) #6.12覆层新增
     if not found_rows:
-        print("[材料联动][警告] 没有满四项的材料组，跳过安装代理")
-        return
+        print("[材料联动][警告] 没有满四项的材料组，跳过安装材料代理")
+    else:   #6.12覆层新增
+        # 确保可编辑 & 去掉 cellWidget
+        for r in found_rows:
+            for c in (1, 2, 3):
+                it = table.item(r, c)
+                if it is None:
+                    it = QTableWidgetItem("")
+                    it.setTextAlignment(Qt.AlignCenter)
+                    table.setItem(r, c, it)
+                it.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
+                if table.cellWidget(r, c):
+                    table.setCellWidget(r, c, None)
 
-    # 确保可编辑 & 去掉 cellWidget
-    for r in found_rows:
-        for c in (1, 2, 3):
-            it = table.item(r, c)
-            if it is None:
-                it = QTableWidgetItem("")
-                it.setTextAlignment(Qt.AlignCenter)
-                table.setItem(r, c, it)
-            it.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
-            if table.cellWidget(r, c):
-                table.setCellWidget(r, c, None)
+        # 安装动态代理（只对这些行）
+        for r in found_rows:
+            table.setItemDelegateForRow(r, None)
+        dyn = MultiSelectDynamicOptionsDelegate(table, groups, row2field, row2group)
+        for r in found_rows:
+            table.setItemDelegateForRow(r, dyn)
 
-    # 安装动态代理（只对这些行）
-    for r in found_rows:
-        table.setItemDelegateForRow(r, None)
-    dyn = MultiSelectDynamicOptionsDelegate(table, groups, row2field, row2group)
-    for r in found_rows:
-        table.setItemDelegateForRow(r, dyn)
+        install_copy_paste_shortcuts(table, groups, row2field, row2group)  #6.12覆层新增
 
-
-    found_set = set(found_rows)
     for r, rule, pname in numeric_rows:
         if r in found_set:
             continue
@@ -1272,11 +1623,7 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
                 it.setFlags(it.flags() | Qt.ItemIsEditable | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
         table.setItemDelegateForRow(r, NumericDelegate(rule, pname, table, viewer_instance))
 
-
     table.setEditTriggers(QAbstractItemView.SelectedClicked)
-
-    install_copy_paste_shortcuts(table, groups, row2field, row2group)
-
 
     # 安装补强圈字段的显示/隐藏切换功能
     install_reinforcement_group_toggle(
@@ -1303,6 +1650,7 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
 
                 "thickness_name": "接管覆层厚度(mm)",
                 "thickness_min": 0.0,
+                "groove_name": "接管存在覆层时的焊接凹槽深度",   #6.12覆层新增
 
                 "plate_values": ["钢板", "板材"],
                 "weld_values": ["焊材"],
@@ -1322,6 +1670,7 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
 
                 "thickness_name": "接管法兰覆层厚度(mm)",
                 "thickness_min": 0.0,
+                "groove_name": "接管法兰存在覆层时的焊接凹槽深度",   #6.12覆层新增
 
                 "plate_values": ["钢板", "板材"],
                 "weld_values": ["焊材"],
@@ -1361,6 +1710,41 @@ def render_guankou_param_to_ui(viewer_instance, guankou_para_info: list):
         table.setItemDelegateForRow(
             r, NumericDelegate("ge0", _name, table, viewer_instance)
         )
+    # 6.12覆层新增
+    for _groove_base in ("接管存在覆层时的焊接凹槽深度", "接管法兰存在覆层时的焊接凹槽深度"):
+        _groove_names = [_groove_base] + [f"{_groove_base}{i}" for i in (1, 2, 3)]
+        for _gname in _groove_names:
+            r = _find_row_by_name(table, _gname, 0)
+            if r is None:
+                continue
+            if table.cellWidget(r, 1):
+                table.setCellWidget(r, 1, None)
+            for c in (1, 2, 3):
+                it = table.item(r, c)
+                if it is None:
+                    it = QTableWidgetItem("")
+                    it.setTextAlignment(Qt.AlignCenter)
+                    it.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled | Qt.ItemIsEditable)
+                    table.setItem(r, c, it)
+            table.setItemDelegateForRow(
+                r, NumericDelegate("ge0", _gname, table, viewer_instance)
+            )
+
+    # 安装 NumericDelegate 时会重置可编辑标志，需再刷一次覆层联动（含凹槽深度按列禁用）
+    try:
+        _overlay_refresh = getattr(table, "_overlay_group_refresh_all", None)
+        if callable(_overlay_refresh):
+            _overlay_refresh()
+    except Exception:
+        pass
+
+    # 接管/接管法兰：材料类型=钢锻件时显示锻件级别（三列任一列满足则整行显示，非钢锻件列禁用并清空）
+    install_guankou_forging_level_toggle(
+        table=table,
+        param_col=0,
+        value_cols=(1, 2, 3),
+        forging_opts=dropdown_options.get("锻件级别", []) or [],
+    )
 
     def _select_row_first(r, c):
         table.selectRow(r)  # 先把整行高亮出来

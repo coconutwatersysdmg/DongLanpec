@@ -2,10 +2,13 @@
 from modules.cailiaodingyi.db_cnt import get_connection
 from PyQt5.QtWidgets import QMessageBox
 from PyQt5 import QtWidgets
+from modules.cailiaodingyi.controllers.style import exec_message_box
 from modules.cailiaodingyi.funcs.funcs_pdf_change import (
     DEBUG_VERBOSE_DEFINE_UI,
     query_element_name_param_value,
     update_element_name_data,
+    resolve_to_standard_name,
+    find_product_element_ids_by_name,
 )
 
 PN_USER_INPUT_CACHE = {}
@@ -170,11 +173,12 @@ def get_gasket_elements(product_id):
     try:
         with conn2.cursor() as cursor2:
             for gid, gname in gasket_names.items():
+                lookup_gname = resolve_to_standard_name(gname)
                 cursor2.execute("""
                     SELECT *
                     FROM 垫片配套法兰映射表
                     WHERE 垫片名称 = %s
-                """, (gname,))
+                """, (lookup_gname,))
                 rows = cursor2.fetchall() or []
                 rows = _filter_mapping_rows_by_form(rows, product_form)
 
@@ -184,18 +188,11 @@ def get_gasket_elements(product_id):
                     flange_course = r.get("法兰管壳程") if "法兰管壳程" in r else None
 
                     # === STEP4: 查配套法兰元件ID ===
-                    conn3 = get_connection(**db_config1)
-                    try:
-                        with conn3.cursor() as cursor3:
-                            cursor3.execute("""
-                                SELECT 元件ID
-                                FROM 产品设计活动表_元件材料表
-                                WHERE 产品ID = %s AND 元件名称 = %s
-                            """, (product_id, flange_name))
-                            flange_rows = cursor3.fetchall()
-                            flange_ids = [fr["元件ID"] for fr in flange_rows]
-
-                            for fid in flange_ids:
+                    flange_ids = find_product_element_ids_by_name(product_id, flange_name)
+                    for fid in flange_ids:
+                        conn3 = get_connection(**db_config1)
+                        try:
+                            with conn3.cursor() as cursor3:
                                 # === STEP5: 查材料牌号 ===
                                 cursor3.execute("""
                                     SELECT 参数值
@@ -216,8 +213,8 @@ def get_gasket_elements(product_id):
                                     "法兰管壳程": flange_course,
                                     "法兰材料牌号": mvals
                                 })
-                    finally:
-                        conn3.close()
+                        finally:
+                            conn3.close()
     finally:
         conn2.close()
 
@@ -380,7 +377,7 @@ def force_recompute_and_update_pn(product_id):
                 box = QMessageBox(QMessageBox.Information, "提示", msg, QMessageBox.NoButton, parent)
                 ok = box.addButton("确认", QMessageBox.YesRole)
                 box.setDefaultButton(ok)
-                box.exec_()
+                exec_message_box(box)
             except Exception:
                 pass
     finally:
@@ -410,7 +407,7 @@ def check_gasket_params(self):
         all_msgs = []
         for i, item in enumerate(gasket_data, 1):
             gasket_name = item.get("垫片名称")
-            check_func = GASKET_CHECK_RULES.get(gasket_name)
+            check_func = GASKET_CHECK_RULES.get(resolve_to_standard_name(gasket_name or ""))
             if check_func:
                 try:
                     res = check_func(item)
@@ -454,7 +451,7 @@ def check_gasket_params(self):
             if DEBUG_VERBOSE_DEFINE_UI:
                 print(f"[垫片校验][组] 垫片ID={gid}, 名称={gname}, 配套法兰={flanges}")
             chosen_pn = None
-            if gname == "平盖垫片":
+            if resolve_to_standard_name(gname) == "平盖垫片":
                 pn_map = {}
                 for it2 in items:
                     nm2 = (it2.get("配套法兰名称") or "").strip()

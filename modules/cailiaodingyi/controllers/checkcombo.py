@@ -1,6 +1,33 @@
 from PyQt5.QtWidgets import QStyledItemDelegate, QComboBox, QTableWidgetItem
 from PyQt5.QtGui import QStandardItemModel, QStandardItem, QColor
-from PyQt5.QtCore import Qt, QTimer, QItemSelectionModel, QEvent, QModelIndex
+from PyQt5.QtCore import Qt, QTimer, QItemSelectionModel, QEvent, QModelIndex, QObject
+
+
+class _CheckComboPopupFilter(QObject):
+    """拦截下拉列表整行点击（含左侧勾选框），统一由代理切换选中状态。
+
+    若不拦截：点勾选框时 Qt 会先改 CheckState，随后自定义逻辑再切一次，效果抵消，
+    表现为“只有点文字能选，点前面框无效”。
+    """
+
+    def __init__(self, delegate, combo):
+        super().__init__(combo)
+        self._delegate = delegate
+        self._combo = combo
+
+    def eventFilter(self, obj, event):
+        if event.type() not in (QEvent.MouseButtonPress, QEvent.MouseButtonDblClick):
+            return False
+        if event.button() != Qt.LeftButton:
+            return False
+        view = self._combo.view()
+        if obj is not view.viewport():
+            return False
+        idx = view.indexAt(event.pos())
+        if not idx.isValid():
+            return False
+        self._delegate._on_pressed(idx, self._combo)
+        return True
 
 
 class CheckComboDelegate(QStyledItemDelegate):
@@ -64,8 +91,10 @@ class CheckComboDelegate(QStyledItemDelegate):
         except Exception:
             pass
 
-        # 点击仅切换勾选，不改变 currentIndex，不关闭 popup；随后再自动弹出
-        combo.view().pressed.connect(lambda mi: self._on_pressed(mi, combo))
+        # 整行可点（含左侧勾选框）：事件过滤器拦截，避免与 Qt 默认勾选切换冲突
+        popup_filter = _CheckComboPopupFilter(self, combo)
+        combo.view().viewport().installEventFilter(popup_filter)
+        setattr(combo, "_check_popup_filter", popup_filter)
 
         # 进入编辑即弹出
         QTimer.singleShot(0, combo.showPopup)

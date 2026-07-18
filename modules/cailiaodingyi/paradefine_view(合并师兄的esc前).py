@@ -39,21 +39,7 @@ from modules.cailiaodingyi.funcs.funcs_pdf_change import load_guankou_para_data_
     load_update_guankou_para_data, load_update_element_merged_para_data, load_update_guankou_attachment_para_data, \
     get_design_params_by_product_id, query_template_id, query_guankou_codes, \
     DEBUG_VERBOSE_DEFINE_UI
-from modules.cailiaodingyi.controllers.structure_tree import (
-    apply_structure_tree_selection,
-    build_initial_visible_and_mandatory,
-    mandatory_ids_for_elements,
-    show_structure_tree_dialog,
-    visible_ids_from_rows,
-)
-from modules.cailiaodingyi.controllers.style import (
-    ReturnKeyJumpFilter,
-    apply_confirm_clear_button_icons,
-    apply_dialog_style,
-    show_critical,
-    show_information,
-    show_warning,
-)
+from modules.cailiaodingyi.controllers.style import ReturnKeyJumpFilter
 from modules.cailiaodingyi.funcs.funcs_pdf_input import (
     load_design_product_data,
     load_elementoriginal_data,
@@ -63,6 +49,7 @@ from modules.cailiaodingyi.funcs.funcs_pdf_input import (
     load_guankou_define_data,
     load_guankou_material_detail,
     insert_element_data,
+    insert_guankou_material_data,
     query_template_guankou_para_data,
     insert_guankou_para_data,
     query_template_element_para_data,
@@ -72,7 +59,6 @@ from modules.cailiaodingyi.funcs.funcs_pdf_input import (
     insert_add_guankou_define,
     insert_all_guankou_param,
     has_product, query_all_guankou_categories, query_all_guankou_categories_with_tab_id, load_element_info,
-    collect_ordered_guankou_categories, infer_guankou_base_tab_count,
     query_guankou_define_data_by_category,
     query_guankou_param_by_product, update_template_input_editable_state, is_all_defined_in_left_table,
     save_to_template_library, get_template_id_by_name, insert_updated_element_para_data, insert_guankou_define_data,
@@ -328,6 +314,7 @@ class DesignParameterDefineInputerViewer(QWidget):
         "壳程侧是否添加覆层",
         "接管是否添加覆层",
         "接管法兰是否添加覆层",
+        "配对法兰是否添加覆层",
     }
 
     def __init__(self, line_tip=None, main_window=None):
@@ -366,10 +353,6 @@ class DesignParameterDefineInputerViewer(QWidget):
         # 映射：元件ID -> 行数据 / 示意图，避免排序后索引错位
         self.element_data_by_id = {}
         self.element_image_map = {}
-        self._structure_tree_pending = False
-        self._pending_element_original_info = None
-        self._pending_template_name = "None"
-        self._need_initial_structure_tree_dialog = False
         self.load_original_data()
         # self.product_id = "PD20250526001"
         # self.product_type = "管壳式热交换器"
@@ -380,8 +363,6 @@ class DesignParameterDefineInputerViewer(QWidget):
         self.visible_rows_stack = []
         self.batch_replace_select_mode = False
         self.batch_replace_target_ids = []
-        self._batch_replace_dialog = None
-        self._batch_replace_exiting = False
         self.setWindowTitle("参数定义")
 
         # 监听用户在下拉框中的点选（含再次选择当前模板；程序 setCurrentIndex 不会触发 activated）
@@ -490,11 +471,7 @@ class DesignParameterDefineInputerViewer(QWidget):
             combo.addItem("")
             combo.addItems(items)
             if keep_text:
-                if combo.isEditable():
-                    combo.setEditText(keep_text)
-                else:
-                    idx = combo.findText(keep_text)
-                    combo.setCurrentIndex(idx if idx >= 0 else 0)
+                combo.setEditText(keep_text)
             else:
                 combo.setCurrentIndex(0)
         finally:
@@ -568,9 +545,6 @@ class DesignParameterDefineInputerViewer(QWidget):
         }
 
         self.render_data_to_table(updated_element_info)
-
-        if getattr(self, "batch_replace_select_mode", False):
-            self.refresh_batch_replace_row_highlight()
 
     def refresh_right_panel_after_batch_replace(self, row):
         """
@@ -1169,101 +1143,58 @@ class DesignParameterDefineInputerViewer(QWidget):
         ordered = [x for x in preferred if x in names] + sorted([x for x in names if x not in preferred])
         return ordered
 
-    def _get_element_id_for_row(self, row):
-        table = self.tableWidget_parts
-        if row < 0 or row >= table.rowCount():
-            return None
-        item = table.item(row, 0)
-        eid = item.data(Qt.UserRole) if item else None
-        if not eid:
-            try:
-                if 0 <= row < len(getattr(self, "element_data", []) or []):
-                    eid = self.element_data[row].get("元件ID")
-            except Exception:
-                eid = None
-        return eid
-
-    def _is_gasket_row(self, row):
-        table = self.tableWidget_parts
-        if row < 0 or row >= table.rowCount():
-            return False
-        part_name_item = table.item(row, 1)
-        part_name = part_name_item.text().strip() if part_name_item else ""
-        return "垫片" in part_name
-
-    def _get_visible_table_rows(self):
-        table = self.tableWidget_parts
-        return [r for r in range(table.rowCount()) if not table.isRowHidden(r)]
-
-    def _get_visible_replaceable_element_ids(self):
-        ids = []
-        seen = set()
-        for row in self._get_visible_table_rows():
-            if self._is_gasket_row(row):
-                continue
-            eid = self._get_element_id_for_row(row)
-            if eid and eid not in seen:
-                seen.add(eid)
-                ids.append(eid)
-        return ids
-
-    def _get_batch_replace_effective_ids(self):
-        targets = list(getattr(self, "batch_replace_target_ids", []) or [])
-        if not targets:
-            return self._get_visible_replaceable_element_ids()
-        return targets
-
-    def _update_batch_replace_tip(self):
-        tip = getattr(self, "line_tip", None)
-        if not tip:
-            return
-        tip.setStyleSheet("color:blue;")
-        count = len(getattr(self, "batch_replace_target_ids", []) or [])
-        if count == 0:
-            visible_count = len(self._get_visible_replaceable_element_ids())
-            tip.setText(
-                f"未选择具体元件，确定后将替换当前界面全部 {visible_count} 个可见元件"
-            )
-        elif count == 1:
-            tip.setText("已选择 1 个元件；在弹窗中点击“确定”执行替换")
-        else:
-            tip.setText(f"已选择 {count} 个元件；在弹窗中点击“确定”执行替换")
-
     def toggle_batch_replace_row(self, row):
         table = self.tableWidget_parts
         if row < 0 or row >= table.rowCount():
             return
 
-        # 批量替换使用自己的目标集合，不保留 Qt 原生选区。
-        selection_model = table.selectionModel()
-        table_was_blocked = table.blockSignals(True)
-        selection_was_blocked = selection_model.blockSignals(True) if selection_model else False
+        # 防止一次点击触发两个信号（cellClicked + itemClicked）导致对同一行 toggle 两次，
+        # 最终出现“点了但一个都选不上”的现象。
         try:
-            table.clearSelection()
-        finally:
-            if selection_model:
-                selection_model.blockSignals(selection_was_blocked)
-            table.blockSignals(table_was_blocked)
+            import time
+            now = time.monotonic()
+            last = getattr(self, "_last_batch_replace_toggle", None)
+            if isinstance(last, tuple) and len(last) == 3:
+                last_row, last_t, last_mode = last
+                if last_mode == "batch_replace" and last_row == row and (now - float(last_t)) < 0.25:
+                    return
+            self._last_batch_replace_toggle = (row, now, "batch_replace")
+        except Exception:
+            pass
 
-        if self._is_gasket_row(row):
+        # 先拿当前行零件名称
+        part_name_item = table.item(row, 1)
+        part_name = part_name_item.text().strip() if part_name_item else ""
+
+        # ===== 关键：垫片不允许被选中 =====
+        if "垫片" in part_name:
             tip = getattr(self, "line_tip", None)
             if tip:
                 tip.setStyleSheet("color:orange;")
                 tip.setText("垫片不参与批量替换，不能选中")
             return
 
-        eid = self._get_element_id_for_row(row)
+        item = table.item(row, 0)
+        if not item:
+            return
+
+        eid = item.data(Qt.UserRole)
+        # 如果先做过 Ctrl 多选/重新渲染导致 UserRole 丢失，则用 element_data[row] 兜底
+        if not eid:
+            try:
+                if 0 <= row < len(getattr(self, "element_data", []) or []):
+                    eid = self.element_data[row].get("元件ID")
+            except Exception:
+                eid = None
         if not eid:
             return
 
         targets = list(getattr(self, "batch_replace_target_ids", []) or [])
-        target_set = set(targets)
 
+        # Shift 连续多选：以最近一次点击行为锚点，把区间内可选元件一次性加入
         modifiers = QtWidgets.QApplication.keyboardModifiers()
         last_row = getattr(self, "_batch_replace_last_clicked_row", None)
         is_shift = bool(modifiers & Qt.ShiftModifier)
-        is_ctrl = bool(modifiers & Qt.ControlModifier)
-
         if (
             is_shift
             and isinstance(last_row, int)
@@ -1271,7 +1202,7 @@ class DesignParameterDefineInputerViewer(QWidget):
             and not table.isRowHidden(last_row)
             and not table.isRowHidden(row)
         ):
-            visible_rows = self._get_visible_table_rows()
+            visible_rows = [r for r in range(table.rowCount()) if not table.isRowHidden(r)]
             try:
                 i1 = visible_rows.index(last_row)
                 i2 = visible_rows.index(row)
@@ -1284,69 +1215,120 @@ class DesignParameterDefineInputerViewer(QWidget):
             else:
                 range_rows = [row]
 
-            targets = []
             for r in range_rows:
-                if self._is_gasket_row(r):
+                p_item = table.item(r, 1)
+                p_name = p_item.text().strip() if p_item else ""
+                if "垫片" in p_name:
                     continue
-                r_eid = self._get_element_id_for_row(r)
-                if r_eid:
+
+                id_item = table.item(r, 0)
+                if not id_item:
+                    continue
+                r_eid = id_item.data(Qt.UserRole)
+                if not r_eid:
+                    try:
+                        if 0 <= r < len(getattr(self, "element_data", []) or []):
+                            r_eid = self.element_data[r].get("元件ID")
+                    except Exception:
+                        r_eid = None
+                if r_eid and r_eid not in targets:
                     targets.append(r_eid)
-        elif is_ctrl:
-            if eid in target_set:
+            table.selectRow(row)
+        else:
+            if eid in targets:
                 targets.remove(eid)
+                table.selectRow(row)
+                sel_model = table.selectionModel()
+                if sel_model:
+                    from PyQt5.QtCore import QItemSelectionModel
+                    index_top = table.model().index(row, 0)
+                    index_bottom = table.model().index(row, table.columnCount() - 1)
+                    sel_model.select(
+                        QtCore.QItemSelection(index_top, index_bottom),
+                        QItemSelectionModel.Deselect
+                    )
             else:
                 targets.append(eid)
-        else:
-            targets = [eid]
+                table.selectRow(row)
 
         self._batch_replace_last_clicked_row = row
-        self.batch_replace_target_ids = targets
-        self.refresh_batch_replace_row_highlight()
-        self.update_batch_replace_button_state()
-        self._update_batch_replace_tip()
-        self._refresh_batch_replace_dialog_context(reset_old_filters=True)
 
-    def refresh_batch_replace_row_highlight(self, rows=None):
+        self.batch_replace_target_ids = targets
+
+        self.refresh_batch_replace_row_highlight()
+
+        # 更新按钮文字/状态：少于2个=退出替换，>=2个=开始替换
+        self.update_batch_replace_button_state()
+
+        tip = getattr(self, "line_tip", None)
+        if tip:
+            tip.setStyleSheet("color:blue;")
+            count = len(targets)
+            if count == 0:
+                tip.setText("未选择任何元件：再次点击“退出替换”退出批量替换模式")
+            elif count == 1:
+                tip.setText("当前仅选择 1 个元件：请至少选择 2 个元件后再“开始替换”")
+            else:
+                tip.setText(f"批量替换已选择 {count} 个元件，再次点击“开始替换”执行")
+
+    def refresh_batch_replace_row_highlight(self):
         table = self.tableWidget_parts
         targets = set(str(x) for x in (getattr(self, "batch_replace_target_ids", []) or []))
 
-        if rows is None:
-            rows_to_refresh = range(table.rowCount())
-        else:
-            rows_to_refresh = sorted({
-                int(r) for r in rows
-                if isinstance(r, int) and 0 <= r < table.rowCount()
-            })
+        for r in range(table.rowCount()):
+            row_item = table.item(r, 0)
+            eid = str(row_item.data(Qt.UserRole)) if row_item and row_item.data(Qt.UserRole) else ""
+            if not eid:
+                # 同样做兜底：UserRole 丢失时按 element_data 行号取
+                try:
+                    if 0 <= r < len(getattr(self, "element_data", []) or []):
+                        fallback_eid = self.element_data[r].get("元件ID")
+                        eid = str(fallback_eid) if fallback_eid else ""
+                except Exception:
+                    eid = ""
 
-        updates_were_enabled = table.updatesEnabled()
-        table.setUpdatesEnabled(False)
-        try:
-            for r in rows_to_refresh:
-                if table.isRowHidden(r):
+            part_name_item = table.item(r, 1)
+            part_name = part_name_item.text().strip() if part_name_item else ""
+            is_gasket = ("垫片" in part_name)
+
+            for c in range(table.columnCount()):
+                item = table.item(r, c)
+                if not item:
                     continue
-                eid = str(self._get_element_id_for_row(r) or "")
-                is_gasket = self._is_gasket_row(r)
-                if eid in targets and not is_gasket:
-                    color = QColor("#d0e7ff")
-                else:
-                    color = QColor("#ffffff" if r % 2 == 0 else "#f6f6f6")
 
-                for c in range(table.columnCount()):
-                    item = table.item(r, c)
-                    if item and item.background().color() != color:
-                        item.setBackground(color)
-        finally:
-            table.setUpdatesEnabled(updates_were_enabled)
+                # 垫片始终保持普通底色，不参与高亮
+                if is_gasket:
+                    if r % 2 == 0:
+                        item.setBackground(QColor("#ffffff"))
+                    else:
+                        item.setBackground(QColor("#f6f6f6"))
+                    continue
+
+                if eid in targets:
+                    item.setBackground(QColor("#d0e7ff"))
+                else:
+                    if r % 2 == 0:
+                        item.setBackground(QColor("#ffffff"))
+                    else:
+                        item.setBackground(QColor("#f6f6f6"))
 
     def on_batch_replace_button_clicked(self):
         """
-        1. 不在批量模式 -> 进入批量模式并打开常驻替换弹窗
-        2. 已在批量模式 -> 退出批量替换模式
+        逻辑：
+        1. 不在批量模式 -> 进入批量模式
+        2. 已在批量模式且未选够2个 -> 退出批量替换模式
+        3. 已在批量模式且选中>=2个 -> 打开批量替换弹窗执行
         """
         if not getattr(self, "batch_replace_select_mode", False):
             self.enter_batch_replace_mode()
             return
-        self.exit_batch_replace_mode()
+
+        selected_ids = list(getattr(self, "batch_replace_target_ids", []) or [])
+        if len(selected_ids) <= 1:
+            self.exit_batch_replace_mode()
+            return
+
+        self.batch_replace_selected_elements()
 
     def build_material_context(self, rows):
         ctx = {
@@ -1460,7 +1442,7 @@ class DesignParameterDefineInputerViewer(QWidget):
 
             for item in items:
                 norm_name = item.get("norm_name")
-                val = self._normalize_material_display_value(item.get("value"))
+                val = str(item.get("value", "")).strip()
                 if norm_name in ctx and val:
                     ctx[norm_name] = val
 
@@ -1479,7 +1461,7 @@ class DesignParameterDefineInputerViewer(QWidget):
 
             # 满足条件的组，贡献候选
             for k in field_order:
-                v = self._normalize_material_display_value(ctx.get(k))
+                v = str(ctx.get(k, "")).strip()
                 if v and v not in seen[k]:
                     seen[k].add(v)
                     result[k].append(v)
@@ -1489,384 +1471,353 @@ class DesignParameterDefineInputerViewer(QWidget):
 
         return result
 
-    def _filter_replaceable_batch_items(self, all_items):
-        filtered_items = []
-        for item in all_items:
-            pname = str(item.get("param_name", "")).strip()
-            row_obj = item.get("row", {}) or {}
-            extra = item.get("extra", {}) or {}
-            ref_text = " ".join([
-                pname,
-                str(row_obj.get("参数名称", "")).strip(),
-                str(row_obj.get("标题分组", "")).strip(),
-                str(row_obj.get("附件类型", "")).strip(),
-                str(extra.get("part_name", "")).strip(),
-                str(extra.get("tab_type", "")).strip(),
-                str(extra.get("attach_type", "")).strip(),
-            ])
-            if "垫片" in ref_text:
-                continue
-            filtered_items.append(item)
-        return filtered_items
-
-    def _build_batch_replace_group_data(self, selected_ids):
-        from collections import defaultdict
-
-        all_items = self.iter_replaceable_material_rows_for_selected_ids(selected_ids)
-        all_items = self._filter_replaceable_batch_items(all_items)
-        if not all_items:
-            return None, None
-
-        grouped_items = defaultdict(list)
-        for item in all_items:
-            grouped_items[item.get("group_key")].append(item)
-
-        def build_ctx(items):
-            ctx = {
-                "材料类型": "",
-                "材料牌号": "",
-                "供货状态": "",
-                "材料标准": "",
-                "是否添加覆层": "",
-            }
-            for it in items:
-                norm_name = str(it.get("norm_name", "")).strip()
-                val = self._normalize_material_display_value(it.get("value"))
-                if norm_name in ctx and val:
-                    ctx[norm_name] = val
-            return ctx
-
-        group_ctx_map = {gk: build_ctx(items) for gk, items in grouped_items.items()}
-        return grouped_items, group_ctx_map
-
-    def _refresh_batch_replace_dialog_context(self, reset_old_filters=False):
-        state = getattr(self, "_batch_replace_dialog_state", None)
-        if not state:
-            return
-        selected_ids = self._get_batch_replace_effective_ids()
-        grouped_items, group_ctx_map = self._build_batch_replace_group_data(selected_ids)
-        if grouped_items is None:
-            return
-        state["grouped_items"] = grouped_items
-        state["group_ctx_map"] = group_ctx_map
-        refresh_old = state.get("refresh_old_value_combos")
-        if callable(refresh_old):
-            refresh_old(reset_filters=reset_old_filters)
-        refresh_new = state.get("refresh_material_combos")
-        if callable(refresh_new):
-            refresh_new()
-
-    def show_batch_replace_dialog(self):
+    def batch_replace_selected_elements(self):
         from PyQt5.QtWidgets import (
             QDialog, QVBoxLayout, QHBoxLayout,
             QPushButton, QMessageBox, QComboBox, QFormLayout, QLabel
         )
-
-        selected_ids = self._get_batch_replace_effective_ids()
-        grouped_items, group_ctx_map = self._build_batch_replace_group_data(selected_ids)
-        if grouped_items is None:
-            show_information(self, "提示", "当前所选元件中没有可替换的材料字段。")
-            return
-
-        dialog = getattr(self, "_batch_replace_dialog", None)
-        if dialog is not None and dialog.isVisible():
-            self._refresh_batch_replace_dialog_context(reset_old_filters=True)
-            dialog.raise_()
-            dialog.activateWindow()
-            return
-
-        dialog = QDialog(self)
-        dialog.setWindowTitle("批量替换（材料约束）")
-        dialog.resize(420, 430)
-        dialog.setModal(False)
-        apply_dialog_style(dialog)
-        self._batch_replace_dialog = dialog
-
-        layout = QVBoxLayout(dialog)
-        layout.addWidget(QLabel("待替换值（单选；“全选”等同于不填）"))
-        form_old = QFormLayout()
-        form_old.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        layout.addLayout(form_old)
-
-        old_type = QComboBox()
-        old_grade = QComboBox()
-        old_supply = QComboBox()
-        old_std = QComboBox()
-        old_overlay = QComboBox()
-        for cb in [old_type, old_grade, old_supply, old_std, old_overlay]:
-            cb.setEditable(False)
-            cb.setProperty("no_wheel", True)
-            cb.installEventFilter(self)
-
-        form_old.addRow("材料类型：", old_type)
-        form_old.addRow("材料牌号：", old_grade)
-        form_old.addRow("材料标准：", old_std)
-        form_old.addRow("供货状态：", old_supply)
-        form_old.addRow("是否添加覆层：", old_overlay)
-
-        layout.addWidget(QLabel("替换为（新值）"))
-        form_new = QFormLayout()
-        form_new.setLabelAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        layout.addLayout(form_new)
-
-        combo_type = QComboBox()
-        combo_grade = QComboBox()
-        combo_supply = QComboBox()
-        combo_std = QComboBox()
-        combo_overlay = QComboBox()
-        # 仅材料牌号保留手输+下拉；其余点击整框即下拉、不可手输
-        for cb in [combo_type, combo_supply, combo_std, combo_overlay]:
-            cb.setEditable(False)
-            cb.setProperty("no_wheel", True)
-            cb.installEventFilter(self)
-        combo_grade.setEditable(True)
-        combo_grade.setInsertPolicy(QComboBox.NoInsert)
-        combo_grade.setCompleter(None)
-        combo_grade.setProperty("no_wheel", True)
-        combo_grade.installEventFilter(self)
-
-        form_new.addRow("材料类型：", combo_type)
-        form_new.addRow("材料牌号：", combo_grade)
-        form_new.addRow("材料标准：", combo_std)
-        form_new.addRow("供货状态：", combo_supply)
-        form_new.addRow("是否添加覆层：", combo_overlay)
-
-        row_btn = QHBoxLayout()
-        btn_ok = QPushButton("确定")
-        btn_cancel = QPushButton("取消")
-        row_btn.addStretch()
-        row_btn.addWidget(btn_ok)
-        row_btn.addWidget(btn_cancel)
-        layout.addLayout(row_btn)
-
-        state = {
-            "grouped_items": grouped_items,
-            "group_ctx_map": group_ctx_map,
-            "old_type": old_type,
-            "old_grade": old_grade,
-            "old_supply": old_supply,
-            "old_std": old_std,
-            "old_overlay": old_overlay,
-            "combo_type": combo_type,
-            "combo_grade": combo_grade,
-            "combo_supply": combo_supply,
-            "combo_std": combo_std,
-            "combo_overlay": combo_overlay,
-        }
-        self._batch_replace_dialog_state = state
-
-        def current_constraints(exclude_field=None):
-            mapping = {
-                "材料类型": combo_type.currentText().strip(),
-                "材料牌号": combo_grade.currentText().strip(),
-                "供货状态": combo_supply.currentText().strip(),
-                "材料标准": combo_std.currentText().strip(),
-            }
-            if exclude_field:
-                mapping.pop(exclude_field, None)
-            return {k: v for k, v in mapping.items() if v}
-
-        def refresh_material_combos(active_field=None):
-            txt_type = combo_type.currentText().strip()
-            txt_grade = combo_grade.currentText().strip()
-            txt_supply = combo_supply.currentText().strip()
-            txt_std = combo_std.currentText().strip()
-            # 非手输字段不做 keyword 过滤，避免选中后选项列表被缩成单值
-            items_type = self.get_material_table_distinct_values(
-                "材料类型",
-                filters=current_constraints(exclude_field="材料类型"),
-                keyword=""
-            )
-            items_grade = self.get_material_table_distinct_values(
-                "材料牌号",
-                filters=current_constraints(exclude_field="材料牌号"),
-                keyword=(txt_grade if active_field == "材料牌号" else "")
-            )
-            items_supply = self.get_material_table_distinct_values(
-                "供货状态",
-                filters=current_constraints(exclude_field="供货状态"),
-                keyword=""
-            )
-            items_std = self.get_material_table_distinct_values(
-                "材料标准",
-                filters=current_constraints(exclude_field="材料标准"),
-                keyword=""
-            )
-            self._set_combo_items_keep_text(combo_type, items_type, txt_type)
-            self._set_combo_items_keep_text(combo_grade, items_grade, txt_grade)
-            self._set_combo_items_keep_text(combo_supply, items_supply, txt_supply)
-            self._set_combo_items_keep_text(combo_std, items_std, txt_std)
-            overlay_text = combo_overlay.currentText().strip()
-            self._set_combo_items_keep_text(combo_overlay, ["是", "否"], overlay_text)
-
-        def refill_old_combo(combo, values, keep_text=""):
-            combo.blockSignals(True)
-            try:
-                combo.clear()
-                combo.addItem("全选")
-                combo.addItems(values)
-                idx = combo.findText(keep_text)
-                combo.setCurrentIndex(idx if idx >= 0 else 0)
-            finally:
-                combo.blockSignals(False)
-
-        def get_old_filters(exclude_field=None):
-            mapping = {
-                "材料类型": old_type.currentText().strip(),
-                "材料牌号": old_grade.currentText().strip(),
-                "供货状态": old_supply.currentText().strip(),
-                "材料标准": old_std.currentText().strip(),
-                "是否添加覆层": old_overlay.currentText().strip(),
-            }
-            if exclude_field:
-                mapping.pop(exclude_field, None)
-            out = {}
-            for k, v in mapping.items():
-                out[k] = "" if v == "全选" else v
-            return out
-
-        def ctx_match_old_filters(ctx, filters, exclude_field=None):
-            for fk, fv in filters.items():
-                if fk == exclude_field:
-                    continue
-                if not fv:
-                    continue
-                if str(ctx.get(fk, "")).strip() != str(fv).strip():
-                    return False
-            return True
-
-        def collect_old_options_for_field(field_name, filters, exclude_field=None):
-            vals = set()
-            cur_group_ctx_map = state.get("group_ctx_map", {}) or {}
-            for _, ctx in cur_group_ctx_map.items():
-                if not ctx_match_old_filters(ctx, filters, exclude_field=exclude_field):
-                    continue
-                v = self._normalize_material_display_value(ctx.get(field_name))
-                if v:
-                    vals.add(v)
-            return sorted(vals)
-
-        def refresh_old_value_combos(active_field=None, reset_filters=False):
-            if reset_filters:
-                for cb in [old_type, old_grade, old_supply, old_std, old_overlay]:
-                    cb.blockSignals(True)
-                    try:
-                        cb.setCurrentIndex(0)
-                    finally:
-                        cb.blockSignals(False)
-
-            keep_type = old_type.currentText().strip()
-            keep_grade = old_grade.currentText().strip()
-            keep_supply = old_supply.currentText().strip()
-            keep_std = old_std.currentText().strip()
-            keep_overlay = old_overlay.currentText().strip()
-            current_old_filters = get_old_filters()
-            opt_type = collect_old_options_for_field("材料类型", current_old_filters, exclude_field="材料类型")
-            opt_grade = collect_old_options_for_field("材料牌号", current_old_filters, exclude_field="材料牌号")
-            opt_supply = collect_old_options_for_field("供货状态", current_old_filters, exclude_field="供货状态")
-            opt_std = collect_old_options_for_field("材料标准", current_old_filters, exclude_field="材料标准")
-            opt_overlay = collect_old_options_for_field("是否添加覆层", current_old_filters, exclude_field="是否添加覆层")
-            refill_old_combo(old_type, opt_type, keep_type)
-            refill_old_combo(old_grade, opt_grade, keep_grade)
-            refill_old_combo(old_supply, opt_supply, keep_supply)
-            refill_old_combo(old_std, opt_std, keep_std)
-            refill_old_combo(old_overlay, opt_overlay, keep_overlay)
-
-        state["get_old_filters"] = get_old_filters
-        state["ctx_match_old_filters"] = ctx_match_old_filters
-        state["refresh_old_value_combos"] = refresh_old_value_combos
-        state["refresh_material_combos"] = refresh_material_combos
-
-        combo_grade.lineEdit().textEdited.connect(lambda _: refresh_material_combos("材料牌号"))
-        combo_type.currentTextChanged.connect(lambda _: refresh_material_combos("材料类型"))
-        combo_grade.currentTextChanged.connect(lambda _: refresh_material_combos("材料牌号"))
-        combo_supply.currentTextChanged.connect(lambda _: refresh_material_combos("供货状态"))
-        combo_std.currentTextChanged.connect(lambda _: refresh_material_combos("材料标准"))
-        old_type.currentTextChanged.connect(lambda _: refresh_old_value_combos("材料类型"))
-        old_grade.currentTextChanged.connect(lambda _: refresh_old_value_combos("材料牌号"))
-        old_supply.currentTextChanged.connect(lambda _: refresh_old_value_combos("供货状态"))
-        old_std.currentTextChanged.connect(lambda _: refresh_old_value_combos("材料标准"))
-        old_overlay.currentTextChanged.connect(lambda _: refresh_old_value_combos("是否添加覆层"))
-
-        refresh_old_value_combos()
-        refresh_material_combos()
-
-        btn_ok.clicked.connect(self._execute_batch_replace_confirm)
-        btn_cancel.clicked.connect(self.exit_batch_replace_mode)
-        dialog.rejected.connect(self._on_batch_replace_dialog_rejected)
-        from PyQt5.QtWidgets import QShortcut
-        from PyQt5.QtGui import QKeySequence
-        esc_shortcut = QShortcut(QKeySequence(Qt.Key_Escape), dialog)
-        esc_shortcut.activated.connect(self.exit_batch_replace_mode)
-        dialog.show()
-
-    def _on_batch_replace_dialog_rejected(self):
-        if getattr(self, "_batch_replace_exiting", False):
-            return
-        self.exit_batch_replace_mode()
-
-    def _execute_batch_replace_confirm(self):
-        from PyQt5.QtWidgets import QMessageBox
+        from collections import defaultdict
         import traceback
 
-        state = getattr(self, "_batch_replace_dialog_state", None)
-        if not state:
-            return
+        if getattr(self, "batch_replace_select_mode", False):
+            selected_ids = list(getattr(self, "batch_replace_target_ids", []) or [])
+        else:
+            selected_ids = list(getattr(self, "selected_element_ids", []) or [])
 
-        self._refresh_batch_replace_dialog_context(reset_old_filters=False)
-        grouped_items = state.get("grouped_items") or {}
-        group_ctx_map = state.get("group_ctx_map") or {}
-        get_old_filters = state.get("get_old_filters")
-        ctx_match_old_filters = state.get("ctx_match_old_filters")
-        if not grouped_items or not callable(get_old_filters) or not callable(ctx_match_old_filters):
-            show_information(self, "提示", "当前所选元件中没有可替换的材料字段。")
-            return
-
-        combo_type = state["combo_type"]
-        combo_grade = state["combo_grade"]
-        combo_supply = state["combo_supply"]
-        combo_std = state["combo_std"]
-        combo_overlay = state["combo_overlay"]
-
-        replacements = {
-            "材料类型": combo_type.currentText().strip(),
-            "材料牌号": combo_grade.currentText().strip(),
-            "供货状态": combo_supply.currentText().strip(),
-            "材料标准": combo_std.currentText().strip(),
-            "是否添加覆层": combo_overlay.currentText().strip(),
-        }
-        old_filters = get_old_filters()
-
-        if not any(replacements.values()):
-            show_warning(self, "提示", "请至少填写一个替换条件。")
-            return
-        if replacements["是否添加覆层"] and replacements["是否添加覆层"] not in {"是", "否"}:
-            show_warning(self, "提示", "是否添加覆层只能选择“是”或“否”。")
+        if len(selected_ids) <= 1:
+            QMessageBox.information(self, "提示", "请先选择两个及以上元件后再进行批量替换。")
             return
 
         total_changed = 0
         validation_errors = []
-        changed_normal_element_ids = set()
 
         try:
+            all_items = self.iter_replaceable_material_rows_for_selected_ids(selected_ids)
+
+            # =========================
+            # 垫片完全不参与
+            # =========================
+            filtered_items = []
+            for item in all_items:
+                pname = str(item.get("param_name", "")).strip()
+                row_obj = item.get("row", {}) or {}
+                extra = item.get("extra", {}) or {}
+
+                ref_text = " ".join([
+                    pname,
+                    str(row_obj.get("参数名称", "")).strip(),
+                    str(row_obj.get("标题分组", "")).strip(),
+                    str(row_obj.get("附件类型", "")).strip(),
+                    str(extra.get("part_name", "")).strip(),
+                    str(extra.get("tab_type", "")).strip(),
+                    str(extra.get("attach_type", "")).strip(),
+                ])
+                if "垫片" in ref_text:
+                    continue
+
+                filtered_items.append(item)
+
+            all_items = filtered_items
+
+            if not all_items:
+                QMessageBox.information(self, "提示", "当前所选元件中没有可替换的材料字段。")
+                return
+
+            # =========================
+            # 先按子组分组
+            # =========================
+            grouped_items = defaultdict(list)
+            for item in all_items:
+                gk = item.get("group_key")
+                grouped_items[gk].append(item)
+
+            def build_ctx(items):
+                ctx = {
+                    "材料类型": "",
+                    "材料牌号": "",
+                    "供货状态": "",
+                    "材料标准": "",
+                    "是否添加覆层": "",
+                }
+                for it in items:
+                    norm_name = str(it.get("norm_name", "")).strip()
+                    val = str(it.get("value", "")).strip()
+                    if norm_name in ctx and val:
+                        ctx[norm_name] = val
+                return ctx
+
+            group_ctx_map = {}
+            for gk, items in grouped_items.items():
+                group_ctx_map[gk] = build_ctx(items)
+
+            # =========================
+            # 弹窗
+            # =========================
+            dialog = QDialog(self)
+            dialog.setWindowTitle("批量替换（材料约束）")
+            dialog.resize(620, 430)
+
+            layout = QVBoxLayout(dialog)
+
+            layout.addWidget(QLabel("待替换值（单选；“全选”等同于不填）"))
+            form_old = QFormLayout()
+            layout.addLayout(form_old)
+
+            old_type = QComboBox()
+            old_grade = QComboBox()
+            old_supply = QComboBox()
+            old_std = QComboBox()
+            old_overlay = QComboBox()
+
+            for cb in [old_type, old_grade, old_supply, old_std, old_overlay]:
+                cb.setEditable(False)
+                # 禁用滚轮切换
+                cb.setProperty("no_wheel", True)
+                cb.installEventFilter(self)
+
+            form_old.addRow("待替换材料类型：", old_type)
+            form_old.addRow("待替换材料牌号：", old_grade)
+            form_old.addRow("待替换材料标准：", old_std)
+            form_old.addRow("待替换供货状态：", old_supply)
+            form_old.addRow("待替换是否添加覆层：", old_overlay)
+
+            layout.addWidget(QLabel("替换为（新值）"))
+            form_new = QFormLayout()
+            layout.addLayout(form_new)
+
+            combo_type = QComboBox()
+            combo_grade = QComboBox()
+            combo_supply = QComboBox()
+            combo_std = QComboBox()
+            combo_overlay = QComboBox()
+
+            for cb in [combo_type, combo_grade, combo_supply, combo_std]:
+                cb.setEditable(True)
+                cb.setInsertPolicy(QComboBox.NoInsert)
+                # 禁用 QComboBox 自带自动补全，避免输入时自动替换为首个候选值
+                cb.setCompleter(None)
+                # 禁用滚轮切换
+                cb.setProperty("no_wheel", True)
+                cb.installEventFilter(self)
+
+            combo_overlay.setEditable(True)
+            combo_overlay.setInsertPolicy(QComboBox.NoInsert)
+            combo_overlay.setCompleter(None)
+            combo_overlay.setProperty("no_wheel", True)
+            combo_overlay.installEventFilter(self)
+
+            form_new.addRow("材料类型：", combo_type)
+            form_new.addRow("材料牌号：", combo_grade)
+            form_new.addRow("材料标准：", combo_std)
+            form_new.addRow("供货状态：", combo_supply)
+            form_new.addRow("是否添加覆层：", combo_overlay)
+
+            row_btn = QHBoxLayout()
+            btn_ok = QPushButton("确定")
+            btn_cancel = QPushButton("取消")
+            row_btn.addStretch()
+            row_btn.addWidget(btn_ok)
+            row_btn.addWidget(btn_cancel)
+            layout.addLayout(row_btn)
+
+            btn_ok.clicked.connect(dialog.accept)
+            btn_cancel.clicked.connect(dialog.reject)
+
+            # =========================
+            # 新值联动
+            # =========================
+            def current_constraints(exclude_field=None):
+                mapping = {
+                    "材料类型": combo_type.currentText().strip(),
+                    "材料牌号": combo_grade.currentText().strip(),
+                    "供货状态": combo_supply.currentText().strip(),
+                    "材料标准": combo_std.currentText().strip(),
+                }
+                if exclude_field:
+                    mapping.pop(exclude_field, None)
+                return {k: v for k, v in mapping.items() if v}
+
+            def refresh_material_combos(active_field=None):
+                txt_type = combo_type.currentText().strip()
+                txt_grade = combo_grade.currentText().strip()
+                txt_supply = combo_supply.currentText().strip()
+                txt_std = combo_std.currentText().strip()
+
+                items_type = self.get_material_table_distinct_values(
+                    "材料类型",
+                    filters=current_constraints(exclude_field="材料类型"),
+                    keyword=(txt_type if active_field == "材料类型" else "")
+                )
+                items_grade = self.get_material_table_distinct_values(
+                    "材料牌号",
+                    filters=current_constraints(exclude_field="材料牌号"),
+                    keyword=(txt_grade if active_field == "材料牌号" else "")
+                )
+                items_supply = self.get_material_table_distinct_values(
+                    "供货状态",
+                    filters=current_constraints(exclude_field="供货状态"),
+                    keyword=(txt_supply if active_field == "供货状态" else "")
+                )
+                items_std = self.get_material_table_distinct_values(
+                    "材料标准",
+                    filters=current_constraints(exclude_field="材料标准"),
+                    keyword=(txt_std if active_field == "材料标准" else "")
+                )
+
+                self._set_combo_items_keep_text(combo_type, items_type, txt_type)
+                self._set_combo_items_keep_text(combo_grade, items_grade, txt_grade)
+                self._set_combo_items_keep_text(combo_supply, items_supply, txt_supply)
+                self._set_combo_items_keep_text(combo_std, items_std, txt_std)
+
+                overlay_text = combo_overlay.currentText().strip()
+                self._set_combo_items_keep_text(combo_overlay, ["是", "否"], overlay_text)
+
+            combo_type.lineEdit().textEdited.connect(lambda _: refresh_material_combos("材料类型"))
+            combo_grade.lineEdit().textEdited.connect(lambda _: refresh_material_combos("材料牌号"))
+            combo_supply.lineEdit().textEdited.connect(lambda _: refresh_material_combos("供货状态"))
+            combo_std.lineEdit().textEdited.connect(lambda _: refresh_material_combos("材料标准"))
+
+            combo_type.currentTextChanged.connect(lambda _: refresh_material_combos("材料类型"))
+            combo_grade.currentTextChanged.connect(lambda _: refresh_material_combos("材料牌号"))
+            combo_supply.currentTextChanged.connect(lambda _: refresh_material_combos("供货状态"))
+            combo_std.currentTextChanged.connect(lambda _: refresh_material_combos("材料标准"))
+
+            # =========================
+            # 旧值联动：只看旧值候选，不看新值
+            # =========================
+            def refill_old_combo(combo, values, keep_text=""):
+                combo.blockSignals(True)
+                try:
+                    combo.clear()
+                    combo.addItem("全选")
+                    combo.addItems(values)
+                    idx = combo.findText(keep_text)
+                    combo.setCurrentIndex(idx if idx >= 0 else 0)
+                finally:
+                    combo.blockSignals(False)
+
+            def get_old_filters(exclude_field=None):
+                mapping = {
+                    "材料类型": old_type.currentText().strip(),
+                    "材料牌号": old_grade.currentText().strip(),
+                    "供货状态": old_supply.currentText().strip(),
+                    "材料标准": old_std.currentText().strip(),
+                    "是否添加覆层": old_overlay.currentText().strip(),
+                }
+                if exclude_field:
+                    mapping.pop(exclude_field, None)
+
+                out = {}
+                for k, v in mapping.items():
+                    out[k] = "" if v == "全选" else v
+                return out
+
+            def ctx_match_old_filters(ctx, filters, exclude_field=None):
+                for fk, fv in filters.items():
+                    if fk == exclude_field:
+                        continue
+                    if not fv:
+                        continue
+                    if str(ctx.get(fk, "")).strip() != str(fv).strip():
+                        return False
+                return True
+
+            def collect_old_options_for_field(field_name, filters, exclude_field=None):
+                vals = set()
+                for _, ctx in group_ctx_map.items():
+                    if not ctx_match_old_filters(ctx, filters, exclude_field=exclude_field):
+                        continue
+                    v = str(ctx.get(field_name, "")).strip()
+                    if v:
+                        vals.add(v)
+                return sorted(vals)
+
+            def refresh_old_value_combos(active_field=None):
+                keep_type = old_type.currentText().strip()
+                keep_grade = old_grade.currentText().strip()
+                keep_supply = old_supply.currentText().strip()
+                keep_std = old_std.currentText().strip()
+                keep_overlay = old_overlay.currentText().strip()
+
+                current_old_filters = get_old_filters()
+
+                opt_type = collect_old_options_for_field("材料类型", current_old_filters, exclude_field="材料类型")
+                opt_grade = collect_old_options_for_field("材料牌号", current_old_filters, exclude_field="材料牌号")
+                opt_supply = collect_old_options_for_field("供货状态", current_old_filters, exclude_field="供货状态")
+                opt_std = collect_old_options_for_field("材料标准", current_old_filters, exclude_field="材料标准")
+                opt_overlay = collect_old_options_for_field("是否添加覆层", current_old_filters,
+                                                            exclude_field="是否添加覆层")
+
+                refill_old_combo(old_type, opt_type, keep_type)
+                refill_old_combo(old_grade, opt_grade, keep_grade)
+                refill_old_combo(old_supply, opt_supply, keep_supply)
+                refill_old_combo(old_std, opt_std, keep_std)
+                refill_old_combo(old_overlay, opt_overlay, keep_overlay)
+
+            old_type.currentTextChanged.connect(lambda _: refresh_old_value_combos("材料类型"))
+            old_grade.currentTextChanged.connect(lambda _: refresh_old_value_combos("材料牌号"))
+            old_supply.currentTextChanged.connect(lambda _: refresh_old_value_combos("供货状态"))
+            old_std.currentTextChanged.connect(lambda _: refresh_old_value_combos("材料标准"))
+            old_overlay.currentTextChanged.connect(lambda _: refresh_old_value_combos("是否添加覆层"))
+
+            refresh_old_value_combos()
+            refresh_material_combos()
+
+            if dialog.exec_() != QDialog.Accepted:
+                return
+
+            replacements = {
+                "材料类型": combo_type.currentText().strip(),
+                "材料牌号": combo_grade.currentText().strip(),
+                "供货状态": combo_supply.currentText().strip(),
+                "材料标准": combo_std.currentText().strip(),
+                "是否添加覆层": combo_overlay.currentText().strip(),
+            }
+
+            old_filters = get_old_filters()
+
+            if not any(replacements.values()):
+                QMessageBox.warning(self, "提示", "请至少填写一个替换条件。")
+                return
+
+            if replacements["是否添加覆层"] and replacements["是否添加覆层"] not in {"是", "否"}:
+                QMessageBox.warning(self, "提示", "是否添加覆层只能选择“是”或“否”。")
+                return
+
+            changed_normal_element_ids = set()
+
+            # =========================
+            # 逐组处理
+            # 核心修正：
+            # 1. 旧值只判断“整组是否命中”
+            # 2. 命中的组，组内对应字段全部替换
+            # 3. 不再逐条 old_value 再次过滤，否则会出现只改 1、不改 2/3
+            # =========================
             for group_key, items in grouped_items.items():
                 try:
                     current_ctx = group_ctx_map.get(group_key, {})
                     if not current_ctx:
                         continue
+
+                    # ---- 这一步是关键：按“组上下文”判断是否命中旧值 ----
+                    # 例如 old_filters["材料牌号"] = "16Mn"
+                    # 那么只要当前组的 ctx["材料牌号"] == "16Mn"，这个组整体参与替换
                     if not ctx_match_old_filters(current_ctx, old_filters):
                         continue
 
+                    # ---- 构造替换后的组上下文 ----
                     candidate_ctx = dict(current_ctx)
                     for k, v in replacements.items():
                         v = str(v or "").strip()
                         if v:
                             candidate_ctx[k] = v
 
+                    # ---- 材料库约束：对当前组单独校验 ----
                     need_validate = any(
                         str(replacements.get(k, "")).strip()
                         for k in self.MATERIAL_DB_FIELDS
                     )
+
                     if need_validate:
                         has_full_ctx = all(
                             str(candidate_ctx.get(k, "")).strip()
@@ -1877,23 +1828,36 @@ class DesignParameterDefineInputerViewer(QWidget):
                                 f"{group_key}: 材料类型/牌号/供货状态/材料标准 不完整，无法校验"
                             )
                             continue
+
                         ok, err = self.validate_material_combo(candidate_ctx)
                         if not ok:
                             validation_errors.append(f"{group_key}: {err}")
                             print(f"[批量替换-跳过组] {group_key}, err={err}")
                             continue
 
+                    # ---- 当前组通过：整组替换 ----
+                    # 注意：这里不再按 old_filters 对单条 item 二次过滤
+                    # 否则又会回到“只改材料牌号1”的老问题
                     for item in items:
                         norm_name = str(item.get("norm_name", "")).strip()
                         if not norm_name:
                             continue
+
                         old_value = str(item.get("value", "")).strip()
+
                         if norm_name == "是否添加覆层":
                             new_value = str(replacements.get("是否添加覆层", "")).strip()
                         else:
                             new_value = str(replacements.get(norm_name, "")).strip()
-                        if not new_value or old_value == new_value:
+
+                        # 这个字段没有给新值 -> 不替换
+                        if not new_value:
                             continue
+
+                        # 值没变 -> 跳过
+                        if old_value == new_value:
+                            continue
+
                         ok = self.update_replaceable_material_row_value(item, new_value)
                         _src = str(item.get("source", "") or "").strip()
                         _tag = {"normal": "普", "merged": "并", "guankou": "管", "attachment": "附"}.get(_src, _src or "?")
@@ -1908,13 +1872,18 @@ class DesignParameterDefineInputerViewer(QWidget):
                                 eid = str(item.get("element_id", "")).strip()
                                 if eid:
                                     changed_normal_element_ids.add(eid)
+
                 except Exception as e:
                     print(f"[批量替换-当前组异常但不中断] group={group_key}, err={e}")
                     traceback.print_exc()
                     continue
 
+            # =========================
+            # 左表同步：只同步真正改成功且允许同步的普通/合并元件
+            # =========================
             for eid in changed_normal_element_ids:
                 try:
+                    # 根据元件类型判断是否需要同步（管口、铭牌、保温支撑、支座、设备法兰紧固件、接地装置、管口附件等跳过）
                     if not self.should_sync_left_material_table(eid):
                         continue
                     self.sync_normal_element_material_table_by_element(eid)
@@ -1922,8 +1891,6 @@ class DesignParameterDefineInputerViewer(QWidget):
                     print(f"[批量替换] 普通元件左表同步失败 eid={eid}, err={e}")
 
             self.refresh_left_table_after_batch_replace()
-            self._refresh_batch_replace_dialog_context(reset_old_filters=True)
-            self._update_batch_replace_tip()
 
             tip = getattr(self, "line_tip", None)
             if tip:
@@ -1936,19 +1903,20 @@ class DesignParameterDefineInputerViewer(QWidget):
 
             if validation_errors:
                 msg = (
-                    f"批量替换完成，共修改 {total_changed} 处。\n\n"
-                    f"以下项目因材料库约束未替换：\n"
-                    + "\n".join(validation_errors[:10])
+                        f"批量替换完成，共修改 {total_changed} 处。\n\n"
+                        f"以下项目因材料库约束未替换：\n" +
+                        "\n".join(validation_errors[:10])
                 )
             else:
                 msg = f"批量替换完成，共修改 {total_changed} 处。"
-            show_information(self, "提示", msg)
+
+            QMessageBox.information(self, "提示", msg)
+
         except Exception as e:
             traceback.print_exc()
-            show_critical(self, "错误", f"批量替换失败：{e}")
+            QMessageBox.critical(self, "错误", f"批量替换失败：{e}")
 
-    def batch_replace_selected_elements(self):
-        self.show_batch_replace_dialog()
+        self.exit_batch_replace_mode()
 
     def need_validate_material_combo_for_group(self, items, replacements):
         """
@@ -2041,21 +2009,10 @@ class DesignParameterDefineInputerViewer(QWidget):
 
     def eventFilter(self, obj, event):
         """
-        - 批量替换模式中，Esc 退出替换模式并关闭弹窗。
-        - 针对“模板选用”下拉框，屏蔽鼠标滚轮事件，防止滚轮误切换模板。
+        仅针对“模板选用”下拉框，屏蔽鼠标滚轮事件，防止滚轮误切换模板。
         其他控件/事件全部走父类默认逻辑。
         """
         try:
-            if (
-                event.type() == QEvent.KeyPress
-                and event.key() == Qt.Key_Escape
-                and getattr(self, "batch_replace_select_mode", False)
-            ):
-                self.exit_batch_replace_mode()
-                return True
-
-            parts_table = getattr(self, "tableWidget_parts", None)
-            parts_viewport = getattr(self, "_parts_table_viewport", None)
             if getattr(self, "_parts_table_viewport", None) is not None and obj is self._parts_table_viewport:
                 if event.type() == QEvent.Resize:
                     QTimer.singleShot(0, self._apply_parts_list_weighted_widths)
@@ -2077,10 +2034,16 @@ class DesignParameterDefineInputerViewer(QWidget):
             return
         btn.setEnabled(True)
 
+        # 根据当前是否处于批量替换选择模式 + 已选元件数量，动态调整按钮文字
         if not getattr(self, "batch_replace_select_mode", False):
             btn.setText("批量替换")
-        else:
+            return
+
+        selected_ids = list(getattr(self, "batch_replace_target_ids", []) or [])
+        if len(selected_ids) <= 1:
             btn.setText("退出替换")
+        else:
+            btn.setText("开始替换")
 
     def init_widgets(self):
         # 获取界面中所有控件的对象
@@ -2089,12 +2052,9 @@ class DesignParameterDefineInputerViewer(QWidget):
         if self.comboBox_template is not None:
             self.comboBox_template.installEventFilter(self)
         self.tableWidget_parts = self.findChild(QtWidgets.QTableWidget, "tableWidget")
-        _parts_header = CustomHeaderView(QtCore.Qt.Horizontal, self.tableWidget_parts)
-        _parts_header.setShowFilterArrows(True)  # Excel 式：仅箭头可开筛选
-        self.tableWidget_parts.setHorizontalHeader(_parts_header)
+        self.tableWidget_parts.setHorizontalHeader(CustomHeaderView(QtCore.Qt.Horizontal, self.tableWidget_parts))
         self._parts_table_viewport = self.tableWidget_parts.viewport()
         self._parts_table_viewport.installEventFilter(self)
-        self.tableWidget_parts.installEventFilter(self)
         self.tableWidget_parts.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.tableWidget_parts.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tableWidget_parts.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -2122,10 +2082,7 @@ class DesignParameterDefineInputerViewer(QWidget):
         self.lineEdit_filter.returnPressed.connect(
             lambda: self.filter_table_globally(self.lineEdit_filter.text())
         )
-        # 结构树 / 批量替换按钮
-        self.pushButton_structure_tree = self.findChild(QPushButton, "pushButton_structure_tree")
-        if self.pushButton_structure_tree:
-            self.pushButton_structure_tree.clicked.connect(self.on_structure_tree_button_clicked)
+        # 获取批量替换按钮
         self.pushButton_batch_replace = self.findChild(QPushButton, "pushButton_batch_replace")
         if self.pushButton_batch_replace:
             self.pushButton_batch_replace.clicked.connect(self.on_batch_replace_button_clicked)
@@ -2182,23 +2139,7 @@ class DesignParameterDefineInputerViewer(QWidget):
             from modules.cailiaodingyi.funcs.funcs_attachment_render import on_confirm_attachment_param_update
             self.pushButton_attachment_confirm.clicked.connect(lambda: on_confirm_attachment_param_update(self))
 
-        # 详细定义底部「确定/清空」：图标对齐项目管理保存/删除
-        apply_confirm_clear_button_icons(
-            confirm_buttons=[
-                self.pushButton_detail,
-                self.findChild(QPushButton, "pushButton_7"),
-                self.pushButton_fixed_saddle_confirm,
-                self.pushButton_fastener_confirm,
-                self.pushButton_attachment_confirm,
-            ],
-            clear_buttons=[
-                self.pushButton_clear,
-                self.pushButton_guankou_clear,
-                self.pushButton_fixed_saddle_clear,
-                self.pushButton_fastener_clear,
-                self.pushButton_attachment_clear,
-            ],
-        )
+
 
         self.label_part_image = self.findChild(QLabel, "label_4")
         print("self.label_part_image", self.label_part_image)
@@ -2234,25 +2175,19 @@ class DesignParameterDefineInputerViewer(QWidget):
 
         if not hasattr(self, "dynamic_guankou_param_tabs"):
             self.dynamic_guankou_param_tabs = {}
-        # 先按 UI 当前标题临时登记；真正分类名在 build_or_refresh 时按库刷新
-        _tab0_title = self.guankou_tabWidget.tabText(0).strip() if self.guankou_tabWidget.count() > 0 else ""
-        if _tab0_title and _tab0_title not in {"+", "＋"}:
-            self.dynamic_guankou_param_tabs[_tab0_title] = self.tableWidget_guankou
+        self.dynamic_guankou_param_tabs["管口材料分类-管程"] = self.tableWidget_guankou
 
-        # 第二个 tab 页（UI 可能预置；最终是否保留由库中分类决定）
+        # 第二个 tab 页（管口材料分类2）
         if self.guankou_tabWidget.count() > 1:
             page1 = self.guankou_tabWidget.widget(1)
             if page1 and hasattr(self, "tableWidget_guankou_2") and self.tableWidget_guankou_2:
                 if page1.property('param_table') is None:
                     page1.setProperty('param_table', self.tableWidget_guankou_2)
+                # 注册第二个tab页到映射字典
                 if not hasattr(self, "dynamic_guankou_param_tabs"):
                     self.dynamic_guankou_param_tabs = {}
-                _tab1_title = self.guankou_tabWidget.tabText(1).strip()
-                if _tab1_title and _tab1_title not in {"+", "＋"}:
-                    self.dynamic_guankou_param_tabs[_tab1_title] = self.tableWidget_guankou_2
-
-        self._guankou_base_tab_count = None
-        self._orphaned_guankou_pages = []
+                # ✅ 直接使用数据库类别名称作为key
+                self.dynamic_guankou_param_tabs["管口材料分类-壳程"] = self.tableWidget_guankou_2
 
         # 监听双击 tab 重命名
         self.guankou_tabWidget.tabBarDoubleClicked.connect(self.on_tab_double_clicked)
@@ -2509,49 +2444,34 @@ class DesignParameterDefineInputerViewer(QWidget):
             print(f"[批量替换] 刷新右侧失败: {e}")
 
     def exit_batch_replace_mode(self):
-        if getattr(self, "_batch_replace_exiting", False):
-            return
-        self._batch_replace_exiting = True
+        self.batch_replace_select_mode = False
+        self.batch_replace_target_ids = []
+        self._batch_replace_last_clicked_row = None
+
         try:
-            self.batch_replace_select_mode = False
-            self.batch_replace_target_ids = []
-            self._batch_replace_last_clicked_row = None
+            self.tableWidget_parts.clearSelection()
+        except Exception:
+            pass
 
-            dlg = getattr(self, "_batch_replace_dialog", None)
-            if dlg is not None:
-                try:
-                    dlg.rejected.disconnect(self._on_batch_replace_dialog_rejected)
-                except Exception:
-                    pass
-                dlg.close()
-            self._batch_replace_dialog = None
-            self._batch_replace_dialog_state = None
+        # 恢复 itemClicked 到普通点击逻辑，确保退出批量替换后行为正常
+        try:
+            self.tableWidget_parts.itemClicked.disconnect()
+        except Exception:
+            pass
+        try:
+            from modules.cailiaodingyi.controllers.datamanager import handle_table_click
+            self.tableWidget_parts.itemClicked.connect(
+                lambda item: handle_table_click(self, item.row(), item.column())
+            )
+        except Exception:
+            pass
 
-            try:
-                self.tableWidget_parts.clearSelection()
-            except Exception:
-                pass
+        self.refresh_batch_replace_row_highlight()
 
-            try:
-                self.tableWidget_parts.itemClicked.disconnect()
-            except Exception:
-                pass
-            try:
-                from modules.cailiaodingyi.controllers.datamanager import handle_table_click
-                self.tableWidget_parts.itemClicked.connect(
-                    lambda item: handle_table_click(self, item.row(), item.column())
-                )
-            except Exception:
-                pass
-
-            self.refresh_batch_replace_row_highlight()
-
-            tip = getattr(self, "line_tip", None)
-            if tip:
-                tip.setText("")
-            self.update_batch_replace_button_state()
-        finally:
-            self._batch_replace_exiting = False
+        tip = getattr(self, "line_tip", None)
+        if tip:
+            tip.setText("")
+        self.update_batch_replace_button_state()
 
     def on_tab_changed(self, index):
         self.guankou_material_category.setCurrentIndex(0)
@@ -2574,19 +2494,11 @@ class DesignParameterDefineInputerViewer(QWidget):
 
         return use_val in {"是", "程序推荐"}
 
-    def _normalize_material_display_value(self, raw):
-        if raw is None:
-            return ""
-        s = str(raw).strip()
-        if not s or s.lower() == "none":
-            return ""
-        return s
-
     def get_param_value_from_row(self, row):
         if "参数值" in row:
-            return self._normalize_material_display_value(row.get("参数值"))
+            return str(row.get("参数值", "")).strip()
         if "参数数值" in row:
-            return self._normalize_material_display_value(row.get("参数数值"))
+            return str(row.get("参数数值", "")).strip()
         return ""
 
     def normalize_material_param_name(self, param_name: str):
@@ -2601,6 +2513,7 @@ class DesignParameterDefineInputerViewer(QWidget):
             "是否添加覆层",
             "接管是否添加覆层",
             "接管法兰是否添加覆层",
+            "配对法兰是否添加覆层",
             "管程侧是否添加覆层",
             "壳程侧是否添加覆层",
         }:
@@ -2619,7 +2532,6 @@ class DesignParameterDefineInputerViewer(QWidget):
 
     def enter_batch_replace_mode(self):
         self.batch_replace_select_mode = True
-        # 空列表表示当前界面全部可见元件均在替换范围内
         self.batch_replace_target_ids = []
         self._batch_replace_last_clicked_row = None
 
@@ -2628,15 +2540,28 @@ class DesignParameterDefineInputerViewer(QWidget):
         except Exception:
             pass
 
+        # 进入批量替换模式时：避免 itemClicked 继续走普通“点击渲染/多选共同字段”逻辑
+        # 普通逻辑来自 controllers/datamanager.handle_table_click
+        # 这里把 itemClicked 轻量化为“只切换批量替换勾选行”，提升性能并避免 ctrl 路径干扰
         try:
             self.tableWidget_parts.itemClicked.disconnect()
         except Exception:
             pass
+        try:
+            self.tableWidget_parts.itemClicked.connect(
+                lambda item: self.toggle_batch_replace_row(item.row())
+            )
+        except Exception:
+            pass
 
         self.refresh_batch_replace_row_highlight()
-        self._update_batch_replace_tip()
+
+        tip = getattr(self, "line_tip", None)
+        if tip:
+            tip.setStyleSheet("color:blue;")
+            tip.setText("选中多于1个元件时点击“开始替换”进行批量修改；未选中元件时点击“退出替换”退出批量替换。")
+        # 进入模式时先基于当前(此时为0个)已选元件数量刷新按钮文字
         self.update_batch_replace_button_state()
-        self.show_batch_replace_dialog()
 
     def _ensure_default_tab_registered(self):
         tw = self.guankou_tabWidget
@@ -2701,8 +2626,6 @@ class DesignParameterDefineInputerViewer(QWidget):
                         self.dynamic_guankou_param_tabs[tab_name_1] = table1
 
     def _on_guankou_tab_changed(self, index: int):
-        if getattr(self, "_structure_tree_pending", False):
-            return
         if getattr(self, "_is_removing_guankou_tab", False):
             return
 
@@ -2714,24 +2637,21 @@ class DesignParameterDefineInputerViewer(QWidget):
         if name in {"+", "＋"}:
             tw.setCurrentIndex(max(0, index - 1))
             return
-        if self._guankou_tab_is_hidden(tw, index):
-            real = self._guankou_real_indices(tw)
-            if real:
-                tw.setCurrentIndex(real[0])
-            return
 
-        # 先确保当前页能拿到正确 table（表格若被挪走则挂回）
+        # 先确保当前页能拿到正确 table
         page = tw.widget(index)
-        preferred = None
-        if index == 0:
-            preferred = getattr(self, "default_param_table", None) or getattr(self, "tableWidget_guankou", None)
-        elif index == 1:
-            preferred = getattr(self, "tableWidget_guankou_2", None)
-        table = self._ensure_guankou_page_table(page, preferred=preferred)
+        table = page.property("param_table") if page else None
 
-        if table is None and hasattr(self, "dynamic_guankou_param_tabs"):
-            table = self.dynamic_guankou_param_tabs.get(name)
-            table = self._ensure_guankou_page_table(page, preferred=table)
+        if table is None:
+            if index == 0:
+                table = getattr(self, "default_param_table", None) or getattr(self, "tableWidget_guankou", None)
+            elif index == 1:
+                table = getattr(self, "tableWidget_guankou_2", None) or getattr(self, "tableWidget_guankou", None)
+            else:
+                table = getattr(self, "tableWidget_guankou", None)
+
+            if page and table:
+                page.setProperty("param_table", table)
 
         if table is None:
             print(f"[管口tab切换] 未找到表格, tab={name}")
@@ -2763,8 +2683,7 @@ class DesignParameterDefineInputerViewer(QWidget):
                 # 再补当前tab自己的管口号候选
                 self.patch_codes_for_current_tab(table, name)
             finally:
-                if old_table is not None and not self._is_qt_deleted(old_table):
-                    self.tableWidget_guankou = old_table
+                self.tableWidget_guankou = old_table
 
         except Exception as e:
             print(f"[管口tab切换刷新失败] tab={name}, err={e}")
@@ -2842,27 +2761,25 @@ class DesignParameterDefineInputerViewer(QWidget):
         print(f"[调试] 新 tab Tab_ID: {new_tab_id}")
 
         tw.insertTab(insert_pos, page, tab_label)
+        tw.setCurrentIndex(insert_pos)
 
-        # 必须先绑定 param_table，再 setCurrentIndex；否则 currentChanged 会按 index
-        # 误用已销毁的 tableWidget_guankou_2（容器删掉第二页后）导致闪退
         page.setProperty('param_table', table_guankou)
+
+        # 记录映射
         self.dynamic_guankou_param_tabs[tab_label] = table_guankou
 
         # 添加放大按钮
         self._add_enlarge_button_to_tab(insert_pos)
 
-        tw.setCurrentIndex(insert_pos)
-
         # —— 5) 加载并渲染：严格用“拷贝源 tab 名”加载相同内容 ——
         select_template = self.comboBox_template.currentText() or 'None'
         # ✅ 直接使用tab名称（不再映射）
-        guankou_para_info = load_guankou_param_leibie(source_tab_name, self.product_id, select_template) or []
+        guankou_para_info = load_guankou_param_leibie(source_tab_name, self.product_id, select_template)
 
         # === 新增: 腐蚀裕量处理逻辑 ===
-        ca_map = get_design_params_by_product_id(self.product_id) or {}
-        ca_row = ca_map.get("腐蚀裕量*") or {}
-        tube_ca = ca_row.get("管程数值", "") if isinstance(ca_row, dict) else ""
-        shell_ca = ca_row.get("壳程数值", "") if isinstance(ca_row, dict) else ""
+        ca_map = get_design_params_by_product_id(self.product_id)
+        tube_ca = ca_map.get("腐蚀裕量*", {}).get("管程数值", "")
+        shell_ca = ca_map.get("腐蚀裕量*", {}).get("壳程数值", "")
 
         for row in guankou_para_info:
             pname = row.get("参数名称", "")
@@ -2918,194 +2835,31 @@ class DesignParameterDefineInputerViewer(QWidget):
         if act is act_delete:
             self.remove_guankou_tab(index)
 
-    def _is_qt_deleted(self, obj) -> bool:
-        if obj is None:
-            return True
-        try:
-            import sip
-            return sip.isdeleted(obj)
-        except Exception:
-            try:
-                obj.objectName()
-                return False
-            except Exception:
-                return True
-
-    def _guankou_tab_is_plus(self, tw, index: int) -> bool:
-        try:
-            return tw.tabText(index).strip() in {"+", "＋"}
-        except Exception:
-            return False
-
-    def _guankou_tab_is_hidden(self, tw, index: int) -> bool:
-        try:
-            if hasattr(tw, "isTabVisible"):
-                return not tw.isTabVisible(index)
-        except Exception:
-            pass
-        return False
-
-    def _set_guankou_tab_visible(self, tw, index: int, visible: bool):
-        try:
-            if hasattr(tw, "setTabVisible"):
-                tw.setTabVisible(index, visible)
-                return True
-        except Exception:
-            pass
-        return False
-
-    def _guankou_real_indices(self, tw, include_hidden=False):
-        """真实材料分类 tab 下标（排除 +；默认也排除隐藏预置页）。"""
-        indices = []
-        for i in range(tw.count()):
-            if self._guankou_tab_is_plus(tw, i):
-                continue
-            if not include_hidden and self._guankou_tab_is_hidden(tw, i):
-                continue
-            indices.append(i)
-        return indices
-
-    def _ensure_guankou_page_table(self, page, preferred=None):
-        """保证 page 布局里有可用 QTableWidget；表格若被挪走则重新挂回。"""
-        if page is None or self._is_qt_deleted(page):
-            return None
-
-        def _usable(t):
-            if self._is_qt_deleted(t):
-                return False
-            try:
-                return page.isAncestorOf(t)
-            except Exception:
-                return False
-
-        table = page.property("param_table")
-        if not _usable(table):
-            tables = page.findChildren(QTableWidget) or []
-            table = next((t for t in tables if _usable(t)), None)
-
-        if not _usable(table) and preferred is not None and not self._is_qt_deleted(preferred):
-            table = preferred
-
-        if table is not None and not self._is_qt_deleted(table):
-            layout = page.layout()
-            if layout is None:
-                layout = QtWidgets.QVBoxLayout(page)
-            try:
-                if layout.indexOf(table) < 0:
-                    # 表格可能被放大/删页逻辑挪走，挂回当前页
-                    try:
-                        table.setParent(page)
-                    except Exception:
-                        pass
-                    layout.addWidget(table)
-                table.show()
-            except Exception:
-                pass
-            page.setProperty("param_table", table)
-            return table
-
-        # 页内已无可用表：新建
-        table = QTableWidget()
-        table.setHorizontalHeader(CustomHeaderView(QtCore.Qt.Horizontal, table))
-        table.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Expanding)
-        layout = page.layout()
-        if layout is None:
-            layout = QtWidgets.QVBoxLayout(page)
-        layout.addWidget(table)
-        page.setProperty("param_table", table)
-        return table
-
-    def _get_guankou_min_keep(self) -> int:
-        """换热器至少 2；容器至少 1。"""
-        pt = str(getattr(self, "product_type", "") or "").strip()
-        base = getattr(self, "_guankou_base_tab_count", None)
-        if base is None:
-            labels = []
-            tw = getattr(self, "guankou_tabWidget", None)
-            if tw:
-                for i in self._guankou_real_indices(tw, include_hidden=False):
-                    labels.append(tw.tabText(i).strip())
-            base = infer_guankou_base_tab_count(labels, pt)
-            self._guankou_base_tab_count = base
-        if "热交换器" in pt or "换热器" in pt:
-            return max(2, int(base or 2))
-        return max(1, int(base or 1))
-
-    def _keep_orphaned_guankou_page(self, page):
-        """兼容旧路径：预置页脱离 tab 时仅隐藏保活，不挂到主窗口。"""
-        if page is None or self._is_qt_deleted(page):
-            return
-        if not hasattr(self, "_orphaned_guankou_pages"):
-            self._orphaned_guankou_pages = []
-        try:
-            page.hide()
-            page.setParent(None)
-        except Exception:
-            pass
-        if page not in self._orphaned_guankou_pages:
-            self._orphaned_guankou_pages.append(page)
-
-    def _refresh_current_guankou_tab_content(self):
-        """删除/重建后强制刷新当前真实 tab 内容。"""
-        tw = getattr(self, "guankou_tabWidget", None)
-        if not tw or tw.count() <= 0:
-            return
-        idx = tw.currentIndex()
-        if idx < 0 or self._guankou_tab_is_plus(tw, idx) or self._guankou_tab_is_hidden(tw, idx):
-            real = self._guankou_real_indices(tw)
-            if not real:
-                return
-            idx = real[0]
-            tw.setCurrentIndex(idx)
-
-        page = tw.widget(idx)
-        name = tw.tabText(idx).strip()
-        preferred = None
-        if idx == 0:
-            preferred = getattr(self, "default_param_table", None) or getattr(self, "tableWidget_guankou", None)
-        elif idx == 1:
-            preferred = getattr(self, "tableWidget_guankou_2", None)
-        table = self._ensure_guankou_page_table(page, preferred=preferred)
-        if table is None:
-            print(f"[删除后刷新] 无法恢复表格 tab={name}")
-            return
-        if not hasattr(self, "dynamic_guankou_param_tabs"):
-            self.dynamic_guankou_param_tabs = {}
-        self.dynamic_guankou_param_tabs[name] = table
-        # 走统一刷新
-        self._on_guankou_tab_changed(idx)
-
     def remove_guankou_tab(self, index):
         # 避免删除过程中触发 currentChanged/restore 等回调导致野引用/闪退
         if getattr(self, "_is_removing_guankou_tab", False):
             return
         self._is_removing_guankou_tab = True
 
-        def _finish_remove():
+        def _clear_removing_flag():
             try:
                 self._is_removing_guankou_tab = False
             except Exception:
                 pass
-            try:
-                self._refresh_current_guankou_tab_content()
-            except Exception as e:
-                print(f"[删除tab后刷新失败] {e}")
 
         # 防止删除 “+”
         tab_text = self.guankou_tabWidget.tabText(index).strip()
         if tab_text in {"+", "＋"}:
-            QTimer.singleShot(0, _finish_remove)
+            QTimer.singleShot(200, _clear_removing_flag)
             return
 
-        # 至少保留初始分类数（排除“+”/隐藏页）：换热器 2，容器 1
-        real_count = len(self._guankou_real_indices(self.guankou_tabWidget, include_hidden=False))
-        min_keep = self._get_guankou_min_keep()
-        if real_count <= min_keep:
-            show_information(
-                self, "提示",
-                f"至少保留{min_keep}个管口材料分类，不能删除最后{min_keep}个 tab"
-            )
-            QTimer.singleShot(0, _finish_remove)
+        # 至少保留两个（排除“+”）
+        total = self.guankou_tabWidget.count()
+        has_plus = total > 0 and self.guankou_tabWidget.tabText(total - 1).strip() in {"+", "＋"}
+        real_count = total - (1 if has_plus else 0)
+        if real_count <= 2:
+            QMessageBox.information(self, "提示", "至少保留两个管口材料分类，不能删除最后两个 tab")
+            QTimer.singleShot(200, _clear_removing_flag)
             return
 
         tab_name = self.guankou_tabWidget.tabText(index)
@@ -3187,17 +2941,13 @@ class DesignParameterDefineInputerViewer(QWidget):
                     return False
 
                 if _is_ui_default_page(page_to_remove):
-                    # 仅移除tab，不销毁默认页；不要 setParent(self)，否则会盖住详细定义区变空白
-                    self._keep_orphaned_guankou_page(page_to_remove)
+                    # 仅移除tab，不销毁默认页，避免模板切换引用到已销毁控件导致闪退
+                    try:
+                        page_to_remove.hide()
+                    except Exception:
+                        pass
                 else:
                     page_to_remove.deleteLater()
-
-                # 清理映射，避免删掉的类别名仍占着
-                try:
-                    if hasattr(self, "guankou_tab_id_map"):
-                        self.guankou_tab_id_map.pop(tab_name, None)
-                except Exception:
-                    pass
 
         finally:
             try:
@@ -3218,7 +2968,7 @@ class DesignParameterDefineInputerViewer(QWidget):
         except Exception:
             pass
 
-        # 再选中一个合理的 tab（删除期间不刷新；结束后强制刷新内容）
+        # 再选中一个合理的 tab（允许触发 currentChanged，但会被 _is_removing_guankou_tab 拦住）
         try:
             cnt = tw.count() if tw else 0
             if tw and cnt:
@@ -3229,8 +2979,8 @@ class DesignParameterDefineInputerViewer(QWidget):
         except Exception:
             pass
 
-        # 延迟结束删除态并强制刷新当前页（删后面 tab 时前面页不会自动 currentChanged）
-        QTimer.singleShot(0, _finish_remove)
+        # 延迟清除删除标志，避开菜单关闭/TabBar事件的尾部触发
+        QTimer.singleShot(200, _clear_removing_flag)
 
     def on_tab_double_clicked(self, index):
         """更改tab页标题"""
@@ -3246,7 +2996,7 @@ class DesignParameterDefineInputerViewer(QWidget):
 
             existing_labels = [self.guankou_tabWidget.tabText(i) for i in range(self.guankou_tabWidget.count())]
             if new_label in existing_labels:
-                show_warning(self, "重名", "该名称已存在，请重新输入")
+                QMessageBox.warning(self, "重名", "该名称已存在，请重新输入")
                 return
 
             self.guankou_tabWidget.setTabText(index, new_label)
@@ -3273,7 +3023,7 @@ class DesignParameterDefineInputerViewer(QWidget):
             # ⚠️ 防止重名
             existing_labels = [self.guankou_tabWidget.tabText(i) for i in range(self.guankou_tabWidget.count())]
             if new_label in existing_labels:
-                show_warning(self, "重名", "该名称已存在，请重新输入")
+                QMessageBox.warning(self, "重名", "该名称已存在，请重新输入")
                 return
 
             self.guankou_tabWidget.setTabText(index, new_label)
@@ -3328,7 +3078,7 @@ class DesignParameterDefineInputerViewer(QWidget):
                 pass
 
         if table is None:
-            show_warning(self, "未找到", f"未找到 {tab_name} 对应的参数表格")
+            QMessageBox.warning(self, "未找到", f"未找到 {tab_name} 对应的参数表格")
             return
 
         # 2.11 双击管口放大会出现两个弹窗并闪退
@@ -3342,7 +3092,7 @@ class DesignParameterDefineInputerViewer(QWidget):
                 pass
             # 弹出提示信息：以放大窗口为父窗口，提示框会置于放大窗口之前
             try:
-                show_information(
+                QMessageBox.information(
                     existing_win,
                     "提示",
                     f"{tab_name}参数表格已经处于放大查看状态，不能重复放大。"
@@ -3499,6 +3249,7 @@ class DesignParameterDefineInputerViewer(QWidget):
 
         # 批量替换模式下，不走系统默认选中高亮逻辑
         if getattr(self, "batch_replace_select_mode", False):
+            self.refresh_batch_replace_row_highlight()
             return
 
         # 普通模式
@@ -3542,10 +3293,22 @@ class DesignParameterDefineInputerViewer(QWidget):
                 item.setBackground(QColor("#d0e7ff"))
 
     def show_error_message(self, title, message):
-        show_critical(self, title, message)
+        # 创建QMessageBox来显示错误信息
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Critical)  # 设置为错误图标
+        msg_box.setWindowTitle(title)  # 设置窗口标题
+        msg_box.setText(message)  # 设置显示的错误信息
+        msg_box.setStandardButtons(QMessageBox.Ok)  # 设置“确定”按钮
+        msg_box.exec_()  # 显示弹窗
 
     def show_info_message(self, title, message):
-        show_information(self, title, message)
+        # 创建QMessageBox来显示正常提示信息
+        msg_box = QMessageBox()
+        msg_box.setIcon(QMessageBox.Information)  # 设置为信息图标
+        msg_box.setWindowTitle(title)  # 设置窗口标题
+        msg_box.setText(message)  # 设置显示的提示信息
+        msg_box.setStandardButtons(QMessageBox.Ok)  # 设置“确定”按钮
+        msg_box.exec_()  # 显示弹窗
 
 
 
@@ -3757,422 +3520,175 @@ class DesignParameterDefineInputerViewer(QWidget):
         #       其他元件（支座、铭牌、保温装置等）使用默认值 False，不显示"全选"功能
         table.setItemDelegateForRow(row, CheckComboDelegate(options=merged, table=table, enable_select_all=True))
 
-    def build_or_refresh_guankou_tabs_from_db(self, param_map: dict, preserve_all_tabs=False,
-                                               reset_base_count=True):
-        """按 产品设计活动表_管口附加参数表 中的类别重建 tab（不硬编码管程/壳程个数）。"""
+    def build_or_refresh_guankou_tabs_from_db(self, param_map: dict):
         tw = self.guankou_tabWidget
         if not hasattr(self, "dynamic_guankou_param_tabs"):
             self.dynamic_guankou_param_tabs = {}
+        # 维护 Tab_ID 映射：{类别: Tab_ID}
         if not hasattr(self, "guankou_tab_id_map"):
             self.guankou_tab_id_map = {}
 
-        category_tab_map = query_all_guankou_categories_with_tab_id(self.product_id) or {}
+        # 获取 Tab_ID 映射
+        category_tab_map = query_all_guankou_categories_with_tab_id(self.product_id)
         self.guankou_tab_id_map.update(category_tab_map)
 
-        # 优先按库中 Tab_ID 顺序；param_map 作为数据源
-        db_labels = query_all_guankou_categories(self.product_id) or []
-        labels = []
-        seen = set()
-        for lb in db_labels:
-            if lb and lb not in seen:
-                seen.add(lb)
-                labels.append(lb)
-        for lb in list((param_map or {}).keys()):
-            if lb and lb not in seen:
-                seen.add(lb)
-                labels.append(lb)
-        if not labels:
-            print("[警告] 管口附加参数表无分类，跳过 tab 重建")
-            return
+        # ✅ 确保"管口材料分类-壳程"也有Tab_ID（如果还没有）
+        if "管口材料分类-壳程" not in self.guankou_tab_id_map:
+            # 为"管口材料分类-壳程"生成Tab_ID并更新到数据库
+            from modules.cailiaodingyi.funcs.funcs_pdf_input import get_connection, db_config_1
+            new_tab_id = generate_unique_tab_id()
+            self.guankou_tab_id_map["管口材料分类-壳程"] = new_tab_id
+            print(f"[初始化] 为管口材料分类-壳程生成新Tab_ID: {new_tab_id}")
 
-        for lb in labels:
-            if lb not in param_map:
-                param_map[lb] = []
+            # 更新数据库中该分类的Tab_ID（如果该分类有数据但没有Tab_ID）
+            connection = get_connection(**db_config_1)
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute("""
+                        UPDATE 产品设计活动表_管口附加参数表
+                        SET Tab_ID = %s
+                        WHERE 产品ID = %s AND 类别 = '管口材料分类-壳程' AND (Tab_ID IS NULL OR Tab_ID = '')
+                    """, (new_tab_id, self.product_id))
+                    connection.commit()
+            except Exception as e:
+                print(f"[错误] 更新管口材料分类-壳程的Tab_ID失败: {e}")
+            finally:
+                connection.close()
 
-        if reset_base_count and not preserve_all_tabs:
-            self._guankou_base_tab_count = infer_guankou_base_tab_count(
-                labels, getattr(self, "product_type", None)
-            )
-        elif getattr(self, "_guankou_base_tab_count", None) is None:
-            self._guankou_base_tab_count = infer_guankou_base_tab_count(
-                labels, getattr(self, "product_type", None)
-            )
+        labels = list(param_map.keys()) or ["管口材料分类-管程"]
 
-        def _real_count():
-            return len(self._guankou_real_indices(tw, include_hidden=False)), (
-                tw.count() > 0 and self._guankou_tab_is_plus(tw, tw.count() - 1)
-            )
+        # # ✅ 切换模板时，只保留前两个默认分类（管口材料分类-管程和管口材料分类-壳程）
+        # # 过滤掉其他分类（如用户新增的"管口材料分类1"、"管口材料分类3"等）
+        # default_categories = ["管口材料分类-管程", "管口材料分类-壳程"]
+        # filtered_labels = []
+        # for cat in default_categories:
+        #     if cat in labels:
+        #         filtered_labels.append(cat)
+        #     else:
+        #         # 如果数据库中没有该分类，也要确保param_map中有它（数据为空）
+        #         if cat not in param_map:
+        #             param_map[cat] = []
+        #         filtered_labels.append(cat)
+        #
+        # # ✅ 只使用前两个默认分类，忽略其他分类
+        # labels = filtered_labels[:2]
+        #
+        # # ✅ 确保param_map中只包含这两个分类的数据
+        # filtered_param_map = {}
+        # for label in labels:
+        #     filtered_param_map[label] = param_map.get(label, [])
+        # param_map = filtered_param_map
 
-        # 多出来的真实 tab：优先隐藏 UI 预置页（与换热器一样保留页对象），动态页才 remove
-        real_indices = self._guankou_real_indices(tw, include_hidden=False)
-        while len(real_indices) > len(labels):
-            idx = real_indices[-1]
-            w = tw.widget(idx)
-            is_ui_preset = False
-            for candidate in (
-                getattr(self, "tableWidget_guankou", None),
-                getattr(self, "tableWidget_guankou_2", None),
-                getattr(self, "default_param_table", None),
-            ):
+        # 保留第0页和第1页（如果存在），删其余
+        has_plus = (tw.count() > 0 and tw.tabText(tw.count() - 1).strip() in {"+", "＋"})
+        last_real = tw.count() - (1 if has_plus else 0)
+        # 保留前两个tab页（管口材料分类1和管口材料分类2），删除第三个及以后的
+        for i in range(last_real - 1, 1, -1):  # 从倒数第二个开始，保留索引0和1
+            w = tw.widget(i)
+            tw.removeTab(i)
+            if w:
+                w.deleteLater()
+
+        # 确保至少有两个tab页（使用UI中已存在的tab页）
+        if tw.count() < 2:
+            # 如果只有1个tab页，检查UI中是否已经有第二个tab页（tab_5）
+            page1_ui = None
+            for i in range(tw.count()):
+                widget = tw.widget(i)
+                if widget and widget.objectName() == "tab_5":
+                    page1_ui = widget
+                    break
+
+            if page1_ui is None:
+                # UI中没有第二个tab页，创建一个新的
+                page1, table1 = self._new_param_tab_like_default("管口材料分类-壳程")
+                tw.addTab(page1, "管口材料分类-壳程")
+            else:
+                # UI中已有第二个tab页，添加到tabWidget（如果还没有添加）
+                if tw.indexOf(page1_ui) == -1:
+                    tw.addTab(page1_ui, "管口材料分类-壳程")
+
+        # 清空映射字典，重新建立映射
+        self.dynamic_guankou_param_tabs.clear()
+
+        for idx, label in enumerate(labels):
+            # ✅ 直接使用数据库类别名称（不再映射）
+            if idx == 0:
+                # 第一个tab页
+                tw.setTabText(0, label)
+                page0 = tw.widget(0)
+                tables = page0.findChildren(QTableWidget) if page0 else []
+                table = tables[0] if tables else getattr(self, "tableWidget_guankou", None)
+                if table is None:
+                    _, table = self._new_param_tab_like_default(label, insert_pos=0)
+                    if tw.count() > 1:
+                        tw.removeTab(1)
+                page0.setProperty("param_table", table)
+                # 为第0个tab添加放大按钮
+                self._add_enlarge_button_to_tab(0)
+            elif idx == 1:
+                # 第二个tab页
+                if tw.count() > 1:
+                    tw.setTabText(1, label)
+                    page1 = tw.widget(1)
+                    tables = page1.findChildren(QTableWidget) if page1 else []
+                    table = tables[0] if tables else getattr(self, "tableWidget_guankou_2", None)
+                    if table is None:
+                        # 如果找不到表格，创建一个新的
+                        page1_new, table = self._new_param_tab_like_default(label)
+                        tw.removeTab(1)
+                        tw.insertTab(1, page1_new, label)
+                        page1 = page1_new
+                    page1.setProperty("param_table", table)
+                    # 为第1个tab添加放大按钮
+                    self._add_enlarge_button_to_tab(1)
+                else:
+                    # 如果tab页不够，创建新的
+                    page1, table = self._new_param_tab_like_default(label)
+                    tw.addTab(page1, label)
+                    page1.setProperty("param_table", table)
+                    self._add_enlarge_button_to_tab(tw.count() - 1)
+            else:
+                # 第三个及以后的tab页
+                page, table = self._new_param_tab_like_default(label)
+                page.setProperty("param_table", table)
+                tw.addTab(page, label)
+                # ✅ 关键：重建时也要给新增tab挂“放大”按钮（否则重进后按钮丢失）
                 try:
-                    if candidate is not None and w is not None and w.isAncestorOf(candidate):
-                        is_ui_preset = True
-                        break
+                    new_index = tw.indexOf(page)
+                    if new_index >= 0:
+                        self._add_enlarge_button_to_tab(new_index)
                 except Exception:
                     pass
-            if is_ui_preset and self._set_guankou_tab_visible(tw, idx, False):
-                # 隐藏即可，不拆页 —— 容器与换热器结构保持一致
-                pass
-            else:
-                tw.removeTab(idx)
-                if w is not None:
-                    if is_ui_preset:
-                        self._keep_orphaned_guankou_page(w)
-                    else:
-                        w.deleteLater()
-            real_indices = self._guankou_real_indices(tw, include_hidden=False)
 
-        # 不足：先恢复被隐藏的预置页，再新建
-        real_indices = self._guankou_real_indices(tw, include_hidden=False)
-        while len(real_indices) < len(labels):
-            restored = False
-            for i in self._guankou_real_indices(tw, include_hidden=True):
-                if self._guankou_tab_is_hidden(tw, i):
-                    self._set_guankou_tab_visible(tw, i, True)
-                    restored = True
-                    break
-            if not restored:
-                need_label = labels[len(real_indices)]
-                page, table = self._new_param_tab_like_default(need_label)
-                page.setProperty("param_table", table)
-            real_indices = self._guankou_real_indices(tw, include_hidden=False)
-
-        self.dynamic_guankou_param_tabs.clear()
-        real_indices = self._guankou_real_indices(tw, include_hidden=False)
-
-        for idx_in_labels, label in enumerate(labels):
-            if idx_in_labels >= len(real_indices):
-                page, table = self._new_param_tab_like_default(label)
-                real_indices = self._guankou_real_indices(tw, include_hidden=False)
-                tab_index = real_indices[idx_in_labels] if idx_in_labels < len(real_indices) else tw.indexOf(page)
-            else:
-                tab_index = real_indices[idx_in_labels]
-                page = tw.widget(tab_index)
-                tw.setTabText(tab_index, label)
-                preferred = None
-                if tab_index == 0 or idx_in_labels == 0:
-                    preferred = getattr(self, "default_param_table", None) or getattr(self, "tableWidget_guankou", None)
-                elif tab_index == 1 or idx_in_labels == 1:
-                    preferred = getattr(self, "tableWidget_guankou_2", None)
-                table = self._ensure_guankou_page_table(page, preferred=preferred)
-
-            try:
-                self._add_enlarge_button_to_tab(tab_index)
-            except Exception:
-                pass
+            # 保存到字典（确保table变量已正确赋值）
+            if idx == 0:
+                page0 = tw.widget(0)
+                table = page0.findChildren(QTableWidget)[0] if page0 else getattr(self, "tableWidget_guankou", None)
+            elif idx == 1:
+                page1 = tw.widget(1) if tw.count() > 1 else None
+                table = page1.findChildren(QTableWidget)[0] if page1 else getattr(self, "tableWidget_guankou_2", None)
+            # else分支中，table已经在上面创建并赋值了
 
             if table:
                 self.dynamic_guankou_param_tabs[label] = table
 
+            # 渲染
             data = param_map.get(label, [])
             old_table = getattr(self, "tableWidget_guankou", None)
             self.tableWidget_guankou = table
             try:
-                if table is None:
-                    print(f"[错误] tab={label} 未绑定表格，跳过渲染")
-                    continue
                 render_guankou_param_to_ui(self, data)
-                print(f"[DBG][refresh] 渲染完成 label={label}, data条数={len(data)}")
+                print(f"[DBG][refresh] 渲染完成 label={label}, data条数={len(data)}")  # ← zhange添加
+                # 渲染完再补"管口号"
                 self.patch_codes_for_current_tab(table, label)
+
             finally:
-                # 仅当旧引用仍有效时恢复，避免指向已删除动态表
-                if old_table is not None and not self._is_qt_deleted(old_table):
-                    self.tableWidget_guankou = old_table
+                self.tableWidget_guankou = old_table
 
-        real = self._guankou_real_indices(tw, include_hidden=False)
-        if real:
-            tw.setCurrentIndex(real[0])
-        try:
-            if getattr(self, "plus_mgr", None):
-                self.plus_mgr.refresh_after_model_change()
-        except Exception:
-            pass
-        print(f"[DBG] build_or_refresh 完成 labels={labels}, base_tab_count={getattr(self, '_guankou_base_tab_count', None)}")
-
-    def _set_toolbar_pending_state(self, pending: bool):
-        """结构树未确认前：仅结构树按钮可用，其余工具栏与主内容区禁用。"""
-        enabled = not pending
-        if getattr(self, "comboBox_template", None):
-            self.comboBox_template.setEnabled(enabled)
-        if getattr(self, "lineEdit_filter", None):
-            self.lineEdit_filter.setEnabled(enabled)
-        if getattr(self, "lineEdit_template", None):
-            self.lineEdit_template.setEnabled(enabled)
-        if getattr(self, "pushButton_batch_replace", None):
-            self.pushButton_batch_replace.setEnabled(enabled)
-        if getattr(self, "pushButton_structure_tree", None):
-            self.pushButton_structure_tree.setEnabled(True)
-        if getattr(self, "tableWidget_parts", None):
-            self.tableWidget_parts.setEnabled(enabled)
-        if getattr(self, "stackedWidget", None):
-            self.stackedWidget.setEnabled(enabled)
-        if getattr(self, "guankou_tabWidget", None):
-            self.guankou_tabWidget.setEnabled(enabled)
-            self.guankou_tabWidget.tabBar().setEnabled(enabled)
-
-        for btn_name in (
-            "pushButton_6", "pushButton_7", "pushButton_8", "pushButton_9",
-            "pushButton_10", "pushButton_11", "pushButton_12", "pushButton_13",
-            "pushButton_14", "pushButton_15",
-        ):
-            btn = getattr(self, btn_name, None) or self.findChild(QPushButton, btn_name)
-            if btn is not None:
-                btn.setEnabled(enabled)
-
-        if enabled:
-            self.update_batch_replace_button_state()
-            current_text = (self.comboBox_template.currentText() or "").strip()
-            if getattr(self, "lineEdit_template", None):
-                if not current_text or current_text.lower() == "none":
-                    self.lineEdit_template.setEnabled(False)
-
-    def _clear_element_define_blank_ui(self):
-        """产品设计活动库尚无数据时，清空元件定义主界面。"""
-        self.element_data = []
-        self.element_data_by_id = {}
-        self.element_image_map = {}
-        self.image_paths = []
-        self._last_part_image_path = None
-
-        if getattr(self, "tableWidget_parts", None):
-            table = self.tableWidget_parts
-            table.clear()
-            headers = [
-                "序号", "零件名称", "材料类型", "材料牌号", "材料标准",
-                "供货状态", "有无覆层", "是否定义", "所属部件",
-            ]
-            table.setColumnCount(len(headers))
-            table.setHorizontalHeaderLabels(headers)
-            table.setRowCount(0)
-
-        if getattr(self, "label_part_image", None):
-            self.label_part_image.clear()
-
-        self._clear_detail_definition_content()
-
-    def _clear_detail_definition_content(self):
-        """仅清空「详细定义」区域内的表格内容，不改变布局比例。"""
-        stacked = getattr(self, "stackedWidget", None)
-        if stacked is not None:
-            for table in stacked.findChildren(QTableWidget):
-                table.clearContents()
-                for row in range(table.rowCount()):
-                    for col in range(table.columnCount()):
-                        table.removeCellWidget(row, col)
-                table.setRowCount(0)
-            if stacked.currentIndex() >= 0:
-                stacked.setCurrentIndex(0)
-        if getattr(self, "guankou_tabWidget", None) and self.guankou_tabWidget.count() > 0:
-            self.guankou_tabWidget.setCurrentIndex(0)
-
-    def _show_structure_tree_cancel_tip(self):
-        """首次结构树取消后，左下角提示用户点击结构树。"""
-        tip = getattr(self, "line_tip", None)
-        if tip:
-            tip.setStyleSheet("color: orange;")
-            tip.setText("请点击结构树进行零件定义")
-        mw = getattr(self, "main_window", None)
-        if mw is None:
-            w = self.parent()
-            while w is not None:
-                if hasattr(w, "_tip_timer"):
-                    mw = w
-                    break
-                w = w.parent()
-        if mw is not None and hasattr(mw, "_tip_timer"):
-            mw._tip_timer.stop()
-
-    def _clear_structure_tree_cancel_tip(self):
-        tip = getattr(self, "line_tip", None)
-        if not tip:
-            return
-        if (tip.text() or "").strip() == "请点击结构树进行零件定义":
-            tip.clear()
-            tip.setStyleSheet("")
-
-    def _apply_structure_tree_pending_ui(self):
-        """结构树未确认：空白界面 + 仅结构树可用（需在 open_tab 刷新只读状态之后再次调用）。"""
-        if not getattr(self, "_structure_tree_pending", False):
-            return
-        self._clear_element_define_blank_ui()
-        self._set_toolbar_pending_state(True)
-
-    def _commit_initial_structure_tree(self, element_original_info, dlg_visible, template_name="None"):
-        """首次结构树确认：写入产品设计活动库并渲染管口等附属数据。"""
-        insert_element_data(element_original_info, self.product_id, template_name)
-
-        first_template_id = element_original_info[0].get("模板ID", None)
-        guankou_para_info = query_template_guankou_para_data(first_template_id)
-        available_categories = collect_ordered_guankou_categories(guankou_para_info)
-
-        insert_guankou_para_data(
-            self.product_id, guankou_para_info, template_name, template_id=first_template_id,
-        )
-        guankou_info = query_guankou_default(self.product_type, self.product_form)
-        insert_guankou_info(
-            self.product_id, guankou_info,
-            product_form=self.product_form, product_type=self.product_type,
-            available_categories=available_categories,
-        )
-
-        element_para_info = query_template_element_para_data(first_template_id)
-        insert_element_para_data(self.product_id, element_para_info)
-
-        from modules.cailiaodingyi.controllers.datamanager import batch_insert_element_merged_para_data
-        batch_insert_element_merged_para_data(self.product_id, first_template_id, template_name)
-
-        init_buguan_defaults(self.product_id)
-
-        labels = query_all_guankou_categories(self.product_id) or list(available_categories)
-        self._guankou_base_tab_count = infer_guankou_base_tab_count(
-            labels, getattr(self, "product_type", None)
-        )
-
-        if not hasattr(self, "guankou_tab_id_map"):
-            self.guankou_tab_id_map = {}
-        category_tab_map = query_all_guankou_categories_with_tab_id(self.product_id)
-        self.guankou_tab_id_map.update(category_tab_map)
-
-        param_map = {}
-        for label in labels:
-            tab_id = self.guankou_tab_id_map.get(label)
-            if tab_id:
-                rows = query_guankou_param_by_product(self.product_id, tab_id) or []
-            else:
-                rows = query_guankou_param_by_product(self.product_id, label) or []
-            param_map[label] = rows
-
-        self.build_or_refresh_guankou_tabs_from_db(param_map, reset_base_count=True)
-        apply_structure_tree_selection(self.product_id, element_original_info, dlg_visible)
-
-    def _finish_initial_structure_tree_ui(self):
-        """结构树首次确认后，刷新界面并恢复工具栏。"""
-        self._clear_structure_tree_cancel_tip()
-        self._structure_tree_pending = False
-        self._pending_element_original_info = None
-        self._set_toolbar_pending_state(False)
-
-        element_rows = load_element_info(self.product_id, only_visible=True)
-        self._sync_element_maps_and_render_parts(element_rows)
-
-        labels = query_all_guankou_categories(self.product_id) or []
-        self._guankou_base_tab_count = infer_guankou_base_tab_count(
-            labels, getattr(self, "product_type", None)
-        )
-
-        category_tab_map = query_all_guankou_categories_with_tab_id(self.product_id)
-        if not hasattr(self, "guankou_tab_id_map"):
-            self.guankou_tab_id_map = {}
-        self.guankou_tab_id_map.update(category_tab_map)
-
-        param_map = {}
-        for label in labels:
-            tab_id = self.guankou_tab_id_map.get(label)
-            if tab_id:
-                rows = query_guankou_param_by_product(self.product_id, tab_id) or []
-            else:
-                rows = query_guankou_param_by_product(self.product_id, label) or []
-            param_map[label] = rows
-        self.build_or_refresh_guankou_tabs_from_db(param_map, preserve_all_tabs=True, reset_base_count=False)
-
-        try:
-            from modules.chanpinguanli.local_product_folder import (
-                schedule_readonly_for_element_define_viewer,
-            )
-            schedule_readonly_for_element_define_viewer(self)
-        except Exception as _e_ro:
-            print(f"[结构树] schedule readonly: {_e_ro}")
-
-        self._schedule_part_image_refresh()
-
-    def _sync_element_maps_and_render_parts(self, element_rows):
-        element_rows = move_guankou_to_first(element_rows or [])
-        element_rows = move_guankou_attachment_to_second(element_rows)
-        self.element_data = element_rows
-        self.element_data_by_id = {
-            row.get("元件ID"): row
-            for row in element_rows
-            if row.get("元件ID")
-        }
-        self.element_image_map = {
-            row.get("元件ID"): row.get("零件示意图", "")
-            for row in element_rows
-            if row.get("元件ID")
-        }
-        self.render_data_to_table(element_rows)
-        self.image_paths = [item.get("零件示意图", "") for item in element_rows]
-        if self.image_paths:
-            self._schedule_part_image_refresh()
-
-    def _refresh_parts_table_visible_only(self):
-        rows = load_element_info(self.product_id, only_visible=True)
-        self._sync_element_maps_and_render_parts(rows)
-
-    def on_structure_tree_button_clicked(self):
-        if getattr(self, "_structure_tree_pending", False):
-            element_original_info = getattr(self, "_pending_element_original_info", None)
-            template_name = getattr(self, "_pending_template_name", "None") or "None"
-            if not element_original_info:
-                element_original_info = load_elementoriginal_data(
-                    template_name, self.product_type, self.product_form,
-                )
-            if not element_original_info:
-                show_information(self, "提示", "没有找到零件数据。")
-                return
-            visible_init, mandatory_ids = build_initial_visible_and_mandatory(
-                element_original_info, self.product_type, self.product_form,
-            )
-            result = show_structure_tree_dialog(
-                self,
-                element_original_info,
-                visible_init,
-                mandatory_ids,
-                title="结构树 - 请选择要显示的元件",
-            )
-            if result is None:
-                self._apply_structure_tree_pending_ui()
-                QTimer.singleShot(50, self._apply_structure_tree_pending_ui)
-                self._show_structure_tree_cancel_tip()
-                return
-            self._commit_initial_structure_tree(element_original_info, result, template_name)
-            self._finish_initial_structure_tree_ui()
-            return
-
-        all_elements = load_element_info(self.product_id, only_visible=False)
-        if not all_elements:
-            show_information(self, "提示", "当前产品尚无元件数据。")
-            return
-        visible_ids = visible_ids_from_rows(all_elements)
-        mandatory = mandatory_ids_for_elements(
-            all_elements, self.product_type, self.product_form
-        )
-        result = show_structure_tree_dialog(
-            self,
-            all_elements,
-            visible_ids,
-            mandatory,
-            title="结构树",
-        )
-        if result is None:
-            return
-        apply_structure_tree_selection(self.product_id, all_elements, result)
-        self._refresh_parts_table_visible_only()
-        try:
-            keyword = self.lineEdit_filter.text().strip() if hasattr(self, "lineEdit_filter") else ""
-            if keyword:
-                self.filter_table_globally(keyword)
-        except Exception as e:
-            print(f"[结构树] 刷新筛选失败: {e}")
+        # ✅ 确保默认显示第一个 tab（管口材料分类-管程）
+        if tw.count() > 0:
+            tw.setCurrentIndex(0)
 
     def load_original_data(self):
 
@@ -4184,7 +3700,6 @@ class DesignParameterDefineInputerViewer(QWidget):
 
         # 如果模板名称为空，则设置为 "None"字符串
         template_name = "None"
-        category_labels = []
         self.product_type, self.product_form = load_design_product_data(product_id)
         self.product_id = product_id
 
@@ -4198,10 +3713,8 @@ class DesignParameterDefineInputerViewer(QWidget):
         ]
         print(f"[DBG] 模板候选：{template_list}")
 
-        self.comboBox_template.blockSignals(True)
         self.comboBox_template.clear()
         self.comboBox_template.addItems(template_list)
-        self.comboBox_template.blockSignals(False)
         # 默认选中空白项
         index_blank = template_list.index("") if "" in template_list else 0
         # self.comboBox_template.setCurrentIndex(index_blank)
@@ -4209,10 +3722,6 @@ class DesignParameterDefineInputerViewer(QWidget):
         # 👉 添加：监听下拉框变化，动态更新 lineEdit_template 的状态
         if not getattr(self, "_template_signal_connected", False):
             def _update_lineEdit_enabled(text):
-                if getattr(self, "_structure_tree_pending", False):
-                    return
-                if not has_product(self.product_id):
-                    return
                 text = text.strip()
                 # 控制可编辑状态
                 if not text or text.lower() == "none":
@@ -4257,8 +3766,8 @@ class DesignParameterDefineInputerViewer(QWidget):
 
         # 检查产品设计活动库数据
         if has_product(product_id):
-            # 获取零件列表信息（仅显示 是否显示=是 的元件）
-            element_original_info = load_element_info(product_id, only_visible=True)
+            # 获取零件列表信息
+            element_original_info = load_element_info(product_id)
             print(
                 f"[DBG] 元件列表条数={len(element_original_info)}  示例前3项={[e.get('零件名称') for e in element_original_info[:3]]}")
             template_name_from_db = element_original_info[0].get("模板名称", "None")
@@ -4295,17 +3804,64 @@ class DesignParameterDefineInputerViewer(QWidget):
         # 从模板库中读数据
         elif self.product_type and self.product_form:
 
+            self.lineEdit_template.setEnabled(False)  # 首次无模板，禁用输入框
+
             element_original_info = load_elementoriginal_data(template_name, self.product_type, self.product_form)
+            insert_element_data(element_original_info, product_id, template_name)
             if not element_original_info:
                 self.show_error_message("数据加载错误", "没有找到零件数据")
                 return
 
-            self._structure_tree_pending = True
-            self._pending_element_original_info = element_original_info
-            self._pending_template_name = template_name
-            self._apply_structure_tree_pending_ui()
-            self._need_initial_structure_tree_dialog = True
-            return
+            # 管口类别表的读取插入
+            guankou_info = query_guankou_default(self.product_type, self.product_form)
+            # ✅ 传入 product_form 和 product_type 以便从管口默认表查询管口功能
+            insert_guankou_info(product_id, guankou_info, product_form=self.product_form,
+                                product_type=self.product_type)
+
+            # 管口附加参数表的读取插入与渲染
+            first_template_id = element_original_info[0].get('模板ID', None)
+            guankou_para_info = query_template_guankou_para_data(first_template_id)
+            insert_guankou_para_data(product_id, guankou_para_info, template_name, template_id=first_template_id)
+            print(f"[DBG] 首次模板渲染参数条数={len(guankou_para_info)}")
+            # ✅ 不再直接调用render_guankou_param_to_ui，而是通过build_or_refresh_guankou_tabs_from_db来渲染
+            # render_guankou_param_to_ui(self, guankou_para_info)
+
+            element_para_info = query_template_element_para_data(first_template_id)
+            insert_element_para_data(product_id, element_para_info)
+
+            # 批量插入元件附加参数合并表数据（包括支座）
+            from modules.cailiaodingyi.controllers.datamanager import batch_insert_element_merged_para_data
+            batch_insert_element_merged_para_data(product_id, first_template_id, template_name)
+
+            # 加载布管参数表至数据库
+            init_buguan_defaults(product_id)
+
+            # ✅ 首次加载模板后，也调用build_or_refresh_guankou_tabs_from_db确保两个tab页都显示
+            labels = query_all_guankou_categories(self.product_id) or ["管口材料分类1"]
+            # 确保至少有两个分类
+            if "管口材料分类2" not in labels:
+                labels.append("管口材料分类2")
+
+            # 获取 Tab_ID 映射
+            if not hasattr(self, "guankou_tab_id_map"):
+                self.guankou_tab_id_map = {}
+            category_tab_map = query_all_guankou_categories_with_tab_id(self.product_id)
+            self.guankou_tab_id_map.update(category_tab_map)
+
+            param_map = {}
+            for label in labels:
+                # 优先使用 Tab_ID 查询
+                tab_id = self.guankou_tab_id_map.get(label)
+                if tab_id:
+                    rows = query_guankou_param_by_product(self.product_id, tab_id) or []
+                else:
+                    rows = query_guankou_param_by_product(self.product_id, label) or []
+                param_map[label] = rows
+                print(f"[DBG][首次加载] param_map[{repr(label)}] Tab_ID={tab_id} 条数={len(rows)}")
+
+            # 调用build_or_refresh_guankou_tabs_from_db来渲染所有tab页
+            self.build_or_refresh_guankou_tabs_from_db(param_map)
+
 
         else:
             self.show_info_message("提示", "未选择产品，界面以空白状态打开。")
@@ -4313,30 +3869,48 @@ class DesignParameterDefineInputerViewer(QWidget):
             return
 
         # 渲染零件列表数据(包括零件示意图)
-        self._sync_element_maps_and_render_parts(element_original_info)
+        element_original_info = move_guankou_to_first(element_original_info)
+        element_original_info = move_guankou_attachment_to_second(element_original_info)
+        self.element_data = element_original_info
+        self.element_data_by_id = {
+            row.get("元件ID"): row
+            for row in element_original_info
+            if row.get("元件ID")
+        }
+        self.element_image_map = {
+            row.get("元件ID"): row.get("零件示意图", "")
+            for row in element_original_info
+            if row.get("元件ID")
+        }
+        self.render_data_to_table(element_original_info)
+
+        # 示意图路径先记录，等右侧布局全部建完后再刷新（避免切换产品后图被缩成一小块）
+        self.image_paths = [item.get('零件示意图', '') for item in element_original_info]
 
         # 取当前/默认 tab 的标题
         if self.guankou_tabWidget.count() > 0:
             current_index = self.guankou_tabWidget.currentIndex()
             category_label = self.guankou_tabWidget.tabText(current_index)
         else:
-            category_label = category_labels[0] if category_labels else (
-                query_all_guankou_categories(self.product_id) or ["管口材料分类1"]
-            )[0]
+            category_label = category_labels[0] if category_labels else "管口材料分类-管程"
         print(
             f"[DBG] 当前Tab：index={getattr(self.guankou_tabWidget, 'currentIndex', lambda: -1)()} title={repr(category_label)}")
 
         if has_product(product_id):
 
-            # 构建 param_map -> 渲染（完全按库中分类）
-            labels = query_all_guankou_categories(self.product_id) or []
+            # 构建 param_map -> 渲染（不在打开时自动覆盖腐蚀裕量）
+
+            # 构建 param_map -> 渲染
+            labels = query_all_guankou_categories(self.product_id) or ["管口材料分类1"]
+            # 获取 Tab_ID 映射
             category_tab_map = query_all_guankou_categories_with_tab_id(self.product_id)
             if not hasattr(self, "guankou_tab_id_map"):
                 self.guankou_tab_id_map = {}
             self.guankou_tab_id_map.update(category_tab_map)
-            self._guankou_base_tab_count = infer_guankou_base_tab_count(
-                labels, getattr(self, "product_type", None)
-            )
+
+            # ✅ 确保至少有两个分类：管口材料分类-管程和管口材料分类-壳程
+            if "管口材料分类-壳程" not in labels:
+                labels.append("管口材料分类-壳程")
 
             param_map = {}
             for label in labels:
@@ -4354,7 +3928,7 @@ class DesignParameterDefineInputerViewer(QWidget):
             print(f"[DBG] 传入 build_or_refresh 的 keys：{[repr(k) for k in param_map.keys()]}")
 
             # 调用建/刷 tabs
-            self.build_or_refresh_guankou_tabs_from_db(param_map, preserve_all_tabs=True, reset_base_count=False)
+            self.build_or_refresh_guankou_tabs_from_db(param_map)
 
             # 打印最终 QTabWidget 的标题列表
             titles = [self.guankou_tabWidget.tabText(i) for i in range(self.guankou_tabWidget.count())]
@@ -4371,52 +3945,8 @@ class DesignParameterDefineInputerViewer(QWidget):
 
         self._schedule_part_image_refresh()
 
-    def _run_initial_structure_tree_dialog(self):
-        """首次进入元件定义界面后弹出结构树（须在标签页切换完成后再调用）。"""
-        if not getattr(self, "_structure_tree_pending", False):
-            return
-        element_original_info = getattr(self, "_pending_element_original_info", None)
-        template_name = getattr(self, "_pending_template_name", "None") or "None"
-        if not element_original_info:
-            return
-
-        visible_init, mandatory_ids = build_initial_visible_and_mandatory(
-            element_original_info, self.product_type, self.product_form,
-        )
-        dlg_visible = show_structure_tree_dialog(
-            self,
-            element_original_info,
-            visible_init,
-            mandatory_ids,
-            title="结构树 - 请选择要显示的元件",
-        )
-        if dlg_visible is None:
-            self._apply_structure_tree_pending_ui()
-            QTimer.singleShot(50, self._apply_structure_tree_pending_ui)
-            self._show_structure_tree_cancel_tip()
-            return
-
-        self._commit_initial_structure_tree(element_original_info, dlg_visible, template_name)
-        self._finish_initial_structure_tree_ui()
-
-    def _on_first_show_structure_tree(self):
-        """界面显示后：先恢复 pending 禁用态，再弹结构树（避免被主窗口 refresh 覆盖）。"""
-        self._apply_structure_tree_pending_ui()
-        QTimer.singleShot(50, self._apply_structure_tree_pending_ui)
-        QTimer.singleShot(60, self._run_initial_structure_tree_dialog)
-
-    def hideEvent(self, event):
-        super().hideEvent(event)
-        self._clear_structure_tree_cancel_tip()
-
     def showEvent(self, event):
         super().showEvent(event)
-        if getattr(self, "_need_initial_structure_tree_dialog", False):
-            self._need_initial_structure_tree_dialog = False
-            QTimer.singleShot(0, self._on_first_show_structure_tree)
-            return
-        if getattr(self, "_structure_tree_pending", False):
-            QTimer.singleShot(0, self._show_structure_tree_cancel_tip)
         path = getattr(self, "_last_part_image_path", None)
         if not path:
             paths = getattr(self, "image_paths", None) or []
@@ -4490,27 +4020,15 @@ class DesignParameterDefineInputerViewer(QWidget):
         # 设置表格的行数为数据条数
         table.setRowCount(len(element_original_info))
 
-        # 启用表头筛选：仅点击 Excel 式下拉箭头触发（点击汉字不筛选）
+        # 启用表头点击事件
         header = table.horizontalHeader()
         header.setSectionsClickable(True)
         header.setSectionsMovable(True)
-        if isinstance(header, CustomHeaderView):
-            header.setShowFilterArrows(True)
-            try:
-                header.filterArrowClicked.disconnect(self.on_header_clicked)
-            except TypeError:
-                pass
-            header.filterArrowClicked.connect(self.on_header_clicked)
-            try:
-                header.sectionClicked.disconnect(self.on_header_clicked)
-            except TypeError:
-                pass
-        else:
-            try:
-                header.sectionClicked.disconnect(self.on_header_clicked)
-            except TypeError:
-                pass
-            header.sectionClicked.connect(self.on_header_clicked)
+        try:
+            header.sectionClicked.disconnect(self.on_header_clicked)
+        except TypeError:
+            pass
+        header.sectionClicked.connect(self.on_header_clicked)
 
         # 列宽：序号/有无覆层/是否定义/所属部件按内容；零件名称+材料四列用 Interactive，由 _apply_parts_list_weighted_widths 按权重分配（默认 零件:材料列=1.5:1）。
         _col_resize_content = (0, 6, 7, 8)  # 序号、有无覆层、是否定义、所属部件
@@ -4711,15 +4229,12 @@ class DesignParameterDefineInputerViewer(QWidget):
         return {str(r.get("参数值", "")).strip() for r in cursor.fetchall() if str(r.get("参数值", "")).strip()}
 
     def on_header_clicked(self, column):
-        """表头筛选箭头点击：显示升序/降序/筛选菜单（仅箭头触发，汉字不可点）"""
+        """表头点击事件：显示筛选菜单"""
         table = self.tableWidget_parts
         header = table.horizontalHeader()
-        header_item = table.horizontalHeaderItem(column)
-        if header_item is None:
-            return
-        header_text = header_item.text()
+        header_text = table.horizontalHeaderItem(column).text()
 
-        # 创建菜单（弹出位置贴近该列箭头，贴近 Excel）
+        # 创建菜单
         menu = QtWidgets.QMenu(self)
 
         # 添加排序和筛选选项
@@ -4768,14 +4283,8 @@ class DesignParameterDefineInputerViewer(QWidget):
             filter_action = filter_menu.addAction(value)
             filter_value_to_action[value] = filter_action
 
-        # 显示菜单：贴近该列表头箭头下方（类似 Excel）
-        if isinstance(header, CustomHeaderView):
-            x = header.sectionViewportPosition(column)
-            w = header.sectionSize(column)
-            global_pos = header.mapToGlobal(QtCore.QPoint(x + w - header.ARROW_HIT_WIDTH, header.height()))
-            selected_action = menu.exec_(global_pos)
-        else:
-            selected_action = menu.exec_(QtGui.QCursor.pos())
+        # 显示菜单并等待用户选择
+        selected_action = menu.exec_(QtGui.QCursor.pos())
 
         # 处理用户选择
         if selected_action == sort_asc_action:
@@ -4872,6 +4381,7 @@ class DesignParameterDefineInputerViewer(QWidget):
                 "壳程侧是否添加覆层",
                 "接管是否添加覆层",
                 "接管法兰是否添加覆层",
+                "配对法兰是否添加覆层",
             )
             TRUE_SET = ("是", "1", "true", "yes")
             FALSE_SET = ("否", "0", "false", "no")
@@ -5824,7 +5334,7 @@ class DesignParameterDefineInputerViewer(QWidget):
         else:
             msg = f"模板 '{template_name}' 已保存到材料库。"
 
-        show_information(self, "模板保存结果", msg)
+        QMessageBox.information(self, "模板保存结果", msg)
 
     def on_param_table_selection_changed(self):
         table = self.tableWidget_para_define
