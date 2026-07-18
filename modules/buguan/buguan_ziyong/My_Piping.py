@@ -10864,9 +10864,11 @@ class TubeLayoutEditor(QMainWindow):
 
         return None
 
-    def _get_slideway_predefined_defaults(self):
+    def _get_slideway_predefined_defaults(self, dn_val=None):
         """
         从配置库 id=2.14.3.1 获取滑道“推荐厚度/推荐高度”。
+        按公称直径 DN 精确对照「热交换器公称直径mm」；对照不上返回 None。
+        厚度取「最小厚度mm: 非合金钢、低合金钢」，高度取「高度mm」。
         返回:
             dict | None: {"thickness": float, "height": float}
         """
@@ -10902,40 +10904,100 @@ class TubeLayoutEditor(QMainWindow):
         if not _SLIDEWAY_PREDEFINED_21431_CACHE:
             return None
 
-        dn_val = None
-        try:
-            for r in range(self.param_table.rowCount()):
-                name_item = self.param_table.item(r, 1)
-                if not name_item:
-                    continue
-                if name_item.text().strip() == "公称直径 DN":
-                    w = self.param_table.cellWidget(r, 2)
-                    if isinstance(w, QComboBox):
-                        txt = w.currentText().strip()
-                    else:
-                        it = self.param_table.item(r, 2)
-                        txt = it.text().strip() if it else ""
-                    if txt != "":
-                        dn_val = float(txt)
-                    break
-        except Exception:
-            dn_val = None
+        if dn_val is None:
+            try:
+                for r in range(self.param_table.rowCount()):
+                    name_item = self.param_table.item(r, 1)
+                    if not name_item:
+                        continue
+                    if name_item.text().strip() == "公称直径 DN":
+                        w = self.param_table.cellWidget(r, 2)
+                        if isinstance(w, QComboBox):
+                            txt = w.currentText().strip()
+                        else:
+                            it = self.param_table.item(r, 2)
+                            txt = it.text().strip() if it else ""
+                        if txt != "":
+                            dn_val = float(txt)
+                        break
+            except Exception:
+                dn_val = None
+
+        if dn_val is None:
+            try:
+                for p in getattr(self, "all_params", None) or []:
+                    if isinstance(p, dict) and str(p.get("参数名", "")).strip() == "公称直径 DN":
+                        txt = str(p.get("参数值", "")).strip()
+                        if txt != "":
+                            dn_val = float(txt)
+                        break
+            except Exception:
+                dn_val = None
 
         if dn_val is None:
             return None
 
-        key = round(dn_val, 1)
-        if key in _SLIDEWAY_PREDEFINED_21431_CACHE:
-            return _SLIDEWAY_PREDEFINED_21431_CACHE[key]
+        key = round(float(dn_val), 1)
+        # 仅精确对照；对照不上则返回 None，由调用方走原默认逻辑
+        return _SLIDEWAY_PREDEFINED_21431_CACHE.get(key)
 
+    def _format_slideway_predefined_number(self, val):
+        """推荐数值展示：整数不带小数点。"""
         try:
-            nearest_dn = min(
-                _SLIDEWAY_PREDEFINED_21431_CACHE.keys(),
-                key=lambda x: abs(float(x) - float(key)),
-            )
-            return _SLIDEWAY_PREDEFINED_21431_CACHE.get(nearest_dn)
+            f = float(val)
+            if f == int(f):
+                return str(int(f))
+            return str(f)
         except Exception:
-            return None
+            return "" if val is None else str(val)
+
+    def _apply_slideway_predefined_defaults_on_first_open(self):
+        """
+        首次打开未保存布管时：若 DN 能对照上配置库 2.14.3.1，
+        则用推荐值覆盖滑道高度/滑道厚度（即使原默认非空）。
+        对照不上则保持原逻辑已填入的值。
+        """
+        if not getattr(self, "_is_first_buguan_open", False):
+            return
+        defaults = self._get_slideway_predefined_defaults()
+        if not defaults:
+            return
+
+        mapping = {
+            "滑道高度": defaults.get("height"),
+            "滑道厚度": defaults.get("thickness"),
+        }
+        for name, val in mapping.items():
+            if val is None:
+                continue
+            text = self._format_slideway_predefined_number(val)
+            if text == "":
+                continue
+            row = self._find_param_row_by_name(name)
+            if row >= 0:
+                item = self.param_table.item(row, 2)
+                if item is not None:
+                    item.setText(text)
+                else:
+                    self.param_table.setItem(row, 2, QTableWidgetItem(text))
+                try:
+                    self.original_param_values[(row, 2)] = text
+                except Exception:
+                    pass
+            try:
+                for p in getattr(self, "all_params", None) or []:
+                    if isinstance(p, dict) and str(p.get("参数名", "")).strip() == name:
+                        p["参数值"] = text
+                        break
+            except Exception:
+                pass
+        try:
+            print(
+                f"[slideway predefined] 首次打开已按2.14.3.1覆盖: "
+                f"高度={mapping.get('滑道高度')}, 厚度={mapping.get('滑道厚度')}"
+            )
+        except Exception:
+            pass
 
     def _find_param_row_by_name(self, param_name: str):
         for r in range(self.param_table.rowCount()):
@@ -16295,16 +16357,8 @@ class TubeLayoutEditor(QMainWindow):
                 ):
                     # 需求：默认换热管壁厚 δ 为 2 mm
                     display_value = "2"
-                elif param["参数名"] in ["滑道高度", "滑道厚度"] and (
-                    param_value is None or str(param_value).strip() == ""
-                ):
-                    # 滑道参数默认值：来自预定义 2.14.3.1
-                    defaults = self._get_slideway_predefined_defaults() or {}
-                    if param["参数名"] == "滑道高度":
-                        v = defaults.get("height", "")
-                    else:
-                        v = defaults.get("thickness", "")
-                    display_value = "" if v == "" else str(v)
+                # 滑道高度/厚度：首次打开的 2.14.3.1 推荐覆盖见
+                # _apply_slideway_predefined_defaults_on_first_open（表格填完后统一处理）
                 elif param["参数名"] == "滑道切边长度" and (
                     param_value is None or str(param_value).strip() == ""
                 ):
@@ -16365,6 +16419,11 @@ class TubeLayoutEditor(QMainWindow):
 
         self.setup_modification_detection()
         self.setup_combobox_modification_detection()
+        # 首次打开：DN 对照上 2.14.3.1 时覆盖滑道高度/厚度（须在 is_loading_data=False 之前）
+        try:
+            self._apply_slideway_predefined_defaults_on_first_open()
+        except Exception as e:
+            print(f"[setup_parameters] 滑道推荐默认值覆盖失败: {e}")
         self.is_loading_data = False
         self.update_all_row_backgrounds()
         # 初始化后按“换热管外径do + 拉杆形式”规则刷新拉杆直径默认值
