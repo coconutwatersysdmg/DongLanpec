@@ -217,15 +217,15 @@ class AutoAddDialog(QDialog):
 
         layout.addWidget(self.table)
 
-        # 确定/取消按钮
-        from modules.buguan.buguan_ziyong.ui_style import BUGUAN_BUTTON_QSS
+        # 确定/取消按钮（弹窗内：批量替换同款）
+        from modules.buguan.buguan_ziyong.ui_style import BUGUAN_DIALOG_BUTTON_QSS
 
         btn_layout = QHBoxLayout()
         btn_layout.addStretch(1)
         btn_ok = QPushButton("确定", self)
         btn_cancel = QPushButton("取消", self)
-        btn_ok.setStyleSheet(BUGUAN_BUTTON_QSS)
-        btn_cancel.setStyleSheet(BUGUAN_BUTTON_QSS)
+        btn_ok.setStyleSheet(BUGUAN_DIALOG_BUTTON_QSS)
+        btn_cancel.setStyleSheet(BUGUAN_DIALOG_BUTTON_QSS)
         btn_ok.clicked.connect(self.accept)
         btn_cancel.clicked.connect(self.reject)
         btn_layout.addWidget(btn_ok)
