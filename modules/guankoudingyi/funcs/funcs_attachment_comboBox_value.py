@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem
 
 from modules.guankoudingyi.db_cnt import get_connection, db_config_1, db_config_2
 from modules.guankoudingyi.funcs.funcs_pipe_comboBox_value import ComboBoxDelegate
+from modules.guankoudingyi.funcs.funcs_pipe_table import show_styled_warning
 from modules.guankoudingyi.obtain_product_type_version import get_product_type_and_version
 
 
@@ -861,7 +862,7 @@ def handle_attachment_cell_changed(stats_widget, row, column, product_id):
                     if not lock_item:
                         lock_item = QTableWidgetItem()
                         table.setItem(row, lock_col, lock_item)
-                    lock_item.setText("—")
+                    lock_item.setText("-")
                     lock_item.setTextAlignment(Qt.AlignCenter)
                     lock_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
             finally:
@@ -1079,7 +1080,7 @@ def handle_attachment_cell_changed(stats_widget, row, column, product_id):
             stats_widget.suppress_cell_change = False
             if hasattr(stats_widget, "original_cell_value_map"):
                 stats_widget.original_cell_value_map[(row, ATTACHMENT_COL_ECCENTRICITY)] = "0.0"
-            QMessageBox.warning(
+            show_styled_warning(
                 stats_widget,
                 "校验冲突",
                 "因轴向夹角和偏心距被同时赋值，基于GB/T 150规则无法对此管口进行强度校核",
@@ -1159,7 +1160,7 @@ def handle_attachment_cell_changed(stats_widget, row, column, product_id):
                 stats_widget.suppress_cell_change = False
                 if hasattr(stats_widget, "original_cell_value_map"):
                     stats_widget.original_cell_value_map[(row, ATTACHMENT_COL_AXIAL_ANGLE)] = "0.0"
-                QMessageBox.warning(
+                show_styled_warning(
                     stats_widget,
                     "校验冲突",
                     "因轴向夹角和偏心距被同时赋值，基于GB/T 150规则无法对此管口进行强度校核",

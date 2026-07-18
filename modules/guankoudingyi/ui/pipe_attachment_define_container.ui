@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1233</width>
+    <width>1283</width>
     <height>838</height>
    </rect>
   </property>
@@ -16,7 +16,7 @@
   <property name="styleSheet">
    <string notr="true"/>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout_6" stretch="21,0,0,1">
+  <layout class="QVBoxLayout" name="verticalLayout_6" stretch="21,0,17,1">
    <property name="spacing">
     <number>7</number>
    </property>
@@ -135,7 +135,7 @@ QPushButton:disabled {
             </widget>
            </item>
            <item>
-            <widget class="QPushButton" name="pushButton_out2">
+            <widget class="QPushButton" name="pushButton">
              <property name="font">
               <font>
                <pointsize>-1</pointsize>
@@ -176,11 +176,6 @@ QPushButton:disabled {
            </item>
            <item>
             <widget class="QPushButton" name="pushButton_out">
-             <property name="font">
-              <font>
-               <pointsize>-1</pointsize>
-              </font>
-             </property>
              <property name="styleSheet">
               <string notr="true">QPushButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -216,11 +211,6 @@ QPushButton:disabled {
            </item>
            <item>
             <widget class="QPushButton" name="pushButton_cv">
-             <property name="font">
-              <font>
-               <pointsize>-1</pointsize>
-              </font>
-             </property>
              <property name="styleSheet">
               <string notr="true">QPushButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -256,11 +246,6 @@ QPushButton:disabled {
            </item>
            <item>
             <widget class="QPushButton" name="pushButton_pipe_delete">
-             <property name="font">
-              <font>
-               <pointsize>-1</pointsize>
-              </font>
-             </property>
              <property name="styleSheet">
               <string notr="true">QPushButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -296,11 +281,6 @@ QPushButton:disabled {
            </item>
            <item>
             <widget class="QPushButton" name="pushButton_pipe_up">
-             <property name="font">
-              <font>
-               <pointsize>-1</pointsize>
-              </font>
-             </property>
              <property name="styleSheet">
               <string notr="true">QPushButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -336,11 +316,6 @@ QPushButton:disabled {
            </item>
            <item>
             <widget class="QPushButton" name="pushButton_pipe_down">
-             <property name="font">
-              <font>
-               <pointsize>-1</pointsize>
-              </font>
-             </property>
              <property name="styleSheet">
               <string notr="true">QPushButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -1076,7 +1051,7 @@ QPushButton:disabled {
     </widget>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_4">
+    <layout class="QHBoxLayout" name="horizontalLayout_6">
      <item>
       <spacer name="horizontalSpacer_4">
        <property name="orientation">
@@ -1092,14 +1067,6 @@ QPushButton:disabled {
      </item>
      <item>
       <widget class="QPushButton" name="Minimize">
-       <property name="font">
-        <font>
-         <pointsize>-1</pointsize>
-         <weight>75</weight>
-         <bold>true</bold>
-         <stylestrategy>PreferDefault</stylestrategy>
-        </font>
-       </property>
        <property name="styleSheet">
         <string notr="true">QPushButton {
     background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
@@ -1134,12 +1101,6 @@ QPushButton:disabled {
        <property name="icon">
         <iconset>
          <normaloff>../../chanpinguanli/icons/下箭头11.png</normaloff>../../chanpinguanli/icons/下箭头11.png</iconset>
-       </property>
-       <property name="iconSize">
-        <size>
-         <width>20</width>
-         <height>20</height>
-        </size>
        </property>
       </widget>
      </item>

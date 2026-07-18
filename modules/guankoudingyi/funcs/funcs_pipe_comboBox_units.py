@@ -182,6 +182,8 @@ def setup_unit_selection_handlers(stats_widget):
                 update_nominal_size_delegate_options(stats_widget)
             # 焊端规格单位切换逻辑
             elif field_name == "焊端规格类型":
+                stats_widget.bulk_assign_target_column = None
+                stats_widget.bulk_assign_rows = []
                 col_index = 9
                 if unit_value == "mm":
                     table = stats_widget.tableWidget_pipe

@@ -6,6 +6,7 @@ from PyQt5.QtGui import QFont, QPixmap, QDoubleValidator, QColor, QBrush
 import os
 import re
 from modules.guankoudingyi.db_cnt import get_connection, db_config_1, db_config_2
+from modules.guankoudingyi.funcs.funcs_pipe_table import show_styled_message
 
 
 class NoWheelComboBox(QComboBox):
@@ -98,7 +99,7 @@ class NumericValueDelegate(QStyledItemDelegate):
 """读取局部应力计算类型的下拉框内容"""
 def get_local_stress_calc_types_from_db():
     """
-    从元件库的管口载荷类型表中读取局部应力计算类型列的所有不重复值
+    从元件库的管口载荷图配置表中读取局部应力计算类型列的所有不重复值
     :return: 局部应力计算类型列表
     """
     conn = None
@@ -109,7 +110,7 @@ def get_local_stress_calc_types_from_db():
         
         sql = """
             SELECT DISTINCT 局部应力计算类型 
-            FROM 管口载荷类型表 
+            FROM 管口载荷图配置表
             WHERE 局部应力计算类型 IS NOT NULL AND 局部应力计算类型 != ''
             
         """
@@ -147,7 +148,7 @@ def get_load_image_path_by_calc_type(calc_type):
         
         sql = """
             SELECT 载荷示意图 
-            FROM 管口载荷类型表 
+            FROM 管口载荷图配置表
             WHERE 局部应力计算类型 = %s
             LIMIT 1
         """
@@ -157,7 +158,7 @@ def get_load_image_path_by_calc_type(calc_type):
         if result and result.get("载荷示意图"):
             image_path = result["载荷示意图"].replace("\\", os.sep).strip()
             # 从路径中提取文件名（处理 openload_img\WRC537_2.png 格式）
-            # 数据库中可能存储 openload_img\WRC537_2.png，实际文件夹是 openingload_img
+            # 数据库中可能存储 openload_img\WRC537_2.png，实际文件夹是 openload_img
             filename = os.path.basename(image_path)
             return filename
         return None
@@ -189,7 +190,7 @@ def get_load_calc_image_path_by_calc_type(calc_type):
         
         sql = """
             SELECT 载荷计算图 
-            FROM 管口载荷类型表 
+            FROM 管口载荷图配置表
             WHERE 局部应力计算类型 = %s
             LIMIT 1
         """
@@ -199,7 +200,7 @@ def get_load_calc_image_path_by_calc_type(calc_type):
         if result and result.get("载荷计算图"):
             image_path = result["载荷计算图"].replace("\\", os.sep).strip()
             # 从路径中提取文件名（处理 openload_img\WRC537_2.png 格式）
-            # 数据库中可能存储 openload_img\WRC537_2.png，实际文件夹是 openingload_img
+            # 数据库中可能存储 openload_img\WRC537_2.png，实际文件夹是 openload_img
             filename = os.path.basename(image_path)
             return filename
         return None
@@ -240,11 +241,11 @@ def display_load_image(dialog, calc_type):
                 return
             
             # 构建完整图片路径
-            # 图片文件夹在 modules/guankoudingyi/openingload_img/ 目录下
+            # 图片文件夹在 modules/guankoudingyi/openload_img/ 目录下
             # 获取当前文件所在目录（funcs），然后回到 guankoudingyi 目录
             current_file_dir = os.path.dirname(os.path.abspath(__file__))  # funcs目录
             guankoudingyi_dir = os.path.dirname(current_file_dir)  # guankoudingyi目录
-            openingload_img_dir = os.path.join(guankoudingyi_dir, "openingload_img")
+            openingload_img_dir = os.path.join(guankoudingyi_dir, "openload_img")
             image_path = os.path.join(openingload_img_dir, filename)
             
             # 统一路径分隔符
@@ -340,11 +341,11 @@ def display_load_calc_image(dialog, calc_type, retry_count=0):
                 return
             
             # 构建完整图片路径
-            # 图片文件夹在 modules/guankoudingyi/openingload_img/ 目录下
+            # 图片文件夹在 modules/guankoudingyi/openload_img/ 目录下
             # 获取当前文件所在目录（funcs），然后回到 guankoudingyi 目录
             current_file_dir = os.path.dirname(os.path.abspath(__file__))  # funcs目录
             guankoudingyi_dir = os.path.dirname(current_file_dir)  # guankoudingyi目录
-            openingload_img_dir = os.path.join(guankoudingyi_dir, "openingload_img")
+            openingload_img_dir = os.path.join(guankoudingyi_dir, "openload_img")
             image_path = os.path.join(openingload_img_dir, filename)
             
             # 统一路径分隔符
@@ -1272,7 +1273,7 @@ def save_second_tab_load_params_to_db(dialog: QDialog, product_id: int, pipe_id:
         conn.commit()
 
         print(f"[保存第二个tab页载荷参数] 成功保存 {len(payloads)} 条参数: 产品ID={product_id}, 管口ID={pipe_id}")
-        QMessageBox.information(dialog, "提示", "保存成功！", QMessageBox.Ok)
+        show_styled_message(dialog, "提示", "保存成功！", icon=QMessageBox.Information)
 
     except Exception as e:
         print(f"[ERROR] 保存第二个tab页载荷参数失败: {e}")

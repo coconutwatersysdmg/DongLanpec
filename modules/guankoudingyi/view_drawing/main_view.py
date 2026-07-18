@@ -1,11 +1,26 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QSizePolicy
-from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QFont, QPolygonF
+from PyQt5.QtGui import QPainter, QPen, QBrush, QColor, QFont, QPolygonF, QFontMetrics
 from PyQt5.QtCore import Qt, QRectF, QPointF, QPoint
 import math
 
 from modules.guankoudingyi.db_cnt import get_connection, db_config_2
 from modules.guankoudingyi.obtain_product_type_version import get_product_type_and_version
-from modules.guankoudingyi.funcs.funcs_pipe_comboBox_value import get_component_nominal_size_od, get_max_pipe_nominal_size_from_ui, get_heat_exchanger_tube_length, get_nominal_diameter
+from modules.guankoudingyi.funcs.funcs_pipe_comboBox_value import get_component_nominal_size_od, get_max_pipe_nominal_size_from_ui, get_heat_exchanger_tube_length, get_nominal_diameter,get_container_shell_length
+
+
+def _pipe_code_text_width(font_or_painter, pipe_code, padding=2):
+    """
+    管口代号文字像素宽度（含少量间距），用于防重叠排布。
+    两位数代号（如 N10）比单位数更宽，错开距离须按实测宽度累加。
+    """
+    font = font_or_painter.font() if hasattr(font_or_painter, "font") else font_or_painter
+    fm = QFontMetrics(font)
+    text = str(pipe_code or "")
+    if hasattr(fm, "horizontalAdvance"):
+        w = fm.horizontalAdvance(text)
+    else:
+        w = fm.width(text)
+    return max(int(w), 1) + padding
 
 
 class HeatExchangerView(QWidget):
@@ -99,6 +114,34 @@ class HeatExchangerView(QWidget):
         #       f"add_width={add_width} line_len={line_len}")
 
         return nominal_dn, add_width, line_len, unit_used,add_width_circle
+
+    def _internal_height_to_pixel_len(self, raw_height, nominal_diameter_mm, full_span_px):
+        """
+        容器内伸高度(mm) → 绘图长度(px)。
+        按公称直径等比映射：299/300 时约为 full_span_px，不超过满跨度。
+        """
+        try:
+            if raw_height in ("程序推荐", "", None):
+                return 0
+            val = float(raw_height)
+            if val <= 0:
+                return 0
+            if not nominal_diameter_mm or nominal_diameter_mm <= 0:
+                return 0
+            ratio = min(val / float(nominal_diameter_mm), 1.0)
+            return ratio * full_span_px
+        except Exception:
+            return 0
+
+    def _get_container_nominal_diameter_mm(self, pipe_belong):
+        """读取容器公称直径(mm)，供内伸高度绘图比例使用。"""
+        ok, result = get_nominal_diameter(self.product_id, pipe_belong or "壳体")
+        if ok and result is not None:
+            try:
+                return float(result)
+            except (TypeError, ValueError):
+                return None
+        return None
 
     def _get_current_and_max_pipe_od(self, current_nominal_size):
         """
@@ -264,10 +307,16 @@ class HeatExchangerView(QWidget):
             self.draw_main_view_NEN_Head(painter)
             self.draw_left_view_BEU(painter)
             self.draw_pipe_mouths_NEN_Head(painter)
+        elif self.product_type == "卧式容器" and self.product_version == "单腔型":
+            self.draw_main_view_Horizontal_container_Single_chamber(painter)
+            self.draw_left_view_BEU(painter)
+            self.draw_pipe_mouths_Horizontal_container_Single_chamber(painter)
+
         else:
             # 可在此添加其它类型/型式的绘图调用
             print(f"[绘图跳过] 暂无绘图逻辑: {self.product_type}-{self.product_version}")
 
+    """换热器视图绘制"""
     def draw_main_view_BEU(self, painter):
         shell_color = QColor(230, 230, 230)  # 浅灰
         tube_color = QColor(50, 100, 200)    # 深蓝
@@ -1244,7 +1293,7 @@ class HeatExchangerView(QWidget):
                     painter.drawText(text_x, text_y, pipe_code)
                 # ======== 封头/平盖左视图：绘制小圆（仅"管箱封头"和“管箱平盖”可见） ========
                 if pipe_belong in ["管箱封头", "管箱平盖","壳体封头"]:
-                    cx, cy = 1435, 170
+                    cx, cy ,r= 1435, 170,80
 
 
                     # ✅从数据库获取公称直径对应的管程数值
@@ -2084,7 +2133,7 @@ class HeatExchangerView(QWidget):
 
                 # ======== 封头/平盖左视图：绘制小圆（"管箱封头、管箱平盖"可见） ========
                 if pipe_belong in ["管箱封头","管箱平盖","外头盖封头"]:
-                    cx, cy = 1435, 170
+                    cx, cy ,r= 1435, 170,80
 
                     # ✅从数据库获取公称直径对应的管程数值
                     tube_diameter = get_tube_value_by_nominal_diameter(self.product_id)
@@ -2962,7 +3011,7 @@ class HeatExchangerView(QWidget):
 
                 # ======== 封头/平盖左视图：绘制小圆（仅"管箱封头、管箱平盖"可见） ========
                 if pipe_belong in["前端管箱平盖","后端管箱平盖"] :
-                    cx, cy = 1435, 170
+                    cx, cy,r= 1435, 170,80
 
                     # ✅从数据库获取公称直径对应的管程数值
                     tube_diameter = get_tube_value_by_nominal_diameter(self.product_id)
@@ -4215,7 +4264,7 @@ class HeatExchangerView(QWidget):
 
                 # ======== 封头左视图：绘制小圆（仅"前端管箱封头可见） ========
                 if pipe_belong in["前端管箱封头","后端管箱封头"] :
-                    cx, cy = 1435, 170
+                    cx, cy ,r= 1435, 170,80
 
                     # ✅从数据库获取公称直径对应的管程数值
                     tube_diameter = get_tube_value_by_nominal_diameter(self.product_id)
@@ -5116,7 +5165,7 @@ class HeatExchangerView(QWidget):
 
                 # ======== 封头左视图：绘制小圆（仅"前端管箱平盖可见） ========
                 if pipe_belong in[ "前端管箱平盖","后端管箱封头"]:
-                    cx, cy = 1435, 170
+                    cx, cy ,r= 1435, 170,80
 
                     # ✅从数据库获取公称直径对应的管程数值
                     tube_diameter = get_tube_value_by_nominal_diameter(self.product_id)
@@ -5421,9 +5470,9 @@ class HeatExchangerView(QWidget):
 
                 # 判断管口所属元件类型
                 # ================= 圆筒部分 =================
-                if pipe_belong in ["管箱圆筒","壳程大端圆筒"]:
+                if pipe_belong in ["管箱圆筒","大端壳体圆筒"]:
                     # ================= 主视图部分 =================
-                    if "大端圆筒" in pipe_belong:
+                    if "大端壳体圆筒" in pipe_belong:
                         base_x = 990 if "右" in axial_position_base else 465  # 基准线
                         section_len = 525
                     else:
@@ -5466,7 +5515,7 @@ class HeatExchangerView(QWidget):
                                     # 可选：限制offset在[half_w, section_len - half_w]范围内（避免超出边界）
                                     offset = max(0.5 * add_width, min(section_len - 0.5 * add_width, offset))
                             # 壳体管口的偏移量计算逻辑
-                            elif ("壳程大端圆筒" in pipe_belong and
+                            elif ("大端壳体圆筒" in pipe_belong and
                                   current_pipe_od is not None and heat_exchanger_tube_length is not None):
 
                                 # 获取换热管长度
@@ -5474,6 +5523,7 @@ class HeatExchangerView(QWidget):
 
                                 tube_ok, tube_nominal_diameter = get_nominal_diameter(self.product_id, "管箱")
                                 shell_ok, shell_nominal_diameter = get_nominal_diameter(self.product_id, "壳体")
+                                print("shell_nominal_diameter",shell_nominal_diameter)
                                 if (not tube_ok) or (tube_nominal_diameter is None):
                                     tube_nominal_diameter = 300
                                 if (not shell_ok) or (shell_nominal_diameter is None):
@@ -5511,7 +5561,7 @@ class HeatExchangerView(QWidget):
                     # ==================== 主视图绘制管口（仅限顶部或底部） ====================
                     # 轴向夹角 + 周向方位
                     if circumferential_direction_angle in (0, 180):
-                        if "大端圆筒" in pipe_belong:
+                        if "大端壳体圆筒" in pipe_belong:
                             pipe_y = 40 if circumferential_direction_angle == 0 else 250
                         else:
                             pipe_y = 100 if circumferential_direction_angle == 0 else 250
@@ -5585,7 +5635,7 @@ class HeatExchangerView(QWidget):
 
                         # 设置坐标
                         if circumferential_direction_angle == 0:
-                            if "大端圆筒"in pipe_belong:
+                            if "大端壳体圆筒"in pipe_belong:
                                 text_x = end_x + ux * 20 + offset_x
                                 text_y = end_y - add_width* 0.35 + uy * 5
                             else:
@@ -5604,7 +5654,7 @@ class HeatExchangerView(QWidget):
                         vessel_head_oy_shell = 145
                         circum_angle = float(pipe.get("周向方位（°）", "0")) % 360
                         shell_diameter = 1 / 2 * get_shell_value_by_nominal_diameter(self.product_id)
-                        if "大端圆筒" in pipe_belong:
+                        if "壳体" in pipe_belong:
                             r_for_shell_y = 105 - 1 / 2 * add_width_circle
                         else:
                             r_for_shell_y = 75 - 1 / 2 * add_width_circle
@@ -5616,7 +5666,7 @@ class HeatExchangerView(QWidget):
                         else:
                             y_scale = eccentricity_distance / 5
 
-                        if "大端圆筒" in pipe_belong:
+                        if "大端壳体圆筒" in pipe_belong:
                             pipe_y = vessel_head_oy_shell + y_scale
                         else:
                             pipe_y = vessel_head_oy_tube + y_scale
@@ -5662,7 +5712,7 @@ class HeatExchangerView(QWidget):
                     half_w = add_width / 2
 
                     # ===================== 核心判断：管箱 / 壳程 =====================
-                    if "壳程大端圆筒" in pipe_belong:
+                    if "大端壳体圆筒" in pipe_belong:
                         # 壳程大端圆筒 → 大圆 + 壳程数值
                         use_big_circle = True
                         tube_diameter = get_shell_value_by_nominal_diameter(self.product_id)
@@ -6096,14 +6146,14 @@ class HeatExchangerView(QWidget):
 
                     painter.drawText(text_x, text_y, pipe_code)
                 # ================= AKU的管箱平盖、壳体封头和 BEU的管箱、壳体封头部分 =================
-                elif pipe_belong in ["管箱封头", "壳程封头", "管箱平盖"]:
+                elif pipe_belong in ["管箱封头", "壳体封头", "管箱平盖"]:
                     # ================= 主视图部分 =================
                     if pipe_belong == "管箱封头":
                         if axial_position_base == "封头中心线":
                             vessel_head_ox = 150  # 管箱封头中心点x坐标
                         # else:
                         #     vessel_head_ox = 150  # 管箱封头中心点x坐标
-                    elif pipe_belong == "壳程封头":
+                    elif pipe_belong == "壳体封头":
                         if axial_position_base == "封头中心线":
                             vessel_head_ox = 990  # 壳体封头中心点x坐标
                         # else:
@@ -6120,13 +6170,13 @@ class HeatExchangerView(QWidget):
 
                     if pipe_belong == "管箱封头":
                         start_x = vessel_head_ox - 40
-                    elif pipe_belong == "壳程封头":
+                    elif pipe_belong == "壳体封头":
                         start_x = vessel_head_ox + 40
                     elif pipe_belong == "管箱平盖":
                         start_x = vessel_head_ox - 40
                     else:
                         start_x = vessel_head_ox - 40
-                    if pipe_belong == "壳程封头":
+                    if pipe_belong == "壳体封头":
                         # 壳程封头：主视图 y 随周向方位与偏心距变化
                         circum_angle = float(pipe.get("周向方位（°）", "0")) % 360
                         shell_diameter = 1/2*get_shell_value_by_nominal_diameter(self.product_id)
@@ -6199,7 +6249,7 @@ class HeatExchangerView(QWidget):
                         dy = max(-head_ry, min(head_ry, start_y - head_cy))
                         inside = max(0.0, 1.0 - (dy * dy) / (head_ry * head_ry))
                         start_x = head_cx - head_rx * math.sqrt(inside)  # 左半椭圆
-                    elif pipe_belong == "壳程封头":
+                    elif pipe_belong == "壳体封头":
                         head_cx, head_cy = vessel_head_ox, vessel_head_oy_shell
                         head_rx, head_ry = 40.0, 105.0  # 对应右封头 QRectF(950,40,80,210)
                         dy = max(-head_ry, min(head_ry, start_y - head_cy))
@@ -6213,7 +6263,7 @@ class HeatExchangerView(QWidget):
                     if pipe_belong == "管箱封头":
                         dx = -math.cos(theta)  # 向左延伸
                         dy = math.sin(theta)
-                    elif pipe_belong == "壳程封头":
+                    elif pipe_belong == "壳体封头":
                         dx = math.cos(theta)  # 向右延伸
                         dy = math.sin(theta)
                     elif pipe_belong == "管箱平盖":
@@ -6280,7 +6330,7 @@ class HeatExchangerView(QWidget):
                     count = label_offset_tracker.get(label_key, 0)
                     label_offset_tracker[label_key] = count + 1
                     offset_x = count * 15
-                    if pipe_belong == "壳程封头":
+                    if pipe_belong == "壳体封头":
                         # 向右侧偏移
                         text_x = end_x + cap_len + horizontal_offset / 2 + offset_x
                     elif pipe_belong == "管箱封头":
@@ -6322,7 +6372,7 @@ class HeatExchangerView(QWidget):
                     painter.setPen(QPen(cap_color, 1))
                     painter.setBrush(QBrush(cap_color))
                     painter.drawEllipse(QPointF(small_cx, small_cy), 5, 5)
-                elif pipe_belong  =="壳程封头":
+                elif pipe_belong  =="壳体封头":
                     cx, cy = 1435, 140
                     big_r = 110
 
@@ -6477,26 +6527,6 @@ class HeatExchangerView(QWidget):
 
                 is_highlighted = pipe_code in self.highlight_pipe_codes  # ✅ 判断是否高亮
 
-                # # ① 管口粗细（公称尺寸）
-                # try:
-                #     if nominal_size in self.nps_to_dn_map:
-                #         # NPS转DN后计算宽度
-                #         nominal_dn = int(self.nps_to_dn_map[nominal_size])
-                #     else:
-                #         nominal_dn = int(nominal_size)
-                #     add_width = max(1, int(nominal_dn / 50))
-                # except:
-                #     add_width = 1
-                #
-                # # ② 管口线长（外伸高度），相当于管口的长度
-                # try:
-                #     if height not in ("程序推荐", ""):
-                #         line_len = float(height) // 40  # 外伸高度缩小 40 倍
-                #     else:
-                #         line_len = 15  # 默认设为 15 个像素点
-                # except:
-                #     line_len = 15
-
                 # 获取对应的公称尺寸和外伸高度
                 nominal_dn, add_width, line_len, unit_used,add_width_circle = self._resolve_dn_and_width(
                     pipe_code=pipe_code,
@@ -6587,60 +6617,6 @@ class HeatExchangerView(QWidget):
 
                         # 坐标
                     pipe_x = base_x + offset if "左" in axial_position_base else base_x - offset
-
-
-                    # try:
-                    #     # 确保 axial_position_distance 是数字
-                    #     distance = float(axial_position_distance) if axial_position_distance not in ("居中",
-                    #                                                                                  "程序推荐",
-                    #                                                                                  "") else 0
-
-                    # 确保 nominal_dn 不为 None 且不为 0
-                    # 仅当管口所属元件为管箱时采用此绘制逻辑
-                    # if ("管箱" in pipe_belong and
-                    #         nominal_dn is not None and nominal_dn != 0
-                    #         and current_pipe_od is not None and max_pipe_od is not None):
-                    #
-                    #     # 计算分母（避免除零）
-                    #     denominator = 2.5 * max_pipe_od - current_pipe_od
-                    #     if denominator == 0:
-                    #         print("偏移量计算分母为0，使用默认值")
-                    #         offset = 10
-                    #     else:
-                    #         # 应用新公式计算偏移量
-                    #         offset = 0.5 * add_width + (section_len - add_width) * (
-                    #                 distance - 0.5 * current_pipe_od) / denominator
-                    #
-                    #         # 可选：限制offset在[half_w, section_len - half_w]范围内（避免超出边界）
-                    #         offset = max(0.5 * add_width, min(section_len - 0.5 * add_width, offset))
-                    # # 壳体管口的偏移量计算逻辑
-                    # elif ("壳体" in pipe_belong and
-                    #       current_pipe_od is not None and heat_exchanger_tube_length is not None):
-                    #
-                    #     # 获取换热管长度
-                    #     tube_length = heat_exchanger_tube_length
-                    #
-                    #     # 计算最小和最大距离
-                    #     min_distance = 0.5 * current_pipe_od
-                    #     max_distance = tube_length - 0.5 * current_pipe_od
-                    #
-                    #     # 线性插值：distance从min_distance到max_distance，offset从0.5*add_width到section_len-0.5*add_width
-                    #     if max_distance > min_distance:
-                    #         ratio = (distance - min_distance) / (max_distance - min_distance)
-                    #         offset = 0.5 * add_width + ratio * (section_len - add_width)
-                    #         print("offset", offset)
-                    #     else:
-                    #         offset = 10
-                    # else:
-                    #     # 参数无效时用默认值
-                    #     offset = 10
-
-                    # except (ValueError, TypeError, ZeroDivisionError) as e:
-                    #     print(f"计算 offset 时出错: {e}")
-                    #     offset = 10  # 默认值
-
-                    # 坐标
-                    # pipe_x = base_x + offset if "左" in axial_position_base else base_x - offset
 
                     # ==================== 主视图绘制管口（仅限顶部或底部） ====================
                     # 轴向夹角 + 周向方位
@@ -7309,7 +7285,7 @@ class HeatExchangerView(QWidget):
 
                 # ======== 封头/平盖左视图：绘制小圆（仅"管箱封头、管箱平盖"可见） ========
                 if pipe_belong in ["前端管箱封头", "后端管箱封头"]:
-                    cx, cy = 1435, 170
+                    cx, cy,r = 1435, 170,80
 
                     # ✅从数据库获取公称直径对应的管程数值
                     tube_diameter = get_tube_value_by_nominal_diameter(self.product_id)
@@ -7345,6 +7321,684 @@ class HeatExchangerView(QWidget):
 
             except Exception as e:
                 print(f"绘制管口 {pipe.get('管口代号', '')} 出错：{e}");
+
+    """容器视图绘制"""
+
+    """臥式容器单腔型主视图"""
+    def draw_main_view_Horizontal_container_Single_chamber(self, painter):
+
+        shell_color = QColor(230, 230, 230)  # 浅灰
+
+        # 管壳
+        painter.setBrush(QBrush(shell_color))
+        painter.setPen(QPen(QColor("#c6c6c8"), 1))
+        painter.drawRect(210, 80, 840, 150)
+
+        # 封头
+        painter.setBrush(QBrush(shell_color))
+        painter.setPen(QPen(QColor("#c6c6c8"), 1))
+
+
+        rect = QRectF(170, 80, 80, 150)  # 定义了一个矩形区域，左上角坐标为 (170, 80)，宽度为 80，高度为 150，这个矩形将作为饼图的外接矩形
+        painter.drawPie(rect, 90 * 16, 180 * 16)  # 只画左半边，90 * 16 表示从 90 度开始，180 * 16 表示画 180 度
+        # 右封头
+        rect = QRectF(1010, 80, 80, 150)
+        painter.drawPie(rect, 270 * 16, 180 * 16)  # 只画右半边，270 * 16 表示从 270 度开始，180 * 16 表示画 180 度
+
+        # 管板区域（两层）
+        painter.setBrush(QBrush(shell_color))
+        painter.setPen(QPen(QColor("#c6c6c8"), 1))
+
+
+
+        # 左右基准线
+        painter.setPen(QPen(QColor("#c6c6c8"), 1))
+
+        painter.drawLine(210, 230, 210, 330)  # 左基准线
+        painter.drawLine(1050, 230, 1050, 330)  # 右基准线
+
+
+        # 封头中心线
+        painter.setPen(QPen(QColor("#c6c6c8"), 1, Qt.DashLine))  # 设置为虚线
+        painter.drawLine(170, 155, 1090, 155)  # 调整起点和终点位置
+
+        # 左右基准线文字
+        painter.setPen(QPen(QColor(0, 0, 255, 180), 1))  # 设置橙色并添加50%透明度，增加alpha的值会让文字变得更不透明
+        painter.setFont(QFont("Arial", 8))
+
+
+        painter.drawText(192, 281, "左")
+        painter.drawText(192, 299, "基")
+        painter.drawText(192, 317, "准")
+        painter.drawText(192, 335, "线")
+
+
+        # 右基准线3
+        painter.drawText(1054, 281, "右")
+        painter.drawText(1054, 299, "基")
+        painter.drawText(1054, 317, "准")
+        painter.drawText(1054, 335, "线")
+
+    """臥式容器单腔型管口"""
+    def draw_pipe_mouths_Horizontal_container_Single_chamber(self, painter):
+        label_offset_tracker = {}  # 侧视图/左视图/封头等代号错开
+        pending_main_shell_labels = []  # 壳体主视图(0°/180°)代号，循环后按 end_x 排序绘制
+        # 主视图壳体圆筒截面高度(px)、左视图圆半径(px)
+        vessel_cross_section_px = 150.0   # y=80~230
+        vessel_left_radius_px = 80.0
+
+        for pipe in self.pipe_data_list:
+            try:
+                pipe_code = pipe.get("管口代号", "")
+                nominal_size = pipe.get("公称尺寸", "")
+                pipe_belong = pipe.get("管口所属元件", "")
+                axial_position_base = pipe.get("轴向定位基准", "")
+                axial_position_distance = pipe.get("轴向定位距离", "")
+                axial_angle = float(pipe.get("轴向夹角（°）", "0"))
+                circumferential_direction_angle = float(pipe.get("周向方位（°）", "180"))
+                eccentricity_distance = float(pipe.get("偏心距", "0"))
+                height = pipe.get("外伸高度", "程序推荐")
+                internal_height = pipe.get("内伸高度", "程序推荐")
+
+                is_highlighted = pipe_code in self.highlight_pipe_codes  # ✅ 判断是否高亮
+
+                # 获取对应的公称尺寸、外伸/内伸高度
+                nominal_dn, add_width, line_len, unit_used, add_width_circle = self._resolve_dn_and_width(
+                    pipe_code=pipe_code,
+                    raw_nominal_size=nominal_size,
+                    raw_height=height
+                )
+                nominal_diameter_mm = self._get_container_nominal_diameter_mm(pipe_belong)
+                inner_line_len = self._internal_height_to_pixel_len(
+                    internal_height, nominal_diameter_mm, vessel_cross_section_px
+                )
+                inner_radial_len = self._internal_height_to_pixel_len(
+                    internal_height, nominal_diameter_mm, 2 * vessel_left_radius_px
+                )
+
+                # 判断管口所属元件类型
+                # ================= 壳体圆筒部分 =================
+                if pipe_belong in ["壳体圆筒"]:
+                    # ================= 主视图部分 =================
+                    base_x = 1050 if "右" in axial_position_base else 210  # 基准线
+                    section_len = 840
+
+                    # ③ 轴向定位距离
+                    if axial_position_distance in ("居中", "程序推荐", ""):
+                        if axial_position_distance == "居中":
+                            offset = section_len // 2
+                        else:
+                            offset = 20
+                    else:
+                        try:
+                            # 确保 axial_position_distance 是数字
+                            # 供后续计算：获取当前/最大管口 对应的接管实际外径 的数值
+                            current_pipe_od, max_pipe_od = self._get_current_and_max_pipe_od(nominal_size)
+                            # 在 HeatExchangerView 类的任何方法中
+                            container_shell_length=float(get_container_shell_length(self.product_id))
+                            distance = float(axial_position_distance) if axial_position_distance not in ("居中",
+                                                                                                         "程序推荐",
+                                                                                                         "") else 0
+                            # 确保 nominal_dn 不为 None 且不为 0
+
+                            # 壳体管口的偏移量计算逻辑
+                            if ("壳体" in pipe_belong and
+                                current_pipe_od is not None and container_shell_length is not None):
+
+                            # 获取换热管长度
+
+
+                                # 计算最小和最大距离
+                                min_distance = 0
+                                max_distance = container_shell_length
+
+                                # 线性插值：distance从min_distance到max_distance，offset从0.5*add_width到section_len-0.5*add_width
+                                if max_distance > min_distance:
+                                    ratio = (distance - min_distance) / (max_distance - min_distance)
+                                    offset = 0.5 * add_width + ratio * (section_len - add_width)
+
+
+                                else:
+                                    offset = 10
+                            else:
+                                # 参数无效时用默认值
+                                offset = 20
+
+                        except (ValueError, TypeError, ZeroDivisionError) as e:
+                            print(f"计算 offset 时出错: {e}")
+                            offset = 10  # 默认值
+
+                        # 坐标
+                    pipe_x = base_x + offset if "左" in axial_position_base else base_x - offset
+
+                    # ==================== 主视图绘制管口（仅限顶部或底部） ====================
+                    # 轴向夹角 + 周向方位
+                    if circumferential_direction_angle in (0, 180):
+
+                        pipe_y = 80 if circumferential_direction_angle == 0 else 230
+
+                        theta = math.radians(axial_angle)
+
+                        # ========= 主视图改为倾斜绘制 =========
+                        dx = math.sin(theta)
+                        dy = -math.cos(theta) if circumferential_direction_angle == 0 else math.cos(theta)
+
+                        length = math.hypot(dx, dy)
+                        ux, uy = dx / length, dy / length  # 垂直方向向量
+                        nx, ny = -uy, ux  # 水平方向的单位向量
+
+                        start_x, start_y = pipe_x, pipe_y  # 壳体外表面附着点
+                        inner_x = start_x - ux * inner_line_len
+                        inner_y = start_y - uy * inner_line_len
+                        end_x = start_x + ux * line_len
+                        end_y = start_y + uy * line_len
+                        half_w = add_width / 2
+
+                        # 灰色矩形（内伸 + 外伸）
+                        p1 = QPointF(inner_x + nx * half_w, inner_y + ny * half_w)
+                        p2 = QPointF(inner_x - nx * half_w, inner_y - ny * half_w)
+                        p3 = QPointF(end_x - nx * half_w, end_y - ny * half_w)
+                        p4 = QPointF(end_x + nx * half_w, end_y + ny * half_w)
+                        polygon = QPolygonF([p1, p2, p3, p4])
+
+                        # 无判断高亮逻辑时候的绘图
+                        # painter.setPen(QPen(Qt.darkGray, 1))
+                        # painter.setBrush(QBrush(Qt.darkGray))
+                        # 加入了判断高亮逻辑的绘图
+                        fill_color = QColor("green") if is_highlighted else Qt.darkGray
+                        painter.setPen(QPen(fill_color, 1))
+                        painter.setBrush(QBrush(fill_color))
+                        painter.drawPolygon(polygon)
+                        painter.drawPolygon(polygon)
+
+                        # 橙色法兰 ： 反向贴合
+                        cap_len = add_width / 3  # 法兰的厚度，向管口方向延申的长度
+                        cap_wid = add_width + 2 * 3  # 法兰的水平宽度
+                        cap_dx = ux * cap_len  # 垂直中心线方向向外
+                        cap_dy = uy * cap_len  # 垂直中心线方向向外
+                        cap_nx = nx * cap_wid
+                        cap_ny = ny * cap_wid
+                        cap_x = end_x  # 矩形末端中心点
+                        cap_y = end_y  # 矩形末端中心点
+
+                        cap_poly = QPolygonF([
+                            QPointF(cap_x + cap_nx, cap_y + cap_ny),
+                            QPointF(cap_x - cap_nx, cap_y - cap_ny),
+                            QPointF(cap_x + cap_dx - cap_nx, cap_y + cap_dy - cap_ny),
+                            QPointF(cap_x + cap_dx + cap_nx, cap_y + cap_dy + cap_ny),
+                        ])
+
+                        # painter.setPen(QPen(QColor("#ff9900"), 1))
+                        # painter.setBrush(QBrush(QColor("#ff9900")))
+                        cap_color = QColor("green") if is_highlighted else QColor("#ff9900")
+                        painter.setPen(QPen(cap_color, 1))
+                        painter.setBrush(QBrush(cap_color))
+                        painter.drawPolygon(cap_poly)
+
+                        # 主视图代号延后绘制（循环结束后按 end_x 排序再标）
+                        pending_main_shell_labels.append({
+                            "end_x": end_x,
+                            "ux": ux,
+                            "uy": uy,
+                            "end_y": end_y,
+                            "add_width": add_width,
+                            "circumferential_direction_angle": circumferential_direction_angle,
+                            "pipe_code": pipe_code,
+                            "is_highlighted": is_highlighted,
+                        })
+
+                    elif circumferential_direction_angle == 90:
+                        # 主视图 y 随周向方位与偏心距变化
+                        vessel_head_oy_shell = 155
+                        circum_angle = float(pipe.get("周向方位（°）", "0")) % 360
+                        shell_diameter = 1 / 2 * get_shell_value_by_nominal_diameter(self.product_id)
+                        r_for_shell_y = 75 - 1 / 2 * add_width_circle
+
+                        if shell_diameter and shell_diameter != 0:
+                            y_scale = (eccentricity_distance / shell_diameter) * r_for_shell_y
+                        else:
+                            y_scale = eccentricity_distance / 5
+
+                        pipe_y = vessel_head_oy_shell + y_scale
+                        center_x = pipe_x
+                        center_y = pipe_y
+                        # 圆半径由管口粗细决定
+                        circle_radius = add_width_circle
+
+                        # 绘制正视圆形管口
+                        fill_color = QColor("green") if is_highlighted else QColor("#ff9900")
+                        painter.setPen(QPen(fill_color, 1))
+                        painter.setBrush(QBrush(fill_color))
+                        painter.drawEllipse(QPointF(center_x, center_y), circle_radius, circle_radius)
+
+                        # 绘制管口编号文字
+                        text_color = QColor("green") if is_highlighted else Qt.black
+                        painter.setPen(QPen(text_color, 1))
+                        painter.setFont(QFont("Arial", 7))
+
+                        label_key = (round(center_x), circumferential_direction_angle)
+                        # 按文字实测宽度累加错开（两位数代号如 N10 更宽）
+                        next_off = label_offset_tracker.get(label_key, 0)
+                        text_w = _pipe_code_text_width(painter, pipe_code)
+                        label_offset_tracker[label_key] = next_off + text_w + 4
+
+                        # 文字放在圆形右侧
+                        text_x = center_x + circle_radius + 8 + next_off
+                        text_y = center_y
+                        painter.drawText(text_x, text_y, pipe_code)
+
+                    # ================= 左视图 =================
+                    cx, cy, r = 1435, 170, 80
+                    # 将输入的角度转成弧度制 90° ➡ Π/2
+                    theta = math.radians(circumferential_direction_angle - 90)  # Qt中0°在正右方，要让他转回到正上方
+                    half_w = add_width / 2
+
+                    # ✅从数据库获取公称直径对应的壳程数值
+                    diameter = get_shell_value_by_nominal_diameter(self.product_id)
+                    if diameter:
+                        eccentricity = eccentricity_distance / ((diameter / 2) / r)
+                    else:
+                        eccentricity = eccentricity_distance / 5  # 回退逻辑
+
+                    # 偏心矢量：顺着 pos 角度方向偏移 ecc 像素
+                    ecc_dx = math.cos(math.radians(circumferential_direction_angle)) * eccentricity
+                    ecc_dy = math.sin(math.radians(circumferential_direction_angle)) * eccentricity
+
+                    # 与换热器一致：偏心时用弦高 h 把起点拉回圆上，保证管口贴合筒壁
+                    if eccentricity == 0:
+                        start_x = cx + r * math.cos(theta)
+                        start_y = cy + r * math.sin(theta)
+                    else:
+                        ecc_clamped = min(abs(eccentricity), r * 0.999)
+                        h = r - math.sqrt(r ** 2 - ecc_clamped ** 2)
+                        h_dx = h * math.sin(math.radians(circumferential_direction_angle))
+                        h_dy = h * math.cos(math.radians(circumferential_direction_angle))
+                        start_x = cx + r * math.cos(theta) + ecc_dx - h_dx
+                        start_y = cy + r * math.sin(theta) + ecc_dy + h_dy
+
+                    # 终点：外伸 line_len（带偏心，与换热器一致）
+                    end_x = cx + (r + line_len) * math.cos(theta) + ecc_dx
+                    end_y = cy + (r + line_len) * math.sin(theta) + ecc_dy
+
+                    # 管口厚度方向（垂直方向）
+                    dx = end_x - start_x
+                    dy = end_y - start_y
+                    length = math.hypot(dx, dy)
+                    if length <= 0:
+                        length = 1
+                    ux, uy = dx / length, dy / length
+                    nx, ny = -uy, ux
+
+                    # 内伸：从贴圆起点沿轴线向内（保留容器内伸，根部仍落在圆周上）
+                    inner_x = start_x - ux * inner_radial_len
+                    inner_y = start_y - uy * inner_radial_len
+
+                    # 构造灰色管口矩形（内伸端 → 外伸端）
+                    p1 = QPointF(inner_x + nx * half_w, inner_y + ny * half_w)
+                    p2 = QPointF(inner_x - nx * half_w, inner_y - ny * half_w)
+                    p3 = QPointF(end_x - nx * half_w, end_y - ny * half_w)
+                    p4 = QPointF(end_x + nx * half_w, end_y + ny * half_w)
+                    polygon = QPolygonF([p1, p2, p3, p4])
+
+                    # painter.setPen(QPen(Qt.darkGray, 1))
+                    # painter.setBrush(QBrush(Qt.darkGray))
+                    fill_color = QColor("green") if is_highlighted else Qt.darkGray
+                    painter.setPen(QPen(fill_color, 1))
+                    painter.setBrush(QBrush(fill_color))
+                    painter.drawPolygon(polygon)
+
+                    # 橙色盖板（贴在管口末端）
+                    cap_len = add_width / 3
+                    cap_wid = add_width + 2 * 3
+                    cap_dx = ux * cap_len
+                    cap_dy = uy * cap_len
+                    cap_nx = nx * cap_wid
+                    cap_ny = ny * cap_wid
+                    cap_x = end_x
+                    cap_y = end_y
+
+                    cap_poly = QPolygonF([
+                        QPointF(cap_x + cap_nx, cap_y + cap_ny),
+                        QPointF(cap_x - cap_nx, cap_y - cap_ny),
+                        QPointF(cap_x + cap_dx - cap_nx, cap_y + cap_dy - cap_ny),
+                        QPointF(cap_x + cap_dx + cap_nx, cap_y + cap_dy + cap_ny),
+                    ])
+
+                    cap_color = QColor("green") if is_highlighted else QColor("#ff9900")
+                    painter.setPen(QPen(cap_color, 1))
+                    painter.setBrush(QBrush(cap_color))
+                    painter.drawPolygon(cap_poly)
+
+                    # === 左视图管口代号偏移绘制 ===
+                    text_color = QColor("green") if is_highlighted else Qt.black
+                    painter.setPen(QPen(text_color, 1))
+                    painter.setFont(QFont("Arial", 7))  # 统一缩小字体
+
+                    angle = circumferential_direction_angle % 360
+                    # 顶部扇区（含 0° 附近）：竖排优先，顶满后按字宽紧挨横排，避免甩到远处
+                    is_top_sector = angle <= 20 or angle >= 340
+                    is_bottom_sector = 160 <= angle <= 200
+                    is_right_sector = 70 <= angle <= 110
+                    is_left_sector = 250 <= angle <= 290
+
+                    fm = painter.fontMetrics()
+                    text_h = fm.height()
+                    text_w = _pipe_code_text_width(painter, pipe_code)
+                    v_step = 13
+                    top_baseline = text_h + 2
+                    view_right = cx + r + 120  # 左视图区域右缘，不用整窗宽度
+                    # 按周向角扇区分组错开：外伸高度接近时 tip 差 1px 也会叠字，不能把 end_x/end_y 进 key
+                    rounded_pos = round(angle / 5) * 5
+
+                    if is_top_sector:
+                        tip_key = ("lv_top", rounded_pos)
+                        count = label_offset_tracker.get(tip_key, 0)
+                        max_v = max(1, int(max(end_y - top_baseline, v_step) / v_step))
+                        if count < max_v:
+                            text_x = end_x
+                            text_y = max(top_baseline, end_y - (count + 1) * v_step + 10)
+                        else:
+                            h_key = ("lv_top_h", rounded_pos)
+                            x_off = label_offset_tracker.get(h_key, 0)
+                            text_x = end_x + 8 + x_off
+                            text_y = top_baseline
+                            label_offset_tracker[h_key] = x_off + text_w + 4
+                        label_offset_tracker[tip_key] = count + 1
+                    elif is_right_sector or angle == 90:
+                        # 与主视图 90° 一致：按字宽累加横排（N10 等比 N7 宽）
+                        label_key = ("lv", rounded_pos)
+                        next_off = label_offset_tracker.get(label_key, 0)
+                        text_x = end_x + 8 + next_off
+                        text_y = end_y
+                        label_offset_tracker[label_key] = next_off + text_w + 4
+                    elif is_left_sector or angle == 270:
+                        label_key = ("lv", rounded_pos)
+                        next_off = label_offset_tracker.get(label_key, 0)
+                        text_x = end_x - 8 - next_off - text_w
+                        text_y = end_y
+                        label_offset_tracker[label_key] = next_off + text_w + 4
+                    else:
+                        label_key = ("lv", rounded_pos)
+                        count = label_offset_tracker.get(label_key, 0)
+                        label_offset_tracker[label_key] = count + 1
+                        label_offset = 18 + count * 18
+
+                        if is_bottom_sector or angle == 180:
+                            text_x = end_x
+                            text_y = end_y + label_offset - 3
+                        else:
+                            text_x = end_x + ux * label_offset
+                            text_y = end_y + uy * label_offset
+
+                        # 非顶部：越界时就近夹紧/小幅横移，禁止用大 label_offset 甩飞
+                        text_top = text_y - text_h
+                        if text_top < 0:
+                            h_key = ("lv_clamp_h", rounded_pos)
+                            x_off = label_offset_tracker.get(h_key, 0)
+                            text_x = end_x + 8 + x_off
+                            text_y = top_baseline
+                            label_offset_tracker[h_key] = x_off + text_w + 4
+                        elif text_x < 0:
+                            text_x = 4
+                        elif text_x + text_w > view_right:
+                            text_x = max(end_x - text_w, view_right - text_w - 4)
+                            text_y = min(end_y + 14, self.height() - 2)
+
+                    painter.drawText(text_x, text_y, pipe_code)
+
+                # ================= 容器的左右封头部分 =================
+                elif pipe_belong in ["左封头", "右封头"]:
+                    # ================= 主视图部分 =================
+                    if pipe_belong == "左封头":
+                        if axial_position_base == "封头中心线":
+                            vessel_head_ox = 210  # 管箱封头中心点x坐标
+                    elif pipe_belong == "右封头":
+                        if axial_position_base == "封头中心线":
+                            vessel_head_ox = 1050
+
+                    # else:
+                    #     vessel_head_ox = 150  # 默认管箱封头中心点x坐标
+
+                    vessel_head_oy = 155  # 中心线固定在 y=155
+
+
+                    if pipe_belong == "左封头":
+                        start_x = vessel_head_ox - 40
+                    elif pipe_belong == "右封头":
+                        start_x = vessel_head_ox + 40
+
+                    if pipe_belong == "左封头":
+                        # 左封头：主视图 y 随周向方位与偏心距变化
+                        circum_angle = float(pipe.get("周向方位（°）", "0")) % 360
+                        shell_diameter = 1 / 2 * get_shell_value_by_nominal_diameter(self.product_id)
+                        r_for_shell_y = 75 - 1 / 2 * add_width  # 壳程封头 y 缩放参考半径
+
+                        if shell_diameter and shell_diameter != 0:
+                            y_scale = (eccentricity_distance / shell_diameter) * r_for_shell_y
+                        else:
+                            y_scale = eccentricity_distance / 5
+
+                        if circum_angle == 0:
+                            start_y = vessel_head_oy - y_scale
+                        elif circum_angle == 180:
+                            start_y = vessel_head_oy + y_scale
+                        elif circum_angle in (90, 270):
+                            start_y = vessel_head_oy
+                        elif 0 < circum_angle < 90:
+                            start_y = vessel_head_oy - y_scale * math.sin(math.radians(90 - circum_angle))
+
+                        elif 90 < circum_angle < 180:
+                            start_y = vessel_head_oy + y_scale * math.sin(
+                                math.radians(circum_angle - 90)
+                            )
+                        elif 180 < circum_angle < 270:
+                            start_y = vessel_head_oy + y_scale * math.sin(
+                                math.radians(270 - circum_angle)
+                            )
+                        else:  # 270 < angle < 360
+                            start_y = vessel_head_oy - y_scale * math.sin(
+                                math.radians(circum_angle - 270)
+                            )
+                    else:
+                        # 右封头：主视图 y 随周向方位与偏心距变化（基准为 vessel_head_oy_tube）
+                        circum_angle = float(pipe.get("周向方位（°）", "0")) % 360
+                        tube_diameter = 1 / 2 * get_shell_value_by_nominal_diameter(self.product_id)
+                        r_for_tube_y = 75 - 1 / 2 * add_width
+
+                        if tube_diameter and tube_diameter != 0:
+                            y_scale = (eccentricity_distance / tube_diameter) * r_for_tube_y
+                        else:
+                            y_scale = eccentricity_distance / 5
+
+                        if circum_angle == 0:
+                            start_y = vessel_head_oy - y_scale
+                        elif circum_angle == 180:
+                            start_y = vessel_head_oy + y_scale
+                        elif circum_angle in (90, 270):
+                            start_y = vessel_head_oy
+                        elif 0 < circum_angle < 90:
+                            start_y = vessel_head_oy - y_scale * math.sin(math.radians(90 - circum_angle))
+                        elif 90 < circum_angle < 180:
+                            start_y = vessel_head_oy + y_scale * math.sin(
+                                math.radians(circum_angle - 90)
+                            )
+                        elif 180 < circum_angle < 270:
+                            start_y = vessel_head_oy + y_scale * math.sin(
+                                math.radians(270 - circum_angle)
+                            )
+                        else:  # 270 < angle < 360
+                            start_y = vessel_head_oy- y_scale * math.sin(
+                                math.radians(circum_angle - 270)
+                            )
+                            # 封头 x 贴合弧线：给定 start_y，反算半椭圆边界上的 start_x（平盖保持固定 x）
+                    if pipe_belong == "左封头":
+                        head_cx, head_cy = vessel_head_ox, vessel_head_oy
+                        head_rx, head_ry = 40.0, 75  # 对应左封头 QRectF(110,100,80,150)
+                        dy = max(-head_ry, min(head_ry, start_y - head_cy))
+                        inside = max(0.0, 1.0 - (dy * dy) / (head_ry * head_ry))
+                        start_x = head_cx - head_rx * math.sqrt(inside)  # 左半椭圆
+                    elif pipe_belong == "右封头":
+                        head_cx, head_cy = vessel_head_ox, vessel_head_oy
+                        head_rx, head_ry = 40.0, 75  # 对应右封头 QRectF(950,40,80,210)
+                        dy = max(-head_ry, min(head_ry, start_y - head_cy))
+                        inside = max(0.0, 1.0 - (dy * dy) / (head_ry * head_ry))
+                        start_x = head_cx + head_rx * math.sqrt(inside)  # 右半椭圆
+
+                    # 轴向方位角
+                    theta = math.radians(axial_angle)  # 轴向夹角
+                    # 根据封头类型决定方向（向左 or 向右）
+                    if pipe_belong == "左封头":
+                        dx = -math.cos(theta)  # 向左延伸
+                        dy = math.sin(theta)
+                    elif pipe_belong == "右封头":
+                        dx = math.cos(theta)  # 向右延伸
+                        dy = math.sin(theta)
+                    # else:
+                    #     dx = -math.cos(theta)  # 向左延伸
+                    #     dy = math.sin(theta)
+                    length = math.hypot(dx, dy)
+                    ux, uy = dx / length, dy / length  # 水平
+                    nx, ny = -uy, ux  # 垂直
+
+                    # 内伸 + 外伸（容器封头主视图）
+                    inner_x = start_x - ux * inner_line_len
+                    inner_y = start_y - uy * inner_line_len
+                    end_x = start_x + ux * line_len
+                    end_y = start_y + uy * line_len
+                    half_w = add_width / 2
+
+                    # 灰色管口
+                    p1 = QPointF(inner_x + nx * half_w, inner_y + ny * half_w)
+                    p2 = QPointF(inner_x - nx * half_w, inner_y - ny * half_w)
+                    p3 = QPointF(end_x - nx * half_w, end_y - ny * half_w)
+                    p4 = QPointF(end_x + nx * half_w, end_y + ny * half_w)
+                    polygon = QPolygonF([p1, p2, p3, p4])
+
+                    fill_color = QColor("green") if is_highlighted else Qt.darkGray
+                    painter.setPen(QPen(fill_color, 1))
+                    painter.setBrush(QBrush(fill_color))
+                    painter.drawPolygon(polygon)
+
+                    # 橙色法兰（垂直方向朝外扩展）
+                    cap_len = add_width / 3  # 法兰厚度
+                    cap_wid = add_width + 2 * 3
+                    cap_ux = ux * cap_len
+                    cap_uy = uy * cap_len
+                    cap_nx = nx * cap_wid
+                    cap_ny = ny * cap_wid
+                    cap_x = end_x
+                    cap_y = end_y
+
+                    cap_poly = QPolygonF([
+                        QPointF(cap_x + cap_nx, cap_y + cap_ny),
+                        QPointF(cap_x - cap_nx, cap_y - cap_ny),
+                        QPointF(cap_x + cap_ux - cap_nx, cap_y + cap_uy - cap_ny),
+                        QPointF(cap_x + cap_ux + cap_nx, cap_y + cap_uy + cap_ny),
+                    ])
+
+                    cap_color = QColor("green") if is_highlighted else QColor("#ff9900")
+                    painter.setPen(QPen(cap_color, 1))
+                    painter.setBrush(QBrush(cap_color))
+                    painter.drawPolygon(cap_poly)
+
+                    # 管口代号文字
+                    # painter.setPen(QPen(Qt.black, 1))
+                    text_color = QColor("green") if is_highlighted else Qt.black
+                    painter.setPen(QPen(text_color, 1))
+                    painter.setFont(QFont("Arial", 7))  # 统一缩小字体
+                    # 统一偏移方向与距离（水平靠外 + 垂直向下）
+                    horizontal_offset = 20
+                    vertical_offset = 5
+                    # 同一位置代号错开：按实测文字宽度累加（避免 N10/N11 等两位数重叠）
+                    # 坐标按 10px 归并，避免端点浮点差导致无法共用错开槽
+                    rounded_pos = round(circumferential_direction_angle / 5) * 5
+                    label_key = (round(end_x / 10) * 10, round(end_y / 10) * 10, rounded_pos)
+                    next_off = label_offset_tracker.get(label_key, 0)
+                    text_w = _pipe_code_text_width(painter, pipe_code)
+                    LABEL_GAP = 4
+                    if pipe_belong == "右封头":
+                        # 向右侧偏移：后续代号接在前一个右侧
+                        text_x = end_x + cap_len + horizontal_offset / 2 + next_off
+                    elif pipe_belong == "左封头":
+                        # 向左侧偏移：drawText 从 text_x 向右画，故再减 text_w 使整体在左侧排开
+                        text_x = end_x - cap_len - horizontal_offset - 5 - next_off - text_w
+                    else:
+                        text_x = end_x
+                    label_offset_tracker[label_key] = next_off + text_w + LABEL_GAP
+                    text_y = end_y + vertical_offset  # 微微下移
+                    painter.drawText(text_x, text_y, pipe_code)
+
+                # ======== 封头左视图：绘制小圆（仅"左封头"可见） ========
+                if pipe_belong in ["左封头", "右封头"]:
+                    cx, cy, r = 1435, 170, 80
+
+                    # ✅从数据库获取公称直径对应的公称直径数值
+                    diameter = get_shell_value_by_nominal_diameter(self.product_id)
+                    if diameter:
+                        eccentricity = eccentricity_distance / ((diameter / 2) / r)
+                    else:
+                        eccentricity = eccentricity_distance / 5
+
+                    circum_angle = float(pipe.get("周向方位（°）", "0"))
+
+                    # 默认：小圆在中心
+                    if eccentricity == 0:
+                        small_cx = cx
+                        small_cy = cy
+                    else:
+                        angle_rad = math.radians(circum_angle - 90)  # 角度从正上方为0°（逆时针方向）
+                        small_cx = cx + math.cos(angle_rad) * eccentricity
+                        small_cy = cy + math.sin(angle_rad) * eccentricity
+
+                    if pipe_belong == "右封头":
+                        # 画虚线小圆点
+                        cap_color = QColor("green") if is_highlighted else QColor("#ff9900")
+                        painter.setPen(QPen(cap_color, 1, Qt.DashLine))  # 虚线
+                        painter.setBrush(Qt.transparent)
+                        painter.drawEllipse(QPointF(small_cx, small_cy), 5, 5)
+
+                    else:
+                        # 画小圆（半径可改）
+                        cap_color = QColor("green") if is_highlighted else QColor("#ff9900")
+                        painter.setPen(QPen(cap_color, 1))
+                        painter.setBrush(QBrush(cap_color))
+                        painter.drawEllipse(QPointF(small_cx, small_cy), 5, 5)
+
+            except Exception as e:
+                print(f"绘制管口 {pipe.get('管口代号', '')} 出错：{e}");
+
+        # 按周向角度 + end_x 排序后水平依次排开
+        if pending_main_shell_labels:
+            painter.setFont(QFont("Arial", 7))
+            LABEL_MIN_GAP = 6
+            pending_main_shell_labels.sort(
+                key=lambda item: (item["circumferential_direction_angle"], item["end_x"])
+            )
+            last_right_by_angle = {}
+            for item in pending_main_shell_labels:
+                angle = item["circumferential_direction_angle"]
+                base_text_x = item["end_x"] + item["ux"] * 15
+                text_width = _pipe_code_text_width(painter, item["pipe_code"])
+                last_right = last_right_by_angle.get(angle)
+                if last_right is None:
+                    text_x = base_text_x
+                else:
+                    text_x = max(base_text_x, last_right + LABEL_MIN_GAP)
+                last_right_by_angle[angle] = text_x + text_width
+
+                text_color = QColor("green") if item["is_highlighted"] else Qt.black
+                painter.setPen(QPen(text_color, 1))
+                if angle == 0:
+                    text_y = item["end_y"] - item["add_width"] + item["uy"] * 10
+                else:
+                    text_y = item["end_y"] + item["add_width"] + item["uy"] * 20
+                painter.drawText(text_x, text_y, item["pipe_code"])
+
+
+
+
+
+
 
 #计算圆的切点(左视图圆上的两个切线)
 def compute_tangent_points(cx, cy, r, px, py):

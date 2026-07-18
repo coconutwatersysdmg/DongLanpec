@@ -15,6 +15,12 @@ import traceback
 from modules.guankoudingyi.obtain_product_type_version import get_product_type_and_version
 from modules.guankoudingyi.funcs.pipe_get_units_types import get_unit_types_from_db, get_current_unit_types_from_ui
 from modules.guankoudingyi.funcs.funcs_pipe_Load import init_pipe_openingload_dialog
+from modules.guankoudingyi.funcs.funcs_pipe_table import (
+    get_pipe_col,
+    get_pipe_special_columns,
+    show_styled_warning,
+    defer_styled_warning,
+)
 from PyQt5.QtCore import QTimer
 
 
@@ -71,6 +77,10 @@ class ComboBoxDelegate(QStyledItemDelegate):
         # 为编辑器安装事件过滤器以处理滚轮事件
         editor.installEventFilter(self)
 
+        # 纯下拉：单击进入编辑后自动弹出选项列表，避免再点一次
+        if not self.editable:
+            QTimer.singleShot(0, editor.showPopup)
+
         return editor
 
     def setEditorData(self, editor, index):
@@ -126,7 +136,11 @@ class ComboBoxDelegate(QStyledItemDelegate):
     def setModelData(self, editor, model, index):
         """将编辑器的数据设置到模型中"""
         value = editor.currentText()
-        model.setData(index, value, Qt.EditRole)
+        # 批量模式（如焊端规格 mm 手输）：通过回调写入选中行，不单写当前格
+        if self.bulk_select_callback and self.disable_wheel_scroll:
+            self.bulk_select_callback(value)
+        else:
+            model.setData(index, value, Qt.EditRole)
 
         # 重置状态
         self.first_key_pressed = False
@@ -205,6 +219,7 @@ def initialize_pipe_combobox_delegates(stats_widget):
     :param stats_widget: 主窗口实例
     """
     table = stats_widget.tableWidget_pipe
+    is_container = getattr(stats_widget, 'is_container_product', False)
 
     # 初始化缓存字典
     stats_widget.pipe_column_delegates = {}
@@ -214,6 +229,9 @@ def initialize_pipe_combobox_delegates(stats_widget):
         12: ["程序推荐", "居中"],  # 轴向定位距离(✅ 可编辑下拉)
         16: ["程序推荐"],  # 外伸高度(✅ 可编辑下拉)
     }
+    internal_col = get_pipe_col(is_container, "内伸高度")
+    if internal_col is not None:
+        static_columns[internal_col] = ["程序推荐"]  # 内伸高度(✅ 可编辑下拉，与外伸高度相同)
     for col, options in static_columns.items():
         # ✅ 关键修改：启用第一次按键覆盖功能
         delegate = ComboBoxDelegate(table, editable=True, overwrite_on_first_key=True)
@@ -223,7 +241,8 @@ def initialize_pipe_combobox_delegates(stats_widget):
         stats_widget.pipe_column_delegates[col] = delegate
 
     # 动态列：初始化空代理，后续在点击时更新选项
-    dynamic_columns = [4, 5, 6, 7, 8, 9, 10, 11, 17]
+    attachment_col = get_pipe_col(is_container, "管口附件")
+    dynamic_columns = [4, 5, 6, 7, 8, 9, 10, 11, attachment_col]
     for col in dynamic_columns:
         # 🚩 关键修改：列9初始化为不可编辑
         editable = False
@@ -703,6 +722,16 @@ def get_weld_end_spec_sch_options():
         if conn:
             conn.close()
 
+
+def get_weld_end_spec_bulk_options(stats_widget):
+    """焊端规格列批量赋值用选项（不做交集）：Sch 为全表选项，mm 为程序推荐。"""
+    current_unit_types = get_current_unit_types_from_ui(stats_widget)
+    welding_type = current_unit_types.get("焊端规格类型", "Sch")
+    if welding_type == "Sch":
+        return get_weld_end_spec_sch_options() or []
+    return ["程序推荐"]
+
+
 """获取管口附件列的下拉框内容"""
 def get_pipe_attachment_options():
     """
@@ -928,7 +957,7 @@ def _show_pipe_openingload_dialog(stats_widget, row):
             pipe_code = code_item.text().strip() if code_item else None
 
         if not product_id:
-            QMessageBox.warning(stats_widget, "提示", "请先选择产品并保存当前管口。")
+            show_styled_warning(stats_widget, "提示", "请先选择产品并保存当前管口。")
             return
 
         # 连接产品设计活动库，检查记录是否存在
@@ -949,12 +978,12 @@ def _show_pipe_openingload_dialog(stats_widget, row):
                     (product_id, pipe_code),
                 )
             else:
-                QMessageBox.warning(stats_widget, "提示", "请先填写并保存管口代号。")
+                show_styled_warning(stats_widget, "提示", "请先填写并保存管口代号。")
                 return
 
             exists = cursor.fetchone()
             if not exists:
-                QMessageBox.warning(stats_widget, "提示", "未找到该管口信息，请先保存当前管口。")
+                show_styled_warning(stats_widget, "提示", "未找到该管口信息，请先保存当前管口。")
                 return
         finally:
             if cursor:
@@ -991,7 +1020,7 @@ def _show_pipe_openingload_dialog(stats_widget, row):
         dialog.exec_()
 
     except Exception as e:
-        QMessageBox.warning(stats_widget, "错误", f"打开管口载荷设置对话框失败：{str(e)}")
+        show_styled_warning(stats_widget, "错误", f"打开管口载荷设置对话框失败：{str(e)}")
         import traceback
         traceback.print_exc()
 
@@ -1020,7 +1049,7 @@ def apply_pipe_row_column_locks_by_belong(stats_widget, row):
                 if not lock_item:
                     lock_item = QTableWidgetItem()
                     table.setItem(row, lock_col, lock_item)
-                lock_item.setText("—")
+                lock_item.setText("-")
                 lock_item.setTextAlignment(Qt.AlignCenter)
                 lock_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
 
@@ -1029,7 +1058,7 @@ def apply_pipe_row_column_locks_by_belong(stats_widget, row):
             if not lock_item:
                 lock_item = QTableWidgetItem()
                 table.setItem(row, 12, lock_item)
-            lock_item.setText("—")
+            lock_item.setText("-")
             lock_item.setTextAlignment(Qt.AlignCenter)
             lock_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
 
@@ -1043,7 +1072,7 @@ def apply_pipe_row_column_locks_by_belong(stats_widget, row):
             if item_col12:
                 item_col12.setFlags(Qt.ItemIsEnabled | Qt.ItemIsEditable | Qt.ItemIsSelectable)
                 text_now = item_col12.text().strip()
-                if text_now in ("", "—"):
+                if text_now in ("", "-"):
                     pipe_function_item = table.item(row, 2)
                     pipe_function = pipe_function_item.text().strip() if pipe_function_item else ""
                     if pipe_function in ["管程入口", "管程出口"]:
@@ -1067,6 +1096,8 @@ def handle_pipe_cell_click(stats_widget, row, column):
     stats_widget.current_editing_cell = (row, column)
 
     table = stats_widget.tableWidget_pipe
+    is_container = getattr(stats_widget, 'is_container_product', False)
+    cols = get_pipe_special_columns(is_container)
 
     is_last_row = (row == table.rowCount() - 1)
     pipe_code_item = table.item(row, 1)
@@ -1085,7 +1116,7 @@ def handle_pipe_cell_click(stats_widget, row, column):
             if not lock_item:
                 lock_item = QTableWidgetItem()
                 table.setItem(row, column, lock_item)
-            lock_item.setText("—")
+            lock_item.setText("-")
             lock_item.setTextAlignment(Qt.AlignCenter)
             lock_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
         finally:
@@ -1104,9 +1135,31 @@ def handle_pipe_cell_click(stats_widget, row, column):
         table.editItem(table.item(row, column))
         return
 
-    if column == 16:
+    if column == cols["extension_height"]:
         delegate = stats_widget.pipe_column_delegates[column]
         table.editItem(table.item(row, column))
+        return
+
+    internal_col = cols["internal_height"]
+    if internal_col is not None and column == internal_col:
+        delegate = stats_widget.pipe_column_delegates[column]
+        table.editItem(table.item(row, column))
+        return
+
+    # 管口附件逻辑
+    if column == cols["attachment"]:
+        attachment_options = get_pipe_attachment_options()
+        delegate = MultiSelectComboDelegate(
+            attachment_options if attachment_options else ["None"],
+            table
+        )
+        table.setItemDelegateForColumn(column, delegate)
+        table.editItem(table.item(row, column))
+        return
+
+    # 管口载荷逻辑
+    if column == cols["load"]:
+        _show_pipe_openingload_dialog(stats_widget, row)
         return
 
     # 管板：禁用 13/14/15；封头/平盖：禁用 12（轴向定位距离）
@@ -1126,59 +1179,68 @@ def handle_pipe_cell_click(stats_widget, row, column):
                 if not lock_item:
                     lock_item = QTableWidgetItem()
                     table.setItem(row, column, lock_item)
-                lock_item.setText("—")
+                lock_item.setText("-")
                 lock_item.setTextAlignment(Qt.AlignCenter)
                 lock_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
             finally:
                 stats_widget.suppress_cell_change = False
             return
-    # # 管板时禁用 13/14/15 列编辑，设为空并置灰（保留可选中以保证整行高亮不丢失）
-    # if column in (13, 14, 15):
-    #     belong_item = table.item(row, 10)
-    #     pipe_belong = belong_item.text().strip() if belong_item else ""
-    #     if "管板" in pipe_belong:
-    #         try:
-    #             stats_widget.suppress_cell_change = True
-    #             lock_item = table.item(row, column)
-    #             if not lock_item:
-    #                 lock_item = QTableWidgetItem()
-    #                 table.setItem(row, column, lock_item)
-    #             lock_item.setText("—")  # 置空
-    #             lock_item.setTextAlignment(Qt.AlignCenter)
-    #             # 只禁止编辑，不禁止选中，避免从“管板”切到其他元件后该列高亮丢失
-    #             lock_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-    #
-    #
-    #
-    #         finally:
-    #             stats_widget.suppress_cell_change = False
-            return
 
     # 焊端规格特殊逻辑
     if column == 9:
-        # 从界面组件获取焊端规格类型，而不是从数据库
         current_unit_types = get_current_unit_types_from_ui(stats_widget)
-        welding_type = current_unit_types.get("焊端规格类型", "Sch")  # 默认为Sch
-        # delegate = stats_widget.pipe_column_delegates[column]
-        if welding_type == "Sch":
-            # Sch类型：使用不可编辑下拉框
-            options = get_weld_end_spec_sch_options()
-            delegate = ComboBoxDelegate(table, editable=False)
-            delegate.setItems(options)
+        welding_type = current_unit_types.get("焊端规格类型", "Sch")
+
+        is_bulk_mode = (hasattr(stats_widget, 'bulk_assign_target_column') and
+                        stats_widget.bulk_assign_target_column == column and
+                        hasattr(stats_widget, 'bulk_assign_rows') and
+                        len(stats_widget.bulk_assign_rows) > 1)
+
+        if is_bulk_mode:
+            options = get_weld_end_spec_bulk_options(stats_widget)
+
+            def bulk_assign_callback(value):
+                text = str(value).strip() if value is not None else ""
+                from modules.guankoudingyi.funcs.funcs_pipe_data_in_out import validate_weld_end_spec_by_unit
+                validated = validate_weld_end_spec_by_unit(
+                    text, welding_type, stats_widget.product_id
+                )
+                if not validated:
+                    return
+                apply_bulk_assign_value_immediate(
+                    stats_widget, column, stats_widget.bulk_assign_rows, validated
+                )
+
+            if welding_type == "Sch":
+                delegate = ComboBoxDelegate(table, editable=False)
+            else:
+                delegate = ComboBoxDelegate(table, editable=True, overwrite_on_first_key=True)
+
+            delegate.setItems(options if options else ["None"])
+            delegate.bulk_select_callback = bulk_assign_callback
+            delegate.disable_wheel_scroll = True
             table.setItemDelegateForColumn(column, delegate)
             stats_widget.pipe_column_delegates[column] = delegate
             table.editItem(table.item(row, column))
-        else:  # 非Sch类型
-            # 使用可编辑下拉框，并启用第一次按键覆盖功能
+        elif welding_type == "Sch":
+            options = get_weld_end_spec_sch_options()
+            delegate = ComboBoxDelegate(table, editable=False)
+            delegate.setItems(options)
+            delegate.bulk_select_callback = None
+            delegate.disable_wheel_scroll = False
+            table.setItemDelegateForColumn(column, delegate)
+            stats_widget.pipe_column_delegates[column] = delegate
+            table.editItem(table.item(row, column))
+        else:
             delegate = ComboBoxDelegate(table, editable=True, overwrite_on_first_key=True)
             delegate.setItems(["程序推荐"])
+            delegate.bulk_select_callback = None
+            delegate.disable_wheel_scroll = False
             table.setItemDelegateForColumn(column, delegate)
             stats_widget.pipe_column_delegates[column] = delegate
 
-            # 初始化空单元格为"程序推荐"
             for r in range(table.rowCount() - 1):
                 item = table.item(r, column)
-                # ✅ 只有当当前单元格为空时才设置默认
                 if not item or not item.text().strip():
                     new_item = QTableWidgetItem("程序推荐")
                     new_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
@@ -1225,11 +1287,11 @@ def handle_pipe_cell_click(stats_widget, row, column):
                 if product_version in versions:
                     # 找到匹配版本，判断管口功能
                     if product_version in ["AKU", "BKU"] and pipe_function == "壳程入口":
-                        belong_options = ["壳程大端圆筒", "锥壳"]
+                        belong_options = ["大端壳体圆筒", "锥壳"]
                     elif product_version in ["AKU", "BKU"] and pipe_function in [
                         "壳程液位计1", "壳程液位计2", "壳程温度计"
                     ]:
-                        belong_options = ["壳程大端圆筒", "壳程封头"]
+                        belong_options = ["大端壳体圆筒", "壳体封头"]
                     elif pipe_function in ["管程入口", "管程出口"]:
                         belong_options = options
                     else:
@@ -1255,23 +1317,6 @@ def handle_pipe_cell_click(stats_widget, row, column):
         delegate = stats_widget.pipe_column_delegates[column]
         delegate.setItems(base_options)
         table.editItem(table.item(row, column))
-        return
-
-    # 管口附件逻辑（第17列）
-    if column == 17:
-        attachment_options = get_pipe_attachment_options()
-        delegate = MultiSelectComboDelegate(
-            attachment_options if attachment_options else ["None"],
-            table
-        )
-        table.setItemDelegateForColumn(column, delegate)
-        table.editItem(table.item(row, column))
-        return
-
-    # 管口载荷逻辑（第18列）
-    if column == 18:
-        # 点击第18列时，弹出管口载荷设置对话框
-        _show_pipe_openingload_dialog(stats_widget, row)
         return
 
     # 公称尺寸列逻辑（第4列）
@@ -1505,7 +1550,7 @@ def handle_pipe_cell_click(stats_widget, row, column):
         stats_widget.original_cell_value = original_text
 
 
-# ================= 批量赋值（多选行，列4-8）=================
+# ================= 批量赋值（多选行，列4-9）=================
 """当选择变化时，判断是否处于多选批量赋值状态"""
 def update_bulk_assign_state(stats_widget):
     table = stats_widget.tableWidget_pipe
@@ -1514,7 +1559,7 @@ def update_bulk_assign_state(stats_widget):
 
     # 仅在多行选择且当前列为目标列时进入批量模式
     current_col = table.currentColumn()
-    target_columns = {4, 5, 6, 7, 8}
+    target_columns = {4, 5, 6, 7, 8, 9}
     if current_col not in target_columns:
         stats_widget.bulk_assign_target_column = None
         stats_widget.bulk_assign_rows = []
@@ -1566,8 +1611,11 @@ def update_bulk_assign_state(stats_widget):
         print(f"[DEBUG] 选中行数不匹配，不进入批量模式：当前列选中行={selected_rows_in_current_col}, 有效行={valid_rows}")
         return
 
-    # 计算交集选项，确保有有效选项
-    options = compute_intersection_options(stats_widget, current_col, valid_rows)
+    # 列9：焊端规格用固定全集，不做交集；列4-8：取各行候选交集
+    if current_col == 9:
+        options = get_weld_end_spec_bulk_options(stats_widget)
+    else:
+        options = compute_intersection_options(stats_widget, current_col, valid_rows)
     if not options:
         stats_widget.bulk_assign_target_column = None
         stats_widget.bulk_assign_rows = []
@@ -1728,7 +1776,7 @@ def get_nominal_diameter(product_id, pipe_belong):
     try:
         if ("管箱" in pipe_belong) or ("管板" in pipe_belong)or("锥壳" in pipe_belong):
             param_field = '管程数值'
-        elif ("壳体" in pipe_belong) or ("壳程" in pipe_belong) or ("外头盖" in pipe_belong) :
+        elif ("壳体" in pipe_belong) or ("壳程" in pipe_belong) or ("外头盖" in pipe_belong) or("右封头" in pipe_belong)or("左封头" in pipe_belong) :
             param_field = '壳程数值'
         else:
             return False, "无效的管口所属元件字段"
@@ -1818,6 +1866,40 @@ def get_recommended_nominal_size(nominal_diameter, pipe_belong):
             cursor.close()
         if conn:
             conn.close()
+
+
+def maybe_refresh_pipe_recommendations(stats_widget, product_id, force_from_default=False):
+    """
+    根据条件输入侧缓存的用户选择，决定是否重新推荐管口公称尺寸与 AKU/BKU 偏心距。
+    - force_from_default=True：首次从默认表加载，直接推荐
+    - 否则：读取 get_pipe_recommend_choice；仅在为 True 时推荐
+    """
+    if not product_id or stats_widget is None:
+        return False
+
+    if force_from_default:
+        auto_recommend_nominal_sizes_for_first_four_pipes(stats_widget, product_id)
+        auto_assign_eccentricity_for_aku_bku(stats_widget, product_id)
+        if hasattr(stats_widget, "view") and stats_widget.view and hasattr(stats_widget, "get_all_pipe_data"):
+            stats_widget.view.set_pipe_data(stats_widget.get_all_pipe_data())
+        return True
+
+    try:
+        from modules.condition_input.view import get_pipe_recommend_choice
+        choice = get_pipe_recommend_choice(product_id)
+    except Exception as e:
+        print(f"[DEBUG] 读取管口推荐选择失败: {e}")
+        return False
+
+    if choice is not True:
+        return False
+
+    auto_recommend_nominal_sizes_for_first_four_pipes(stats_widget, product_id)
+    auto_assign_eccentricity_for_aku_bku(stats_widget, product_id)
+    if hasattr(stats_widget, "view") and stats_widget.view and hasattr(stats_widget, "get_all_pipe_data"):
+        stats_widget.view.set_pipe_data(stats_widget.get_all_pipe_data())
+    return True
+
 
 """自动为前四个管口推荐公称尺寸"""
 def auto_recommend_nominal_sizes_for_first_four_pipes(stats_widget, product_id):
@@ -2023,6 +2105,36 @@ def validate_extension_height(height_text, product_id, pipe_belong, emit_error=T
     except ValueError:
         return False, "请输入有效数字或\"程序推荐\""
 
+"""验证内伸高度（容器版）"""
+def validate_internal_extension_height(height_text, product_id, pipe_belong, emit_error=True):
+    """
+    验证内伸高度是否有效。可为"程序推荐"，否则须满足 0 <= 值 <对应公称直径。
+    如果 emit_error=False，不弹窗，只返回错误信息
+    """
+    try:
+        if not height_text or height_text.strip() == "":
+            return True, "程序推荐"
+        if height_text.strip() == "程序推荐":
+            return True, "程序推荐"
+
+        height_val = float(height_text)
+        if height_val < 0:
+            return False, "内伸高度必须大于等于0"
+
+        success, result_or_error = get_nominal_diameter(product_id, pipe_belong)
+        if not success:
+            if emit_error:
+                QMessageBox.warning(None, "验证错误", result_or_error)
+            return False, result_or_error
+
+        nominal_diameter = float(result_or_error)
+        if height_val > nominal_diameter:
+            return False, f"内伸高度不能超过公称直径（{nominal_diameter}mm），请核对后重新输入"
+        return True, height_val
+
+    except ValueError:
+        return False, "请输入有效数字或\"程序推荐\""
+
 """补丁：用于清空下方的提示条"""
 def _set_tip(stats_widget, text="", color=None):
     """统一设置/清空底部提示条"""
@@ -2084,10 +2196,11 @@ def _check_angle_eccentricity_mutex(stats_widget, row):
         finally:
             stats_widget.suppress_cell_change = False
 
-        QMessageBox.warning(
+        _mark_pipe_cell_validation_blocked(stats_widget)
+        defer_styled_warning(
             stats_widget,
             "校验冲突",
-            "因轴向夹角和偏心距被同时赋值，基于GB/T 150规则无法对此管口进行强度校核"
+            "因轴向夹角和偏心距被同时赋值，基于GB/T 150规则无法对此管口进行强度校核",
         )
 
 """轴向定位基准互斥选择"""
@@ -2153,6 +2266,143 @@ def enforce_shell_inout_axial_base_mutex(stats_widget, changed_row: int):
             if hasattr(stats_widget, "suppress_cell_change"):
                 stats_widget.suppress_cell_change = False
 
+"""校验管口功能是否在界面上重复"""
+def is_duplicate_pipe_function(table, function_text, current_row):
+    """
+    判断管口功能是否与其他行重复（排除自身；空值不参与重复判定）。
+    """
+    func_text = (function_text or "").strip()
+    if not func_text:
+        return False
+
+    for row in range(table.rowCount() - 1):
+        if row == current_row:
+            continue
+        item = table.item(row, 2)
+        if item and item.text().strip() == func_text:
+            return True
+    return False
+
+
+def _mark_pipe_cell_validation_blocked(stats_widget):
+    """通知 Enter 导航：本轮 cell 校验已拦截，勿跳行/勿强制二次 commit。"""
+    stats_widget._pipe_cell_validation_blocked = True
+    # 快照：关窗结算只认 outcome，避免 blocked 被后续空值提交清掉后误跳行
+    stats_widget._pipe_enter_nav_outcome = "fail"
+
+
+def validate_pipe_code_unique(stats_widget, row, code_text):
+    """
+    管口代号列重复校验：重复则置空、冻结末行，并延迟弹窗。
+    :return: True 通过；False 已拦截
+    """
+    from modules.guankoudingyi.funcs.funcs_pipe_table import (
+        is_duplicate_port_code,
+        control_last_row_editable_state,
+    )
+
+    table = stats_widget.tableWidget_pipe
+    code = (code_text or "").strip()
+    if not code:
+        return True
+    if not is_duplicate_port_code(table, code, row):
+        return True
+
+    guard = getattr(stats_widget, "_pipe_code_dup_guard", None)
+    if guard == (row, code):
+        item = table.item(row, 1)
+        if item and item.text().strip():
+            try:
+                stats_widget.suppress_cell_change = True
+                item.setText("")
+            finally:
+                stats_widget.suppress_cell_change = False
+        _mark_pipe_cell_validation_blocked(stats_widget)
+        return False
+    stats_widget._pipe_code_dup_guard = (row, code)
+    _mark_pipe_cell_validation_blocked(stats_widget)
+
+    tip_msg = f"管口代号 '{code}' 已存在，禁止重复。"
+    item = table.item(row, 1)
+    if item:
+        try:
+            stats_widget.suppress_cell_change = True
+            item.setText("")
+        finally:
+            stats_widget.suppress_cell_change = False
+    control_last_row_editable_state(stats_widget, enable_editing=False)
+
+    def _show_dup_msg():
+        try:
+            show_styled_warning(stats_widget, "管口代号重复", tip_msg)
+        finally:
+            if getattr(stats_widget, "_pipe_code_dup_guard", None) == (row, code):
+                stats_widget._pipe_code_dup_guard = None
+
+    stats_widget._pipe_warning_pending = True
+    QTimer.singleShot(0, _show_dup_msg)
+    return False
+
+
+def validate_pipe_function_unique(stats_widget, row, function_text):
+    """
+    管口功能列重复校验：若与界面上已有管口功能重复，则置空并弹窗提示。
+    :return: True 表示通过校验，False 表示重复已拦截
+    """
+    table = stats_widget.tableWidget_pipe
+    func_text = (function_text or "").strip()
+    if not func_text:
+        return True
+
+    if not is_duplicate_pipe_function(table, func_text, row):
+        return True
+
+    # 编辑器关闭过程中可能再次提交同一值；同一轮只处理一次，避免双弹窗/崩溃
+    guard = getattr(stats_widget, "_pipe_function_dup_guard", None)
+    if guard == (row, func_text):
+        item = table.item(row, 2)
+        if item and item.text().strip():
+            try:
+                stats_widget.suppress_cell_change = True
+                item.setText("")
+            finally:
+                stats_widget.suppress_cell_change = False
+        _mark_pipe_cell_validation_blocked(stats_widget)
+        return False
+    stats_widget._pipe_function_dup_guard = (row, func_text)
+    _mark_pipe_cell_validation_blocked(stats_widget)
+
+    pipe_code_item = table.item(row, 1)
+    pipe_code = pipe_code_item.text().strip() if pipe_code_item else ""
+    if pipe_code:
+        tip_msg = f"管口功能重复，请重新输入{pipe_code}的管口功能"
+    else:
+        tip_msg = "管口功能重复，请重新输入当前管口的管口功能"
+
+    # 先清空再延迟弹窗：cellChanged 栈内开模态会重入并崩溃（与轴向夹角互斥同理）
+    item = table.item(row, 2)
+    if item:
+        try:
+            stats_widget.suppress_cell_change = True
+            item.setText("")
+        finally:
+            stats_widget.suppress_cell_change = False
+
+    from modules.guankoudingyi.funcs.funcs_pipe_table import set_pipe_function_column_readonly
+    set_pipe_function_column_readonly(stats_widget)
+
+    def _show_dup_msg():
+        try:
+            show_styled_warning(stats_widget, "提示", tip_msg)
+        finally:
+            if getattr(stats_widget, "_pipe_function_dup_guard", None) == (row, func_text):
+                stats_widget._pipe_function_dup_guard = None
+
+    stats_widget._pipe_warning_pending = True
+    QTimer.singleShot(0, _show_dup_msg)
+    return False
+
+
 """处理单元格内容改变时触发的验证"""
 def handle_pipe_cell_changed(stats_widget, row, column, product_id):
     """
@@ -2166,6 +2416,11 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
     if getattr(stats_widget, "suppress_cell_change", False):
         return
 
+    # 新一次用户编辑：清掉上一轮 Enter 拦截标志（本轮失败会再置上）。
+    # 不在此清 _pipe_enter_nav_outcome：重复校验清空格后的二次提交会把 blocked 洗掉，
+    # 但挂起的 Enter 结算仍需保留 fail 快照。
+    stats_widget._pipe_cell_validation_blocked = False
+
     table = stats_widget.tableWidget_pipe
     item = table.item(row, column)
 
@@ -2173,23 +2428,15 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
         return
 
     # ---------------- 新增：在最后一行“新增触发”之前做重复校验 ----------------
-    # 仅在编辑的是管口代号列时检查
+    # 仅在编辑的是管口代号列时检查（唯一入口；勿在 handle_cell_change 再校验）
     if column == 1:
-        from modules.guankoudingyi.funcs.funcs_pipe_table import is_duplicate_port_code, \
-            control_last_row_editable_state
-        code_text = item.text().strip()
-        if code_text:  # 非空才检查
-            if is_duplicate_port_code(table, code_text, row):
-                # 重复：清空并保持最后一行冻结，禁止新增
-                QMessageBox.warning(stats_widget, "管口代号重复", f"管口代号 '{code_text}' 已存在，禁止重复。")
-                try:
-                    stats_widget.suppress_cell_change = True
-                    item.setText("")
-                finally:
-                    stats_widget.suppress_cell_change = False
-                # 确保最后一行仍是冻结态
-                control_last_row_editable_state(stats_widget, enable_editing=False)
-                return
+        if not validate_pipe_code_unique(stats_widget, row, item.text()):
+            return
+
+    # 管口功能列：重复校验
+    if column == 2:
+        if not validate_pipe_function_unique(stats_widget, row, item.text()):
+            return
     # ----------------------------------------------------------------------
     ##########################
     # 检查是否是最后一行
@@ -2214,8 +2461,11 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
             if not hasattr(stats_widget, "row_hidden_pipe_id"):
                 stats_widget.row_hidden_pipe_id = {}
             stats_widget.row_hidden_pipe_id[row] = new_hid
+            from modules.guankoudingyi.funcs.funcs_pipe_table import get_next_display_order_runtime
+            stats_widget.row_display_order[row] = get_next_display_order_runtime(stats_widget)
         except Exception as e:
-            QMessageBox.warning(stats_widget, "分配管口ID失败", f"无法分配新的管口ID：{e}")
+            err_msg = f"无法分配新的管口ID：{e}"
+            defer_styled_warning(stats_widget, "分配管口ID失败", err_msg)
         # 检查是否需要添加新行
         from modules.guankoudingyi.funcs.funcs_pipe_table import check_last_row_and_add_new
         check_last_row_and_add_new(stats_widget)
@@ -2223,7 +2473,11 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
 
     # ✅ 对于其他列，检查是否需要验证的列
     # 需要验证的列：轴向夹角(13)、周向方位(14)、偏心距(15)、外伸高度(16)、轴向定位距离(12)
+    is_container = getattr(stats_widget, 'is_container_product', False)
+    cols = get_pipe_special_columns(is_container)
     validation_columns = {12, 13, 14, 15, 16}
+    if cols["internal_height"] is not None:
+        validation_columns.add(cols["internal_height"])
     if column != 1 and column not in validation_columns:
         # 对于非验证列，仍然只处理当前点击编辑的单元格
         if getattr(stats_widget, 'current_editing_cell', None) != (row, column):
@@ -2285,10 +2539,12 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
                 stats_widget.suppress_cell_change = False
                 if hasattr(stats_widget, "original_cell_value_map"):
                     stats_widget.original_cell_value_map[(row, 15)] = "0.0"
-                QMessageBox.warning(
+                # 延迟弹窗：避免在 cellChanged 栈内开模态框导致崩溃；并挂起 Enter 跳行
+                _mark_pipe_cell_validation_blocked(stats_widget)
+                defer_styled_warning(
                     stats_widget,
                     "校验冲突",
-                    "因轴向夹角和偏心距被同时赋值，基于GB/T 150规则无法对此管口进行强度校核"
+                    "因轴向夹角和偏心距被同时赋值，基于GB/T 150规则无法对此管口进行强度校核",
                 )
 
             if hasattr(stats_widget, "original_cell_value_map"):
@@ -2382,10 +2638,12 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
                 stats_widget.suppress_cell_change = False
                 if hasattr(stats_widget, "original_cell_value_map"):
                     stats_widget.original_cell_value_map[(row, 13)] = "0.0"
-                QMessageBox.warning(
+                # 延迟弹窗：避免在 cellChanged 栈内开模态框导致崩溃；并挂起 Enter 跳行
+                _mark_pipe_cell_validation_blocked(stats_widget)
+                defer_styled_warning(
                     stats_widget,
                     "校验冲突",
-                    "因轴向夹角和偏心距被同时赋值，基于GB/T 150规则无法对此管口进行强度校核"
+                    "因轴向夹角和偏心距被同时赋值，基于GB/T 150规则无法对此管口进行强度校核",
                 )
 
             if hasattr(stats_widget, "original_cell_value_map"):
@@ -2424,6 +2682,30 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
         if hasattr(stats_widget, 'view') and stats_widget.view:
             stats_widget.view.set_pipe_data(stats_widget.get_all_pipe_data())
 
+    # 内伸高度验证（容器版）
+    elif cols["internal_height"] is not None and column == cols["internal_height"]:
+        belong_item = table.item(row, 10)
+        pipe_belong = belong_item.text().strip() if belong_item else ""
+
+        valid, result = validate_internal_extension_height(
+            item.text(), product_id, pipe_belong, emit_error=False
+        )
+        if not valid:
+            _set_tip(stats_widget, result, "red")
+            _, default_value = validate_internal_extension_height(
+                "", product_id, pipe_belong, emit_error=False
+            )
+            table.blockSignals(True)
+            item.setText(str(default_value))
+            table.blockSignals(False)
+        else:
+            _set_tip(stats_widget, "")
+            table.blockSignals(True)
+            item.setText(str(result))
+            table.blockSignals(False)
+
+        if hasattr(stats_widget, 'view') and stats_widget.view:
+            stats_widget.view.set_pipe_data(stats_widget.get_all_pipe_data())
 
     # 验证轴向定位距离
     elif column == 12:  # 轴向定位距离列
@@ -2445,10 +2727,17 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
             _set_tip(stats_widget, "")
             return
 
-        # # 使用新的验证函数
-        valid, result = validate_axial_position_distance(input_value, nominal_size_text, stats_widget, emit_error=False,
-                                                         pipe_belong=pipe_belong, product_id=product_id,
-                                                         pipe_code=pipe_code)
+        is_container = getattr(stats_widget, 'is_container_product', False)
+        if is_container:
+            valid, result = validate_container_axial_position_distance(
+                input_value, nominal_size_text, stats_widget, emit_error=False,
+                pipe_belong=pipe_belong, product_id=product_id, pipe_code=pipe_code
+            )
+        else:
+            valid, result = validate_axial_position_distance(
+                input_value, nominal_size_text, stats_widget, emit_error=False,
+                pipe_belong=pipe_belong, product_id=product_id, pipe_code=pipe_code
+            )
 
         if not valid:
             # 显示错误提示
@@ -2516,7 +2805,7 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
                     if not lock_item:
                         lock_item = QTableWidgetItem()
                         table.setItem(row, lock_col, lock_item)
-                    lock_item.setText("—")
+                    lock_item.setText("-")
                     lock_item.setTextAlignment(Qt.AlignCenter)
                     # 只禁止编辑，不禁止选中，避免行选中高亮被截断
                     lock_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
@@ -2555,7 +2844,7 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
                         # 13列：轴向夹角 -> 默认 0.0
                         # 14列：周向方位 -> 根据管口功能，入口 0°，其他 180°
                         # 15列：偏心距   -> 默认 0.0
-                        if text_now in ("", "—"):
+                        if text_now in ("", "-"):
                             if unlock_col == 13:
                                 _, default_angle = validate_axial_angle("")
                                 unlock_item.setText(str(default_angle))
@@ -2858,7 +3147,7 @@ def _check_and_fix_axial_distance_for_rows(stats_widget, table, target_belong_ke
             # 壳体圆筒：设为"程序推荐"
             if "管箱圆筒" in pipe_belong or "外头盖圆筒" in pipe_belong or "管板" in pipe_belong:
                 default_value = "居中"
-            elif "壳体圆筒" in pipe_belong or "壳程大端圆筒" in pipe_belong or"锥壳"in pipe_belong:
+            elif "壳体圆筒" in pipe_belong or "大端壳体圆筒" in pipe_belong or"锥壳"in pipe_belong:
                 default_value = "程序推荐"
             else:
                 # 其他类型，根据管口功能确定默认值
@@ -2882,6 +3171,9 @@ def _handle_nominal_size_changed(stats_widget, row, product_id):
     处理公称尺寸列修改时的逻辑
     公称尺寸修改时，对管箱外头盖和壳体管口的轴向定位距离进行验证，不合法则设为默/认值并合并提示
     """
+    if getattr(stats_widget, 'is_container_product', False):
+        return
+
     try:
         table = stats_widget.tableWidget_pipe
 
@@ -3591,6 +3883,47 @@ def generate_pressure_level_tips(product_id, pipe_belong, pressure_type, pipe_id
         # print(f"DEBUG: 异常发生: {str(e)}\n{error_detail}")
         return f"{str(e)}\n详细错误:\n{error_detail}"
 
+"""验证容器轴向定位距离"""
+def validate_container_axial_position_distance(distance_text, nominal_size_text=None, stats_widget=None,
+                                               emit_error=True, pipe_belong=None, product_id=None, pipe_code=None):
+    """
+    验证容器产品轴向定位距离输入值是否在有效范围内。
+    :param distance_text: 用户输入的轴向定位距离文本
+    :return: (是否有效: bool, 数值或错误消息: float|str)
+    """
+    try:
+        if distance_text in ["程序推荐", "居中"]:
+            return True, distance_text
+
+        if pipe_belong and (("封头" in pipe_belong) or ("平盖" in pipe_belong)):
+            if distance_text.strip() in ("-", ""):
+                return True, "-"
+
+        if not distance_text or distance_text.strip() == "":
+            return True, "程序推荐"
+
+        try:
+            distance_value = float(distance_text)
+        except ValueError:
+            return False, "请输入有效的数字"
+
+        shell_length = get_container_shell_length(product_id)
+        if shell_length is None:
+            return False, "未获取到容器壳体长度，须先至条件输入输入容器壳体长度并保存"
+
+        if 0 <= distance_value < shell_length:
+            return True, distance_value
+
+        pipe_code_text = pipe_code if pipe_code else "当前"
+        error_msg = (
+            f"{pipe_code_text}管口的轴向定位值需在0 mm至{shell_length:.2f} mm之间"
+            f"（小于容器壳体长度）"
+        )
+        return False, error_msg
+    except Exception as e:
+        return False, f"验证失败: {str(e)}"
+
+
 """验证轴向定位距离"""
 def validate_axial_position_distance(distance_text, nominal_size_text, stats_widget=None, emit_error=True,
                                      pipe_belong=None, product_id=None, pipe_code=None):
@@ -3612,8 +3945,8 @@ def validate_axial_position_distance(distance_text, nominal_size_text, stats_wid
 
         # 封头/平盖：轴向定位距离列禁用，占位符“—”合法
         if pipe_belong and (("封头" in pipe_belong) or ("平盖" in pipe_belong)):
-            if distance_text.strip() in ("—", ""):
-                return True, "—"
+            if distance_text.strip() in ("-", ""):
+                return True, "-"
 
         # 如果输入为空，返回默认值
         if not distance_text or distance_text.strip() == "":
@@ -3704,7 +4037,7 @@ def validate_axial_position_distance(distance_text, nominal_size_text, stats_wid
             #print("tube_nominal_diameter",tube_nominal_diameter,"shell_nominal_diameter",shell_nominal_diameter,"cone_length",cone_length,"max_distance",max_distance)
 
         # 判断管口所属元件是否为壳体
-        elif pipe_belong and ("壳体" in pipe_belong or "壳程大端圆筒" in pipe_belong):
+        elif pipe_belong and ("壳体" in pipe_belong or "大端壳体圆筒" in pipe_belong):
             # 获取换热管长度
             tube_length = get_heat_exchanger_tube_length(product_id)
             product_version = getattr(stats_widget, "current_product_version", "")
@@ -3757,7 +4090,7 @@ def validate_axial_position_distance(distance_text, nominal_size_text, stats_wid
                 error_msg = f"{pipe_code_text}管口的轴向定位值需在{min_distance:.2f} mm至{max_distance:.2f} mm之间（最小值为{min_tip}，最大值为管板上最大管口对应接管实际外径的50倍）"
             elif pipe_belong and ("管箱" in pipe_belong or "外头盖圆筒" in pipe_belong):
                 error_msg = f"{pipe_code_text}管口的轴向定位值需在{min_distance:.2f} mm至{max_distance:.2f} mm之间（最小值为{pipe_code_text}管口接管实际外径的0.5倍，最大值为所有管口中公称尺寸最大管口对应接管实际外径的2.5倍减去{pipe_code_text}管口接管实际外径的0.5倍）"
-            elif pipe_belong and ("壳体" in pipe_belong or "壳程大端圆筒" in pipe_belong):
+            elif pipe_belong and ("壳体" in pipe_belong or "大端壳体圆筒" in pipe_belong):
                 # 获取换热管长度用于提示
                 #tube_length = get_heat_exchanger_tube_length(product_id) if product_id else None
                 if product_version in ["AKU", "BKU"]:
@@ -4039,6 +4372,51 @@ def get_heat_exchanger_tube_length(product_id):
             connection.close()
 
 
+"""获取容器壳体长度"""
+def get_container_shell_length(product_id):
+    """
+    获取容器壳体长度
+    根据当前产品ID查询产品设计活动库的产品设计活动表_设计数据表，
+    取参数名称为「容器壳体长度*」对应行的壳程数值。
+
+    :param product_id: 产品ID
+    :return: 容器壳体长度（单位：mm）；未配置或查询失败时返回 None
+    """
+    conn = None
+    cursor = None
+    try:
+        conn = get_connection(**db_config_2)
+        if not conn:
+            print("获取数据库连接失败，无法读取容器壳体长度")
+            return None
+
+        cursor = conn.cursor(pymysql.cursors.DictCursor)
+        cursor.execute("""
+            SELECT 壳程数值
+            FROM 产品设计活动表_设计数据表
+            WHERE 产品ID = %s AND 参数名称 LIKE '容器壳体长度*%%'
+        """, (product_id,))
+        result = cursor.fetchone()
+
+        if result and result.get("壳程数值") not in (None, ""):
+            try:
+                return float(result["壳程数值"])
+            except (ValueError, TypeError):
+                print(f"产品ID {product_id} 容器壳体长度数值无效：{result.get('壳程数值')}")
+                return None
+
+        print(f"产品ID {product_id} 未找到容器壳体长度参数")
+        return None
+    except Exception as e:
+        print(f"查询容器壳体长度失败: {e}")
+        return None
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 """管口附件下拉框实现多选"""
 from PyQt5.QtWidgets import QStyledItemDelegate
 
@@ -4050,6 +4428,8 @@ class MultiSelectComboDelegate(QStyledItemDelegate):
     def createEditor(self, parent, option, index):
         editor = CheckableComboBox(parent)
         editor.addItems(self.items)
+        # 与纯下拉一致：单击进入编辑后自动弹出，避免再点一次
+        QTimer.singleShot(0, editor.showPopup)
         return editor
 
     def setEditorData(self, editor, index):

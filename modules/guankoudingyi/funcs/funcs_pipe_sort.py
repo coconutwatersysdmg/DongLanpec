@@ -4,7 +4,17 @@ from PyQt5.QtGui import QCursor, QColor
 import re
 from fractions import Fraction
 
-from modules.guankoudingyi.funcs.funcs_pipe_table import set_pipe_function_column_readonly
+from modules.guankoudingyi.funcs.funcs_pipe_table import (
+    set_pipe_function_column_readonly,
+    set_pipe_load_column_readonly,
+    get_pipe_sort_string_columns,
+    get_pipe_sort_numeric_columns,
+    get_pipe_position_hide_columns,
+    sync_display_order_from_ui,
+    ensure_hidden_maps,
+    check_last_row_and_add_new,
+    control_last_row_editable_state,
+)
 
 
 # from modules.guankoudingyi.funcs.funcs_pipe_table import set_pipe_function_column_readonly, \
@@ -116,7 +126,8 @@ def show_head_menu(stats_widget, row, col):
             # 隐藏“管口位置”子列的功能
             hide_group_action = QAction("隐藏该列", stats_widget)
             def hide_pipepos_group():
-                for cc in [10, 11, 12, 13, 14, 15, 16]:
+                is_container = getattr(stats_widget, 'is_container_product', False)
+                for cc in get_pipe_position_hide_columns(is_container):
                     hide_pipe_column(stats_widget, cc)
             hide_group_action.triggered.connect(hide_pipepos_group)
             menu.addAction(hide_group_action)
@@ -268,7 +279,22 @@ def parse_nps_value(val):
             return float(val)
     except Exception:
         return 0.0
-    
+
+
+def _mixed_cell_sort_key(val):
+    """
+    混合单元格排序键：空白 / 数值 / 文本 使用统一元组，避免 str 与 float 比较触发 TypeError。
+    升序时：数值 < 文本 < 空白。
+    """
+    s = (val or "").strip() if val is not None else ""
+    if not s:
+        return (2, 0.0, "")
+    try:
+        return (0, float(s), s)
+    except ValueError:
+        return (1, 0.0, s.lower())
+
+
 # 对指定列进行特殊排序，因为有的列同时存在数字和字符串，需进行特殊处理
 def sort_table_column(stats_widget, col, ascending=True):
     """
@@ -276,6 +302,7 @@ def sort_table_column(stats_widget, col, ascending=True):
     """
     table = stats_widget.tableWidget_pipe
     row_count = table.rowCount()
+    ensure_hidden_maps(stats_widget)
 
     data = []
     for row in range(row_count):
@@ -285,46 +312,45 @@ def sort_table_column(stats_widget, col, ascending=True):
                 continue
 
         row_data = {}
+        row_data["_pipe_id"] = stats_widget.row_hidden_pipe_id.get(row)
         for c in range(table.columnCount()):
             item = table.item(row, c)
             row_data[c] = item.text().strip() if item else ""
         data.append(row_data)
 
-    def try_float_or_zero(val):
-        try:
-            return float(val)
-        except (ValueError, TypeError):
-            return 0.0  # 排到最后
+    is_container = getattr(stats_widget, 'is_container_product', False)
+    string_cols = get_pipe_sort_string_columns(is_container)
+    numeric_cols = get_pipe_sort_numeric_columns(is_container)
 
-    # 根据列索引选择排序策略
-    if col in [9, 12, 16]:  # 使用字符串排序
+    if col in string_cols:
         data.sort(key=lambda x: x.get(col, ""), reverse=not ascending)
-    elif col in [4, 13, 14, 15]:  # 强制使用浮点数排序
+    elif col in numeric_cols:
         data.sort(key=lambda x: parse_nps_value(x.get(col, "")), reverse=not ascending)
     else:
-        # 尝试使用 float，否则用字符串
-        def sort_key(x):
-            val = x.get(col, "")
-            try:
-                return float(val)
-            except ValueError:
-                return val
-        data.sort(key=sort_key, reverse=not ascending)
+        data.sort(key=lambda x: _mixed_cell_sort_key(x.get(col, "")), reverse=not ascending)
 
     table.blockSignals(True)
-    for row, row_data in enumerate(data):
-        for c, value in row_data.items():
-            if c != 0:
-                item = QTableWidgetItem(value)
-                item.setTextAlignment(Qt.AlignCenter)
-                table.setItem(row, c, item)
-    stats_widget.refresh_pipe_table_sequence()
-    table.blockSignals(False)
+    try:
+        stats_widget.row_hidden_pipe_id.clear()
+        table.setRowCount(len(data))
+        for row, row_data in enumerate(data):
+            hid = row_data.pop("_pipe_id", None)
+            if hid is not None:
+                stats_widget.row_hidden_pipe_id[row] = hid
+            for c, value in row_data.items():
+                if c != 0:
+                    item = QTableWidgetItem(value)
+                    item.setTextAlignment(Qt.AlignCenter)
+                    table.setItem(row, c, item)
+        stats_widget.refresh_pipe_table_sequence()
+        sync_display_order_from_ui(stats_widget)
+        check_last_row_and_add_new(stats_widget)
+        control_last_row_editable_state(stats_widget, enable_editing=False)
+    finally:
+        table.blockSignals(False)
 
-    # # 设置功能列和所属单元格状态
-    # set_pipe_function_column_readonly(stats_widget)
-    # lock_belong_if_function_filled(stats_widget)  # ✅ 修复排序后“管口所属元件”变可编辑的问题
     set_pipe_function_column_readonly(stats_widget)
+    set_pipe_load_column_readonly(stats_widget)
 
 
 # 隐藏列功能

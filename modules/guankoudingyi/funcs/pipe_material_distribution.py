@@ -6,6 +6,7 @@ from PyQt5 import uic
 import pymysql
 
 from modules.guankoudingyi.db_cnt import get_connection
+from modules.guankoudingyi.funcs.funcs_pipe_table import show_styled_confirm
 
 # 数据库配置
 db_config = {
@@ -451,51 +452,49 @@ class PipeMaterialDistribution(QDialog):
             QMessageBox.critical(self, "错误", "未找到当前分类")
             return
 
-        reply = QMessageBox.question(
-            self, "确认删除", f"是否取消该分类：{current_tab_name}？",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
-        )
+        if not show_styled_confirm(
+            self, "确认删除", f"是否取消该分类：{current_tab_name}？"
+        ):
+            return
 
-        if reply == QMessageBox.Yes:
-            # 获取所有管口代号
-            pipe_codes = []
-            for row in range(table.rowCount()):
-                if table.item(row, 0):
-                    pipe_codes.append(table.item(row, 0).text())
+        # 获取所有管口代号
+        pipe_codes = []
+        for row in range(table.rowCount()):
+            if table.item(row, 0):
+                pipe_codes.append(table.item(row, 0).text())
 
-            # 添加回左侧未分类表格
-            for code in pipe_codes:
-                row_count = self.tableWidge_pipe_code.rowCount()
-                self.tableWidge_pipe_code.setRowCount(row_count + 1)
-                item = QTableWidgetItem(code)
-                item.setTextAlignment(Qt.AlignCenter)
-                self.tableWidge_pipe_code.setItem(row_count, 0, item)
-                self.tableWidge_pipe_code.setRowHeight(row_count, 30)
+        # 添加回左侧未分类表格
+        for code in pipe_codes:
+            row_count = self.tableWidge_pipe_code.rowCount()
+            self.tableWidge_pipe_code.setRowCount(row_count + 1)
+            item = QTableWidgetItem(code)
+            item.setTextAlignment(Qt.AlignCenter)
+            self.tableWidge_pipe_code.setItem(row_count, 0, item)
+            self.tableWidge_pipe_code.setRowHeight(row_count, 30)
 
-            # 删除数据库中记录
-            try:
-                conn = get_connection(**db_config)
-                cursor = conn.cursor()
-                delete_query = """
-                    DELETE FROM 产品设计活动表_管口类别表
-                    WHERE 产品ID = %s AND 类别 = %s
-                """
-                cursor.execute(delete_query, (self.product_id, current_tab_name))
-                conn.commit()
-            except Exception as e:
-                QMessageBox.critical(self, "数据库错误", f"删除分类失败: {str(e)}")
-            finally:
-                if cursor:
-                    cursor.close()
-                if conn:
-                    conn.close()
+        # 删除数据库中记录
+        try:
+            conn = get_connection(**db_config)
+            cursor = conn.cursor()
+            delete_query = """
+                DELETE FROM 产品设计活动表_管口类别表
+                WHERE 产品ID = %s AND 类别 = %s
+            """
+            cursor.execute(delete_query, (self.product_id, current_tab_name))
+            conn.commit()
+        except Exception as e:
+            QMessageBox.critical(self, "数据库错误", f"删除分类失败: {str(e)}")
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                conn.close()
 
-            # 删除该标签页
-            self.tabWidget_pipe_classification.removeTab(current_index)
-            #删除后自动选中下一个标签页
-            self.tabWidget_pipe_classification.setCurrentIndex(
-                min(current_index, self.tabWidget_pipe_classification.count() - 1))
-
+        # 删除该标签页
+        self.tabWidget_pipe_classification.removeTab(current_index)
+        #删除后自动选中下一个标签页
+        self.tabWidget_pipe_classification.setCurrentIndex(
+            min(current_index, self.tabWidget_pipe_classification.count() - 1))
 
             
     def save_and_close(self):
