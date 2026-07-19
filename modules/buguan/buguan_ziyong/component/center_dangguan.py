@@ -38,16 +38,17 @@ def _get_clickable_rect_item():
     return ClickableRectItem
 
 
-def draw_center_dangguan_at_position(coord, editor=None):
+def draw_center_dangguan_at_position(coord, editor=None, skip_check=False):
     """
     在指定位置绘制中间挡管（独立函数）
     
     参数:
         coord: 绝对坐标元组 (x, y)，圆心位置（该坐标一定在坐标轴上）
         editor: 编辑器实例（可选，如果为None则从get_current_editor获取）
+        skip_check: 为 True 时跳过干涉检查（仅用于加载已存数据）
         
     返回:
-        创建的挡管对象，如果已存在则返回None
+        创建的挡管对象，如果已存在或干涉检查失败则返回None
     """
     if editor is None:
         editor = get_current_editor()
@@ -62,6 +63,28 @@ def draw_center_dangguan_at_position(coord, editor=None):
             editor._remove_any_lagan_at_coords([(float(x), float(y))])
     except Exception as e:
         print(f"[draw_center_dangguan_at_position] 清除同位置拉杆失败: {e}")
+
+    # 干涉检查（挡管间距 / 轴侧换热管）；同批失败则回滚已画点并弹窗
+    if not skip_check and editor and hasattr(editor, "validate_center_dangguan_placement"):
+        try:
+            if getattr(editor, "_cdg_batch_failed", False):
+                return None
+            extra = list(getattr(editor, "_cdg_batch_coords", None) or [])
+            ok, msg = editor.validate_center_dangguan_placement(
+                (float(x), float(y)), extra_coords=extra
+            )
+            if not ok:
+                if getattr(editor, "_cdg_batch_active", False):
+                    editor.rollback_center_dangguan_batch()
+                try:
+                    from PyQt5.QtWidgets import QMessageBox
+
+                    QMessageBox.warning(editor, "无法添加中间挡管", msg)
+                except Exception:
+                    print(f"[draw_center_dangguan_at_position] {msg}")
+                return None
+        except Exception as e:
+            print(f"[draw_center_dangguan_at_position] 干涉检查失败: {e}")
 
     # 检查 center_dangguan 列表中是否已有相同坐标
     if editor and hasattr(editor, 'center_dangguan'):
@@ -138,11 +161,20 @@ def draw_center_dangguan_at_position(coord, editor=None):
     center_dangguan_item.setZValue(10)
     graphics_scene.addItem(center_dangguan_item)
 
-    # 添加到 center_dangguan 列表
+    # 添加到 center_dangguan 列表 / 数据字典
     if editor:
-        if not hasattr(editor, 'center_dangguan'):
-            editor.center_dangguan = []
-        editor.center_dangguan.append(coord)
+        if hasattr(editor, "_register_center_dangguan"):
+            editor._register_center_dangguan(coord)
+        else:
+            if not hasattr(editor, 'center_dangguan'):
+                editor.center_dangguan = []
+            editor.center_dangguan.append(coord)
+        if getattr(editor, "_cdg_batch_active", False):
+            try:
+                editor._cdg_batch_coords.append((float(x), float(y)))
+                editor._cdg_batch_items.append(center_dangguan_item)
+            except Exception:
+                pass
 
     # 记录操作
     current_operations = list(g_operations) if g_operations else []
@@ -894,6 +926,14 @@ def delete_selected_center_dangguan():
             # 同步到全局变量
             from ..variable import update_center_dangguan
             update_center_dangguan(new_center_dangguan)
+            # 同步数据字典
+            try:
+                if hasattr(editor, "_unregister_center_dangguan_coords"):
+                    editor._unregister_center_dangguan_coords(list(all_coords_to_remove))
+                elif hasattr(editor, "_rebuild_center_dangguan_dic_from_list"):
+                    editor._rebuild_center_dangguan_dic_from_list()
+            except Exception as e:
+                print(f"[delete_selected_center_dangguan] 同步数据字典失败: {e}")
             print(f"✓ 删除完成，当前 center_dangguan 包含 {len(new_center_dangguan)} 个挡管")
 
         # 复制选中列表避免迭代中修改列表导致错误

@@ -1408,6 +1408,9 @@ class TubeLayoutEditor(QMainWindow):
         self.all_center_dangban = []  # 存储所有中间挡板对象
         self.center_dangguan_num = 0  # 记录中间挡管数量
         self.selected_center_dangguan = []  # 选中的中间挡管图元
+        # 中间挡管数据字典（干涉检查用）：{id: {"coord": (x,y), "axis": "x"|"y"|"origin"}}
+        self.center_dangguan_dic = {}
+        self._center_dangguan_auto_id = 0
         # 由中间挡管转换而来的普通拉杆绝对坐标（用于回转识别与存盘）
         self.converted_lagan_from_dangguan = []
         # 中间挡板全局数据字典与自增ID
@@ -5721,6 +5724,8 @@ class TubeLayoutEditor(QMainWindow):
 
             # 在加载前，清空 center_dangguan 列表，避免重复检查
             self.center_dangguan = []
+            self.center_dangguan_dic = {}
+            self._center_dangguan_auto_id = 0
 
             # 直接将center_dangguan_centers转换为列表
             try:
@@ -5750,8 +5755,10 @@ class TubeLayoutEditor(QMainWindow):
                             if isinstance(x, (int, float)) and isinstance(
                                     y, (int, float)
                             ):
-                                # 直接调用绘制函数
-                                draw_center_dangguan_at_position(coord, self)
+                                # 加载已存数据：跳过干涉检查
+                                draw_center_dangguan_at_position(
+                                    coord, self, skip_check=True
+                                )
                         except (TypeError, ValueError):
                             # 如果解包失败，跳过
                             continue
@@ -21913,6 +21920,8 @@ class TubeLayoutEditor(QMainWindow):
                 ("center_dangban", []),
                 ("center_dangguan", []),
                 ("center_dangguan_num", 0),
+                ("center_dangguan_dic", {}),
+                ("_center_dangguan_auto_id", 0),
                 ("converted_lagan_from_dangguan", []),
                 ("selected_center_dangguan", []),
                 ("del_centers", []),
@@ -26043,6 +26052,299 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             return False
 
+    # ---------- 中间挡管数据字典 / 干涉检查 ----------
+    def _center_dangguan_diameter(self):
+        """中间挡管直径 = 换热管直径 = 2 * r。"""
+        try:
+            r = float(getattr(self, "r", 0) or 0)
+        except Exception:
+            r = 0.0
+        return r * 2.0
+
+    def _center_dangguan_axis(self, coord, tol=1e-4):
+        """判断落点所在轴：'x'（在 x 轴上）/ 'y'（在 y 轴上）/ 'origin' / None。"""
+        try:
+            x, y = float(coord[0]), float(coord[1])
+        except Exception:
+            return None
+        on_x = abs(y) <= tol
+        on_y = abs(x) <= tol
+        if on_x and on_y:
+            return "origin"
+        if on_x:
+            return "x"
+        if on_y:
+            return "y"
+        return None
+
+    def _iter_center_dangguan_coords(self):
+        """从数据字典（优先）或旧列表收集已有中间挡管绝对圆心。"""
+        coords = []
+        seen = set()
+        dic = getattr(self, "center_dangguan_dic", None) or {}
+        for info in dic.values():
+            try:
+                if isinstance(info, dict):
+                    c = info.get("coord")
+                else:
+                    c = info
+                x, y = float(c[0]), float(c[1])
+                key = self._abs_coord_key6(x, y)
+                if key in seen:
+                    continue
+                seen.add(key)
+                coords.append((x, y))
+            except Exception:
+                continue
+        if coords:
+            return coords
+        for c in getattr(self, "center_dangguan", None) or []:
+            try:
+                if isinstance(c, list):
+                    continue
+                if not (isinstance(c, (tuple, list)) and len(c) == 2):
+                    continue
+                x, y = float(c[0]), float(c[1])
+                key = self._abs_coord_key6(x, y)
+                if key in seen:
+                    continue
+                seen.add(key)
+                coords.append((x, y))
+            except Exception:
+                continue
+        return coords
+
+    def _register_center_dangguan(self, coord):
+        """登记中间挡管到数据字典（并保持列表同步）。"""
+        try:
+            x, y = float(coord[0]), float(coord[1])
+        except Exception:
+            return None
+        if not hasattr(self, "center_dangguan_dic") or self.center_dangguan_dic is None:
+            self.center_dangguan_dic = {}
+        if not hasattr(self, "_center_dangguan_auto_id"):
+            self._center_dangguan_auto_id = 0
+        key = self._abs_coord_key6(x, y)
+        for info in self.center_dangguan_dic.values():
+            try:
+                c = info.get("coord") if isinstance(info, dict) else info
+                if self._abs_coord_key6(c[0], c[1]) == key:
+                    return None
+            except Exception:
+                continue
+        self._center_dangguan_auto_id += 1
+        cid = f"cdg_{self._center_dangguan_auto_id}"
+        axis = self._center_dangguan_axis((x, y)) or ""
+        self.center_dangguan_dic[cid] = {"coord": (x, y), "axis": axis}
+        if not hasattr(self, "center_dangguan") or self.center_dangguan is None:
+            self.center_dangguan = []
+        # 列表去重追加
+        exists = False
+        for existing in self.center_dangguan:
+            try:
+                if isinstance(existing, list):
+                    continue
+                if self._abs_coords_close(existing, (x, y)):
+                    exists = True
+                    break
+            except Exception:
+                continue
+        if not exists:
+            self.center_dangguan.append((x, y))
+        return cid
+
+    def _unregister_center_dangguan_coords(self, coords):
+        """按绝对坐标从字典与列表中移除中间挡管记录。"""
+        if not coords:
+            return
+        targets = []
+        for c in coords:
+            try:
+                targets.append((float(c[0]), float(c[1])))
+            except Exception:
+                continue
+        if not targets:
+            return
+        dic = getattr(self, "center_dangguan_dic", None) or {}
+        keep = {}
+        for cid, info in dic.items():
+            try:
+                c = info.get("coord") if isinstance(info, dict) else info
+                drop = any(self._abs_coords_close(c, t) for t in targets)
+            except Exception:
+                drop = False
+            if not drop:
+                keep[cid] = info
+        self.center_dangguan_dic = keep
+        if hasattr(self, "center_dangguan") and self.center_dangguan:
+            new_list = []
+            for existing in self.center_dangguan:
+                try:
+                    if isinstance(existing, list):
+                        new_list.append(existing)
+                        continue
+                    if any(self._abs_coords_close(existing, t) for t in targets):
+                        continue
+                    new_list.append(existing)
+                except Exception:
+                    new_list.append(existing)
+            self.center_dangguan = new_list
+
+    def _rebuild_center_dangguan_dic_from_list(self):
+        """由 center_dangguan 列表重建数据字典（加载后调用）。"""
+        self.center_dangguan_dic = {}
+        self._center_dangguan_auto_id = 0
+        for c in list(getattr(self, "center_dangguan", None) or []):
+            try:
+                if isinstance(c, list):
+                    continue
+                if isinstance(c, (tuple, list)) and len(c) == 2:
+                    self._register_center_dangguan(c)
+            except Exception:
+                continue
+
+    def _center_dangguan_interferes_with_tubes(self, coord, diameter):
+        """
+        中间挡管与换热管干涉检查：挡管圆心到换热管圆心距离须 > 直径 D。
+
+        优化：挡管只在坐标轴上——
+        - 在 x 轴 (cx, 0)：距离 ≥ |ty| 且 ≥ |tx-cx|，故仅检查 |ty|≤D 且 |tx-cx|≤D 的管
+        - 在 y 轴 (0, cy)：仅检查 |tx|≤D 且 |ty-cy|≤D 的管
+        - 原点：上述邻域并集
+        """
+        try:
+            cx, cy = float(coord[0]), float(coord[1])
+            D = float(diameter)
+        except Exception:
+            return True
+        if D <= 0:
+            return True
+
+        axis = self._center_dangguan_axis((cx, cy))
+        d2 = D * D
+        centers = getattr(self, "global_centers", None) or []
+
+        for c in centers:
+            try:
+                tx, ty = float(c[0]), float(c[1])
+            except Exception:
+                continue
+
+            # 轴上快速剪枝：任一轴向分量已 > D，则圆心距必 > D
+            if axis == "x":
+                if abs(ty) > D or abs(tx - cx) > D:
+                    continue
+            elif axis == "y":
+                if abs(tx) > D or abs(ty - cy) > D:
+                    continue
+            elif axis == "origin":
+                if abs(tx) > D and abs(ty) > D:
+                    continue
+            else:
+                # 非轴上（兜底）：用包围盒剪枝
+                if abs(tx - cx) > D or abs(ty - cy) > D:
+                    continue
+
+            dx = tx - cx
+            dy = ty - cy
+            if dx * dx + dy * dy <= d2:
+                return True
+        return False
+
+    def validate_center_dangguan_placement(self, coord, extra_coords=None):
+        """
+        添加前干涉检查。
+        - 与已有/同批中间挡管：圆心距必须 > 直径 D(=2r)
+        - 与换热管：挡管圆心到各换热管圆心距离必须 > D
+          （利用挡管在坐标轴上做邻域剪枝，避免无条件全表扫描）
+        返回 (ok: bool, message: str)
+        """
+        try:
+            x, y = float(coord[0]), float(coord[1])
+        except Exception:
+            return False, "中间挡管坐标无效，无法添加。"
+
+        D = self._center_dangguan_diameter()
+        if D <= 0:
+            return False, "换热管半径无效，无法添加中间挡管。"
+
+        # 挡管-挡管间距
+        existing = list(self._iter_center_dangguan_coords())
+        for c in extra_coords or []:
+            try:
+                existing.append((float(c[0]), float(c[1])))
+            except Exception:
+                continue
+        for ex, ey in existing:
+            # 同位置视为已存在，交由绘制层静默跳过；此处不报干涉
+            if self._abs_coords_close((x, y), (ex, ey), tol=1e-6):
+                continue
+            dist = ((x - ex) ** 2 + (y - ey) ** 2) ** 0.5
+            if not (dist > D):
+                return False, "中间挡管间距不足，无法添加。"
+
+        # 挡管-换热管：圆心距须 > D（轴上邻域剪枝）
+        if self._center_dangguan_interferes_with_tubes((x, y), D):
+            return False, "中间挡管与换热管干涉，无法添加。"
+
+        return True, ""
+
+    def validate_center_dangguan_batch(self, coords):
+        """批量预检：候选点之间及与已有挡管均须满足规则。"""
+        pending = []
+        for c in coords or []:
+            ok, msg = self.validate_center_dangguan_placement(c, extra_coords=pending)
+            if not ok:
+                return False, msg
+            try:
+                pending.append((float(c[0]), float(c[1])))
+            except Exception:
+                continue
+        return True, ""
+
+    def begin_center_dangguan_batch(self):
+        self._cdg_batch_active = True
+        self._cdg_batch_coords = []
+        self._cdg_batch_items = []
+        self._cdg_batch_failed = False
+
+    def end_center_dangguan_batch(self):
+        self._cdg_batch_active = False
+        self._cdg_batch_coords = []
+        self._cdg_batch_items = []
+        self._cdg_batch_failed = False
+
+    def rollback_center_dangguan_batch(self):
+        """同一次添加中若后续点失败，回滚已画出的中间挡管。"""
+        items = list(getattr(self, "_cdg_batch_items", None) or [])
+        coords = list(getattr(self, "_cdg_batch_coords", None) or [])
+        scene = getattr(self, "graphics_scene", None)
+        for item in items:
+            try:
+                if scene is not None and item.scene() == scene:
+                    scene.removeItem(item)
+            except Exception:
+                pass
+        self._unregister_center_dangguan_coords(coords)
+        # 同步清理 operations 中本批 center_block
+        if hasattr(self, "operations") and self.operations and coords:
+            new_ops = []
+            for op in self.operations:
+                if op.get("type") != "center_block":
+                    new_ops.append(op)
+                    continue
+                c = op.get("coord")
+                try:
+                    if any(self._abs_coords_close(c, t) for t in coords):
+                        continue
+                except Exception:
+                    pass
+                new_ops.append(op)
+            self.operations = new_ops
+        self._cdg_batch_coords = []
+        self._cdg_batch_items = []
+        self._cdg_batch_failed = True
+
     def _mirror_abs_coords(self, cx, cy):
         """
         生成绝对坐标镜像集合（与拉杆创建/删除规则对齐）。
@@ -26673,13 +26975,27 @@ class TubeLayoutEditor(QMainWindow):
         if not restore_coords:
             return False
 
+        # 恢复前整批干涉预检：不通过则不删拉杆、不添加挡管
+        ok, msg = self.validate_center_dangguan_batch(restore_coords)
+        if not ok:
+            try:
+                from PyQt5.QtWidgets import QMessageBox
+
+                QMessageBox.warning(self, "无法添加中间挡管", msg)
+            except Exception:
+                print(f"[convert_lagan_back_to_center_dangguan] {msg}")
+            return False
+
         # 仅删除带标记的转换拉杆，避免误删普通拉杆
         self._remove_normal_lagan_items(items_to_restore)
 
         created = 0
         for cx, cy in restore_coords:
             try:
-                item = draw_center_dangguan_at_position((cx, cy), self)
+                # 已整批预检通过，绘制时跳过重复弹窗检查
+                item = draw_center_dangguan_at_position(
+                    (cx, cy), self, skip_check=True
+                )
                 if item is not None:
                     created += 1
                     print(
@@ -36849,32 +37165,9 @@ class TubeLayoutEditor(QMainWindow):
             self.clear_selection_highlight()
             return
 
-        # 干涉检测：检查中间挡管是否与换热管干涉
-        interference_detected = False
-        if tube_num == "2":
-            # 2管程：检查 min_distance_row 是否大于换热管直径
-            if self.min_distance_row <= self.r * 4:
-                interference_detected = True
-        # elif tube_num in ["4", "6"]:
-        #     # 4、6管程：检查 min_distance_col 是否大于换热管直径
-        #     if self.min_distance_col <= self.r * 4:
-        #         interference_detected = True
-
-        if interference_detected:
-            reply = QMessageBox.question(
-                self,
-                "干涉警告",
-                "您布置的中间挡管与换热管干涉，是否继续？",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-
-            if reply == QMessageBox.No:
-                # 用户选择"否"，清除选中高亮并返回
-                self.clear_selection_highlight()
-                return
-            # 如果用户选择"是"，继续执行后续逻辑
-
+        # 干涉检测已改为硬规则：圆心距须 > 直径，轴侧最近管距须 > 直径；
+        # 不通过一律禁止并弹窗（在 draw_center_dangguan_at_position 中执行）。
+        self.begin_center_dangguan_batch()
         self.full_sorted_current_centers_up, self.full_sorted_current_centers_down = (
             self.group_centers_by_y(self.global_centers)
         )
