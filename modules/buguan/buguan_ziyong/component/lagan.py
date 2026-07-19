@@ -169,9 +169,14 @@ def draw_lagan_at_position(coord, editor=None, diameter=None):
 def delete_selected_lagans(editor=None):
     """
     删除选中的拉杆
-    
+
     参数:
         editor: 编辑器实例（可选，如果为None则从get_current_editor获取）
+
+    删除策略（双保险，不影响其它元件）：
+      1) 数据字典/联动：绝对→相对→judge_linkage*→绝对，按扩出来的坐标删数据与图元
+      2) 绝对坐标镜像兜底：按对称/AEU·BEU 规则算出应删位置，扫场景补删残留普通拉杆
+         （第二道只动普通拉杆图元与 lagan_info，不扩大 delete_huanreguan 范围）
     """
     if editor is None:
         from ..variable import get_current_editor
@@ -183,77 +188,220 @@ def delete_selected_lagans(editor=None):
     if not hasattr(editor, 'selected_lagans') or not editor.selected_lagans:
         return
 
-    selected_items = list(editor.selected_lagans)
-    coords_to_remove = []
+    def key6(x, y):
+        return (round(float(x), 6), round(float(y), 6))
 
-    # 收集要删除的坐标
-    for lagan in selected_items:
-        if hasattr(lagan, 'position') and lagan.position:
-            coord = lagan.position
-            coords_to_remove.append(coord)
+    def _item_abs_center(item):
+        try:
+            if hasattr(item, "position") and item.position is not None:
+                px, py = item.position
+                return float(px), float(py)
+        except Exception:
+            pass
+        try:
+            if hasattr(item, "mapToScene") and hasattr(item, "rect"):
+                c = item.mapToScene(item.rect().center())
+                return float(c.x()), float(c.y())
+        except Exception:
+            pass
+        try:
+            c = item.sceneBoundingRect().center()
+            return float(c.x()), float(c.y())
+        except Exception:
+            return None
 
-    if not coords_to_remove:
-        return
+    def _merge_abs_coords(*groups):
+        merged = []
+        seen = set()
+        for group in groups:
+            for coord in group or []:
+                try:
+                    x, y = float(coord[0]), float(coord[1])
+                    k = key6(x, y)
+                except Exception:
+                    continue
+                if k in seen:
+                    continue
+                seen.add(k)
+                merged.append((x, y))
+        return merged
 
-    # ===== 对称扩展：将拉杆绝对坐标 -> 相对坐标 -> 按程数/对称扩展 -> 再转回绝对坐标 =====
-    expanded_rel_centers = []
-    try:
-        rel_centers = []
-        for x, y in coords_to_remove:
-            if hasattr(editor, 'actual_to_selected_coords') and callable(getattr(editor, 'actual_to_selected_coords', None)):
-                rel = editor.actual_to_selected_coords((x, y))
-                if rel:
-                    rel_centers.append(rel)
+    def _abs_mirror_targets(seed_coords):
+        """
+        按与创建一致的规则，用绝对坐标镜像得到“应删位置”。
+        - 对称开：四象限
+        - 对称关 + AEU/BEU/AKU/BKU：2管程仅上下(x轴)，4/6管程仅左右(y轴)
+        - 其它：仅自身
+        """
+        result = []
+        seen = set()
 
-        if rel_centers:
-            # 参考 on_lagan_click 中的对称逻辑
-            if getattr(editor, 'isSymmetry', False):
-                if hasattr(editor, 'judge_linkage'):
-                    expanded_rel_centers = list(editor.judge_linkage(rel_centers))
-                else:
-                    expanded_rel_centers = list(rel_centers)
+        def _add(x, y):
+            try:
+                fx, fy = float(x), float(y)
+                k = key6(fx, fy)
+            except Exception:
+                return
+            if k in seen:
+                return
+            seen.add(k)
+            result.append((fx, fy))
+
+        is_sym = bool(getattr(editor, "isSymmetry", False))
+        try:
+            tubeline = (
+                editor.get_tube_pass_count()
+                if hasattr(editor, "get_tube_pass_count")
+                else None
+            )
+        except Exception:
+            tubeline = None
+        hx = getattr(editor, "heat_exchanger", None)
+        u_types = ("AEU", "BEU", "AKU", "BKU")
+
+        for coord in seed_coords or []:
+            try:
+                x, y = float(coord[0]), float(coord[1])
+            except Exception:
+                continue
+            if is_sym:
+                for px, py in ((x, y), (-x, y), (x, -y), (-x, -y)):
+                    _add(px, py)
+            elif tubeline == "2" and hx in u_types:
+                _add(x, y)
+                _add(x, -y)
+            elif tubeline in ("4", "6") and hx in u_types:
+                _add(x, y)
+                _add(-x, y)
             else:
-                tubeline = editor.get_tube_pass_count() if hasattr(editor, 'get_tube_pass_count') else None
-                hx = getattr(editor, 'heat_exchanger', None)
-                if tubeline == "2" and hx in ["AEU", "BEU"] and hasattr(editor, 'judge_linkage_x'):
-                    expanded_rel_centers = list(editor.judge_linkage_x(rel_centers))
-                elif tubeline in ["4", "6"] and hx in ["AEU", "BEU"] and hasattr(editor, 'judge_linkage_y'):
-                    expanded_rel_centers = list(editor.judge_linkage_y(rel_centers))
-                else:
-                    expanded_rel_centers = list(rel_centers)
+                _add(x, y)
+        return result
 
-        # 将相对坐标转回绝对坐标，作为最终要删除的整组坐标
-        if expanded_rel_centers and hasattr(editor, 'selected_to_current_coords') and callable(getattr(editor, 'selected_to_current_coords', None)):
-            expanded_abs = editor.selected_to_current_coords(expanded_rel_centers)
-            if expanded_abs:
-                coords_to_remove = list(expanded_abs)
-    except Exception as e:
-        print(f"[delete_selected_lagans] 对称扩展失败，回退为仅删除选中位置: {e}")
-
-    # 从 lagan_info 中删除坐标
-    if hasattr(editor, 'lagan_info') and editor.lagan_info:
-        def key6(x, y):
-            return (round(float(x), 6), round(float(y), 6))
-        
-        new_lagan_info = []
+    def _purge_lagan_info(target_coords):
+        if not hasattr(editor, "lagan_info") or not editor.lagan_info:
+            return
+        target_keys = set()
+        for coord in target_coords or []:
+            try:
+                target_keys.add(key6(coord[0], coord[1]))
+            except Exception:
+                continue
+        if not target_keys:
+            return
+        new_info = []
         for coord in editor.lagan_info:
             try:
                 if isinstance(coord, (tuple, list)) and len(coord) == 2:
                     cx, cy = coord
                     if isinstance(cx, (int, float)) and isinstance(cy, (int, float)):
-                        should_remove = False
-                        for target_coord in coords_to_remove:
-                            tx, ty = target_coord
-                            if key6(cx, cy) == key6(tx, ty):
-                                should_remove = True
-                                break
-                        if not should_remove:
-                            new_lagan_info.append(coord)
-                else:
-                    new_lagan_info.append(coord)
+                        if key6(cx, cy) in target_keys:
+                            continue
+                new_info.append(coord)
             except (TypeError, ValueError):
-                new_lagan_info.append(coord)
-        editor.lagan_info = new_lagan_info
+                new_info.append(coord)
+        editor.lagan_info = new_info
+
+    def _remove_lagan_items_at(target_coords, graphics_scene):
+        """按目标坐标删除普通拉杆图元；返回实际删掉的绝对坐标。"""
+        removed = []
+        if graphics_scene is None or not target_coords:
+            return removed
+        target_keys = set()
+        for coord in target_coords:
+            try:
+                target_keys.add(key6(coord[0], coord[1]))
+            except Exception:
+                continue
+        if not target_keys:
+            return removed
+
+        for item in list(graphics_scene.items()):
+            try:
+                # 仅普通拉杆；不动自由拉杆(is_side_rod)
+                if not getattr(item, "is_lagan", False):
+                    continue
+                if getattr(item, "is_side_rod", False):
+                    continue
+                center = _item_abs_center(item)
+                if center is None:
+                    continue
+                if key6(center[0], center[1]) not in target_keys:
+                    continue
+                if item.scene() == graphics_scene:
+                    graphics_scene.removeItem(item)
+                    removed.append(center)
+            except Exception:
+                continue
+        return removed
+
+    selected_items = list(editor.selected_lagans)
+
+    # 收集选中拉杆的绝对坐标（position 缺失时回退场景圆心）
+    seed_coords = []
+    for lagan in selected_items:
+        center = _item_abs_center(lagan)
+        if center is not None:
+            seed_coords.append(center)
+
+    if not seed_coords:
+        return
+
+    # ===== 第一道：数据字典/联动扩展 =====
+    coords_from_dict = list(seed_coords)
+    try:
+        rel_centers = []
+        for x, y in seed_coords:
+            if hasattr(editor, "actual_to_selected_coords") and callable(
+                getattr(editor, "actual_to_selected_coords", None)
+            ):
+                rel = editor.actual_to_selected_coords((x, y))
+                if rel:
+                    rel_centers.append(rel)
+
+        expanded_rel_centers = []
+        if rel_centers:
+            # 与 on_lagan_click / build_lagan 创建侧规则对齐（含 AKU/BKU）
+            if getattr(editor, "isSymmetry", False):
+                if hasattr(editor, "judge_linkage"):
+                    expanded_rel_centers = list(editor.judge_linkage(rel_centers))
+                else:
+                    expanded_rel_centers = list(rel_centers)
+            else:
+                tubeline = (
+                    editor.get_tube_pass_count()
+                    if hasattr(editor, "get_tube_pass_count")
+                    else None
+                )
+                hx = getattr(editor, "heat_exchanger", None)
+                u_types = ("AEU", "BEU", "AKU", "BKU")
+                if (
+                    tubeline == "2"
+                    and hx in u_types
+                    and hasattr(editor, "judge_linkage_x")
+                ):
+                    expanded_rel_centers = list(editor.judge_linkage_x(rel_centers))
+                elif (
+                    tubeline in ("4", "6")
+                    and hx in u_types
+                    and hasattr(editor, "judge_linkage_y")
+                ):
+                    expanded_rel_centers = list(editor.judge_linkage_y(rel_centers))
+                else:
+                    expanded_rel_centers = list(rel_centers)
+
+        if expanded_rel_centers and hasattr(editor, "selected_to_current_coords"):
+            expanded_abs = editor.selected_to_current_coords(expanded_rel_centers)
+            if expanded_abs:
+                coords_from_dict = list(expanded_abs)
+    except Exception as e:
+        print(f"[delete_selected_lagans] 对称扩展失败，回退为仅删除选中位置: {e}")
+        coords_from_dict = list(seed_coords)
+
+    # 字典结果与选中种子取并，避免扩坐标时丢掉当前选中点
+    coords_to_remove = _merge_abs_coords(coords_from_dict, seed_coords)
+
+    # 从 lagan_info 中删除坐标
+    _purge_lagan_info(coords_to_remove)
 
     # 维护 current_centers_lagan：= current_centers + lagan_info
     if hasattr(editor, "_sync_current_centers_lagan"):
@@ -262,38 +410,44 @@ def delete_selected_lagans(editor=None):
         except Exception:
             pass
 
-    # 同步删除对应位置的换热管
+    # 同步删除对应位置的换热管（仅字典扩展范围，避免绝对镜像误删未转拉杆的管）
     try:
-        if hasattr(editor, 'delete_huanreguan') and callable(getattr(editor, 'delete_huanreguan', None)):
-            # delete_huanreguan 支持绝对坐标[(x, y)]列表，这里直接传入 coords_to_remove
+        if hasattr(editor, "delete_huanreguan") and callable(
+            getattr(editor, "delete_huanreguan", None)
+        ):
             editor.delete_huanreguan(coords_to_remove)
     except Exception as e:
-        # 防御性处理，避免影响原有拉杆删除流程
         print(f"[delete_selected_lagans] 删除拉杆对应换热管时出错: {e}")
 
-    # 删除图形对象
-    graphics_scene = editor.graphics_scene if hasattr(editor, 'graphics_scene') and editor.graphics_scene else None
-    if graphics_scene:
-        # 为了对称删除拉杆，这里根据坐标匹配所有对应位置的拉杆图元
-        def key6(x, y):
-            return (round(float(x), 6), round(float(y), 6))
+    graphics_scene = (
+        editor.graphics_scene
+        if hasattr(editor, "graphics_scene") and editor.graphics_scene
+        else None
+    )
 
-        target_keys = set()
-        for x, y in coords_to_remove:
-            try:
-                target_keys.add(key6(x, y))
-            except Exception:
-                continue
+    # 第一道：按字典坐标删图元
+    _remove_lagan_items_at(coords_to_remove, graphics_scene)
 
-        for item in list(graphics_scene.items()):
+    # ===== 第二道双保险：应删绝对位置上若仍有普通拉杆，一并清除 =====
+    insurance_targets = _merge_abs_coords(
+        coords_to_remove, _abs_mirror_targets(seed_coords)
+    )
+    leftover = _remove_lagan_items_at(insurance_targets, graphics_scene)
+    if leftover:
+        print(
+            f"[delete_selected_lagans] 双保险补删残留普通拉杆 {len(leftover)} 个"
+        )
+        _purge_lagan_info(leftover)
+        if hasattr(editor, "_sync_current_centers_lagan"):
             try:
-                if hasattr(item, 'is_lagan') and item.is_lagan and hasattr(item, 'position') and item.position:
-                    ix, iy = item.position
-                    if key6(ix, iy) in target_keys:
-                        if item.scene() == graphics_scene:
-                            graphics_scene.removeItem(item)
+                editor._sync_current_centers_lagan(reason="delete_lagan_insurance")
             except Exception:
-                continue
+                pass
+        try:
+            if hasattr(editor, "_remove_converted_lagan_coords"):
+                editor._remove_converted_lagan_coords(leftover)
+        except Exception:
+            pass
 
     # 清空选中列表
     editor.selected_lagans = []
@@ -301,15 +455,28 @@ def delete_selected_lagans(editor=None):
     # 同步清理“由中间挡管转换”的坐标缓存
     try:
         if hasattr(editor, "_remove_converted_lagan_coords"):
-            editor._remove_converted_lagan_coords(coords_to_remove)
+            editor._remove_converted_lagan_coords(insurance_targets)
     except Exception:
         pass
 
     # 更新操作记录
-    if hasattr(editor, 'operations') and editor.operations:
-        editor.operations = [op for op in editor.operations 
-                            if not (op.get("type") == "lagan" and 
-                                   any(key6(op.get("coord")[0], op.get("coord")[1]) == key6(x, y) for x, y in coords_to_remove))]
+    if hasattr(editor, "operations") and editor.operations:
+        remove_keys = set()
+        for x, y in insurance_targets:
+            try:
+                remove_keys.add(key6(x, y))
+            except Exception:
+                continue
 
-    def key6(x, y):
-        return (round(float(x), 6), round(float(y), 6))
+        def _keep_op(op):
+            if op.get("type") != "lagan":
+                return True
+            coord = op.get("coord")
+            if not (isinstance(coord, (tuple, list)) and len(coord) == 2):
+                return True
+            try:
+                return key6(coord[0], coord[1]) not in remove_keys
+            except Exception:
+                return True
+
+        editor.operations = [op for op in editor.operations if _keep_op(op)]
