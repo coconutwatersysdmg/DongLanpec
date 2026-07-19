@@ -56,6 +56,13 @@ def draw_center_dangguan_at_position(coord, editor=None):
 
     x, y = coord
 
+    # 落点前：同位置已有拉杆（普通/转换/自由）则静默清除，避免叠层覆盖中间挡管
+    try:
+        if editor and hasattr(editor, "_remove_any_lagan_at_coords"):
+            editor._remove_any_lagan_at_coords([(float(x), float(y))])
+    except Exception as e:
+        print(f"[draw_center_dangguan_at_position] 清除同位置拉杆失败: {e}")
+
     # 检查 center_dangguan 列表中是否已有相同坐标
     if editor and hasattr(editor, 'center_dangguan'):
         center_dangguan_list = editor.center_dangguan

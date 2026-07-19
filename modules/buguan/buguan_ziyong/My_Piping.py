@@ -25519,15 +25519,16 @@ class TubeLayoutEditor(QMainWindow):
     # 拉杆功能
     def on_lagan_click(self):
         """拉杆点击事件（无“中间挡管”逻辑；形式+直径均用下拉框，直径随形式联动）"""
-        # 互转：选中中间挡管时优先直接转为普通拉杆，不弹参数窗
-        # （即使仍残留换热管选中，也不挡互转；转换失败且无换热管时直接返回）
+        # 互转：选中中间挡管时直接转为拉杆，绝不弹参数窗
+        # （即使仍残留换热管选中，也不挡互转；成败都不再走后面的参数弹窗）
         try:
-            has_tubes = bool(getattr(self, "selected_centers", None))
             if self._has_selected_center_dangguan():
-                if self.convert_center_dangguan_to_lagan():
-                    return
-                if not has_tubes:
-                    return
+                try:
+                    ok = self.convert_center_dangguan_to_lagan()
+                    print(f"[on_lagan_click] 中间挡管转拉杆完成: ok={ok}")
+                except Exception as e:
+                    print(f"[on_lagan_click] 中间挡管转拉杆失败: {e}")
+                return
         except Exception as e:
             print(f"[on_lagan_click] 中间挡管转拉杆前置判断出错: {e}")
 
@@ -26084,25 +26085,54 @@ class TubeLayoutEditor(QMainWindow):
 
     def _collect_selected_center_dangguan_items(self):
         items = []
-        scene = getattr(self, "graphics_scene", None)
-        if scene is None:
-            return items
-        for item in scene.items():
+        seen_ids = set()
+
+        def _append(item):
             try:
-                if (
-                    getattr(item, "is_center_dangguan", False)
-                    and getattr(item, "is_selected", False)
-                ):
-                    items.append(item)
+                if item is None or not getattr(item, "is_center_dangguan", False):
+                    return
+                # 已从场景移除的失效引用不算选中
+                if hasattr(item, "scene") and item.scene() is None:
+                    return
+                iid = id(item)
+                if iid in seen_ids:
+                    return
+                seen_ids.add(iid)
+                items.append(item)
             except Exception:
-                continue
+                return
+
+        # 1) 选中列表
+        for item in list(getattr(self, "selected_center_dangguan", None) or []):
+            _append(item)
+
+        # 2) 场景中自定义 is_selected / Qt isSelected
+        scene = getattr(self, "graphics_scene", None)
+        if scene is not None:
+            for item in scene.items():
+                try:
+                    if not getattr(item, "is_center_dangguan", False):
+                        continue
+                    selected = bool(getattr(item, "is_selected", False))
+                    if not selected and hasattr(item, "isSelected"):
+                        try:
+                            selected = bool(item.isSelected())
+                        except Exception:
+                            selected = False
+                    if selected:
+                        _append(item)
+                except Exception:
+                    continue
+
+        # 回写有效选中列表，避免残留失效引用导致后续误判
+        try:
+            self.selected_center_dangguan = list(items)
+        except Exception:
+            pass
         return items
 
     def _has_selected_center_dangguan(self):
-        if self._collect_selected_center_dangguan_items():
-            return True
-        sel = getattr(self, "selected_center_dangguan", None) or []
-        return bool(sel)
+        return bool(self._collect_selected_center_dangguan_items())
 
     def _collect_selected_converted_lagan_items(self):
         items = []
@@ -26301,6 +26331,126 @@ class TubeLayoutEditor(QMainWindow):
 
         self._remove_converted_lagan_coords(coords_removed)
 
+    def _remove_free_lagan_items(self, items):
+        """删除自由拉杆图元，并同步 red_dangban / red_dangban_abs / 选中列表。"""
+        if not items:
+            return
+        coords_removed = []
+        removed_relative_keys = set()
+
+        def _rel_key(coord):
+            try:
+                return round(float(coord[0]), 6), round(float(coord[1]), 6)
+            except Exception:
+                return None
+
+        for item in list(items):
+            center = self._item_abs_center(item)
+            if center is not None:
+                coords_removed.append(center)
+            rel_key = _rel_key(getattr(item, "original_selected_center", None))
+            if rel_key is not None:
+                removed_relative_keys.add(rel_key)
+            try:
+                scene = item.scene() if hasattr(item, "scene") else None
+                if scene is not None:
+                    scene.removeItem(item)
+                elif getattr(self, "graphics_scene", None) is not None:
+                    self.graphics_scene.removeItem(item)
+            except Exception:
+                pass
+            try:
+                if hasattr(self, "selected_side_rods") and item in self.selected_side_rods:
+                    self.selected_side_rods.remove(item)
+            except Exception:
+                pass
+
+        if coords_removed and hasattr(self, "red_dangban_abs") and isinstance(
+            self.red_dangban_abs, list
+        ):
+            self.red_dangban_abs = [
+                coord
+                for coord in self.red_dangban_abs
+                if not any(
+                    self._abs_coords_close(coord, target) for target in coords_removed
+                )
+            ]
+
+        if removed_relative_keys and hasattr(self, "red_dangban"):
+            remaining_relative_keys = set()
+            scene = getattr(self, "graphics_scene", None)
+            if scene is not None:
+                for it in scene.items():
+                    if getattr(it, "is_side_rod", False):
+                        key = _rel_key(getattr(it, "original_selected_center", None))
+                        if key is not None:
+                            remaining_relative_keys.add(key)
+            removable = removed_relative_keys - remaining_relative_keys
+            self.red_dangban = [
+                coord
+                for coord in (self.red_dangban or [])
+                if _rel_key(coord) not in removable
+            ]
+
+    def _remove_any_lagan_at_coords(self, coords):
+        """
+        静默清除指定绝对坐标上的所有拉杆（普通/转换/自由）。
+        用于中间挡管落点前：同位置只保留一个元件。
+        """
+        if not coords:
+            return 0
+        scene = getattr(self, "graphics_scene", None)
+        if scene is None:
+            return 0
+
+        normal_items = []
+        free_items = []
+        seen_ids = set()
+        for item in list(scene.items()):
+            try:
+                is_normal = bool(getattr(item, "is_lagan", False))
+                is_free = bool(getattr(item, "is_side_rod", False))
+                if not (is_normal or is_free):
+                    continue
+                iid = id(item)
+                if iid in seen_ids:
+                    continue
+                center = self._item_abs_center(item)
+                if center is None:
+                    continue
+                hit = False
+                for target in coords:
+                    if self._abs_coords_close(center, target):
+                        hit = True
+                        break
+                if not hit:
+                    continue
+                seen_ids.add(iid)
+                # 自由拉杆优先按 is_side_rod 归类（工业上都是拉杆，缓存路径不同）
+                if is_free:
+                    free_items.append(item)
+                else:
+                    normal_items.append(item)
+            except Exception:
+                continue
+
+        if not normal_items and not free_items:
+            return 0
+
+        self._remove_normal_lagan_items(normal_items)
+        self._remove_free_lagan_items(free_items)
+        try:
+            if hasattr(self, "update_total_lagan_count"):
+                self.update_total_lagan_count()
+        except Exception:
+            pass
+        removed = len(normal_items) + len(free_items)
+        print(
+            f"[remove_any_lagan_at_coords] 已静默清除同位置拉杆 {removed} 个"
+            f"（普通/转换={len(normal_items)}, 自由={len(free_items)}）"
+        )
+        return removed
+
     def convert_center_dangguan_to_lagan(self):
         """
         将当前选中的中间挡管转换为普通拉杆（带 from_center_dangguan 标记）。
@@ -26391,11 +26541,28 @@ class TubeLayoutEditor(QMainWindow):
 
         created = 0
         for cx, cy in convert_coords:
-            if self._find_rod_at_position((cx, cy), candidate_radius=radius) is not None:
-                print(
-                    f"[convert_center_dangguan_to_lagan] 位置 ({cx:.3f}, {cy:.3f}) 已有拉杆，跳过"
-                )
-                continue
+            # 仅按圆心重合判断，避免用半径相交误判导致转换失败后落入参数弹窗
+            existing = self._find_rod_at_position((cx, cy))
+            if existing is not None:
+                if (
+                    getattr(existing, "is_lagan", False)
+                    and not getattr(existing, "is_side_rod", False)
+                ):
+                    try:
+                        existing.from_center_dangguan = True
+                        existing.position = (cx, cy)
+                    except Exception:
+                        pass
+                    self._add_converted_lagan_coord((cx, cy))
+                    created += 1
+                    print(
+                        f"[convert_center_dangguan_to_lagan] 位置 ({cx:.3f}, {cy:.3f}) "
+                        f"已有普通拉杆，已标记为转换拉杆"
+                    )
+                    continue
+                # 同位置自由拉杆：静默替换为普通转换拉杆
+                self._remove_any_lagan_at_coords([(cx, cy)])
+
             lagan_item = draw_lagan_at_position((cx, cy), self, diameter=diameter)
             if lagan_item is None:
                 continue
