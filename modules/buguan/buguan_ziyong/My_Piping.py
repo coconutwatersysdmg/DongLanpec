@@ -1903,6 +1903,8 @@ class TubeLayoutEditor(QMainWindow):
             radius = float(getattr(self, "r", 0) or 0)
         hits = []
         for corners in (slide_corners1, slide_corners2):
+            if not corners:
+                continue
             hits.extend(
                 self._collect_geometric_slipway_hits(corners, tube_centers, radius)
             )
@@ -43306,6 +43308,16 @@ class TubeLayoutEditor(QMainWindow):
             theta_rad = math.radians(theta_deg)
             center_angle = math.radians(90)  # Qt坐标系向下方向
 
+            # 滑道数量：1=仅 y 轴一块竖直矩形；2=左右两块（原逻辑）
+            try:
+                slipway_count = str(
+                    self._read_param_table_value("滑道数量") or "2"
+                ).strip()
+            except Exception:
+                slipway_count = "2"
+            if slipway_count not in ("1", "2"):
+                slipway_count = "2"
+
             left_angle = center_angle + theta_rad
             right_angle = center_angle - theta_rad
 
@@ -43477,29 +43489,45 @@ class TubeLayoutEditor(QMainWindow):
                     slide2 = self.green_slide_items[-1]
                     slide1.set_paired_block(slide2)
 
-            # 先计算两个滑道的干涉信息
-            interfering_tubes1, interfering_y_coords1, slide_corners1 = (
-                get_slide_interfering_tubes(
-                    base1_x,
-                    base1_y,
-                    u1_x,
-                    u1_y,
-                    slide_thickness,
-                    slide_length,
-                    is_left=True,
+            # 先计算滑道干涉信息（数量1：仅 y 轴一块竖直矩形，不旋转）
+            if slipway_count == "1":
+                interfering_tubes1, interfering_y_coords1, slide_corners1 = (
+                    get_slide_interfering_tubes(
+                        0.0,
+                        float(outer_radius),
+                        0.0,
+                        -1.0,
+                        slide_thickness,
+                        slide_length,
+                        is_left=True,
+                    )
                 )
-            )
-            interfering_tubes2, interfering_y_coords2, slide_corners2 = (
-                get_slide_interfering_tubes(
-                    base2_x,
-                    base2_y,
-                    u2_x,
-                    u2_y,
-                    slide_thickness,
-                    slide_length,
-                    is_left=False,
+                interfering_tubes2 = []
+                interfering_y_coords2 = set()
+                slide_corners2 = None
+            else:
+                interfering_tubes1, interfering_y_coords1, slide_corners1 = (
+                    get_slide_interfering_tubes(
+                        base1_x,
+                        base1_y,
+                        u1_x,
+                        u1_y,
+                        slide_thickness,
+                        slide_length,
+                        is_left=True,
+                    )
                 )
-            )
+                interfering_tubes2, interfering_y_coords2, slide_corners2 = (
+                    get_slide_interfering_tubes(
+                        base2_x,
+                        base2_y,
+                        u2_x,
+                        u2_y,
+                        slide_thickness,
+                        slide_length,
+                        is_left=False,
+                    )
+                )
             self.interfering_tubes1 = interfering_tubes1
             self.interfering_tubes2 = interfering_tubes2
 
@@ -43581,7 +43609,8 @@ class TubeLayoutEditor(QMainWindow):
 
             # 现在绘制滑道
             draw_slide_polygon(slide_corners1, is_left=True)
-            draw_slide_polygon(slide_corners2, is_left=False)
+            if slipway_count != "1" and slide_corners2 is not None:
+                draw_slide_polygon(slide_corners2, is_left=False)
 
             if not hasattr(self, "operations"):
                 self.operations = []
@@ -43594,6 +43623,7 @@ class TubeLayoutEditor(QMainWindow):
                     "DN": DN,
                     "coord_origin": (0, 0),
                     "length": slide_length,
+                    "slipway_count": slipway_count,
                 }
             )
 
