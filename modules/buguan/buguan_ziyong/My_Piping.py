@@ -26044,23 +26044,50 @@ class TubeLayoutEditor(QMainWindow):
             return False
 
     def _mirror_abs_coords(self, cx, cy):
-        """按对称分布勾选状态，生成绝对坐标镜像集合（最多四象限）。"""
-        base = (float(cx), float(cy))
-        if not getattr(self, "isSymmetry", False):
-            return [base]
+        """
+        生成绝对坐标镜像集合（与拉杆创建/删除规则对齐）。
+        - 对称开：四象限
+        - 对称关 + AEU/BEU/AKU/BKU：2管程仅上下(x轴)，4/6管程仅左右(y轴)
+        - 其它：仅自身
+        用于中间挡管↔转换拉杆互转等场景。
+        """
+        try:
+            x, y = float(cx), float(cy)
+        except Exception:
+            return []
+
         result = []
         seen = set()
-        for p in (
-            (cx, cy),
-            (-cx, cy),
-            (cx, -cy),
-            (-cx, -cy),
-        ):
-            key = self._abs_coord_key6(p[0], p[1])
+
+        def _add(px, py):
+            try:
+                key = self._abs_coord_key6(px, py)
+            except Exception:
+                return
             if key in seen:
-                continue
+                return
             seen.add(key)
-            result.append((float(p[0]), float(p[1])))
+            result.append((float(px), float(py)))
+
+        if getattr(self, "isSymmetry", False):
+            for p in ((x, y), (-x, y), (x, -y), (-x, -y)):
+                _add(p[0], p[1])
+            return result
+
+        try:
+            tubeline = self.get_tube_pass_count()
+        except Exception:
+            tubeline = None
+        hx = getattr(self, "heat_exchanger", None)
+        u_types = ("AEU", "BEU", "AKU", "BKU")
+        if tubeline == "2" and hx in u_types:
+            _add(x, y)
+            _add(x, -y)
+        elif tubeline in ("4", "6") and hx in u_types:
+            _add(x, y)
+            _add(-x, y)
+        else:
+            _add(x, y)
         return result
 
     def _item_abs_center(self, item):
@@ -35707,7 +35734,12 @@ class TubeLayoutEditor(QMainWindow):
 
     def delete_selected_side_rods(self):
         self.operation_order += 1
-        """删除选中的最左最右拉杆，支持对称模式下删除所有相关拉杆"""
+        """
+        删除选中的自由拉杆（双保险，与普通/转换拉杆删除策略对齐）：
+          1) 数据字典/联动：参照相对坐标 → judge_linkage* → 再结合绝对镜像定位自由拉杆
+          2) 绝对坐标镜像兜底：应删位置上若仍有自由拉杆则补删
+        注意：不能仅按 original_selected_center 匹配图元（同一参照可同时按行/按列布置）。
+        """
         if not hasattr(self, "selected_side_rods"):
             self.selected_side_rods = []
 
@@ -35720,10 +35752,8 @@ class TubeLayoutEditor(QMainWindow):
         )
 
         rods_to_remove = list(self.selected_side_rods)
-        all_rods_to_remove = set(rods_to_remove)
 
         def _item_scene_center(item):
-            """获取自由拉杆圆心的场景坐标。"""
             try:
                 center = item.mapToScene(item.rect().center())
                 return float(center.x()), float(center.y())
@@ -35733,8 +35763,8 @@ class TubeLayoutEditor(QMainWindow):
         def _coords_close(coord1, coord2, tolerance=1e-4):
             try:
                 return (
-                        abs(float(coord1[0]) - float(coord2[0])) <= tolerance
-                        and abs(float(coord1[1]) - float(coord2[1])) <= tolerance
+                    abs(float(coord1[0]) - float(coord2[0])) <= tolerance
+                    and abs(float(coord1[1]) - float(coord2[1])) <= tolerance
                 )
             except (TypeError, ValueError, IndexError, OverflowError):
                 return False
@@ -35745,101 +35775,202 @@ class TubeLayoutEditor(QMainWindow):
             except (TypeError, ValueError, IndexError, OverflowError):
                 return None
 
-        rods_to_remove_info = [
-            rod.original_selected_center
-            for rod in rods_to_remove
-            if (
-                    hasattr(rod, "original_selected_center")
-                    and rod.original_selected_center is not None
-            )
-        ]
+        def _key6(x, y):
+            return (round(float(x), 6), round(float(y), 6))
 
-        if self.isSymmetry:
-            try:
-                # 逻辑坐标仅用于日志。不能用它反查待删除图元：
-                # 同一根参照管可以同时按行、按列布置自由拉杆，两组拉杆的
-                # original_selected_center 相同，按该字段匹配会把两组一起删除。
-                all_symmetric_coords = (
-                    self.judge_linkage(rods_to_remove_info)
-                    if rods_to_remove_info
-                    else []
-                )
-                print(
-                    f"[delete_selected_side_rods] 对称模式，找到所有对称坐标（最多4个）: {all_symmetric_coords}"
-                )
-
-                # 以选中拉杆的实际绘制位置生成四象限镜像位置。
-                # 按行和按列生成的拉杆位置不同，因此不会互相误删。
-                symmetric_scene_centers = []
-                for rod in rods_to_remove:
-                    scene_center = _item_scene_center(rod)
-                    if scene_center is None:
+        def _merge_abs_coords(*groups):
+            merged = []
+            seen = set()
+            for group in groups:
+                for coord in group or []:
+                    try:
+                        x, y = float(coord[0]), float(coord[1])
+                        k = _key6(x, y)
+                    except Exception:
                         continue
-                    cx, cy = scene_center
-                    for center in (
-                            (cx, cy),
-                            (-cx, cy),
-                            (cx, -cy),
-                            (-cx, -cy),
-                    ):
-                        if not any(
-                                _coords_close(center, existing)
-                                for existing in symmetric_scene_centers
-                        ):
-                            symmetric_scene_centers.append(center)
+                    if k in seen:
+                        continue
+                    seen.add(k)
+                    merged.append((x, y))
+            return merged
 
-                for item in self.graphics_scene.items():
-                    if (
-                            hasattr(item, "is_side_rod")
-                            and item.is_side_rod
-                    ):
-                        item_scene_center = _item_scene_center(item)
-                        if (
-                                item_scene_center is not None
-                                and any(
-                                    _coords_close(item_scene_center, target_center)
-                                    for target_center in symmetric_scene_centers
-                                )
-                        ):
-                            all_rods_to_remove.add(item)
+        def _abs_mirror_targets(seed_coords):
+            """与普通拉杆删除一致的绝对镜像规则。"""
+            result = []
+            seen = set()
+
+            def _add(x, y):
+                try:
+                    fx, fy = float(x), float(y)
+                    k = _key6(fx, fy)
+                except Exception:
+                    return
+                if k in seen:
+                    return
+                seen.add(k)
+                result.append((fx, fy))
+
+            is_sym = bool(getattr(self, "isSymmetry", False))
+            try:
+                tubeline = self.get_tube_pass_count()
+            except Exception:
+                tubeline = None
+            hx = getattr(self, "heat_exchanger", None)
+            u_types = ("AEU", "BEU", "AKU", "BKU")
+
+            for coord in seed_coords or []:
+                try:
+                    x, y = float(coord[0]), float(coord[1])
+                except Exception:
+                    continue
+                if is_sym:
+                    for px, py in ((x, y), (-x, y), (x, -y), (-x, -y)):
+                        _add(px, py)
+                elif tubeline == "2" and hx in u_types:
+                    _add(x, y)
+                    _add(x, -y)
+                elif tubeline in ("4", "6") and hx in u_types:
+                    _add(x, y)
+                    _add(-x, y)
+                else:
+                    _add(x, y)
+            return result
+
+        def _expand_rel_centers(rel_centers):
+            if not rel_centers:
+                return []
+            try:
+                if getattr(self, "isSymmetry", False):
+                    return list(self.judge_linkage(rel_centers))
+                tubeline = self.get_tube_pass_count()
+                hx = getattr(self, "heat_exchanger", None)
+                u_types = ("AEU", "BEU", "AKU", "BKU")
+                if tubeline == "2" and hx in u_types:
+                    return list(self.judge_linkage_x(rel_centers))
+                if tubeline in ("4", "6") and hx in u_types:
+                    return list(self.judge_linkage_y(rel_centers))
             except Exception as e:
-                print(f"[delete_selected_side_rods] 获取对称坐标时出错: {e}")
-                import traceback
+                print(f"[delete_selected_side_rods] 相对坐标联动扩展失败: {e}")
+            return list(rel_centers)
 
-                traceback.print_exc()
-        else:
+        def _collect_side_rods_at(target_coords):
+            found = set()
+            if not target_coords or not getattr(self, "graphics_scene", None):
+                return found
+            for item in self.graphics_scene.items():
+                try:
+                    if not getattr(item, "is_side_rod", False):
+                        continue
+                    center = _item_scene_center(item)
+                    if center is None:
+                        continue
+                    if any(_coords_close(center, t) for t in target_coords):
+                        found.add(item)
+                except Exception:
+                    continue
+            return found
+
+        # 选中种子绝对坐标
+        seed_coords = []
+        for rod in rods_to_remove:
+            c = _item_scene_center(rod)
+            if c is not None:
+                seed_coords.append(c)
+        if not seed_coords:
+            print("[delete_selected_side_rods] 无法获取选中拉杆坐标")
+            return
+
+        # ===== 第一道：数据字典/联动（相对）+ 绝对镜像定位 =====
+        # 相对坐标只用于辅助扩展；最终仍按绝对位置匹配，避免同参照行/列布置误删。
+        rel_centers = []
+        for rod in rods_to_remove:
+            rel = getattr(rod, "original_selected_center", None)
+            if rel is not None:
+                rel_centers.append(rel)
+        expanded_rel = _expand_rel_centers(rel_centers)
+        if expanded_rel:
             print(
-                f"[delete_selected_side_rods] 非对称模式，只删除选中的 {len(rods_to_remove)} 个拉杆"
+                f"[delete_selected_side_rods] 字典联动相对坐标: {expanded_rel}"
             )
 
-        # 配对图元也纳入统一删除和缓存清理流程。
+        primary_targets = _abs_mirror_targets(seed_coords)
+        all_rods_to_remove = set(rods_to_remove)
+        all_rods_to_remove |= _collect_side_rods_at(primary_targets)
+
+        # 字典辅助：参照相对坐标在联动集合内、且绝对位置落在应删集合内的自由拉杆
+        if expanded_rel:
+            expanded_rel_keys = {
+                k
+                for k in (_relative_coord_key(r) for r in expanded_rel)
+                if k is not None
+            }
+            for item in list(getattr(self, "graphics_scene", None).items() if self.graphics_scene else []):
+                try:
+                    if not getattr(item, "is_side_rod", False):
+                        continue
+                    rel_key = _relative_coord_key(
+                        getattr(item, "original_selected_center", None)
+                    )
+                    if rel_key is None or rel_key not in expanded_rel_keys:
+                        continue
+                    center = _item_scene_center(item)
+                    if center is None:
+                        continue
+                    if any(_coords_close(center, t) for t in primary_targets):
+                        all_rods_to_remove.add(item)
+                except Exception:
+                    continue
+
+        # 配对图元一并纳入
         for rod in list(all_rods_to_remove):
             paired_rod = getattr(rod, "paired_rod", None)
             if paired_rod:
                 all_rods_to_remove.add(paired_rod)
 
-        deleted_count = 0
-        removed_abs_centers = []
-        removed_relative_keys = set()
-        for rod in all_rods_to_remove:
-            scene_center = _item_scene_center(rod)
-            if scene_center is not None:
-                removed_abs_centers.append(scene_center)
-
-            relative_key = _relative_coord_key(
-                getattr(rod, "original_selected_center", None)
-            )
-            if relative_key is not None:
-                removed_relative_keys.add(relative_key)
-
-            if rod.scene() == self.graphics_scene:
-                self.graphics_scene.removeItem(rod)
-                deleted_count += 1
-                print(
-                    f"[delete_selected_side_rods] 删除拉杆，坐标: {getattr(rod, 'original_selected_center', 'N/A')}"
+        def _purge_rods(rods):
+            deleted = 0
+            removed_abs = []
+            removed_rel_keys = set()
+            for rod in list(rods):
+                scene_center = _item_scene_center(rod)
+                if scene_center is not None:
+                    removed_abs.append(scene_center)
+                rel_key = _relative_coord_key(
+                    getattr(rod, "original_selected_center", None)
                 )
+                if rel_key is not None:
+                    removed_rel_keys.add(rel_key)
+                try:
+                    if rod.scene() == self.graphics_scene:
+                        self.graphics_scene.removeItem(rod)
+                        deleted += 1
+                        print(
+                            f"[delete_selected_side_rods] 删除拉杆，坐标: "
+                            f"{getattr(rod, 'original_selected_center', 'N/A')}"
+                        )
+                except Exception:
+                    continue
+            return deleted, removed_abs, removed_rel_keys
 
-        # 绝对坐标缓存按实际删除位置清理。
+        deleted_count, removed_abs_centers, removed_relative_keys = _purge_rods(
+            all_rods_to_remove
+        )
+
+        # ===== 第二道双保险：应删绝对位置上若仍有自由拉杆，补删 =====
+        insurance_targets = _merge_abs_coords(
+            primary_targets, _abs_mirror_targets(seed_coords)
+        )
+        leftover_rods = _collect_side_rods_at(insurance_targets)
+        if leftover_rods:
+            print(
+                f"[delete_selected_side_rods] 双保险补删残留自由拉杆 {len(leftover_rods)} 个"
+            )
+            extra_n, extra_abs, extra_rel = _purge_rods(leftover_rods)
+            deleted_count += extra_n
+            removed_abs_centers.extend(extra_abs)
+            removed_relative_keys |= extra_rel
+
+        # 绝对坐标缓存按实际删除位置清理
         if hasattr(self, "red_dangban_abs") and isinstance(self.red_dangban_abs, list):
             self.red_dangban_abs = [
                 coord
@@ -35850,7 +35981,7 @@ class TubeLayoutEditor(QMainWindow):
                 )
             ]
 
-        # 如果同一参照管还保留着另一种布置方式，则保留其相对坐标缓存。
+        # 若同一参照管还保留另一种布置方式，则保留其相对坐标缓存
         if removed_relative_keys and hasattr(self, "red_dangban"):
             remaining_relative_keys = {
                 key
@@ -35871,7 +36002,6 @@ class TubeLayoutEditor(QMainWindow):
             ]
 
         self.update_total_lagan_count()
-
         self.selected_side_rods.clear()
 
         print(f"[delete_selected_side_rods] 删除完成，共删除 {deleted_count} 个拉杆")
@@ -35880,7 +36010,6 @@ class TubeLayoutEditor(QMainWindow):
             self.graphics_scene.update()
         if hasattr(self, "graphics_view") and self.graphics_view:
             self.graphics_view.viewport().update()
-
     def _find_global_column_centers(self, abs_x, merge_tol=None):
         """满布列分组：一列横跨上下象限的全部换热管，按 y 升序返回。"""
         try:
