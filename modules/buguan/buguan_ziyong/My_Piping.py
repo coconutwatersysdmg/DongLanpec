@@ -235,6 +235,23 @@ def create_product_connection():
         return None
 
 
+def create_material_connection():
+    """创建材料库数据库连接（滑道厚度推荐按钢材分类选列时用）"""
+    try:
+        return pymysql.connect(
+            host="localhost",
+            port=3306,
+            database="材料库",
+            user="root",
+            password="123456",
+            charset="utf8mb4",
+            cursorclass=pymysql.cursors.DictCursor,
+        )
+    except pymysql.MySQLError as e:
+        print(f"连接材料库失败: {e}")
+        return None
+
+
 class ZoomableGraphicsView(QGraphicsView):
     def __init__(self, scene):
         super().__init__(scene)
@@ -10775,11 +10792,126 @@ class TubeLayoutEditor(QMainWindow):
 
         return None
 
+    def _get_slipway_material_grade(self):
+        """从产品设计活动表_元件附加参数表读取当前产品滑道材料牌号。"""
+        product_id = getattr(self, "productID", None)
+        if not product_id:
+            return None
+        conn = None
+        try:
+            conn = create_product_connection()
+            if not conn:
+                return None
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT 参数值
+                    FROM 产品设计活动表_元件附加参数表
+                    WHERE 产品ID = %s
+                      AND 元件名称 LIKE %s
+                      AND 参数名称 LIKE %s
+                    LIMIT 1
+                    """,
+                    (product_id, "%滑道%", "%材料牌号%"),
+                )
+                row = cursor.fetchone()
+                if isinstance(row, dict):
+                    grade = str(row.get("参数值") or "").strip()
+                    return grade or None
+        except Exception as e:
+            print(f"[slideway predefined] 查询滑道材料牌号失败: {e}")
+            return None
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        return None
+
+    def _get_steel_category_by_grade(self, material_grade):
+        """按材料牌号从材料库.钢材分类表读取钢材分类。"""
+        grade = str(material_grade or "").strip()
+        if not grade:
+            return None
+        conn = None
+        try:
+            conn = create_material_connection()
+            if not conn:
+                return None
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT 钢材分类
+                    FROM 钢材分类表
+                    WHERE 材料牌号 = %s
+                    LIMIT 1
+                    """,
+                    (grade,),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    cursor.execute(
+                        """
+                        SELECT 钢材分类
+                        FROM 钢材分类表
+                        WHERE 材料牌号 LIKE %s
+                        LIMIT 1
+                        """,
+                        (f"%{grade}%",),
+                    )
+                    row = cursor.fetchone()
+                if isinstance(row, dict):
+                    cat = str(row.get("钢材分类") or "").strip()
+                    return cat or None
+        except Exception as e:
+            print(f"[slideway predefined] 查询钢材分类失败: {e}")
+            return None
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        return None
+
+    def _resolve_slideway_thickness_by_steel_category(self, row_data):
+        """
+        按滑道材料对应钢材分类选择厚度列：
+        - 含「高合金」→ thickness_high（最小厚度mm: 高合金钢）
+        - 含「非合金」/「低合金」或其它/查不到 → thickness_carbon（最小厚度mm: 非合金钢、低合金钢）
+        """
+        thickness_carbon = row_data.get("thickness_carbon")
+        thickness_high = row_data.get("thickness_high")
+        use_high = False
+        grade = None
+        category = None
+        try:
+            grade = self._get_slipway_material_grade()
+            category = self._get_steel_category_by_grade(grade) if grade else None
+            cat_text = str(category or "")
+            if "高合金" in cat_text:
+                use_high = True
+            # 非合金 / 低合金 / 其它 / 查不到：均用非合金、低合金列
+        except Exception as e:
+            print(f"[slideway predefined] 解析钢材分类选列失败: {e}")
+            use_high = False
+
+        thickness = thickness_high if use_high else thickness_carbon
+        try:
+            print(
+                f"[slideway predefined] 材料牌号={grade}, 钢材分类={category}, "
+                f"厚度列={'高合金钢' if use_high else '非合金钢/低合金钢'}, thickness={thickness}"
+            )
+        except Exception:
+            pass
+        return thickness
+
     def _get_slideway_predefined_defaults(self, dn_val=None):
         """
         从配置库 id=2.14.3.1 获取滑道“推荐厚度/推荐高度”。
         按公称直径 DN 精确对照「热交换器公称直径mm」；对照不上返回 None。
-        厚度取「最小厚度mm: 非合金钢、低合金钢」，高度取「高度mm」。
+        厚度按滑道材料牌号→钢材分类选列（高合金 / 非合金·低合金）；高度取「高度mm」。
         返回:
             dict | None: {"thickness": float, "height": float}
         """
@@ -10800,12 +10932,12 @@ class TubeLayoutEditor(QMainWindow):
                             continue
                         try:
                             dn = float(r[0])
-                            # 默认采用“最小厚度mm: 非合金钢、低合金钢”这一列
-                            thickness = float(r[2])
-                            height = float(r[4])
                             _SLIDEWAY_PREDEFINED_21431_CACHE[round(dn, 1)] = {
-                                "thickness": thickness,
-                                "height": height,
+                                # 最小厚度mm: 非合金钢、低合金钢
+                                "thickness_carbon": float(r[2]),
+                                # 最小厚度mm: 高合金钢
+                                "thickness_high": float(r[3]),
+                                "height": float(r[4]),
                             }
                         except Exception:
                             continue
@@ -10850,7 +10982,15 @@ class TubeLayoutEditor(QMainWindow):
 
         key = round(float(dn_val), 1)
         # 仅精确对照；对照不上则返回 None，由调用方走原默认逻辑
-        return _SLIDEWAY_PREDEFINED_21431_CACHE.get(key)
+        row_data = _SLIDEWAY_PREDEFINED_21431_CACHE.get(key)
+        if not row_data:
+            return None
+
+        thickness = self._resolve_slideway_thickness_by_steel_category(row_data)
+        return {
+            "thickness": thickness,
+            "height": row_data.get("height"),
+        }
 
     def _format_slideway_predefined_number(self, val):
         """推荐数值展示：整数不带小数点。"""
