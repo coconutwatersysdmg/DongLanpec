@@ -26309,12 +26309,14 @@ class TubeLayoutEditor(QMainWindow):
         self._cdg_batch_coords = []
         self._cdg_batch_items = []
         self._cdg_batch_failed = False
+        self._cdg_replace_lagan_decision = None
 
     def end_center_dangguan_batch(self):
         self._cdg_batch_active = False
         self._cdg_batch_coords = []
         self._cdg_batch_items = []
         self._cdg_batch_failed = False
+        self._cdg_replace_lagan_decision = None
 
     def rollback_center_dangguan_batch(self):
         """同一次添加中若后续点失败，回滚已画出的中间挡管。"""
@@ -26346,6 +26348,7 @@ class TubeLayoutEditor(QMainWindow):
         self._cdg_batch_coords = []
         self._cdg_batch_items = []
         self._cdg_batch_failed = True
+        self._cdg_replace_lagan_decision = None
 
     def _mirror_abs_coords(self, cx, cy):
         """
@@ -26723,19 +26726,16 @@ class TubeLayoutEditor(QMainWindow):
                 if _rel_key(coord) not in removable
             ]
 
-    def _remove_any_lagan_at_coords(self, coords):
-        """
-        静默清除指定绝对坐标上的所有拉杆（普通/转换/自由）。
-        用于中间挡管落点前：同位置只保留一个元件。
-        """
-        if not coords:
-            return 0
-        scene = getattr(self, "graphics_scene", None)
-        if scene is None:
-            return 0
-
+    def _collect_any_lagan_items_at_coords(self, coords):
+        """收集指定绝对坐标上的所有拉杆图元（普通/转换/自由）。"""
         normal_items = []
         free_items = []
+        if not coords:
+            return normal_items, free_items
+        scene = getattr(self, "graphics_scene", None)
+        if scene is None:
+            return normal_items, free_items
+
         seen_ids = set()
         for item in list(scene.items()):
             try:
@@ -26764,7 +26764,45 @@ class TubeLayoutEditor(QMainWindow):
                     normal_items.append(item)
             except Exception:
                 continue
+        return normal_items, free_items
 
+    def _has_any_lagan_at_coords(self, coords):
+        """指定绝对坐标上是否已有拉杆（普通/转换/自由）。"""
+        normal_items, free_items = self._collect_any_lagan_items_at_coords(coords)
+        return bool(normal_items or free_items)
+
+    def _confirm_replace_lagan_for_center_dangguan(self):
+        """
+        弹窗确认是否用中间挡管替换同位置拉杆。
+        同一次批量添加只询问一次；否决后标记本批失败。
+        """
+        if getattr(self, "_cdg_batch_active", False):
+            decided = getattr(self, "_cdg_replace_lagan_decision", None)
+            if decided is not None:
+                return bool(decided)
+
+        from PyQt5.QtWidgets import QMessageBox
+
+        reply = QMessageBox.question(
+            self,
+            "提示",
+            "此处已有拉杆，是否继续添加中间挡管？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        ok = reply == QMessageBox.Yes
+        if getattr(self, "_cdg_batch_active", False):
+            self._cdg_replace_lagan_decision = ok
+            if not ok:
+                self._cdg_batch_failed = True
+        return ok
+
+    def _remove_any_lagan_at_coords(self, coords):
+        """
+        清除指定绝对坐标上的所有拉杆（普通/转换/自由）。
+        用于中间挡管落点前：同位置只保留一个元件。
+        """
+        normal_items, free_items = self._collect_any_lagan_items_at_coords(coords)
         if not normal_items and not free_items:
             return 0
 
@@ -26777,7 +26815,7 @@ class TubeLayoutEditor(QMainWindow):
             pass
         removed = len(normal_items) + len(free_items)
         print(
-            f"[remove_any_lagan_at_coords] 已静默清除同位置拉杆 {removed} 个"
+            f"[remove_any_lagan_at_coords] 已清除同位置拉杆 {removed} 个"
             f"（普通/转换={len(normal_items)}, 自由={len(free_items)}）"
         )
         return removed

@@ -2,9 +2,7 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="357ee038-b424-4db3-a1fd-be9e8b5f30dc" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/../../debug_log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/../../debug_log.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../error_log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/../../error_log.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/buguan_ziyong/My_Piping.py" beforeDir="false" afterPath="$PROJECT_DIR$/buguan_ziyong/My_Piping.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/buguan_ziyong.rar" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -19,13 +17,13 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "RunOnceActivity.OpenProjectViewOnStart": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "git-widget-placeholder": "main"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;
   }
-}]]></component>
+}</component>
   <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
   <component name="TaskManager">
     <task active="true" id="Default" summary="Default task">

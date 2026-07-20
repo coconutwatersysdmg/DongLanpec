@@ -57,12 +57,33 @@ def draw_center_dangguan_at_position(coord, editor=None, skip_check=False):
 
     x, y = coord
 
-    # 落点前：同位置已有拉杆（普通/转换/自由）则静默清除，避免叠层覆盖中间挡管
+    # 同批已失败（含用户拒绝替换拉杆）则不再继续落点
+    if not skip_check and editor and getattr(editor, "_cdg_batch_failed", False):
+        return None
+
+    # 落点前：同位置已有拉杆时询问；确认后清除再画，拒绝则保持不变
+    # skip_check（加载/显式互转恢复）仍静默清除，避免叠层
     try:
-        if editor and hasattr(editor, "_remove_any_lagan_at_coords"):
-            editor._remove_any_lagan_at_coords([(float(x), float(y))])
+        target = [(float(x), float(y))]
+        has_lagan = False
+        if editor and hasattr(editor, "_has_any_lagan_at_coords"):
+            has_lagan = bool(editor._has_any_lagan_at_coords(target))
+        if has_lagan:
+            if skip_check:
+                if hasattr(editor, "_remove_any_lagan_at_coords"):
+                    editor._remove_any_lagan_at_coords(target)
+            else:
+                confirmed = True
+                if hasattr(editor, "_confirm_replace_lagan_for_center_dangguan"):
+                    confirmed = bool(
+                        editor._confirm_replace_lagan_for_center_dangguan()
+                    )
+                if not confirmed:
+                    return None
+                if hasattr(editor, "_remove_any_lagan_at_coords"):
+                    editor._remove_any_lagan_at_coords(target)
     except Exception as e:
-        print(f"[draw_center_dangguan_at_position] 清除同位置拉杆失败: {e}")
+        print(f"[draw_center_dangguan_at_position] 处理同位置拉杆失败: {e}")
 
     # 干涉检查（挡管间距 / 轴侧换热管）；同批失败则回滚已画点并弹窗
     if not skip_check and editor and hasattr(editor, "validate_center_dangguan_placement"):
