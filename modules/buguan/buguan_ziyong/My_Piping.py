@@ -24846,31 +24846,17 @@ class TubeLayoutEditor(QMainWindow):
                 distance = self.calculate_distance(self.selected_centers)
 
                 tube_outer_diameter = int(tube_radius)
-                rmin_table = {
-                    10: 20,
-                    12: 24,
-                    14: 30,
-                    16: 32,
-                    19: 40,
-                    20: 40,
-                    22: 45,
-                    25: 50,
-                    30: 60,
-                    32: 65,
-                    35: 70,
-                    38: 76,
-                    45: 90,
-                    50: 100,
-                    55: 110,
-                    57: 115,
+                # 已知换热管外径规格；最小弯曲半径 = 1.5 * do
+                known_do = {
+                    10, 12, 14, 16, 19, 20, 22, 25, 30, 32, 35, 38, 45, 50, 55, 57,
                 }
 
                 # 检查是否需要进行弯曲半径检查
-                perform_check = tube_outer_diameter in rmin_table
+                perform_check = tube_outer_diameter in known_do
 
                 # 如果需要检查且不满足条件，则给出提示
                 if perform_check:
-                    required_rmin = rmin_table[tube_outer_diameter]
+                    required_rmin = tube_outer_diameter * 1.5
                     if distance < required_rmin:
                         QMessageBox.warning(
                             self,
