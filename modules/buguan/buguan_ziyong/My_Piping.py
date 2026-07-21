@@ -2892,9 +2892,11 @@ class TubeLayoutEditor(QMainWindow):
         self.param_table.showEvent = (
             lambda event: self.restore_param_table_column_widths()
         )
-        # Excel 式编辑：单击选中，回车进入编辑；直接输入字符也可编辑（禁用双击编辑）
+        # Excel 式编辑：单击/回车进入编辑；直接输入字符也可编辑
         self.param_table.setEditTriggers(
-            QAbstractItemView.AnyKeyPressed | QAbstractItemView.EditKeyPressed
+            QAbstractItemView.SelectedClicked
+            | QAbstractItemView.EditKeyPressed
+            | QAbstractItemView.AnyKeyPressed
         )
         self.param_table.installEventFilter(self)
         self.param_table.viewport().installEventFilter(self)
@@ -16420,7 +16422,12 @@ class TubeLayoutEditor(QMainWindow):
                     # 设置为灰色文字，提示用户不可编辑
                     item.setForeground(QBrush(QColor(150, 150, 150)))
                 else:
-                    item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
+                    # 必须含 ItemIsSelectable，否则无法单击选中/进入编辑
+                    item.setFlags(
+                        Qt.ItemIsSelectable
+                        | Qt.ItemIsEnabled
+                        | Qt.ItemIsEditable
+                    )
                 self.original_param_values[(row, 2)] = display_value
 
                 # 为普通文本单元格添加变化监听
@@ -41597,9 +41604,40 @@ class TubeLayoutEditor(QMainWindow):
             print(f"[param_table Tab] {e}")
             return False
 
+    def _param_name_at_row(self, row):
+        """读取参数表第 row 行参数名。"""
+        tbl = getattr(self, "param_table", None)
+        if tbl is None or row < 0 or row >= tbl.rowCount():
+            return ""
+        name_item = tbl.item(row, 1)
+        if name_item is None:
+            return ""
+        return (name_item.text() or "").strip()
+
+    def _should_open_combo_popup_on_enter(self, row):
+        """回车跳转到下拉时，仅这两项自动展开；其余下拉保持原样。"""
+        return self._param_name_at_row(row) in (
+            "换热管布置方式",
+            "换热管排列方式",
+        )
+
+    def _start_param_value_edit_on_click(self, row):
+        """单击参数值列：文本格进入编辑；下拉格获焦（不一律展开）。"""
+        tbl = getattr(self, "param_table", None)
+        if tbl is None or row < 0 or row >= tbl.rowCount():
+            return
+        if not self._param_value_row_enter_jumpable(row):
+            return
+        # 单击进入编辑时不强制展开下拉；回车跳转到指定两项时再展开
+        self._focus_param_value_cell(row, open_combo_popup=False)
+
     def _handle_param_table_enter_start_edit(self):
-        """参数表未进入编辑时按回车：进入当前行参数值列编辑（先单击选中再回车）。"""
+        """参数表未进入编辑时按回车：进入当前行参数值列编辑。
+
+        若当前格只读（如「公称直径 DN」），则跳到下一可编辑参数值格。
+        """
         from PyQt5.QtWidgets import QAbstractItemView
+        from PyQt5.QtCore import QTimer
 
         tbl = getattr(self, "param_table", None)
         if tbl is None or tbl.state() == QAbstractItemView.EditingState:
@@ -41610,22 +41648,48 @@ class TubeLayoutEditor(QMainWindow):
             return False
         if col != 2:
             tbl.setCurrentCell(row, 2)
+
+        # 只读格（DN / 是否以外径为基准等）：回车不编辑，直接跳下一格
         if not self._param_value_row_enter_jumpable(row):
-            return False
-        self._focus_param_value_cell(row)
+            next_row = self._find_next_editable_param_value_row(row)
+            if next_row < 0:
+                return False
+
+            def _go_readonly():
+                try:
+                    tbl.setCurrentCell(next_row, 2)
+                    tbl.setFocus(Qt.OtherFocusReason)
+                    self._focus_param_value_cell(
+                        next_row,
+                        open_combo_popup=self._should_open_combo_popup_on_enter(
+                            next_row
+                        ),
+                    )
+                except Exception:
+                    pass
+
+            QTimer.singleShot(0, _go_readonly)
+            return True
+
+        self._focus_param_value_cell(
+            row, open_combo_popup=self._should_open_combo_popup_on_enter(row)
+        )
         return True
 
     def _focus_param_value_cell(self, row, open_combo_popup=False):
         """将焦点落到第 row 行参数值列（文本格进入编辑；下拉框获焦，可编辑时选中 lineEdit 全文）。
 
-        open_combo_popup=True（如 Tab 跳转）：下拉框自动展开选项列表。
+        open_combo_popup=True（如 Tab 跳转，或回车落到指定下拉项）：下拉框自动展开选项列表。
         """
         tbl = getattr(self, "param_table", None)
         if tbl is None or row < 0 or row >= tbl.rowCount():
             return
         item = tbl.item(row, 2)
         cw = tbl.cellWidget(row, 2)
-        if item is not None and (item.flags() & Qt.ItemIsEditable):
+        if item is not None and (item.flags() & Qt.ItemIsEditable) and not isinstance(
+            cw, QComboBox
+        ):
+            tbl.setCurrentCell(row, 2)
             tbl.editItem(item)
         elif isinstance(cw, QComboBox):
             cw.setFocus(Qt.OtherFocusReason)
@@ -41663,7 +41727,10 @@ class TubeLayoutEditor(QMainWindow):
             if next_row >= 0:
                 tbl.setCurrentCell(next_row, 2)
                 tbl.setFocus(Qt.OtherFocusReason)
-                self._focus_param_value_cell(next_row)
+                self._focus_param_value_cell(
+                    next_row,
+                    open_combo_popup=self._should_open_combo_popup_on_enter(next_row),
+                )
             else:
                 tbl.setFocus(Qt.OtherFocusReason)
 
@@ -41710,7 +41777,10 @@ class TubeLayoutEditor(QMainWindow):
             if next_row >= 0:
                 tbl.setCurrentCell(next_row, 2)
                 tbl.setFocus(Qt.OtherFocusReason)
-                self._focus_param_value_cell(next_row)
+                self._focus_param_value_cell(
+                    next_row,
+                    open_combo_popup=self._should_open_combo_popup_on_enter(next_row),
+                )
             else:
                 tbl.setFocus(Qt.OtherFocusReason)
 
@@ -41787,6 +41857,33 @@ class TubeLayoutEditor(QMainWindow):
                                 if self._handle_param_table_value_enter_commit_and_next(obj):
                                     event.accept()
                                     return True
+
+        # 参数值列单击即进入编辑（Excel 式；不依赖双击）
+        if event.type() == QEvent.MouseButtonRelease:
+            try:
+                if (
+                    event.button() == Qt.LeftButton
+                    and getattr(self, "param_table", None) is not None
+                    and obj is self.param_table.viewport()
+                ):
+                    from PyQt5.QtCore import QTimer
+                    from PyQt5.QtWidgets import QAbstractItemView
+
+                    idx = self.param_table.indexAt(event.pos())
+                    if (
+                        idx.isValid()
+                        and idx.column() == 2
+                        and self._param_value_row_enter_jumpable(idx.row())
+                    ):
+                        # 已有 cellWidget（下拉）时点击会落到控件上，这里主要处理文本格
+                        if self.param_table.cellWidget(idx.row(), 2) is None:
+                            row = idx.row()
+                            if self.param_table.state() != QAbstractItemView.EditingState:
+                                QTimer.singleShot(
+                                    0, lambda r=row: self._start_param_value_edit_on_click(r)
+                                )
+            except Exception as e:
+                print(f"[eventFilter param click edit] {e}")
 
         if not hasattr(self, "has_piped"):
             self.has_piped = False
