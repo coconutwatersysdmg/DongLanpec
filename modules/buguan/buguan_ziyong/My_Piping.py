@@ -3353,6 +3353,12 @@ class TubeLayoutEditor(QMainWindow):
 
         self._set_hole_distribution_table_readonly()
 
+        try:
+            self.hole_distribution_table.installEventFilter(self)
+            self.hole_distribution_table.viewport().installEventFilter(self)
+        except Exception:
+            pass
+
         right_layout.addWidget(self.hole_distribution_table, 1)
 
         # 底部占位：高度与左侧「拉杆标准数量」行一致，使左右表框底边平齐
@@ -41370,6 +41376,7 @@ class TubeLayoutEditor(QMainWindow):
                 if self._param_value_row_for_col2_widget(now) >= 0:
                     now.installEventFilter(self)
                     self._param_enter_filter_widget = now
+                    self._arm_param_combo_popup_tab_filter(now)
         except Exception:
             pass
 
@@ -41402,6 +41409,194 @@ class TubeLayoutEditor(QMainWindow):
                 return r
         return -1
 
+    def _find_prev_editable_param_value_row(self, before_row):
+        """从 before_row 之前（含绕回）找上一行参数值列可停留的单元格。"""
+        tbl = getattr(self, "param_table", None)
+        if tbl is None:
+            return -1
+        n = tbl.rowCount()
+        if n <= 0:
+            return -1
+        for step in range(1, n):
+            r = (before_row - step) % n
+            if self._param_value_row_enter_jumpable(r):
+                return r
+        return -1
+
+    def _arm_param_combo_popup_tab_filter(self, combo):
+        """给下拉弹出层装 eventFilter，否则展开后 Tab 进不了参数表逻辑。"""
+        if not isinstance(combo, QComboBox):
+            return
+        try:
+            view = combo.view()
+            if view is None:
+                return
+            if not getattr(view, "_buguan_param_tab_filter", False):
+                view.installEventFilter(self)
+                view._buguan_param_tab_filter = True
+            vp = view.viewport()
+            if vp is not None and not getattr(vp, "_buguan_param_tab_filter", False):
+                vp.installEventFilter(self)
+                vp._buguan_param_tab_filter = True
+        except Exception:
+            pass
+
+    def _resolve_param_table_combo_from_obj(self, obj):
+        """
+        若 obj 是参数表第 2 列下拉框、其 lineEdit、或其弹出列表，
+        返回 (combo, row)；否则 (None, -1)。
+        """
+        tbl = getattr(self, "param_table", None)
+        if tbl is None or obj is None:
+            return None, -1
+        try:
+            for r in range(tbl.rowCount()):
+                cw = tbl.cellWidget(r, 2)
+                if not isinstance(cw, QComboBox):
+                    continue
+                if obj is cw:
+                    return cw, r
+                try:
+                    if isinstance(obj, QWidget) and cw.isAncestorOf(obj):
+                        return cw, r
+                except Exception:
+                    pass
+                view = cw.view()
+                if view is None:
+                    continue
+                if obj is view:
+                    return cw, r
+                try:
+                    if isinstance(obj, QWidget) and view.isAncestorOf(obj):
+                        return cw, r
+                except Exception:
+                    pass
+                try:
+                    vp = view.viewport()
+                    if vp is not None and (obj is vp or (
+                        isinstance(obj, QWidget) and vp.isAncestorOf(obj)
+                    )):
+                        return cw, r
+                except Exception:
+                    pass
+        except Exception:
+            return None, -1
+        return None, -1
+
+    def _is_param_table_tab_scope(self, obj):
+        """Tab 是否应走参数表跳转（含下拉弹出层）。"""
+        tbl = getattr(self, "param_table", None)
+        if tbl is None or obj is None:
+            return False
+        try:
+            if obj in (tbl, tbl.viewport()):
+                return True
+            if isinstance(obj, QWidget) and tbl.isAncestorOf(obj):
+                return True
+        except Exception:
+            pass
+        combo, _row = self._resolve_param_table_combo_from_obj(obj)
+        return combo is not None
+
+    def _handle_param_table_tab_to_input_cell(self, backward=False, event_obj=None):
+        """
+        Tab / Shift+Tab：只在可输入参数值列（文本格/下拉）之间跳；
+        落到下拉时展开；已展开时再 Tab 关闭并跳下一格。
+        """
+        try:
+            from PyQt5.QtWidgets import QAbstractItemView
+            from PyQt5.QtCore import QTimer
+
+            tbl = getattr(self, "param_table", None)
+            if tbl is None:
+                return False
+
+            row = tbl.currentRow()
+            col = tbl.currentColumn()
+            focus_combo = None
+
+            # 1) 事件源可能是弹出列表
+            if event_obj is not None:
+                c, r = self._resolve_param_table_combo_from_obj(event_obj)
+                if c is not None and r >= 0:
+                    focus_combo, row, col = c, r, 2
+
+            # 2) 当前焦点控件
+            if focus_combo is None:
+                fw = QApplication.focusWidget()
+                c, r = self._resolve_param_table_combo_from_obj(fw)
+                if c is not None and r >= 0:
+                    focus_combo, row, col = c, r, 2
+
+            if focus_combo is not None:
+                self._arm_param_combo_popup_tab_filter(focus_combo)
+                try:
+                    focus_combo.hidePopup()
+                except Exception:
+                    pass
+                if focus_combo.isEditable() and focus_combo.lineEdit() is not None:
+                    txt = focus_combo.lineEdit().text().strip()
+                    if txt != "" and txt != focus_combo.currentText().strip():
+                        focus_combo.setCurrentText(txt)
+
+            def _focus_target(target_row):
+                tbl.setCurrentCell(target_row, 2)
+                self._focus_param_value_cell(target_row, open_combo_popup=True)
+
+            if row < 0:
+                target = self._find_next_editable_param_value_row(-1)
+                if target < 0:
+                    return False
+                _focus_target(target)
+                return True
+
+            # 已在可输入参数值（含下拉展开中）：跳下一/上一
+            if col == 2 and self._param_value_row_enter_jumpable(row):
+                if tbl.state() == QAbstractItemView.EditingState and focus_combo is None:
+                    fw2 = QApplication.focusWidget()
+                    if isinstance(fw2, (QLineEdit, QAbstractSpinBox)) and tbl.isAncestorOf(fw2):
+                        if not self._commit_param_table_cell_editor(row, fw2):
+                            return True
+                    else:
+                        try:
+                            self._commit_param_table_open_editor()
+                        except Exception:
+                            pass
+
+                next_row = (
+                    self._find_prev_editable_param_value_row(row)
+                    if backward
+                    else self._find_next_editable_param_value_row(row)
+                )
+                if next_row < 0:
+                    return True
+
+                def _go_next():
+                    try:
+                        _focus_target(next_row)
+                    except Exception:
+                        pass
+
+                QTimer.singleShot(0, _go_next)
+                return True
+
+            # 其它列：进本行可输入参数值，否则下一/上一
+            if self._param_value_row_enter_jumpable(row):
+                target = row
+            else:
+                target = (
+                    self._find_prev_editable_param_value_row(row)
+                    if backward
+                    else self._find_next_editable_param_value_row(row)
+                )
+            if target < 0:
+                return False
+            _focus_target(target)
+            return True
+        except Exception as e:
+            print(f"[param_table Tab] {e}")
+            return False
+
     def _handle_param_table_enter_start_edit(self):
         """参数表未进入编辑时按回车：进入当前行参数值列编辑（先单击选中再回车）。"""
         from PyQt5.QtWidgets import QAbstractItemView
@@ -41420,8 +41615,11 @@ class TubeLayoutEditor(QMainWindow):
         self._focus_param_value_cell(row)
         return True
 
-    def _focus_param_value_cell(self, row):
-        """将焦点落到第 row 行参数值列（文本格进入编辑；下拉框获焦，可编辑时选中 lineEdit 全文）。"""
+    def _focus_param_value_cell(self, row, open_combo_popup=False):
+        """将焦点落到第 row 行参数值列（文本格进入编辑；下拉框获焦，可编辑时选中 lineEdit 全文）。
+
+        open_combo_popup=True（如 Tab 跳转）：下拉框自动展开选项列表。
+        """
         tbl = getattr(self, "param_table", None)
         if tbl is None or row < 0 or row >= tbl.rowCount():
             return
@@ -41438,6 +41636,12 @@ class TubeLayoutEditor(QMainWindow):
                     le.setText(cw.currentText())
                     le.setFocus(Qt.OtherFocusReason)
                     le.selectAll()
+            if open_combo_popup and cw.isEnabled():
+                from PyQt5.QtCore import QTimer
+
+                self._arm_param_combo_popup_tab_filter(cw)
+                # 等焦点落稳后再展开，避免弹层被立刻关掉
+                QTimer.singleShot(0, cw.showPopup)
 
     def _handle_param_table_combo_enter_commit_and_next(self, combo):
         """参数值列为 QComboBox（含不可编辑）时按回车：跳到下一参数值单元格。"""
@@ -41536,10 +41740,32 @@ class TubeLayoutEditor(QMainWindow):
         # 确保ClickableRectItem已定义（如果在其他文件中需导入）
         # from your_module import ClickableRectItem
 
-        # 左侧参数值列编辑中回车：提交并跳到下一可编辑单元格（不触发布管）
+        # 左侧参数值列：回车跳下一可编辑格；Tab 无论当前在哪一列都只落到可编辑参数值列
         if event.type() == QEvent.KeyPress:
             if isinstance(event, QKeyEvent):
                 key = event.key()
+                if key == Qt.Key_Tab:
+                    try:
+                        backward = bool(event.modifiers() & Qt.ShiftModifier)
+                        hole_tbl = getattr(self, "hole_distribution_table", None)
+                        if hole_tbl is not None:
+                            in_hole = obj in (hole_tbl, hole_tbl.viewport()) or (
+                                isinstance(obj, QWidget) and hole_tbl.isAncestorOf(obj)
+                            )
+                            if in_hole:
+                                # 右侧数量表无输入格：Tab 移出表，不在行号/标题间游走
+                                hole_tbl.focusNextPrevChild(not backward)
+                                event.accept()
+                                return True
+                        # 含下拉弹出层：展开后再 Tab 也要能跳下一格
+                        if self._is_param_table_tab_scope(obj):
+                            if self._handle_param_table_tab_to_input_cell(
+                                backward=backward, event_obj=obj
+                            ):
+                                event.accept()
+                                return True
+                    except Exception as e:
+                        print(f"[eventFilter Tab] {e}")
                 if key in (Qt.Key_Return, Qt.Key_Enter):
                     tbl = getattr(self, "param_table", None)
                     if tbl is not None and obj in (tbl, tbl.viewport()):

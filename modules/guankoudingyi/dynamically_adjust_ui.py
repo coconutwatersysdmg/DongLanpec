@@ -55,6 +55,7 @@ from modules.guankoudingyi.funcs.funcs_pipe_sort import setup_header_click_sort,
 # 导入确认按钮功能
 from modules.guankoudingyi.funcs.funs_enter_key import connect_save_button
 from modules.guankoudingyi.view_drawing.main_view import embed_heat_exchanger_view, HeatExchangerView
+from modules.guankoudingyi.view_drawing.smooth_resizable_view import install_pipe_definition_resizable_view
 #导入管口复制功能
 from modules.guankoudingyi.funcs.funcs_pipe_table import copy_pipe_data
 #管口批量导入功能
@@ -88,6 +89,14 @@ def get_pipe_position_subheaders(is_container):
     return headers
 
 
+# 二级表头显示换行（逻辑名不变，仅界面展示）
+PIPE_HEADER_DISPLAY_LINES = {
+    "密封面型式": "密封面\n型式",
+    "管口所属元件": "管口所属\n元件",
+    "轴向定位基准": "轴向定位\n基准",
+    "轴向定位距离": "轴向定位\n距离",
+}
+
 def get_pipe_min_column_widths(is_container):
     widths = {
         0: 80,   # 序号
@@ -97,23 +106,23 @@ def get_pipe_min_column_widths(is_container):
         4: 110,  # 公称尺寸
         5: 240,  # 法兰标准
         6: 130,  # 压力等级
-        7: 130,  # 法兰型式
-        8: 130,  # 密封面型式
+        7: 125,  # 法兰型式
+        8: 110,  # 密封面型式
         9: 160,  # 焊端规格
-        10: 175,  # 管口所属元件
-        11: 160,  # 轴向定位基准
-        12: 160,  # 轴向定位距离
-        13: 140,  # 轴向夹角(°)
-        14: 140,  # 周向方位(°)
-        15: 140,  # 偏心距(mm)
-        16: 160,  # 外伸高度
+        10: 160,  # 管口所属元件
+        11: 140,  # 轴向定位基准
+        12: 140,  # 轴向定位距离
+        13: 135,  # 轴向夹角(°)
+        14: 135,  # 周向方位(°)
+        15: 135,  # 偏心距(mm)
+        16: 140,  # 外伸高度
     }
     if is_container:
         widths[17] = 160  # 内伸高度
-        widths[18] = 190  # 管口附件
+        widths[18] = 180  # 管口附件
         widths[19] = 110  # 管口载荷
     else:
-        widths[17] = 190  # 管口附件
+        widths[17] = 180  # 管口附件
         widths[18] = 110  # 管口载荷
     return widths
 
@@ -732,6 +741,8 @@ class Stats(QtWidgets.QWidget):
             ui_filename = "pipe_attachment_define.ui"
         ui_path = os.path.join(ui_dir, ui_filename)
         uic.loadUi(ui_path, self)
+        # 2026-07-19：上下拉伸、等比缩放及流畅度优化已完整封装，一行安装。
+        install_pipe_definition_resizable_view(self)
 
         self.current_product_type = product_type or ""
         self.is_container_product = is_container_product_type(self.current_product_type)
@@ -856,8 +867,7 @@ class Stats(QtWidgets.QWidget):
             self.view.query_current_units = lambda: get_current_unit_types_from_ui(self)  # ✅ 让视图能获取当前公称尺寸的单位
             self.view.set_pipe_data(self.get_all_pipe_data())
 
-        # 示意图最小化按钮（pipe_attachment_define_test.ui 的 Minimize）
-        self.setup_pipe_view_minimize_button()
+
 
         #管口删除
         self.pushButton_pipe_delete.clicked.connect(lambda: delete_selected_pipe_rows(self, self.product_id))
@@ -1057,11 +1067,14 @@ class Stats(QtWidgets.QWidget):
                 layout.addWidget(combo)
                 table_title.setCellWidget(1, i, widget)
             else:
-                # 无单位字段，合并第2、3行，垂直居中
+                # 无单位字段，合并第2、3行，垂直居中（部分表头两行显示）
                 table_title.setSpan(1, i, 2, 1)
-                item = QTableWidgetItem(key)
+                display = PIPE_HEADER_DISPLAY_LINES.get(key, key)
+                item = QTableWidgetItem(display)
                 item.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
                 table_title.setItem(1, i, item)
+
+        table_title.setWordWrap(True)
 
         # 设置行高
         table_title.setRowHeight(0, 30)
@@ -1137,59 +1150,7 @@ class Stats(QtWidgets.QWidget):
         single_step = max(1, int(row_height / 3))
         table.verticalScrollBar().setSingleStep(single_step)
 
-    def setup_pipe_view_minimize_button(self):
-        """示意图最小化：仅 test UI 有 Minimize 时生效；收起时图标旋转 180°。"""
-        btn = getattr(self, "Minimize", None)
-        view_host = getattr(self, "widget_control", None)
-        if btn is None or view_host is None:
-            return
 
-        self._pipe_view_collapsed = False
-        icon_size = btn.iconSize()
-        pm_down = btn.icon().pixmap(icon_size)
-        if pm_down.isNull():
-            # UI 相对路径偶发解析失败时，按工程路径再取一次
-            icon_path = os.path.normpath(os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
-                "..", "chanpinguanli", "icons", "下箭头11.png",
-            ))
-            pm_down = QPixmap(icon_path)
-        if not pm_down.isNull():
-            pm_down = pm_down.scaled(
-                icon_size, Qt.KeepAspectRatio, Qt.SmoothTransformation
-            )
-            pm_up = pm_down.transformed(
-                QTransform().rotate(180), Qt.SmoothTransformation
-            )
-            self._minimize_icon_down = QIcon(pm_down)
-            self._minimize_icon_up = QIcon(pm_up)
-            btn.setIcon(self._minimize_icon_down)
-        else:
-            self._minimize_icon_down = btn.icon()
-            self._minimize_icon_up = btn.icon()
-
-        btn.setToolTip("最小化示意图")
-        try:
-            btn.clicked.disconnect()
-        except TypeError:
-            pass
-        btn.clicked.connect(self.toggle_pipe_view_minimize)
-
-    def toggle_pipe_view_minimize(self):
-        """切换示意图显隐，并翻转 Minimize 箭头方向。"""
-        btn = getattr(self, "Minimize", None)
-        view_host = getattr(self, "widget_control", None)
-        if btn is None or view_host is None:
-            return
-
-        self._pipe_view_collapsed = not getattr(self, "_pipe_view_collapsed", False)
-        view_host.setVisible(not self._pipe_view_collapsed)
-        if self._pipe_view_collapsed:
-            btn.setIcon(getattr(self, "_minimize_icon_up", btn.icon()))
-            btn.setToolTip("展开示意图")
-        else:
-            btn.setIcon(getattr(self, "_minimize_icon_down", btn.icon()))
-            btn.setToolTip("最小化示意图")
 
     def setup_pipe_frozen_columns(self):
         self.pipe_frozen_columns = (0, 1)
@@ -1224,6 +1185,8 @@ class Stats(QtWidgets.QWidget):
         for table in (self.tableWidget_pipe, self.tableWidget_pipe_title):
             table.installEventFilter(self)
             table.viewport().installEventFilter(self)
+            table.horizontalHeader().sectionResized.connect(sync_later)
+            table.verticalHeader().sectionResized.connect(sync_later)
 
         self._sync_pipe_frozen_columns()
 
@@ -1232,6 +1195,8 @@ class Stats(QtWidgets.QWidget):
         frozen.setModel(source_table.model())
         frozen.setObjectName(f"{source_table.objectName()}_frozen")
         frozen.setFrameShape(QtWidgets.QFrame.NoFrame)
+        frozen.setContentsMargins(0, 0, 0, 0)
+        frozen.setViewportMargins(0, 0, 0, 0)
         frozen.setShowGrid(source_table.showGrid())
         frozen.setGridStyle(source_table.gridStyle())
         # 不复制主表外框样式，避免冻结叠层多出一圈边框；网格线与底色与主表一致
@@ -1242,12 +1207,23 @@ class Stats(QtWidgets.QWidget):
                 gridline-color: palette(midlight);
             }
         """)
+        frozen.setFont(source_table.font())
+        frozen.setPalette(source_table.palette())
         frozen.setAlternatingRowColors(source_table.alternatingRowColors())
         frozen.setWordWrap(source_table.wordWrap())
+        frozen.setTextElideMode(source_table.textElideMode())
         frozen.horizontalHeader().setVisible(False)
         frozen.verticalHeader().setVisible(False)
         frozen.horizontalHeader().setSectionResizeMode(QHeaderView.Fixed)
         frozen.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        frozen.verticalHeader().setMinimumSectionSize(
+            source_table.verticalHeader().minimumSectionSize()
+        )
+        frozen.verticalHeader().setDefaultSectionSize(
+            source_table.verticalHeader().defaultSectionSize()
+        )
+        frozen.setHorizontalScrollMode(source_table.horizontalScrollMode())
+        frozen.setVerticalScrollMode(source_table.verticalScrollMode())
         frozen.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         frozen.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         if source_table is self.tableWidget_pipe:
@@ -1270,6 +1246,7 @@ class Stats(QtWidgets.QWidget):
         return frozen
 
     def _sync_pipe_frozen_columns(self):
+        """同步冻结列几何信息；全部使用 Qt 的逻辑像素，避免不同 DPI 下错位。"""
         pairs = (
             (self.tableWidget_pipe_title, getattr(self, "tableWidget_pipe_title_frozen", None)),
             (self.tableWidget_pipe, getattr(self, "tableWidget_pipe_frozen", None)),
@@ -1278,33 +1255,71 @@ class Stats(QtWidgets.QWidget):
             if frozen is None:
                 continue
 
-            frozen.clearSpans()
-            frozen_columns_width = 0
-            for col in range(source_table.columnCount()):
-                visible = col in self.pipe_frozen_columns and not source_table.isColumnHidden(col)
-                frozen.setColumnHidden(col, not visible)
-                if visible:
-                    col_width = source_table.columnWidth(col)
-                    frozen.setColumnWidth(col, col_width)
-                    frozen_columns_width += col_width
+            # 2026-07-19：冻结视图与主表必须共享完全相同的字体、DPI 逻辑尺寸、
+            # 行高和 viewport 原点；禁止再移动整个冻结视图做二次像素补偿。
+            frozen.setUpdatesEnabled(False)
+            try:
+                frozen.setFont(source_table.font())
+                frozen.setPalette(source_table.palette())
+                frozen.setGridStyle(source_table.gridStyle())
+                frozen.setTextElideMode(source_table.textElideMode())
+                frozen.verticalHeader().setMinimumSectionSize(
+                    source_table.verticalHeader().minimumSectionSize()
+                )
+                frozen.verticalHeader().setDefaultSectionSize(
+                    source_table.verticalHeader().defaultSectionSize()
+                )
 
-            for row in range(source_table.rowCount()):
-                frozen.setRowHeight(row, source_table.rowHeight(row))
+                frozen.clearSpans()
+                visible_cols = []
+                for col in range(source_table.columnCount()):
+                    visible = col in self.pipe_frozen_columns and not source_table.isColumnHidden(col)
+                    frozen.setColumnHidden(col, not visible)
+                    if visible:
+                        frozen.setColumnWidth(col, source_table.columnWidth(col))
+                        visible_cols.append(col)
 
-            if source_table is self.tableWidget_pipe_title:
-                for col in self.pipe_frozen_columns:
-                    if col < source_table.columnCount() and not source_table.isColumnHidden(col):
+                # 逐行复制最终 sectionSize，而不是依赖默认行高或字体估算。
+                for row in range(source_table.rowCount()):
+                    frozen.setRowHeight(row, source_table.rowHeight(row))
+
+                if source_table is self.tableWidget_pipe_title:
+                    for col in visible_cols:
                         frozen.setSpan(0, col, 3, 1)
 
-            viewport_geometry = source_table.viewport().geometry()
-            frozen.setGeometry(
-                viewport_geometry.x(),
-                viewport_geometry.y(),
-                frozen_columns_width,
-                viewport_geometry.height(),
-            )
-            frozen.setVisible(frozen_columns_width > 0 and source_table.isVisible())
-            frozen.raise_()
+                if not visible_cols:
+                    frozen.setVisible(False)
+                    continue
+
+                frozen_columns_width = sum(
+                    source_table.horizontalHeader().sectionSize(col)
+                    for col in visible_cols
+                )
+                if frozen_columns_width > 0:
+                    # 保留最后一列右缘网格线，宽度仍为 Qt 逻辑像素。
+                    frozen_columns_width += 1
+
+                # viewport.geometry() 已经是 source_table 坐标，能同时包含系统样式、
+                # frameWidth 和高 DPI 取整结果；不再自行 mapTo/visualRect 叠加修正。
+                viewport_geometry = source_table.viewport().geometry()
+                frozen.setGeometry(
+                    viewport_geometry.x(),
+                    viewport_geometry.y(),
+                    min(frozen_columns_width, viewport_geometry.width()),
+                    viewport_geometry.height(),
+                )
+                frozen.horizontalScrollBar().setValue(0)
+                frozen.updateGeometries()
+                if source_table is self.tableWidget_pipe:
+                    frozen.verticalScrollBar().setValue(
+                        source_table.verticalScrollBar().value()
+                    )
+
+                frozen.setVisible(frozen_columns_width > 0 and source_table.isVisible())
+                frozen.raise_()
+            finally:
+                frozen.setUpdatesEnabled(True)
+                frozen.viewport().update()
 
         data_frozen = getattr(self, "tableWidget_pipe_frozen", None)
         if data_frozen is not None:
@@ -1326,6 +1341,9 @@ class Stats(QtWidgets.QWidget):
             QEvent.Show,
             QEvent.Hide,
             QEvent.LayoutRequest,
+            QEvent.FontChange,
+            QEvent.StyleChange,
+            QEvent.ApplicationFontChange,
         ):
             QTimer.singleShot(0, self._sync_pipe_frozen_columns)
         return super().eventFilter(obj, event)
@@ -1465,11 +1483,14 @@ class Stats(QtWidgets.QWidget):
         if column == 1 and not hasattr(self, 'old_port_code'):
             self.old_port_code = ''
 
-        # # ✅ 如果是最后一行的管口代号被填写，自动添加新行
-        # if column == 1 and row == self.tableWidget_pipe.rowCount() - 1:
-        #     item = self.tableWidget_pipe.item(row, column)
-        #     if item and item.text().strip():
-        #         check_last_row_and_add_new(self)
+        # 仅影响示意图的列才全量刷新；压力等级/法兰等列跳过，避免管口多时卡顿
+        drawing_columns = {1, 4, 10, 11, 12, 13, 14, 15, 16}
+        if getattr(self, "is_container_product", False):
+            internal_col = get_pipe_col(True, "内伸高度")
+            if internal_col is not None:
+                drawing_columns.add(internal_col)
+        if column not in drawing_columns:
+            return
 
         # ✅ 更新视图
         view = self.widget_control.findChild(HeatExchangerView)
@@ -1715,11 +1736,7 @@ class Stats(QtWidgets.QWidget):
                 self.line_tip.setText("离开该界面前请勿忘记点击“确认”按钮！")
                 self.line_tip.setStyleSheet("color: #fcb15d; font-weight:bold;")
 
-            out_path = export_nozzle_listing(self)  # self 就是 stats_widget
-            if out_path:
-                show_styled_message(
-                    self, "导出成功", f"已导出到：\n{out_path}", icon=QMessageBox.Information
-                )
+            export_nozzle_listing(self)  # self 就是 stats_widget；成功后在导出函数内询问是否打开文件夹
         except Exception as e:
             show_styled_message(self, "导出失败", str(e), icon=QMessageBox.Critical)
 
@@ -1729,11 +1746,7 @@ class Stats(QtWidgets.QWidget):
             if self.line_tip:
                 self.line_tip.setText("离开该界面前请勿忘记点击“确认”按钮！")
                 self.line_tip.setStyleSheet("color: #fcb15d; font-weight:bold;")
-            out_path = export_nozzle_define_sheet(self)
-            if out_path:
-                show_styled_message(
-                    self, "导出成功", f"已导出到：\n{out_path}", icon=QMessageBox.Information
-                )
+            export_nozzle_define_sheet(self)  # 成功后在导出函数内询问是否打开文件夹
         except Exception as e:
             show_styled_message(self, "导出失败", str(e), icon=QMessageBox.Critical)
 
@@ -1858,4 +1871,3 @@ class Stats(QtWidgets.QWidget):
         for col in range(table_attach.columnCount()):
             table_attach.resizeColumnToContents(col)
             table_attach.setColumnWidth(col, max(table_attach.columnWidth(col), min_widths.get(col, 100)))
-
