@@ -4652,9 +4652,15 @@ class TubeLayoutEditor(QMainWindow):
                                     elif Di <= 2000:
                                         b_n = 16.0
                                         b_1 = 6.0
-                                    else:  # Di > 2000mm（最大到2600mm）
+                                    elif Di < 2300:
                                         b_n = 20.0
                                         b_1 = 7.0
+                                    elif Di <= 2600:
+                                        b_n = 20.0
+                                        b_1 = 8.0
+                                    else:  # Di > 2600mm
+                                        b_n = 20.0
+                                        b_1 = 9.0
 
                                     # 3. 计算b₂（第二圈管到第一圈管距离）
                                     b_2 = b_n + 1.5  # 固定公式
@@ -5184,9 +5190,15 @@ class TubeLayoutEditor(QMainWindow):
                                     elif Di <= 2000:
                                         b_n = 16.0
                                         b_1 = 6.0
-                                    else:  # Di > 2000mm（最大到2600mm）
+                                    elif Di < 2300:
                                         b_n = 20.0
                                         b_1 = 7.0
+                                    elif Di <= 2600:
+                                        b_n = 20.0
+                                        b_1 = 8.0
+                                    else:  # Di > 2600mm
+                                        b_n = 20.0
+                                        b_1 = 9.0
 
                                     # 3. 计算b₂（第二圈管到第一圈管距离）
                                     b_2 = b_n + 1.5  # 固定公式
@@ -9783,9 +9795,15 @@ class TubeLayoutEditor(QMainWindow):
                 elif di_value_local <= 2000:
                     b_n = 16.0
                     b_1 = 6.0
-                else:  # di_value_local ≤ 2600
+                elif di_value_local < 2300:
                     b_n = 20.0
                     b_1 = 7.0
+                elif di_value_local <= 2600:
+                    b_n = 20.0
+                    b_1 = 8.0
+                else:  # di_value_local > 2600
+                    b_n = 20.0
+                    b_1 = 9.0
 
                 # 计算b₂
                 b_2 = b_n + 1.5
@@ -15488,14 +15506,18 @@ class TubeLayoutEditor(QMainWindow):
                         if _di_val is not None and _do_val is not None and _di_val > 0 and _do_val > 0:
                             _hx = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
                             if _hx in ("AES", "BES"):
-                                if _di_val < 700:
+                                if _di_val <= 700:
                                     _b_n, _b_1 = 10.0, 3.0
                                 elif _di_val <= 1200:
                                     _b_n, _b_1 = 13.0, 5.0
                                 elif _di_val <= 2000:
                                     _b_n, _b_1 = 16.0, 6.0
-                                else:
+                                elif _di_val < 2300:
                                     _b_n, _b_1 = 20.0, 7.0
+                                elif _di_val <= 2600:
+                                    _b_n, _b_1 = 20.0, 8.0
+                                else:
+                                    _b_n, _b_1 = 20.0, 9.0
                                 _b = 4.0 if _di_val < 1000 else 5.0
                                 _b_2 = _b_n + 1.5
                                 _dl_limit = _di_val - 2 * (_b_1 + _b_2 + _b)
