@@ -6207,15 +6207,15 @@ class TubeLayoutEditor(QMainWindow):
                 self.is_x_line1 = True
             else:
                 # 没有绝对坐标对，使用相对坐标重新计算（兼容旧数据）
-                self.cross_x_2_pipes(
+                if self.cross_x_2_pipes(
                     self.coord_x_line1_2,
                     self.print_cross_x_up_line1,
                     self.print_cross_x_down_line1,
                     1,
-                )
-                if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
-                    self.abs_coords_line1 = self._current_abs_coords.copy()
-                self.is_x_line1 = True
+                ):
+                    if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
+                        self.abs_coords_line1 = self._current_abs_coords.copy()
+                    self.is_x_line1 = True
         if self.coord_x_line2_2:
             if hasattr(self, "abs_coords_line2") and self.abs_coords_line2:
                 for abs_coord_pair in self.abs_coords_line2:
@@ -6230,15 +6230,15 @@ class TubeLayoutEditor(QMainWindow):
                             self.build_2_cross_pipes([coord1_selected, coord2_selected])
                 self.is_x_line2 = True
             else:
-                self.cross_x_2_pipes(
+                if self.cross_x_2_pipes(
                     self.coord_x_line2_2,
                     self.print_cross_x_up_line2,
                     self.print_cross_x_down_line2,
                     2,
-                )
-                if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
-                    self.abs_coords_line2 = self._current_abs_coords.copy()
-                self.is_x_line2 = True
+                ):
+                    if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
+                        self.abs_coords_line2 = self._current_abs_coords.copy()
+                    self.is_x_line2 = True
         if self.coord_x_line3_2:
             if hasattr(self, "abs_coords_line3") and self.abs_coords_line3:
                 for abs_coord_pair in self.abs_coords_line3:
@@ -6253,15 +6253,15 @@ class TubeLayoutEditor(QMainWindow):
                             self.build_2_cross_pipes([coord1_selected, coord2_selected])
                 self.is_x_line3 = True
             else:
-                self.cross_x_2_pipes(
+                if self.cross_x_2_pipes(
                     self.coord_x_line3_2,
                     self.print_cross_x_up_line3,
                     self.print_cross_x_down_line3,
                     3,
-                )
-                if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
-                    self.abs_coords_line3 = self._current_abs_coords.copy()
-                self.is_x_line3 = True
+                ):
+                    if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
+                        self.abs_coords_line3 = self._current_abs_coords.copy()
+                    self.is_x_line3 = True
         if self.coord_y_line1_2:
             if hasattr(self, "abs_coords_line1") and self.abs_coords_line1:
                 for abs_coord_pair in self.abs_coords_line1:
@@ -6276,15 +6276,15 @@ class TubeLayoutEditor(QMainWindow):
                             self.build_2_cross_pipes([coord1_selected, coord2_selected])
                 self.is_y_line1 = True
             else:
-                self.cross_y_2_pipes(
+                if self.cross_y_2_pipes(
                     self.coord_y_line1_2,
                     self.print_cross_y_left_line1,
                     self.print_cross_y_right_line1,
                     1,
-                )
-                if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
-                    self.abs_coords_line1 = self._current_abs_coords.copy()
-                self.is_y_line1 = True
+                ):
+                    if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
+                        self.abs_coords_line1 = self._current_abs_coords.copy()
+                    self.is_y_line1 = True
         if self.coord_y_line2_2:
             if hasattr(self, "abs_coords_line2") and self.abs_coords_line2:
                 for abs_coord_pair in self.abs_coords_line2:
@@ -6299,15 +6299,15 @@ class TubeLayoutEditor(QMainWindow):
                             self.build_2_cross_pipes([coord1_selected, coord2_selected])
                 self.is_y_line2 = True
             else:
-                self.cross_y_2_pipes(
+                if self.cross_y_2_pipes(
                     self.coord_y_line2_2,
                     self.print_cross_y_left_line2,
                     self.print_cross_y_right_line2,
                     2,
-                )
-                if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
-                    self.abs_coords_line2 = self._current_abs_coords.copy()
-                self.is_y_line2 = True
+                ):
+                    if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
+                        self.abs_coords_line2 = self._current_abs_coords.copy()
+                    self.is_y_line2 = True
         if self.coord_y_line3_2:
             if hasattr(self, "abs_coords_line3") and self.abs_coords_line3:
                 for abs_coord_pair in self.abs_coords_line3:
@@ -6322,15 +6322,15 @@ class TubeLayoutEditor(QMainWindow):
                             self.build_2_cross_pipes([coord1_selected, coord2_selected])
                 self.is_y_line3 = True
             else:
-                self.cross_y_2_pipes(
+                if self.cross_y_2_pipes(
                     self.coord_y_line3_2,
                     self.print_cross_y_left_line3,
                     self.print_cross_y_right_line3,
                     3,
-                )
-                if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
-                    self.abs_coords_line3 = self._current_abs_coords.copy()
-                self.is_y_line3 = True
+                ):
+                    if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
+                        self.abs_coords_line3 = self._current_abs_coords.copy()
+                    self.is_y_line3 = True
         if self.coord_x_line1_4:
             if hasattr(self, "abs_coords_line1") and self.abs_coords_line1:
                 for abs_coord_pair in self.abs_coords_line1:
@@ -6345,14 +6345,14 @@ class TubeLayoutEditor(QMainWindow):
                             self.build_2_cross_pipes([coord1_selected, coord2_selected])
                 self.is_x_line1 = True
             else:
-                self.cross_x_4_pipes(
+                if self.cross_x_4_pipes(
                     self.coord_x_line1_4,
                     self.print_cross_x_up_line1,
                     self.print_cross_x_down_line1,
-                )
-                if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
-                    self.abs_coords_line1 = self._current_abs_coords.copy()
-                self.is_x_line1 = True
+                ):
+                    if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
+                        self.abs_coords_line1 = self._current_abs_coords.copy()
+                    self.is_x_line1 = True
         if self.coord_x_line2_4:
             if hasattr(self, "abs_coords_line2") and self.abs_coords_line2:
                 for abs_coord_pair in self.abs_coords_line2:
@@ -6367,14 +6367,14 @@ class TubeLayoutEditor(QMainWindow):
                             self.build_2_cross_pipes([coord1_selected, coord2_selected])
                 self.is_x_line2 = True
             else:
-                self.cross_x_4_pipes(
+                if self.cross_x_4_pipes(
                     self.coord_x_line2_4,
                     self.print_cross_x_up_line2,
                     self.print_cross_x_down_line2,
-                )
-                if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
-                    self.abs_coords_line2 = self._current_abs_coords.copy()
-                self.is_x_line2 = True
+                ):
+                    if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
+                        self.abs_coords_line2 = self._current_abs_coords.copy()
+                    self.is_x_line2 = True
         if self.coord_x_line3_4:
             if hasattr(self, "abs_coords_line3") and self.abs_coords_line3:
                 for abs_coord_pair in self.abs_coords_line3:
@@ -6389,14 +6389,14 @@ class TubeLayoutEditor(QMainWindow):
                             self.build_2_cross_pipes([coord1_selected, coord2_selected])
                 self.is_x_line3 = True
             else:
-                self.cross_x_4_pipes(
+                if self.cross_x_4_pipes(
                     self.coord_x_line3_4,
                     self.print_cross_x_up_line3,
                     self.print_cross_x_down_line3,
-                )
-                if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
-                    self.abs_coords_line3 = self._current_abs_coords.copy()
-                self.is_x_line3 = True
+                ):
+                    if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
+                        self.abs_coords_line3 = self._current_abs_coords.copy()
+                    self.is_x_line3 = True
         if self.coord_y_line1_4:
             if hasattr(self, "abs_coords_line1") and self.abs_coords_line1:
                 for abs_coord_pair in self.abs_coords_line1:
@@ -6411,14 +6411,14 @@ class TubeLayoutEditor(QMainWindow):
                             self.build_2_cross_pipes([coord1_selected, coord2_selected])
                 self.is_y_line1 = True
             else:
-                self.cross_y_4_pipes(
+                if self.cross_y_4_pipes(
                     self.coord_y_line1_4,
                     self.print_cross_y_left_line1,
                     self.print_cross_y_right_line1,
-                )
-                if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
-                    self.abs_coords_line1 = self._current_abs_coords.copy()
-                self.is_y_line1 = True
+                ):
+                    if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
+                        self.abs_coords_line1 = self._current_abs_coords.copy()
+                    self.is_y_line1 = True
         if self.coord_y_line2_4:
             if hasattr(self, "abs_coords_line2") and self.abs_coords_line2:
                 for abs_coord_pair in self.abs_coords_line2:
@@ -6433,14 +6433,14 @@ class TubeLayoutEditor(QMainWindow):
                             self.build_2_cross_pipes([coord1_selected, coord2_selected])
                 self.is_y_line2 = True
             else:
-                self.cross_y_4_pipes(
+                if self.cross_y_4_pipes(
                     self.coord_y_line2_4,
                     self.print_cross_y_left_line2,
                     self.print_cross_y_right_line2,
-                )
-                if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
-                    self.abs_coords_line2 = self._current_abs_coords.copy()
-                self.is_y_line2 = True
+                ):
+                    if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
+                        self.abs_coords_line2 = self._current_abs_coords.copy()
+                    self.is_y_line2 = True
         if self.coord_y_line3_4:
             if hasattr(self, "abs_coords_line3") and self.abs_coords_line3:
                 for abs_coord_pair in self.abs_coords_line3:
@@ -6455,14 +6455,14 @@ class TubeLayoutEditor(QMainWindow):
                             self.build_2_cross_pipes([coord1_selected, coord2_selected])
                 self.is_y_line3 = True
             else:
-                self.cross_y_4_pipes(
+                if self.cross_y_4_pipes(
                     self.coord_y_line3_4,
                     self.print_cross_y_left_line3,
                     self.print_cross_y_right_line3,
-                )
-                if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
-                    self.abs_coords_line3 = self._current_abs_coords.copy()
-                self.is_y_line3 = True
+                ):
+                    if hasattr(self, "_current_abs_coords") and self._current_abs_coords:
+                        self.abs_coords_line3 = self._current_abs_coords.copy()
+                    self.is_y_line3 = True
 
     def cal_di(self, user_Di, user_DN, user_Dit):
         # 调用接口获取壳体内直径数据
@@ -23730,6 +23730,13 @@ class TubeLayoutEditor(QMainWindow):
     def cross_x_2_pipes(
             self, selected_centers, print_cross_x_up, print_cross_x_down, row
     ):
+        prepared = self._prepare_cross_pairing_after_axis_cleanup(
+            selected_centers, "x", print_cross_x_up, print_cross_x_down, line_no=row
+        )
+        if prepared is None:
+            return False
+        print_cross_x_up, print_cross_x_down = prepared
+
         # 获取选择的中心点编号
         result = self.get_selected_x_center_numbers(
             selected_centers, print_cross_x_up, print_cross_x_down, row
@@ -23739,13 +23746,14 @@ class TubeLayoutEditor(QMainWindow):
             QMessageBox.warning(self, "选择错误", "参照管孔之间的连线应为倾斜线")
             self.clear_selection_highlight()
             self.selected_centers = []
-            return
+            return False
 
         elif abs(result["up_number"] - result["down_number"]) > 3:
             # 参照管孔间隔不能大于3个
             QMessageBox.warning(self, "选择错误", "参照管孔间隔不能大于3个换热管孔")
             self.clear_selection_highlight()
             self.selected_centers = []
+            return False
         else:
             self.get_x_2_number_sequences(result, print_cross_x_up)
             up_seq, down_seq = self.get_x_2_number_sequences(result, print_cross_x_up)
@@ -23862,10 +23870,18 @@ class TubeLayoutEditor(QMainWindow):
                     if coord not in self.cross_pipe_deleted_tubes:
                         self.cross_pipe_deleted_tubes.append(coord)
                 self.delete_huanreguan(del_centers)
+            return True
 
     def cross_y_2_pipes(
             self, current_coords, print_cross_y_left, print_cross_y_right, row
     ):
+        prepared = self._prepare_cross_pairing_after_axis_cleanup(
+            current_coords, "y", print_cross_y_left, print_cross_y_right, line_no=row
+        )
+        if prepared is None:
+            return False
+        print_cross_y_left, print_cross_y_right = prepared
+
         # 获取选择的中心点编号（实际坐标传入，参数名从selected_centers改为current_coords，匹配需求）
         global valid_distance
         result = self.get_selected_y_center_numbers(
@@ -23877,13 +23893,14 @@ class TubeLayoutEditor(QMainWindow):
             QMessageBox.warning(self, "选择错误", "参照管孔之间的连线应为倾斜线")
             self.clear_selection_highlight()
             self.selected_centers = []
-            return
+            return False
 
         # 校验2：参照管孔间隔不能大于3个换热管孔
         elif abs(result["left_number"] - result["right_number"]) > 3:
             QMessageBox.warning(self, "选择错误", "参照管孔间隔不能大于3个换热管孔")
             self.clear_selection_highlight()
             self.selected_centers = []
+            return False
 
         # 校验通过：生成序列并构建交叉管道
         else:
@@ -24029,8 +24046,16 @@ class TubeLayoutEditor(QMainWindow):
                     if coord not in self.cross_pipe_deleted_tubes:
                         self.cross_pipe_deleted_tubes.append(coord)
                 self.delete_huanreguan(del_centers)
+            return True
 
     def cross_x_4_pipes(self, selected_centers, print_cross_x_up, print_cross_x_down):
+        prepared = self._prepare_cross_pairing_after_axis_cleanup(
+            selected_centers, "x", print_cross_x_up, print_cross_x_down, line_no=None
+        )
+        if prepared is None:
+            return False
+        print_cross_x_up, print_cross_x_down = prepared
+
         result = self.get_selected_x_4_center_numbers(
             selected_centers, print_cross_x_up, print_cross_x_down
         )
@@ -24050,6 +24075,7 @@ class TubeLayoutEditor(QMainWindow):
                 QMessageBox.warning(self, "选择错误", "参照管孔间隔不能大于3个换热管孔")
                 self.clear_selection_highlight()
                 self.selected_centers = []
+                return False
             else:
                 # self.get_x_4_number_sequences(result, print_cross_x_up)
                 tube_num = self.get_tube_pass_count()
@@ -24182,6 +24208,8 @@ class TubeLayoutEditor(QMainWindow):
                     QMessageBox.warning(self, "功能提示", "该管程程数交叉布管尚未开发")
                     self.clear_selection_highlight()
                     self.selected_centers = []
+                    return False
+                return True
 
         else:
             print(
@@ -24193,6 +24221,7 @@ class TubeLayoutEditor(QMainWindow):
             )
             self.clear_selection_highlight()
             self.selected_centers = []
+            return False
 
     def get_x_4_number_sequences(self, result, print_cross_x_up, print_cross_x_down):
         pair_x_info_up = []
@@ -24410,6 +24439,13 @@ class TubeLayoutEditor(QMainWindow):
         return pair_x_info_up, pair_x_info_down
 
     def cross_y_4_pipes(self, current_coords, print_cross_y_left, print_cross_y_right):
+        prepared = self._prepare_cross_pairing_after_axis_cleanup(
+            current_coords, "y", print_cross_y_left, print_cross_y_right, line_no=None
+        )
+        if prepared is None:
+            return False
+        print_cross_y_left, print_cross_y_right = prepared
+
         global valid_distance
         result = self.get_selected_y_4_center_numbers(
             current_coords, print_cross_y_left, print_cross_y_right
@@ -24429,6 +24465,7 @@ class TubeLayoutEditor(QMainWindow):
                 QMessageBox.warning(self, "选择错误", "参照管孔间隔不能大于3个换热管孔")
                 self.clear_selection_highlight()
                 self.selected_centers = []
+                return False
             else:
                 # self.get_x_4_number_sequences(result, print_cross_x_up)
                 up_seq, down_seq = self.get_y_4_number_sequences(
@@ -24529,6 +24566,7 @@ class TubeLayoutEditor(QMainWindow):
                         if coord not in self.cross_pipe_deleted_tubes:
                             self.cross_pipe_deleted_tubes.append(coord)
                     self.delete_huanreguan(del_centers)
+                return True
 
         else:
             print(
@@ -24540,6 +24578,7 @@ class TubeLayoutEditor(QMainWindow):
             )
             self.clear_selection_highlight()
             self.selected_centers = []
+            return False
 
     def calculate_distance(self, selected_centers):
         # 取前两个坐标点进行计算
@@ -24731,6 +24770,197 @@ class TubeLayoutEditor(QMainWindow):
         return bool(getattr(self, "is_y_line1", False)) or bool(
             getattr(self, "is_y_line2", False)
         ) or bool(getattr(self, "is_y_line3", False))
+
+    # 交叉布管：判定“位于坐标轴上”的绝对坐标容差（mm），取极小值避免误伤近轴管
+    _CROSS_AXIS_EPS = 1e-6
+
+    def _is_abs_on_vertical_centerline(self, coord):
+        """绝对坐标是否在竖直中心线 x=0 上。"""
+        try:
+            return abs(float(coord[0])) <= float(self._CROSS_AXIS_EPS)
+        except Exception:
+            return False
+
+    def _is_abs_on_horizontal_centerline(self, coord):
+        """绝对坐标是否在水平中心线 y=0 上。"""
+        try:
+            return abs(float(coord[1])) <= float(self._CROSS_AXIS_EPS)
+        except Exception:
+            return False
+
+    def _reject_if_cross_refs_on_axis(self, abs_coords, cross_kind):
+        """
+        参照管孔落在对应中心线上则报错并清空选中。
+        cross_kind: \"x\" 检查 x≈0；\"y\" 检查 y≈0。
+        返回 True 表示应中止后续交叉布管。
+        """
+        if not abs_coords:
+            return False
+        try:
+            coords = list(abs_coords)
+        except Exception:
+            return False
+        if cross_kind == "x":
+            bad = any(self._is_abs_on_vertical_centerline(c) for c in coords)
+            msg = "参照管孔不能位于竖直中心线（x=0）上，请重新选择！"
+        elif cross_kind == "y":
+            bad = any(self._is_abs_on_horizontal_centerline(c) for c in coords)
+            msg = "参照管孔不能位于水平中心线（y=0）上，请重新选择！"
+        else:
+            return False
+        if not bad:
+            return False
+        QMessageBox.warning(self, "选择错误", msg)
+        try:
+            self.clear_selection_highlight()
+        except Exception:
+            pass
+        try:
+            self.selected_centers = []
+        except Exception:
+            pass
+        return True
+
+    def _iter_abs_points_from_print_cross_list(self, print_list):
+        """从候选列表解析绝对坐标。支持 (x,y) 或 (num,x,y)。"""
+        for item in print_list or []:
+            try:
+                if isinstance(item, (list, tuple)) and len(item) >= 3:
+                    yield (float(item[1]), float(item[2]))
+                elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                    yield (float(item[0]), float(item[1]))
+            except Exception:
+                continue
+
+    def _collect_axis_rel_coords_from_print_lists(self, print_lists, cross_kind):
+        """收集候选线上落在对应中心线的换热管相对坐标（去重；跳过拉杆孔）。"""
+        rel_coords = []
+        seen = set()
+        lagan_abs = []
+        try:
+            lagan_abs = list(getattr(self, "lagan_info", None) or [])
+        except Exception:
+            lagan_abs = []
+
+        def _is_lagan(abs_pt, tol=1e-5):
+            for lx, ly in lagan_abs:
+                try:
+                    if abs(float(lx) - abs_pt[0]) < tol and abs(float(ly) - abs_pt[1]) < tol:
+                        return True
+                except Exception:
+                    continue
+            return False
+
+        for lst in print_lists or []:
+            for abs_pt in self._iter_abs_points_from_print_cross_list(lst):
+                if cross_kind == "x":
+                    if not self._is_abs_on_vertical_centerline(abs_pt):
+                        continue
+                elif cross_kind == "y":
+                    if not self._is_abs_on_horizontal_centerline(abs_pt):
+                        continue
+                else:
+                    continue
+                if _is_lagan(abs_pt):
+                    continue
+                rel = None
+                try:
+                    rel = self.actual_to_selected_coords(abs_pt)
+                except Exception:
+                    rel = None
+                if not rel:
+                    continue
+                key = (int(rel[0]), int(rel[1])) if len(rel) >= 2 else tuple(rel)
+                if key in seen:
+                    continue
+                seen.add(key)
+                rel_coords.append(rel)
+        return rel_coords
+
+    def _refresh_cross_candidate_lines_after_axis_delete(self):
+        """删除轴上管后刷新上下分组与交叉候选编号。"""
+        try:
+            self.sorted_current_centers_up, self.sorted_current_centers_down = (
+                self.group_centers_by_y(self.current_centers)
+            )
+        except Exception:
+            pass
+        try:
+            self.sorted_current_centers_lagan_up, self.sorted_current_centers_lagan_down = (
+                self.group_centers_by_y(getattr(self, "current_centers_lagan", None) or [])
+            )
+        except Exception:
+            pass
+        try:
+            self.find_closest_to_axes()
+            self.find_full_closest_to_axes()
+            self.update_print_cross_lines()
+        except Exception as e:
+            print(f"[交叉布管] 删除轴上管后刷新候选失败: {e}")
+
+    def _infer_cross_line_no_from_print_list(self, print_list, prefix):
+        """根据传入的 print_cross_* 列表推断排号 1/2/3。prefix 如 print_cross_x_up_line"""
+        for i in (1, 2, 3):
+            try:
+                if print_list is getattr(self, f"{prefix}{i}", None):
+                    return i
+            except Exception:
+                continue
+        return None
+
+    def _prepare_cross_pairing_after_axis_cleanup(
+        self, abs_coords, cross_kind, print_side_a, print_side_b, line_no=None
+    ):
+        """
+        交叉配对前处理：
+        1) 参照点若在对应中心线上 → 报错并返回 None
+        2) 删除本排候选上的轴上换热管，记入 cross_pipe_deleted_tubes
+        3) 刷新候选编号，返回本排最新的两侧 print 列表
+        """
+        if self._reject_if_cross_refs_on_axis(abs_coords, cross_kind):
+            return None
+
+        if line_no is None:
+            if cross_kind == "x":
+                line_no = self._infer_cross_line_no_from_print_list(
+                    print_side_a, "print_cross_x_up_line"
+                )
+            else:
+                line_no = self._infer_cross_line_no_from_print_list(
+                    print_side_a, "print_cross_y_left_line"
+                )
+        if line_no not in (1, 2, 3):
+            line_no = 1
+
+        to_del = self._collect_axis_rel_coords_from_print_lists(
+            [print_side_a, print_side_b], cross_kind
+        )
+        if to_del:
+            try:
+                if not hasattr(self, "cross_pipe_deleted_tubes") or self.cross_pipe_deleted_tubes is None:
+                    self.cross_pipe_deleted_tubes = []
+                for coord in to_del:
+                    if coord not in self.cross_pipe_deleted_tubes:
+                        self.cross_pipe_deleted_tubes.append(coord)
+            except Exception:
+                pass
+            try:
+                print(
+                    f"[交叉布管] 配对前删除{('竖直' if cross_kind == 'x' else '水平')}中心线上换热管 "
+                    f"{len(to_del)} 个: {to_del}"
+                )
+                self.delete_huanreguan(to_del)
+            except Exception as e:
+                print(f"[交叉布管] 删除轴上换热管失败: {e}")
+            self._refresh_cross_candidate_lines_after_axis_delete()
+
+        if cross_kind == "x":
+            up = getattr(self, f"print_cross_x_up_line{line_no}", None) or []
+            down = getattr(self, f"print_cross_x_down_line{line_no}", None) or []
+            return up, down
+        left = getattr(self, f"print_cross_y_left_line{line_no}", None) or []
+        right = getattr(self, f"print_cross_y_right_line{line_no}", None) or []
+        return left, right
 
     def _classify_cross_selection_2(self, current_coords):
         """两根参照管：判断为 x(上下/竖直) / y(左右/水平) / None。"""
@@ -24989,20 +25219,20 @@ class TubeLayoutEditor(QMainWindow):
                             )
                             self.clear_selection_highlight()
                             return
-                        self.cross_x_2_pipes(
+                        if self.cross_x_2_pipes(
                             current_coords,
                             self.print_cross_x_up_line1,
                             self.print_cross_x_down_line1,
                             1,
-                        )
-                        self.coord_x_line1_2 = current_coords
-                        # 存储绝对坐标对
-                        if (
-                                hasattr(self, "_current_abs_coords")
-                                and self._current_abs_coords
                         ):
-                            self.abs_coords_line1 = self._current_abs_coords.copy()
-                        self.is_x_line1 = True
+                            self.coord_x_line1_2 = current_coords
+                            # 存储绝对坐标对
+                            if (
+                                    hasattr(self, "_current_abs_coords")
+                                    and self._current_abs_coords
+                            ):
+                                self.abs_coords_line1 = self._current_abs_coords.copy()
+                            self.is_x_line1 = True
                     # y轴第一排
                     elif (coord3_in_left and coord4_in_right) or (
                             coord3_in_right and coord4_in_left
@@ -25013,20 +25243,20 @@ class TubeLayoutEditor(QMainWindow):
                             )
                             self.clear_selection_highlight()
                             return
-                        self.cross_y_2_pipes(
+                        if self.cross_y_2_pipes(
                             current_coords,
                             self.print_cross_y_left_line1,
                             self.print_cross_y_right_line1,
                             1,
-                        )
-                        self.coord_y_line1_2 = current_coords
-                        # 存储绝对坐标对
-                        if (
-                                hasattr(self, "_current_abs_coords")
-                                and self._current_abs_coords
                         ):
-                            self.abs_coords_line1 = self._current_abs_coords.copy()
-                        self.is_y_line1 = True
+                            self.coord_y_line1_2 = current_coords
+                            # 存储绝对坐标对
+                            if (
+                                    hasattr(self, "_current_abs_coords")
+                                    and self._current_abs_coords
+                            ):
+                                self.abs_coords_line1 = self._current_abs_coords.copy()
+                            self.is_y_line1 = True
                     # x轴第二排
                     elif (coord5_in_up and coord6_in_down) or (
                             coord5_in_down and coord6_in_up
@@ -25038,20 +25268,20 @@ class TubeLayoutEditor(QMainWindow):
                             self.clear_selection_highlight()
                             return
                         if self.is_x_line1:
-                            self.cross_x_2_pipes(
+                            if self.cross_x_2_pipes(
                                 current_coords,
                                 self.print_cross_x_up_line2,
                                 self.print_cross_x_down_line2,
                                 2,
-                            )
-                            self.coord_x_line2_2 = current_coords
-                            # 存储绝对坐标对
-                            if (
-                                    hasattr(self, "_current_abs_coords")
-                                    and self._current_abs_coords
                             ):
-                                self.abs_coords_line2 = self._current_abs_coords.copy()
-                            self.is_x_line2 = True
+                                self.coord_x_line2_2 = current_coords
+                                # 存储绝对坐标对
+                                if (
+                                        hasattr(self, "_current_abs_coords")
+                                        and self._current_abs_coords
+                                ):
+                                    self.abs_coords_line2 = self._current_abs_coords.copy()
+                                self.is_x_line2 = True
                         else:
                             QMessageBox.warning(
                                 self, "选择错误", "请从第1排（行）依次完成交叉布管"
@@ -25069,20 +25299,20 @@ class TubeLayoutEditor(QMainWindow):
                             self.clear_selection_highlight()
                             return
                         if self.is_y_line1:
-                            self.cross_y_2_pipes(
+                            if self.cross_y_2_pipes(
                                 current_coords,
                                 self.print_cross_y_left_line2,
                                 self.print_cross_y_right_line2,
                                 2,
-                            )
-                            self.coord_y_line2_2 = current_coords
-                            # 存储绝对坐标对
-                            if (
-                                    hasattr(self, "_current_abs_coords")
-                                    and self._current_abs_coords
                             ):
-                                self.abs_coords_line2 = self._current_abs_coords.copy()
-                            self.is_y_line2 = True
+                                self.coord_y_line2_2 = current_coords
+                                # 存储绝对坐标对
+                                if (
+                                        hasattr(self, "_current_abs_coords")
+                                        and self._current_abs_coords
+                                ):
+                                    self.abs_coords_line2 = self._current_abs_coords.copy()
+                                self.is_y_line2 = True
                         else:
                             QMessageBox.warning(
                                 self, "选择错误", "请从第1排（行）依次完成交叉布管"
@@ -25100,20 +25330,20 @@ class TubeLayoutEditor(QMainWindow):
                             self.clear_selection_highlight()
                             return
                         if self.is_x_line1 and self.is_x_line2:
-                            self.cross_x_2_pipes(
+                            if self.cross_x_2_pipes(
                                 current_coords,
                                 self.print_cross_x_up_line3,
                                 self.print_cross_x_down_line3,
                                 3,
-                            )
-                            self.coord_x_line3_2 = current_coords
-                            # 存储绝对坐标对
-                            if (
-                                    hasattr(self, "_current_abs_coords")
-                                    and self._current_abs_coords
                             ):
-                                self.abs_coords_line3 = self._current_abs_coords.copy()
-                            self.is_x_line3 = True
+                                self.coord_x_line3_2 = current_coords
+                                # 存储绝对坐标对
+                                if (
+                                        hasattr(self, "_current_abs_coords")
+                                        and self._current_abs_coords
+                                ):
+                                    self.abs_coords_line3 = self._current_abs_coords.copy()
+                                self.is_x_line3 = True
                         else:
                             QMessageBox.warning(
                                 self, "选择错误", "请从第1排（行）依次完成交叉布管"
@@ -25131,20 +25361,20 @@ class TubeLayoutEditor(QMainWindow):
                             self.clear_selection_highlight()
                             return
                         if self.is_y_line1 and self.is_y_line2:
-                            self.cross_y_2_pipes(
+                            if self.cross_y_2_pipes(
                                 current_coords,
                                 self.print_cross_y_left_line3,
                                 self.print_cross_y_right_line3,
                                 3,
-                            )
-                            self.is_y_line3 = True
-                            self.coord_y_line3_2 = current_coords
-                            # 存储绝对坐标对
-                            if (
-                                    hasattr(self, "_current_abs_coords")
-                                    and self._current_abs_coords
                             ):
-                                self.abs_coords_line3 = self._current_abs_coords.copy()
+                                self.coord_y_line3_2 = current_coords
+                                # 存储绝对坐标对
+                                if (
+                                        hasattr(self, "_current_abs_coords")
+                                        and self._current_abs_coords
+                                ):
+                                    self.abs_coords_line3 = self._current_abs_coords.copy()
+                                self.is_y_line3 = True
                         else:
                             QMessageBox.warning(
                                 self, "选择错误", "请从第1排（行）依次完成交叉布管"
@@ -25247,38 +25477,38 @@ class TubeLayoutEditor(QMainWindow):
                         QMessageBox.warning(self, "选择错误", "该行已经布过交叉布管")
                         self.clear_selection_highlight()
                         return
-                    self.cross_x_4_pipes(
+                    if self.cross_x_4_pipes(
                         current_coords,
                         self.print_cross_x_up_line1,
                         self.print_cross_x_down_line1,
-                    )
-                    self.coord_x_line1_4 = self.extract_key_pair(current_coords)
-                    # 存储绝对坐标对
-                    if (
-                            hasattr(self, "_current_abs_coords")
-                            and self._current_abs_coords
                     ):
-                        self.abs_coords_line1 = self._current_abs_coords.copy()
-                    self.is_x_line1 = True
+                        self.coord_x_line1_4 = self.extract_key_pair(current_coords)
+                        # 存储绝对坐标对
+                        if (
+                                hasattr(self, "_current_abs_coords")
+                                and self._current_abs_coords
+                        ):
+                            self.abs_coords_line1 = self._current_abs_coords.copy()
+                        self.is_x_line1 = True
                 # y轴第一排
                 elif y_left_count_line1 == 2 and y_right_count_line1 == 2:
                     if self.is_y_line1:
                         QMessageBox.warning(self, "选择错误", "该行已经布过交叉布管")
                         self.clear_selection_highlight()
                         return
-                    self.cross_y_4_pipes(
+                    if self.cross_y_4_pipes(
                         current_coords,
                         self.print_cross_y_left_line1,
                         self.print_cross_y_right_line1,
-                    )
-                    self.coord_y_line1_4 = self.extract_key_pair(current_coords)
-                    # 存储绝对坐标对
-                    if (
-                            hasattr(self, "_current_abs_coords")
-                            and self._current_abs_coords
                     ):
-                        self.abs_coords_line1 = self._current_abs_coords.copy()
-                    self.is_y_line1 = True
+                        self.coord_y_line1_4 = self.extract_key_pair(current_coords)
+                        # 存储绝对坐标对
+                        if (
+                                hasattr(self, "_current_abs_coords")
+                                and self._current_abs_coords
+                        ):
+                            self.abs_coords_line1 = self._current_abs_coords.copy()
+                        self.is_y_line1 = True
                 # x轴第二排
                 elif x_up_count_line2 == 2 and x_down_count_line2 == 2:
                     if self.is_x_line2:
@@ -25286,19 +25516,19 @@ class TubeLayoutEditor(QMainWindow):
                         self.clear_selection_highlight()
                         return
                     if self.is_x_line1:
-                        self.cross_x_4_pipes(
+                        if self.cross_x_4_pipes(
                             current_coords,
                             self.print_cross_x_up_line2,
                             self.print_cross_x_down_line2,
-                        )
-                        self.coord_x_line2_4 = self.extract_key_pair(current_coords)
-                        # 存储绝对坐标对
-                        if (
-                                hasattr(self, "_current_abs_coords")
-                                and self._current_abs_coords
                         ):
-                            self.abs_coords_line2 = self._current_abs_coords.copy()
-                        self.is_x_line2 = True
+                            self.coord_x_line2_4 = self.extract_key_pair(current_coords)
+                            # 存储绝对坐标对
+                            if (
+                                    hasattr(self, "_current_abs_coords")
+                                    and self._current_abs_coords
+                            ):
+                                self.abs_coords_line2 = self._current_abs_coords.copy()
+                            self.is_x_line2 = True
                     else:
                         QMessageBox.warning(
                             self, "选择错误", "请从第1排（行）依次完成交叉布管"
@@ -25312,19 +25542,19 @@ class TubeLayoutEditor(QMainWindow):
                         self.clear_selection_highlight()
                         return
                     if self.is_y_line1:
-                        self.cross_y_4_pipes(
+                        if self.cross_y_4_pipes(
                             current_coords,
                             self.print_cross_y_left_line2,
                             self.print_cross_y_right_line2,
-                        )
-                        self.coord_y_line2_4 = self.extract_key_pair(current_coords)
-                        # 存储绝对坐标对
-                        if (
-                                hasattr(self, "_current_abs_coords")
-                                and self._current_abs_coords
                         ):
-                            self.abs_coords_line2 = self._current_abs_coords.copy()
-                        self.is_y_line2 = True
+                            self.coord_y_line2_4 = self.extract_key_pair(current_coords)
+                            # 存储绝对坐标对
+                            if (
+                                    hasattr(self, "_current_abs_coords")
+                                    and self._current_abs_coords
+                            ):
+                                self.abs_coords_line2 = self._current_abs_coords.copy()
+                            self.is_y_line2 = True
                     else:
                         QMessageBox.warning(
                             self, "选择错误", "请从第1排（行）依次完成交叉布管"
@@ -25338,19 +25568,19 @@ class TubeLayoutEditor(QMainWindow):
                         self.clear_selection_highlight()
                         return
                     if self.is_x_line1 and self.is_x_line2:
-                        self.cross_x_4_pipes(
+                        if self.cross_x_4_pipes(
                             current_coords,
                             self.print_cross_x_up_line3,
                             self.print_cross_x_down_line3,
-                        )
-                        self.coord_x_line3_4 = self.extract_key_pair(current_coords)
-                        # 存储绝对坐标对
-                        if (
-                                hasattr(self, "_current_abs_coords")
-                                and self._current_abs_coords
                         ):
-                            self.abs_coords_line3 = self._current_abs_coords.copy()
-                        self.is_x_line3 = True
+                            self.coord_x_line3_4 = self.extract_key_pair(current_coords)
+                            # 存储绝对坐标对
+                            if (
+                                    hasattr(self, "_current_abs_coords")
+                                    and self._current_abs_coords
+                            ):
+                                self.abs_coords_line3 = self._current_abs_coords.copy()
+                            self.is_x_line3 = True
                     else:
                         QMessageBox.warning(
                             self, "选择错误", "请从第1排（行）依次完成交叉布管"
@@ -25364,19 +25594,19 @@ class TubeLayoutEditor(QMainWindow):
                         self.clear_selection_highlight()
                         return
                     if self.is_y_line1 and self.is_y_line2:
-                        self.cross_y_4_pipes(
+                        if self.cross_y_4_pipes(
                             current_coords,
                             self.print_cross_y_left_line3,
                             self.print_cross_y_right_line3,
-                        )
-                        self.coord_y_line3_4 = self.extract_key_pair(current_coords)
-                        # 存储绝对坐标对
-                        if (
-                                hasattr(self, "_current_abs_coords")
-                                and self._current_abs_coords
                         ):
-                            self.abs_coords_line3 = self._current_abs_coords.copy()
-                        self.is_y_line3 = True
+                            self.coord_y_line3_4 = self.extract_key_pair(current_coords)
+                            # 存储绝对坐标对
+                            if (
+                                    hasattr(self, "_current_abs_coords")
+                                    and self._current_abs_coords
+                            ):
+                                self.abs_coords_line3 = self._current_abs_coords.copy()
+                            self.is_y_line3 = True
                     else:
                         QMessageBox.warning(
                             self, "选择错误", "请从第1排（行）依次完成交叉布管"
