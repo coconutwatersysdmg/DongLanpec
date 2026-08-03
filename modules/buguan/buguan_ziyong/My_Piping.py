@@ -4636,11 +4636,12 @@ class TubeLayoutEditor(QMainWindow):
 
                                 elif self.heat_exchanger in ["AES", "BES"]:
                                     # 计算方式2: DL = Di - 2×(b₁ + b₂ + b)
-                                    # 1. 确定b值（根据Di范围）
+                                    # 1. 确定b值（默认值；表要求 Di<1000 时 b>3，1000~2600 时 b>4）
                                     if Di < 1000:
-                                        b = 4.0  # Di < 1000mm时的默认值
-                                    else:  # 1000 ≤ Di ≤ 2600mm
-                                        b = 5.0  # 大直径壳程的默认值
+                                        b = 4.0  # Di < 1000 默认值
+                                    else:
+                                        # 1000 ≤ Di ≤ 2600 默认 5；标准 Di 通常≤2600，超出亦默认 5
+                                        b = 5.0
 
                                     # 2. 确定b₁（第一圈管到壳体内壁距离）和bₙ（最外圈管到壳体内壁距离）
                                     if Di <= 700:
@@ -5174,11 +5175,12 @@ class TubeLayoutEditor(QMainWindow):
 
                                 elif self.heat_exchanger in ["AES", "BES"]:
                                     # 计算方式2: DL = Di - 2×(b₁ + b₂ + b)
-                                    # 1. 确定b值（根据Di范围）
+                                    # 1. 确定b值（默认值；表要求 Di<1000 时 b>3，1000~2600 时 b>4）
                                     if Di < 1000:
-                                        b = 4.0  # Di < 1000mm时的默认值
-                                    else:  # 1000 ≤ Di ≤ 2600mm
-                                        b = 5.0  # 大直径壳程的默认值
+                                        b = 4.0  # Di < 1000 默认值
+                                    else:
+                                        # 1000 ≤ Di ≤ 2600 默认 5；标准 Di 通常≤2600，超出亦默认 5
+                                        b = 5.0
 
                                     # 2. 确定b₁（第一圈管到壳体内壁距离）和bₙ（最外圈管到壳体内壁距离）
                                     if Di <= 700:
@@ -9779,11 +9781,12 @@ class TubeLayoutEditor(QMainWindow):
 
             if heat_exchanger_type_local in ["AES", "BES"]:
                 # 计算方式2: DL = Di - 2(b₁ + b₂ + b)
-                # 确定b的值
+                # 确定b的值（默认值；表要求 Di<1000 时 b>3，1000~2600 时 b>4）
                 if di_value_local < 1000:
-                    b = 4.0  # 默认值
-                else:  # 1000 ≤ Di ≤ 2600
-                    b = 5.0  # 默认值
+                    b = 4.0  # Di < 1000 默认值
+                else:
+                    # 1000 ≤ Di ≤ 2600 默认 5；标准 Di 通常≤2600，超出亦默认 5
+                    b = 5.0
 
                 # 确定b₁和bₙ的值
                 if di_value_local <= 700:
@@ -15518,6 +15521,7 @@ class TubeLayoutEditor(QMainWindow):
                                     _b_n, _b_1 = 20.0, 8.0
                                 else:
                                     _b_n, _b_1 = 20.0, 9.0
+                                # b：Di<1000 默认4；1000~2600 默认5；超出2600亦默认5
                                 _b = 4.0 if _di_val < 1000 else 5.0
                                 _b_2 = _b_n + 1.5
                                 _dl_limit = _di_val - 2 * (_b_1 + _b_2 + _b)
