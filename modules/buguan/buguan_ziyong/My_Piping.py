@@ -3549,11 +3549,20 @@ class TubeLayoutEditor(QMainWindow):
         if hasattr(self, "param_table"):
             total_width = self.param_table.viewport().width()
             if total_width > 0:
-                # 设置合理的初始比例：序号10%，参数名55%，参数值25%，单位10%
-                self.param_table.setColumnWidth(0, int(total_width * 0.1))  # 序号
-                self.param_table.setColumnWidth(1, int(total_width * 0.55))  # 参数名
-                self.param_table.setColumnWidth(2, int(total_width * 0.25))  # 参数值
-                self.param_table.setColumnWidth(3, int(total_width * 0.1))  # 单位
+                # 与 resizeEvent 一致：参数值列略宽，便于管程分程形式示意图显示
+                col0_width = 80
+                col3_width = 80
+                remaining = max(0, total_width - col0_width - col3_width)
+                col1_width = int(remaining * 0.55)
+                col2_width = remaining - col1_width
+                self.param_table.setColumnWidth(0, col0_width)
+                self.param_table.setColumnWidth(1, col1_width)
+                self.param_table.setColumnWidth(2, col2_width)
+                self.param_table.setColumnWidth(3, col3_width)
+            try:
+                self._update_tube_pass_form_combo_icon_size()
+            except Exception:
+                pass
 
     def handle_fullscreen_toggle(self):
         # 改进的全屏切换逻辑
@@ -16091,13 +16100,21 @@ class TubeLayoutEditor(QMainWindow):
 
                         list_view = QListView()
                         combo.setView(list_view)
-                        # 闭合态用较矮图标适配参数表行高；下拉列表仍用较大示意图
-                        combo.setIconSize(QSize(56, 32))
-                        list_view.setIconSize(QSize(100, 85))
-                        try:
-                            self.param_table.setRowHeight(row, 44)
-                        except Exception:
-                            pass
+                        list_view.setSpacing(2)
+                        # 示意图按单元格宽高等比适配（仅抬高本行），避免过小看不清或撑出单元格
+                        self._update_tube_pass_form_combo_icon_size(combo=combo, row=row)
+                        QTimer.singleShot(
+                            0,
+                            lambda c=combo, r=row: self._update_tube_pass_form_combo_icon_size(
+                                combo=c, row=r
+                            ),
+                        )
+                        QTimer.singleShot(
+                            80,
+                            lambda c=combo, r=row: self._update_tube_pass_form_combo_icon_size(
+                                combo=c, row=r
+                            ),
+                        )
 
                         tube_pass_row = -1
                         for r in range(self.param_table.rowCount()):
@@ -16438,6 +16455,51 @@ class TubeLayoutEditor(QMainWindow):
             # 存储标识到用户数据中
             combo.setItemData(combo.count() - 1, identifier, Qt.UserRole)
 
+    def _update_tube_pass_form_combo_icon_size(self, combo=None, row=None):
+        """管程分程形式示意图：仅抬高本行，图标等比缩放到不超过当前单元格宽高。"""
+        try:
+            if combo is None:
+                combo = getattr(self, "tube_pass_form_combo", None)
+            if not isinstance(combo, QComboBox):
+                return
+            if row is None:
+                row = getattr(self, "tube_pass_form_row", -1)
+            if row is None or row < 0:
+                return
+            if not hasattr(self, "param_table") or self.param_table is None:
+                return
+
+            # 其它行保持默认行高；本行略抬高以便看清宽幅示意图
+            row_h = 40
+            self.param_table.setRowHeight(int(row), row_h)
+
+            col_w = int(self.param_table.columnWidth(2))
+            if col_w <= 0:
+                col_w = 120
+            # 多预留下拉箭头与边距，避免闭合态显示不全
+            max_w = max(40, col_w - 40)
+            max_h = max(18, row_h - 12)
+            aspect = 4.5  # TubePattern 示意图约 4.5:1
+            if max_w / float(max_h) > aspect:
+                icon_h = max_h
+                icon_w = max(40, int(round(max_h * aspect)))
+            else:
+                icon_w = max_w
+                icon_h = max(14, int(round(max_w / aspect)))
+
+            icon_size = QSize(icon_w, icon_h)
+            combo.setIconSize(icon_size)
+            combo.setMinimumHeight(row_h - 2)
+            combo.setMaximumHeight(row_h - 2)
+
+            # 下拉列表与单元格内图标同尺寸
+            view = combo.view()
+            if view is not None:
+                view.setIconSize(icon_size)
+            combo.update()
+        except Exception:
+            pass
+
     # TODO 管程分程形式加载函数
     def load_tube_pass_images(self, combo, tube_pass):
         """加载管程分程形式的图片到下拉框，关联具体标识"""
@@ -16515,6 +16577,10 @@ class TubeLayoutEditor(QMainWindow):
                 self.tube_pass_form_value = combo.itemData(0, Qt.UserRole)
 
         # 强制刷新（QTableWidget 内的 QComboBox 有时不会立即重绘 icon）
+        try:
+            self._update_tube_pass_form_combo_icon_size(combo=combo)
+        except Exception:
+            pass
         try:
             combo.update()
             combo.repaint()
@@ -19718,6 +19784,10 @@ class TubeLayoutEditor(QMainWindow):
                 self.param_table.setColumnWidth(1, col1_width)
                 self.param_table.setColumnWidth(2, col2_width)
                 self.param_table.setColumnWidth(3, col3_width)
+                try:
+                    self._update_tube_pass_form_combo_icon_size()
+                except Exception:
+                    pass
 
         # 保持你原来的右侧表策略不变
         if hasattr(self, "hole_distribution_table"):
