@@ -96,10 +96,8 @@ ENABLE_SCREW_RING = True
 
 edge_centers: List[Tuple[float, float]] = []
 
-# 从配置库加载的“换热管中心距 S 映射表”缓存（只读一次，避免每次联动都查询数据库）
-_TUBE_CENTER_DISTANCE_MAP_CACHE = None
-# 从配置库加载的“滑道高度/厚度 推荐表”缓存（id=2.14.3.1）
-_SLIDEWAY_PREDEFINED_21431_CACHE = None
+# 预定义（配置库 user_config）读库/解析/缓存见：
+# modules.buguan.buguan_ziyong.predefined_config
 
 
 class SignalBlocker:
@@ -7186,47 +7184,11 @@ class TubeLayoutEditor(QMainWindow):
         try:
             if getattr(self, "_user_override_tube_center_distance", False):
                 raise RuntimeError("skip_force_S_due_to_user_override")
-            global _TUBE_CENTER_DISTANCE_MAP_CACHE
-            if _TUBE_CENTER_DISTANCE_MAP_CACHE is None:
-                _TUBE_CENTER_DISTANCE_MAP_CACHE = {}
-                config_value = self.get_config_value("2.10.1.1")
-                if config_value:
-                    try:
-                        config_rows = (
-                            ast.literal_eval(config_value)
-                            if isinstance(config_value, str)
-                            else config_value
-                        )
-                        do_row_cfg = None
-                        tri_s_row_cfg = None
-                        sq_s_row_cfg = None
-                        for r_cfg in (config_rows or []):
-                            if not r_cfg or len(r_cfg) < 2:
-                                continue
-                            name_cfg = str(r_cfg[0]).strip()
-                            if name_cfg == "换热管外径d":
-                                do_row_cfg = r_cfg
-                            elif name_cfg == "换热管中心距S（三角形排列）":
-                                tri_s_row_cfg = r_cfg
-                            elif name_cfg == "换热管中心距S（正方形排列）":
-                                sq_s_row_cfg = r_cfg
-                        if do_row_cfg and tri_s_row_cfg and sq_s_row_cfg:
-                            do_values_cfg = [
-                                float(x) for x in do_row_cfg[1:] if str(x).strip() != ""
-                            ]
-                            tri_values_cfg = [
-                                float(x) for x in tri_s_row_cfg[1:] if str(x).strip() != ""
-                            ]
-                            sq_values_cfg = [
-                                float(x) for x in sq_s_row_cfg[1:] if str(x).strip() != ""
-                            ]
-                            for i_cfg, d_cfg in enumerate(do_values_cfg):
-                                if i_cfg < len(tri_values_cfg):
-                                    _TUBE_CENTER_DISTANCE_MAP_CACHE[(d_cfg, "三角形排列")] = tri_values_cfg[i_cfg]
-                                if i_cfg < len(sq_values_cfg):
-                                    _TUBE_CENTER_DISTANCE_MAP_CACHE[(d_cfg, "正方形排列")] = sq_values_cfg[i_cfg]
-                    except Exception as _s_cfg_e:
-                        print(f"[calculate_piping_layout] 解析S映射配置失败: {_s_cfg_e}")
+            from modules.buguan.buguan_ziyong.predefined_config import (
+                get_tube_center_distance_map,
+            )
+
+            tube_s_map = get_tube_center_distance_map()
 
             do_for_s = None
             try:
@@ -7241,7 +7203,7 @@ class TubeLayoutEditor(QMainWindow):
                 range_type_for_s = "正方形排列"
 
             if do_for_s is not None and range_type_for_s:
-                mapped_s = _TUBE_CENTER_DISTANCE_MAP_CACHE.get((do_for_s, range_type_for_s))
+                mapped_s = tube_s_map.get((do_for_s, range_type_for_s))
                 if mapped_s is not None:
                     mapped_s_text = f"{float(mapped_s):.1f}"
                     # 只有在用户未手动覆盖 S 时，才用推荐值填充入参（不再强制回写界面）
@@ -7813,47 +7775,11 @@ class TubeLayoutEditor(QMainWindow):
         try:
             if getattr(self, "_user_override_tube_center_distance", False):
                 raise RuntimeError("skip_force_S_due_to_user_override")
-            global _TUBE_CENTER_DISTANCE_MAP_CACHE
-            if _TUBE_CENTER_DISTANCE_MAP_CACHE is None:
-                _TUBE_CENTER_DISTANCE_MAP_CACHE = {}
-                config_value = self.get_config_value("2.10.1.1")
-                if config_value:
-                    try:
-                        config_rows = (
-                            ast.literal_eval(config_value)
-                            if isinstance(config_value, str)
-                            else config_value
-                        )
-                        do_row_cfg = None
-                        tri_s_row_cfg = None
-                        sq_s_row_cfg = None
-                        for r_cfg in (config_rows or []):
-                            if not r_cfg or len(r_cfg) < 2:
-                                continue
-                            name_cfg = str(r_cfg[0]).strip()
-                            if name_cfg == "换热管外径d":
-                                do_row_cfg = r_cfg
-                            elif name_cfg == "换热管中心距S（三角形排列）":
-                                tri_s_row_cfg = r_cfg
-                            elif name_cfg == "换热管中心距S（正方形排列）":
-                                sq_s_row_cfg = r_cfg
-                        if do_row_cfg and tri_s_row_cfg and sq_s_row_cfg:
-                            do_values_cfg = [
-                                float(x) for x in do_row_cfg[1:] if str(x).strip() != ""
-                            ]
-                            tri_values_cfg = [
-                                float(x) for x in tri_s_row_cfg[1:] if str(x).strip() != ""
-                            ]
-                            sq_values_cfg = [
-                                float(x) for x in sq_s_row_cfg[1:] if str(x).strip() != ""
-                            ]
-                            for i_cfg, d_cfg in enumerate(do_values_cfg):
-                                if i_cfg < len(tri_values_cfg):
-                                    _TUBE_CENTER_DISTANCE_MAP_CACHE[(d_cfg, "三角形排列")] = tri_values_cfg[i_cfg]
-                                if i_cfg < len(sq_values_cfg):
-                                    _TUBE_CENTER_DISTANCE_MAP_CACHE[(d_cfg, "正方形排列")] = sq_values_cfg[i_cfg]
-                    except Exception as _s_cfg_e:
-                        print(f"[calculate_piping] 解析S映射配置失败: {_s_cfg_e}")
+            from modules.buguan.buguan_ziyong.predefined_config import (
+                get_tube_center_distance_map,
+            )
+
+            tube_s_map = get_tube_center_distance_map()
 
             do_for_s = None
             try:
@@ -7868,7 +7794,7 @@ class TubeLayoutEditor(QMainWindow):
                 range_type_for_s = "正方形排列"
 
             if do_for_s is not None and range_type_for_s:
-                mapped_s = _TUBE_CENTER_DISTANCE_MAP_CACHE.get((do_for_s, range_type_for_s))
+                mapped_s = tube_s_map.get((do_for_s, range_type_for_s))
                 if mapped_s is not None:
                     mapped_s_text = f"{float(mapped_s):.1f}"
                     input_json["LB_S"] = mapped_s_text
@@ -10655,68 +10581,12 @@ class TubeLayoutEditor(QMainWindow):
             )
             return
 
-        # 4. 中心距映射表（从配置库 user_config 读取并缓存）
-        global _TUBE_CENTER_DISTANCE_MAP_CACHE
-        if _TUBE_CENTER_DISTANCE_MAP_CACHE is None:
-            _TUBE_CENTER_DISTANCE_MAP_CACHE = {}
-            config_value = self.get_config_value("2.10.1.1")
-            if config_value:
-                try:
-                    config_rows = (
-                        ast.literal_eval(config_value)
-                        if isinstance(config_value, str)
-                        else config_value
-                    )
-                    # 期望结构：[
-                    #   ["换热管外径d", ...do...],
-                    #   ["换热管中心距S（三角形排列）", ...S_tri...],
-                    #   ["换热管中心距S（正方形排列）", ...S_square...],
-                    #   ...（Sn 行可忽略）
-                    # ]
-                    do_row = None
-                    tri_s_row = None
-                    sq_s_row = None
-                    for r in (config_rows or []):
-                        if not r or len(r) < 2:
-                            continue
-                        name = str(r[0]).strip()
-                        if name == "换热管外径d":
-                            do_row = r
-                        elif name == "换热管中心距S（三角形排列）":
-                            tri_s_row = r
-                        elif name == "换热管中心距S（正方形排列）":
-                            sq_s_row = r
+        # 4. 中心距映射表（预定义 2.10.1.1，见 predefined_config）
+        from modules.buguan.buguan_ziyong.predefined_config import (
+            get_tube_center_distance_map,
+        )
 
-                    if do_row and tri_s_row and sq_s_row:
-                        do_values = [
-                            float(x)
-                            for x in do_row[1:]
-                            if str(x).strip() != ""
-                        ]
-                        tri_values = [
-                            float(x)
-                            for x in tri_s_row[1:]
-                            if str(x).strip() != ""
-                        ]
-                        sq_values = [
-                            float(x)
-                            for x in sq_s_row[1:]
-                            if str(x).strip() != ""
-                        ]
-
-                        for i, do_value in enumerate(do_values):
-                            if i < len(tri_values):
-                                _TUBE_CENTER_DISTANCE_MAP_CACHE[
-                                    (do_value, "三角形排列")
-                                ] = tri_values[i]
-                            if i < len(sq_values):
-                                _TUBE_CENTER_DISTANCE_MAP_CACHE[
-                                    (do_value, "正方形排列")
-                                ] = sq_values[i]
-                except Exception as e:
-                    print(f"[update_tube_center_distance] 解析配置失败: {e}")
-
-        center_distance_map = _TUBE_CENTER_DISTANCE_MAP_CACHE
+        center_distance_map = get_tube_center_distance_map()
 
         # 5. 匹配映射关系并更新中心距
         key = (do_value, unified_range_type)
@@ -10738,62 +10608,12 @@ class TubeLayoutEditor(QMainWindow):
         返回：
             float|None：默认中心距；找不到映射时返回 None
         """
-        global _TUBE_CENTER_DISTANCE_MAP_CACHE
-        if _TUBE_CENTER_DISTANCE_MAP_CACHE is None:
-            _TUBE_CENTER_DISTANCE_MAP_CACHE = {}
-            config_value = self.get_config_value("2.10.1.1")
-            if config_value:
-                try:
-                    config_rows = (
-                        ast.literal_eval(config_value)
-                        if isinstance(config_value, str)
-                        else config_value
-                    )
-                    do_row = None
-                    tri_s_row = None
-                    sq_s_row = None
-                    for r in (config_rows or []):
-                        if not r or len(r) < 2:
-                            continue
-                        name = str(r[0]).strip()
-                        if name == "换热管外径d":
-                            do_row = r
-                        elif name == "换热管中心距S（三角形排列）":
-                            tri_s_row = r
-                        elif name == "换热管中心距S（正方形排列）":
-                            sq_s_row = r
+        from modules.buguan.buguan_ziyong.predefined_config import (
+            get_tube_center_distance_map,
+        )
 
-                    if do_row and tri_s_row and sq_s_row:
-                        do_values = [
-                            float(x)
-                            for x in do_row[1:]
-                            if str(x).strip() != ""
-                        ]
-                        tri_values = [
-                            float(x)
-                            for x in tri_s_row[1:]
-                            if str(x).strip() != ""
-                        ]
-                        sq_values = [
-                            float(x)
-                            for x in sq_s_row[1:]
-                            if str(x).strip() != ""
-                        ]
-
-                        for i, do_value in enumerate(do_values):
-                            if i < len(tri_values):
-                                _TUBE_CENTER_DISTANCE_MAP_CACHE[
-                                    (do_value, "三角形排列")
-                                ] = tri_values[i]
-                            if i < len(sq_values):
-                                _TUBE_CENTER_DISTANCE_MAP_CACHE[
-                                    (do_value, "正方形排列")
-                                ] = sq_values[i]
-                except Exception:
-                    # 配置解析失败则直接认为找不到默认值
-                    pass
-
-        if not _TUBE_CENTER_DISTANCE_MAP_CACHE:
+        tube_s_map = get_tube_center_distance_map()
+        if not tube_s_map:
             return None
 
         # 1) 取当前 do
@@ -10840,8 +10660,8 @@ class TubeLayoutEditor(QMainWindow):
             (do_value, unified_range_type),
         ]
         for key in key_candidates:
-            if key in _TUBE_CENTER_DISTANCE_MAP_CACHE:
-                return _TUBE_CENTER_DISTANCE_MAP_CACHE[key]
+            if key in tube_s_map:
+                return tube_s_map[key]
 
         return None
 
@@ -10966,20 +10786,11 @@ class TubeLayoutEditor(QMainWindow):
         作为板式滑道与换热管最小间距相对名义孔桥宽度的倍数。
         读失败或非法时回退 1.0。
         """
-        try:
-            raw = self.get_config_value("2.14.9.1")
-            if raw is None or str(raw).strip() == "":
-                return 1.0
-            factor = float(str(raw).strip())
-            if factor < 0:
-                print(
-                    f"[slideway predefined] 2.14.9.1 倍数非法({factor})，回退 1.0"
-                )
-                return 1.0
-            return factor
-        except Exception as e:
-            print(f"[slideway predefined] 读取2.14.9.1失败: {e}，回退 1.0")
-            return 1.0
+        from modules.buguan.buguan_ziyong.predefined_config import (
+            get_slipway_bridge_factor,
+        )
+
+        return get_slipway_bridge_factor(default=1.0)
 
     def _get_slideway_predefined_defaults(self, dn_val=None):
         """
@@ -10989,36 +10800,12 @@ class TubeLayoutEditor(QMainWindow):
         返回:
             dict | None: {"thickness": float, "height": float}
         """
-        global _SLIDEWAY_PREDEFINED_21431_CACHE
+        from modules.buguan.buguan_ziyong.predefined_config import (
+            get_slipway_size_table,
+        )
 
-        if _SLIDEWAY_PREDEFINED_21431_CACHE is None:
-            _SLIDEWAY_PREDEFINED_21431_CACHE = {}
-            config_value = self.get_config_value("2.14.3.1")
-            if config_value:
-                try:
-                    rows = (
-                        ast.literal_eval(config_value)
-                        if isinstance(config_value, str)
-                        else config_value
-                    )
-                    for r in rows[1:] if isinstance(rows, list) and len(rows) > 1 else []:
-                        if not isinstance(r, (list, tuple)) or len(r) < 5:
-                            continue
-                        try:
-                            dn = float(r[0])
-                            _SLIDEWAY_PREDEFINED_21431_CACHE[round(dn, 1)] = {
-                                # 最小厚度mm: 非合金钢、低合金钢
-                                "thickness_carbon": float(r[2]),
-                                # 最小厚度mm: 高合金钢
-                                "thickness_high": float(r[3]),
-                                "height": float(r[4]),
-                            }
-                        except Exception:
-                            continue
-                except Exception as e:
-                    print(f"[slideway predefined] 解析配置2.14.3.1失败: {e}")
-
-        if not _SLIDEWAY_PREDEFINED_21431_CACHE:
+        table = get_slipway_size_table()
+        if not table:
             return None
 
         if dn_val is None:
@@ -11056,7 +10843,7 @@ class TubeLayoutEditor(QMainWindow):
 
         key = round(float(dn_val), 1)
         # 仅精确对照；对照不上则返回 None，由调用方走原默认逻辑
-        row_data = _SLIDEWAY_PREDEFINED_21431_CACHE.get(key)
+        row_data = table.get(key)
         if not row_data:
             return None
 
@@ -13556,25 +13343,12 @@ class TubeLayoutEditor(QMainWindow):
             self._is_validating = False
 
     def get_config_value(self, config_id):
-        """从配置库获取配置值"""
-        try:
-            conn = create_config_connection()
-            if conn:
-                with conn.cursor() as cursor:
-                    sql = "SELECT value FROM user_config WHERE id = %s"
-                    cursor.execute(sql, (config_id,))
-                    result = cursor.fetchone()
-                    if result:
-                        return result["value"]
-                    else:
-                        print(f"未找到配置项: {config_id}")
-                        return None
-        except Exception as e:
-            print(f"查询配置库失败: {e}")
-            return None
-        finally:
-            if conn:
-                conn.close()
+        """从配置库获取配置值（预定义操作，见 predefined_config）。"""
+        from modules.buguan.buguan_ziyong.predefined_config import (
+            get_user_config_value,
+        )
+
+        return get_user_config_value(config_id)
 
     def update_baffle_parameters(self, changed_param_name):
         """

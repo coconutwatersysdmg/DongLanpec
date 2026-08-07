@@ -3851,13 +3851,12 @@ def cal_qiaotineizhijing_KU(product_id, isDi_change, isDN_change, user_Di, user_
         param_map.get("设计温度*", {}).get("管程数值", "")
     )
 
-    cursor.execute("""
-        SELECT id, value
-        FROM 配置库.user_config
-        WHERE id IN ('2.18.5.1', '2.18.5.2', '2.18.5.3')
-    """)
-    config_rows = cursor.fetchall()
-    config_map = {str(row["id"]).strip(): parse_float(row["value"]) for row in config_rows}
+    from modules.buguan.buguan_ziyong.predefined_config import get_float_config_map
+
+    config_map = get_float_config_map(
+        ("2.18.5.1", "2.18.5.2", "2.18.5.3"),
+        parse_float=parse_float,
+    )
 
     a_limit = config_map.get("2.18.5.1")
     b_limit = config_map.get("2.18.5.2")
