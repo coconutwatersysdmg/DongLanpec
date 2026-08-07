@@ -1,7 +1,7 @@
 # 10/19 3
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QFrame,
-    QLineEdit, QGridLayout, QScrollBar, QTableWidget,
+    QLineEdit, QGridLayout, QScrollBar, QTableWidget, QComboBox,
     QTableWidgetItem, QHeaderView, QApplication, QPushButton, QAbstractItemView
 )
 from modules.buguan.buguan_ziyong.ui_style import StyledMessageBox as QMessageBox
@@ -12,6 +12,18 @@ import pymysql
 from pathlib import Path
 
 from .buguan_param_table_style import apply_buguan_param_table_style
+
+# 内孔焊接头形式：焊接接头系数下拉选项
+NEIKONGHAN_PARAM_NAME = "内孔焊焊接接头系数φ"
+NEIKONGHAN_FACTOR_OPTIONS = ("1.0", "0.85", "0.7")
+NEIKONGHAN_FACTOR_DEFAULT = "0.85"
+
+
+class NoWheelComboBox(QComboBox):
+    """禁用滚轮的下拉框，避免误改参数。"""
+
+    def wheelEvent(self, event):
+        event.ignore()
 
 
 class ToggleSwitch(QWidget):
@@ -775,15 +787,15 @@ class TubeSheetConnectionPage(QWidget):
         # 设置表格行数
         self.param_table.setRowCount(len(params))
 
-        # 如果没有参数（如内孔焊接头形式），显示空白表格
+        # 断开之前的信号连接，避免重复连接
+        try:
+            self.param_table.itemChanged.disconnect()
+        except TypeError:
+            pass
+
+        # 如果没有参数，显示空白表格
         if len(params) == 0:
-            # 清空表格内容但保持表格结构
             self.param_table.clearContents()
-            # 断开之前的信号连接，避免重复连接
-            try:
-                self.param_table.itemChanged.disconnect()
-            except TypeError:
-                pass  # 如果没有连接则忽略
             return
 
         # 设置列宽比例为6:4
@@ -795,23 +807,38 @@ class TubeSheetConnectionPage(QWidget):
             header.resizeSection(0, col0_width)
             header.resizeSection(1, col1_width)
 
-        # 填充表格数据 - 完全照搬My_Piping.py的方式
+        # 填充表格数据
         for row, param in enumerate(params):
             # 参数名列 - 只读
             name_item = QTableWidgetItem(param['name'])
-            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)  # 参数名不可编辑
+            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
             self.param_table.setItem(row, 0, name_item)
 
-            # 参数值列 - 可编辑，照搬My_Piping.py的设置
-            value_item = QTableWidgetItem(param['value'])
-            value_item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)  # 照搬My_Piping.py的权限设置
-            self.param_table.setItem(row, 1, value_item)
+            param_name = param['name']
+            param_value = param['value']
 
-            # 存储参数信息
-            self.current_params.append((param['name'], param['value']))
+            # 内孔焊焊接接头系数φ：固定三项下拉
+            if param_name == NEIKONGHAN_PARAM_NAME:
+                combo = NoWheelComboBox()
+                combo.addItems(list(NEIKONGHAN_FACTOR_OPTIONS))
+                normalized = self._normalize_neikonghan_factor(param_value)
+                idx = combo.findText(normalized)
+                combo.setCurrentIndex(idx if idx >= 0 else combo.findText(NEIKONGHAN_FACTOR_DEFAULT))
+                combo.currentTextChanged.connect(
+                    lambda text, n=param_name: self.update_param_value(n, text)
+                )
+                self.param_table.setCellWidget(row, 1, combo)
+                param_value = combo.currentText()
+            else:
+                value_item = QTableWidgetItem(param_value)
+                value_item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
+                self.param_table.setItem(row, 1, value_item)
+
+            self.current_params.append((param_name, param_value))
 
         # 连接表格数据变化信号
         self.param_table.itemChanged.connect(self.on_table_item_changed)
+        self._sync_tsc_widgets_enabled()
 
     def resizeEvent(self, event):
         """处理窗口大小变化，重新设置列宽比例"""
@@ -880,6 +907,20 @@ class TubeSheetConnectionPage(QWidget):
 
     def get_current_parameters(self):
         """获取当前参数列表，包含连接方式和管板类型"""
+        # 从参数表同步下拉框等控件当前值，避免只改下拉未写入 current_params
+        try:
+            if hasattr(self, "param_table") and self.param_table is not None:
+                for row in range(self.param_table.rowCount()):
+                    name_item = self.param_table.item(row, 0)
+                    if not name_item:
+                        continue
+                    param_name = name_item.text()
+                    cell_widget = self.param_table.cellWidget(row, 1)
+                    if isinstance(cell_widget, QComboBox):
+                        self.update_param_value(param_name, cell_widget.currentText())
+        except Exception:
+            pass
+
         # 从当前选中的图片标签获取连接方式和管板类型
         connection_type = ""
         tube_sheet_type = ""
@@ -921,10 +962,106 @@ class TubeSheetConnectionPage(QWidget):
         print(f"🔍 [调试] 最终返回的参数数量: {len(full_params)}")
         return full_params
 
+    def _normalize_neikonghan_factor(self, value):
+        """将读到的值规范为下拉可选值，无效则回退默认 0.85。"""
+        text = str(value).strip() if value is not None else ""
+        if text in NEIKONGHAN_FACTOR_OPTIONS:
+            return text
+        # 兼容 1 / 0.70 等写法
+        try:
+            num = float(text)
+            for opt in NEIKONGHAN_FACTOR_OPTIONS:
+                if abs(float(opt) - num) < 1e-9:
+                    return opt
+        except (TypeError, ValueError):
+            pass
+        return NEIKONGHAN_FACTOR_DEFAULT
+
+    def _query_single_param_value(self, connection_type, tube_sheet_type, param_name):
+        """按优先级：产品活动库 → 元件库 → None。管板类型无匹配时再按连接方式兜底。"""
+        def _fetch(conn, sql, args):
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(sql, args)
+                    row = cur.fetchone()
+                    if row and row.get("参数值") not in (None, ""):
+                        return row["参数值"]
+            except pymysql.Error as e:
+                print(f"[管板连接参数查询错误] {e}")
+            return None
+
+        product_id = self.get_product_id()
+        if product_id:
+            prod_conn = create_product_connection()
+            if prod_conn:
+                try:
+                    value = _fetch(
+                        prod_conn,
+                        """
+                        SELECT 参数值
+                        FROM 产品设计活动表_管板连接表
+                        WHERE 产品ID = %s AND 管板连接方式 = %s
+                          AND 管板类型 = %s AND 参数名 = %s
+                        LIMIT 1
+                        """,
+                        (product_id, connection_type, tube_sheet_type, param_name),
+                    )
+                    if value is None:
+                        value = _fetch(
+                            prod_conn,
+                            """
+                            SELECT 参数值
+                            FROM 产品设计活动表_管板连接表
+                            WHERE 产品ID = %s AND 管板连接方式 = %s AND 参数名 = %s
+                            LIMIT 1
+                            """,
+                            (product_id, connection_type, param_name),
+                        )
+                    if value is not None:
+                        return value
+                finally:
+                    prod_conn.close()
+
+        comp_conn = create_component_connection()
+        if comp_conn:
+            try:
+                value = _fetch(
+                    comp_conn,
+                    """
+                    SELECT 参数值
+                    FROM 管板连接表
+                    WHERE 管板连接方式 = %s AND 管板类型 = %s AND 参数名 = %s
+                    LIMIT 1
+                    """,
+                    (connection_type, tube_sheet_type, param_name),
+                )
+                if value is None:
+                    value = _fetch(
+                        comp_conn,
+                        """
+                        SELECT 参数值
+                        FROM 管板连接表
+                        WHERE 管板连接方式 = %s AND 参数名 = %s
+                        LIMIT 1
+                        """,
+                        (connection_type, param_name),
+                    )
+                if value is not None:
+                    return value
+            finally:
+                comp_conn.close()
+        return None
+
     def get_parameters_by_type(self, connection_type, tube_sheet_type):
-        # 特殊处理：内孔焊接头形式 - 不显示任何参数
+        # 特殊处理：内孔焊接头形式 - 显示焊接接头系数下拉参数
         if connection_type == "内孔焊接头形式":
-            return []
+            raw_value = self._query_single_param_value(
+                connection_type, tube_sheet_type, NEIKONGHAN_PARAM_NAME
+            )
+            value = self._normalize_neikonghan_factor(
+                raw_value if raw_value is not None else NEIKONGHAN_FACTOR_DEFAULT
+            )
+            return [{"name": NEIKONGHAN_PARAM_NAME, "value": value}]
 
         # 特殊处理：强度焊接的焊缝形式 - 只显示焊脚高度 l 参数
         if connection_type == "强度焊接的焊缝形式":

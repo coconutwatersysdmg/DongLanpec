@@ -6149,6 +6149,15 @@ def cal_qiaotineizhijing_KU(product_id, isDi_change, isDN_change, user_Di, user_
             except (TypeError, ValueError):
                 g_val = 0.0
 
+            # === 读取内孔焊焊接接头系数φ（强度接口字段名为内孔焊焊接接头系数）===
+            cursor.execute("""
+                SELECT 参数值 FROM 产品设计活动表_管板连接表
+                WHERE 产品ID = %s AND 参数名 = '内孔焊焊接接头系数φ' LIMIT 1
+            """, (product_id,))
+            row = cursor.fetchone()
+            if row and row.get("参数值") not in (None, ""):
+                guanban_a["内孔焊焊接接头系数"] = str(row["参数值"]).strip()
+
         except Exception as e:
             print(f" 查询失败: {e}")
         print(e_val)
