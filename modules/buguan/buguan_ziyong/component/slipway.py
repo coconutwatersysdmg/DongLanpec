@@ -1047,6 +1047,21 @@ def draw_slide_with_params(self, height, thickness, angle, skip_interference_del
         # 兼容旧字段：后续 operations 里仍记录 DN，这里用“实际绘制基准圆直径”代替
         DN = base_circle_diameter
 
+        # 滑道形式：板式按「管外壁↔滑道表面」≥1×名义孔桥判定干涉
+        try:
+            slipway_form = str(
+                self._read_param_table_value("滑道形式") or "板式滑道"
+            ).strip()
+        except Exception:
+            slipway_form = "板式滑道"
+        is_plate_slipway = slipway_form == "板式滑道"
+        bridge_clearance = 0.0
+        if is_plate_slipway:
+            try:
+                bridge_clearance = float(self.get_nominal_bridge_width(do) or 0)
+            except Exception:
+                bridge_clearance = 0.0
+
         # 初始化滑道中心列表（复现模式保留已加载的 slipway_centers）
         if not skip_interference_delete:
             self.slipway_centers = []
@@ -1100,92 +1115,38 @@ def draw_slide_with_params(self, height, thickness, angle, skip_interference_del
         u1_x, u1_y = unit_vector(center_x - base1_x, center_y - base1_y)
         u2_x, u2_y = unit_vector(center_x - base2_x, center_y - base2_y)
 
-        def is_point_in_rectangle(point, rect_points):
-            """判断点是否在矩形内（包括边界）"""
-            x, y = point
-            # 提取矩形的四个顶点坐标
-            (x1, y1), (x2, y2), (x3, y3), (x4, y4) = rect_points
-
-            # 计算矩形的最小和最大x、y坐标（轴对齐边界框）
-            min_x = min(x1, x2, x3, x4)
-            max_x = max(x1, x2, x3, x4)
-            min_y = min(y1, y2, y3, y4)
-            max_y = max(y1, y2, y3, y4)
-
-            # 检查点是否在边界框内
-            if not (
-                    min_x - 1e-8 <= x <= max_x + 1e-8
-                    and min_y - 1e-8 <= y <= max_y + 1e-8
-            ):
-                return False
-
-            # 计算向量
-            def cross(o, a, b):
-                return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
-
-            # 检查点是否在矩形内部
-            c1 = cross(rect_points[0], rect_points[1], point)
-            c2 = cross(rect_points[1], rect_points[2], point)
-            c3 = cross(rect_points[2], rect_points[3], point)
-            c4 = cross(rect_points[3], rect_points[0], point)
-
-            # 所有叉积同号（或为0），表示点在矩形内
-            has_neg = (c1 < -1e-8) or (c2 < -1e-8) or (c3 < -1e-8) or (c4 < -1e-8)
-            has_pos = (c1 > 1e-8) or (c2 > 1e-8) or (c3 > 1e-8) or (c4 > 1e-8)
-
-            return not (has_neg and has_pos)
-
-        def point_to_line_distance(point, line_start, line_end):
-            """计算点到线段的最短距离"""
-            x, y = point
-            x1, y1 = line_start
-            x2, y2 = line_end
-
-            # 线段的向量
-            dx = x2 - x1
-            dy = y2 - y1
-            # 如果线段长度为0，返回点到端点的距离
-            if dx == 0 and dy == 0:
-                return math.hypot(x - x1, y - y1)
-            # 计算投影比例
-            t = ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy)
-            t = max(0, min(1, t))  # 限制在[0,1]范围内
-            # 投影点
-            proj_x = x1 + t * dx
-            proj_y = y1 + t * dy
-
-            # 计算距离
-            return math.hypot(x - proj_x, y - proj_y)
-
         def check_tube_slide_interference(
-                slide_corners, tube_centers, tube_diameter
+            slide_corners, tube_centers, tube_diameter, clearance=0.0
         ):
-            # 【修改核心】：通过滑道矩形四角y坐标确定干涉范围，替代原几何干涉判断
-            # 1. 提取滑道矩形四个角的y坐标
-            corner_ys = [corner[1] for corner in slide_corners]
-            # 2. 找y坐标绝对值最小（最高）和最大（最低）的点，取其原值
-            min_abs_y_idx = corner_ys.index(min(corner_ys, key=abs))
-            max_abs_y_idx = corner_ys.index(max(corner_ys, key=abs))
-            slide_min_y = corner_ys[min_abs_y_idx]  # 最高处y原值
-            slide_max_y = corner_ys[max_abs_y_idx]  # 最低处y原值
-            # 3. 确定干涉y范围（处理min和max顺序，确保左小右大）
-            lower_y = min(slide_min_y, slide_max_y)
-            upper_y = max(slide_min_y, slide_max_y)
-            # 4. 筛选y坐标在[lower_y, upper_y]之间的换热管
-            interfering_tubes = [
-                center
-                for center in tube_centers
-                if lower_y - 1e-8 - self.r
-                   <= center[1]
-                   <= upper_y + 1e-8 + self.r  # 浮点数误差容忍
-            ]
-            # 5. 收集干涉管的y坐标
-            interfering_y_coords = {center[1] for center in interfering_tubes}
+            """
+            板式：管外壁到滑道表面间距 < 1×名义孔桥 → 干涉。
+            等价：管心到滑道矩形距离 < do/2 + 名义孔桥。
+            圆钢等 clearance=0：纯几何碰管。
+            """
+            try:
+                tube_radius = float(tube_diameter) / 2.0
+            except Exception:
+                tube_radius = float(getattr(self, "r", 0) or 0)
+            try:
+                cl = float(clearance or 0.0)
+            except Exception:
+                cl = 0.0
 
+            interfering_tubes = []
+            for center in tube_centers or []:
+                if self._tube_intersects_slide_rect(
+                    center, tube_radius, slide_corners, clearance=cl
+                ):
+                    interfering_tubes.append(center)
+
+            # 用圆整 y 做行键，避免浮点导致整行漏删
+            interfering_y_coords = {
+                round(float(center[1]), 6) for center in interfering_tubes
+            }
             return interfering_tubes, interfering_y_coords
 
         def get_slide_interfering_tubes(
-                base_x, base_y, unit_dx, unit_dy, thickness, length, is_left=True
+            base_x, base_y, unit_dx, unit_dy, thickness, length, is_left=True
         ):
             perp_dx, perp_dy = -unit_dy, unit_dx
             half_thick = thickness / 2
@@ -1206,16 +1167,12 @@ def draw_slide_with_params(self, height, thickness, angle, skip_interference_del
                 (p4.x(), p4.y()),
             ]
 
-            # 检查干涉（调用修改后的check_tube_slide_interference）
-            # print(f"[调试] 检查干涉，current_centers数量: {len(self.current_centers)}")
-            # print(f"[调试] current_centers前5个坐标: {self.current_centers[:5] if self.current_centers else 'None'}")
             interfering_tubes, interfering_y_coords = check_tube_slide_interference(
                 slide_corners=slide_corners,
                 tube_centers=self.current_centers + self.lagan_info,
                 tube_diameter=do,
+                clearance=bridge_clearance if is_plate_slipway else 0.0,
             )
-            # print(f"[调试] 找到干涉管数量: {len(interfering_tubes)}")
-            # print(f"[调试] 干涉y坐标: {interfering_y_coords}")
 
             return interfering_tubes, interfering_y_coords, slide_corners
 
@@ -1291,7 +1248,11 @@ def draw_slide_with_params(self, height, thickness, angle, skip_interference_del
             if not combined_for_geom:
                 combined_for_geom = list(self.current_centers or [])
         self._update_true_slipway_centers(
-            slide_corners1, slide_corners2, combined_for_geom, do
+            slide_corners1,
+            slide_corners2,
+            combined_for_geom,
+            do,
+            clearance=bridge_clearance if is_plate_slipway else 0.0,
         )
 
         # 合并所有干涉的y坐标
@@ -1301,15 +1262,13 @@ def draw_slide_with_params(self, height, thickness, angle, skip_interference_del
 
         # 处理所有干涉的管子（按行删除）- 仅界面布置时执行；复现时不重算干涉
         if (not skip_interference_delete) and all_interfering_y_coords:
-            # 【核心修改】：计算self.current_centers与lagan_centers的合集
-            lagan_centers = self.selected_to_current_coords(self.lagan_info)
             combined_centers = list(set(self.current_centers + self.lagan_info))
 
-            # 收集所有在干涉行上的换热管（从合集中筛选）
+            # 收集所有在干涉行上的换热管（整行删除）
             self.slipway_centers = [
                 center
                 for center in combined_centers
-                if center[1] in all_interfering_y_coords
+                if round(float(center[1]), 6) in all_interfering_y_coords
             ]
 
             # 擦除干涉换热管（整行删除）

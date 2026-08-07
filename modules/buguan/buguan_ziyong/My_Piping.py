@@ -1868,27 +1868,40 @@ class TubeLayoutEditor(QMainWindow):
         proj_y = y1 + t * dy
         return math.hypot(x - proj_x, y - proj_y)
 
-    def _tube_intersects_slide_rect(self, center, radius, slide_corners):
+    def _tube_intersects_slide_rect(
+        self, center, radius, slide_corners, clearance=0.0
+    ):
+        """
+        管与滑道矩形是否干涉。
+        clearance: 管外壁到滑道表面的最小允许间距；小于该值视为干涉。
+        判定：管心到矩形距离 < radius + clearance。
+        """
         if not center or not slide_corners:
             return False
         try:
             cx, cy = float(center[0]), float(center[1])
             r = float(radius)
+            cl = float(clearance or 0.0)
         except Exception:
             return False
+        limit = r + max(cl, 0.0) + 1e-8
         if self._point_in_convex_polygon((cx, cy), slide_corners):
             return True
         for i in range(len(slide_corners)):
             p1 = slide_corners[i]
             p2 = slide_corners[(i + 1) % len(slide_corners)]
-            if self._point_to_segment_distance((cx, cy), p1, p2) <= r + 1e-8:
+            if self._point_to_segment_distance((cx, cy), p1, p2) <= limit:
                 return True
         return False
 
-    def _collect_geometric_slipway_hits(self, slide_corners, tube_centers, tube_radius):
+    def _collect_geometric_slipway_hits(
+        self, slide_corners, tube_centers, tube_radius, clearance=0.0
+    ):
         hits = []
         for center in tube_centers or []:
-            if self._tube_intersects_slide_rect(center, tube_radius, slide_corners):
+            if self._tube_intersects_slide_rect(
+                center, tube_radius, slide_corners, clearance=clearance
+            ):
                 hits.append(center)
         return hits
 
@@ -1911,19 +1924,30 @@ class TubeLayoutEditor(QMainWindow):
         return self._normalize_slipway_abs_centers(abs_expanded)
 
     def _update_true_slipway_centers(
-        self, slide_corners1, slide_corners2, tube_centers, tube_diameter
+        self,
+        slide_corners1,
+        slide_corners2,
+        tube_centers,
+        tube_diameter,
+        clearance=0.0,
     ):
-        """按滑道矩形几何干涉 + 对称联动，更新 true_slipway_centers。"""
+        """按滑道矩形几何干涉（含可选孔桥间距）+ 对称联动，更新 true_slipway_centers。"""
         try:
             radius = float(tube_diameter) / 2.0
         except Exception:
             radius = float(getattr(self, "r", 0) or 0)
+        try:
+            cl = float(clearance or 0.0)
+        except Exception:
+            cl = 0.0
         hits = []
         for corners in (slide_corners1, slide_corners2):
             if not corners:
                 continue
             hits.extend(
-                self._collect_geometric_slipway_hits(corners, tube_centers, radius)
+                self._collect_geometric_slipway_hits(
+                    corners, tube_centers, radius, clearance=cl
+                )
             )
         hits = self._normalize_slipway_abs_centers(hits)
         self.true_slipway_centers = self._apply_slipway_linkage_abs(hits)
@@ -38415,29 +38439,12 @@ class TubeLayoutEditor(QMainWindow):
         return _edit_center_dangban(self, dangban_item)
 
     def get_nominal_bridge_width(self, d):
-        # 定义换热管外径与名义孔桥宽度的对应关系
-        width_map = {
-            10: 3.82,
-            12: 3.82,
-            14: 4.75,
-            16: 5.75,
-            19: 5.75,
-            20: 5.75,
-            25: 6.75,
-            30: 7.65,
-            32: 7.60,
-            35: 8.60,
-            38: 9.55,
-            45: 11.50,
-            50: 13.45,
-            55: 14.35,
-            57: 14.35,
-        }
-        # 检查输入的换热管外径是否在字典中
-        if d in width_map:
-            return width_map[d]
-        else:
-            return 0
+        """换热管外径 → 名义孔桥宽度，数据见 nominal_bridge_width.py。"""
+        from modules.buguan.buguan_ziyong.nominal_bridge_width import (
+            get_nominal_bridge_width as _get_nominal_bridge_width,
+        )
+
+        return _get_nominal_bridge_width(d)
 
     def get_y_pair_by_W(self):
         from PyQt5.QtWidgets import QComboBox
