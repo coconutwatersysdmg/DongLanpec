@@ -10960,6 +10960,27 @@ class TubeLayoutEditor(QMainWindow):
             pass
         return thickness
 
+    def _get_slipway_bridge_factor(self):
+        """
+        读取预定义：配置库 user_config id=2.14.9.1 的 value，
+        作为板式滑道与换热管最小间距相对名义孔桥宽度的倍数。
+        读失败或非法时回退 1.0。
+        """
+        try:
+            raw = self.get_config_value("2.14.9.1")
+            if raw is None or str(raw).strip() == "":
+                return 1.0
+            factor = float(str(raw).strip())
+            if factor < 0:
+                print(
+                    f"[slideway predefined] 2.14.9.1 倍数非法({factor})，回退 1.0"
+                )
+                return 1.0
+            return factor
+        except Exception as e:
+            print(f"[slideway predefined] 读取2.14.9.1失败: {e}，回退 1.0")
+            return 1.0
+
     def _get_slideway_predefined_defaults(self, dn_val=None):
         """
         从配置库 id=2.14.3.1 获取滑道“推荐厚度/推荐高度”。

@@ -1047,7 +1047,8 @@ def draw_slide_with_params(self, height, thickness, angle, skip_interference_del
         # 兼容旧字段：后续 operations 里仍记录 DN，这里用“实际绘制基准圆直径”代替
         DN = base_circle_diameter
 
-        # 滑道形式：板式按「管外壁↔滑道表面」≥1×名义孔桥判定干涉
+        # 滑道形式：板式按「管外壁↔滑道表面」≥ k×名义孔桥判定干涉
+        # k 来自预定义 user_config id=2.14.9.1
         try:
             slipway_form = str(
                 self._read_param_table_value("滑道形式") or "板式滑道"
@@ -1058,7 +1059,9 @@ def draw_slide_with_params(self, height, thickness, angle, skip_interference_del
         bridge_clearance = 0.0
         if is_plate_slipway:
             try:
-                bridge_clearance = float(self.get_nominal_bridge_width(do) or 0)
+                bridge_b = float(self.get_nominal_bridge_width(do) or 0)
+                bridge_k = float(self._get_slipway_bridge_factor())
+                bridge_clearance = bridge_k * bridge_b
             except Exception:
                 bridge_clearance = 0.0
 
@@ -1119,8 +1122,8 @@ def draw_slide_with_params(self, height, thickness, angle, skip_interference_del
             slide_corners, tube_centers, tube_diameter, clearance=0.0
         ):
             """
-            板式：管外壁到滑道表面间距 < 1×名义孔桥 → 干涉。
-            等价：管心到滑道矩形距离 < do/2 + 名义孔桥。
+            板式：管外壁到滑道表面间距 < k×名义孔桥 → 干涉。
+            等价：管心到滑道矩形距离 < do/2 + k×名义孔桥。
             圆钢等 clearance=0：纯几何碰管。
             """
             try:
