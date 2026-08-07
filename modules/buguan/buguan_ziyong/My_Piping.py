@@ -32009,55 +32009,78 @@ class TubeLayoutEditor(QMainWindow):
                 return a[0] == b[0] and a[1] == b[1]
 
             baffles_to_remove = []
-            for baffle_item in self.baffle_items:
-                if (
-                        hasattr(baffle_item, "original_selected_centers")
-                        and baffle_item.original_selected_centers
-                ):
-                    for deleted_coord in deleted_relative_coords:
-                        if any(
-                                _coord_match(deleted_coord, c)
-                                for c in baffle_item.original_selected_centers
-                        ):
-                            baffles_to_remove.append(baffle_item)
-                            break
+            for baffle_item in list(self.baffle_items):
+                try:
+                    if (
+                            hasattr(baffle_item, "original_selected_centers")
+                            and baffle_item.original_selected_centers
+                    ):
+                        for deleted_coord in deleted_relative_coords:
+                            if any(
+                                    _coord_match(deleted_coord, c)
+                                    for c in baffle_item.original_selected_centers
+                            ):
+                                baffles_to_remove.append(baffle_item)
+                                break
+                except RuntimeError:
+                    # 僵尸图元：从列表剔除，避免后续再踩
+                    try:
+                        if baffle_item in self.baffle_items:
+                            self.baffle_items.remove(baffle_item)
+                    except Exception:
+                        pass
+                    continue
 
-            # 删除相关的防冲板
+            # 删除相关的防冲板（图元可能已被 create_scene 等销毁，需防 RuntimeError）
             for baffle_item in baffles_to_remove:
-                # 从场景中删除
-                if baffle_item.scene() == self.graphics_scene:
-                    self.graphics_scene.removeItem(baffle_item)
-                # 从 baffle_items 中删除
-                if baffle_item in self.baffle_items:
-                    self.baffle_items.remove(baffle_item)
-                # 从 impingement_plate_1 或 impingement_plate_2 中删除对应的坐标对
-                if (
-                        hasattr(baffle_item, "original_selected_centers")
-                        and baffle_item.original_selected_centers
-                ):
-                    if baffle_item.baffle_type == "平板形" and hasattr(
-                            self, "impingement_plate_1"
+                try:
+                    # 从场景中删除
+                    try:
+                        if (
+                                baffle_item.scene() is not None
+                                and baffle_item.scene() == self.graphics_scene
+                        ):
+                            self.graphics_scene.removeItem(baffle_item)
+                    except RuntimeError:
+                        pass
+                    # 从 baffle_items 中删除
+                    if baffle_item in self.baffle_items:
+                        self.baffle_items.remove(baffle_item)
+                    # 从 impingement_plate_1 或 impingement_plate_2 中删除对应的坐标对
+                    if (
+                            hasattr(baffle_item, "original_selected_centers")
+                            and baffle_item.original_selected_centers
                     ):
-                        self.impingement_plate_1 = [
-                            pair
-                            for pair in self.impingement_plate_1
-                            if pair != baffle_item.original_selected_centers
-                        ]
-                    elif baffle_item.baffle_type == "圆弧形" and hasattr(
-                            self, "impingement_plate_2"
+                        if getattr(baffle_item, "baffle_type", None) == "平板形" and hasattr(
+                                self, "impingement_plate_1"
+                        ):
+                            self.impingement_plate_1 = [
+                                pair
+                                for pair in self.impingement_plate_1
+                                if pair != baffle_item.original_selected_centers
+                            ]
+                        elif getattr(baffle_item, "baffle_type", None) == "圆弧形" and hasattr(
+                                self, "impingement_plate_2"
+                        ):
+                            self.impingement_plate_2 = [
+                                pair
+                                for pair in self.impingement_plate_2
+                                if pair != baffle_item.original_selected_centers
+                            ]
+                    # 同步从防冲板数据字典中移除
+                    if hasattr(baffle_item, "impingement_plate_id") and hasattr(
+                            self, "impingement_plate_dic"
                     ):
-                        self.impingement_plate_2 = [
-                            pair
-                            for pair in self.impingement_plate_2
-                            if pair != baffle_item.original_selected_centers
-                        ]
-                # 同步从防冲板数据字典中移除
-                if hasattr(baffle_item, "impingement_plate_id") and hasattr(
-                        self, "impingement_plate_dic"
-                ):
-                    self.impingement_plate_dic.pop(
-                        getattr(baffle_item, "impingement_plate_id"), None
-                    )
+                        self.impingement_plate_dic.pop(
+                            getattr(baffle_item, "impingement_plate_id"), None
+                        )
+                except RuntimeError:
+                    # C++ 图元已销毁：仍尽量从 Python 列表中清掉僵尸引用
+                    try:
+                        if baffle_item in self.baffle_items:
+                            self.baffle_items.remove(baffle_item)
+                    except Exception:
+                        pass
 
         if hasattr(self, "clear_selection_highlight"):
             self.clear_selection_highlight()

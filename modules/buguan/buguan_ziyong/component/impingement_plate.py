@@ -271,6 +271,160 @@ def calculate_and_update_bend_interfering_tubes(self, A, P, Q, B, baffle_thickne
         self.update_tube_nums()
 
 
+def _read_param_float(self, param_name):
+    """从参数表读取指定参数的浮点值；找不到或无法解析时返回 None。"""
+    try:
+        for row in range(self.param_table.rowCount()):
+            param_name_item = self.param_table.item(row, 1)
+            if not param_name_item or param_name_item.text().strip() != param_name:
+                continue
+            cell_widget = self.param_table.cellWidget(row, 2)
+            if isinstance(cell_widget, QComboBox):
+                text = cell_widget.currentText()
+            else:
+                value_item = self.param_table.item(row, 2)
+                text = value_item.text() if value_item else ""
+            try:
+                return float(str(text).strip())
+            except (ValueError, TypeError):
+                return None
+    except Exception:
+        return None
+    return None
+
+
+def _coord_key6(coord):
+    """绝对坐标 6 位小数键，用于去重/比较。"""
+    return (round(float(coord[0]), 6), round(float(coord[1]), 6))
+
+
+def collect_extra_impingement_delete_centers(
+        self, selected_abs_centers, selected_rel_centers
+):
+    """平板形/圆弧形防冲板：在原干涉之外，额外需要删除的换热管绝对坐标。
+
+    规则：
+    1) 以两选中管圆心连线为弦，删除布管限定圆 DL 内、弦靠壳壁外侧（背离圆心一侧）
+       弓形区域内的所有换热管；
+    2) 仅当两选中管在同一行时：删除该行上位于两选中管连线段外侧的其他换热管
+       （选中管本身不删；两选中管之间的管也不删）。
+       若两管不在同一行，则跳过本条，只保留弓形删除。
+    """
+    extra = []
+    if not selected_abs_centers or len(selected_abs_centers) < 2:
+        return extra
+
+    def _is_heat_tube_center(abs_coord, heat_keys):
+        return _coord_key6(abs_coord) in heat_keys
+
+    # 当前仍存在的换热管（不含已删除）
+    heat_centers = list(getattr(self, "current_centers", None) or [])
+    heat_keys = {_coord_key6(c) for c in heat_centers}
+    selected_keys = {_coord_key6(c) for c in selected_abs_centers}
+
+    # ---------- 1) 弦外侧弓形（相对布管限定圆 DL）----------
+    DL = _read_param_float(self, "布管限定圆 DL")
+    if DL is not None and DL > 0:
+        R = DL / 2.0
+        R2 = R * R
+        (x1, y1), (x2, y2) = selected_abs_centers[0], selected_abs_centers[1]
+        dx = x2 - x1
+        dy = y2 - y1
+        line_len = math.hypot(dx, dy)
+        if line_len > 1e-9:
+            # f(x,y) = (x2-x1)*(y-y1) - (y2-y1)*(x-x1)；原点在弦哪一侧
+            f_origin = dx * (0.0 - y1) - dy * (0.0 - x1)
+            # 弦近似过圆心时，无明确“外侧弓形”，跳过本规则
+            if abs(f_origin) > 1e-6 * line_len:
+                for cx, cy in heat_centers:
+                    if _coord_key6((cx, cy)) in selected_keys:
+                        continue
+                    if cx * cx + cy * cy > R2:
+                        continue
+                    f_pt = dx * (cy - y1) - dy * (cx - x1)
+                    # 与原点异侧 => 靠壳壁的外侧
+                    if f_pt * f_origin < 0:
+                        extra.append((cx, cy))
+
+    # ---------- 2) 同行外侧删除：仅两选中管同一行时处理 ----------
+    if isinstance(selected_rel_centers, str):
+        try:
+            selected_rel_centers = ast.literal_eval(selected_rel_centers)
+        except Exception:
+            selected_rel_centers = []
+    if not isinstance(selected_rel_centers, (list, tuple)):
+        selected_rel_centers = []
+
+    sel_rows = []
+    for item in selected_rel_centers:
+        if isinstance(item, (list, tuple)) and len(item) == 2:
+            try:
+                sel_rows.append(int(item[0]))
+            except (TypeError, ValueError):
+                continue
+
+    # 不同行：不处理同行精细删除
+    if len(sel_rows) >= 2 and sel_rows[0] == sel_rows[1]:
+        row_label = sel_rows[0]
+        (ax, ay), (bx, by) = selected_abs_centers[0], selected_abs_centers[1]
+        abx, aby = bx - ax, by - ay
+        ab_len2 = abx * abx + aby * aby
+
+        up = getattr(self, "full_sorted_current_centers_up", None) or []
+        down = getattr(self, "full_sorted_current_centers_down", None) or []
+        row_idx = abs(row_label) - 1
+        if row_label > 0:
+            row_data = up[row_idx] if 0 <= row_idx < len(up) else []
+        else:
+            row_data = down[row_idx] if 0 <= row_idx < len(down) else []
+
+        for pt in row_data:
+            if not (isinstance(pt, (list, tuple)) and len(pt) == 2):
+                continue
+            abs_pt = (pt[0], pt[1])
+            if _coord_key6(abs_pt) in selected_keys:
+                continue
+            if not _is_heat_tube_center(abs_pt, heat_keys):
+                continue
+            # 投影到选中管连线：t∈(0,1) 为两管之间，不删除；外侧删除
+            if ab_len2 <= 1e-18:
+                continue
+            t = ((abs_pt[0] - ax) * abx + (abs_pt[1] - ay) * aby) / ab_len2
+            if t <= 0.0 or t >= 1.0:
+                extra.append(abs_pt)
+
+    # 去重
+    seen = set()
+    unique_extra = []
+    for c in extra:
+        k = _coord_key6(c)
+        if k not in seen:
+            seen.add(k)
+            unique_extra.append(c)
+    return unique_extra
+
+
+def _merge_interfering_with_extra(
+        self, selected_abs_centers, selected_rel_centers
+):
+    """将原干涉结果与额外删除管合并，并剔除两选中管。"""
+    extra = collect_extra_impingement_delete_centers(
+        self, selected_abs_centers, selected_rel_centers
+    )
+    raw = list(getattr(self, "interfering_centers", None) or []) + list(extra)
+    selected_keys = {_coord_key6(c) for c in (selected_abs_centers or [])}
+    seen = set()
+    merged = []
+    for coord in raw:
+        k = _coord_key6(coord)
+        if k in selected_keys or k in seen:
+            continue
+        seen.add(k)
+        merged.append(coord)
+    self.interfering_centers = merged
+    return merged
+
+
 def calculate_welded_impingement_interfering_tubes(
         self, A_point, P_point, Q_point, B_point, baffle_thickness
 ):
@@ -1642,14 +1796,11 @@ def build_impingement_plate(
         except Exception:
             pass
 
-        # 计算干涉管
+        # 计算干涉管（原逻辑）+ 弓形外侧/同行额外删除
         self.calculate_and_update_interfering_tubes(points, baffle_thickness)
         # 这个函数得到了干涉换热管坐标，为绝对坐标，更新的需求为不要删除选中的俩坐标，所以在这里做一下过滤
         actual_centers = self.selected_to_current_coords(selected_centers)
-        _raw_interfering = getattr(self, "interfering_centers", None) or []
-        self.interfering_centers = [
-            coord for coord in _raw_interfering if coord not in actual_centers
-        ]
+        _merge_interfering_with_extra(self, actual_centers, selected_centers)
 
         if hasattr(self, "interfering_centers"):
             centers = [
@@ -2054,15 +2205,12 @@ def build_impingement_plate(
         except Exception:
             pass
 
-        # 计算干涉管
+        # 计算干涉管（原逻辑）+ 弓形外侧/同行额外删除
         self.calculate_and_update_bend_interfering_tubes(
             A, P, Q, B, baffle_thickness
         )
         actual_centers = self.selected_to_current_coords(selected_centers)
-        _raw_interfering = getattr(self, "interfering_centers", None) or []
-        self.interfering_centers = [
-            coord for coord in _raw_interfering if coord not in actual_centers
-        ]
+        _merge_interfering_with_extra(self, actual_centers, selected_centers)
         if hasattr(self, "interfering_centers"):
             centers = [
                 self.actual_to_selected_coords(coord)
