@@ -1866,6 +1866,23 @@ class TubeLayoutEditor(QMainWindow):
         proj_y = y1 + t * dy
         return math.hypot(x - proj_x, y - proj_y)
 
+    def _tube_intersects_slide_circle(
+        self, center, tube_radius, slide_center, slide_radius, clearance=0.0
+    ):
+        """管与滑道圆截面是否干涉：圆心距 ≤ 管半径+滑道半径+clearance。"""
+        if not center or not slide_center:
+            return False
+        try:
+            cx, cy = float(center[0]), float(center[1])
+            sx, sy = float(slide_center[0]), float(slide_center[1])
+            tr = float(tube_radius)
+            sr = float(slide_radius)
+            cl = float(clearance or 0.0)
+        except Exception:
+            return False
+        limit = tr + sr + max(cl, 0.0) + 1e-8
+        return math.hypot(cx - sx, cy - sy) <= limit
+
     def _tube_intersects_slide_rect(
         self, center, radius, slide_corners, clearance=0.0
     ):
@@ -1903,6 +1920,20 @@ class TubeLayoutEditor(QMainWindow):
                 hits.append(center)
         return hits
 
+    def _collect_geometric_slipway_circle_hits(
+        self, slide_circle, tube_centers, tube_radius, clearance=0.0
+    ):
+        hits = []
+        if not slide_circle or len(slide_circle) < 3:
+            return hits
+        sx, sy, sr = slide_circle[0], slide_circle[1], slide_circle[2]
+        for center in tube_centers or []:
+            if self._tube_intersects_slide_circle(
+                center, tube_radius, (sx, sy), sr, clearance=clearance
+            ):
+                hits.append(center)
+        return hits
+
     def _apply_slipway_linkage_abs(self, abs_centers):
         if not abs_centers:
             return []
@@ -1928,8 +1959,9 @@ class TubeLayoutEditor(QMainWindow):
         tube_centers,
         tube_diameter,
         clearance=0.0,
+        slide_circles=None,
     ):
-        """按滑道矩形几何干涉（含可选孔桥间距）+ 对称联动，更新 true_slipway_centers。"""
+        """按滑道几何干涉（矩形或圆钢圆）+ 对称联动，更新 true_slipway_centers。"""
         try:
             radius = float(tube_diameter) / 2.0
         except Exception:
@@ -1939,38 +1971,76 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             cl = 0.0
         hits = []
-        for corners in (slide_corners1, slide_corners2):
-            if not corners:
-                continue
-            hits.extend(
-                self._collect_geometric_slipway_hits(
-                    corners, tube_centers, radius, clearance=cl
+        if slide_circles:
+            for circ in slide_circles:
+                if not circ:
+                    continue
+                hits.extend(
+                    self._collect_geometric_slipway_circle_hits(
+                        circ, tube_centers, radius, clearance=cl
+                    )
                 )
-            )
+        else:
+            for corners in (slide_corners1, slide_corners2):
+                if not corners:
+                    continue
+                hits.extend(
+                    self._collect_geometric_slipway_hits(
+                        corners, tube_centers, radius, clearance=cl
+                    )
+                )
         hits = self._normalize_slipway_abs_centers(hits)
         self.true_slipway_centers = self._apply_slipway_linkage_abs(hits)
 
     def _read_slipway_draw_params(self):
-        """读取滑道绘制参数（高度/厚度/夹角）。"""
+        """读取滑道绘制参数。圆钢返回 (圆钢规格, 圆钢规格, 夹角)；板式返回 (高, 厚, 夹角)。"""
         height = thickness = angle = None
+        form = None
+        try:
+            form = str(self._read_param_table_value("滑道形式") or "").strip()
+        except Exception:
+            form = ""
+        if form == "圆钢条式滑道":
+            form = "圆钢滑道"
+        is_round = form in ("圆钢滑道", "圆钢条式滑道")
+
         try:
             ij = getattr(self, "input_json", None)
             if isinstance(ij, dict):
-                height = ij.get("LB_SlipWayHeight")
-                thickness = ij.get("LB_SlipWayThick")
+                if is_round:
+                    height = ij.get("LB_RoundSteelSpec") or ij.get("圆钢规格")
+                    thickness = height
+                else:
+                    height = ij.get("LB_SlipWayHeight")
+                    thickness = ij.get("LB_SlipWayThick")
                 angle = ij.get("LB_SlipWayAngle")
         except Exception:
             pass
         try:
-            if height is None:
-                height = self._read_param_table_float("滑道高度")
-            if thickness is None:
-                thickness = self._read_param_table_float("滑道厚度")
+            if is_round:
+                if height is None:
+                    height = self._read_param_table_float("圆钢规格")
+                thickness = height
+            else:
+                if height is None:
+                    height = self._read_param_table_float("滑道高度")
+                if thickness is None:
+                    thickness = self._read_param_table_float("滑道厚度")
             if angle is None:
                 angle = self._read_param_table_float("滑道与竖直中心线夹角")
         except Exception:
             pass
         try:
+            if is_round:
+                if height is None or angle is None:
+                    # 数量=1 时夹角不参与定位，缺省用 20 以便复现能画出圆
+                    if height is not None and angle is None:
+                        angle = 20.0
+                    else:
+                        return None
+                d = float(height)
+                a = float(angle)
+                return d, d, a
             if height is None or thickness is None or angle is None:
                 return None
             return float(height), float(thickness), float(angle)
