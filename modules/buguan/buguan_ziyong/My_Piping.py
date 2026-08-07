@@ -16272,7 +16272,13 @@ class TubeLayoutEditor(QMainWindow):
 
                         list_view = QListView()
                         combo.setView(list_view)
-                        combo.setIconSize(QSize(100, 85))
+                        # 闭合态用较矮图标适配参数表行高；下拉列表仍用较大示意图
+                        combo.setIconSize(QSize(56, 32))
+                        list_view.setIconSize(QSize(100, 85))
+                        try:
+                            self.param_table.setRowHeight(row, 44)
+                        except Exception:
+                            pass
 
                         tube_pass_row = -1
                         for r in range(self.param_table.rowCount()):

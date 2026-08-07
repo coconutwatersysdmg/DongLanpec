@@ -381,7 +381,8 @@ def apply_buguan_param_table_style(table, value_column_index=1, extra_value_colu
         table.setAlternatingRowColors(True)
         table.setShowGrid(True)
         try:
-            table.verticalHeader().setDefaultSectionSize(34)
+            # 略增高：容纳下拉框/图片行，避免控件贴边或溢出
+            table.verticalHeader().setDefaultSectionSize(40)
         except Exception:
             pass
         for col in value_cols:
