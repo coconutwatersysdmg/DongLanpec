@@ -479,8 +479,8 @@ def edit_slide(self, slide_item):
                     or "15",
                 }
             self.build_huadao(**params)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[slipway] edit_slide build_huadao failed: {e}")
         dialog.accept()
 
     ok_btn.clicked.connect(on_ok)
@@ -928,16 +928,28 @@ def build_huadao(self, location, height, thickness, angle, cut_length, cut_heigh
         self.clear_selection_highlight()
 
 def draw_slide_with_params(self, height, thickness, angle, skip_interference_delete=False):
+    # 防止参数表双触发/嵌套重入：二次进入会先清绿块再异常退出，导致“管删了绿块没了”
+    if getattr(self, "_slipway_draw_in_progress", False):
+        print("[slipway] skip nested draw_slide_with_params")
+        return
+    self._slipway_draw_in_progress = True
+
+    def _clear_existing_green_slides():
+        try:
+            if hasattr(self, "green_slide_items"):
+                for item in list(self.green_slide_items):
+                    try:
+                        if item.scene() is not None:
+                            self.graphics_scene.removeItem(item)
+                    except RuntimeError:
+                        pass
+                self.green_slide_items.clear()
+            self.green_slide_items = []
+        except Exception:
+            self.green_slide_items = []
+
     try:
-        if hasattr(self, "green_slide_items"):
-            for item in list(self.green_slide_items):
-                try:
-                    self.graphics_scene.removeItem(item)
-                except RuntimeError:
-                    pass
-            # 清空列表，彻底移除无效引用
-            self.green_slide_items.clear()
-        self.green_slide_items = []
+        # 旧绿块延后到删管完成后再清并重画；打开界面复现(skip_interference_delete=True)同样在绘前清理
 
         # 参数验证
         slide_length = float(height)
@@ -954,7 +966,10 @@ def draw_slide_with_params(self, height, thickness, angle, skip_interference_del
         base_circle_diameter = None
         DN = None  # 兼容旧字段：用于 operations 记录
         for row in range(self.param_table.rowCount()):
-            param_name = self.param_table.item(row, 1).text()
+            name_item = self.param_table.item(row, 1)
+            if not name_item:
+                continue
+            param_name = name_item.text()
             widget = self.param_table.cellWidget(row, 2)
             if isinstance(widget, QComboBox):
                 param_value = widget.currentText()
@@ -1176,21 +1191,27 @@ def draw_slide_with_params(self, height, thickness, angle, skip_interference_del
                         centers.append(converted)
                 self.slide_selected_centers = centers
                 if centers:
-                    tube_num = self.get_tube_pass_count()
-                    if tube_num == "2" and self.heat_exchanger in [
-                        "AEU",
-                        "BEU",
-                        "AKU",
-                        "BKU",
-                    ]:
-                        all_centers = self.judge_linkage_x(centers)
-                        self.delete_huanreguan(all_centers)
-                    else:
-                        all_centers = self.judge_linkage_y(centers)
-                        self.delete_huanreguan(all_centers)
+                    try:
+                        tube_num = self.get_tube_pass_count()
+                        if tube_num == "2" and self.heat_exchanger in [
+                            "AEU",
+                            "BEU",
+                            "AKU",
+                            "BKU",
+                        ]:
+                            all_centers = self.judge_linkage_x(centers)
+                            self.delete_huanreguan(all_centers)
+                        else:
+                            all_centers = self.judge_linkage_y(centers)
+                            self.delete_huanreguan(all_centers)
+                    except Exception as del_e:
+                        print(f"[slipway] 圆钢删管失败(仍继续绘制绿块): {del_e}")
                 else:
                     print("未删除换热管")
-                self.update_tube_nums()
+                try:
+                    self.update_tube_nums()
+                except Exception:
+                    pass
 
             def draw_slide_circle(cx, cy, r):
                 path = QPainterPath()
@@ -1204,6 +1225,8 @@ def draw_slide_with_params(self, height, thickness, angle, skip_interference_del
                 self.graphics_scene.addItem(item)
                 self.green_slide_items.append(item)
 
+            # 删管完成后再替换绿块（打开界面复现同样走这里）
+            _clear_existing_green_slides()
             draw_slide_circle(*slide_circles[0])
             if len(slide_circles) > 1:
                 draw_slide_circle(*slide_circles[1])
@@ -1445,24 +1468,31 @@ def draw_slide_with_params(self, height, thickness, angle, skip_interference_del
             self.slide_selected_centers = centers
 
             if centers:
-                tube_num = self.get_tube_pass_count()
-                if tube_num == "2" and self.heat_exchanger in [
-                    "AEU",
-                    "BEU",
-                    "AKU",
-                    "BKU",
-                ]:
-                    all_centers = self.judge_linkage_x(centers)
-                    self.delete_huanreguan(all_centers)
-                else:
-                    all_centers = self.judge_linkage_y(centers)
-                    self.delete_huanreguan(all_centers)
+                try:
+                    tube_num = self.get_tube_pass_count()
+                    if tube_num == "2" and self.heat_exchanger in [
+                        "AEU",
+                        "BEU",
+                        "AKU",
+                        "BKU",
+                    ]:
+                        all_centers = self.judge_linkage_x(centers)
+                        self.delete_huanreguan(all_centers)
+                    else:
+                        all_centers = self.judge_linkage_y(centers)
+                        self.delete_huanreguan(all_centers)
+                except Exception as del_e:
+                    print(f"[slipway] 板式删管失败(仍继续绘制绿块): {del_e}")
             else:
                 print("未删除换热管")
 
-            self.update_tube_nums()
+            try:
+                self.update_tube_nums()
+            except Exception:
+                pass
 
-        # 现在绘制滑道
+        # 删管完成后再替换绿块（打开界面复现 skip_interference_delete=True 同样：不删管，只清旧绿块并重画）
+        _clear_existing_green_slides()
         draw_slide_polygon(slide_corners1, is_left=True)
         if slipway_count != "1" and slide_corners2 is not None:
             draw_slide_polygon(slide_corners2, is_left=False)
@@ -1491,4 +1521,6 @@ def draw_slide_with_params(self, height, thickness, angle, skip_interference_del
     except Exception as e:
         # QMessageBox.warning(self, "错误", f"绘制滑道时发生错误: {str(e)}")
         print(f"[错误] 绘制滑道时发生错误: {e}")
+    finally:
+        self._slipway_draw_in_progress = False
 
