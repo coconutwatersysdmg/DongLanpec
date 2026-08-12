@@ -9143,10 +9143,42 @@ class TubeLayoutEditor(QMainWindow):
                     combo_widget.currentTextChanged.disconnect()
                 except TypeError:
                     pass
-                # 为每个下拉框连接信号，使用lambda确保正确的row值传递
-                combo_widget.currentTextChanged.connect(
-                    lambda text, r=row: self.on_combobox_changed(r, text)
-                )
+
+                # 可编辑下拉（如 do / LN）：每个按键都会改文本/index，若在此联动会卡死 UI。
+                # 仅在失焦提交或从列表点选时再走 on_combobox_changed。
+                if combo_widget.isEditable() and combo_widget.lineEdit() is not None:
+                    def create_edit_commit(current_combo, current_row):
+                        def on_commit(*_args):
+                            try:
+                                if getattr(self, "is_loading_data", False) or getattr(
+                                    self, "_is_validating", False
+                                ):
+                                    return
+                            except Exception:
+                                pass
+                            self.on_combobox_changed(
+                                current_row, current_combo.currentText()
+                            )
+
+                        return on_commit
+
+                    if not getattr(combo_widget, "_buguan_edit_commit_bound", False):
+                        combo_widget.lineEdit().editingFinished.connect(
+                            create_edit_commit(combo_widget, row)
+                        )
+                        try:
+                            combo_widget.activated.disconnect()
+                        except Exception:
+                            pass
+                        combo_widget.activated.connect(
+                            create_edit_commit(combo_widget, row)
+                        )
+                        combo_widget._buguan_edit_commit_bound = True
+                else:
+                    # 为每个下拉框连接信号，使用lambda确保正确的row值传递
+                    combo_widget.currentTextChanged.connect(
+                        lambda text, r=row: self.on_combobox_changed(r, text)
+                    )
 
     def update_lagan(self):
         try:
@@ -15813,6 +15845,11 @@ class TubeLayoutEditor(QMainWindow):
                     except Exception:
                         pass
 
+                    # 可编辑下拉：手输时 index 会跳到 -1，禁止用 indexChanged 触发重计算
+                    # （提交联动由 setup_combobox_modification_detection 的 editingFinished/activated 负责）
+                    if combo_widget.isEditable():
+                        continue
+
                     # 使用闭包捕获当前行和下拉框实例，避免lambda变量引用问题
                     def create_combobox_callback(current_combo, current_row):
                         def callback(index):
@@ -16083,6 +16120,72 @@ class TubeLayoutEditor(QMainWindow):
                         combo.currentText() if isinstance(combo, QComboBox) else ""
                     )
                     self.original_param_values[(row, 2)] = current_value
+                elif param["参数名"] == "换热管外径 do":
+                    # 与「换热管公称长度 LN」相同：可下拉选择，也可手动输入
+                    combo = NoWheelComboBox()
+                    combo.setEditable(True)
+                    standard_dos = [
+                        "10",
+                        "12",
+                        "14",
+                        "16",
+                        "19",
+                        "20",
+                        "22",
+                        "25",
+                        "30",
+                        "32",
+                        "35",
+                        "38",
+                        "45",
+                        "50",
+                        "55",
+                        "57",
+                    ]
+                    combo.addItems(standard_dos)
+                    # 允许先输入再校验：超限时在提交链路弹窗回滚（若上限卡死在57则无法输入89）
+                    validator = QIntValidator(1, 99999, self)
+                    combo.setValidator(validator)
+
+                    try:
+                        current_value = (
+                            str(param["参数值"]).strip()
+                            if param["参数值"] is not None
+                            else ""
+                        )
+                        if current_value:
+                            index = combo.findText(current_value)
+                            if index >= 0:
+                                combo.setCurrentIndex(index)
+                            else:
+                                combo.setEditText(current_value)
+                                self.validate_tube_do_input(
+                                    combo, current_value, row, show_message=False
+                                )
+                        else:
+                            combo.setCurrentIndex(0)
+                    except Exception:
+                        combo.setCurrentIndex(0)
+
+                    self._original_values[(row, 2)] = (
+                        str(param["参数值"]) if param["参数值"] else ""
+                    )
+
+                    # 范围校验与联动提交统一在 on_combobox_changed / editingFinished 提交链路中处理
+                    def update_do_original_value(text, row_idx):
+                        self._original_values[(row_idx, 2)] = text
+
+                    combo.currentTextChanged.connect(
+                        lambda text, r=row: update_do_original_value(text, r)
+                    )
+
+                    # 联动监听仍由 setup_parameter_listeners() 统一绑定
+                    self.param_table.setCellWidget(row, 2, combo)
+                    current_value = (
+                        combo.currentText() if isinstance(combo, QComboBox) else ""
+                    )
+                    self.original_param_values[(row, 2)] = current_value
+                    self._original_values[(row, 2)] = current_value
                 else:
                     combo = NoWheelComboBox()
                     is_diameter_based = param["参数名"] == "是否以外径为基准"
@@ -16235,27 +16338,6 @@ class TubeLayoutEditor(QMainWindow):
                         )
                     elif param["参数名"] == "防冲板形式":
                         combo.addItems(["平板形", "圆弧形", "焊接式"])
-                    elif param["参数名"] == "换热管外径 do":
-                        combo.addItems(
-                            [
-                                "10",
-                                "12",
-                                "14",
-                                "16",
-                                "19",
-                                "20",
-                                "22",
-                                "25",
-                                "30",
-                                "32",
-                                "35",
-                                "38",
-                                "45",
-                                "50",
-                                "55",
-                                "57",
-                            ]
-                        )
 
                     param_value_str = (
                         str(param["参数值"]) if param["参数值"] is not None else ""
@@ -16489,6 +16571,70 @@ class TubeLayoutEditor(QMainWindow):
                 else:
                     combo_box.setCurrentIndex(0)
                 return False
+        return True
+
+    def validate_tube_do_input(self, combo_box, text, row_idx, show_message=True):
+        """验证换热管外径 do：必须满足 0 < do ≤ 57。"""
+
+        def _rollback():
+            original = str(
+                self._original_values.get((row_idx, 2), "")
+                or self.original_param_values.get((row_idx, 2), "")
+                or ""
+            ).strip()
+            try:
+                from PyQt5.QtCore import QSignalBlocker
+
+                _bk = QSignalBlocker(combo_box)
+            except Exception:
+                _bk = None
+            try:
+                if original:
+                    idx = combo_box.findText(original)
+                    if idx >= 0:
+                        combo_box.setCurrentIndex(idx)
+                    else:
+                        combo_box.setEditText(original)
+                elif combo_box.count() > 0:
+                    combo_box.setCurrentIndex(0)
+            finally:
+                try:
+                    del _bk
+                except Exception:
+                    pass
+
+        text = str(text or "").strip()
+        invalid = False
+        try:
+            if text == "":
+                invalid = True
+            else:
+                value = float(text)
+                if value <= 0 or value > 57:
+                    invalid = True
+        except (TypeError, ValueError):
+            invalid = True
+
+        if invalid:
+            if show_message and not getattr(self, "_suppress_tube_do_warn", False):
+                try:
+                    print(
+                        "[POPUP] type=warning title=输入错误 "
+                        "msg=换热管外径 do 须大于0且不超过57 "
+                        f"param=换热管外径 do input='{text}'"
+                    )
+                except Exception:
+                    pass
+                QMessageBox.warning(
+                    self,
+                    "输入错误",
+                    "换热管外径 do 须大于0且不超过57，请重新输入！",
+                )
+            _rollback()
+            return False
+
+        # 合法值记为最近有效值，供下次回滚
+        self._original_values[(row_idx, 2)] = text
         return True
 
     def on_tube_pass_combo_changed(self, row):
@@ -16795,9 +16941,28 @@ class TubeLayoutEditor(QMainWindow):
         if param_name == "换热管外径 do":
             # 获取当前选中的值
             do_widget = self.param_table.cellWidget(row, 2)
+            selected_value = ""
             if isinstance(do_widget, QComboBox):
-                selected_value = do_widget.currentText()
+                selected_value = do_widget.currentText().strip()
+                # 超出 (0, 57]：弹窗并回滚，阻断后续重计算（避免接口卡死）
+                if not self.validate_tube_do_input(
+                    do_widget, selected_value, row, show_message=True
+                ):
+                    try:
+                        self.modified_rows.discard(row)
+                        self.reset_row_background(row)
+                    except Exception:
+                        pass
+                    return
                 print(f"选中的换热管外径: {selected_value}")
+                # 校验通过后同步“上次有效值”
+                try:
+                    self.original_param_values[(row, 2)] = selected_value
+                    self._original_values[(row, 2)] = selected_value
+                except Exception:
+                    pass
+            elif value is not None:
+                selected_value = str(value).strip()
 
             # 外径变化时，S 的手动覆盖标记必须失效，确保按新 do 重新推荐
             try:
