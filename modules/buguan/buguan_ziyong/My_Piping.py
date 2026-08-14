@@ -68,7 +68,10 @@ from modules.buguan.buguan_ziyong.api import run_layout_tube_calculate
 from modules.buguan.buguan_ziyong import piping_calculations
 from modules.buguan.buguan_ziyong.json_process import parse_heat_exchanger_json
 from modules.buguan.buguan_ziyong.sheet_form_page import SheetFormPage, _PLATE_OLD_TO_NEW_BY_NODE
-from modules.buguan.buguan_ziyong.tube_sheet_connection import TubeSheetConnectionPage
+from modules.buguan.buguan_ziyong.tube_sheet_connection import (
+    TubeSheetConnectionPage,
+    normalize_tube_conn_param_name,
+)
 from modules.chanpinguanli.chanpinguanli_main import product_manager
 import modules.buguan.buguan_ziyong.qiaotineizhijing as qtzj
 from modules.condition_input.view import check_project_and_product
@@ -18495,7 +18498,7 @@ class TubeLayoutEditor(QMainWindow):
         # 再把当前过滤后的所有参数作为新记录插入
         for param in filtered_params:
             # param 是元组格式 (参数名, 参数值)
-            param_name = param[0]  # 参数名
+            param_name = normalize_tube_conn_param_name(param[0])  # 旧名写回时规范为倒角
             param_value = param[1]  # 参数值
 
             safe_param_name = escape_str(param_name)

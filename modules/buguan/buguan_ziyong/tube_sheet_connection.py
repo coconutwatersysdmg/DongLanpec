@@ -18,6 +18,22 @@ NEIKONGHAN_PARAM_NAME = "内孔焊焊接接头系数φ"
 NEIKONGHAN_FACTOR_OPTIONS = ("1.0", "0.85", "0.7")
 NEIKONGHAN_FACTOR_DEFAULT = "0.85"
 
+# 老产品活动库可能仍存「坡口」旧名；统一显示/写回为「倒角」（带空格）
+_TUBE_CONN_PARAM_NAME_ALIASES = {
+    "壳程侧坡口深度 H": "壳程侧倒角深度 H",
+    "壳程侧坡口深度H": "壳程侧倒角深度 H",
+    "壳程侧坡口角度 K": "壳程侧倒角角度 K",
+    "壳程侧坡口角度K": "壳程侧倒角角度 K",
+}
+
+
+def normalize_tube_conn_param_name(param_name):
+    """将管板连接参数旧名规范为当前显示名；未知名原样返回。"""
+    if param_name is None:
+        return param_name
+    name = str(param_name).strip()
+    return _TUBE_CONN_PARAM_NAME_ALIASES.get(name, name)
+
 
 class NoWheelComboBox(QComboBox):
     """禁用滚轮的下拉框，避免误改参数。"""
@@ -1128,7 +1144,7 @@ class TubeSheetConnectionPage(QWidget):
                             # 处理特殊参数：从父窗口参数表读取
                             processed_params = []
                             for r in rows:
-                                param_name = r["参数名"]
+                                param_name = normalize_tube_conn_param_name(r["参数名"])
                                 param_value = r["参数值"]
 
                                 # 特殊处理：换热管壁厚 δt 和 换热管外径 d
@@ -1170,7 +1186,7 @@ class TubeSheetConnectionPage(QWidget):
                 # 处理特殊参数：从父窗口参数表读取
                 processed_params = []
                 for r in rows:
-                    param_name = r["参数名"]
+                    param_name = normalize_tube_conn_param_name(r["参数名"])
                     param_value = r["参数值"]
 
                     # 特殊处理：换热管壁厚 δt 和 换热管外径 d
