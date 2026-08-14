@@ -67,6 +67,10 @@ from modules.buguan.buguan_ziyong.variable import (
 from modules.buguan.buguan_ziyong.api import run_layout_tube_calculate
 from modules.buguan.buguan_ziyong import piping_calculations
 from modules.buguan.buguan_ziyong.json_process import parse_heat_exchanger_json
+from modules.buguan.buguan_ziyong.tube_pass.adapter import (
+    is_local_tube_pass_cat,
+    run_local_tube_layout,
+)
 from modules.buguan.buguan_ziyong.sheet_form_page import SheetFormPage, _PLATE_OLD_TO_NEW_BY_NODE
 from modules.buguan.buguan_ziyong.tube_sheet_connection import (
     TubeSheetConnectionPage,
@@ -7176,6 +7180,29 @@ class TubeLayoutEditor(QMainWindow):
                 "[DEBUG calculate_piping_layout] update_axial_basic_params failed:", e
             )
 
+        # 本地分程（8a~8d / 10a~10b / 12a~12b）：不调 DLL，直接算坐标后走原绘图链路
+        try:
+            _local_cat = getattr(self, "tube_pass_form_value", None)
+            if not _local_cat and hasattr(self, "get_selected_tube_pass_form"):
+                _local_cat = self.get_selected_tube_pass_form()
+            if is_local_tube_pass_cat(_local_cat):
+                return self._calculate_piping_layout_local(
+                    DN=DN,
+                    Di=Di,
+                    DL=DL,
+                    do=do,
+                    height_0_180=height_0_180,
+                    height_90_270=height_90_270,
+                    heat_exchanger_type=heat_exchanger_type,
+                    cat=_local_cat,
+                )
+        except Exception as _local_branch_e:
+            print(f"[calculate_piping_layout] 本地布管失败: {_local_branch_e}")
+            import traceback as _tb_local
+
+            _tb_local.print_exc()
+            return None
+
         # 2. 构造JSON映射
         param_mapping = {
             "换热管布置方式": (
@@ -7645,8 +7672,107 @@ class TubeLayoutEditor(QMainWindow):
             print(f"布管计算失败: {e}")
             return None
 
+    def _calculate_piping_layout_local(
+        self,
+        DN,
+        Di,
+        DL,
+        do,
+        height_0_180,
+        height_90_270,
+        heat_exchanger_type,
+        cat,
+    ):
+        """
+        8/10/12 本地分程布管：调用 tube_pass.compute_centers，后续绘图链路与 DLL 路径一致。
+        """
+        product_type_str = heat_exchanger_type or getattr(self, "heat_exchanger", "") or ""
+        try:
+            packed = run_local_tube_layout(
+                cat,
+                self.left_data_pd,
+                D=DL,
+                d=do,
+                DN=DN,
+            )
+        except Exception as e:
+            print(f"[本地布管] 计算失败: {e}")
+            import traceback
+
+            traceback.print_exc()
+            QMessageBox.warning(self, "提示", f"本地布管计算失败：{e}")
+            return None
+
+        result = packed["result"]
+        centers = packed["centers"]
+        self.target_list = packed["target_list"]
+        self.output_data = result.get("raw", {})
+        self.input_json = {
+            "LB_Tubeform": str(cat),
+            "LB_DL": DL,
+            "LB_TubeD": do,
+            "LB_DN": DN,
+            "local_tube_pass": True,
+            **{k: v for k, v in (packed.get("kwargs") or {}).items()},
+        }
+        try:
+            self.save_layout_input(product_id, self.input_json)
+        except Exception as _save_in_e:
+            print(f"[本地布管] save_layout_input: {_save_in_e}")
+        try:
+            self.save_layout_result(product_id, result)
+        except Exception as _save_out_e:
+            print(f"[本地布管] save_layout_result: {_save_out_e}")
+
+        self.global_centers = centers
+        self._invalidate_axis_cluster_cache()
+
+        h0 = height_0_180 if height_0_180 is not None else 0
+        h90 = height_90_270 if height_90_270 is not None else 0
+        current_centers = none_tube_centers(h0, h90, Di, do, centers)
+        self.current_centers = current_centers
+        self.current_centers_lagan = current_centers
+        self._sync_current_centers_lagan()
+
+        self.draw_layout(DN, Di, DL, do, centers)
+        if self.create_scene():
+            self.connect_center(self.scene, self.current_centers, self.small_D)
+
+        self.global_centers = centers
+        self._invalidate_axis_cluster_cache()
+        self.none_tube(h0, h90, Di, do, centers)
+        try:
+            self._sync_applied_nonbaffle_chord_heights(h0, h90)
+        except Exception as _sync_chord_e:
+            print(f"[本地布管] sync applied chord: {_sync_chord_e}")
+
+        self.graphics_scene.update()
+        QApplication.processEvents()
+
+        self.update_SN()
+        (
+            self.full_sorted_current_centers_up,
+            self.full_sorted_current_centers_down,
+        ) = self.group_centers_by_y(self.global_centers)
+        self.update_tube_nums()
+        self.update_cross_pipe_button_state(product_type_str)
+        self.update_total_lagan_count()
+        print(f"[本地布管] Cat={cat}, 管数={len(centers)}")
+        return result
+
     # 该方法只调用接口，主要是为了看W返回值
     def calculate_piping(self):
+        # 本地分程不调 DLL（W 暂由参数表/映射维护）
+        try:
+            _cat = getattr(self, "tube_pass_form_value", None)
+            if not _cat and hasattr(self, "get_selected_tube_pass_form"):
+                _cat = self.get_selected_tube_pass_form()
+            if is_local_tube_pass_cat(_cat):
+                print(f"[calculate_piping] 本地分程 {_cat}，跳过 DLL")
+                return None
+        except Exception as _skip_e:
+            print(f"[calculate_piping] 本地分程判断失败: {_skip_e}")
+
         self.left_data_pd = []
 
         self._commit_param_table_open_editor()
@@ -11929,7 +12055,21 @@ class TubeLayoutEditor(QMainWindow):
 
     def update_divider_position_and_size(self):
         # TODO 更新隔条位置尺寸
-        self.calculate_piping()
+        # 本地分程（8/10/12）不调 DLL 取 W；其余仍走原接口
+        try:
+            _cat = getattr(self, "tube_pass_form_value", None)
+            if not _cat and hasattr(self, "get_selected_tube_pass_form"):
+                _cat = self.get_selected_tube_pass_form()
+            if not is_local_tube_pass_cat(_cat):
+                self.calculate_piping()
+            else:
+                print(f"[update_divider_position_and_size] 本地分程 {_cat}，跳过 DLL 取 W")
+        except Exception as _div_e:
+            print(f"[update_divider_position_and_size] 分程判断/接口: {_div_e}")
+            try:
+                self.calculate_piping()
+            except Exception:
+                pass
 
         # 设置程序自动更新标记
         self._is_programmatic_update = True
@@ -16778,6 +16918,19 @@ class TubeLayoutEditor(QMainWindow):
         elif tube_pass == "1":
             if hx_norm in non_u_types:
                 self.add_image_to_combo(combo, base_path, "1.1.png", "1.1")
+        elif tube_pass == "8":
+            # 本地分程 8a~8d（非 U / U 均可选，便于试用）
+            if hx_norm in u_and_common_types:
+                for _cid in ("8a", "8b", "8c", "8d"):
+                    self.add_image_to_combo(combo, base_path, f"{_cid}.png", _cid)
+        elif tube_pass == "10":
+            if hx_norm in u_and_common_types:
+                for _cid in ("10a", "10b"):
+                    self.add_image_to_combo(combo, base_path, f"{_cid}.png", _cid)
+        elif tube_pass == "12":
+            if hx_norm in u_and_common_types:
+                for _cid in ("12a", "12b"):
+                    self.add_image_to_combo(combo, base_path, f"{_cid}.png", _cid)
 
         else:
             combo.addItem("未选择")
@@ -17933,23 +18086,32 @@ class TubeLayoutEditor(QMainWindow):
     def save_data(self):
         current_page_index = self.header.currentIndex()
 
-        # 统一逻辑：不论在哪个界面点“保存”，都尝试把多个页面的“当前数据”落库
-        # 说明：
-        # - 各页面数据可能为空/未编辑，此时对应保存逻辑会自行跳过或写入空集（按原实现）
-        # - 布管页面若尚未布管(has_piped=False)：静默跳过，避免在其他页面保存时弹窗打断
-        # - 若当前就在布管页面：仍执行原有的保存前检查
-        if current_page_index == 1:
-            if not self.check_before_save():
-                return
+        # 管板型式(0)、管-板连接(2)：只保存当前页。
+        # 旧逻辑不论哪页都跑 0→1→2→3，会在管板连接保存时顺带全量落库布管
+        # （含大量坐标调试 print + 多次开库），界面长时间到不了“保存成功”提示。
+        if current_page_index in (0, 2):
+            pages_to_save = (current_page_index,)
+        else:
+            if current_page_index == 1:
+                if not self.check_before_save():
+                    return
+            pages_to_save = (0, 1, 2, 3)
+            if not ENABLE_AXIAL_DESIGN_PAGE:
+                pages_to_save = tuple(i for i in pages_to_save if i != 3)
 
         try:
-            # 保存顺序：先管板形式(0) → 布管(1) → 管-板连接(2) → 轴向设计(3)
-            # 其中 1/3 的分支内部会有自身的“空数据直接返回”逻辑
-            for idx in (0, 1, 2, 3):
+            # 先刷一条“正在保存”，避免重操作时底部提示栏长时间空白
+            try:
+                self._notify_save_success_ui("正在保存…")
+            except Exception:
+                pass
+
+            print(f"[save_data] 当前页={current_page_index}, 将保存页={pages_to_save}")
+            for idx in pages_to_save:
                 try:
-                    # 非布管页触发的全量保存：布管未布管时不弹窗
                     silent = (idx == 1 and current_page_index != 1)
                     self.actual_save_operation(idx, silent=silent)
+                    print(f"[save_data] page_index={idx} 完成")
                 except Exception as e:
                     print(f"[save_data] 保存 page_index={idx} 失败: {e}")
 
@@ -17975,7 +18137,6 @@ class TubeLayoutEditor(QMainWindow):
                 except Exception:
                     pass
                 try:
-
                     QMessageBox.information(self, "提示", "数据保存成功！")
                 except Exception:
                     try:
@@ -18431,17 +18592,17 @@ class TubeLayoutEditor(QMainWindow):
 
         def escape_str(value):
             if isinstance(value, str):
-                # 只转义单引号，其他字符保持原样
-                return value.replace("'", "''")
+                # MySQL 默认字符串里 \ 是转义符；路径中的 \a \b 等必须先写成 \\
+                return value.replace("\\", "\\\\").replace("'", "''")
             return str(value) if value is not None else ""
 
-        # 获取选中图片的绝对路径
+        # 获取选中图片的绝对路径（统一正斜杠，避免 Windows \a/\b 被 SQL 吃掉）
         connection_diagram = ""
         for label in self.tube_sheet_page.image_labels:
             if label.property("selected"):
                 connection_diagram = getattr(label, "image_path", "")
                 if connection_diagram:
-                    connection_diagram = os.path.abspath(connection_diagram)
+                    connection_diagram = os.path.abspath(connection_diagram).replace("\\", "/")
                 break
 
         connection_type = ""
@@ -19154,20 +19315,20 @@ class TubeLayoutEditor(QMainWindow):
 
             pass
         elif page_index == 3:  # 轴向设计页面
+            if not ENABLE_AXIAL_DESIGN_PAGE:
+                return
             try:
                 # 从轴向设计页面导出当前表格数据
                 tube_data = []
                 component_data = []
-                if (
-                        hasattr(self, "axial_design_page")
-                        and self.axial_design_page is not None
-                ):
+                axial_page = getattr(self, "axial_design_page", None)
+                if axial_page is not None and hasattr(axial_page, "get_tube_params_data"):
                     try:
-                        tube_data = self.axial_design_page.get_tube_params_data()
+                        tube_data = axial_page.get_tube_params_data()
                     except Exception as e:
                         print("[AxialDesignSave] 获取布管换热管信息数据失败:", e)
                     try:
-                        component_data = self.axial_design_page.get_component_data()
+                        component_data = axial_page.get_component_data()
                     except Exception as e:
                         print("[AxialDesignSave] 获取布管元件信息数据失败:", e)
 
@@ -19241,14 +19402,36 @@ class TubeLayoutEditor(QMainWindow):
             except Exception as e:
                 print("[AxialDesignSave] 轴向设计页面保存过程中发生异常:", e)
         elif page_index == 2:  # 管-板连接页面
-            # 构建SQL语句
+            # 构建SQL语句；同一连接批量执行，避免反复开库拖慢保存
             sql_list = self.build_sql_for_tube_sheet_connection()
-            if sql_list:
-                # 分割SQL语句，过滤空语句
-                sql_statements = [s.strip() for s in sql_list.split(";") if s.strip()]
+            if not sql_list:
+                print("[save_tube_sheet] 无SQL可执行（参数为空？）")
+                return
+            sql_statements = [s.strip() for s in sql_list.split(";") if s.strip()]
+            connection = None
+            try:
+                from modules.buguan.buguan_ziyong.database_utils import create_connection
+
+                connection = create_connection()
+                cursor = connection.cursor()
                 for statement in sql_statements:
-                    self.execute_sql(statement + ";")  # 确保每条语句以分号结尾
-            pass
+                    cursor.execute(statement if statement.endswith(";") else statement + ";")
+                connection.commit()
+                print(f"[save_tube_sheet] 已写入 {len(sql_statements)} 条SQL")
+            except Exception as e:
+                try:
+                    if connection is not None:
+                        connection.rollback()
+                except Exception:
+                    pass
+                print(f"[save_tube_sheet] 保存失败: {e}")
+                QMessageBox.critical(self, "错误", f"管板连接保存失败:\n{str(e)}")
+            finally:
+                try:
+                    if connection is not None:
+                        connection.close()
+                except Exception:
+                    pass
         elif page_index == 0:
             tube_form_data = self.get_current_tube_form_data()
             sql_statements = self.build_sql_for_tube_form()
@@ -19558,6 +19741,7 @@ class TubeLayoutEditor(QMainWindow):
 
     def execute_sql(self, sql, fetch=False):
         """执行SQL语句"""
+        connection = None
         try:
             from modules.buguan.buguan_ziyong.database_utils import create_connection
 
@@ -19566,20 +19750,28 @@ class TubeLayoutEditor(QMainWindow):
             cursor.execute(sql)
 
             if fetch:
-                # 如果是查询操作，返回结果
                 result = cursor.fetchall()
-                connection.close()
                 return result
-            else:
-                # 如果是更新操作，提交事务
-                connection.commit()
-                connection.close()
+            connection.commit()
+            return None
         except Exception as e:
+            try:
+                if connection is not None:
+                    connection.rollback()
+            except Exception:
+                pass
+            print(f"保存数据时出错: {e}")
+            print(f"[execute_sql] SQL片段: {str(sql)[:500]}")
             QMessageBox.critical(self, "错误", f"保存数据时出错:\n{str(e)}")
-            print("保存数据时出错")
             if fetch:
                 return None
-
+            return None
+        finally:
+            try:
+                if connection is not None:
+                    connection.close()
+            except Exception:
+                pass
     def _sync_tube_sheet_snapshot_and_update_dl(self):
         """从管板形式页同步参数快照，并在命中特殊节点时重算布管限定圆 DL。"""
         plate_type = None
@@ -28742,21 +28934,6 @@ class TubeLayoutEditor(QMainWindow):
                     table_ip = "产品设计活动表_布管防冲板表"
                     ip_dic = getattr(self, "impingement_plate_dic", {}) or {}
 
-                    # 调试输出：打印当前防冲板数据字典整体情况
-                    try:
-                        print("[DEBUG] impingement_plate_dic size =", len(ip_dic))
-                        for _id, rec in ip_dic.items():
-                            if isinstance(rec, dict):
-                                print(
-                                    f"[DEBUG] ip_dic id={_id}, type={rec.get('type')}, "
-                                    f"thickness={rec.get('thickness')}, angle={rec.get('angle')}, "
-                                    f"width={rec.get('width')}, azimuth={rec.get('azimuth')}, distance={rec.get('distance')}"
-                                )
-                            else:
-                                print(f"[DEBUG] ip_dic id={_id}, rec(not dict)={rec}")
-                    except Exception as _e:
-                        print("[DEBUG] print impingement_plate_dic failed:", _e)
-
                     if not ip_dic:
                         delete_sql = f"DELETE FROM {table_ip} WHERE 产品ID = %s"
                         cursor.execute(delete_sql, (self.productID,))
@@ -28848,19 +29025,6 @@ class TubeLayoutEditor(QMainWindow):
                                 weld_dic[_id] = rec
                         except Exception:
                             continue
-
-                    # 调试输出：打印焊接式防冲板筛选结果
-                    try:
-                        print("[DEBUG] weld_dic size =", len(weld_dic))
-                        for _id, rec in weld_dic.items():
-                            print(
-                                f"[DEBUG] weld id={_id}, thickness={rec.get('thickness')}, "
-                                f"angle={rec.get('angle')}, width={rec.get('width')}, "
-                                f"azimuth={rec.get('azimuth')}, distance={rec.get('distance')}, "
-                                f"del_coord_len={len(rec.get('del_coord') or [])}"
-                            )
-                    except Exception as _e:
-                        print("[DEBUG] print weld_dic failed:", _e)
 
                     if not weld_dic:
                         # 若当前无焊接式防冲板，则删除该产品在新表中的所有记录

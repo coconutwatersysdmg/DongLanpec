@@ -6117,43 +6117,74 @@ def cal_qiaotineizhijing_KU(product_id, isDi_change, isDN_change, user_Di, user_
         if tube_form == "2" or tube_form == None or tube_form == "":
             guanban_a["管/壳程布置型式"] = "2.1"
 
-        # 默认值
+        # === 焊脚高度：强度焊接的焊缝形式用 l；其它连接方式仍用 E+G ===
         e_val = 0.0
         g_val = 0.0
+        weld_l_val = None
         try:
-            conn = pymysql.connect(
-                host="localhost", user="root", password="123456",
-                database="产品设计活动库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+            cursor.execute(
+                """
+                SELECT 管板连接方式 FROM 产品设计活动表_管板连接表
+                WHERE 产品ID = %s LIMIT 1
+                """,
+                (product_id,),
             )
-            cursor = conn.cursor()  # 手动创建游标，不会自动关闭
+            conn_type_row = cursor.fetchone()
+            conn_type_name = ""
+            if conn_type_row:
+                conn_type_name = str(conn_type_row.get("管板连接方式") or "").strip()
 
-            # === 读取焊脚外伸高度E ===
-            cursor.execute("""
-                SELECT 参数值 FROM 产品设计活动表_管板连接表
-                WHERE 产品ID = %s AND 参数名 = '焊脚外伸高度 E' LIMIT 1
-            """, (product_id,))
-            row = cursor.fetchone()
-            try:
-                e_val = float(row["参数值"]) if row and row.get("参数值") else 0.0
-            except (TypeError, ValueError):
-                e_val = 0.0
+            if conn_type_name == "强度焊接的焊缝形式":
+                cursor.execute(
+                    """
+                    SELECT 参数值 FROM 产品设计活动表_管板连接表
+                    WHERE 产品ID = %s AND 参数名 = '焊脚高度 l' LIMIT 1
+                    """,
+                    (product_id,),
+                )
+                row = cursor.fetchone()
+                try:
+                    weld_l_val = (
+                        float(row["参数值"])
+                        if row and row.get("参数值") not in (None, "")
+                        else None
+                    )
+                except (TypeError, ValueError):
+                    weld_l_val = None
+            else:
+                cursor.execute(
+                    """
+                    SELECT 参数值 FROM 产品设计活动表_管板连接表
+                    WHERE 产品ID = %s AND 参数名 = '焊脚外伸高度 E' LIMIT 1
+                    """,
+                    (product_id,),
+                )
+                row = cursor.fetchone()
+                try:
+                    e_val = float(row["参数值"]) if row and row.get("参数值") else 0.0
+                except (TypeError, ValueError):
+                    e_val = 0.0
 
-            # === 读取管程侧坡口深度G ===
-            cursor.execute("""
-                SELECT 参数值 FROM 产品设计活动表_管板连接表
-                WHERE 产品ID = %s AND 参数名 = '管程侧坡口深度 G' LIMIT 1
-            """, (product_id,))
-            row = cursor.fetchone()
-            try:
-                g_val = float(row["参数值"]) if row and row.get("参数值") else 0.0
-            except (TypeError, ValueError):
-                g_val = 0.0
+                cursor.execute(
+                    """
+                    SELECT 参数值 FROM 产品设计活动表_管板连接表
+                    WHERE 产品ID = %s AND 参数名 = '管程侧坡口深度 G' LIMIT 1
+                    """,
+                    (product_id,),
+                )
+                row = cursor.fetchone()
+                try:
+                    g_val = float(row["参数值"]) if row and row.get("参数值") else 0.0
+                except (TypeError, ValueError):
+                    g_val = 0.0
 
-            # === 读取内孔焊焊接接头系数φ（强度接口字段名为内孔焊焊接接头系数）===
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT 参数值 FROM 产品设计活动表_管板连接表
                 WHERE 产品ID = %s AND 参数名 = '内孔焊焊接接头系数φ' LIMIT 1
-            """, (product_id,))
+                """,
+                (product_id,),
+            )
             row = cursor.fetchone()
             if row and row.get("参数值") not in (None, ""):
                 guanban_a["内孔焊焊接接头系数"] = str(row["参数值"]).strip()
@@ -6162,8 +6193,10 @@ def cal_qiaotineizhijing_KU(product_id, isDi_change, isDN_change, user_Di, user_
             print(f" 查询失败: {e}")
         print(e_val)
         print(g_val)
-        # === 求和并写入 guanban_a ===
-        sum_val = round(e_val + g_val, 1)  # 保留1位小数
+        if weld_l_val is not None:
+            sum_val = round(weld_l_val, 1)
+        else:
+            sum_val = round(e_val + g_val, 1)
 
         if "换热管与管板胀接长度或焊脚高度" in guanban_a:
             if sum_val == 0:

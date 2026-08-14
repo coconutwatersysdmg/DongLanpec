@@ -9,6 +9,7 @@ from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
 from PyQt5.QtGui import QPixmap, QPainter, QColor, QBrush
 from PyQt5.QtCore import Qt, QSize, pyqtSignal, QTimer
 import pymysql
+import re
 from pathlib import Path
 
 from .buguan_param_table_style import apply_buguan_param_table_style
@@ -17,6 +18,24 @@ from .buguan_param_table_style import apply_buguan_param_table_style
 NEIKONGHAN_PARAM_NAME = "内孔焊焊接接头系数φ"
 NEIKONGHAN_FACTOR_OPTIONS = ("1.0", "0.85", "0.7")
 NEIKONGHAN_FACTOR_DEFAULT = "0.85"
+
+WELD_FORM_CONN_TYPE = "强度焊接的焊缝形式"
+WELD_FORM_L_PARAM = "焊脚高度 l"
+WELD_FORM_LF = "外焊缝焊脚高度 l_f"
+WELD_FORM_LG_GROOVE = "坡口深度 l_g"
+WELD_FORM_LG_INNER = "内焊缝焊脚高度 l_g"
+WELD_FORM_C = "管程侧坡口角度 C"
+WELD_FORM_L_EXT = "换热管伸出管板长度 L"
+WELD_FORM_L_REC = "换热管缩进管板长度 L"
+
+# 各管板类型界面可见参数（顺序即表格顺序）
+WELD_FORM_VISIBLE = {
+    "a": [WELD_FORM_LF, WELD_FORM_L_EXT],
+    "b": [WELD_FORM_LG_GROOVE, WELD_FORM_C],
+    "c": [WELD_FORM_LF, WELD_FORM_LG_GROOVE, WELD_FORM_C],
+    "d": [WELD_FORM_LF, WELD_FORM_LG_GROOVE, WELD_FORM_L_EXT],
+    "e": [WELD_FORM_C, WELD_FORM_LF, WELD_FORM_LG_INNER, WELD_FORM_L_REC],
+}
 
 # 老产品活动库可能仍存「坡口」旧名；统一显示/写回为「倒角」（带空格）
 _TUBE_CONN_PARAM_NAME_ALIASES = {
@@ -33,6 +52,34 @@ def normalize_tube_conn_param_name(param_name):
         return param_name
     name = str(param_name).strip()
     return _TUBE_CONN_PARAM_NAME_ALIASES.get(name, name)
+
+
+def format_param_name_html(param_name):
+    """库名 l_f / l_g / δ_t 等转为界面下标 HTML。"""
+    text = str(param_name or "")
+    return re.sub(r"_([A-Za-z0-9]+)", r"<sub>\1</sub>", text)
+
+
+def _to_float_safe(value, default=0.0):
+    if value is None:
+        return default
+    try:
+        text = str(value).strip()
+        if text == "":
+            return default
+        return float(text)
+    except (TypeError, ValueError):
+        return default
+
+
+def _fmt_num(value):
+    """数值格式化为简洁字符串（最多 3 位小数，去尾零）。"""
+    try:
+        num = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    text = f"{num:.3f}".rstrip("0").rstrip(".")
+    return text if text else "0"
 
 
 class NoWheelComboBox(QComboBox):
@@ -196,6 +243,7 @@ class TubeSheetConnectionPage(QWidget):
         self._tsc_user_readonly = False
         self.current_params = []
         self.current_image_path = ""
+        self._weld_form_extra_params = []
         self.current_dir = Path(__file__).parent.resolve()
         self.connection_types = [
             "强度焊接加贴胀管孔结构",
@@ -411,9 +459,6 @@ class TubeSheetConnectionPage(QWidget):
 
             param_table = self.parent.param_table
 
-            print(f"🔍 [调试] 在父窗口参数表中查找参数: '{param_name}'")
-            print(f"🔍 [调试] 父窗口参数表总行数: {param_table.rowCount()}")
-
             # 遍历参数表的所有行
             for row in range(param_table.rowCount()):
                 # 跳过隐藏行
@@ -437,14 +482,10 @@ class TubeSheetConnectionPage(QWidget):
                     value_item = param_table.item(row, 2)
                     param_value = value_item.text() if value_item else ""
 
-                print(f"🔍 [调试] 父窗口参数表第{row}行: '{current_param_name}' = '{param_value}'")
-
                 # 匹配参数名并返回值
                 if current_param_name == param_name:
-                    print(f"✅ [调试] 从父窗口参数表找到 {param_name}: {param_value}")
                     return param_value
 
-            print(f"❌ [调试] 在父窗口参数表中未找到参数: {param_name}")
             return None
 
         except Exception as e:
@@ -765,6 +806,9 @@ class TubeSheetConnectionPage(QWidget):
             result = '1'
         elif '整体' in f or '0' in f:
             result = '0'
+        elif f in ('a', 'b', 'c', 'd', 'e') or f.startswith(('a', 'b', 'c', 'd', 'e')):
+            # 强度焊接焊缝形式 a~e（文件名即为类型）
+            result = f[0] if f[0] in ('a', 'b', 'c', 'd', 'e') else f
         elif 'a' in f:
             result = 'a'
         elif 'b' in f:
@@ -773,6 +817,8 @@ class TubeSheetConnectionPage(QWidget):
             result = 'c'
         elif 'd' in f:
             result = 'd'
+        elif 'e' in f:
+            result = 'e'
         else:
             result = filename
         return result
@@ -823,15 +869,28 @@ class TubeSheetConnectionPage(QWidget):
             header.resizeSection(0, col0_width)
             header.resizeSection(1, col1_width)
 
-        # 填充表格数据
+        # 填充表格数据（参数名列统一用同字号 QLabel，避免下标行/普通行字体不一致）
+        table_font = self.param_table.font()
+        name_pt = table_font.pointSize()
+        if name_pt <= 0:
+            name_pt = 10
         for row, param in enumerate(params):
-            # 参数名列 - 只读
-            name_item = QTableWidgetItem(param['name'])
-            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-            self.param_table.setItem(row, 0, name_item)
-
             param_name = param['name']
             param_value = param['value']
+
+            html_name = format_param_name_html(param_name)
+            name_label = QLabel(
+                f'<span style="font-size:{name_pt}pt;">{html_name}</span>'
+            )
+            name_label.setTextFormat(Qt.RichText)
+            name_label.setProperty("param_name", param_name)
+            name_label.setFont(table_font)
+            name_label.setStyleSheet(
+                f"font-size: {name_pt}pt; color: #1f1f1f; "
+                f"padding-left: 4px; background: transparent;"
+            )
+            name_label.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+            self.param_table.setCellWidget(row, 0, name_label)
 
             # 内孔焊焊接接头系数φ：固定三项下拉
             if param_name == NEIKONGHAN_PARAM_NAME:
@@ -846,11 +905,17 @@ class TubeSheetConnectionPage(QWidget):
                 self.param_table.setCellWidget(row, 1, combo)
                 param_value = combo.currentText()
             else:
-                value_item = QTableWidgetItem(param_value)
+                value_item = QTableWidgetItem(str(param_value) if param_value is not None else "")
                 value_item.setFlags(Qt.ItemIsEditable | Qt.ItemIsEnabled)
+                value_item.setFont(table_font)
                 self.param_table.setItem(row, 1, value_item)
 
             self.current_params.append((param_name, param_value))
+
+        # 焊缝形式：追加隐藏的计算参数（如焊脚高度 l），不进表格
+        for extra in getattr(self, "_weld_form_extra_params", []) or []:
+            self.update_param_value(extra[0], extra[1])
+        self._weld_form_extra_params = []
 
         # 连接表格数据变化信号
         self.param_table.itemChanged.connect(self.on_table_item_changed)
@@ -878,6 +943,7 @@ class TubeSheetConnectionPage(QWidget):
         # 清空表格
         self.param_table.setRowCount(0)
         self.current_params = []
+        self._weld_form_extra_params = []
 
         # 清空布局中的其他控件（如警告标签），但保留表格
         if hasattr(self, 'param_layout') and self.param_layout:
@@ -906,13 +972,203 @@ class TubeSheetConnectionPage(QWidget):
 
     def on_table_item_changed(self, item):
         """处理表格数据变化"""
-        if item.column() == 1:  # 只处理参数值列的变化
-            row = item.row()
-            param_name_item = self.param_table.item(row, 0)
-            if param_name_item:
-                param_name = param_name_item.text()
-                param_value = item.text()
-                self.update_param_value(param_name, param_value)
+        if item.column() != 1:  # 只处理参数值列的变化
+            return
+        row = item.row()
+        param_name = self._param_name_at_row(row)
+        if not param_name:
+            return
+        param_value = item.text()
+
+        # 取修改前旧值，用于校验失败回滚
+        old_value = None
+        for n, v in self.current_params:
+            if n == param_name:
+                old_value = v
+                break
+
+        self.update_param_value(param_name, param_value)
+
+        # 强度焊接焊缝形式 e：l_f 必须 < δ_t，否则提示并回滚
+        if self._is_weld_form_selected():
+            tube_type = self._selected_tube_sheet_type()
+            if tube_type == "e" and not self._validate_weld_form_e_constraint():
+                QMessageBox.warning(
+                    self,
+                    "参数校验",
+                    "外焊缝焊脚高度 l_f 必须小于换热管壁厚 δ_t，请重新输入。",
+                )
+                restore = "" if old_value is None else str(old_value)
+                self.param_table.blockSignals(True)
+                try:
+                    item.setText(restore)
+                    self.update_param_value(param_name, restore)
+                finally:
+                    self.param_table.blockSignals(False)
+                return
+            self._refresh_weld_form_computed_l()
+
+    def _param_name_at_row(self, row):
+        """读取参数名（兼容下标 QLabel）。"""
+        name_item = self.param_table.item(row, 0)
+        if name_item:
+            role_name = name_item.data(Qt.UserRole)
+            if role_name:
+                return str(role_name)
+            text = name_item.text().strip()
+            if text:
+                return text
+        w = self.param_table.cellWidget(row, 0)
+        if isinstance(w, QLabel):
+            prop = w.property("param_name")
+            if prop:
+                return str(prop)
+        return ""
+
+    def _selected_connection_type(self):
+        for label in self.image_labels:
+            if label.property("selected"):
+                return getattr(label, "connection_type", "") or ""
+        return ""
+
+    def _selected_tube_sheet_type(self):
+        for label in self.image_labels:
+            if label.property("selected"):
+                return str(getattr(label, "tube_sheet_type", "") or "")
+        return ""
+
+    def _is_weld_form_selected(self):
+        return self._selected_connection_type() == WELD_FORM_CONN_TYPE
+
+    def _get_current_param_value(self, param_name, default=""):
+        for n, v in self.current_params:
+            if n == param_name:
+                return v
+        return default
+
+    def _get_delta_t(self):
+        """布管左侧换热管壁厚 δ → δ_t。"""
+        parent_value = self._get_param_from_parent("换热管壁厚 δ")
+        if parent_value is None or str(parent_value).strip() == "":
+            return None
+        return _to_float_safe(parent_value, None)
+
+    def _validate_weld_form_e_constraint(self):
+        dt = self._get_delta_t()
+        if dt is None:
+            return True  # 无壁厚时不在此拦截
+        lf = _to_float_safe(self._get_current_param_value(WELD_FORM_LF), 0.0)
+        return lf < dt
+
+    def _compute_weld_form_l(self, tube_type, value_map):
+        """按类型计算焊脚高度 l。"""
+        lf = _to_float_safe(value_map.get(WELD_FORM_LF), 0.0)
+        lg_groove = _to_float_safe(value_map.get(WELD_FORM_LG_GROOVE), 0.0)
+        lg_inner = _to_float_safe(value_map.get(WELD_FORM_LG_INNER), 0.0)
+        if tube_type == "a":
+            return lf
+        if tube_type == "b":
+            return lg_groove
+        if tube_type in ("c", "d"):
+            return lg_groove + lf
+        if tube_type == "e":
+            return lf + lg_inner
+        return 0.0
+
+    def _refresh_weld_form_computed_l(self):
+        tube_type = self._selected_tube_sheet_type()
+        value_map = {n: v for n, v in self.current_params}
+        l_val = self._compute_weld_form_l(tube_type, value_map)
+        self.update_param_value(WELD_FORM_L_PARAM, _fmt_num(l_val))
+
+    def _apply_weld_form_first_time_formulas(self, tube_type, value_map, dt):
+        """
+        首次（元件库常数）套公式；dt 为 δ_t。
+        库中存的是 max(...) 的常数项。
+        """
+        out = dict(value_map)
+        dt = 0.0 if dt is None else float(dt)
+
+        if tube_type == "a":
+            base_lf = _to_float_safe(out.get(WELD_FORM_LF), 2.5)
+            out[WELD_FORM_LF] = _fmt_num(max(base_lf, dt))
+        elif tube_type == "b":
+            base_lg = _to_float_safe(out.get(WELD_FORM_LG_GROOVE), 2.0)
+            out[WELD_FORM_LG_GROOVE] = _fmt_num(max(base_lg, dt))
+        elif tube_type in ("c", "d"):
+            lg = _to_float_safe(out.get(WELD_FORM_LG_GROOVE), 2.0)
+            base_lf = _to_float_safe(out.get(WELD_FORM_LF), 1.5)
+            out[WELD_FORM_LG_GROOVE] = _fmt_num(lg)
+            out[WELD_FORM_LF] = _fmt_num(max(base_lf, dt - lg))
+        elif tube_type == "e":
+            lg = _to_float_safe(out.get(WELD_FORM_LG_INNER), 1.5)
+            base_lf = _to_float_safe(out.get(WELD_FORM_LF), 2.0)
+            base_L = _to_float_safe(out.get(WELD_FORM_L_REC), 4.5)
+            lf = max(base_lf, dt - lg)
+            out[WELD_FORM_LG_INNER] = _fmt_num(lg)
+            out[WELD_FORM_LF] = _fmt_num(lf)
+            out[WELD_FORM_L_REC] = _fmt_num(max(base_L, 1.0 + lf + lg))
+        return out
+
+    def _fetch_weld_form_param_map(self, tube_sheet_type):
+        """
+        返回 (param_map, from_product)。
+        产品库若已有该类型可见参数数值 → from_product=True（冻结，不再套公式）；
+        否则读元件库常数 → from_product=False（首次套公式）。
+        """
+        visible = WELD_FORM_VISIBLE.get(str(tube_sheet_type), [])
+        product_id = self.get_product_id()
+        if product_id:
+            prod_conn = create_product_connection()
+            if prod_conn:
+                try:
+                    with prod_conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            SELECT 参数名, 参数值
+                            FROM 产品设计活动表_管板连接表
+                            WHERE 产品ID = %s AND 管板连接方式 = %s AND 管板类型 = %s
+                            """,
+                            (product_id, WELD_FORM_CONN_TYPE, tube_sheet_type),
+                        )
+                        rows = cur.fetchall() or []
+                    pmap = {}
+                    for r in rows:
+                        name = normalize_tube_conn_param_name(r.get("参数名"))
+                        if name:
+                            pmap[name] = r.get("参数值")
+                    if any(name in pmap for name in visible):
+                        return pmap, True
+                except pymysql.Error as e:
+                    print(f"[产品库查询错误-焊缝形式] {e}")
+                finally:
+                    prod_conn.close()
+
+        comp_conn = create_component_connection()
+        if not comp_conn:
+            return {}, False
+        try:
+            with comp_conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT 参数名, 参数值
+                    FROM 管板连接表
+                    WHERE 管板连接方式 = %s AND 管板类型 = %s
+                    """,
+                    (WELD_FORM_CONN_TYPE, tube_sheet_type),
+                )
+                rows = cur.fetchall() or []
+            pmap = {}
+            for r in rows:
+                name = normalize_tube_conn_param_name(r.get("参数名"))
+                if name:
+                    pmap[name] = r.get("参数值")
+            return pmap, False
+        except pymysql.Error as e:
+            print(f"[元件库查询错误-焊缝形式] {e}")
+            return {}, False
+        finally:
+            comp_conn.close()
 
     def update_param_value(self, param_name, param_value):
         for i, (n, v) in enumerate(self.current_params):
@@ -927,15 +1183,21 @@ class TubeSheetConnectionPage(QWidget):
         try:
             if hasattr(self, "param_table") and self.param_table is not None:
                 for row in range(self.param_table.rowCount()):
-                    name_item = self.param_table.item(row, 0)
-                    if not name_item:
+                    param_name = self._param_name_at_row(row)
+                    if not param_name:
                         continue
-                    param_name = name_item.text()
                     cell_widget = self.param_table.cellWidget(row, 1)
                     if isinstance(cell_widget, QComboBox):
                         self.update_param_value(param_name, cell_widget.currentText())
+                    else:
+                        value_item = self.param_table.item(row, 1)
+                        if value_item is not None:
+                            self.update_param_value(param_name, value_item.text())
         except Exception:
             pass
+
+        if self._is_weld_form_selected():
+            self._refresh_weld_form_computed_l()
 
         # 从当前选中的图片标签获取连接方式和管板类型
         connection_type = ""
@@ -1079,50 +1341,56 @@ class TubeSheetConnectionPage(QWidget):
             )
             return [{"name": NEIKONGHAN_PARAM_NAME, "value": value}]
 
-        # 特殊处理：强度焊接的焊缝形式 - 只显示焊脚高度 l 参数
-        if connection_type == "强度焊接的焊缝形式":
-            # 从数据库读取焊脚高度 l 参数
-            product_id = self.get_product_id()
-            if product_id:
-                prod_conn = create_product_connection()
-                if prod_conn:
-                    try:
-                        with prod_conn.cursor() as cur:
-                            sql = """
-                            SELECT 参数名, 参数值
-                            FROM 产品设计活动表_管板连接表
-                            WHERE 产品ID = %s AND 管板连接方式 = %s AND 管板类型 = %s AND 参数名 = '焊脚高度 l'
-                            """
-                            cur.execute(sql, (product_id, connection_type, tube_sheet_type))
-                            rows = cur.fetchall()
-                            if rows:
-                                return [{"name": "焊脚高度 l", "value": rows[0]["参数值"]}]
-                    except pymysql.Error as e:
-                        print(f"[产品库查询错误] {e}")
-                    finally:
-                        prod_conn.close()
+        # 特殊处理：强度焊接的焊缝形式 — 按 a~e 显示参数；首次套公式，产品库已有数值则冻结
+        if connection_type == WELD_FORM_CONN_TYPE:
+            tube_type = str(tube_sheet_type or "").strip()
+            visible_names = WELD_FORM_VISIBLE.get(tube_type, [])
+            param_map, from_product = self._fetch_weld_form_param_map(tube_type)
+            dt = self._get_delta_t()
+            if dt is None:
+                print("[tube_sheet_connection] 警告：未读到换热管壁厚 δ，公式中 δ_t 按 0 处理")
 
-            # 如果产品库没有，从元件库读取
-            comp_conn = create_component_connection()
-            if comp_conn:
-                try:
-                    with comp_conn.cursor() as cur:
-                        sql = """
-                        SELECT 参数名, 参数值
-                        FROM 管板连接表
-                        WHERE 管板连接方式 = %s AND 管板类型 = %s AND 参数名 = '焊脚高度 l'
-                        """
-                        cur.execute(sql, (connection_type, tube_sheet_type))
-                        rows = cur.fetchall()
-                        if rows:
-                            return [{"name": "焊脚高度 l", "value": rows[0]["参数值"]}]
-                except pymysql.Error as e:
-                    print(f"[元件库查询错误] {e}")
-                finally:
-                    comp_conn.close()
+            if not from_product:
+                param_map = self._apply_weld_form_first_time_formulas(tube_type, param_map, dt)
+            else:
+                # 冻结：产品库已有数值；个别缺项用元件库常数补齐（不重跑整套公式）
+                missing = [
+                    n
+                    for n in visible_names
+                    if n not in param_map or param_map.get(n) in (None, "")
+                ]
+                if missing:
+                    comp_conn = create_component_connection()
+                    if comp_conn:
+                        try:
+                            with comp_conn.cursor() as cur:
+                                cur.execute(
+                                    """
+                                    SELECT 参数名, 参数值
+                                    FROM 管板连接表
+                                    WHERE 管板连接方式 = %s AND 管板类型 = %s
+                                    """,
+                                    (WELD_FORM_CONN_TYPE, tube_type),
+                                )
+                                for r in cur.fetchall() or []:
+                                    n = normalize_tube_conn_param_name(r.get("参数名"))
+                                    if n in missing and r.get("参数值") not in (None, ""):
+                                        param_map[n] = r.get("参数值")
+                        except pymysql.Error as e:
+                            print(f"[元件库补齐焊缝形式缺项失败] {e}")
+                        finally:
+                            comp_conn.close()
 
-            # 如果都没有找到，返回空值
-            return [{"name": "焊脚高度 l", "value": ""}]
+            visible_params = []
+            for name in visible_names:
+                val = param_map.get(name, "")
+                if val is None:
+                    val = ""
+                visible_params.append({"name": name, "value": str(val)})
+
+            l_val = self._compute_weld_form_l(tube_type, param_map)
+            self._weld_form_extra_params = [(WELD_FORM_L_PARAM, _fmt_num(l_val))]
+            return visible_params
 
         product_id = self.get_product_id()
         if product_id:
