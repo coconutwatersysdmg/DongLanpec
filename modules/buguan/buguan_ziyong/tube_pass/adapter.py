@@ -23,7 +23,7 @@ LOCAL_TUBE_PASS_CATS = frozenset(
     }
 )
 
-# 各 Cat 实际用到的隔条定位参数（与 main_gui 灰化逻辑一致）
+# 各 Cat 实际用到的隔条定位参数（与 main_gui / 甲方显隐要求一致，不含 12c）
 _CAT_USES_WX0 = frozenset({"8a", "8b", "10a", "12a"})
 _CAT_USES_WX1 = frozenset({"12a"})
 _CAT_USES_WY0 = frozenset(
@@ -31,6 +31,21 @@ _CAT_USES_WY0 = frozenset(
 )
 _CAT_USES_WY1 = frozenset({"8c", "10b", "12b"})
 _CAT_USES_WY2 = frozenset({"12b"})
+
+# 左侧参数表参数名（与产品库一致）
+PARAM_W = "隔条位置尺寸 W"  # 对应算法 Wy0
+PARAM_WY1 = "竖直隔条位置尺寸 Wy1"
+PARAM_WY2 = "竖直隔条位置尺寸 Wy2"
+PARAM_WX0 = "水平隔条位置尺寸 Wx0"
+PARAM_WX1 = "水平隔条位置尺寸 Wx1"
+
+# 供界面按 Cat 显隐：参数名 → 需要显示该行的 Cat 集合
+DIVIDER_EXTRA_PARAM_CATS = {
+    PARAM_WX0: _CAT_USES_WX0,
+    PARAM_WX1: _CAT_USES_WX1,
+    PARAM_WY1: _CAT_USES_WY1,
+    PARAM_WY2: _CAT_USES_WY2,
+}
 
 _ARR_TEXT_TO_DEG = {
     "正三角形": 60,
@@ -93,17 +108,45 @@ def _params_from_dataframe_rows(rows: Union[Mapping, Iterable]) -> Dict[str, str
     return out
 
 
-def _resolve_divider_dims(cat: str, D: float, w_raw: float) -> Dict[str, float]:
+def _dim_or_fallback(raw: Any, needed: bool, fallback: float) -> float:
+    """该 Cat 不需要则 0；需要则优先用户值，否则用兜底保证算法可跑。"""
+    if not needed:
+        return 0.0
+    val = _to_float(raw, 0.0)
+    return val if val > 0 else fallback
+
+
+def _resolve_divider_dims(
+    cat: str, D: float, param_map: Mapping[str, str]
+) -> Dict[str, float]:
     """
-    现有界面只有单个「隔条位置尺寸 W」。
-    按 Cat 映射到 Wy*/Wx*；W≤0 时用限定圆比例兜底，保证算法可跑。
+    从左侧参数读取隔条定位尺寸。
+    - 隔条位置尺寸 W → Wy0
+    - 竖直隔条位置尺寸 Wy1 / Wy2、水平隔条位置尺寸 Wx0 / Wx1 → 对应维
+    未填或 ≤0 时按限定圆比例兜底（无推荐表）。
     """
-    base = w_raw if w_raw > 0 else max(D * 0.15, 1.0)
-    wy0 = base if cat in _CAT_USES_WY0 else 0.0
-    wy1 = (base * 1.75) if cat in _CAT_USES_WY1 else 0.0
-    wy2 = (base * 2.5) if cat in _CAT_USES_WY2 else 0.0
-    wx0 = base if cat in _CAT_USES_WX0 else 0.0
-    wx1 = (base * 2.0) if cat in _CAT_USES_WX1 else 0.0
+    base = max(float(D) * 0.15, 1.0)
+    wy0 = _dim_or_fallback(
+        param_map.get(PARAM_W), cat in _CAT_USES_WY0, base
+    )
+    wy1 = _dim_or_fallback(
+        param_map.get(PARAM_WY1),
+        cat in _CAT_USES_WY1,
+        (wy0 * 1.75) if wy0 > 0 else (base * 1.75),
+    )
+    wy2 = _dim_or_fallback(
+        param_map.get(PARAM_WY2),
+        cat in _CAT_USES_WY2,
+        (wy0 * 2.5) if wy0 > 0 else (base * 2.5),
+    )
+    wx0 = _dim_or_fallback(
+        param_map.get(PARAM_WX0), cat in _CAT_USES_WX0, base
+    )
+    wx1 = _dim_or_fallback(
+        param_map.get(PARAM_WX1),
+        cat in _CAT_USES_WX1,
+        (wx0 * 2.0) if wx0 > 0 else (base * 2.0),
+    )
     return {
         "Wy0": wy0,
         "Wy1": wy1,
@@ -143,8 +186,7 @@ def build_compute_kwargs(
     cut_text = param_map.get("折流板切口方向", "垂直左右")
     Cut = _CUT_TEXT_TO_CODE.get(cut_text, "VSR")
 
-    w_raw = _to_float(param_map.get("隔条位置尺寸 W"), 0.0)
-    dims = _resolve_divider_dims(cat, float(D), w_raw)
+    dims = _resolve_divider_dims(cat, float(D), param_map)
 
     return {
         "Cat": cat,

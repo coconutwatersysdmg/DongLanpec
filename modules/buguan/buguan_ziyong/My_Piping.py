@@ -68,6 +68,11 @@ from modules.buguan.buguan_ziyong.api import run_layout_tube_calculate
 from modules.buguan.buguan_ziyong import piping_calculations
 from modules.buguan.buguan_ziyong.json_process import parse_heat_exchanger_json
 from modules.buguan.buguan_ziyong.tube_pass.adapter import (
+    DIVIDER_EXTRA_PARAM_CATS,
+    PARAM_WX0,
+    PARAM_WX1,
+    PARAM_WY1,
+    PARAM_WY2,
     is_local_tube_pass_cat,
     run_local_tube_layout,
 )
@@ -8912,18 +8917,19 @@ class TubeLayoutEditor(QMainWindow):
         """根据管程数的值更新分程隔板两侧相邻管中心距（竖直/水平）所在行的状态"""
         print(self.tube_pass_form_value)
         print("最新的管程分程形式")
-        # 1. 查找管程数、分程隔板两侧相邻管中心距（竖直）、分程隔板两侧相邻管中心距（水平）在参数表中的行索引
+        # 1. 查找管程数、分程隔板两侧相邻管中心距（竖直/水平）、隔条尺寸相关行索引
         tube_pass_row = -1
         sn_row = -1  # 分程隔板两侧相邻管中心距（竖直）行索引
         lev_row = -1  # 分程隔板两侧相邻管中心距（水平）行索引
         w_row = -1  # 隔条位置尺寸 W 行索引
+        extra_w_rows = {name: -1 for name in DIVIDER_EXTRA_PARAM_CATS}
         row_count = self.param_table.rowCount()
 
         for row in range(row_count):
             param_name_item = self.param_table.item(row, 1)
             if not param_name_item:
                 continue
-            param_name = param_name_item.text()
+            param_name = param_name_item.text().strip()
 
             if param_name == "管程程数":
                 tube_pass_row = row
@@ -8932,7 +8938,9 @@ class TubeLayoutEditor(QMainWindow):
             elif param_name == "分程隔板两侧相邻管中心距（水平）":
                 lev_row = row
             elif param_name == "隔条位置尺寸 W":
-                w_row = row  # 确保正确获取水平方向参数的行索引（原代码已定义变量，此处逻辑无修改）
+                w_row = row
+            elif param_name in extra_w_rows:
+                extra_w_rows[param_name] = row
 
         # 2. 获取管程数的值
         tube_pass_value = None
@@ -9064,6 +9072,14 @@ class TubeLayoutEditor(QMainWindow):
             w_row
         )  # 处理隔条位置尺寸 W（使用专用函数，考虑管程分程形式）
 
+        # 本地分程多隔条尺寸：按 Cat 显示/隐藏 Wy1/Wy2/Wx0/Wx1
+        tube_pass_form = getattr(self, "tube_pass_form_value", None)
+        cat_key = str(tube_pass_form).strip() if tube_pass_form else ""
+        for param_name, cats in DIVIDER_EXTRA_PARAM_CATS.items():
+            target_row = extra_w_rows.get(param_name, -1)
+            should_show = bool(cat_key) and cat_key in cats
+            update_row_status(target_row, should_disable=not should_show)
+
         # ===== 调试输出：检查相关行是否存在及其隐藏状态 =====
         try:
             for row in range(self.param_table.rowCount()):
@@ -9073,6 +9089,7 @@ class TubeLayoutEditor(QMainWindow):
                     "分程隔板两侧相邻管中心距（竖直）",
                     "分程隔板两侧相邻管中心距（水平）",
                     "隔条位置尺寸 W",
+                    *DIVIDER_EXTRA_PARAM_CATS.keys(),
                 ]:
                     hidden = self.param_table.isRowHidden(row)
                     num_item = self.param_table.item(row, 0)
@@ -16059,6 +16076,10 @@ class TubeLayoutEditor(QMainWindow):
                 _add_if_missing("滑道切边高度", "15", "mm")
                 _add_if_missing("放置位置", "参照管中心连线", "")
 
+                # 本地分程多隔条尺寸（库表可能尚未配置）：保证行存在，再由 update_SN 按 Cat 显隐
+                for _extra_name in (PARAM_WY1, PARAM_WY2, PARAM_WX0, PARAM_WX1):
+                    _add_if_missing(_extra_name, "", "mm")
+
                 # 将“滑道数量/滑道方位角”固定排在“滑道形式”下方
                 try:
                     place_after = ["滑道数量", "滑道方位角"]
@@ -16088,6 +16109,38 @@ class TubeLayoutEditor(QMainWindow):
                         if _k in extracted:
                             reordered.append(extracted[_k])
                     params[:] = reordered
+                except Exception:
+                    pass
+
+                # 四个隔条尺寸固定排在「隔条位置尺寸 W」下方
+                try:
+                    place_after_w = [PARAM_WY1, PARAM_WY2, PARAM_WX0, PARAM_WX1]
+                    extracted_w = {}
+                    remaining_w = []
+                    for _p in params:
+                        try:
+                            _n = str(_p.get("参数名", "")).strip() if isinstance(_p, dict) else ""
+                        except Exception:
+                            _n = ""
+                        if _n in place_after_w and _n not in extracted_w:
+                            extracted_w[_n] = _p
+                        else:
+                            remaining_w.append(_p)
+                    reordered_w = []
+                    for _p in remaining_w:
+                        reordered_w.append(_p)
+                        try:
+                            _n = str(_p.get("参数名", "")).strip() if isinstance(_p, dict) else ""
+                        except Exception:
+                            _n = ""
+                        if _n == "隔条位置尺寸 W":
+                            for _k in place_after_w:
+                                if _k in extracted_w:
+                                    reordered_w.append(extracted_w.pop(_k))
+                    for _k in place_after_w:
+                        if _k in extracted_w:
+                            reordered_w.append(extracted_w[_k])
+                    params[:] = reordered_w
                 except Exception:
                     pass
         except Exception:
@@ -17979,10 +18032,10 @@ class TubeLayoutEditor(QMainWindow):
             print(f"[错误] 保存前检查时出错: {str(e)}")
             return True  # 避免程序崩溃
 
-    def _notify_save_success_ui(self, message="数据保存成功！"):
+    def _notify_save_success_ui(self, message="数据保存成功！", auto_clear=True):
         """
-        在底部 line_tip 显示保存成功；与主窗体 _tip_timer→clear_line_tip 竞争时先停主定时器，
-        避免刚写入即被清空；line_tip 不可用时用 QMessageBox 兜底，保证用户能看到文案。
+        在底部 line_tip 显示提示；与主窗体 _tip_timer→clear_line_tip 竞争时先停主定时器。
+        auto_clear=False 用于「正在保存…」，避免保存未完成就被 5s 定时器清掉。
         """
         # 主窗体单发定时器会清空 line_tip，保存成功后先停掉，避免“有时不显示”
         try:
@@ -18039,7 +18092,6 @@ class TubeLayoutEditor(QMainWindow):
 
         if not tip_ok:
             try:
-
                 QMessageBox.information(self, "提示", message)
             except Exception as e2:
                 try:
@@ -18065,9 +18117,15 @@ class TubeLayoutEditor(QMainWindow):
                     pass
 
             try:
+                self._save_success_tip_clear_timer.stop()
+            except Exception:
+                pass
+            try:
                 self._save_success_tip_clear_timer.timeout.disconnect()
             except TypeError:
                 pass
+            if not auto_clear:
+                return
             try:
                 self._save_success_tip_clear_timer.timeout.connect(_safe_clear)
                 self._save_success_tip_clear_timer.start(5000)
@@ -18099,21 +18157,28 @@ class TubeLayoutEditor(QMainWindow):
             if not ENABLE_AXIAL_DESIGN_PAGE:
                 pages_to_save = tuple(i for i in pages_to_save if i != 3)
 
+        # 保存链路会间接 print 全量管心坐标，卡死 UI；此处临时屏蔽 stdout，不改计算文件。
+        import contextlib
+        import io
+
         try:
-            # 先刷一条“正在保存”，避免重操作时底部提示栏长时间空白
             try:
-                self._notify_save_success_ui("正在保存…")
+                self._notify_save_success_ui("正在保存…", auto_clear=False)
             except Exception:
                 pass
 
             print(f"[save_data] 当前页={current_page_index}, 将保存页={pages_to_save}")
-            for idx in pages_to_save:
-                try:
-                    silent = (idx == 1 and current_page_index != 1)
-                    self.actual_save_operation(idx, silent=silent)
-                    print(f"[save_data] page_index={idx} 完成")
-                except Exception as e:
-                    print(f"[save_data] 保存 page_index={idx} 失败: {e}")
+            with contextlib.redirect_stdout(io.StringIO()):
+                for idx in pages_to_save:
+                    try:
+                        silent = (idx == 1 and current_page_index != 1)
+                        self.actual_save_operation(idx, silent=silent)
+                        print(f"[save_data] page_index={idx} 完成", file=sys.stderr)
+                    except Exception as e:
+                        print(
+                            f"[save_data] 保存 page_index={idx} 失败: {e}",
+                            file=sys.stderr,
+                        )
 
             if current_page_index == 0:
                 try:
@@ -18130,7 +18195,8 @@ class TubeLayoutEditor(QMainWindow):
                 pass
         finally:
             try:
-                self._notify_save_success_ui("数据保存成功！")
+                self._notify_save_success_ui("数据保存成功！", auto_clear=True)
+                print("[save_data] 已提示：数据保存成功！")
             except Exception as e:
                 try:
                     print(f"[save_data] 成功提示仍失败: {e}")
@@ -19240,78 +19306,80 @@ class TubeLayoutEditor(QMainWindow):
                     self.save_current_centers_to_product_json()
                 except Exception as e:
                     print(f"[actual_save_operation] 保存 productID.json 失败: {e}")
-                # 径向开孔
-                sql_list = self.build_sql_for_radial_holes()
-                if sql_list:
-                    for sql in sql_list:
-                        self.execute_sql(sql)
-                1  # TODO 布管数量存储
-                sql_list = self.build_sql_for_tube_hole(tube_hole_data)
-                if sql_list:
-                    for sql in sql_list:
-                        self.execute_sql(sql)
+                # 以下 execute_sql 复用同一连接，每条仍单独 commit（与原逻辑一致）
+                with self._sql_connection_scope():
+                    # 径向开孔
+                    sql_list = self.build_sql_for_radial_holes()
+                    if sql_list:
+                        for sql in sql_list:
+                            self.execute_sql(sql)
+                    1  # TODO 布管数量存储
+                    sql_list = self.build_sql_for_tube_hole(tube_hole_data)
+                    if sql_list:
+                        for sql in sql_list:
+                            self.execute_sql(sql)
 
-                sql_list = self.build_sql_for_tube_hole_present(tube_hole_data)
-                if sql_list:
-                    for sql in sql_list:
-                        self.execute_sql(sql)
-                # TODO 布管参数存储
-                tube_data = self.get_current_tube_data()
-                sql_statements = self.build_sql_for_tube(tube_data)
-                if sql_statements:
-                    for statement in sql_statements:
-                        self.execute_sql(statement)
-                # 全部坐标存表，暂时注释掉
-                # sql = self.build_sql_for_coordinate()
-                # if sql:
-                #     for statement in sql:
-                #         self.execute_sql(statement)
+                    sql_list = self.build_sql_for_tube_hole_present(tube_hole_data)
+                    if sql_list:
+                        for sql in sql_list:
+                            self.execute_sql(sql)
+                    # TODO 布管参数存储
+                    tube_data = self.get_current_tube_data()
+                    sql_statements = self.build_sql_for_tube(tube_data)
+                    if sql_statements:
+                        for statement in sql_statements:
+                            self.execute_sql(statement)
+                    # 全部坐标存表，暂时注释掉
+                    # sql = self.build_sql_for_coordinate()
+                    # if sql:
+                    #     for statement in sql:
+                    #         self.execute_sql(statement)
 
-                self.build_sql_for_component()
-                self.build_sql_for_screw_ring()
+                    self.build_sql_for_component()
+                    self.build_sql_for_screw_ring()
 
-                sql = self.build_sql_for_cross_pipes()
-                if sql:
-                    for statement in sql:
-                        self.execute_sql(statement)
-
-                # build_sql_for_radial_holes 返回 [delete_sql] 或 [delete_sql, insert1, insert2, ...]，无 query_sql
-                sql_list = self.build_sql_for_radial_holes()
-                if sql_list:
-                    try:
-                        delete_sql = sql_list[0]
-                        insert_sqls = sql_list[1:] if len(sql_list) > 1 else []
-                        self.execute_sql(delete_sql)
-                        for s in insert_sqls:
-                            self.execute_sql(s)
-                    except Exception as e:
-                        print(f"保存径向开孔数据失败: {e}")
-                        import traceback
-                        traceback.print_exc()
-
-                # 当前圆心坐标
-                if self.heat_exchanger in ["AES", "BES"]:
-                    sql = piping_calculations.build_sql_for_floating_head_calc(
-                        self, create_product_connection
-                    )
+                    sql = self.build_sql_for_cross_pipes()
                     if sql:
                         for statement in sql:
                             self.execute_sql(statement)
-                elif self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
-                    self.update_buguan_quantity()
-                    sql = piping_calculations.build_sql_for_u_tube_calc(
-                        self, create_product_connection
-                    )
-                    if sql:
-                        for statement in sql:
-                            self.execute_sql(statement)
-                else:
-                    sql = piping_calculations.build_sql_for_floating_head_calc(
-                        self, create_product_connection
-                    )
-                    if sql:
-                        for statement in sql:
-                            self.execute_sql(statement)
+
+                    # build_sql_for_radial_holes 返回 [delete_sql] 或 [delete_sql, insert1, insert2, ...]，无 query_sql
+                    sql_list = self.build_sql_for_radial_holes()
+                    if sql_list:
+                        try:
+                            delete_sql = sql_list[0]
+                            insert_sqls = sql_list[1:] if len(sql_list) > 1 else []
+                            self.execute_sql(delete_sql)
+                            for s in insert_sqls:
+                                self.execute_sql(s)
+                        except Exception as e:
+                            print(f"保存径向开孔数据失败: {e}")
+                            import traceback
+                            traceback.print_exc()
+
+                    # 当前圆心坐标
+                    if self.heat_exchanger in ["AES", "BES"]:
+                        sql = piping_calculations.build_sql_for_floating_head_calc(
+                            self, create_product_connection
+                        )
+                        if sql:
+                            for statement in sql:
+                                self.execute_sql(statement)
+                    elif self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
+                        self.update_buguan_quantity()
+                        sql = piping_calculations.build_sql_for_u_tube_calc(
+                            self, create_product_connection
+                        )
+                        if sql:
+                            for statement in sql:
+                                self.execute_sql(statement)
+                    else:
+                        sql = piping_calculations.build_sql_for_floating_head_calc(
+                            self, create_product_connection
+                        )
+                        if sql:
+                            for statement in sql:
+                                self.execute_sql(statement)
 
             pass
         elif page_index == 3:  # 轴向设计页面
@@ -19436,9 +19504,10 @@ class TubeLayoutEditor(QMainWindow):
             tube_form_data = self.get_current_tube_form_data()
             sql_statements = self.build_sql_for_tube_form()
             if sql_statements:
-                # 执行SQL语句列表
-                for statement in sql_statements:
-                    self.execute_sql(statement)
+                # 执行SQL语句列表（复用连接，每条仍单独 commit）
+                with self._sql_connection_scope():
+                    for statement in sql_statements:
+                        self.execute_sql(statement)
             pass
         else:
             print("其他页面不执行")
@@ -19739,25 +19808,61 @@ class TubeLayoutEditor(QMainWindow):
         finally:
             conn.close()
 
-    def execute_sql(self, sql, fetch=False):
-        """执行SQL语句"""
-        connection = None
-        try:
-            from modules.buguan.buguan_ziyong.database_utils import create_connection
+    def _sql_connection_scope(self):
+        """
+        保存路径复用同一 DB 连接：进入时建连一次，退出时关闭。
+        范围内的 execute_sql 仍按条 commit，语义与原先一致。
+        """
+        from contextlib import contextmanager
+        from modules.buguan.buguan_ziyong.database_utils import create_connection
 
-            connection = create_connection()
-            cursor = connection.cursor()
+        @contextmanager
+        def _scope():
+            prev = getattr(self, "_active_sql_conn", None)
+            conn = None
+            try:
+                conn = create_connection()
+                self._active_sql_conn = conn
+                yield conn
+            finally:
+                self._active_sql_conn = prev
+                if conn is not None:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
+
+        return _scope()
+
+    def execute_sql(self, sql, fetch=False, connection=None):
+        """执行SQL语句。
+
+        connection 或 self._active_sql_conn 存在时复用连接（不关闭）；
+        否则自建连接并用完关闭。非 fetch 时每条仍单独 commit，与原逻辑一致。
+        """
+        owns_connection = False
+        active = connection if connection is not None else getattr(self, "_active_sql_conn", None)
+        try:
+            if active is None:
+                from modules.buguan.buguan_ziyong.database_utils import create_connection
+
+                active = create_connection()
+                owns_connection = True
+            if active is None:
+                raise RuntimeError("无法创建数据库连接")
+
+            cursor = active.cursor()
             cursor.execute(sql)
 
             if fetch:
                 result = cursor.fetchall()
                 return result
-            connection.commit()
+            active.commit()
             return None
         except Exception as e:
             try:
-                if connection is not None:
-                    connection.rollback()
+                if active is not None:
+                    active.rollback()
             except Exception:
                 pass
             print(f"保存数据时出错: {e}")
@@ -19767,11 +19872,12 @@ class TubeLayoutEditor(QMainWindow):
                 return None
             return None
         finally:
-            try:
-                if connection is not None:
-                    connection.close()
-            except Exception:
-                pass
+            if owns_connection:
+                try:
+                    if active is not None:
+                        active.close()
+                except Exception:
+                    pass
     def _sync_tube_sheet_snapshot_and_update_dl(self):
         """从管板形式页同步参数快照，并在命中特殊节点时重算布管限定圆 DL。"""
         plate_type = None
