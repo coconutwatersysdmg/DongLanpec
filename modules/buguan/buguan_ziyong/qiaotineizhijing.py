@@ -5560,22 +5560,23 @@ def cal_qiaotineizhijing_KU(product_id, isDi_change, isDN_change, user_Di, user_
     val = row["参数值"] if row and row["参数值"] not in (None, "", "None") else "0"
     fencheng_geban["分程隔板槽宽度"] = str(val)
 
-    # === 获取进出口压力差 ===
+    # === 获取固定管板的分程隔板槽宽度 ===
     cursor.execute("""
-            SELECT 管程数值
-            FROM 产品设计活动表_设计数据表
-            WHERE 产品ID = %s AND 参数名称 = '进、出口压力差*'
-            LIMIT 1
-        """, (product_id,))
+        SELECT 参数值
+        FROM 产品设计活动表_元件附加参数表
+        WHERE 产品ID = %s AND 元件名称 = '固定管板' AND 参数名称 = '管程侧分程隔板槽宽度'
+    """, (product_id,))
     row = cursor.fetchone()
-    if row and row["管程数值"] is not None:
-        try:
-            val = float(row["管程数值"])
-            fencheng_geban["管箱分程隔板两侧压力差值"] = str(val)
-        except ValueError:
-            fencheng_geban["管箱分程隔板两侧压力差值"] = "0"
-    else:
-        fencheng_geban["管箱分程隔板两侧压力差值"] = "0"
+    val = row["参数值"] if row and row["参数值"] not in (None, "", "None") else "0"
+    fencheng_geban["分程隔板槽宽度"] = str(val)
+
+    # === 获取管箱分程隔板两侧压力差值 ===
+    pressure_diff_names = [
+        "进、出口压力差*",
+        "隔板两侧压力差值*（可取隔板两侧计算压降2倍）",
+    ]
+
+    fencheng_geban["管箱分程隔板两侧压力差值"] = "0"
     # === 获取腐蚀裕量(双面) ===
     cursor.execute("""
         SELECT 管程数值
@@ -11780,22 +11781,23 @@ def cal_qiaotineizhijing_NEN(product_id, isDi_change, isDN_change, user_Di, user
     val = row["参数值"] if row and row["参数值"] not in (None, "", "None") else "0"
     fencheng_geban["分程隔板槽宽度"] = str(val)
 
-    # === 获取进出口压力差 ===
+    # === 获取固定管板的分程隔板槽宽度 ===
     cursor.execute("""
-                SELECT 管程数值
-                FROM 产品设计活动表_设计数据表
-                WHERE 产品ID = %s AND 参数名称 = '进、出口压力差*'
-                LIMIT 1
-            """, (product_id,))
+        SELECT 参数值
+        FROM 产品设计活动表_元件附加参数表
+        WHERE 产品ID = %s AND 元件名称 = '固定管板' AND 参数名称 = '管程侧分程隔板槽宽度'
+    """, (product_id,))
     row = cursor.fetchone()
-    if row and row["管程数值"] is not None:
-        try:
-            val = float(row["管程数值"])
-            fencheng_geban["管箱分程隔板两侧压力差值"] = str(val)
-        except ValueError:
-            fencheng_geban["管箱分程隔板两侧压力差值"] = "0"
-    else:
-        fencheng_geban["管箱分程隔板两侧压力差值"] = "0"
+    val = row["参数值"] if row and row["参数值"] not in (None, "", "None") else "0"
+    fencheng_geban["分程隔板槽宽度"] = str(val)
+
+    # === 获取管箱分程隔板两侧压力差值 ===
+    pressure_diff_names = [
+        "进、出口压力差*",
+        "隔板两侧压力差值*（可取隔板两侧计算压降2倍）",
+    ]
+
+    fencheng_geban["管箱分程隔板两侧压力差值"] = "0"
     # === 获取腐蚀裕量(双面) ===
     cursor.execute("""
             SELECT 管程数值
@@ -14640,22 +14642,23 @@ def cal_qiaotineizhijing_AEM(product_id, isDi_change, isDN_change, user_Di, user
     val = row["参数值"] if row and row["参数值"] not in (None, "", "None") else "0"
     fencheng_geban["分程隔板槽宽度"] = str(val)
 
-    # === 获取进出口压力差 ===
+    # === 获取固定管板的分程隔板槽宽度 ===
     cursor.execute("""
-                SELECT 管程数值
-                FROM 产品设计活动表_设计数据表
-                WHERE 产品ID = %s AND 参数名称 = '进、出口压力差*'
-                LIMIT 1
-            """, (product_id,))
+        SELECT 参数值
+        FROM 产品设计活动表_元件附加参数表
+        WHERE 产品ID = %s AND 元件名称 = '固定管板' AND 参数名称 = '管程侧分程隔板槽宽度'
+    """, (product_id,))
     row = cursor.fetchone()
-    if row and row["管程数值"] is not None:
-        try:
-            val = float(row["管程数值"])
-            fencheng_geban["管箱分程隔板两侧压力差值"] = str(val)
-        except ValueError:
-            fencheng_geban["管箱分程隔板两侧压力差值"] = "0"
-    else:
-        fencheng_geban["管箱分程隔板两侧压力差值"] = "0"
+    val = row["参数值"] if row and row["参数值"] not in (None, "", "None") else "0"
+    fencheng_geban["分程隔板槽宽度"] = str(val)
+
+    # === 获取管箱分程隔板两侧压力差值 ===
+    pressure_diff_names = [
+        "进、出口压力差*",
+        "隔板两侧压力差值*（可取隔板两侧计算压降2倍）",
+    ]
+
+    fencheng_geban["管箱分程隔板两侧压力差值"] = "0"
     # === 获取腐蚀裕量(双面) ===
     cursor.execute("""
             SELECT 管程数值
