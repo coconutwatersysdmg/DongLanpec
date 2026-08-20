@@ -20771,8 +20771,8 @@ class TubeLayoutEditor(QMainWindow):
         if baffle_type_text == "支持板":
             return
         if baffle_type_text in ["双弓型", "双弓形"]:
-            # 双弓型：根据 a/b 画竖向弦线
-            # 优先使用折流/支持板外径作为大圆直径；若缺失则退回壳体内直径
+            # 双弓型：按切口方向画 A(蓝)/B(红) 弦线
+            # 垂直左右（默认）：竖弦 x=±a/±b；水平上下：横弦 y=±a/±b
             circle_diameter = baffle_outer_diameter or shell_inner_diameter
             if circle_diameter is None:
                 return
@@ -20782,6 +20782,9 @@ class TubeLayoutEditor(QMainWindow):
                 return
 
             R = circle_diameter / 2.0
+            cut_dir_text = (cut_direction or "").strip()
+            # 双弓默认垂直左右；仅明确为水平上下时画横弦
+            horizontal_cut = cut_dir_text in ("水平上下", "水平")
 
             def draw_vertical_chord(
                     x_level: float, color: QColor, tag: str, line_width=3
@@ -20810,36 +20813,61 @@ class TubeLayoutEditor(QMainWindow):
                     }
                 )
 
+            def draw_horizontal_chord(
+                    y_level: float, color: QColor, tag: str, line_width=3
+            ):
+                if y_level is None:
+                    return
+                if abs(y_level) > R:
+                    return
+                half_len = math.sqrt(max(0.0, R * R - y_level * y_level))
+                pen_local = QPen(color)
+                pen_local.setWidth(line_width)
+                line_item = self.graphics_scene.addLine(
+                    -half_len,
+                    y_level,
+                    half_len,
+                    y_level,
+                    pen_local,
+                )
+                self.baffle_lines.append(
+                    {
+                        "type": "horizontal",
+                        "y_level": y_level,
+                        "x_range": (-half_len, half_len),
+                        "line_item": line_item,
+                        "baffle_subtype": tag,
+                    }
+                )
+
             # 折流板线条宽度（可调参数，值越大线越粗）
             baffle_line_width = (
                 5  # 默认值，可根据需要调整（例如：1=细线，3=中等，5=粗线）
             )
 
-            # 浅蓝色：A 型板（±a）
-            light_blue = QColor(150, 200, 255)  # 更浅的蓝色
-            draw_vertical_chord(
-                a_distance, light_blue, "A", line_width=baffle_line_width
+            # 浅蓝色：A 型板（±a）；浅红色：B 型板（±b）
+            light_blue = QColor(150, 200, 255)
+            light_red = QColor(255, 150, 150)
+            draw_chord = (
+                draw_horizontal_chord if horizontal_cut else draw_vertical_chord
             )
-            draw_vertical_chord(
-                -a_distance, light_blue, "A", line_width=baffle_line_width
-            )
-
-            # 浅红色：B 型板（±b）
-            light_red = QColor(255, 150, 150)  # 浅红色
-            draw_vertical_chord(
-                b_distance, light_red, "B", line_width=baffle_line_width
-            )
-            draw_vertical_chord(
-                -b_distance, light_red, "B", line_width=baffle_line_width
-            )
+            draw_chord(a_distance, light_blue, "A", line_width=baffle_line_width)
+            draw_chord(-a_distance, light_blue, "A", line_width=baffle_line_width)
+            draw_chord(b_distance, light_red, "B", line_width=baffle_line_width)
+            draw_chord(-b_distance, light_red, "B", line_width=baffle_line_width)
 
             self.operations.append(
                 {
                     "type": "baffle_plate",
-                    "direction": "double_bow_vertical",
+                    "direction": (
+                        "double_bow_horizontal"
+                        if horizontal_cut
+                        else "double_bow_vertical"
+                    ),
                     "a": a_distance,
                     "b": b_distance,
                     "circle_diameter": circle_diameter,
+                    "cut_direction": cut_dir_text or "垂直左右",
                 }
             )
             return
@@ -30522,19 +30550,23 @@ class TubeLayoutEditor(QMainWindow):
             ("B型板切口与中心线间距b", "B型板切口与中心线间距b", "mm", "125"),
         ]
 
-        # 折流板切口方向、要求切口率、切口与中心线间距a，仍然显示在弹窗中，方便查看和修改
-        other_params = [
-            ("折流板切口方向", "折流板切口方向", ""),
+        # 切口方向：单弓/双弓/支持板均显示；要求切口率、间距a：仅非双弓显示
+        cut_direction_param = ("折流板切口方向", "折流板切口方向", "")
+        single_bow_only_params = [
             ("折流板要求切口率", "折流板要求切口率", "%"),
             ("折流板切口与中心线间距a", "折流板切口与中心线间距a", "mm"),
         ]
+        other_params = [cut_direction_param] + single_bow_only_params
 
         # 读取初始折流板类型
         current_baffle_type = get_param_value("折流板类型") or "单弓形"
         is_ku_type = str(getattr(self, "heat_exchanger", "") or "").strip().upper() in ("AKU", "BKU")
         if is_ku_type:
             current_baffle_type = "支持板"
-        show_other_params = current_baffle_type != "双弓形"
+        show_single_bow_params = current_baffle_type != "双弓形"
+
+        def default_cut_direction_for(baffle_type: str) -> str:
+            return "垂直左右" if baffle_type == "双弓形" else "水平上下"
 
         # ---------- 构造对话框 ----------
         try:
@@ -30552,8 +30584,8 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             # 若导入失败，仅在控制台输出信息
             print("折流板参数:")
-            for cn, real, unit in base_params + (
-                    other_params if show_other_params else []
+            for cn, real, unit in base_params + [cut_direction_param] + (
+                    single_bow_only_params if show_single_bow_params else []
             ):
                 print(f"  {cn}: {get_param_value(real)} {unit}")
             if current_baffle_type == "双弓形":
@@ -30578,7 +30610,7 @@ class TubeLayoutEditor(QMainWindow):
         table.verticalHeader().setVisible(False)
         table.setSelectionMode(QTableWidget.NoSelection)
 
-        # 构造初始行：基础参数 + 其他参数
+        # 构造初始行：基础参数 + 切口方向（始终）+ 单弓专用 / 双弓附加
         dialog_rows = []  # (显示名, 实际名, 单位, 默认值(可选))
         # 记录四个联动参数的初始数值，用于非法输入恢复
         initial_numeric_values = {}
@@ -30587,8 +30619,10 @@ class TubeLayoutEditor(QMainWindow):
         for cn, rn, unit in base_params:
             dialog_rows.append((cn, rn, unit, None))
 
-        if show_other_params:
-            for cn, rn, unit in other_params:
+        dialog_rows.append((*cut_direction_param, None))
+
+        if show_single_bow_params:
+            for cn, rn, unit in single_bow_only_params:
                 dialog_rows.append((cn, rn, unit, None))
 
         # 如果一开始就是双弓形，则把附加参数一起加入
@@ -30658,7 +30692,9 @@ class TubeLayoutEditor(QMainWindow):
                 if value_text in ["水平上下", "垂直左右"]:
                     direction_combo.setCurrentText(value_text)
                 else:
-                    direction_combo.setCurrentText("水平上下")
+                    direction_combo.setCurrentText(
+                        default_cut_direction_for(current_baffle_type)
+                    )
                 table.setCellWidget(row, 1, direction_combo)
                 unit_item = QTableWidgetItem(unit or "")
                 unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
@@ -30682,7 +30718,7 @@ class TubeLayoutEditor(QMainWindow):
                     last_valid_text_by_name[cn] = ""
 
         # 一打开弹窗即根据当前数据计算“折流板切口与中心线间距a”并显示
-        if show_other_params:
+        if show_single_bow_params:
             try:
                 di_str = get_param_value("壳体内直径 Dis")
                 od_str = get_param_value("折流/支持板外径")
@@ -30829,8 +30865,10 @@ class TubeLayoutEditor(QMainWindow):
                         except Exception:
                             pass
 
-        # 读取初始切口方向
-        current_cut_direction = get_param_value("折流板切口方向") or "水平上下"
+        # 读取初始切口方向（双弓默认垂直左右，单弓默认水平上下）
+        current_cut_direction = get_param_value("折流板切口方向")
+        if current_cut_direction not in ("水平上下", "垂直左右"):
+            current_cut_direction = default_cut_direction_for(current_baffle_type)
         update_images(current_baffle_type, current_cut_direction)
 
         right_layout.addWidget(image_container_1)
@@ -30882,15 +30920,45 @@ class TubeLayoutEditor(QMainWindow):
             for r in reversed(rows_to_remove):
                 table.removeRow(r)
 
+        def ensure_cut_direction_row(baffle_type: str = None):
+            """确保「折流板切口方向」行存在（双弓/单弓/支持板均保留）。"""
+            if find_row_by_name("折流板切口方向") >= 0:
+                return
+            btype = baffle_type or "单弓形"
+            cn, rn, unit = cut_direction_param
+            # 插在「折流板类型」之后；找不到则追加到末尾
+            type_row = find_row_by_name("折流板类型")
+            row = (type_row + 1) if type_row >= 0 else table.rowCount()
+            table.insertRow(row)
+
+            name_item = QTableWidgetItem(cn)
+            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+            table.setItem(row, 0, name_item)
+
+            value_from_table = get_param_value(rn)
+            value_text = value_from_table or ""
+            direction_combo = _QComboBoxForDialog()
+            direction_combo.addItems(["水平上下", "垂直左右"])
+            if value_text in ["水平上下", "垂直左右"]:
+                direction_combo.setCurrentText(value_text)
+            else:
+                direction_combo.setCurrentText(default_cut_direction_for(btype))
+            table.setCellWidget(row, 1, direction_combo)
+
+            unit_item = QTableWidgetItem(unit or "")
+            unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
+            table.setItem(row, 2, unit_item)
+
         def ensure_other_rows_exist():
-            """在需要显示时，确保三条"切口相关"参数行存在（若缺失则追加）。"""
+            """非双弓时，确保切口方向 + 要求切口率 + 间距a 三行存在。"""
+            ensure_cut_direction_row("单弓形")
             existing_names = set()
             for r in range(table.rowCount()):
                 item = table.item(r, 0)
                 if item:
                     existing_names.add(item.text().strip())
 
-            for cn, rn, unit in other_params:
+            for cn, rn, unit in single_bow_only_params:
                 if cn in existing_names:
                     continue
                 row = table.rowCount()
@@ -30908,32 +30976,23 @@ class TubeLayoutEditor(QMainWindow):
                 else:
                     value_text = value_from_table or ""
 
-                if cn == "折流板切口方向":
-                    direction_combo = _QComboBoxForDialog()
-                    direction_combo.addItems(["水平上下", "垂直左右"])
-                    if value_text in ["水平上下", "垂直左右"]:
-                        direction_combo.setCurrentText(value_text)
-                    else:
-                        direction_combo.setCurrentText("水平上下")
-                    table.setCellWidget(row, 1, direction_combo)
-                else:
-                    value_item = QTableWidgetItem(str(value_text))
-                    value_item.setFlags(value_item.flags() | Qt.ItemIsEditable)
-                    table.setItem(row, 1, value_item)
+                value_item = QTableWidgetItem(str(value_text))
+                value_item.setFlags(value_item.flags() | Qt.ItemIsEditable)
+                table.setItem(row, 1, value_item)
 
                 unit_item = QTableWidgetItem(unit or "")
                 unit_item.setFlags(unit_item.flags() & ~Qt.ItemIsEditable)
                 table.setItem(row, 2, unit_item)
 
-        def remove_other_rows():
-            """在双弓形时，从弹窗中移除三条"切口相关"参数行（不影响主参数表）。"""
+        def remove_single_bow_only_rows():
+            """双弓形时，仅移除要求切口率、间距a（保留切口方向）。"""
             rows_to_remove = []
             for r in range(table.rowCount()):
                 item = table.item(r, 0)
                 if not item:
                     continue
                 name = item.text().strip()
-                if any(name == cn for (cn, _rn, _unit) in other_params):
+                if any(name == cn for (cn, _rn, _unit) in single_bow_only_params):
                     rows_to_remove.append(r)
 
             for r in reversed(rows_to_remove):
@@ -31040,22 +31099,30 @@ class TubeLayoutEditor(QMainWindow):
 
             def on_baffle_type_changed(text: str):
                 btype = text.strip()
-                # 获取当前切口方向
-                cut_dir_row = find_row_by_name("折流板切口方向")
-                current_dir = "水平上下"
-                if cut_dir_row >= 0:
-                    dir_widget = table.cellWidget(cut_dir_row, 1)
-                    if isinstance(dir_widget, _QComboBoxForDialog):
-                        current_dir = dir_widget.currentText()
-                update_images(btype, current_dir)
                 if btype == "双弓形":
                     ensure_extra_rows_exist()
-                    remove_other_rows()
+                    remove_single_bow_only_rows()
+                    ensure_cut_direction_row("双弓形")
+                    # 双弓形默认切口方向：垂直左右
+                    cut_dir_row = find_row_by_name("折流板切口方向")
+                    if cut_dir_row >= 0:
+                        dir_widget = table.cellWidget(cut_dir_row, 1)
+                        if isinstance(dir_widget, _QComboBoxForDialog):
+                            dir_widget.setCurrentText("垂直左右")
+                    bind_cut_direction_event()
+                    update_images(btype, "垂直左右")
                 else:
                     remove_extra_rows()
                     ensure_other_rows_exist()
-                    # 重新绑定切口方向事件（因为行被重新添加）
+                    # 重新绑定切口方向事件（因为行可能被重新添加）
                     bind_cut_direction_event()
+                    cut_dir_row = find_row_by_name("折流板切口方向")
+                    current_dir = default_cut_direction_for(btype)
+                    if cut_dir_row >= 0:
+                        dir_widget = table.cellWidget(cut_dir_row, 1)
+                        if isinstance(dir_widget, _QComboBoxForDialog):
+                            current_dir = dir_widget.currentText() or current_dir
+                    update_images(btype, current_dir)
                 apply_support_plate_lock_state(btype)
                 table.resizeColumnsToContents()
 
