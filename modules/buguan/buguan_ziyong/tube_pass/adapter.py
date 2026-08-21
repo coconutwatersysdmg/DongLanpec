@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 将界面参数映射为 core_calculation.compute_centers 入参，并输出与现有布管下游兼容的结果。
-仅用于本地分程 Cat：8a~8d / 10a~10b / 12a~12b。
+仅用于本地分程 Cat：8a~8d / 10a~10b / 12a~12b（界面标识可为 8a.1 / 8a.2 等）。
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple, Union
 
 from .core_calculation import compute_centers
 
-# 产品侧启用的本地分程（不含 12c）
+# 产品侧启用的本地分程基类（不含 12c）；界面存 8a.1/8a.2 等，计算前归一到此集合
 LOCAL_TUBE_PASS_CATS = frozenset(
     {
         "8a",
@@ -22,6 +23,23 @@ LOCAL_TUBE_PASS_CATS = frozenset(
         "12b",
     }
 )
+
+# 界面参数标识：图片名去扩展名，如 8a.1 / 10b.2
+_LOCAL_CAT_VARIANT_RE = re.compile(
+    r"^(\d+[a-d])(?:\.(\d+))?$", re.IGNORECASE
+)
+
+
+def normalize_local_tube_pass_cat(cat: Any) -> str:
+    """界面标识 8a.1/8a.2 → 计算用基类 8a；已是 8a 则原样（小写字母）。"""
+    if cat is None:
+        return ""
+    text = str(cat).strip()
+    m = _LOCAL_CAT_VARIANT_RE.match(text)
+    if not m:
+        return text
+    return m.group(1).lower()
+
 
 # 各 Cat 实际用到的隔条定位参数（与 main_gui / 甲方显隐要求一致，不含 12c）
 _CAT_USES_WX0 = frozenset({"8a", "8b", "10a", "12a"})
@@ -69,7 +87,7 @@ _LAYOUT_TEXT_TO_CODE = {
 def is_local_tube_pass_cat(cat: Any) -> bool:
     if cat is None:
         return False
-    return str(cat).strip() in LOCAL_TUBE_PASS_CATS
+    return normalize_local_tube_pass_cat(cat) in LOCAL_TUBE_PASS_CATS
 
 
 def _to_float(value: Any, default: float = 0.0) -> float:
@@ -164,7 +182,7 @@ def build_compute_kwargs(
     d: Optional[float] = None,
 ) -> Dict[str, Any]:
     """从参数名字典构造 compute_centers 关键字参数。"""
-    cat = str(cat).strip()
+    cat = normalize_local_tube_pass_cat(cat)
     if D is None:
         D = _to_float(param_map.get("布管限定圆 DL"), 0.0)
     if d is None:
@@ -222,7 +240,7 @@ def run_local_tube_layout(
       raw_calc: compute_centers 原始 dict
       kwargs: 实际入参
     """
-    cat = str(cat).strip()
+    cat = normalize_local_tube_pass_cat(cat)
     if not is_local_tube_pass_cat(cat):
         raise ValueError(f"非本地分程 Cat: {cat}")
 

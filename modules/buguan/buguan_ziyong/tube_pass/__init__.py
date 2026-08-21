@@ -3,6 +3,7 @@ from .adapter import (
     DIVIDER_EXTRA_PARAM_CATS,
     LOCAL_TUBE_PASS_CATS,
     is_local_tube_pass_cat,
+    normalize_local_tube_pass_cat,
     run_local_tube_layout,
 )
 
@@ -10,5 +11,6 @@ __all__ = [
     "DIVIDER_EXTRA_PARAM_CATS",
     "LOCAL_TUBE_PASS_CATS",
     "is_local_tube_pass_cat",
+    "normalize_local_tube_pass_cat",
     "run_local_tube_layout",
 ]

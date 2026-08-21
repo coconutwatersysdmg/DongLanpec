@@ -74,6 +74,7 @@ from modules.buguan.buguan_ziyong.tube_pass.adapter import (
     PARAM_WY1,
     PARAM_WY2,
     is_local_tube_pass_cat,
+    normalize_local_tube_pass_cat,
     run_local_tube_layout,
 )
 from modules.buguan.buguan_ziyong.sheet_form_page import SheetFormPage, _PLATE_OLD_TO_NEW_BY_NODE
@@ -9074,7 +9075,9 @@ class TubeLayoutEditor(QMainWindow):
 
         # 本地分程多隔条尺寸：按 Cat 显示/隐藏 Wy1/Wy2/Wx0/Wx1
         tube_pass_form = getattr(self, "tube_pass_form_value", None)
-        cat_key = str(tube_pass_form).strip() if tube_pass_form else ""
+        cat_key = (
+            normalize_local_tube_pass_cat(tube_pass_form) if tube_pass_form else ""
+        )
         for param_name, cats in DIVIDER_EXTRA_PARAM_CATS.items():
             target_row = extra_w_rows.get(param_name, -1)
             should_show = bool(cat_key) and cat_key in cats
@@ -15939,10 +15942,13 @@ class TubeLayoutEditor(QMainWindow):
                             print(f"绘制折流板出错: {e}")
                     if param_name == "管程程数":
                         self.tube_pass_form_value = {
-                            "1": "1.1",
+                            "1": "1",
                             "2": "2.1",
                             "4": "4.1",
                             "6": "6.1",
+                            "8": "8a.1",
+                            "10": "10a.1",
+                            "12": "12a.1",
                         }.get(param_value, self.tube_pass_form_value)
                         print(
                             f"[on_table_item_changed] 管程分程形式: {self.tube_pass_form_value}"
@@ -16970,20 +16976,26 @@ class TubeLayoutEditor(QMainWindow):
             # self.add_image_to_combo(combo, base_path, "6.3.png", "6.3")
         elif tube_pass == "1":
             if hx_norm in non_u_types:
-                self.add_image_to_combo(combo, base_path, "1.1.png", "1.1")
+                self.add_image_to_combo(combo, base_path, "1.png", "1")
         elif tube_pass == "8":
-            # 本地分程 8a~8d（非 U / U 均可选，便于试用）
+            # 本地分程 8a/8b/8c/8d，标识与图片名一致（8a.1 / 8a.2 …）
             if hx_norm in u_and_common_types:
                 for _cid in ("8a", "8b", "8c", "8d"):
-                    self.add_image_to_combo(combo, base_path, f"{_cid}.png", _cid)
+                    for _suf in ("1", "2"):
+                        _id = f"{_cid}.{_suf}"
+                        self.add_image_to_combo(combo, base_path, f"{_id}.png", _id)
         elif tube_pass == "10":
             if hx_norm in u_and_common_types:
                 for _cid in ("10a", "10b"):
-                    self.add_image_to_combo(combo, base_path, f"{_cid}.png", _cid)
+                    for _suf in ("1", "2"):
+                        _id = f"{_cid}.{_suf}"
+                        self.add_image_to_combo(combo, base_path, f"{_id}.png", _id)
         elif tube_pass == "12":
             if hx_norm in u_and_common_types:
                 for _cid in ("12a", "12b"):
-                    self.add_image_to_combo(combo, base_path, f"{_cid}.png", _cid)
+                    for _suf in ("1", "2"):
+                        _id = f"{_cid}.{_suf}"
+                        self.add_image_to_combo(combo, base_path, f"{_id}.png", _id)
 
         else:
             combo.addItem("未选择")
@@ -16991,10 +17003,29 @@ class TubeLayoutEditor(QMainWindow):
 
         # 设置初始选择（如果有当前值）
         if hasattr(self, "tube_pass_form_value") and self.tube_pass_form_value:
+            cur = str(self.tube_pass_form_value).strip()
+            matched = False
             for i in range(combo.count()):
-                if combo.itemData(i, Qt.UserRole) == self.tube_pass_form_value:
+                if combo.itemData(i, Qt.UserRole) == cur:
                     combo.setCurrentIndex(i)
+                    matched = True
                     break
+            # 兼容旧库值：1.1→1；8a→8a.1
+            if not matched:
+                compat_ids = []
+                if cur == "1.1":
+                    compat_ids.append("1")
+                elif is_local_tube_pass_cat(cur) and "." not in cur:
+                    compat_ids.append(f"{normalize_local_tube_pass_cat(cur)}.1")
+                for compat in compat_ids:
+                    for i in range(combo.count()):
+                        if combo.itemData(i, Qt.UserRole) == compat:
+                            combo.setCurrentIndex(i)
+                            self.tube_pass_form_value = compat
+                            matched = True
+                            break
+                    if matched:
+                        break
         else:
             # 设置默认选择为第一个选项
             if combo.count() > 0:
@@ -17291,10 +17322,13 @@ class TubeLayoutEditor(QMainWindow):
 
             # 管程程数变化：更新管程分程形式值及对应图片
             self.tube_pass_form_value = {
-                "1": "1.1",
+                "1": "1",
                 "2": "2.1",
                 "4": "4.1",
                 "6": "6.1",
+                "8": "8a.1",
+                "10": "10a.1",
+                "12": "12a.1",
             }.get(tube_pass_text, self.tube_pass_form_value)
             print(f"当前管程分程形式: {self.tube_pass_form_value}")
 
@@ -17449,7 +17483,7 @@ class TubeLayoutEditor(QMainWindow):
 
                     if (
                         getattr(self, "heat_exchanger", None) == "BEM"
-                        and getattr(self, "tube_pass_form_value", None) == "1.1"
+                        and getattr(self, "tube_pass_form_value", None) in ("1", "1.1")
                     ):
                         for pname in ("管程侧分程隔板槽深度", "壳程侧分程隔板槽深度"):
                             cursor.execute(
@@ -20135,12 +20169,13 @@ class TubeLayoutEditor(QMainWindow):
                                 "4.3": "4.3.1.png",
                                 "6.1": "6.1.1.png",
                                 "6.2": "6.2.1.png",
-                                "1.1": "1.1.png",
+                                "1": "1.png",
                             }
 
-                            # 获取对应的图片文件名
+                            # 获取对应的图片文件名（8a.1 等本地分程：标识即文件名）
                             image_filename = image_file_map.get(
-                                current_tube_partition, f"{current_tube_partition}.png"
+                                current_tube_partition,
+                                f"{current_tube_partition}.png",
                             )
                             image_path = os.path.join(
                                 tube_pattern_base_path, image_filename
@@ -20148,13 +20183,19 @@ class TubeLayoutEditor(QMainWindow):
 
                             # 如果首选图片不存在，尝试其他可能的文件名
                             if not os.path.exists(image_path):
-                                # 尝试不带后缀的版本
-                                alt_filename = f"{current_tube_partition}.png"
-                                alt_path = os.path.join(
-                                    tube_pattern_base_path, alt_filename
-                                )
-                                if os.path.exists(alt_path):
-                                    image_path = alt_path
+                                for alt_filename in (
+                                    f"{current_tube_partition}.png",
+                                    f"{current_tube_partition}.1.png",
+                                    "1.1.png" if current_tube_partition in ("1", "1.1") else None,
+                                ):
+                                    if not alt_filename:
+                                        continue
+                                    alt_path = os.path.join(
+                                        tube_pattern_base_path, alt_filename
+                                    )
+                                    if os.path.exists(alt_path):
+                                        image_path = alt_path
+                                        break
 
                             # 加载并处理图片
                             if os.path.exists(image_path):
@@ -22553,7 +22594,7 @@ class TubeLayoutEditor(QMainWindow):
         # 获取当前管程分程形式
         is_special_layout = hasattr(
             self, "tube_pass_form_value"
-        ) and self.tube_pass_form_value in ["4.3", "6.2", "1.1"]
+        ) and self.tube_pass_form_value in ["4.3", "6.2", "1", "1.1"]
 
         master_reps = self._get_y_cluster_reps(merge_tol)
 
@@ -22675,7 +22716,7 @@ class TubeLayoutEditor(QMainWindow):
         # 获取当前管程分程形式
         is_special_layout = hasattr(
             self, "tube_pass_form_value"
-        ) and self.tube_pass_form_value in ["1.1", "2.1", "4.1", "4.3", "6.1"]
+        ) and self.tube_pass_form_value in ["1", "1.1", "2.1", "4.1", "4.3", "6.1"]
 
         master_reps = self._get_x_cluster_reps(merge_tol)
 
@@ -22955,7 +22996,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 特殊布局：只保留中间列的一侧（右侧）有值
         is_special_layout = hasattr(self, "tube_pass_form_value") and (
-                self.tube_pass_form_value in ["1.1", "2.1", "4.1", "4.3", "6.1"]
+                self.tube_pass_form_value in ["1", "1.1", "2.1", "4.1", "4.3", "6.1"]
         )
 
         # 清除旧高亮
@@ -23094,7 +23135,7 @@ class TubeLayoutEditor(QMainWindow):
                 self.group_centers_by_x(self.global_centers)
             )
             is_special_layout_col = hasattr(self, "tube_pass_form_value") and (
-                self.tube_pass_form_value in ["1.1", "2.1", "4.1", "4.3", "6.1"]
+                self.tube_pass_form_value in ["1", "1.1", "2.1", "4.1", "4.3", "6.1"]
             )
             col_idx = tbl_row
             if is_special_layout_col and col_idx == 0:
@@ -28560,10 +28601,10 @@ class TubeLayoutEditor(QMainWindow):
                     f"WHERE `产品ID` = '{safe_productID}' AND `元件名称` = '{safe_component_name}' AND `参数名称` = '{safe_param_name}'"
                 )
 
-        # BEM 且管程分程形式为 1.1 时，将元件附加参数表中固定管板的管程侧/壳程侧分程隔板槽深度更新为 0
+        # BEM 且管程分程形式为 1（兼容旧值 1.1）时，将元件附加参数表中固定管板的管程侧/壳程侧分程隔板槽深度更新为 0
         if (
                 getattr(self, "heat_exchanger", None) == "BEM"
-                and getattr(self, "tube_pass_form_value", None) == "1.1"
+                and getattr(self, "tube_pass_form_value", None) in ("1", "1.1")
         ):
             safe_component_name = escape_str("固定管板")
             for param_name in ("管程侧分程隔板槽深度", "壳程侧分程隔板槽深度"):
