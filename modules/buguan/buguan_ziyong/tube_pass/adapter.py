@@ -80,8 +80,28 @@ _CUT_TEXT_TO_CODE = {
 _LAYOUT_TEXT_TO_CODE = {
     "对中": "C",
     "跨中": "S",
-    "任意": "C",
 }
+
+_LAYOUT_TEXT_TO_LB = {
+    "对中": "0",
+    "跨中": "1",
+    "任意": "2",
+}
+
+
+def resolve_layout_code(layout_text: Any) -> Tuple[str, str]:
+    """
+    界面「换热管布置方式」→ (Layout 算法码, LB_IsRangeCenter)。
+    「任意」时 Layout 为占位符 A，由 run_local_tube_layout 自动在 C/S 间择优。
+    """
+    text = str(layout_text or "对中").strip()
+    lb_code = _LAYOUT_TEXT_TO_LB.get(text, "0")
+    if text == "任意":
+        return "A", lb_code
+    layout = _LAYOUT_TEXT_TO_CODE.get(text, "C")
+    if text not in _LAYOUT_TEXT_TO_CODE and text != "任意":
+        print(f"[tube_pass] 未知换热管布置方式「{text}」，默认对中(C)")
+    return layout, lb_code
 
 
 def is_local_tube_pass_cat(cat: Any) -> bool:
@@ -180,6 +200,7 @@ def build_compute_kwargs(
     *,
     D: Optional[float] = None,
     d: Optional[float] = None,
+    layout_override: Optional[str] = None,
 ) -> Dict[str, Any]:
     """从参数名字典构造 compute_centers 关键字参数。"""
     cat = normalize_local_tube_pass_cat(cat)
@@ -195,8 +216,12 @@ def build_compute_kwargs(
     if Snh <= 0 and S > 0:
         Snh = S
 
-    layout_text = param_map.get("换热管布置方式", "对中")
-    Layout = _LAYOUT_TEXT_TO_CODE.get(layout_text, "C")
+    layout_text = str(param_map.get("换热管布置方式", "对中")).strip()
+    if layout_override is not None:
+        Layout = layout_override
+        lb_is_range_center = _LAYOUT_TEXT_TO_LB.get(layout_text, "0")
+    else:
+        Layout, lb_is_range_center = resolve_layout_code(layout_text)
 
     arr_text = param_map.get("换热管排列方式", "正三角形")
     Arr = _ARR_TEXT_TO_DEG.get(arr_text, 60)
@@ -221,6 +246,8 @@ def build_compute_kwargs(
         "Layout": Layout,
         "Arr": int(Arr),
         "Cut": Cut,
+        "layout_text": layout_text,
+        "LB_IsRangeCenter": lb_is_range_center,
     }
 
 
@@ -259,9 +286,41 @@ def run_local_tube_layout(
     if kwargs["D"] <= kwargs["d"]:
         raise ValueError(f"布管限定圆 D 必须大于管径 d: D={kwargs['D']}, d={kwargs['d']}")
 
-    raw = compute_centers(**kwargs)
+    layout_text = kwargs.get("layout_text", "对中")
+    compute_kwargs = {k: v for k, v in kwargs.items() if k not in ("layout_text", "LB_IsRangeCenter")}
+
+    if compute_kwargs.get("Layout") == "A":
+        kwargs_c = build_compute_kwargs(cat, param_map, D=D, d=d, layout_override="C")
+        kwargs_s = build_compute_kwargs(cat, param_map, D=D, d=d, layout_override="S")
+        kw_c = {k: v for k, v in kwargs_c.items() if k not in ("layout_text", "LB_IsRangeCenter")}
+        kw_s = {k: v for k, v in kwargs_s.items() if k not in ("layout_text", "LB_IsRangeCenter")}
+        raw_c = compute_centers(**kw_c)
+        raw_s = compute_centers(**kw_s)
+        n_c = len(raw_c.get("XY") or [])
+        n_s = len(raw_s.get("XY") or [])
+        if n_s > n_c:
+            compute_kwargs = kw_s
+            raw = raw_s
+            chosen = "S"
+        else:
+            compute_kwargs = kw_c
+            raw = raw_c
+            chosen = "C"
+        kwargs["Layout"] = chosen
+        kwargs["layout_auto_chosen"] = chosen
+        print(
+            f"[tube_pass] 任意布置: C管数={n_c}, S管数={n_s}, 选用={'跨中' if chosen == 'S' else '对中'}({chosen})"
+        )
+    else:
+        raw = compute_centers(**compute_kwargs)
+        kwargs["Layout"] = compute_kwargs["Layout"]
+
+    print(
+        f"[tube_pass] Cat={cat}, 布置方式={layout_text}, Layout={kwargs['Layout']}, "
+        f"LB_IsRangeCenter={kwargs.get('LB_IsRangeCenter')}, Arr={compute_kwargs.get('Arr')}"
+    )
     xy: Sequence[Sequence[float]] = raw.get("XY") or []
-    r_tube = float(kwargs["d"]) * 0.5
+    r_tube = float(compute_kwargs["d"]) * 0.5
     centers: list = []
     target_list = []
     script_items = []
@@ -273,8 +332,8 @@ def run_local_tube_layout(
         target_list.append({"X": x, "Y": y, "R": r_tube})
         script_items.append({"CenterPt": {"X": x, "Y": y}, "R": r_tube})
 
-    dn_val = float(DN) if DN is not None else float(kwargs["D"])
-    dl_val = float(kwargs["D"])
+    dn_val = float(DN) if DN is not None else float(compute_kwargs["D"])
+    dl_val = float(compute_kwargs["D"])
     result = {
         "small_r": r_tube,
         "big_r_wai": dn_val * 0.5,
@@ -286,10 +345,12 @@ def run_local_tube_layout(
             "TubesParam": [{"ScriptItem": script_items}],
             "DNs": {"R": dn_val},
             "DLs": {"R": dl_val},
-            "S": kwargs["S"],
-            "W": kwargs.get("Wy0") or kwargs.get("Wx0") or 0.0,
+            "S": compute_kwargs["S"],
+            "W": compute_kwargs.get("Wy0") or compute_kwargs.get("Wx0") or 0.0,
             "local_tube_pass": True,
             "Cat": cat,
+            "Layout": kwargs["Layout"],
+            "LB_IsRangeCenter": kwargs.get("LB_IsRangeCenter", "0"),
         },
     }
     return {

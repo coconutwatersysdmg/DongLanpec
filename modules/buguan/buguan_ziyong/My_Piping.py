@@ -4115,6 +4115,7 @@ class TubeLayoutEditor(QMainWindow):
         try:
             self._is_first_buguan_open = True
             self._suppress_open_s_dl_autoupdate = False
+            self._user_override_tube_layout_circle_dl = False
         except Exception:
             pass
 
@@ -4696,6 +4697,22 @@ class TubeLayoutEditor(QMainWindow):
                                 except (ValueError, TypeError) as e:
                                     print(f"中间挡板宽度转换失败: {str(e)}")
 
+                        saved_dl_from_table = None
+                        for _p in processed_params:
+                            if (
+                                    isinstance(_p, dict)
+                                    and _p.get("参数名") == "布管限定圆 DL"
+                                    and _p.get("参数值") not in (None, "")
+                            ):
+                                try:
+                                    saved_dl_from_table = float(
+                                        str(_p.get("参数值")).strip()
+                                    )
+                                except (ValueError, TypeError):
+                                    pass
+                                break
+
+                        should_calculate_dl = False
                         # 验证关键参数有效性
                         if Di is None or do is None:
                             print(
@@ -4707,33 +4724,71 @@ class TubeLayoutEditor(QMainWindow):
                             )
 
                         else:
-                            # 新增：只有当原始Di值和最终Di值不同时才计算DL
-                            should_calculate_dl = False
-                            # 非首次打开（已存在布管元件记录）时，DL 必须保持布管参数表中的值，不自动重算
+                            # 非首次打开：DL 必须保持布管参数表中的值，不自动重算
                             if has_buguan_component_records:
                                 should_calculate_dl = False
-                                print("[load_initial_data] 非首次打开：DL 保持布管参数表值，不自动重算")
-                            if original_di_value is not None:
-                                try:
-                                    original_di_float = float(original_di_value)
-                                    # 比较原始值和最终值，如果不同则计算DL
-                                    if (
-                                            abs(original_di_float - Di) > 0.001
-                                    ):  # 使用小容差比较浮点数
-                                        should_calculate_dl = True
-                                        print(
-                                            f"壳体内直径发生变化: {original_di_float} -> {Di}，需要重新计算DL"
-                                        )
-                                    else:
-                                        print(f"壳体内直径未变化: {Di}，使用原有DL值")
-                                except (ValueError, TypeError):
-                                    # 如果转换失败，默认需要计算DL
-                                    should_calculate_dl = True
-                                    print(f"壳体内直径值转换失败，默认计算DL")
+                                print(
+                                    "[load_initial_data] 非首次打开：DL 保持布管参数表值，不自动重算"
+                                )
                             else:
-                                # 如果没有原始值，默认需要计算DL
-                                should_calculate_dl = True
-                                print(f"未找到原始壳体内直径值，默认计算DL")
+                                # 首次打开：仅当 Dis 相对库中原始值发生变化时才重算 DL
+                                if original_di_value is not None:
+                                    try:
+                                        original_di_float = float(original_di_value)
+                                        if abs(original_di_float - Di) > 0.001:
+                                            should_calculate_dl = True
+                                            print(
+                                                f"壳体内直径发生变化: {original_di_float} -> {Di}，需要重新计算DL"
+                                            )
+                                        else:
+                                            print(
+                                                f"壳体内直径未变化: {Di}，使用原有DL值"
+                                            )
+                                    except (ValueError, TypeError):
+                                        should_calculate_dl = True
+                                        print("壳体内直径值转换失败，默认计算DL")
+                                else:
+                                    should_calculate_dl = True
+                                    print("未找到原始壳体内直径值，默认计算DL")
+
+                                # 库中 DL 与公式推荐值不同：视为用户/历史值，保留不重算
+                                if (
+                                        saved_dl_from_table is not None
+                                        and not should_calculate_dl
+                                ):
+                                    try:
+                                        _rec_dl = self._calc_recommended_dl(Di, do)
+                                        if (
+                                                _rec_dl is not None
+                                                and abs(saved_dl_from_table - _rec_dl)
+                                                > 0.001
+                                        ):
+                                            should_calculate_dl = False
+                                            print(
+                                                f"[load_initial_data] 库中 DL={saved_dl_from_table:.1f} "
+                                                f"与推荐值 {_rec_dl:.1f} 不同，保留库值"
+                                            )
+                                    except Exception as _dl_preserve_e:
+                                        print(
+                                            f"[load_initial_data] 比较库中 DL 与推荐值失败: {_dl_preserve_e}"
+                                        )
+                                elif saved_dl_from_table is not None and should_calculate_dl:
+                                    try:
+                                        _rec_dl = self._calc_recommended_dl(Di, do)
+                                        if (
+                                                _rec_dl is not None
+                                                and abs(saved_dl_from_table - _rec_dl)
+                                                > 0.001
+                                        ):
+                                            should_calculate_dl = False
+                                            print(
+                                                f"[load_initial_data] 库中 DL={saved_dl_from_table:.1f} "
+                                                f"与推荐值 {_rec_dl:.1f} 不同，保留库值（未布管但已保存）"
+                                            )
+                                    except Exception as _dl_preserve_e:
+                                        print(
+                                            f"[load_initial_data] 比较库中 DL 与推荐值失败: {_dl_preserve_e}"
+                                        )
 
                             if should_calculate_dl:
                                 if not self.heat_exchanger:
@@ -4868,7 +4923,7 @@ class TubeLayoutEditor(QMainWindow):
                             self.setup_parameters(
                                 processed_params, setup_listeners=False
                             )
-                            # S 控制策略：
+                            # S / DL 控制策略：
                             # - 非首次打开：锁定为“按布管参数表显示”，阻止加载阶段推荐值覆盖；
                             # - 首次打开：允许按方法联动更新推荐值。
                             try:
@@ -4876,6 +4931,12 @@ class TubeLayoutEditor(QMainWindow):
                                     self._user_override_tube_center_distance = True
                                 else:
                                     self._user_override_tube_center_distance = False
+                                if has_buguan_component_records or (
+                                        not should_calculate_dl and DL is not None
+                                ):
+                                    self._user_override_tube_layout_circle_dl = True
+                                else:
+                                    self._user_override_tube_layout_circle_dl = False
                             except Exception:
                                 pass
                             self.hide_specific_params(hidden_params)
@@ -7064,8 +7125,7 @@ class TubeLayoutEditor(QMainWindow):
                     and DL is not None
                     and float(DL) > float(Di)
             ):
-                self._suppress_open_s_dl_autoupdate = False
-                self.update_tube_layout_circle_dl()
+                self.update_tube_layout_circle_dl(force_recalc=True)
         except Exception as _dl_sync_e:
             print(f"[calculate_piping_layout] update_tube_layout_circle_dl: {_dl_sync_e}")
 
@@ -7719,7 +7779,12 @@ class TubeLayoutEditor(QMainWindow):
             "LB_TubeD": do,
             "LB_DN": DN,
             "local_tube_pass": True,
-            **{k: v for k, v in (packed.get("kwargs") or {}).items()},
+            "LB_IsRangeCenter": (packed.get("kwargs") or {}).get("LB_IsRangeCenter", "0"),
+            **{
+                k: v
+                for k, v in (packed.get("kwargs") or {}).items()
+                if k not in ("layout_text", "LB_IsRangeCenter", "layout_auto_chosen")
+            },
         }
         try:
             self.save_layout_input(product_id, self.input_json)
@@ -7763,7 +7828,11 @@ class TubeLayoutEditor(QMainWindow):
         self.update_tube_nums()
         self.update_cross_pipe_button_state(product_type_str)
         self.update_total_lagan_count()
-        print(f"[本地布管] Cat={cat}, 管数={len(centers)}")
+        _kw = packed.get("kwargs") or {}
+        print(
+            f"[本地布管] Cat={cat}, 布置方式={_kw.get('layout_text', '?')}, "
+            f"Layout={_kw.get('Layout', '?')}, 管数={len(centers)}"
+        )
         return result
 
     # 该方法只调用接口，主要是为了看W返回值
@@ -7870,8 +7939,7 @@ class TubeLayoutEditor(QMainWindow):
                     and DL is not None
                     and float(DL) > float(Di)
             ):
-                self._suppress_open_s_dl_autoupdate = False
-                self.update_tube_layout_circle_dl()
+                self.update_tube_layout_circle_dl(force_recalc=True)
         except Exception as _dl_sync_e:
             print(f"[calculate_piping] update_tube_layout_circle_dl: {_dl_sync_e}")
 
@@ -9249,6 +9317,14 @@ class TubeLayoutEditor(QMainWindow):
 
     def clear_modification_marks(self):
         """清除所有修改标记（用于保存后重置）"""
+        dl_row_override = False
+        for row in range(self.param_table.rowCount()):
+            name_item = self.param_table.item(row, 1)
+            if name_item and name_item.text().strip() == "布管限定圆 DL":
+                if row in self.modified_rows:
+                    dl_row_override = True
+                break
+
         # 重置背景色
         for row in range(self.param_table.rowCount()):
             self.reset_row_background(row)
@@ -9266,6 +9342,12 @@ class TubeLayoutEditor(QMainWindow):
                 combo = self.param_table.cellWidget(row, 2)
                 if isinstance(combo, QComboBox):
                     self.original_param_values[(row, 2)] = combo.currentText()
+
+        if dl_row_override:
+            try:
+                self._user_override_tube_layout_circle_dl = True
+            except Exception:
+                pass
 
         # 保存后清理 DN/Dis/DL 的 temp 缓存（按需求：保存时清除即可）
         for _k in (
@@ -9864,13 +9946,59 @@ class TubeLayoutEditor(QMainWindow):
                 # 连接信号，允许用户手动更改
                 combo_box.currentTextChanged.connect(lambda: self.handle_param_change())
 
-    def update_tube_layout_circle_dl(self):
-        # 非首次打开时，加载阶段按要求保持布管参数表中的 DL，不自动重算
+    def _calc_recommended_dl(self, di_value, do_value):
+        """按换热器型号计算布管限定圆 DL 标准推荐值（与 update_tube_layout_circle_dl 原逻辑一致）。"""
         try:
-            if getattr(self, "_suppress_open_s_dl_autoupdate", False):
-                return
-        except Exception:
-            pass
+            di_value = float(di_value)
+            do_value = float(do_value)
+        except (TypeError, ValueError):
+            return None
+        if di_value <= 0 or do_value <= 0:
+            return None
+
+        heat_exchanger_type = self.heat_exchanger or "AEU"
+        if heat_exchanger_type in [
+            "AEU",
+            "BEU",
+            "BEM",
+            "NEN",
+            "AEM",
+            "AKU",
+            "BKU",
+            "NEN(Head)",
+        ]:
+            b3 = max(0.25 * do_value, 8.0)
+            return di_value - 2 * b3
+
+        if heat_exchanger_type in ["AES", "BES"]:
+            b = 4.0 if di_value < 1000 else 5.0
+            if di_value <= 700:
+                b_n, b_1 = 10.0, 3.0
+            elif di_value <= 1200:
+                b_n, b_1 = 13.0, 5.0
+            elif di_value <= 2000:
+                b_n, b_1 = 16.0, 6.0
+            elif di_value < 2300:
+                b_n, b_1 = 20.0, 7.0
+            elif di_value <= 2600:
+                b_n, b_1 = 20.0, 8.0
+            else:
+                b_n, b_1 = 20.0, 9.0
+            b_2 = b_n + 1.5
+            return di_value - 2 * (b_1 + b_2 + b)
+
+        return None
+
+    def update_tube_layout_circle_dl(self, force_recalc=False):
+        # 非首次打开 / 用户已覆盖 DL 时，保持布管参数表中的值，不自动重算
+        if not force_recalc:
+            try:
+                if getattr(self, "_suppress_open_s_dl_autoupdate", False):
+                    return
+                if getattr(self, "_user_override_tube_layout_circle_dl", False):
+                    return
+            except Exception:
+                pass
         # TODO 更新布管限定圆 DL
         # 1. 查找参数表中布管限定圆计算所需的关键参数行索引
         di_row = -1
@@ -11247,6 +11375,11 @@ class TubeLayoutEditor(QMainWindow):
 
         if pname == "管箱内直径 Dit":
             self._sync_dis_dit_peer_from_source("管箱内直径 Dit")
+        try:
+            self._suppress_open_s_dl_autoupdate = False
+            self._user_override_tube_layout_circle_dl = False
+        except Exception:
+            pass
         trig = "壳体内直径 Dis" if pname == "管箱内直径 Dit" else pname
         ok = self.check_diameter_consistency(trigger_name=trig)
         if ok is False:
@@ -11497,7 +11630,8 @@ class TubeLayoutEditor(QMainWindow):
                     except Exception:
                         pass
 
-                self.update_tube_layout_circle_dl()
+                if not getattr(self, "_user_override_tube_layout_circle_dl", False):
+                    self.update_tube_layout_circle_dl()
         
         finally:
             # 在函数最后重新打开监听开关
@@ -13155,7 +13289,10 @@ class TubeLayoutEditor(QMainWindow):
                     try:
                         self.update_baffle_diameter()
                         self.update_tube_center_distance()
-                        self.update_tube_layout_circle_dl()
+                        if not getattr(
+                            self, "_user_override_tube_layout_circle_dl", False
+                        ):
+                            self.update_tube_layout_circle_dl()
                         self.update_divider_position_and_size()
                         print(f"[update_DN_Di] 已触发壳体内直径相关的联动函数")
                     except Exception as e:
@@ -14041,6 +14178,15 @@ class TubeLayoutEditor(QMainWindow):
                     self._suppress_open_s_dl_autoupdate = False
                 if param_name in ("换热管外径 do", "换热管排列方式"):
                     self._user_override_tube_center_distance = False
+                if param_name in (
+                    "换热管外径 do",
+                    "换热管排列方式",
+                    "壳体内直径 Dis",
+                    "管箱内直径 Dit",
+                ):
+                    self._user_override_tube_layout_circle_dl = False
+                if param_name == "布管限定圆 DL":
+                    self._user_override_tube_layout_circle_dl = True
             except Exception:
                 pass
 
@@ -17204,10 +17350,11 @@ class TubeLayoutEditor(QMainWindow):
             elif value is not None:
                 selected_value = str(value).strip()
 
-            # 外径变化时，S 的手动覆盖标记必须失效，确保按新 do 重新推荐
+            # 外径变化时，S/DL 的手动覆盖标记必须失效，确保按新 do 重新推荐
             try:
                 self._suppress_open_s_dl_autoupdate = False
                 self._user_override_tube_center_distance = False
+                self._user_override_tube_layout_circle_dl = False
             except Exception:
                 pass
 
@@ -17229,6 +17376,7 @@ class TubeLayoutEditor(QMainWindow):
             try:
                 self._suppress_open_s_dl_autoupdate = False
                 self._user_override_tube_center_distance = False
+                self._user_override_tube_layout_circle_dl = False
             except Exception:
                 pass
             try:
@@ -19989,15 +20137,20 @@ class TubeLayoutEditor(QMainWindow):
                 pass
 
             prev_suppress = getattr(self, "_suppress_open_s_dl_autoupdate", False)
-            if prev_suppress:
-                print("[My_Piping] 管板形式变更：临时允许 DL 自动重算（覆盖加载阶段抑制）")
-            self._suppress_open_s_dl_autoupdate = False
-            try:
-                self.update_tube_layout_circle_dl()
-            except Exception as e:
-                print(f"[My_Piping] 根据管板形式快照更新 DL 时发生异常: {e}")
-            finally:
-                self._suppress_open_s_dl_autoupdate = prev_suppress
+            if getattr(self, "_user_override_tube_layout_circle_dl", False):
+                print("[My_Piping] 用户已覆盖 DL，跳过管板形式触发的自动重算")
+            else:
+                if prev_suppress:
+                    print(
+                        "[My_Piping] 管板形式变更：临时允许 DL 自动重算（覆盖加载阶段抑制）"
+                    )
+                self._suppress_open_s_dl_autoupdate = False
+                try:
+                    self.update_tube_layout_circle_dl()
+                except Exception as e:
+                    print(f"[My_Piping] 根据管板形式快照更新 DL 时发生异常: {e}")
+                finally:
+                    self._suppress_open_s_dl_autoupdate = prev_suppress
         else:
             print("[My_Piping] 未命中特殊管板节点分支，清空管板参数快照。")
             try:

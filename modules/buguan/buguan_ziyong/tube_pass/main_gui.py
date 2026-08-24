@@ -54,7 +54,7 @@ class MainWindow:
             ("Wy0", "entry", "Wy0", "120"),
             ("Wy1", "entry", "Wy1", "210"),
             ("Wy2", "entry", "Wy2", "300"),
-            ("Layout", "combo", "Layout", "C", ["C", "S"]),
+            ("Layout", "combo", "Layout", "对中(C)", ["对中(C)", "跨中(S)"]),
             ("Arr", "combo", "Arr", "60", ["30", "45", "60", "90"]),
             ("Cut", "combo", "Cut", "VSR", ["HUD", "VSR"]),
             ("S (mm)", "entry", "S", "25"),
@@ -188,7 +188,8 @@ class MainWindow:
             Wy2 = float(self.widgets["Wy2"].get())
             Wx0 = float(self.widgets["Wx0"].get())
             Wx1 = float(self.widgets["Wx1"].get())
-            Layout = self.widgets["Layout"].get()
+            Layout_raw = self.widgets["Layout"].get()
+            Layout = "S" if "跨中" in str(Layout_raw) else "C"
             Arr = int(self.widgets["Arr"].get())
             Cut = self.widgets["Cut"].get()
             S = float(self.widgets["S"].get())
@@ -236,8 +237,17 @@ class MainWindow:
         half_Snv = 0.5 * Snv
         half_Snh = 0.5 * Snh
 
-        info = f"总点数 Nt = {Nt}\n"
+        info = f"布置方式 Layout = {Layout} ({'跨中' if Layout == 'S' else '对中'})\n"
+        info += f"排列角度 Ang = {result['Ang']}°, 管间距 S = {S}\n"
+        info += f"总点数 Nt = {Nt}\n"
         info += "-" * 30 + "\n"
+
+        if XY:
+            y0 = min(y for _, y in XY)
+            row0_xs = sorted(x for x, y in XY if abs(y - y0) < 1e-3)
+            if row0_xs:
+                info += f"首行(y={y0:.3f}) 最小x = {row0_xs[0]:.3f}, 管数 = {len(row0_xs)}\n"
+                info += "-" * 30 + "\n"
 
         # 宽度校验
         if result.get("ColAmax") is not None:

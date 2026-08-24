@@ -100,17 +100,21 @@ def compute_centers(
             else:
                 return (half_Snh + half_dh) if odd_row else half_Snh
         else:
-            return half_Snh
+            return half_Snh + (half_dh if Layout == "S" else 0.0)
+
+    def xstart_rule_at_base(base_x, odd_row):
+        """RegionB/D 续布：在 base_x 上应用 Layout 偏移"""
+        if Ang in (30, 45, 60):
+            if Layout == "C":
+                return base_x if odd_row else base_x + half_dh
+            else:
+                return base_x + half_dh if odd_row else base_x
+        else:
+            return base_x + (half_dh if Layout == "S" else 0.0)
 
     def xstart_rule_Snh_xmin(odd_row):
         """12c专用：基于Snh的xstart规则，带x下限检查"""
-        if Ang in (30, 45, 60):
-            if Layout == "C":
-                return half_Snh if odd_row else (half_Snh + half_dh)
-            else:
-                return (half_Snh + half_dh) if odd_row else half_Snh
-        else:
-            return half_Snh
+        return xstart_rule_Snh(odd_row)
 
     # ---------- 按 Cat 生成 ----------
     if Cat == 1 or Cat == "1":
@@ -171,13 +175,7 @@ def compute_centers(
             if yk > R + EPS:
                 break
             odd = (k % 2 == 0)
-            if Ang in (30, 45, 60):
-                if Layout == "C":
-                    xs = half_Snh if odd else half_Snh + half_dh
-                else:
-                    xs = half_Snh + half_dh if odd else half_Snh
-            else:
-                xs = half_Snh
+            xs = xstart_rule_Snh(odd)
             generate_row(xs, yk, check_x_min=True, x_min=half_Snh)
             k += 1
 
@@ -284,13 +282,7 @@ def compute_centers(
             if yk > R + EPS:
                 break
             odd = (k % 2 == 0)
-            if Ang in (30, 45, 60):
-                if Layout == "C":
-                    xs = base_x if odd else base_x + half_dh
-                else:
-                    xs = base_x + half_dh if odd else base_x
-            else:
-                xs = base_x
+            xs = xstart_rule_at_base(base_x, odd)
             generate_row(xs, yk, x_limit=R)
             k += 1
         # RegionC: y从Snv+RowAmax开始，到R
@@ -329,13 +321,7 @@ def compute_centers(
             if yk > y_max_B + EPS or yk > R + EPS:
                 break
             odd = (k % 2 == 0)
-            if Ang in (30, 45, 60):
-                if Layout == "C":
-                    xs = base_x if odd else base_x + half_dh
-                else:
-                    xs = base_x + half_dh if odd else base_x
-            else:
-                xs = base_x
+            xs = xstart_rule_at_base(base_x, odd)
             generate_row(xs, yk, x_limit=R)
             k += 1
         # RegionC: y从Snv+RowAmax开始，x到ColAmax
@@ -414,13 +400,7 @@ def compute_centers(
             if yk > R + EPS:
                 break
             odd = (k % 2 == 0)
-            if Ang in (30, 45, 60):
-                if Layout == "C":
-                    xs = half_Snh if odd else half_Snh + half_dh
-                else:
-                    xs = half_Snh + half_dh if odd else half_Snh
-            else:
-                xs = half_Snh
+            xs = xstart_rule_Snh(odd)
             generate_row(xs, yk, x_limit=R, y_limit=y_limit_A, check_x_min=True, x_min=half_Snv)
             k += 1
         RowAmax = max([p[1] for p in OA]) if OA else 0.0
@@ -434,13 +414,7 @@ def compute_centers(
             if yk > R + EPS:
                 break
             odd = (k % 2 == 0)
-            if Ang in (30, 45, 60):
-                if Layout == "C":
-                    xs = half_Snh if odd else half_Snh + half_dh
-                else:
-                    xs = half_Snh + half_dh if odd else half_Snh
-            else:
-                xs = half_Snh
+            xs = xstart_rule_Snh(odd)
             generate_row(xs, yk, x_limit=R, y_limit=R, check_x_min=True, x_min=half_Snv)
             k += 1
 
@@ -469,13 +443,7 @@ def compute_centers(
             if yk > R + EPS:
                 break
             odd = (k % 2 == 0)
-            if Ang in (30, 45, 60):
-                if Layout == "C":
-                    xs = base_x if odd else base_x + half_dh
-                else:
-                    xs = base_x + half_dh if odd else base_x
-            else:
-                xs = base_x
+            xs = xstart_rule_at_base(base_x, odd)
             generate_row(xs, yk, x_limit=R)
             k += 1
         # RegionC
@@ -555,13 +523,7 @@ def compute_centers(
             if yk > R + EPS:
                 break
             odd = (k % 2 == 0)
-            if Ang in (30, 45, 60):
-                if Layout == "C":
-                    xs = base_x if odd else base_x + half_dh
-                else:
-                    xs = base_x + half_dh if odd else base_x
-            else:
-                xs = base_x
+            xs = xstart_rule_at_base(base_x, odd)
             generate_row(xs, yk, x_limit=R)
             k += 1
         # RegionC
@@ -595,13 +557,7 @@ def compute_centers(
             if yk > R + EPS:
                 break
             odd = (k % 2 == 0)
-            if Ang in (30, 45, 60):
-                if Layout == "S":
-                    xs = base_x + half_dh if odd else base_x
-                else:
-                    xs = base_x if odd else base_x + half_dh
-            else:
-                xs = base_x
+            xs = xstart_rule_at_base(base_x, odd)
             generate_row(xs, yk, x_limit=R)
             k += 1
 
@@ -668,14 +624,7 @@ def compute_centers(
             if yk > y_max_A + EPS:
                 break
             is_odd_row = (k % 2 == 0)
-            # A xstart规则
-            if Ang in (30, 45, 60):
-                if Layout == "C":
-                    xs = half_Snh if is_odd_row else (half_Snh + half_dh)
-                else:
-                    xs = (half_Snh + half_dh) if is_odd_row else half_Snh
-            else:
-                xs = half_Snh
+            xs = xstart_rule_Snh(is_odd_row)
             m = 0
             while m < MAX_LOOP:
                 xm = xs + m * dh
@@ -701,14 +650,7 @@ def compute_centers(
             if yk > Wy1-0.5*Snv + EPS:  # 是Wy1
                 break
             is_odd_row = (k % 2 == 0)
-            # B xstart同A
-            if Ang in (30, 45, 60):
-                if Layout == "C":
-                    xs = half_Snh if is_odd_row else (half_Snh + half_dh)
-                else:
-                    xs = (half_Snh + half_dh) if is_odd_row else half_Snh
-            else:
-                xs = half_Snh
+            xs = xstart_rule_Snh(is_odd_row)
             m = 0
             while m < MAX_LOOP:
                 xm = xs + m * dh
@@ -732,14 +674,7 @@ def compute_centers(
             if yk > R + EPS:
                 break
             is_odd_row = (k % 2 == 0)
-            # C xstart与A/B完全一致
-            if Ang in (30, 45, 60):
-                if Layout == "C":
-                    xs = half_Snh if is_odd_row else (half_Snh + half_dh)
-                else:
-                    xs = (half_Snh + half_dh) if is_odd_row else half_Snh
-            else:
-                xs = half_Snh
+            xs = xstart_rule_Snh(is_odd_row)
             m = 0
             while m < MAX_LOOP:
                 xm = xs + m * dh
