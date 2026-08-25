@@ -4421,8 +4421,17 @@ class DesignParameterDefineInputerViewer(QWidget):
         if not path:
             paths = getattr(self, "image_paths", None) or []
             path = paths[0] if paths else None
-        if path:
-            QTimer.singleShot(0, lambda p=path: self.display_image(p))
+        if not path:
+            return
+        # 切回本模块时若示意图已是同一路径且 label 已有图，不再重复解码/Smooth 缩放
+        if (
+            path == getattr(self, "_displayed_part_image_path", None)
+            and self.label_part_image is not None
+            and self.label_part_image.pixmap() is not None
+            and not self.label_part_image.pixmap().isNull()
+        ):
+            return
+        QTimer.singleShot(0, lambda p=path: self.display_image(p))
 
     def _schedule_part_image_refresh(self):
         """在布局稳定后多次尝试刷新示意图（切换产品/重建 tab 后尤为重要）。"""
@@ -5378,6 +5387,7 @@ class DesignParameterDefineInputerViewer(QWidget):
         self.label_part_image.setPixmap(scaled_pixmap)
         self.label_part_image.setAlignment(Qt.AlignCenter)
         self._last_part_image_path = image_path
+        self._displayed_part_image_path = image_path
 
     #
     # def render_guankou_param_table(self, table: QTableWidget, guankou_param_info):

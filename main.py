@@ -253,11 +253,12 @@ class _FontScaleController(QtCore.QObject):
 
     def eventFilter(self, obj, event):
         try:
-            et = event.type()
-            # Polish: 控件完成初始化；Show: 弹窗/Tab 打开
-            if et in (QEvent.Polish, QEvent.Show):
-                if isinstance(obj, QtWidgets.QWidget):
-                    self.apply_widget(obj)
+            # 只在 Polish（控件首次初始化）时缩放。
+            # 切勿监听 Show：QTabWidget 切换会让数千子控件反复 Show，
+            # 每次都进入 Python 回调会导致模块切换严重卡顿。
+            # 改字号走 set_scale() -> apply_all()，不依赖 Show。
+            if event.type() == QEvent.Polish and isinstance(obj, QtWidgets.QWidget):
+                self.apply_widget(obj)
         except Exception:
             pass
         return super().eventFilter(obj, event)
@@ -273,9 +274,13 @@ class _FontScaleController(QtCore.QObject):
                     widget.setProperty(self._PROP_BASE_FONT_PT, pt)
                     base_pt = pt
             if base_pt is not None:
-                f = QtGui.QFont(widget.font())
-                f.setPointSizeF(max(1.0, float(base_pt) * self._scale))
-                widget.setFont(f)
+                new_pt = max(1.0, float(base_pt) * self._scale)
+                cur_pt = float(widget.font().pointSizeF())
+                # 字号已是目标值则跳过 setFont，避免触发昂贵的样式重算
+                if abs(cur_pt - new_pt) > 0.01:
+                    f = QtGui.QFont(widget.font())
+                    f.setPointSizeF(new_pt)
+                    widget.setFont(f)
         except Exception:
             pass
 
@@ -1130,11 +1135,37 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             print(f"[_apply_readonly_unlock_project_management_product_areas] {e}")
 
-    # 4，12新修改--本地文件夹误删2共7
-    def refresh_all_tabs_readonly_state(self):
+    def _apply_readonly_to_single_tab(self, title, widget):
+        """仅对单个新打开的 tab 应用当前只读标志（避免全量遍历其它已开模块）。"""
+        if widget is None:
+            return
         import modules.chanpinguanli.bianl as bianl
 
-        ro = getattr(bianl, "product_local_files_missing_readonly", False)
+        ro = bool(getattr(bianl, "product_local_files_missing_readonly", False))
+        if title in ("", "项目管理"):
+            # 0506新修改-项目管理只读区域设置
+            self._apply_readonly_unlock_project_management_product_areas()
+        elif ro:
+            self.apply_readonly_to_widget_tree(widget, True)
+
+    # 4，12新修改--本地文件夹误删2共7
+    def refresh_all_tabs_readonly_state(self, force=False):
+        """
+        将「本地文件缺失只读」状态同步到所有已打开模块。
+        切 tab 时若状态未变则跳过（全量 findChildren + 单元格遍历非常慢）；
+        状态变化或 force=True（本地恢复/新建界面）时才全量刷新。
+        """
+        import modules.chanpinguanli.bianl as bianl
+
+        ro = bool(getattr(bianl, "product_local_files_missing_readonly", False))
+        last = getattr(self, "_last_readonly_applied", None)
+        # 从未加锁且仍非只读：控件默认即可编辑，无需全表扫描
+        if not force and last is None and not ro:
+            self._last_readonly_applied = False
+            return
+        if not force and last is not None and last == ro:
+            return
+
         for i in range(self.tab_widget.count()):
             title = self.tab_widget.tabText(i)
             w = self.tab_widget.widget(i)
@@ -1145,6 +1176,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._apply_readonly_unlock_project_management_product_areas()
             else:
                 self.apply_readonly_to_widget_tree(w, ro)
+        self._last_readonly_applied = ro
 
     def safe_open_tab(self, title, widget_class):
         """安全地打开tab，处理widget创建失败的情况"""
@@ -1469,6 +1501,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.tab_widget.setCurrentIndex(i)
                 # 4，12新修改--本地文件夹误删3共7
                 self._last_tab_index = i
+                # 只读标志未变时跳过全量刷新，避免切模块卡顿
                 self.refresh_all_tabs_readonly_state()
                 return
 
@@ -1477,7 +1510,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tab_widget.setCurrentIndex(idx)
         self._last_tab_index = idx
         # 4，12新修改--本地文件夹误删4共7
-        self.refresh_all_tabs_readonly_state()
+        # 新页面默认可编辑；仅在「本地缺失只读」开启时锁定本页，不重扫其它已开 tab
+        self._apply_readonly_to_single_tab(title, widget)
+        if getattr(self, "_last_readonly_applied", None) is None:
+            self._last_readonly_applied = bool(
+                getattr(bianl, "product_local_files_missing_readonly", False)
+            )
 
     # === on_tab_changed 改进版 ===
     def on_tab_changed(self, index):
@@ -1572,8 +1610,9 @@ class MainWindow(QtWidgets.QMainWindow):
                     self._last_tab_index = new_idx
                     print(f"[DEBUG] 已打开新产品界面: {ctitle}")
                     # 4，12新修改--本地文件夹误删5共7
+                    # 产品切换后界面是新建的，强制按当前只读标志同步
                     try:
-                        self.refresh_all_tabs_readonly_state()
+                        self.refresh_all_tabs_readonly_state(force=True)
                     except Exception:
                         pass
                 # 重新连接信号
@@ -1674,7 +1713,7 @@ class MainWindow(QtWidgets.QMainWindow):
                         print(f"[DEBUG] 已打开新产品界面: {ctitle}")
                         # 4，12新修改--本地文件夹误删6共7
                         try:
-                            self.refresh_all_tabs_readonly_state()
+                            self.refresh_all_tabs_readonly_state(force=True)
                         except Exception:
                             pass
                     else:

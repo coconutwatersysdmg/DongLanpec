@@ -1019,3 +1019,79 @@ def delete_selected_center_dangguan():
         print(f"删除中间挡管时出错: {e}")
         import traceback
         traceback.print_exc()
+
+
+INSTALL_MODE_OPTIONS = ("贯穿", "分割")
+INSTALL_MODE_DEFAULT = "贯穿"
+CENTER_DANGGUAN_INSTALL_PARAM = "中间挡管安装方式"
+
+
+def _normalize_install_mode(value):
+    text = str(value).strip() if value is not None else ""
+    return text if text in INSTALL_MODE_OPTIONS else INSTALL_MODE_DEFAULT
+
+
+def prompt_center_dangguan_params(editor):
+    """
+    创建中间挡管前的参数弹窗（仅安装方式，不影响绘制逻辑）。
+    返回 True 表示确定并已写回参数表；False 表示取消。
+    """
+    from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton
+    from modules.buguan.buguan_ziyong.ui_style import StyledDialog as QDialog
+
+    default_mode = INSTALL_MODE_DEFAULT
+    try:
+        if hasattr(editor, "_read_param_table_value"):
+            default_mode = _normalize_install_mode(
+                editor._read_param_table_value(CENTER_DANGGUAN_INSTALL_PARAM)
+            )
+    except Exception:
+        default_mode = INSTALL_MODE_DEFAULT
+
+    dialog = QDialog(editor)
+    dialog.setWindowTitle("中间挡管参数设置")
+    dialog.setModal(True)
+    layout = QVBoxLayout(dialog)
+
+    row = QHBoxLayout()
+    row.addWidget(QLabel("中间挡管安装方式:"))
+    combo = QComboBox()
+    combo.addItems(list(INSTALL_MODE_OPTIONS))
+    combo.setCurrentText(default_mode)
+    row.addWidget(combo)
+    layout.addLayout(row)
+
+    btn_row = QHBoxLayout()
+    ok_btn = QPushButton("确定")
+    close_btn = QPushButton("关闭")
+    btn_row.addWidget(ok_btn)
+    btn_row.addWidget(close_btn)
+    layout.addLayout(btn_row)
+
+    result = {"accepted": False}
+
+    def on_ok():
+        mode = _normalize_install_mode(combo.currentText())
+        try:
+            if hasattr(editor, "_write_param_table_value"):
+                editor._write_param_table_value(CENTER_DANGGUAN_INSTALL_PARAM, mode)
+        except Exception:
+            pass
+        result["accepted"] = True
+        dialog.accept()
+
+    def on_close():
+        # 关闭也写回当前选择（与中间挡板关闭保存参数一致），但不继续绘制
+        mode = _normalize_install_mode(combo.currentText())
+        try:
+            if hasattr(editor, "_write_param_table_value"):
+                editor._write_param_table_value(CENTER_DANGGUAN_INSTALL_PARAM, mode)
+        except Exception:
+            pass
+        result["accepted"] = False
+        dialog.reject()
+
+    ok_btn.clicked.connect(on_ok)
+    close_btn.clicked.connect(on_close)
+    dialog.exec_()
+    return bool(result["accepted"])

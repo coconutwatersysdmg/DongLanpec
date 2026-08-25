@@ -88,7 +88,8 @@ def _refresh_main_window_tabs_readonly():
 
         mw = getattr(main, "APP_MAIN_WINDOW", None)
         if mw is not None and hasattr(mw, "refresh_all_tabs_readonly_state"):
-            mw.refresh_all_tabs_readonly_state()
+            # 本地文件恢复/缺失流程刚改过标志，必须强制刷到各已开界面
+            mw.refresh_all_tabs_readonly_state(force=True)
     except Exception as e:
         print(f"[_refresh_main_window_tabs_readonly] {e}")
 

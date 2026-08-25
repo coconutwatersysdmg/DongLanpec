@@ -4088,6 +4088,8 @@ class TubeLayoutEditor(QMainWindow):
             "切边高度 h",
             "中间挡板厚度",
             "中间挡板宽度",
+            "中间挡板安装方式",
+            "中间挡管安装方式",
             "旁路挡板宽度",
             "拉杆形式",
             "拉杆直径",
@@ -4607,6 +4609,8 @@ class TubeLayoutEditor(QMainWindow):
                                     "切边高度 h",
                                     "换热管外径 do",
                                     "中间挡板厚度",
+                                    "中间挡板安装方式",
+                                    "中间挡管安装方式",
                                     "拉杆形式",
                                     "拉杆直径",
                                     "防冲板折边角度",
@@ -16229,6 +16233,9 @@ class TubeLayoutEditor(QMainWindow):
                 _add_if_missing("滑道切边长度", "50", "mm")
                 _add_if_missing("滑道切边高度", "15", "mm")
                 _add_if_missing("放置位置", "参照管中心连线", "")
+                # 中间挡板/挡管安装方式：弹窗编辑、左侧隐藏，必须存在才能写入布管参数表
+                _add_if_missing("中间挡板安装方式", "贯穿", "")
+                _add_if_missing("中间挡管安装方式", "贯穿", "")
 
                 # 本地分程多隔条尺寸（库表可能尚未配置）：保证行存在，再由 update_SN 按 Cat 显隐
                 for _extra_name in (PARAM_WY1, PARAM_WY2, PARAM_WX0, PARAM_WX1):
@@ -16394,6 +16401,8 @@ class TubeLayoutEditor(QMainWindow):
                 "导轨类型",
                 "拉杆形式",
                 "拉杆直径",
+                "中间挡板安装方式",
+                "中间挡管安装方式",
             ]
 
             if param["参数名"] in special_params:
@@ -16688,6 +16697,8 @@ class TubeLayoutEditor(QMainWindow):
                         )
                     elif param["参数名"] == "防冲板形式":
                         combo.addItems(["平板形", "圆弧形", "焊接式"])
+                    elif param["参数名"] in ("中间挡板安装方式", "中间挡管安装方式"):
+                        combo.addItems(["贯穿", "分割"])
 
                     param_value_str = (
                         str(param["参数值"]) if param["参数值"] is not None else ""
@@ -16708,6 +16719,11 @@ class TubeLayoutEditor(QMainWindow):
                             param_value_str = "螺纹拉杆" if do_default >= 19 else "焊接拉杆"
                     elif param["参数名"] == "滑道数量" and param_value_str.strip() == "":
                         param_value_str = "2"
+                    elif (
+                        param["参数名"] in ("中间挡板安装方式", "中间挡管安装方式")
+                        and param_value_str.strip() not in ("贯穿", "分割")
+                    ):
+                        param_value_str = "贯穿"
                     elif (
                         param["参数名"] == "滑道形式"
                         and param_value_str.strip() == "圆钢条式滑道"
@@ -17681,6 +17697,104 @@ class TubeLayoutEditor(QMainWindow):
             it = table.item(row, 2)
             return it.text().strip() if it else ""
         return ""
+
+    def _write_param_table_value(self, param_name, value):
+        """写回左侧参数表指定参数名（支持下拉/文本，含隐藏行）。"""
+        table = getattr(self, "param_table", None)
+        if table is None:
+            return False
+        target = str(param_name).strip()
+        text = str(value).strip() if value is not None else ""
+        for row in range(table.rowCount()):
+            name_item = table.item(row, 1)
+            if not name_item or name_item.text().strip() != target:
+                continue
+            w = table.cellWidget(row, 2)
+            if isinstance(w, QComboBox):
+                idx = w.findText(text)
+                if idx >= 0:
+                    w.setCurrentIndex(idx)
+                else:
+                    w.addItem(text)
+                    w.setCurrentText(text)
+            else:
+                item = table.item(row, 2)
+                if item:
+                    item.setText(text)
+                else:
+                    from PyQt5.QtWidgets import QTableWidgetItem
+
+                    table.setItem(row, 2, QTableWidgetItem(text))
+            return True
+
+        # 行不存在时：安装方式参数补建隐藏行，保证后续保存能进布管参数表
+        if target in ("中间挡板安装方式", "中间挡管安装方式"):
+            return self._ensure_install_mode_param_row(target, text)
+        return False
+
+    def _ensure_install_mode_param_row(self, param_name, value="贯穿"):
+        """确保中间挡板/挡管安装方式行存在（隐藏下拉），并写入当前值。"""
+        from PyQt5.QtWidgets import QTableWidgetItem
+
+        table = getattr(self, "param_table", None)
+        if table is None:
+            return False
+        target = str(param_name).strip()
+        mode = str(value).strip() if value is not None else "贯穿"
+        if mode not in ("贯穿", "分割"):
+            mode = "贯穿"
+
+        # 已存在则直接写
+        for row in range(table.rowCount()):
+            name_item = table.item(row, 1)
+            if name_item and name_item.text().strip() == target:
+                w = table.cellWidget(row, 2)
+                if isinstance(w, QComboBox):
+                    idx = w.findText(mode)
+                    if idx >= 0:
+                        w.setCurrentIndex(idx)
+                    else:
+                        w.addItem(mode)
+                        w.setCurrentText(mode)
+                else:
+                    item = table.item(row, 2)
+                    if item:
+                        item.setText(mode)
+                    else:
+                        table.setItem(row, 2, QTableWidgetItem(mode))
+                try:
+                    self.set_param_visibility(row, False, force=True)
+                except Exception:
+                    table.setRowHidden(row, True)
+                return True
+
+        row = table.rowCount()
+        table.insertRow(row)
+        seq_item = QTableWidgetItem(str(row + 1))
+        seq_item.setFlags(seq_item.flags() & ~Qt.ItemIsEditable)
+        table.setItem(row, 0, seq_item)
+        name_item = QTableWidgetItem(target)
+        name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+        table.setItem(row, 1, name_item)
+
+        combo = NoWheelComboBox()
+        combo.addItems(["贯穿", "分割"])
+        idx = combo.findText(mode)
+        combo.setCurrentIndex(idx if idx >= 0 else 0)
+        table.setCellWidget(row, 2, combo)
+        table.setItem(row, 3, QTableWidgetItem(""))
+        try:
+            self.set_param_visibility(row, False, force=True)
+        except Exception:
+            table.setRowHidden(row, True)
+        try:
+            if not hasattr(self, "hidden_params") or self.hidden_params is None:
+                self.hidden_params = []
+            if target not in self.hidden_params:
+                self.hidden_params.append(target)
+        except Exception:
+            pass
+        return True
 
     def _read_nonbaffle_chord_params(self):
         """读取非布管弦高及 Dis/do；缺参或非法时返回 None。"""
@@ -20258,6 +20372,8 @@ class TubeLayoutEditor(QMainWindow):
             "切边高度 h",
             "中间挡板厚度",
             "中间挡板宽度",
+            "中间挡板安装方式",
+            "中间挡管安装方式",
             "旁路挡板宽度",
             "吊环螺钉起始方位角",
             "吊环螺钉规格",
@@ -28437,6 +28553,8 @@ class TubeLayoutEditor(QMainWindow):
             "换热管外径 do": "换热管外径",
             "中间挡板厚度": "中间挡板厚度",
             "中间挡板宽度": "中间挡板宽度",
+            "中间挡板安装方式": "中间挡板安装方式",
+            "中间挡管安装方式": "中间挡管安装方式",
             "拉杆形式": "拉杆型式",
             "拉杆直径": "拉杆规格",
             "旁路挡板厚度": "旁路挡板厚度",
@@ -28479,6 +28597,8 @@ class TubeLayoutEditor(QMainWindow):
             "换热管外径 do": None,
             "中间挡板厚度": None,
             "中间挡板宽度": None,
+            "中间挡板安装方式": None,
+            "中间挡管安装方式": None,
             "拉杆形式": None,
             "拉杆直径": None,
         }
@@ -28561,6 +28681,37 @@ class TubeLayoutEditor(QMainWindow):
             )
             # 存入cross_params用于跨表同步
             cross_params[param_name] = param_value
+
+        # 强制落库：中间挡板/中间挡管安装方式（左侧隐藏，可能曾缺失行）
+        for install_param in ("中间挡板安装方式", "中间挡管安装方式"):
+            install_val = ""
+            try:
+                install_val = self._read_param_table_value(install_param)
+            except Exception:
+                install_val = ""
+            install_val = str(install_val).strip() if install_val is not None else ""
+            if install_val not in ("贯穿", "分割"):
+                # tube_data 兜底（刚写回但读表失败时）
+                for data in tube_data:
+                    if str(data.get("参数名", "")).strip() == install_param:
+                        install_val = str(data.get("参数值", "")).strip()
+                        break
+            if install_val not in ("贯穿", "分割"):
+                install_val = "贯穿"
+
+            safe_param_name = escape_str(install_param)
+            safe_param_value = escape_str(install_val)
+            sql_statements.append(
+                f"UPDATE {table_name} SET `参数值` = '{safe_param_value}', `单位` = NULL "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}'"
+            )
+            sql_statements.append(
+                f"INSERT INTO {table_name} (`产品ID`, `参数名`, `参数值`, `单位`) "
+                f"SELECT '{productID}', '{safe_param_name}', '{safe_param_value}', NULL "
+                f"WHERE NOT EXISTS (SELECT 1 FROM {table_name} "
+                f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
+            )
+            cross_params[install_param] = install_val
 
         # 处理“旁路挡板宽度”参数，包含单位mm
         if (
@@ -36156,6 +36307,20 @@ class TubeLayoutEditor(QMainWindow):
 
         if len(self.selected_centers) != 2:
             QMessageBox.warning(self, "选中错误", "请先选择满足要求的换热管！")
+            self.clear_selection_highlight()
+            return
+
+        # 创建前弹出参数设置（安装方式）；取消则不绘制
+        try:
+            from modules.buguan.buguan_ziyong.component.center_dangguan import (
+                prompt_center_dangguan_params,
+            )
+
+            if not prompt_center_dangguan_params(self):
+                self.clear_selection_highlight()
+                return
+        except Exception as e:
+            print(f"[on_center_block_click] 中间挡管参数弹窗失败: {e}")
             self.clear_selection_highlight()
             return
 

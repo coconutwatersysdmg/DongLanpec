@@ -39,6 +39,36 @@ def _create_product_connection():
     return create_product_connection()
 
 
+INSTALL_MODE_OPTIONS = ("贯穿", "分割")
+INSTALL_MODE_DEFAULT = "贯穿"
+CENTER_DANGBAN_INSTALL_PARAM = "中间挡板安装方式"
+
+
+def _normalize_install_mode(value):
+    text = str(value).strip() if value is not None else ""
+    return text if text in INSTALL_MODE_OPTIONS else INSTALL_MODE_DEFAULT
+
+
+def _read_install_mode(editor, param_name):
+    try:
+        if hasattr(editor, "_read_param_table_value"):
+            return _normalize_install_mode(editor._read_param_table_value(param_name))
+    except Exception:
+        pass
+    return INSTALL_MODE_DEFAULT
+
+
+def _write_install_mode(editor, param_name, value):
+    mode = _normalize_install_mode(value)
+    try:
+        if hasattr(editor, "_write_param_table_value"):
+            editor._write_param_table_value(param_name, mode)
+            return mode
+    except Exception:
+        pass
+    return mode
+
+
 def is_line_intersect(self, p1, p2, q1, q2):
     def ccw(a, b, c):
         return (c[1] - a[1]) * (b[0] - a[0]) > (b[1] - a[1]) * (c[0] - a[0])
@@ -553,6 +583,16 @@ def on_center_dangban_click(self):
     thickness_layout.addWidget(self.thickness_input)
     layout.addLayout(thickness_layout)
 
+    install_layout = QHBoxLayout()
+    install_layout.addWidget(QLabel("中间挡板安装方式:"))
+    install_combo = QComboBox()
+    install_combo.addItems(list(INSTALL_MODE_OPTIONS))
+    install_combo.setCurrentText(
+        _read_install_mode(self, CENTER_DANGBAN_INSTALL_PARAM)
+    )
+    install_layout.addWidget(install_combo)
+    layout.addLayout(install_layout)
+
     btn_layout = QHBoxLayout()
     confirm_btn = QPushButton("确定")
     close_btn = QPushButton("关闭")
@@ -577,6 +617,9 @@ def on_center_dangban_click(self):
                 pass
             return
         last_valid_thickness_text = str(block_thickness)
+        _write_install_mode(
+            self, CENTER_DANGBAN_INSTALL_PARAM, install_combo.currentText()
+        )
 
         # 重新构造用于绘制的 selected_centers_local（保留原对称扩展逻辑）
         tube_num_local = (
@@ -891,7 +934,7 @@ def on_center_dangban_click(self):
             pass
 
         try:
-            # 仅在关闭时保存厚度值，不绘制
+            # 仅在关闭时保存厚度值与安装方式，不绘制
             thickness = float(self.thickness_input.text())
             for row in range(self.param_table.rowCount()):
                 param_name = (
@@ -919,6 +962,12 @@ def on_center_dangban_click(self):
                             )
                     break
         except ValueError:
+            pass
+        try:
+            _write_install_mode(
+                self, CENTER_DANGBAN_INSTALL_PARAM, install_combo.currentText()
+            )
+        except Exception:
             pass
         dialog.reject()
 
@@ -1290,6 +1339,16 @@ def edit_center_dangban(self, dangban_item):
     row_layout.addWidget(edit)
     layout.addLayout(row_layout)
 
+    install_layout = QHBoxLayout()
+    install_layout.addWidget(QLabel("中间挡板安装方式:"))
+    install_combo = QComboBox()
+    install_combo.addItems(list(INSTALL_MODE_OPTIONS))
+    install_combo.setCurrentText(
+        _read_install_mode(self, CENTER_DANGBAN_INSTALL_PARAM)
+    )
+    install_layout.addWidget(install_combo)
+    layout.addLayout(install_layout)
+
     btn_layout = QHBoxLayout()
     ok_btn = QPushButton("确定")
     cancel_btn = QPushButton("关闭")
@@ -1326,6 +1385,9 @@ def edit_center_dangban(self, dangban_item):
 
         # 同步参数表
         update_param_table(new_thickness)
+        _write_install_mode(
+            self, CENTER_DANGBAN_INSTALL_PARAM, install_combo.currentText()
+        )
 
         # 优先尝试：基于 center_dangban_dic 全删全重建（使用新厚度）
         used_global_rebuild = False
