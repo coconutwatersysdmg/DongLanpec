@@ -7246,7 +7246,8 @@ class TubeLayoutEditor(QMainWindow):
                 "[DEBUG calculate_piping_layout] update_axial_basic_params failed:", e
             )
 
-        # 本地分程（8a~8d / 10a~10b / 12a~12b）：不调 DLL，直接算坐标后走原绘图链路
+        # 本地分程（1/2/4a~4c/6a~6b/8a~12b）：不调 DLL，直接算坐标后走原绘图链路
+        # Dis/Dit 仍由上方 update_DN_Di / cal_di 接口维护，本分支只算管心
         try:
             _local_cat = getattr(self, "tube_pass_form_value", None)
             if not _local_cat and hasattr(self, "get_selected_tube_pass_form"):
@@ -7750,7 +7751,8 @@ class TubeLayoutEditor(QMainWindow):
         cat,
     ):
         """
-        8/10/12 本地分程布管：调用 tube_pass.compute_centers，后续绘图链路与 DLL 路径一致。
+        本地分程布管（1~12）：调用 tube_pass.compute_centers，后续绘图链路与 DLL 路径一致。
+        不计算 Dis/Dit（仍走 cal_di 接口）。
         """
         product_type_str = heat_exchanger_type or getattr(self, "heat_exchanger", "") or ""
         try:
@@ -12209,7 +12211,7 @@ class TubeLayoutEditor(QMainWindow):
 
     def update_divider_position_and_size(self):
         # TODO 更新隔条位置尺寸
-        # 本地分程（8/10/12）不调 DLL 取 W；其余仍走原接口
+        # 本地分程（1~12）不调布管 DLL 取 W；其余仍走原接口（Dis/Dit 不在此路径）
         try:
             _cat = getattr(self, "tube_pass_form_value", None)
             if not _cat and hasattr(self, "get_selected_tube_pass_form"):
@@ -17156,13 +17158,17 @@ class TubeLayoutEditor(QMainWindow):
                     combo.setCurrentIndex(i)
                     matched = True
                     break
-            # 兼容旧库值：1.1→1；8a→8a.1
+            # 兼容旧库值：1.1→1；2→2.1；8a→8a.1（纯数字 1 已是最终标识，不补后缀）
             if not matched:
                 compat_ids = []
                 if cur == "1.1":
                     compat_ids.append("1")
                 elif is_local_tube_pass_cat(cur) and "." not in cur:
-                    compat_ids.append(f"{normalize_local_tube_pass_cat(cur)}.1")
+                    _base = normalize_local_tube_pass_cat(cur)
+                    if _base == "2":
+                        compat_ids.append("2.1")
+                    elif _base and any(ch.isalpha() for ch in _base):
+                        compat_ids.append(f"{_base}.1")
                 for compat in compat_ids:
                     for i in range(combo.count()):
                         if combo.itemData(i, Qt.UserRole) == compat:

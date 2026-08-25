@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 将界面参数映射为 core_calculation.compute_centers 入参，并输出与现有布管下游兼容的结果。
-仅用于本地分程 Cat：8a~8d / 10a~10b / 12a~12b（界面标识可为 8a.1 / 8a.2 等）。
+本地分程 Cat：1/2/4a~4c/6a~6b/8a~8d/10a~10b/12a~12b
+（界面标识可为 1、2.1、4.1、8a.1 等）。
 """
 from __future__ import annotations
 
@@ -10,9 +11,16 @@ from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Tuple, Unio
 
 from .core_calculation import compute_centers
 
-# 产品侧启用的本地分程基类（不含 12c）；界面存 8a.1/8a.2 等，计算前归一到此集合
+# 产品侧启用的本地分程基类（不含 12c）
 LOCAL_TUBE_PASS_CATS = frozenset(
     {
+        "1",
+        "2",
+        "4a",
+        "4b",
+        "4c",
+        "6a",
+        "6b",
         "8a",
         "8b",
         "8c",
@@ -24,6 +32,19 @@ LOCAL_TUBE_PASS_CATS = frozenset(
     }
 )
 
+# 界面分程形式 UserRole → 算法 Cat（1~6，已与产品确认）
+_UI_TUBE_PASS_TO_CAT = {
+    "1": "1",
+    "1.1": "1",  # 旧库兼容
+    "2": "2",
+    "2.1": "2",
+    "4.1": "4a",
+    "4.2": "4b",
+    "4.3": "4c",
+    "6.1": "6a",
+    "6.2": "6b",
+}
+
 # 界面参数标识：图片名去扩展名，如 8a.1 / 10b.2
 _LOCAL_CAT_VARIANT_RE = re.compile(
     r"^(\d+[a-d])(?:\.(\d+))?$", re.IGNORECASE
@@ -31,21 +52,46 @@ _LOCAL_CAT_VARIANT_RE = re.compile(
 
 
 def normalize_local_tube_pass_cat(cat: Any) -> str:
-    """界面标识 8a.1/8a.2 → 计算用基类 8a；已是 8a 则原样（小写字母）。"""
+    """
+    界面标识 → 计算用基类 Cat。
+    - 1 / 1.1 / 2.1 / 4.1 / 4.2 / 4.3 / 6.1 / 6.2 → 1/2/4a/4b/4c/6a/6b
+    - 8a.1 / 8a.2 → 8a；已是 8a / 4a 等则原样（小写）
+    """
     if cat is None:
         return ""
     text = str(cat).strip()
+    if not text:
+        return ""
+    mapped = _UI_TUBE_PASS_TO_CAT.get(text)
+    if mapped is not None:
+        return mapped
     m = _LOCAL_CAT_VARIANT_RE.match(text)
-    if not m:
-        return text
-    return m.group(1).lower()
+    if m:
+        return m.group(1).lower()
+    low = text.lower()
+    if low in LOCAL_TUBE_PASS_CATS:
+        return low
+    return text
 
 
 # 各 Cat 实际用到的隔条定位参数（与 main_gui / 甲方显隐要求一致，不含 12c）
 _CAT_USES_WX0 = frozenset({"8a", "8b", "10a", "12a"})
 _CAT_USES_WX1 = frozenset({"12a"})
 _CAT_USES_WY0 = frozenset(
-    {"8a", "8b", "8c", "8d", "10a", "10b", "12a", "12b"}
+    {
+        "4a",
+        "4c",
+        "6a",
+        "6b",
+        "8a",
+        "8b",
+        "8c",
+        "8d",
+        "10a",
+        "10b",
+        "12a",
+        "12b",
+    }
 )
 _CAT_USES_WY1 = frozenset({"8c", "10b", "12b"})
 _CAT_USES_WY2 = frozenset({"12b"})

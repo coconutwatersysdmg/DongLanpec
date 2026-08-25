@@ -1,4 +1,4 @@
-# 本地多管程布管（8/10/12）计算包
+# 本地分程布管（1/2/4/6/8/10/12）计算包
 from .adapter import (
     DIVIDER_EXTRA_PARAM_CATS,
     LOCAL_TUBE_PASS_CATS,
