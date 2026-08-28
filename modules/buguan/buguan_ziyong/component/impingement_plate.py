@@ -31,6 +31,13 @@ from modules.buguan.buguan_ziyong.ui_style import (
 )
 
 
+def default_baffle_placement(baffle_type=None):
+    """平板形防冲板默认放置位置为参照管顶部连线。"""
+    if str(baffle_type or "平板形").strip() == "平板形":
+        return "参照管顶部连线"
+    return "参照管中心连线"
+
+
 def _get_clickable_rect_item():
     """延迟导入 ClickableRectItem，避免循环导入。"""
     from ..My_Piping import ClickableRectItem
@@ -795,6 +802,7 @@ def on_dangban_click(self):
             self.param_widgets["防冲板形式"] = baffle_type_combo
             form_layout.addWidget(baffle_type_combo, row_idx, 1)
             row_idx += 1
+            _form_for_placement = self.params.get("防冲板形式") or baffle_types[0]
 
             # 防冲板厚度
             form_layout.addWidget(QLabel("防冲板厚度:"), row_idx, 0)
@@ -810,9 +818,17 @@ def on_dangban_click(self):
             form_layout.addWidget(placement_label, row_idx, 0)
             placement_combo = QComboBox()
             placement_combo.addItems(["参照管中心连线", "参照管顶部连线"])
-            placement_combo.setCurrentText(
-                self.params.get("放置位置", "参照管中心连线")
-            )
+            _placement_val = self.params.get("放置位置")
+            if str(_form_for_placement).strip() == "平板形":
+                if not str(_placement_val or "").strip() or str(
+                    _placement_val
+                ).strip() == "参照管中心连线":
+                    _placement_val = default_baffle_placement("平板形")
+            else:
+                _placement_val = _placement_val or default_baffle_placement(
+                    _form_for_placement
+                )
+            placement_combo.setCurrentText(_placement_val)
             self.param_widgets["放置位置_label"] = placement_label
             self.param_widgets["放置位置"] = placement_combo
             form_layout.addWidget(placement_combo, row_idx, 1)
@@ -871,10 +887,7 @@ def on_dangban_click(self):
 
             # 连接信号：防冲板形式改变时，同步更新所有关联参数的编辑状态
             baffle_type_combo.currentTextChanged.connect(
-                self.update_angle_edit_state
-            )
-            baffle_type_combo.currentTextChanged.connect(
-                self.update_special_params_state
+                self.on_baffle_type_changed
             )
 
             # 连接按钮信号
@@ -919,6 +932,17 @@ def on_dangban_click(self):
             if placement_label is not None:
                 placement_label.setVisible(baffle_type == "平板形")
 
+        def on_baffle_type_changed(self, baffle_type):
+            """形式切换时同步控件状态；切到平板形时重置放置位置默认。"""
+            self.update_angle_edit_state(baffle_type)
+            self.update_special_params_state(baffle_type)
+            if baffle_type == "平板形":
+                placement_widget = self.param_widgets.get("放置位置")
+                if placement_widget is not None:
+                    placement_widget.setCurrentText(
+                        default_baffle_placement("平板形")
+                    )
+
         def get_params(self):
             """获取弹窗中的参数值（原有逻辑保留）"""
             return {
@@ -949,6 +973,13 @@ def on_dangban_click(self):
                 value_item = self.param_table.item(row, 2)
                 param_value = value_item.text() if value_item else ""
             initial_params[param_name] = param_value
+
+    if not str(initial_params.get("放置位置", "")).strip():
+        baffle_form = initial_params.get("防冲板形式") or "平板形"
+        initial_params["放置位置"] = default_baffle_placement(baffle_form)
+    elif str(initial_params.get("防冲板形式", "平板形")).strip() == "平板形":
+        if str(initial_params.get("放置位置", "")).strip() == "参照管中心连线":
+            initial_params["放置位置"] = default_baffle_placement("平板形")
 
     # 显示弹窗（原有逻辑保留）
     dialog = BaffleParamDialog(self, initial_params)
@@ -1147,7 +1178,7 @@ def on_dangban_click(self):
                 try:
                     coord = rec.get("coord")
                     plate_type = rec.get("type")
-                    rec_placement = rec.get("placement", "参照管中心连线")
+                    rec_placement = rec.get("placement")
                     if not coord or len(coord) != 2:
                         continue
 
@@ -1168,6 +1199,8 @@ def on_dangban_click(self):
                     else:
                         # 未知类型，跳过
                         continue
+                    if not rec_placement:
+                        rec_placement = default_baffle_placement(rec_type)
 
                     self.build_impingement_plate(
                         selected_centers=centers_pair,
@@ -1273,7 +1306,8 @@ def on_dangban_click(self):
         baffle_distance=baffle_distance,
         tube_outer_diameter=tube_outer_diameter,
         tube_pitch=tube_pitch,
-        baffle_placement=current_params.get("放置位置", "参照管中心连线"),
+        baffle_placement=current_params.get("放置位置")
+        or default_baffle_placement(baffle_type),
     )
 
 
@@ -1522,7 +1556,9 @@ def build_impingement_plate(
         # 按“放置位置”规则重算平板形防冲板的绘制端点
         # Ⅰ 参照管中心连线：长度 = 两参照管中心连线长度 - 1*do，线段位于两参照管之间
         # Ⅱ 参照管顶部连线：长度 = 两参照管中心连线长度，线段整体上移 do/2
-        placement_mode = str(baffle_placement or "参照管中心连线").strip()
+        placement_mode = str(
+            baffle_placement or default_baffle_placement("平板形")
+        ).strip()
 
         def _parse_float_from_text(text):
             try:
@@ -2676,9 +2712,18 @@ def edit_baffle(self, baffle_item):
         return ""
 
     # 构建初始参数：优先使用参数表（保持“上一次确认”的值），不再从图元属性或画笔宽度读取
+    _baffle_form_init = get_param_value("防冲板形式") or "平板形"
+    _placement_init = get_param_value("放置位置")
+    if str(_baffle_form_init).strip() == "平板形":
+        if not str(_placement_init or "").strip() or str(
+            _placement_init
+        ).strip() == "参照管中心连线":
+            _placement_init = default_baffle_placement("平板形")
+    elif not str(_placement_init or "").strip():
+        _placement_init = default_baffle_placement(_baffle_form_init)
     initial_params = {
-        "防冲板形式": get_param_value("防冲板形式"),
-        "放置位置": get_param_value("放置位置") or "参照管中心连线",
+        "防冲板形式": _baffle_form_init,
+        "放置位置": _placement_init,
         "防冲板厚度": get_param_value("防冲板厚度"),
         "防冲板折边角度": get_param_value("防冲板折边角度"),
         "防冲板宽度": get_param_value("防冲板宽度"),
@@ -2753,6 +2798,7 @@ def edit_baffle(self, baffle_item):
             )
             self.param_widgets["防冲板形式"] = baffle_type_combo
             form_layout.addWidget(baffle_type_combo, 0, 1)
+            _form_for_placement = self.params.get("防冲板形式") or baffle_types[0]
 
             # 防冲板厚度
             form_layout.addWidget(QLabel("防冲板厚度:"), 1, 0)
@@ -2767,9 +2813,17 @@ def edit_baffle(self, baffle_item):
             form_layout.addWidget(placement_label, 2, 0)
             placement_combo = QComboBox()
             placement_combo.addItems(["参照管中心连线", "参照管顶部连线"])
-            placement_combo.setCurrentText(
-                self.params.get("放置位置", "参照管中心连线")
-            )
+            _placement_val = self.params.get("放置位置")
+            if str(_form_for_placement).strip() == "平板形":
+                if not str(_placement_val or "").strip() or str(
+                    _placement_val
+                ).strip() == "参照管中心连线":
+                    _placement_val = default_baffle_placement("平板形")
+            else:
+                _placement_val = _placement_val or default_baffle_placement(
+                    _form_for_placement
+                )
+            placement_combo.setCurrentText(_placement_val)
             self.param_widgets["放置位置_label"] = placement_label
             self.param_widgets["放置位置"] = placement_combo
             form_layout.addWidget(placement_combo, 2, 1)
@@ -2849,14 +2903,21 @@ def edit_baffle(self, baffle_item):
                 if placement_label is not None:
                     placement_label.setVisible(baffle_type == "平板形")
 
+            def on_baffle_type_changed(baffle_type):
+                update_angle_edit_state(baffle_type)
+                update_special_params_state(baffle_type)
+                if baffle_type == "平板形":
+                    placement_widget = self.param_widgets.get("放置位置")
+                    if placement_widget is not None:
+                        placement_widget.setCurrentText(
+                            default_baffle_placement("平板形")
+                        )
+
             # 初始联动
             current_type = baffle_type_combo.currentText()
             update_angle_edit_state(current_type)
             update_special_params_state(current_type)
-            baffle_type_combo.currentTextChanged.connect(update_angle_edit_state)
-            baffle_type_combo.currentTextChanged.connect(
-                update_special_params_state
-            )
+            baffle_type_combo.currentTextChanged.connect(on_baffle_type_changed)
 
             ok_btn.clicked.connect(self.accept)
             close_btn.clicked.connect(self.reject)
@@ -3031,7 +3092,9 @@ def edit_baffle(self, baffle_item):
                     rec["type"] = new_type_val
                     # 仅平板形记录放置位置；圆弧/焊接置空，避免“统一规格”污染其它记录
                     if new_type_val == 1:
-                        rec["placement"] = current_params.get("放置位置", "参照管中心连线")
+                        rec["placement"] = current_params.get("放置位置") or default_baffle_placement(
+                            "平板形"
+                        )
                     else:
                         rec["placement"] = None
                     self.impingement_plate_dic[plate_id] = rec
@@ -3106,7 +3169,7 @@ def edit_baffle(self, baffle_item):
                 try:
                     coord = rec.get("coord")
                     plate_type_val = rec.get("type")
-                    rec_placement = rec.get("placement", "参照管中心连线")
+                    rec_placement = rec.get("placement")
                     if not coord or len(coord) != 2:
                         continue
 
@@ -3129,6 +3192,8 @@ def edit_baffle(self, baffle_item):
                     else:
                         # 未知类型，跳过
                         continue
+                    if not rec_placement:
+                        rec_placement = default_baffle_placement(rec_type)
 
                     self.build_impingement_plate(
                         selected_centers=centers_pair,
@@ -3174,7 +3239,8 @@ def edit_baffle(self, baffle_item):
                 baffle_distance=baffle_distance,
                 tube_outer_diameter=tube_outer_diameter,
                 tube_pitch=tube_pitch,
-                baffle_placement=current_params.get("放置位置", "参照管中心连线"),
+                baffle_placement=current_params.get("放置位置")
+                or default_baffle_placement(baffle_type),
             )
         else:
             # 焊接式防冲板：几何完全由参数 (thickness/angle/width/azimuth/distance) 决定，
@@ -3189,7 +3255,8 @@ def edit_baffle(self, baffle_item):
                 baffle_distance=baffle_distance,
                 tube_outer_diameter=tube_outer_diameter,
                 tube_pitch=tube_pitch,
-                baffle_placement=current_params.get("放置位置", "参照管中心连线"),
+                baffle_placement=current_params.get("放置位置")
+                or default_baffle_placement(baffle_type),
             )
 
 

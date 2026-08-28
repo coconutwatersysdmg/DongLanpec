@@ -6057,8 +6057,9 @@ class TubeLayoutEditor(QMainWindow):
                             if k is None:
                                 continue
                             placement_raw = rec_ip.get("放置位置")
-                            placement_text = "参照管中心连线"
-                            if str(placement_raw).strip() in ("2", "参照管顶部连线"):
+                            if str(placement_raw).strip() in ("1", "参照管中心连线"):
+                                placement_text = "参照管中心连线"
+                            else:
                                 placement_text = "参照管顶部连线"
                             placement_by_pair[k] = placement_text
                         except Exception:
@@ -6106,9 +6107,9 @@ class TubeLayoutEditor(QMainWindow):
                             except Exception:
                                 pair_key = None
                             placement_text = (
-                                placement_by_pair.get(pair_key, "参照管中心连线")
+                                placement_by_pair.get(pair_key, "参照管顶部连线")
                                 if isinstance(placement_by_pair, dict)
-                                else "参照管中心连线"
+                                else "参照管顶部连线"
                             )
                             self.build_impingement_plate(
                                 pair,
@@ -6145,9 +6146,9 @@ class TubeLayoutEditor(QMainWindow):
                             except Exception:
                                 pair_key = None
                             placement_text = (
-                                placement_by_pair.get(pair_key, "参照管中心连线")
+                                placement_by_pair.get(pair_key, "参照管顶部连线")
                                 if isinstance(placement_by_pair, dict)
-                                else "参照管中心连线"
+                                else "参照管顶部连线"
                             )
                             self.build_impingement_plate(
                                 pair,
@@ -16232,7 +16233,7 @@ class TubeLayoutEditor(QMainWindow):
                 _add_if_missing("圆钢规格", "12", "mm")
                 _add_if_missing("滑道切边长度", "50", "mm")
                 _add_if_missing("滑道切边高度", "15", "mm")
-                _add_if_missing("放置位置", "参照管中心连线", "")
+                _add_if_missing("放置位置", "参照管顶部连线", "")
                 # 中间挡板/挡管安装方式：弹窗编辑、左侧隐藏，必须存在才能写入布管参数表
                 _add_if_missing("中间挡板安装方式", "贯穿", "")
                 _add_if_missing("中间挡管安装方式", "贯穿", "")
