@@ -4118,6 +4118,7 @@ class TubeLayoutEditor(QMainWindow):
             self._is_first_buguan_open = True
             self._suppress_open_s_dl_autoupdate = False
             self._user_override_tube_layout_circle_dl = False
+            self._dn_change_invalidated_buguan = False
         except Exception:
             pass
 
@@ -4432,6 +4433,13 @@ class TubeLayoutEditor(QMainWindow):
                                                         f"防冲板表、焊接式防冲板表、旁路挡板表、操作记录表、"
                                                         f"中间挡板表、吊环螺钉表所有数据"
                                                     )
+                                                    # DN 变更作废管束：等同首次打开，DL 须强制重算
+                                                    self._dn_change_invalidated_buguan = True
+                                                    has_buguan_component_records = False
+                                                    self._is_first_buguan_open = True
+                                                    self._suppress_open_s_dl_autoupdate = False
+                                                    operation_record_exists = False
+                                                    operation_record_exists_effective = False
                                                 except Exception as e:
                                                     # 发生错误时回滚事务
                                                     product_conn.rollback()
@@ -4728,8 +4736,18 @@ class TubeLayoutEditor(QMainWindow):
                             )
 
                         else:
-                            # 非首次打开：DL 必须保持布管参数表中的值，不自动重算
-                            if has_buguan_component_records:
+                            _dn_invalidated = getattr(
+                                self, "_dn_change_invalidated_buguan", False
+                            )
+                            if _dn_invalidated:
+                                # 公称直径变更导致管束失效：丢弃库中 DL，按公式重算
+                                should_calculate_dl = True
+                                print(
+                                    "[load_initial_data] 公称直径变更导致管束失效，"
+                                    "强制重算布管限定圆 DL"
+                                )
+                            elif has_buguan_component_records:
+                                # 非首次打开：DL 必须保持布管参数表中的值，不自动重算
                                 should_calculate_dl = False
                                 print(
                                     "[load_initial_data] 非首次打开：DL 保持布管参数表值，不自动重算"
@@ -4931,16 +4949,23 @@ class TubeLayoutEditor(QMainWindow):
                             # - 非首次打开：锁定为“按布管参数表显示”，阻止加载阶段推荐值覆盖；
                             # - 首次打开：允许按方法联动更新推荐值。
                             try:
-                                if has_buguan_component_records:
-                                    self._user_override_tube_center_distance = True
-                                else:
+                                _dn_invalidated = getattr(
+                                    self, "_dn_change_invalidated_buguan", False
+                                )
+                                if _dn_invalidated:
                                     self._user_override_tube_center_distance = False
-                                if has_buguan_component_records or (
-                                        not should_calculate_dl and DL is not None
-                                ):
-                                    self._user_override_tube_layout_circle_dl = True
-                                else:
                                     self._user_override_tube_layout_circle_dl = False
+                                else:
+                                    if has_buguan_component_records:
+                                        self._user_override_tube_center_distance = True
+                                    else:
+                                        self._user_override_tube_center_distance = False
+                                    if has_buguan_component_records or (
+                                            not should_calculate_dl and DL is not None
+                                    ):
+                                        self._user_override_tube_layout_circle_dl = True
+                                    else:
+                                        self._user_override_tube_layout_circle_dl = False
                             except Exception:
                                 pass
                             self.hide_specific_params(hidden_params)
