@@ -5663,6 +5663,10 @@ class TubeLayoutEditor(QMainWindow):
             self.load_initial_tube_num()
             self.update_total_holes_count()
             self.update_diameter_visibility_by_outer_flag()
+            try:
+                self.renumber_visible_rows()
+            except Exception:
+                pass
             # 仅限“刚打开管束”这一步调用 user_update_Di：
             # - 无有效操作记录：一定执行（恢复原逻辑）
             # - 有有效操作记录：仅当通用数据表「是」且布管参数表「否」（need_initial_user_update_di_for_outer_base）时也执行
@@ -8903,9 +8907,7 @@ class TubeLayoutEditor(QMainWindow):
 
         if current_hidden != target_hidden or force:
             self.param_table.setRowHidden(row, target_hidden)
-            # 强制刷新行高
-            # self.param_table.setRowHeight(row, self.param_table.rowHeight(row))
-            # self.renumber_visible_rows()
+            self.renumber_visible_rows()
 
     def _apply_slipway_form_and_guide_visibility(self):
         """
@@ -9351,6 +9353,11 @@ class TubeLayoutEditor(QMainWindow):
         except Exception as _e_dbg:
             print(f"[DEBUG update_SN] 打印可见性信息出错: {_e_dbg}")
 
+        try:
+            self.renumber_visible_rows()
+        except Exception:
+            pass
+
     def update_diameter_visibility_by_outer_flag(self):
         if not hasattr(self, "param_table") or self.param_table is None:
             return
@@ -9391,6 +9398,10 @@ class TubeLayoutEditor(QMainWindow):
                 self.set_param_visibility(target_row, not hide_rows)
 
         self._lock_outer_base_flag_param_cell()
+        try:
+            self.renumber_visible_rows()
+        except Exception:
+            pass
 
     def _lock_outer_base_flag_param_cell(self):
         """左侧「是否以外径为基准」值列始终只读并灰显（不在布管界面手工修改）。"""
@@ -17073,6 +17084,10 @@ class TubeLayoutEditor(QMainWindow):
             self._update_tube_pass_form_combo_icon_size()
         except Exception:
             pass
+        try:
+            self.renumber_visible_rows()
+        except Exception:
+            pass
         # self.update_partition_plate_center_distance()
 
     def on_param_table_item_changed(self, item):
@@ -17955,6 +17970,10 @@ class TubeLayoutEditor(QMainWindow):
                     self.set_param_visibility(row, False, force=True)
                 except Exception:
                     table.setRowHidden(row, True)
+                    try:
+                        self.renumber_visible_rows()
+                    except Exception:
+                        pass
                 return True
 
         row = table.rowCount()
@@ -17976,6 +17995,10 @@ class TubeLayoutEditor(QMainWindow):
             self.set_param_visibility(row, False, force=True)
         except Exception:
             table.setRowHidden(row, True)
+            try:
+                self.renumber_visible_rows()
+            except Exception:
+                pass
         try:
             if not hasattr(self, "hidden_params") or self.hidden_params is None:
                 self.hidden_params = []
