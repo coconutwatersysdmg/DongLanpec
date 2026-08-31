@@ -18,7 +18,7 @@ import pymysql
 from PyQt5.QtCore import QLineF
 from PyQt5.QtCore import QPointF, QRectF
 from PyQt5.QtCore import QSize, QTimer, QPoint, QEvent, Qt
-from PyQt5.QtGui import QBrush, QIcon
+from PyQt5.QtGui import QBrush, QIcon, QPixmap, QPainter
 from PyQt5.QtGui import QColor, QPen, QPolygonF, QPainterPath, QIntValidator
 from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsLineItem
 from PyQt5.QtWidgets import (
@@ -46,6 +46,8 @@ from PyQt5.QtWidgets import (
     QAbstractSpinBox,
     QAbstractItemDelegate,
     QApplication,
+    QStyle,
+    QStyleOptionComboBox,
 )
 from modules.buguan.buguan_ziyong.ui_style import (
     StyledMessageBox as QMessageBox,
@@ -1259,6 +1261,135 @@ class NoWheelComboBox(QComboBox):
         event.ignore()
 
 
+_TUBE_PASS_PIXMAP_ROLE = Qt.UserRole + 200
+
+
+class TubePassFormComboBox(NoWheelComboBox):
+    """管程分程形式：闭合态自绘示意图，按单元格完整缩放，适配不同分辨率/DPI。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setStyleSheet(
+            "QComboBox {"
+            "  border: 1px solid #CCCCCC;"
+            "  background: #ffffff;"
+            "  padding: 0px;"
+            "  padding-right: 18px;"
+            "}"
+            "QComboBox::drop-down {"
+            "  subcontrol-origin: padding;"
+            "  subcontrol-position: top right;"
+            "  width: 18px;"
+            "  border: none;"
+            "  background: transparent;"
+            "}"
+        )
+
+    def _preview_rect(self):
+        opt = QStyleOptionComboBox()
+        self.initStyleOption(opt)
+        field = self.style().subControlRect(
+            QStyle.CC_ComboBox, opt, QStyle.SC_ComboBoxEditField, self
+        )
+        return field.adjusted(2, 2, -2, -2)
+
+    def _current_pixmap(self):
+        idx = self.currentIndex()
+        if idx < 0:
+            return None
+        pm = self.itemData(idx, _TUBE_PASS_PIXMAP_ROLE)
+        if isinstance(pm, QPixmap) and not pm.isNull():
+            return pm
+        icon = self.itemIcon(idx)
+        if icon.isNull():
+            return None
+        sizes = icon.availableSizes()
+        if sizes:
+            return icon.pixmap(sizes[0])
+        return icon.pixmap(QSize(660, 153))
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+        opt = QStyleOptionComboBox()
+        self.initStyleOption(opt)
+        opt.currentIcon = QIcon()
+        self.style().drawComplexControl(QStyle.CC_ComboBox, opt, painter, self)
+
+        pm = self._current_pixmap()
+        if pm is None or pm.isNull():
+            return
+
+        target = self._preview_rect()
+        if target.width() <= 0 or target.height() <= 0:
+            return
+
+        scaled = pm.scaled(
+            target.size(),
+            Qt.KeepAspectRatio,
+            Qt.SmoothTransformation,
+        )
+        # 与下拉列表一致：水平左对齐，垂直居中
+        x = target.x()
+        y = target.y() + (target.height() - scaled.height()) // 2
+        painter.drawPixmap(x, y, scaled)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.update()
+
+    def refresh_dropdown_icons(self):
+        """下拉项图标与单元格闭合态示意图同尺寸。"""
+        box = self._preview_rect().size()
+        if box.width() <= 1 or box.height() <= 1:
+            row_h = max(self.height(), self.minimumHeight(), 36)
+            box = QSize(max(80, self.width() - 24), max(18, row_h - 8))
+
+        icon_size = None
+        for i in range(self.count()):
+            pm = self.itemData(i, _TUBE_PASS_PIXMAP_ROLE)
+            if isinstance(pm, QPixmap) and not pm.isNull():
+                scaled = pm.scaled(
+                    box, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                )
+                self.setItemIcon(i, QIcon(scaled))
+                if icon_size is None:
+                    icon_size = scaled.size()
+
+        view = self.view()
+        if view is not None and icon_size is not None:
+            view.setIconSize(icon_size)
+            view.setSpacing(2)
+            try:
+                view.setGridSize(
+                    QSize(icon_size.width() + 8, icon_size.height() + 4)
+                )
+            except Exception:
+                pass
+        return icon_size
+
+    def showPopup(self):
+        try:
+            self.refresh_dropdown_icons()
+        except Exception:
+            pass
+        super().showPopup()
+
+
+def _tube_pass_form_combo_from_cell_widget(widget):
+    """从单元格 widget（可能是容器）解析管程分程形式 QComboBox。"""
+    if isinstance(widget, QComboBox):
+        return widget
+    if widget is not None:
+        found = widget.findChild(QComboBox)
+        if isinstance(found, QComboBox):
+            return found
+    return None
+
+
 class NoWheelTableWidget(QTableWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1273,6 +1404,10 @@ class NoWheelTableWidget(QTableWidget):
 
             if cell_widget and isinstance(cell_widget, QComboBox):
                 return
+            if cell_widget is not None:
+                nested = cell_widget.findChild(QComboBox)
+                if nested is not None:
+                    return
 
         super().wheelEvent(event)
 
@@ -2976,8 +3111,8 @@ class TubeLayoutEditor(QMainWindow):
         self.param_table.setColumnCount(4)
         self.param_table.setHorizontalHeaderLabels(["序号", "参数名", "参数值", "单位"])
         self.param_table.verticalHeader().setVisible(False)
-        # 统一行高：各参数行（含管程分程形式示意图）保持一致，避免换机/DPI 下高低不一
-        self._param_table_row_height = 50
+        # 统一行高：略紧凑，管程分程形式示意图由自绘控件完整缩放
+        self._param_table_row_height = 40
         try:
             self.param_table.verticalHeader().setDefaultSectionSize(
                 self._param_table_row_height
@@ -3641,12 +3776,14 @@ class TubeLayoutEditor(QMainWindow):
         if hasattr(self, "param_table"):
             total_width = self.param_table.viewport().width()
             if total_width > 0:
-                # 参数值列略宽，保证宽幅「管程分程形式」示意图在不同分辨率下完整显示
-                col0_width = 56
-                col3_width = 56
+                col0_width = 52
+                col3_width = 52
                 remaining = max(0, total_width - col0_width - col3_width)
-                col1_width = int(remaining * 0.45)
-                col2_width = remaining - col1_width
+                # 参数值列尽量宽，保证宽幅示意图在不同分辨率下完整显示
+                col2_width = max(int(remaining * 0.58), min(remaining - 72, 200))
+                col1_width = max(72, remaining - col2_width)
+                if col1_width + col2_width > remaining:
+                    col2_width = max(120, remaining - col1_width)
                 self.param_table.setColumnWidth(0, col0_width)
                 self.param_table.setColumnWidth(1, col1_width)
                 self.param_table.setColumnWidth(2, col2_width)
@@ -16663,25 +16800,15 @@ class TubeLayoutEditor(QMainWindow):
                         )
                     elif param["参数名"] == "管程分程形式":
                         initial_tube_pattern = str(self.tube_pass_partition)
+                        combo = TubePassFormComboBox()
                         self.tube_pass_form_combo = combo
                         self.tube_pass_form_row = row
 
                         list_view = QListView()
                         combo.setView(list_view)
                         list_view.setSpacing(2)
-                        # 示意图按单元格宽高等比适配；行高与整表统一
-                        self._update_tube_pass_form_combo_icon_size(combo=combo, row=row)
-                        QTimer.singleShot(
-                            0,
-                            lambda c=combo, r=row: self._update_tube_pass_form_combo_icon_size(
-                                combo=c, row=r
-                            ),
-                        )
-                        QTimer.singleShot(
-                            80,
-                            lambda c=combo, r=row: self._update_tube_pass_form_combo_icon_size(
-                                combo=c, row=r
-                            ),
+                        list_view.setStyleSheet(
+                            "QListView::item { padding: 2px 4px; }"
                         )
 
                         tube_pass_row = -1
@@ -16730,6 +16857,11 @@ class TubeLayoutEditor(QMainWindow):
                         # 添加信号连接：当下拉框选择变化时触发
                         combo.currentIndexChanged.connect(
                             self.on_tube_pass_form_changed
+                        )
+                        combo.currentIndexChanged.connect(
+                            lambda _i, c=combo: self._update_tube_pass_form_combo_icon_size(
+                                combo=c
+                            )
                         )
                     elif param["参数名"] == "防冲板形式":
                         combo.addItems(["平板形", "圆弧形", "焊接式"])
@@ -16787,7 +16919,27 @@ class TubeLayoutEditor(QMainWindow):
                     # 统一由 setup_parameter_listeners() 内的 bind_combobox_listeners() 做一次性绑定，
                     # 避免闭包 row 捕获错误/重复触发/错行联动。
 
-                    self.param_table.setCellWidget(row, 2, combo)
+                    if param["参数名"] == "管程分程形式":
+                        cell_wrap = QWidget()
+                        cell_lay = QHBoxLayout(cell_wrap)
+                        cell_lay.setContentsMargins(0, 0, 0, 0)
+                        cell_lay.setSpacing(0)
+                        cell_lay.addWidget(combo)
+                        self.param_table.setCellWidget(row, 2, cell_wrap)
+                        QTimer.singleShot(
+                            0,
+                            lambda c=combo: self._update_tube_pass_form_combo_icon_size(
+                                combo=c
+                            ),
+                        )
+                        QTimer.singleShot(
+                            120,
+                            lambda c=combo: self._update_tube_pass_form_combo_icon_size(
+                                combo=c
+                            ),
+                        )
+                    else:
+                        self.param_table.setCellWidget(row, 2, combo)
                     # 附到表格后再锁：部分型式/布局下 setCellWidget 会刷新子控件状态，先锁再 attach 会失效
                     if is_diameter_based:
                         combo.setEditable(False)
@@ -17073,17 +17225,19 @@ class TubeLayoutEditor(QMainWindow):
             # 存储标识
             combo.setItemData(combo.count() - 1, identifier, Qt.UserRole)
         else:
-            # 添加带图片的选项，显示图片但不显示文字
-            combo.addItem(QIcon(pixmap), "")
-            # 存储标识到用户数据中
-            combo.setItemData(combo.count() - 1, identifier, Qt.UserRole)
+            # 添加带图片的选项；闭合态由 TubePassFormComboBox 自绘，原图存 UserRole
+            combo.addItem("")
+            idx = combo.count() - 1
+            combo.setItemData(idx, identifier, Qt.UserRole)
+            combo.setItemData(idx, pixmap, _TUBE_PASS_PIXMAP_ROLE)
+            # 下拉图标在 refresh_dropdown_icons 中按单元格尺寸缩放，此处不塞原图
 
     def _apply_uniform_param_table_row_heights(self):
         """左侧参数表统一行高，各行视觉高度一致。"""
         try:
             if not hasattr(self, "param_table") or self.param_table is None:
                 return
-            row_h = int(getattr(self, "_param_table_row_height", 50) or 50)
+            row_h = int(getattr(self, "_param_table_row_height", 40) or 40)
             try:
                 self.param_table.verticalHeader().setDefaultSectionSize(row_h)
             except Exception:
@@ -17094,70 +17248,22 @@ class TubeLayoutEditor(QMainWindow):
             pass
 
     def _update_tube_pass_form_combo_icon_size(self, combo=None, row=None):
-        """管程分程形式示意图：按单元格可用宽高等比缩放，保证完整显示且不裁切。"""
+        """刷新管程分程形式显示：统一行高 + 下拉列表图标 + 触发自绘重绘。"""
         try:
             if combo is None:
                 combo = getattr(self, "tube_pass_form_combo", None)
             if not isinstance(combo, QComboBox):
                 return
-            if row is None:
-                row = getattr(self, "tube_pass_form_row", -1)
-            if not hasattr(self, "param_table") or self.param_table is None:
-                return
 
-            row_h = int(getattr(self, "_param_table_row_height", 50) or 50)
-            # 所有行统一行高（含本行），避免换机后高低不一
+            row_h = int(getattr(self, "_param_table_row_height", 40) or 40)
             self._apply_uniform_param_table_row_heights()
+            combo.setMinimumHeight(max(28, row_h - 4))
 
-            col_w = int(self.param_table.columnWidth(2))
-            # 优先用 combo 实际宽度（布局后更准），避免列宽与控件差导致裁切
-            try:
-                combo_w = int(combo.width())
-                if combo_w > 20:
-                    col_w = combo_w
-            except Exception:
-                pass
-            if col_w <= 0:
-                col_w = 120
+            if isinstance(combo, TubePassFormComboBox):
+                combo.refresh_dropdown_icons()
 
-            # 预留下拉箭头与边框；DPI/样式偏紧时仍留足余量，避免右侧被裁
-            max_w = max(48, col_w - 30)
-            max_h = max(22, row_h - 10)
-
-            # TubePattern 示意图约 4.3:1；优先取当前项真实比例
-            aspect = 4.35
-            try:
-                idx = combo.currentIndex()
-                if idx >= 0:
-                    pm = combo.itemIcon(idx).pixmap(QSize(800, 200))
-                    if pm is not None and (not pm.isNull()) and pm.height() > 0:
-                        aspect = max(2.0, float(pm.width()) / float(pm.height()))
-            except Exception:
-                pass
-
-            # 先按宽度适配（宽幅图完整显示优先），超高再按高度回退
-            icon_w = max_w
-            icon_h = max(16, int(round(max_w / aspect)))
-            if icon_h > max_h:
-                icon_h = max_h
-                icon_w = max(40, int(round(max_h * aspect)))
-                if icon_w > max_w:
-                    icon_w = max_w
-                    icon_h = max(16, int(round(max_w / aspect)))
-
-            icon_size = QSize(int(icon_w), int(icon_h))
-            combo.setIconSize(icon_size)
-            # 只约束最小高度，避免 MaximumHeight 在高 DPI/样式边距下裁切示意图
-            combo.setMinimumHeight(max(24, row_h - 6))
-            try:
-                combo.setMaximumHeight(16777215)
-            except Exception:
-                pass
-
-            view = combo.view()
-            if view is not None:
-                view.setIconSize(icon_size)
             combo.update()
+            combo.repaint()
         except Exception:
             pass
 
@@ -17642,7 +17748,11 @@ class TubeLayoutEditor(QMainWindow):
                         form_row = rr
                         break
                 form_combo = (
-                    self.param_table.cellWidget(form_row, 2) if form_row != -1 else None
+                    _tube_pass_form_combo_from_cell_widget(
+                        self.param_table.cellWidget(form_row, 2)
+                    )
+                    if form_row != -1
+                    else None
                 )
                 if isinstance(form_combo, QComboBox):
                     self.tube_pass_form_combo = form_combo
@@ -20704,12 +20814,13 @@ class TubeLayoutEditor(QMainWindow):
         if hasattr(self, "param_table"):
             table_width = self.param_table.viewport().width()
             if table_width > 0:
-                col0_width = 56  # 序号
-                col3_width = 56  # 单位
+                col0_width = 52  # 序号
+                col3_width = 52  # 单位
                 remaining = max(0, table_width - col0_width - col3_width)
-                # 参数值列更宽，便于管程分程形式示意图完整显示
-                col1_width = int(remaining * 0.45)  # 参数名
-                col2_width = remaining - col1_width  # 参数值
+                col2_width = max(int(remaining * 0.58), min(remaining - 72, 200))
+                col1_width = max(72, remaining - col2_width)
+                if col1_width + col2_width > remaining:
+                    col2_width = max(120, remaining - col1_width)
 
                 self.param_table.setColumnWidth(0, col0_width)
                 self.param_table.setColumnWidth(1, col1_width)
