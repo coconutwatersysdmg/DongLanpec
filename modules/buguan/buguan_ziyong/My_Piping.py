@@ -2976,6 +2976,15 @@ class TubeLayoutEditor(QMainWindow):
         self.param_table.setColumnCount(4)
         self.param_table.setHorizontalHeaderLabels(["序号", "参数名", "参数值", "单位"])
         self.param_table.verticalHeader().setVisible(False)
+        # 统一行高：各参数行（含管程分程形式示意图）保持一致，避免换机/DPI 下高低不一
+        self._param_table_row_height = 50
+        try:
+            self.param_table.verticalHeader().setDefaultSectionSize(
+                self._param_table_row_height
+            )
+            self.param_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+        except Exception:
+            pass
 
         self.param_table.horizontalHeader().setSectionResizeMode(
             QHeaderView.Interactive
@@ -3632,17 +3641,18 @@ class TubeLayoutEditor(QMainWindow):
         if hasattr(self, "param_table"):
             total_width = self.param_table.viewport().width()
             if total_width > 0:
-                # 与 resizeEvent 一致：参数值列略宽，便于管程分程形式示意图显示
-                col0_width = 80
-                col3_width = 80
+                # 参数值列略宽，保证宽幅「管程分程形式」示意图在不同分辨率下完整显示
+                col0_width = 56
+                col3_width = 56
                 remaining = max(0, total_width - col0_width - col3_width)
-                col1_width = int(remaining * 0.55)
+                col1_width = int(remaining * 0.45)
                 col2_width = remaining - col1_width
                 self.param_table.setColumnWidth(0, col0_width)
                 self.param_table.setColumnWidth(1, col1_width)
                 self.param_table.setColumnWidth(2, col2_width)
                 self.param_table.setColumnWidth(3, col3_width)
             try:
+                self._apply_uniform_param_table_row_heights()
                 self._update_tube_pass_form_combo_icon_size()
             except Exception:
                 pass
@@ -16659,7 +16669,7 @@ class TubeLayoutEditor(QMainWindow):
                         list_view = QListView()
                         combo.setView(list_view)
                         list_view.setSpacing(2)
-                        # 示意图按单元格宽高等比适配（仅抬高本行），避免过小看不清或撑出单元格
+                        # 示意图按单元格宽高等比适配；行高与整表统一
                         self._update_tube_pass_form_combo_icon_size(combo=combo, row=row)
                         QTimer.singleShot(
                             0,
@@ -16906,6 +16916,11 @@ class TubeLayoutEditor(QMainWindow):
             self._lock_outer_base_flag_param_cell()
         except Exception:
             pass
+        try:
+            self._apply_uniform_param_table_row_heights()
+            self._update_tube_pass_form_combo_icon_size()
+        except Exception:
+            pass
         # self.update_partition_plate_center_distance()
 
     def on_param_table_item_changed(self, item):
@@ -17063,8 +17078,23 @@ class TubeLayoutEditor(QMainWindow):
             # 存储标识到用户数据中
             combo.setItemData(combo.count() - 1, identifier, Qt.UserRole)
 
+    def _apply_uniform_param_table_row_heights(self):
+        """左侧参数表统一行高，各行视觉高度一致。"""
+        try:
+            if not hasattr(self, "param_table") or self.param_table is None:
+                return
+            row_h = int(getattr(self, "_param_table_row_height", 50) or 50)
+            try:
+                self.param_table.verticalHeader().setDefaultSectionSize(row_h)
+            except Exception:
+                pass
+            for r in range(self.param_table.rowCount()):
+                self.param_table.setRowHeight(r, row_h)
+        except Exception:
+            pass
+
     def _update_tube_pass_form_combo_icon_size(self, combo=None, row=None):
-        """管程分程形式示意图：仅抬高本行，图标等比缩放到不超过当前单元格宽高。"""
+        """管程分程形式示意图：按单元格可用宽高等比缩放，保证完整显示且不裁切。"""
         try:
             if combo is None:
                 combo = getattr(self, "tube_pass_form_combo", None)
@@ -17072,35 +17102,58 @@ class TubeLayoutEditor(QMainWindow):
                 return
             if row is None:
                 row = getattr(self, "tube_pass_form_row", -1)
-            if row is None or row < 0:
-                return
             if not hasattr(self, "param_table") or self.param_table is None:
                 return
 
-            # 其它行保持默认行高；本行略抬高以便看清宽幅示意图
-            row_h = 40
-            self.param_table.setRowHeight(int(row), row_h)
+            row_h = int(getattr(self, "_param_table_row_height", 50) or 50)
+            # 所有行统一行高（含本行），避免换机后高低不一
+            self._apply_uniform_param_table_row_heights()
 
             col_w = int(self.param_table.columnWidth(2))
+            # 优先用 combo 实际宽度（布局后更准），避免列宽与控件差导致裁切
+            try:
+                combo_w = int(combo.width())
+                if combo_w > 20:
+                    col_w = combo_w
+            except Exception:
+                pass
             if col_w <= 0:
                 col_w = 120
-            # 多预留下拉箭头与边距，避免闭合态显示不全
-            max_w = max(40, col_w - 40)
-            max_h = max(18, row_h - 12)
-            aspect = 4.5  # TubePattern 示意图约 4.5:1
-            if max_w / float(max_h) > aspect:
+
+            # 预留下拉箭头与边框；DPI/样式偏紧时仍留足余量，避免右侧被裁
+            max_w = max(48, col_w - 30)
+            max_h = max(22, row_h - 10)
+
+            # TubePattern 示意图约 4.3:1；优先取当前项真实比例
+            aspect = 4.35
+            try:
+                idx = combo.currentIndex()
+                if idx >= 0:
+                    pm = combo.itemIcon(idx).pixmap(QSize(800, 200))
+                    if pm is not None and (not pm.isNull()) and pm.height() > 0:
+                        aspect = max(2.0, float(pm.width()) / float(pm.height()))
+            except Exception:
+                pass
+
+            # 先按宽度适配（宽幅图完整显示优先），超高再按高度回退
+            icon_w = max_w
+            icon_h = max(16, int(round(max_w / aspect)))
+            if icon_h > max_h:
                 icon_h = max_h
                 icon_w = max(40, int(round(max_h * aspect)))
-            else:
-                icon_w = max_w
-                icon_h = max(14, int(round(max_w / aspect)))
+                if icon_w > max_w:
+                    icon_w = max_w
+                    icon_h = max(16, int(round(max_w / aspect)))
 
-            icon_size = QSize(icon_w, icon_h)
+            icon_size = QSize(int(icon_w), int(icon_h))
             combo.setIconSize(icon_size)
-            combo.setMinimumHeight(row_h - 2)
-            combo.setMaximumHeight(row_h - 2)
+            # 只约束最小高度，避免 MaximumHeight 在高 DPI/样式边距下裁切示意图
+            combo.setMinimumHeight(max(24, row_h - 6))
+            try:
+                combo.setMaximumHeight(16777215)
+            except Exception:
+                pass
 
-            # 下拉列表与单元格内图标同尺寸
             view = combo.view()
             if view is not None:
                 view.setIconSize(icon_size)
@@ -20651,11 +20704,11 @@ class TubeLayoutEditor(QMainWindow):
         if hasattr(self, "param_table"):
             table_width = self.param_table.viewport().width()
             if table_width > 0:
-                col0_width = 80  # 序号
-                col3_width = 80  # 单位
+                col0_width = 56  # 序号
+                col3_width = 56  # 单位
                 remaining = max(0, table_width - col0_width - col3_width)
-                # 缩小“参数名”列宽占比，让“参数值”列更宽一些
-                col1_width = int(remaining * 0.55)  # 参数名
+                # 参数值列更宽，便于管程分程形式示意图完整显示
+                col1_width = int(remaining * 0.45)  # 参数名
                 col2_width = remaining - col1_width  # 参数值
 
                 self.param_table.setColumnWidth(0, col0_width)
@@ -20663,6 +20716,7 @@ class TubeLayoutEditor(QMainWindow):
                 self.param_table.setColumnWidth(2, col2_width)
                 self.param_table.setColumnWidth(3, col3_width)
                 try:
+                    self._apply_uniform_param_table_row_heights()
                     self._update_tube_pass_form_combo_icon_size()
                 except Exception:
                     pass
