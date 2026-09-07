@@ -74,29 +74,18 @@ def convert_center_dangguan_to_lagan(editor=None):
     try:
         from modules.buguan.buguan_ziyong.variable import (
             update_selected_center_dangguan,
+            sync_from_editor,
         )
 
         editor.selected_center_dangguan = list(items_to_convert)
         update_selected_center_dangguan(list(items_to_convert))
+        sync_from_editor(editor)
     except Exception as e:
         print(f"[convert_center_dangguan_to_lagan] 同步选中中间挡管失败: {e}")
 
+    # 互转：只删已解析到的坐标/图元，禁止再按对称扩展（避免对侧被删却未补画）
     try:
-        old_sym = getattr(editor, "isSymmetry", False)
-        try:
-            editor.isSymmetry = False
-            from modules.buguan.buguan_ziyong.variable import sync_from_editor
-
-            sync_from_editor(editor)
-            delete_selected_center_dangguan_new()
-        finally:
-            editor.isSymmetry = old_sym
-            try:
-                from modules.buguan.buguan_ziyong.variable import sync_from_editor
-
-                sync_from_editor(editor)
-            except Exception:
-                pass
+        delete_selected_center_dangguan_new(expand_symmetry=False)
     except Exception as e:
         print(f"[convert_center_dangguan_to_lagan] 删除中间挡管失败: {e}")
         return False
@@ -112,7 +101,8 @@ def convert_center_dangguan_to_lagan(editor=None):
 
     created = 0
     for cx, cy in convert_coords:
-        existing = editor._find_rod_at_position((cx, cy))
+        # 精确点位判断：勿用半径相交，否则对称近点会把第二根挡掉
+        existing = editor._find_rod_at_position((cx, cy), candidate_radius=None)
         if existing is not None:
             if getattr(existing, "is_lagan", False) and not getattr(
                 existing, "is_side_rod", False
@@ -127,9 +117,13 @@ def convert_center_dangguan_to_lagan(editor=None):
             editor._remove_any_lagan_at_coords([(cx, cy)])
 
         lagan_item = draw_converted_lagan_at_position(
-            (cx, cy), editor, diameter=diameter
+            (cx, cy), editor, diameter=diameter, exact_position_only=True
         )
         if lagan_item is None:
+            print(
+                f"[convert_center_dangguan_to_lagan] 位置 ({cx:.3f}, {cy:.3f}) "
+                f"绘制转换拉杆失败"
+            )
             continue
         created += 1
         print(

@@ -9,7 +9,7 @@ from PyQt5.QtGui import QPen, QBrush, QColor
 from PyQt5.QtWidgets import QGraphicsEllipseItem
 
 
-def draw_lagan_at_position(coord, editor=None, diameter=None):
+def draw_lagan_at_position(coord, editor=None, diameter=None, exact_position_only=False):
     """
     在指定位置绘制拉杆（可选中可删除）
     
@@ -17,6 +17,8 @@ def draw_lagan_at_position(coord, editor=None, diameter=None):
         coord: 绝对坐标元组 (x, y)，拉杆圆心位置
         editor: 编辑器实例（可选，如果为None则从get_current_editor获取）
         diameter: 拉杆直径（可选，如果为None则从参数表读取换热管外径 do）
+        exact_position_only: True 时仅按圆心重合判重（互转对称落点用）；
+            False（默认）按半径相交判重，避免同位置叠画
         
     返回:
         创建的拉杆对象，如果已存在则返回None
@@ -88,13 +90,25 @@ def draw_lagan_at_position(coord, editor=None, diameter=None):
         return ClickableCircleItem
     
     ClickableCircleItem = _get_clickable_circle_item()
-    
-    for item in graphics_scene.items():
-        if hasattr(item, 'is_lagan') and item.is_lagan:
-            if hasattr(item, 'position') and item.position:
-                item_x, item_y = item.position
-                if abs(item_x - x) < 1e-6 and abs(item_y - y) < 1e-6:
-                    return None  # 已存在，不绘制
+
+    # 默认半径相交判重；互转可传 exact_position_only 仅判圆心重合
+    try:
+        find_kwargs = {}
+        if exact_position_only:
+            find_kwargs["candidate_radius"] = None
+        else:
+            find_kwargs["candidate_radius"] = float(radius)
+        if hasattr(editor, "_find_rod_at_position") and editor._find_rod_at_position(
+            (x, y), **find_kwargs
+        ) is not None:
+            return None
+    except Exception:
+        for item in graphics_scene.items():
+            if hasattr(item, 'is_lagan') and item.is_lagan:
+                if hasattr(item, 'position') and item.position:
+                    item_x, item_y = item.position
+                    if abs(item_x - x) < 0.5 and abs(item_y - y) < 0.5:
+                        return None  # 已存在，不绘制
 
     # 创建可选中的拉杆
     try:

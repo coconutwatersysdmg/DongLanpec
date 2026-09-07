@@ -852,8 +852,15 @@ def _draw_single_dangguan_pair(selected_centers, skip_dialog=False):
     return current_coords
 
 
-def delete_selected_center_dangguan():
-    """删除选中的中间挡管（完全照搬旁路挡板删除逻辑）"""
+def delete_selected_center_dangguan(expand_symmetry=None):
+    """删除选中的中间挡管（完全照搬旁路挡板删除逻辑）
+
+    参数:
+        expand_symmetry: 是否按对称扩展删除坐标。
+            None（默认）= 跟随当前全局 isSymmetry（删除键等原有行为）；
+            False = 只删已选中的坐标/图元（互转用，避免误删后未补画）；
+            True = 强制对称扩展删除。
+    """
     print("[调试] delete_selected_center_dangguan() 函数被调用")
     try:
         print("[调试] 正在获取当前编辑器实例...")
@@ -895,26 +902,38 @@ def delete_selected_center_dangguan():
 
         # 找出选中挡管对应的绘制坐标
         for dangguan in current_selected_center_dangguan:
-            if hasattr(dangguan, 'position'):
+            if hasattr(dangguan, 'position') and dangguan.position is not None:
                 coord = dangguan.position
-                coords_to_remove.append(coord)
+                try:
+                    coords_to_remove.append((float(coord[0]), float(coord[1])))
+                except Exception:
+                    coords_to_remove.append(coord)
 
         if not coords_to_remove:
             return
 
+        # 是否对称扩展：互转传入 False，避免“只删不补”
+        if expand_symmetry is None:
+            do_expand = bool(g_isSymmetry)
+        else:
+            do_expand = bool(expand_symmetry)
+
         # 如果是对称模式，计算对称坐标
         all_coords_to_remove = set()
         for coord in coords_to_remove:
-            all_coords_to_remove.add(coord)
-            if g_isSymmetry:
+            try:
+                all_coords_to_remove.add((float(coord[0]), float(coord[1])))
+            except Exception:
+                all_coords_to_remove.add(coord)
+            if do_expand:
                 x, y = coord
                 # 判断对称轴：在y轴上则关于x轴对称，其他情况关于y轴对称
                 if abs(x) < 1e-9:  # 在y轴上
                     # 关于x轴对称：(x, y) -> (x, -y)
-                    sym_coord = (x, -y)
+                    sym_coord = (float(x), float(-y))
                 else:
                     # 关于y轴对称：(x, y) -> (-x, y)
-                    sym_coord = (-x, y)
+                    sym_coord = (float(-x), float(y))
                 all_coords_to_remove.add(sym_coord)
 
         # 从 center_dangguan 列表中删除坐标（使用容差比较）
@@ -961,22 +980,26 @@ def delete_selected_center_dangguan():
         danguan_to_remove = list(current_selected_center_dangguan)
         removed_danguan = set()
 
-        # 收集所有需要删除的挡管（包括对称的）
+        # 收集所有需要删除的挡管（包括对称扩展后的坐标匹配项）
         all_danguan_to_remove = set(danguan_to_remove)
 
-        # 如果是对称模式，找到所有相关的挡管
+        # 按坐标在场景中补齐要删的图元（互转关闭对称扩展时也按已给坐标删干净）
         ClickableRectItem = _get_clickable_rect_item()
-        if g_isSymmetry:
-            # 在场景中查找所有匹配坐标的挡管
+        if g_graphics_scene is not None:
             for item in g_graphics_scene.items():
                 if (isinstance(item, ClickableRectItem) and
                         item.is_center_dangguan and
-                        hasattr(item, 'position')):
-                    item_coord = item.position
-                    # 检查是否在要删除的坐标列表中（使用容差比较）
+                        hasattr(item, 'position') and
+                        item.position is not None):
+                    try:
+                        ix, iy = float(item.position[0]), float(item.position[1])
+                    except Exception:
+                        continue
                     for target_coord in all_coords_to_remove:
-                        tx, ty = target_coord
-                        ix, iy = item_coord
+                        try:
+                            tx, ty = float(target_coord[0]), float(target_coord[1])
+                        except Exception:
+                            continue
                         if abs(ix - tx) < 1e-6 and abs(iy - ty) < 1e-6:
                             all_danguan_to_remove.add(item)
                             break
@@ -989,11 +1012,11 @@ def delete_selected_center_dangguan():
             # 删除关联的临时矩形
             if hasattr(dangguan, 'related_temp_items') and isinstance(dangguan.related_temp_items, list):
                 for temp_item in dangguan.related_temp_items:
-                    if temp_item and temp_item.scene() == g_graphics_scene:
+                    if temp_item and g_graphics_scene is not None and temp_item.scene() == g_graphics_scene:
                         g_graphics_scene.removeItem(temp_item)
 
             # 移除自身
-            if dangguan.scene() == g_graphics_scene:  # 确认在当前场景中
+            if g_graphics_scene is not None and dangguan.scene() == g_graphics_scene:
                 g_graphics_scene.removeItem(dangguan)
                 removed_danguan.add(dangguan)
 

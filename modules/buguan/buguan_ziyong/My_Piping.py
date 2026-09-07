@@ -2937,12 +2937,15 @@ class TubeLayoutEditor(QMainWindow):
 
     def _get_total_lagan_count(self):
         """普通拉杆 + 自由拉杆总数（与左下角「标准要求数量/已有数量」统计一致）。"""
-        # 场景图元是当前实际存在数量的唯一可靠来源；lagan_info、
-        # red_dangban_abs 在删除、转换或旧数据加载时可能短暂残留。
+        # 场景图元是当前实际存在数量的唯一可靠来源；同位置叠画时按圆心邻近合并计数。
         scene = getattr(self, "graphics_scene", None)
         if scene is not None:
             try:
-                seen = set()
+                try:
+                    merge_tol = max(0.5, float(getattr(self, "r", 0) or 0) * 0.25)
+                except Exception:
+                    merge_tol = 0.5
+                centers = []
                 for item in scene.items():
                     if not (
                             getattr(item, "is_lagan", False)
@@ -2950,16 +2953,20 @@ class TubeLayoutEditor(QMainWindow):
                     ):
                         continue
                     try:
-                        center = item.mapToScene(item.rect().center())
-                        seen.add(
-                            (
-                                round(float(center.x()), 6),
-                                round(float(center.y()), 6),
-                            )
-                        )
+                        center = self._item_abs_center(item)
+                        if center is None:
+                            continue
+                        cx, cy = float(center[0]), float(center[1])
                     except Exception:
-                        pass
-                return len(seen)
+                        continue
+                    duplicated = False
+                    for ex, ey in centers:
+                        if (cx - ex) * (cx - ex) + (cy - ey) * (cy - ey) <= merge_tol * merge_tol:
+                            duplicated = True
+                            break
+                    if not duplicated:
+                        centers.append((cx, cy))
+                return len(centers)
             except Exception:
                 pass
 
@@ -2974,8 +2981,111 @@ class TubeLayoutEditor(QMainWindow):
             return int(lagan_list) + free_count
         return free_count
 
+    def _dedupe_overlapping_lagan_scene_items(self):
+        """清除场景中几乎重合的拉杆叠层（同位置只保留一根），并同步 lagan_info / red_dangban_abs。"""
+        scene = getattr(self, "graphics_scene", None)
+        if scene is None:
+            return 0
+        try:
+            merge_tol = max(0.5, float(getattr(self, "r", 0) or 0) * 0.25)
+        except Exception:
+            merge_tol = 0.5
+
+        rods = []
+        for item in list(scene.items()):
+            if not (
+                    getattr(item, "is_lagan", False)
+                    or getattr(item, "is_side_rod", False)
+            ):
+                continue
+            center = self._item_abs_center(item)
+            if center is None:
+                continue
+            try:
+                rods.append((item, float(center[0]), float(center[1])))
+            except Exception:
+                continue
+
+        keep = []
+        remove_items = []
+        for item, cx, cy in rods:
+            hit_idx = None
+            for i, (kx, ky, _) in enumerate(keep):
+                if (cx - kx) * (cx - kx) + (cy - ky) * (cy - ky) <= merge_tol * merge_tol:
+                    hit_idx = i
+                    break
+            if hit_idx is None:
+                keep.append((cx, cy, item))
+                continue
+            # 同位置已有：优先保留普通拉杆（含转换拉杆），去掉后放入的叠层
+            existing = keep[hit_idx][2]
+            existing_is_normal = (
+                getattr(existing, "is_lagan", False)
+                and not getattr(existing, "is_side_rod", False)
+            )
+            new_is_normal = (
+                getattr(item, "is_lagan", False)
+                and not getattr(item, "is_side_rod", False)
+            )
+            if (not existing_is_normal) and new_is_normal:
+                remove_items.append(existing)
+                keep[hit_idx] = (cx, cy, item)
+            else:
+                remove_items.append(item)
+
+        for item in remove_items:
+            try:
+                if item.scene() is not None:
+                    scene.removeItem(item)
+            except Exception:
+                pass
+            try:
+                if hasattr(self, "selected_lagans") and item in self.selected_lagans:
+                    self.selected_lagans.remove(item)
+            except Exception:
+                pass
+            try:
+                if hasattr(self, "selected_side_rods") and item in self.selected_side_rods:
+                    self.selected_side_rods.remove(item)
+            except Exception:
+                pass
+
+        if remove_items:
+            # 按场景重建坐标缓存，避免脏数据再次叠画
+            refreshed_lagan = []
+            refreshed_free = []
+            for it in list(scene.items()):
+                try:
+                    center = self._item_abs_center(it)
+                    if center is None:
+                        continue
+                    key = self._abs_coord_key6(center[0], center[1])
+                    if getattr(it, "is_lagan", False) and not getattr(it, "is_side_rod", False):
+                        if key not in refreshed_lagan:
+                            refreshed_lagan.append(key)
+                    elif getattr(it, "is_side_rod", False):
+                        if key not in refreshed_free:
+                            refreshed_free.append(key)
+                except Exception:
+                    continue
+            self.lagan_info = [(float(x), float(y)) for x, y in refreshed_lagan]
+            self.red_dangban_abs = [(float(x), float(y)) for x, y in refreshed_free]
+            try:
+                self._sync_current_centers_lagan(reason="dedupe overlapping lagan")
+            except Exception:
+                pass
+            print(
+                f"[拉杆去重] 移除重合叠层 {len(remove_items)} 个，"
+                f"保留普通拉杆 {len(self.lagan_info)} / 自由拉杆 {len(self.red_dangban_abs)}"
+            )
+        return len(remove_items)
+
     def update_total_lagan_count(self):
         """更新拉杆要求/已有数量显示。"""
+        try:
+            self._dedupe_overlapping_lagan_scene_items()
+        except Exception as e:
+            print(f"[update_total_lagan_count] 拉杆重合去重失败: {e}")
         total = self._get_total_lagan_count()
         std = self._get_lagan_required_count()
         self.current_lagan_standard_required = std
@@ -4794,16 +4904,45 @@ class TubeLayoutEditor(QMainWindow):
                                         )
                                         design_data = cursor.fetchone()
 
+                                        # 拉杆直径/形式：布管参数表已有明确值时优先保留，
+                                        # 避免重新打开时被元件附加参数表默认值（常为16）覆盖。
+                                        keep_buguan_lagan = False
+                                        if param_name in ("拉杆直径", "拉杆形式"):
+                                            try:
+                                                _bv = (
+                                                    ""
+                                                    if param_value is None
+                                                    else str(param_value).strip()
+                                                )
+                                                if _bv and _bv != "程序推荐":
+                                                    if param_name == "拉杆形式":
+                                                        keep_buguan_lagan = _bv in (
+                                                            "螺纹拉杆",
+                                                            "焊接拉杆",
+                                                        )
+                                                    else:
+                                                        float(_bv)
+                                                        keep_buguan_lagan = True
+                                            except Exception:
+                                                keep_buguan_lagan = False
+
                                         if (
                                                 isinstance(design_data, dict)
                                                 and "参数值" in design_data
                                                 and design_data["参数值"]
+                                                and not keep_buguan_lagan
                                         ):
                                             final_value = design_data["参数值"]
                                             print(
                                                 f"更新{param_name}: {param_value} -> {final_value}"
                                             )
                                             param_value = final_value
+                                        elif keep_buguan_lagan:
+                                            print(
+                                                f"[load_initial_data] 保留布管参数表"
+                                                f"{param_name}={param_value}，"
+                                                f"不覆盖元件附加参数表值"
+                                            )
                                     except Exception as e:
                                         print(
                                             f"处理{param_name}时出错: {str(e)}，使用原值: {param_value}"
@@ -5057,7 +5196,20 @@ class TubeLayoutEditor(QMainWindow):
                                     dl_exists = True
                                 if param["参数名"] == "拉杆直径":
                                     if processed_params[i]["参数值"] == "程序推荐":
-                                        processed_params[i]["参数值"] = "16"
+                                        try:
+                                            _do_for_lg = None
+                                            for _p in processed_params:
+                                                if _p.get("参数名") == "换热管外径 do":
+                                                    _do_for_lg = float(
+                                                        str(_p.get("参数值")).strip()
+                                                    )
+                                                    break
+                                            processed_params[i]["参数值"] = str(
+                                                self._get_default_lg_diameter(_do_for_lg)
+                                                or "12"
+                                            )
+                                        except Exception:
+                                            processed_params[i]["参数值"] = "12"
                                     dl_exists = True
 
                                 # if param['参数名'] == "壳体内直径 Dis":
@@ -5083,7 +5235,20 @@ class TubeLayoutEditor(QMainWindow):
                                 self.side_dangban_length = processed_params[i]["参数值"]
                             if param["参数名"] == "拉杆直径":
                                 if processed_params[i]["参数值"] == "程序推荐":
-                                    processed_params[i]["参数值"] = "16"
+                                    try:
+                                        _do_for_lg = None
+                                        for _p in processed_params:
+                                            if _p.get("参数名") == "换热管外径 do":
+                                                _do_for_lg = float(
+                                                    str(_p.get("参数值")).strip()
+                                                )
+                                                break
+                                        processed_params[i]["参数值"] = str(
+                                            self._get_default_lg_diameter(_do_for_lg)
+                                            or "12"
+                                        )
+                                    except Exception:
+                                        processed_params[i]["参数值"] = "12"
 
                         if processed_params:
                             processed_params = self._dedupe_buguan_params(
@@ -6477,6 +6642,12 @@ class TubeLayoutEditor(QMainWindow):
             self._mark_converted_lagan_flags_on_scene()
         except Exception as e:
             print(f"[加载] 恢复转换拉杆标记失败: {e}")
+
+        # 清理加载过程中同位置叠画的拉杆，并刷新左下角数量
+        try:
+            self.update_total_lagan_count()
+        except Exception as e:
+            print(f"[加载] 刷新拉杆数量失败: {e}")
 
         # 读取吊环螺钉表并重建场景中的吊环螺钉
         try:
@@ -9762,12 +9933,26 @@ class TubeLayoutEditor(QMainWindow):
                         lg_diameter_widget.clear()
                         # 添加与换热管外径相同的选项
                         lg_diameter_widget.addItems(do_options)
-                        # 设置默认值为do的值
-                        target_value = (
+                        # 优先保留库中/界面已有有效直径，避免重新打开被 do 默认值覆盖
+                        do_as_text = (
                             str(int(do_value))
                             if float(do_value).is_integer()
                             else str(do_value)
                         )
+                        target_value = do_as_text
+                        if lg_current_value and lg_current_value.strip():
+                            cur = lg_current_value.strip()
+                            if cur == "程序推荐":
+                                target_value = do_as_text
+                            else:
+                                try:
+                                    float(cur)
+                                    target_value = cur
+                                    print(
+                                        f"保留当前焊接拉杆直径值: {target_value}"
+                                    )
+                                except (TypeError, ValueError):
+                                    target_value = do_as_text
                         lg_diameter_widget.setCurrentText(target_value)
                         print(f"焊接拉杆直径已设置为: {target_value}")
 
@@ -9788,19 +9973,16 @@ class TubeLayoutEditor(QMainWindow):
 
                 elif lg_type_value == "螺纹拉杆":
                     print("处理螺纹拉杆类型")
-                    # 螺纹拉杆，通过下拉框选择，选项为10、12、16、27
+                    # 螺纹拉杆，通过下拉框选择，选项为10、12、16、20
                     lg_diameter_widget = self.param_table.cellWidget(lg_diameter_row, 2)
 
                     # 定义螺纹拉杆直径选项
                     thread_options = ["10", "12", "16", "20"]
 
-                    # 确定基于换热管外径的默认值（保留原逻辑）
-                    if 25 > do_value >= 19:
-                        default_value = "12"
-                    elif do_value <= 32:
-                        default_value = "16"
-                    else:
-                        default_value = "20"
+                    # 与 _get_default_lg_diameter 保持一致
+                    default_value = str(
+                        self._get_default_lg_diameter(do_value) or "12"
+                    )
                     print(
                         f"根据换热管外径 {do_value} 计算的默认螺纹拉杆直径: {default_value}"
                     )
@@ -9909,7 +10091,18 @@ class TubeLayoutEditor(QMainWindow):
             for param in self.all_params:
                 if param["参数名"] == "拉杆直径":
                     if lg_type_value == "焊接拉杆":
-                        param["参数值"] = str(do_value) if do_value else ""
+                        # 与界面一致：优先保留当前有效直径
+                        if lg_current_value and str(lg_current_value).strip() not in (
+                            "",
+                            "程序推荐",
+                        ):
+                            try:
+                                float(str(lg_current_value).strip())
+                                param["参数值"] = str(lg_current_value).strip()
+                            except (TypeError, ValueError):
+                                param["参数值"] = str(do_value) if do_value else ""
+                        else:
+                            param["参数值"] = str(do_value) if do_value else ""
                     elif lg_type_value == "螺纹拉杆":
                         # 使用target_value而不是default_value，以保留数据库中的值
                         param["参数值"] = (
@@ -27184,21 +27377,20 @@ class TubeLayoutEditor(QMainWindow):
 
             dlg.accept()
 
-            # ========== 特例：若当前没有选中的换热管，但选中了“中间挡管”，则执行
-            # “中间挡管 → 普通拉杆” 的转换逻辑（弹窗内兜底，正常路径已在入口直接转换）==========
-            if not getattr(self, "selected_centers", None):
-                # 无论实例属性列表是否存在，都尝试基于场景选中状态进行转换
-                try:
+            # ========== 优先：选中中间挡管时走互转（即使仍残留换热管选中）==========
+            try:
+                if self._has_selected_center_dangguan():
                     converted = self.convert_center_dangguan_to_lagan()
-                except Exception as e:
-                    converted = False
-                    print(f"[on_lagan_click] 中间挡管转换为拉杆时出错: {e}")
+                    print(
+                        f"[on_lagan_click] 弹窗确定后中间挡管转拉杆: ok={converted}"
+                    )
+                    if converted:
+                        return
+            except Exception as e:
+                print(f"[on_lagan_click] 中间挡管转换为拉杆时出错: {e}")
 
-                # 若成功完成“中间挡管→拉杆”的转换，则直接返回
-                if converted:
-                    return
-
-                # 否则按原逻辑提示
+            # ========== 无换热管选中则无法画普通拉杆 ==========
+            if not getattr(self, "selected_centers", None):
                 print("[on_lagan_click] 没有选中的换热管，无法绘制拉杆")
                 return
 
@@ -29277,10 +29469,12 @@ class TubeLayoutEditor(QMainWindow):
                         for it in list(self.graphics_scene.items()):
                             try:
                                 if getattr(it, "is_lagan", False) and not getattr(it, "is_side_rod", False):
-                                    r = it.rect()
-                                    cx = float(r.center().x())
-                                    cy = float(r.center().y())
-                                    refreshed_lagan.append((cx, cy))
+                                    center = self._item_abs_center(it)
+                                    if center is None:
+                                        continue
+                                    key = self._abs_coord_key6(center[0], center[1])
+                                    if key not in refreshed_lagan:
+                                        refreshed_lagan.append(key)
                             except Exception:
                                 continue
                 except Exception:
@@ -29288,7 +29482,7 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 去重并回写；场景中没有普通拉杆时明确置空
                 try:
-                    self.lagan_info = list(dict.fromkeys(refreshed_lagan))
+                    self.lagan_info = [(float(x), float(y)) for x, y in refreshed_lagan]
                 except Exception:
                     self.lagan_info = refreshed_lagan if refreshed_lagan else []
 
@@ -34322,7 +34516,10 @@ class TubeLayoutEditor(QMainWindow):
                             continue
                         x, y = self.full_sorted_current_centers_down[row_idx][col_idx]
 
-                    if self._find_rod_at_position((x, y)) is not None:
+                    if self._find_rod_at_position(
+                            (x, y),
+                            candidate_radius=float(getattr(self, "r", 0) or 0),
+                    ) is not None:
                         continue
 
                     # 使用 ClickableCircleItem 绘制普通拉杆，使其支持选中和双击编辑
@@ -34369,7 +34566,10 @@ class TubeLayoutEditor(QMainWindow):
             for coord in abs_coords_direct:
                 try:
                     x, y = coord
-                    if self._find_rod_at_position((x, y)) is not None:
+                    if self._find_rod_at_position(
+                            (x, y),
+                            candidate_radius=float(getattr(self, "r", 0) or 0),
+                    ) is not None:
                         continue
 
                     # 使用 ClickableCircleItem 绘制普通拉杆，使其支持选中和双击编辑

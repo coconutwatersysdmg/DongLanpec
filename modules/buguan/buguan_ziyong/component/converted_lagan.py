@@ -182,7 +182,9 @@ def mark_existing_as_converted_lagan(item, coord, editor=None):
     return True
 
 
-def draw_converted_lagan_at_position(coord, editor=None, diameter=None):
+def draw_converted_lagan_at_position(
+    coord, editor=None, diameter=None, exact_position_only=True
+):
     """
     在指定位置绘制转换拉杆（普通拉杆 + from_center_dangguan）。
 
@@ -190,6 +192,7 @@ def draw_converted_lagan_at_position(coord, editor=None, diameter=None):
         coord: 绝对坐标 (x, y)
         editor: 编辑器实例
         diameter: 拉杆直径（可选）
+        exact_position_only: 默认 True，仅圆心重合判重，避免对称近点互相挡掉
 
     返回:
         创建的拉杆图元；失败返回 None
@@ -214,7 +217,12 @@ def draw_converted_lagan_at_position(coord, editor=None, diameter=None):
             return None
         diameter = radius * 2.0
 
-    lagan_item = draw_lagan_at_position((cx, cy), editor, diameter=diameter)
+    lagan_item = draw_lagan_at_position(
+        (cx, cy),
+        editor,
+        diameter=diameter,
+        exact_position_only=exact_position_only,
+    )
     if lagan_item is None:
         return None
 

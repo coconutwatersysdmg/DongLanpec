@@ -291,6 +291,19 @@ def draw_free_lagan_at_position(
     red_brush = QBrush(Qt.red)
     lagan_radius = draw_diameter / 2.0
 
+    # 绘制前再拦一次：同位置已有普通/自由拉杆则不叠画
+    try:
+        if hasattr(editor, "_find_rod_at_position") and editor._find_rod_at_position(
+            (lagan_x, lagan_y), candidate_radius=lagan_radius
+        ) is not None:
+            print(
+                f"[draw_free_lagan_at_position] 位置 ({lagan_x:.3f}, {lagan_y:.3f}) "
+                f"已有拉杆，跳过叠画"
+            )
+            return None
+    except Exception:
+        pass
+
     lagan_rect = QRectF(
         lagan_x - lagan_radius,
         lagan_y - lagan_radius,
