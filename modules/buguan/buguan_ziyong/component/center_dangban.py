@@ -286,13 +286,13 @@ def on_center_dangban_click(self):
 
         heat_exchanger = getattr(self, "heat_exchanger", None)
         tube_pass_form_value = getattr(self, "tube_pass_form_value", None)
-        is_special_4_1 = (str(heat_exchanger) in ("AES", "BES", "NEN", "NEN(Head)")) and (
+        is_special_4_1 = (str(heat_exchanger) in ("AES", "BES", "NEN", "NEN(H)")) and (
                 str(tube_pass_form_value) == "4.1"
         )
-        is_special_4_3 = (str(heat_exchanger) in ("AES", "BES", "NEN", "NEN(Head)")) and (
+        is_special_4_3 = (str(heat_exchanger) in ("AES", "BES", "NEN", "NEN(H)")) and (
                 str(tube_pass_form_value) == "4.3"
         )
-        is_special_6_1 = (str(heat_exchanger) in ("AES", "BES", "NEN", "NEN(Head)")) and (
+        is_special_6_1 = (str(heat_exchanger) in ("AES", "BES", "NEN", "NEN(H)")) and (
                 str(tube_pass_form_value) == "6.1"
         )
 

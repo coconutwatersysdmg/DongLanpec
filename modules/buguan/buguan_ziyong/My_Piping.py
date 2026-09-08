@@ -3100,6 +3100,200 @@ class TubeLayoutEditor(QMainWindow):
                 text = f"拉杆标准要求数量-/已有数量{total}"
             self.lagan_required_label.setText(text)
 
+    def update_wy0_correction_tip(self, tip_text=None):
+        """拉杆数量下方：显示/清除隔条尺寸按 Snv/Snh 修正提示（可多行）。"""
+        label = getattr(self, "wy0_correction_tip_label", None)
+        if label is None:
+            return
+        text = (tip_text or "").strip()
+        if text:
+            label.setText(text)
+            label.setVisible(True)
+        else:
+            label.setText("")
+            label.setVisible(False)
+        try:
+            self._align_side_table_bottoms()
+        except Exception:
+            pass
+
+    def _write_back_param_table_value(self, param_name, value, output_key=None):
+        """
+        程序写回左侧参数表某一行（本地分程 Snv/Snh 修正后）。
+        走 programmatic 标记，避免当成用户手改触发联动。
+        """
+        param_name = (param_name or "").strip()
+        if not param_name:
+            return False
+        try:
+            w_f = float(value)
+        except (TypeError, ValueError):
+            return False
+        value_str = f"{w_f:.3f}"
+
+        target_row = -1
+        for row in range(self.param_table.rowCount()):
+            name_item = self.param_table.item(row, 1)
+            if name_item and name_item.text().strip() == param_name:
+                target_row = row
+                break
+        if target_row < 0:
+            print(f"[本地布管] 参数表无「{param_name}」行，跳过回写")
+            return False
+
+        if not hasattr(self, "_programmatic_update_params"):
+            self._programmatic_update_params = set()
+        self._programmatic_update_params.add(param_name)
+        try:
+            try:
+                self.param_table.itemChanged.disconnect()
+            except Exception:
+                pass
+
+            cell_widget = self.param_table.cellWidget(target_row, 2)
+            if isinstance(cell_widget, QComboBox):
+                cell_widget.blockSignals(True)
+                if cell_widget.findText(value_str) < 0:
+                    cell_widget.addItem(value_str)
+                cell_widget.setCurrentText(value_str)
+                cell_widget.blockSignals(False)
+            else:
+                item = self.param_table.item(target_row, 2)
+                if item is None:
+                    item = QTableWidgetItem(value_str)
+                    self.param_table.setItem(target_row, 2, item)
+                else:
+                    item.setText(value_str)
+
+            try:
+                if isinstance(getattr(self, "left_data_pd", None), list):
+                    for p in self.left_data_pd:
+                        if isinstance(p, dict) and p.get("参数名") == param_name:
+                            p["参数值"] = value_str
+                            break
+            except Exception:
+                pass
+            try:
+                if isinstance(getattr(self, "output_data", None), dict):
+                    if output_key:
+                        self.output_data[output_key] = w_f
+                    elif param_name == "隔条位置尺寸 W":
+                        self.output_data["W"] = w_f
+            except Exception:
+                pass
+
+            print(f"[本地布管] 已回写 {param_name} = {value_str}")
+            return True
+        except Exception as e:
+            print(f"[本地布管] 回写 {param_name} 失败: {e}")
+            return False
+        finally:
+            try:
+                self._programmatic_update_params.discard(param_name)
+            except Exception:
+                pass
+            try:
+                self.setup_parameter_listeners()
+            except Exception:
+                pass
+
+    def _write_back_param_w_value(self, w_value):
+        """兼容旧调用：回写隔条位置尺寸 W。"""
+        return self._write_back_param_table_value("隔条位置尺寸 W", w_value, output_key="W")
+
+    def _apply_local_divider_corrections(self, packed):
+        """按 main_gui 逻辑回写 Wx0/Wx1/Wy0/Wy1/Wy2，并刷新左下提示。"""
+        corr = (
+            (packed or {}).get("divider_corrections")
+            or (packed or {}).get("wy0_correction")
+            or {}
+        )
+        writebacks = list(corr.get("writebacks") or [])
+        # 批量写回时只断/接一次信号
+        names = [wb.get("param_name") for wb in writebacks if wb.get("param_name")]
+        if not hasattr(self, "_programmatic_update_params"):
+            self._programmatic_update_params = set()
+        for n in names:
+            self._programmatic_update_params.add(n)
+        disconnected = False
+        try:
+            if writebacks:
+                try:
+                    self.param_table.itemChanged.disconnect()
+                    disconnected = True
+                except Exception:
+                    pass
+            for wb in writebacks:
+                pname = wb.get("param_name")
+                cval = wb.get("corrected")
+                if pname is None or cval is None:
+                    continue
+                out_key = "W" if pname == "隔条位置尺寸 W" else None
+                # 内部不再 disconnect：临时去掉 finally 里的 setup，改为批量后统一恢复
+                try:
+                    w_f = float(cval)
+                except (TypeError, ValueError):
+                    continue
+                value_str = f"{w_f:.3f}"
+                target_row = -1
+                for row in range(self.param_table.rowCount()):
+                    name_item = self.param_table.item(row, 1)
+                    if name_item and name_item.text().strip() == pname:
+                        target_row = row
+                        break
+                if target_row < 0:
+                    print(f"[本地布管] 参数表无「{pname}」行，跳过回写")
+                    continue
+                cell_widget = self.param_table.cellWidget(target_row, 2)
+                if isinstance(cell_widget, QComboBox):
+                    cell_widget.blockSignals(True)
+                    if cell_widget.findText(value_str) < 0:
+                        cell_widget.addItem(value_str)
+                    cell_widget.setCurrentText(value_str)
+                    cell_widget.blockSignals(False)
+                else:
+                    item = self.param_table.item(target_row, 2)
+                    if item is None:
+                        item = QTableWidgetItem(value_str)
+                        self.param_table.setItem(target_row, 2, item)
+                    else:
+                        item.setText(value_str)
+                try:
+                    if isinstance(getattr(self, "left_data_pd", None), list):
+                        for p in self.left_data_pd:
+                            if isinstance(p, dict) and p.get("参数名") == pname:
+                                p["参数值"] = value_str
+                                break
+                except Exception:
+                    pass
+                try:
+                    if out_key and isinstance(getattr(self, "output_data", None), dict):
+                        self.output_data[out_key] = w_f
+                except Exception:
+                    pass
+                print(f"[本地布管] 已回写 {pname} = {value_str}")
+            tip = (corr.get("tip") or "").strip()
+            if not tip and corr.get("tips"):
+                tip = "\n".join(corr.get("tips") or [])
+            self.update_wy0_correction_tip(tip)
+        except Exception as e:
+            print(f"[本地布管] 隔条尺寸修正回写/提示失败: {e}")
+            try:
+                self.update_wy0_correction_tip("")
+            except Exception:
+                pass
+        finally:
+            for n in names:
+                try:
+                    self._programmatic_update_params.discard(n)
+                except Exception:
+                    pass
+            if disconnected or writebacks:
+                try:
+                    self.setup_parameter_listeners()
+                except Exception:
+                    pass
+
     def setup_ui(self):
         # 主窗口样式
         self.setStyleSheet(
@@ -3283,6 +3477,13 @@ class TubeLayoutEditor(QMainWindow):
         self.lagan_required_label.setStyleSheet("font-size: 22px; color: #222;")
         self.lagan_required_label.setTextFormat(Qt.RichText)
         lagan_layout.addWidget(self.lagan_required_label)
+        # 本地分程：按 Snv 修正 Wy0 时的提示（与 tube_pass/main_gui 文案一致）
+        self.wy0_correction_tip_label = QLabel("")
+        self.wy0_correction_tip_label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        self.wy0_correction_tip_label.setWordWrap(True)
+        self.wy0_correction_tip_label.setStyleSheet("font-size: 16px; color: #222;")
+        self.wy0_correction_tip_label.setVisible(False)
+        lagan_layout.addWidget(self.wy0_correction_tip_label)
         param_layout.addWidget(self.lagan_summary_container)
 
         # 中间区域
@@ -5102,7 +5303,7 @@ class TubeLayoutEditor(QMainWindow):
                                 if not self.heat_exchanger:
                                     self.heat_exchanger = "AEU"
                                 # 根据换热器型号计算DL
-                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN", "AEM", "AKU", "BKU", "NEN(Head)"]:
+                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN", "AEM", "AKU", "BKU", "NEN(H)"]:
                                     # 计算方式1: DL = Di - 2×b₃，其中b₃ = max(0.25×do, 8mm)
                                     b3 = max(0.25 * do, 8.0)  # 取两者较大值作为b3
                                     DL = Di - 2 * b3
@@ -5680,7 +5881,7 @@ class TubeLayoutEditor(QMainWindow):
                                 print("无法计算DL：未获取到换热器型号")
                             else:
                                 # 根据换热器型号计算DL
-                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN", "AEM", "AKU", "BKU", "NEN(Head)"]:
+                                if self.heat_exchanger in ["AEU", "BEU", "BEM", "NEN", "AEM", "AKU", "BKU", "NEN(H)"]:
                                     # 计算方式1: DL = Di - 2×b₃，其中b₃ = max(0.25×do, 8mm)
                                     b3 = max(0.25 * do, 8.0)  # 取两者较大值作为b3
                                     DL = Di - 2 * b3
@@ -5847,7 +6048,7 @@ class TubeLayoutEditor(QMainWindow):
         except Exception:
             pass
 
-        if self.heat_exchanger in ["BEM", "NEN", "AEM", "NEN(Head)"]:
+        if self.heat_exchanger in ["BEM", "NEN", "AEM", "NEN(H)"]:
             self.header.setCurrentIndex(0)  # 管板形式页面
             self.stacked_widget.setCurrentIndex(0)
         else:
@@ -7047,7 +7248,7 @@ class TubeLayoutEditor(QMainWindow):
             di_result = qtzj.cal_qiaotineizhijing_S(
                 self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN, user_Dit
             )
-        elif self.heat_exchanger in ["NEN", "BEM", "NEN(Head)"]:
+        elif self.heat_exchanger in ["NEN", "BEM", "NEN(H)"]:
             print(1111111111111111111111111)
             di_result = qtzj.cal_qiaotineizhijing_NEN(
                 self.productID, self.isDi_change, self.isDN_change, user_Di, user_DN, user_Dit
@@ -7833,7 +8034,7 @@ class TubeLayoutEditor(QMainWindow):
         # 根据产品型式判断热交换器类型
         if product_type_str in ["AEU", "BEU", "AKU", "BKU"]:
             he_type = "2"  # U型管式
-        elif product_type_str in ["NEN", "BEM", "AEM", "NEN(Head)"]:
+        elif product_type_str in ["NEN", "BEM", "AEM", "NEN(H)"]:
             he_type = "1"  # 固定管板式
         elif product_type_str in ["AES", "BES"]:
             he_type = "0"  # 浮头式
@@ -7856,7 +8057,7 @@ class TubeLayoutEditor(QMainWindow):
                             # 根据产品型式判断热交换器类型
                             if product_type_str in ["AEU", "BEU", "AKU", "BKU"]:
                                 he_type = "2"  # U型管式
-                            elif product_type_str in ["NEN", "BEM", "AEM", "NEN(Head)"]:
+                            elif product_type_str in ["NEN", "BEM", "AEM", "NEN(H)"]:
                                 he_type = "1"  # 固定管板式
                             elif product_type_str in ["AES", "BES"]:
                                 he_type = "0"  # 浮头式
@@ -8084,6 +8285,11 @@ class TubeLayoutEditor(QMainWindow):
 
             self.update_cross_pipe_button_state(product_type_str)
             self.update_total_lagan_count()
+            # DLL 路径无 Wy0/Snv 修正提示
+            try:
+                self.update_wy0_correction_tip("")
+            except Exception:
+                pass
 
             return result
 
@@ -8182,6 +8388,15 @@ class TubeLayoutEditor(QMainWindow):
         self.update_tube_nums()
         self.update_cross_pipe_button_state(product_type_str)
         self.update_total_lagan_count()
+        # 按 main_gui：Wx0/Wx1/Wy0/Wy1/Wy2 修正则回写参数表，并在拉杆数量下方提示
+        try:
+            self._apply_local_divider_corrections(packed)
+        except Exception as _div_e:
+            print(f"[本地布管] 隔条尺寸修正处理失败: {_div_e}")
+            try:
+                self.update_wy0_correction_tip("")
+            except Exception:
+                pass
         _kw = packed.get("kwargs") or {}
         print(
             f"[本地布管] Cat={cat}, 布置方式={_kw.get('layout_text', '?')}, "
@@ -8653,7 +8868,7 @@ class TubeLayoutEditor(QMainWindow):
         # 根据产品型式判断热交换器类型
         if product_type_str in ["AEU", "BEU", "AKU", "BKU"]:
             he_type = "2"  # U型管式
-        elif product_type_str in ["NEN", "BEM", "AEM", "NEN(Head)"]:
+        elif product_type_str in ["NEN", "BEM", "AEM", "NEN(H)"]:
             he_type = "1"  # 固定管板式
         elif product_type_str in ["AES", "BES"]:
             he_type = "0"  # 浮头式
@@ -8676,7 +8891,7 @@ class TubeLayoutEditor(QMainWindow):
                             # 根据产品型式判断热交换器类型
                             if product_type_str in ["AEU", "BEU", "AKU", "BKU"]:
                                 he_type = "2"  # U型管式
-                            elif product_type_str in ["NEN", "BEM", "AEM", "NEN(Head)"]:
+                            elif product_type_str in ["NEN", "BEM", "AEM", "NEN(H)"]:
                                 he_type = "1"  # 固定管板式
                             elif product_type_str in ["AES", "BES"]:
                                 he_type = "0"  # 浮头式
@@ -10348,7 +10563,7 @@ class TubeLayoutEditor(QMainWindow):
             "AEM",
             "AKU",
             "BKU",
-            "NEN(Head)",
+            "NEN(H)",
         ]:
             b3 = max(0.25 * do_value, 8.0)
             return di_value - 2 * b3
@@ -10490,7 +10705,7 @@ class TubeLayoutEditor(QMainWindow):
             """内部工具函数：按原逻辑根据换热器型号计算 DL。"""
             heat_exchanger_type_local = self.heat_exchanger or "AEU"
 
-            if heat_exchanger_type_local in ["AEU", "BEU", "BEM", "NEN", "AEM", "AKU", "BKU", "NEN(Head)"]:
+            if heat_exchanger_type_local in ["AEU", "BEU", "BEM", "NEN", "AEM", "AKU", "BKU", "NEN(H)"]:
                 # 计算方式1: DL = Di - 2b₃, b₃ = max(0.25do, 8)
                 b3_local = max(0.25 * do_value_local, 8.0)
                 dl_local = di_value_local - 2 * b3_local
@@ -13849,7 +14064,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 4. 按换热器类型+管程数更新中心距
         # 4.1 浮头式换热器（AES、BES）
-        if self.heat_exchanger in ["AES", "BES", "NEN", "BEM", "NEN(Head)"]:
+        if self.heat_exchanger in ["AES", "BES", "NEN", "BEM", "NEN(H)"]:
             # 获取浮头式对应的中心距（竖直/水平一致）
             if do_value not in aes_bes_map or range_type not in aes_bes_map[do_value]:
                 print(
@@ -17508,7 +17723,7 @@ class TubeLayoutEditor(QMainWindow):
         hx_norm = str(getattr(self, "heat_exchanger", "") or "").strip().upper()
         # non_u：与 AES/BES 同类的“非 U 管”布置示意图；AEM 固定管板式此前漏写导致下拉无任何图片
         non_u_types = {"AES", "BES", "NEN", "BEM", "AEM"}
-        u_and_common_types = {"AEU", "BEU", "AKU", "BKU", "AES", "BES", "NEN", "BEM", "AEM", "NEN(Head)"}
+        u_and_common_types = {"AEU", "BEU", "AKU", "BKU", "AES", "BES", "NEN", "BEM", "AEM", "NEN(H)"}
 
         # 根据管程程数加载对应图片，同时关联标识
         if tube_pass == "2":
@@ -17896,7 +18111,7 @@ class TubeLayoutEditor(QMainWindow):
             print(f"当前管程分程形式: {self.tube_pass_form_value}")
 
             # 交互前移：当管程程数改为1且型号为AEM/BEM/NEN时，立即询问是否置0固定管板槽宽/槽深
-            if str(tube_pass_text).strip() == "1" and getattr(self, "heat_exchanger", None) in ("AEM", "BEM", "NEN", "NEN(Head)"):
+            if str(tube_pass_text).strip() == "1" and getattr(self, "heat_exchanger", None) in ("AEM", "BEM", "NEN", "NEN(H)"):
                 # 同一轮值变更可能触发两次回调（text/index），这里做一次性防重
                 if not getattr(self, "_tube_pass_one_prompt_shown", False):
                     self._tube_pass_one_prompt_shown = True
@@ -18010,7 +18225,7 @@ class TubeLayoutEditor(QMainWindow):
     def _tubebox_flat_cover_component_name(self):
         """管程侧平盖元件名称：AEM/NEN 为前端管箱平盖，其余型式为管箱平盖。"""
         hx = getattr(self, "heat_exchanger", None)
-        if hx in ("AEM", "NEN", "NEN(Head)"):
+        if hx in ("AEM", "NEN", "NEN(H)"):
             return "前端管箱平盖"
         return "管箱平盖"
 

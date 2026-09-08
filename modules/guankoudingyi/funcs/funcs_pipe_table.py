@@ -691,7 +691,7 @@ def set_pipe_function_column_readonly(stats_widget):
             readonly_values = {"管程入口", "管程出口", "壳程入口", "壳程出口"}
         elif product_version in ["AES", "BES"]:
             readonly_values = {"管程入口", "管程出口", "壳程入口", "壳程出口"}
-        elif product_version in ["NEN","NEN(Head)"]:
+        elif product_version in ["NEN","NEN(H)"]:
             readonly_values = {"管程入口", "管程出口", "壳程入口", "壳程出口"}
         elif product_version in ["BEM","AEM"]:
             readonly_values = {"管程入口", "管程出口", "壳程入口", "壳程出口"}
@@ -700,7 +700,7 @@ def set_pipe_function_column_readonly(stats_widget):
 
     # 所有类型的"管程入口"、"管程出口"的管口所属元件列可编辑
     belong_editable_functions = set()  # 变量名从belong_editable_for_nen改为更通用的名称
-    if product_type == "管壳式热交换器" and product_version in ["NEN", "BEM","AES","BES","AEU","BEU","AEM","NEN(Head)"]:
+    if product_type == "管壳式热交换器" and product_version in ["NEN", "BEM","AES","BES","AEU","BEU","AEM","NEN(H)"]:
         belong_editable_functions = {"管程入口", "管程出口"}
     elif product_type == "管壳式热交换器" and product_version in ["AKU","BKU"]:
         belong_editable_functions ={"管程入口", "管程出口", "壳程入口","壳程液位计1","壳程液位计2","壳程温度计"}
@@ -727,7 +727,7 @@ def set_pipe_function_column_readonly(stats_widget):
 
         # 设置管口所属元件列的只读状态
         if belong_item:
-            if product_type == "管壳式热交换器" and product_version in ["NEN", "BEM","AES","BES","AEU","BEU","AEM","AKU","BKU","NEN(Head)"]:  # 加入BEM
+            if product_type == "管壳式热交换器" and product_version in ["NEN", "BEM","AES","BES","AEU","BEU","AEM","AKU","BKU","NEN(H)"]:  # 加入BEM
                 #管程入口、管程出口的管口所属元件列可编辑
                 if func_value in belong_editable_functions:  # 同步使用新的变量名
                     belong_item.setFlags(belong_item.flags() | Qt.ItemIsEditable)
@@ -1803,7 +1803,7 @@ def set_default_pipe_cannot_be_deleted(stats_widget):
     if product_type == "管壳式热交换器":
         if product_version in ["AEU", "BEU"]:
             readonly_pipe_functions = {"管程入口", "管程出口", "壳程入口", "壳程出口"}
-        elif product_version in ["AES", "BES","NEN","AME","BEM","NEN(Head)"]:
+        elif product_version in ["AES", "BES","NEN","AME","BEM","NEN(H)"]:
             readonly_pipe_functions = {"管程入口", "管程出口", "壳程入口", "壳程出口", "排液口", "排气口"}
         elif product_version in ["AKU","BKU"]:
             readonly_pipe_functions = {"管程入口", "管程出口", "壳程入口", "壳程气相出口","壳程液相出口","壳程液位计1","壳程液位计2","壳程温度计"}

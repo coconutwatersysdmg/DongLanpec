@@ -652,10 +652,10 @@ class DesignConditionInputViewer(QWidget):
         product_form = get_product_form_from_db(self.product_id)
 
         # 只对NEN\AEM和BEM产品应用
-        if product_form not in ['NEN', 'AEM', 'BEM', 'NEN(Head)']:
+        if product_form not in ['NEN', 'AEM', 'BEM', 'NEN(H)']:
             return
 
-        print(f"[DEBUG] 正在为NEN/NEN(Head)/AEM/BEM产品设置特殊只读单元格")
+        print(f"[DEBUG] 正在为NEN/NEN(H)/AEM/BEM产品设置特殊只读单元格")
 
         # 遍历设计数据表的所有行
         for row in range(self.tableWidget_design_data.rowCount()):

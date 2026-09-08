@@ -1275,7 +1275,7 @@ def handle_pipe_cell_click(stats_widget, row, column):
             ("NEN",): ["前端管箱平盖", "前端管箱圆筒", "后端管箱圆筒", "后端管箱平盖"],
             ("BEM",): ["前端管箱封头", "前端管箱圆筒", "后端管箱圆筒", "后端管箱封头"],
             ("AEM",): ["前端管箱平盖", "前端管箱圆筒", "后端管箱圆筒", "后端管箱封头"],
-            ("NEN(Head)",): ["前端管箱封头", "前端管箱圆筒", "后端管箱圆筒", "后端管箱封头"],
+            ("NEN(H)",): ["前端管箱封头", "前端管箱圆筒", "后端管箱圆筒", "后端管箱封头"],
             ("AES", "AEU","AKU"): ["管箱圆筒", "管箱平盖"],
             ("BES", "BEU","BKU"): ["管箱圆筒", "管箱封头"],
 
@@ -2213,7 +2213,7 @@ def enforce_shell_inout_axial_base_mutex(stats_widget, changed_row: int):
     """
     table = stats_widget.tableWidget_pipe
     product_version = getattr(stats_widget, "current_product_version", "") or ""
-    if product_version not in ["AEU", "BEU", "AES", "BES", "NEN", "BEM","NEN(Head)"]:
+    if product_version not in ["AEU", "BEU", "AES", "BES", "NEN", "BEM","NEN(H)"]:
         return
 
     func_col = 2      # 管口功能
@@ -4050,7 +4050,7 @@ def validate_axial_position_distance(distance_text, nominal_size_text, stats_wid
 
             # 计算限定值：0.5*当前管口接管实际外径——换热管长度+1/2壳程公称直径-0.5*当前管口接管实际外径
             min_distance = round(0.5 * current_pipe_od, 2)
-            if product_version in [ "AEU", "BEU","AES", "BES", "AEM", "BEM", "NEN","NEN(Head)"]:
+            if product_version in [ "AEU", "BEU","AES", "BES", "AEM", "BEM", "NEN","NEN(H)"]:
                 # 获取壳程公称直径数值（失败时按0处理）
                 nominal_ok, shell_lengh = get_nominal_diameter(product_id, "壳体")
                 if (not nominal_ok) or (shell_lengh is None):

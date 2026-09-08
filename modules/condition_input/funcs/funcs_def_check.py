@@ -822,7 +822,7 @@ def check_design_temp_max(value, tip_widget, param_name, column_name, table_widg
     except Exception:
         raw_form = ""
 
-    if raw_form in {"nen", "bem", "aem","NEN(Head)"}:
+    if raw_form in {"nen", "bem", "aem","NEN(H)"}:
         avg_tube_metal_temp = None
         avg_shell_metal_temp = None
         for row in range(table_widget.rowCount()):

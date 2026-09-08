@@ -303,10 +303,10 @@ class HeatExchangerView(QWidget):
             self.draw_main_view_BKU(painter)
             self.draw_left_view_AKU_BKU(painter)
             self.draw_pipe_mouths_AKU_BKU(painter)
-        elif self.product_type == "管壳式热交换器" and self.product_version == "NEN(Head)":
-            self.draw_main_view_NEN_Head(painter)
+        elif self.product_type == "管壳式热交换器" and self.product_version == "NEN(H)":
+            self.draw_main_view_NEN_H(painter)
             self.draw_left_view_BEU(painter)
-            self.draw_pipe_mouths_NEN_Head(painter)
+            self.draw_pipe_mouths_NEN_H(painter)
         elif self.product_type == "卧式容器" and self.product_version == "单腔型":
             self.draw_main_view_Horizontal_container_Single_chamber(painter)
             self.draw_left_view_BEU(painter)
@@ -6410,7 +6410,7 @@ class HeatExchangerView(QWidget):
             except Exception as e:
                 print(f"绘制管口 {pipe.get('管口代号', '')} 出错：{e}")
 
-    def draw_main_view_NEN_Head(self, painter):
+    def draw_main_view_NEN_H(self, painter):
         shell_color = QColor(230, 230, 230)  # 浅灰
         tube_color = QColor(50, 100, 200)  # 深蓝
         base_color = QColor(255, 153, 0)  # 橙色
@@ -6505,7 +6505,7 @@ class HeatExchangerView(QWidget):
         painter.drawText(1112, 317, "准")
         painter.drawText(1112, 335, "线")
 
-    def draw_pipe_mouths_NEN_Head(self, painter):
+    def draw_pipe_mouths_NEN_H(self, painter):
         label_offset_tracker = {}  # 按角度记录次数，避免重叠
 
         for pipe in self.pipe_data_list:

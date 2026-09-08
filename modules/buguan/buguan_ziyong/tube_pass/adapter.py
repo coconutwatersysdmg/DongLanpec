@@ -297,6 +297,87 @@ def build_compute_kwargs(
     }
 
 
+def build_divider_sn_corrections(
+    raw_calc: Mapping[str, Any], compute_kwargs: Mapping[str, Any]
+) -> Dict[str, Any]:
+    """
+    与 tube_pass/main_gui 宽度/高度校验完全一致：
+      WXA = 0.5*Snh + ColAmax  → 修正 Wx0
+      WXB = 0.5*Snh + ColCmax  → 修正 Wx1
+      WYA = 0.5*Snv + RowAmax  → 修正 Wy0（隔条位置尺寸 W）
+      WYB = 0.5*Snv + RowBmax  → 修正 Wy1
+      WYC = 0.5*Snv + RowCmax  → 修正 Wy2
+    差值 > 1e-4 时记入 tip，并给出需回写的参数表项。
+    """
+    raw = raw_calc or {}
+
+    def _f(key, default=0.0):
+        try:
+            return float(compute_kwargs.get(key) or default)
+        except (TypeError, ValueError):
+            return float(default)
+
+    snv = _f("Snv")
+    snh = _f("Snh")
+    half_snv = 0.5 * snv
+    half_snh = 0.5 * snh
+    wy0, wy1, wy2 = _f("Wy0"), _f("Wy1"), _f("Wy2")
+    wx0, wx1 = _f("Wx0"), _f("Wx1")
+
+    tips: list = []
+    writebacks: list = []
+
+    def _maybe(axis_max_key, half, input_val, name, tip_axis, param_name):
+        axis_max = raw.get(axis_max_key)
+        if axis_max is None:
+            return None
+        try:
+            corrected = half + float(axis_max)
+        except (TypeError, ValueError):
+            return None
+        if abs(corrected - input_val) > 1e-4:
+            tip = (
+                f"程序已按{tip_axis}要求修正输入{name}值："
+                f"{input_val:.3f} → {corrected:.3f}"
+            )
+            tips.append(tip)
+            writebacks.append(
+                {
+                    "name": name,
+                    "param_name": param_name,
+                    "input": input_val,
+                    "corrected": corrected,
+                    "tip": tip,
+                }
+            )
+            return corrected
+        return None
+
+    # 顺序与 main_gui 一致：先宽后高
+    _maybe("ColAmax", half_snh, wx0, "Wx0", "Snh", PARAM_WX0)
+    _maybe("ColCmax", half_snh, wx1, "Wx1", "Snh", PARAM_WX1)
+    corrected_wy0 = _maybe("RowAmax", half_snv, wy0, "Wy0", "Snv", PARAM_W)
+    _maybe("RowBmax", half_snv, wy1, "Wy1", "Snv", PARAM_WY1)
+    _maybe("RowCmax", half_snv, wy2, "Wy2", "Snv", PARAM_WY2)
+
+    return {
+        "tips": tips,
+        "tip": "\n".join(tips),
+        "writebacks": writebacks,
+        "corrected_Wy0": corrected_wy0,
+        "wy0_corrected": corrected_wy0 is not None,
+        # 兼容旧字段
+        "input_Wy0": wy0,
+    }
+
+
+def build_wy0_snv_correction(
+    raw_calc: Mapping[str, Any], compute_kwargs: Mapping[str, Any]
+) -> Dict[str, Any]:
+    """兼容旧调用：等价于 build_divider_sn_corrections 的 Wy0 子集。"""
+    return build_divider_sn_corrections(raw_calc, compute_kwargs)
+
+
 def run_local_tube_layout(
     cat: str,
     param_source: Union[Mapping, Iterable],
@@ -380,6 +461,14 @@ def run_local_tube_layout(
 
     dn_val = float(DN) if DN is not None else float(compute_kwargs["D"])
     dl_val = float(compute_kwargs["D"])
+    divider_corrections = build_divider_sn_corrections(raw, compute_kwargs)
+    # 结果中的 W：有 Snv 修正 Wy0 则用修正后的值，否则仍为入参 Wy0/Wx0
+    w_out = compute_kwargs.get("Wy0") or compute_kwargs.get("Wx0") or 0.0
+    if (
+        divider_corrections.get("wy0_corrected")
+        and divider_corrections.get("corrected_Wy0") is not None
+    ):
+        w_out = float(divider_corrections["corrected_Wy0"])
     result = {
         "small_r": r_tube,
         "big_r_wai": dn_val * 0.5,
@@ -392,7 +481,7 @@ def run_local_tube_layout(
             "DNs": {"R": dn_val},
             "DLs": {"R": dl_val},
             "S": compute_kwargs["S"],
-            "W": compute_kwargs.get("Wy0") or compute_kwargs.get("Wx0") or 0.0,
+            "W": w_out,
             "local_tube_pass": True,
             "Cat": cat,
             "Layout": kwargs["Layout"],
@@ -405,4 +494,7 @@ def run_local_tube_layout(
         "result": result,
         "raw_calc": raw,
         "kwargs": kwargs,
+        "divider_corrections": divider_corrections,
+        # 兼容旧字段名
+        "wy0_correction": divider_corrections,
     }

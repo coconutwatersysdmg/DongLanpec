@@ -585,13 +585,13 @@ def get_product_form_from_db(product_id: str) -> str:
                 # 如果是 AEM，就返回 AEM
                 print(f"    ↳ 逻辑转换: 保持为 'AEM'")
                 return 'AEM'
-            # 0515新修改-NEN(Head)产品型式
-            if raw_product_form == 'NEN(Head)':
-                # 如果是 NEN(Head)，就返回 NEN(Head)
-                print(f"    ↳ 逻辑转换: 保持为 'NEN(Head)'")
-                return 'NEN(Head)'
+            # 0515新修改-NEN(H)产品型式（兼容旧名 NEN(Head)/NEN(HEAD)）
+            if raw_product_form in ('NEN(H)', 'NEN(Head)', 'NEN(HEAD)'):
+                # 统一为 NEN(H)
+                print(f"    ↳ 逻辑转换: '{raw_product_form}' → 'NEN(H)'")
+                return 'NEN(H)'
             else:
-                # 如果是其他任何值 (AES, BES, NEN、NEN(Head)空值等)，都统一视为 'all'
+                # 如果是其他任何值 (AES, BES, NEN、空值等)，都统一视为 'all'
                 print(f"    ↳ 逻辑转换: 将 '{raw_product_form}' 视为 'all'")
                 return 'all'
         else:

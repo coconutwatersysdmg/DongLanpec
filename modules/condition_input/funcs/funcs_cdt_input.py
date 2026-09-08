@@ -3158,7 +3158,7 @@ def apply_dn_standard_range_user_prompt(viewer, table, row, col, value: str) -> 
 
         raw_form = (_get_raw_product_form(table) or "").strip().upper()
         removable_for_gb151 = {"AEU", "BEU", "AES", "BES", "AKU", "BKU"}
-        non_removable_for_gb151 = {"AEM", "BEM", "NEN", "NEN(HEAD)"}
+        non_removable_for_gb151 = {"AEM", "BEM", "NEN", "NEN(H)"}
         gb150_shell_tube = removable_for_gb151 | non_removable_for_gb151
 
         if raw_form in gb150_shell_tube and dn_val < 150:
@@ -3742,7 +3742,7 @@ def import_multi_conditions_from_excel(excel_path: str, product_id: int, viewer:
             r2 = cur.fetchone() or {}
             multi_max = int(r2.get("max_id") or 0)
 
-            if product_form in ("NEN", "AEM", "BEM", "NEN(Head)"):
+            if product_form in ("NEN", "AEM", "BEM", "NEN(H)"):
                 cur.execute(
                     """
                     SELECT MAX(设计数据参数ID) AS max_id

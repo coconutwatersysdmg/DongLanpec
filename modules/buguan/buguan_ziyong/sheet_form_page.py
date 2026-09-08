@@ -536,7 +536,7 @@ class SheetFormPage(QWidget):
         if hx in {"AEU", "BEU"}:
             return "a", True
         # 固定 b 型，不允许修改
-        if hx in {"NEN", "NEN(Head)"}:
+        if hx in {"NEN", "NEN(H)"}:
             return "b", False
         # 固定 e 型，不允许修改
         if hx in {"AEM", "BEM"}:
@@ -639,7 +639,7 @@ class SheetFormPage(QWidget):
             hx = str(getattr(self, "_sheet_form_hx_for_rule", "") or "").strip().upper()
         except Exception:
             hx = ""
-        if hx in ["NEN", "NEN(Head)"]:
+        if hx in ["NEN", "NEN(H)"]:
             return "b_a"
         if hx in {"AEM", "BEM"}:
             return "e_a"
