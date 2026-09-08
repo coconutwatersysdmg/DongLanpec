@@ -6,6 +6,101 @@ from ast import literal_eval
 import pymysql
 
 
+def _cross_oab(o, a, b):
+    return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+
+def _convex_hull(points):
+    """Andrew 单调链，返回按边界顺序的凸包顶点（不含重复闭合点）。"""
+    pts = sorted(set((float(x), float(y)) for x, y in points))
+    if len(pts) <= 1:
+        return pts
+    lower = []
+    for p in pts:
+        while len(lower) >= 2 and _cross_oab(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    upper = []
+    for p in reversed(pts):
+        while len(upper) >= 2 and _cross_oab(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    return lower[:-1] + upper[:-1]
+
+
+def compute_rmax_and_outer_ring_perimeter(centers, radius_tol=None):
+    """
+    由换热管圆心计算：
+    - Rmax：圆心到原点距离的最大值
+    - 换热管布管周长：最外圈折线环周长
+      先取半径落在 [Rmax-tol, Rmax] 的圆心，按极角排序后弦长相加闭合；
+      外圈点数不足 3 时回退为全部圆心的凸包周长。
+    """
+    coords = []
+    for center in centers or []:
+        if len(center) < 2:
+            continue
+        try:
+            coords.append((float(center[0]), float(center[1])))
+        except (TypeError, ValueError):
+            continue
+    if not coords:
+        return 0.0, 0.0
+
+    radii = [math.hypot(x, y) for x, y in coords]
+    rmax = max(radii)
+
+    if radius_tol is None:
+        unique_r = sorted({round(r, 6) for r in radii}, reverse=True)
+        if len(unique_r) >= 2:
+            # 同一外圈允许的径向容差：半个相邻半径差，且至少 0.5mm
+            radius_tol = max(0.5, (unique_r[0] - unique_r[1]) * 0.5)
+        else:
+            radius_tol = max(0.5, rmax * 1e-6)
+
+    outer = [
+        (x, y)
+        for (x, y), r in zip(coords, radii)
+        if rmax - r <= radius_tol + 1e-9
+    ]
+    # 去重
+    dedup = []
+    seen = set()
+    for x, y in outer:
+        key = (round(x, 6), round(y, 6))
+        if key in seen:
+            continue
+        seen.add(key)
+        dedup.append((x, y))
+
+    ring = dedup
+    if len(ring) < 3:
+        ring = _convex_hull(coords)
+    else:
+        ring = sorted(ring, key=lambda p: math.atan2(p[1], p[0]))
+
+    if len(ring) <= 1:
+        return rmax, 0.0
+    if len(ring) == 2:
+        d = math.hypot(ring[0][0] - ring[1][0], ring[0][1] - ring[1][1])
+        return rmax, 2.0 * d
+
+    perimeter = 0.0
+    n = len(ring)
+    for i in range(n):
+        x1, y1 = ring[i]
+        x2, y2 = ring[(i + 1) % n]
+        perimeter += math.hypot(x2 - x1, y2 - y1)
+    return rmax, perimeter
+
+
+def apply_rmax_and_outer_ring_to_calc_results(calc_results, centers):
+    """写入 Rmax值、换热管布管周长（字符串，保留3位小数）。"""
+    rmax, perimeter = compute_rmax_and_outer_ring_perimeter(centers)
+    calc_results["Rmax值"] = str(round(rmax, 3))
+    calc_results["换热管布管周长"] = str(round(perimeter, 3))
+
+
 def build_sql_for_u_tube_calc(editor, create_product_connection):
     from collections import defaultdict as _dd
 
@@ -59,6 +154,8 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
         "交叉管排3实际管孔数量": "0",
         "U型管弯曲直径": "0.0",
         "管总数 tubes_count": "0",
+        "Rmax值": "0.0",
+        "换热管布管周长": "0.0",
     }
 
     product_id = editor.productID
@@ -542,6 +639,10 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
         calc_results["实际布管区域最大直径"] = "0.0"
         calc_results["实际布管区域最大宽度"] = "0.0"
         calc_results["实际布管区域最大高度"] = "0.0"
+
+    # 换热管圆心：Rmax、最外圈折线环周长（排除已删除管孔）
+    apply_rmax_and_outer_ring_to_calc_results(calc_results, filtered_coords)
+
     table_name = "`产品设计活动表_布管计算结果表`"
     sql_statements = []
 
@@ -633,6 +734,8 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
         "相邻隔板槽中心距": "0.0",
         "实际布管区域最大直径": "0.0",
         "实际布管区域最大高度": "0.0",
+        "Rmax值": "0.0",
+        "换热管布管周长": "0.0",
     }
 
     product_id = editor.productID
@@ -1277,6 +1380,9 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
             calc_results["相邻隔板槽中心距"] = "0.0"
     else:
         calc_results["相邻隔板槽中心距"] = str(round(getiao_chicun, 3))
+
+    # 换热管圆心：Rmax、最外圈折线环周长（排除已删除管孔）
+    apply_rmax_and_outer_ring_to_calc_results(calc_results, filtered_coords)
 
     table_name = "`产品设计活动表_布管计算结果表`"
     sql_statements = []
