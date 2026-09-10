@@ -1,5 +1,6 @@
 from PyQt5.QtWidgets import (
-    QUndoStack, QShortcut, QTableWidgetItem, QTableWidget, QStyledItemDelegate, QLineEdit, QApplication, QComboBox
+    QUndoStack, QShortcut, QTableWidgetItem, QTableWidget, QStyledItemDelegate, QLineEdit, QApplication, QComboBox,
+    QAbstractItemDelegate,
 )
 from PyQt5.QtGui import QKeySequence
 from PyQt5.QtCore import QTimer, Qt, QObject, QEvent
@@ -11,6 +12,89 @@ from .funcs_cdt_input import (
                               CheckableComboBox,
 )
 import re
+
+
+def _is_tab_stop_cell(table, row, col):
+    """Tab 仅落在可编辑且可见的单元格上。"""
+    if row < 0 or col < 0:
+        return False
+    if row >= table.rowCount() or col >= table.columnCount():
+        return False
+    if table.isRowHidden(row) or table.isColumnHidden(col):
+        return False
+    item = table.item(row, col)
+    if item is None:
+        return False
+    if not (item.flags() & Qt.ItemIsEditable):
+        return False
+    # 与 _enter_edit_mode_if_editable 一致：设计数据参数名列不作为 Tab 落点
+    if table.objectName() == "tableWidget_design_data" and col == 1:
+        return False
+    return True
+
+
+def _find_next_tab_stop(table, row, col, forward=True):
+    """从 (row, col) 起找下一个/上一个可编辑单元格；无则返回 None。"""
+    n_rows = table.rowCount()
+    n_cols = table.columnCount()
+    if n_rows <= 0 or n_cols <= 0:
+        return None
+    total = n_rows * n_cols
+    pos = row * n_cols + col
+    for step in range(1, total + 1):
+        new_pos = (pos + step) % total if forward else (pos - step) % total
+        r, c = divmod(new_pos, n_cols)
+        if _is_tab_stop_cell(table, r, c):
+            return r, c
+    return None
+
+
+def jump_table_tab(table, forward=True, from_row=None, from_col=None):
+    """Tab/Shift+Tab：跳到下一个可编辑格并按原逻辑尝试进入编辑。"""
+    if from_row is None or from_col is None:
+        current = table.currentIndex()
+        if not current.isValid():
+            return
+        from_row, from_col = current.row(), current.column()
+    target = _find_next_tab_stop(table, from_row, from_col, forward=forward)
+    if target is None:
+        return
+    next_row, next_col = target
+    table.setCurrentCell(next_row, next_col)
+    QTimer.singleShot(0, lambda r=next_row, c=next_col: _enter_edit_mode_if_editable(table, r, c))
+
+
+def _enter_edit_mode_if_editable(table, row, col):
+    """检查单元格是否可编辑，如果可编辑则进入编辑模式"""
+    try:
+        item = table.item(row, col)
+        if item and (item.flags() & Qt.ItemIsEditable):
+            if table.objectName() == "tableWidget_design_data" and col == 1:
+                return
+            table.edit(table.model().index(row, col))
+    except Exception as e:
+        print(f"进入编辑模式失败: {e}")
+
+
+def _tab_key_is_forward(event):
+    """区分 Tab 与 Shift+Tab（含 Windows 下的 Key_Backtab）。"""
+    if event.key() == Qt.Key_Backtab:
+        return False
+    if event.key() == Qt.Key_Tab and (event.modifiers() & Qt.ShiftModifier):
+        return False
+    return True
+
+
+def _reinstall_tab_event_filter(editor, filter_obj):
+    """编辑器创建后 Qt 视图会再装自己的过滤器并优先处理 Tab；重装一次确保我们先收到。"""
+    if editor is None or filter_obj is None:
+        return
+    try:
+        editor.installEventFilter(filter_obj)
+    except Exception:
+        pass
+
+
 class UndoableItemDelegate(QStyledItemDelegate):
     def __init__(self, table, undo_stack, viewer=None, line_tip=None):
         super().__init__(table)
@@ -23,13 +107,29 @@ class UndoableItemDelegate(QStyledItemDelegate):
         editor = QLineEdit(parent)
         editor._original_value = index.data()
         editor.installEventFilter(self)
+        # 视图随后会 installEventFilter(自身) 并抢先处理 Tab，延后重装以压过它
+        QTimer.singleShot(0, lambda e=editor: _reinstall_tab_event_filter(e, self))
         return editor
 
     def eventFilter(self, editor, event):
-        if event.type() == QEvent.KeyPress and event.key() in (Qt.Key_Return, Qt.Key_Enter):
-            self.commitData.emit(editor)
-            self.closeEditor.emit(editor)
-            return True
+        if event.type() == QEvent.KeyPress:
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter):
+                self.commitData.emit(editor)
+                self.closeEditor.emit(editor)
+                return True
+            # 编辑态 Tab：提交后只跳到可编辑单元格（与表格未编辑态一致）
+            if event.key() in (Qt.Key_Tab, Qt.Key_Backtab):
+                forward = _tab_key_is_forward(event)
+                cur = self.table.currentIndex()
+                from_row = cur.row() if cur.isValid() else 0
+                from_col = cur.column() if cur.isValid() else 0
+                self.commitData.emit(editor)
+                self.closeEditor.emit(editor, QAbstractItemDelegate.NoHint)
+                QTimer.singleShot(
+                    0,
+                    lambda r=from_row, c=from_col, f=forward: jump_table_tab(self.table, f, r, c),
+                )
+                return True
         return super().eventFilter(editor, event)
 
     def setModelData(self, editor, model, index):
@@ -60,16 +160,17 @@ class UndoableItemDelegate(QStyledItemDelegate):
                 param_name = vh_item.text().strip()
             else:
                 # fallback: 如果没有行头，就用第1列（主界面）
+                from modules.condition_input.funcs.funcs_def_check import param_name_from_item
                 param_item = self.table.item(row, 1)
-                param_name = param_item.text().strip() if param_item else ""
+                param_name = param_name_from_item(param_item)
 
             value = value.strip()
 
             if hasattr(self.table, "logical_headers"):
                 column_name = self.table.logical_headers[col]
             else:
-                header_item = self.table.horizontalHeaderItem(col)
-                column_name = header_item.text().strip() if header_item else ""
+                from modules.condition_input.funcs.funcs_cdt_input import resolve_header_field_name
+                column_name = resolve_header_field_name(self.table, col)
 
             print(f"[校核DEBUG] row={row}, col={col}, param={param_name}, col_name={column_name}, value={value}")
 
@@ -104,6 +205,15 @@ class SmartDelegate(QStyledItemDelegate):
         # 如果是下拉框，安装事件过滤器禁用滚轮 --新加
         if isinstance(editor, QComboBox):
             editor.installEventFilter(self)
+            # 可编辑下拉的内部输入框也要接管 Tab
+            try:
+                le = editor.lineEdit()
+                if le is not None:
+                    le.installEventFilter(self)
+                    QTimer.singleShot(0, lambda w=le: _reinstall_tab_event_filter(w, self))
+            except Exception:
+                pass
+            QTimer.singleShot(0, lambda e=editor: _reinstall_tab_event_filter(e, self))
             # 1206新修改-在选择发生时立刻触发 commitData 并 closeEditor，把值及时写回表格，
             # 配合联动去抖：确保只有“真实值变化”才会触发表格的itemChanged，避免仅点击或滚轮造成误联动、误弹窗。
             try:
@@ -113,21 +223,56 @@ class SmartDelegate(QStyledItemDelegate):
             except Exception:
                 pass
             try:
-                editor.currentTextChanged.connect(lambda *_: self.commitData.emit(editor))
+                if not editor.isEditable():
+                    editor.currentTextChanged.connect(lambda *_: self.commitData.emit(editor))
             except Exception:
                 pass
+            # 单击进入编辑后立即弹出下拉菜单
+            QTimer.singleShot(0, editor.showPopup)
+        elif editor is not None:
+            # 普通行内编辑器：同样延后重装，避免视图抢 Tab
+            editor.installEventFilter(self)
+            QTimer.singleShot(0, lambda e=editor: _reinstall_tab_event_filter(e, self))
         return editor
+
+    def paint(self, painter, option, index):
+        # 表格实际使用的是 SmartDelegate；下拉箭头绘制需转到 MultiParamComboDelegate
+        if self.is_dropdown_cell(index) and self.dropdown_delegate:
+            return self.dropdown_delegate.paint(painter, option, index)
+        return super().paint(painter, option, index)
 
     def eventFilter(self, obj, event): #--新加
         # 拦截下拉框的滚轮事件
         if isinstance(obj, QComboBox) and event.type() == QEvent.Wheel:
             return True  # 拦截滚轮事件
+        # 下拉/行内编辑态 Tab：提交后只跳到可编辑单元格
+        if event.type() == QEvent.KeyPress and event.key() in (Qt.Key_Tab, Qt.Key_Backtab):
+            editor = None
+            if isinstance(obj, QComboBox):
+                editor = obj
+            elif isinstance(obj, QLineEdit) and isinstance(obj.parent(), QComboBox):
+                editor = obj.parent()
+            elif isinstance(obj, QLineEdit):
+                editor = obj
+            if editor is not None:
+                forward = _tab_key_is_forward(event)
+                cur = self.table.currentIndex()
+                from_row = cur.row() if cur.isValid() else 0
+                from_col = cur.column() if cur.isValid() else 0
+                self.commitData.emit(editor)
+                self.closeEditor.emit(editor, QAbstractItemDelegate.NoHint)
+                QTimer.singleShot(
+                    0,
+                    lambda r=from_row, c=from_col, f=forward: jump_table_tab(self.table, f, r, c),
+                )
+                return True
 
         return super().eventFilter(obj, event)
     def _get_delegate(self, index):
         try:
             param_item = self.table.item(index.row(), 1)
-            param_name = param_item.text().strip() if param_item else ""
+            from modules.condition_input.funcs.funcs_def_check import param_name_from_item
+            param_name = param_name_from_item(param_item)
 
             # ✅ 限定只在“参数值列”才显示下拉框（如设计数据第3、4列，通用数据第3列）
             allowed_columns = [3, 4] if self.mode == "design" else [3]
@@ -172,65 +317,23 @@ class ReturnKeyJumpFilter(QObject):
                 next_row = row + 1
 
                 if next_row >= self.table.rowCount():
-                    next_row = 0  # 到最后一行则回到第一行，可按需修改逻辑
+                    return True  # 到最后一行则直接拦截，不跳转也不进入编辑模式
 
                 self.table.setCurrentCell(next_row, col)
                 # 自动进入编辑模式，实现键盘直接键入
-                QTimer.singleShot(0, lambda: self._enter_edit_mode_if_editable(next_row, col))
+                QTimer.singleShot(0, lambda: _enter_edit_mode_if_editable(self.table, next_row, col))
                 return True  # 拦截掉默认行为
 
-            # 处理Tab键 - 向右移动并进入编辑
-            elif event.key() == Qt.Key_Tab:
-                # 如果正在编辑，先完成编辑再移动
+            # Tab / Shift+Tab / Backtab：仅在可编辑单元格之间移动
+            elif event.key() in (Qt.Key_Tab, Qt.Key_Backtab):
+                # 编辑态由编辑器 eventFilter 接管；此处只处理未编辑选中态
                 if self.table.state() == self.table.EditingState:
                     return False
 
-                current = self.table.currentIndex()
-                if not current.isValid():
+                if not self.table.currentIndex().isValid():
                     return False
 
-                row = current.row()
-                col = current.column()
-                next_col = col + 1
-
-                if next_col >= self.table.columnCount():
-                    next_col = 0
-                    next_row = row + 1
-                    if next_row >= self.table.rowCount():
-                        next_row = 0
-                else:
-                    next_row = row
-
-                self.table.setCurrentCell(next_row, next_col)
-                # 自动进入编辑模式，实现键盘直接键入
-                QTimer.singleShot(0, lambda: self._enter_edit_mode_if_editable(next_row, next_col))
-                return True  # 拦截掉默认行为
-
-            # 处理Shift+Tab键 - 向左移动并进入编辑
-            elif event.key() == Qt.Key_Tab and event.modifiers() & Qt.ShiftModifier:
-                # 如果正在编辑，先完成编辑再移动
-                if self.table.state() == self.table.EditingState:
-                    return False
-
-                current = self.table.currentIndex()
-                if not current.isValid():
-                    return False
-
-                row = current.row()
-                col = current.column()
-                next_col = col - 1
-
-                if next_col < 0:
-                    next_col = self.table.columnCount() - 1
-                    next_row = row - 1
-                    if next_row < 0:
-                        next_row = self.table.rowCount() - 1
-                else:
-                    next_row = row
-
-                self.table.setCurrentCell(next_row, next_col)
-                # 自动进入编辑模式，实现键盘直接键入
-                QTimer.singleShot(0, lambda: self._enter_edit_mode_if_editable(next_row, next_col))
+                jump_table_tab(self.table, forward=_tab_key_is_forward(event))
                 return True  # 拦截掉默认行为
 
             # 方向键：完全交给 Qt 默认（移动当前格 / 从行内编辑退出并移动），不自动 table.edit()，
@@ -239,19 +342,6 @@ class ReturnKeyJumpFilter(QObject):
                 return False
 
         return super().eventFilter(obj, event)
-
-    # 0506新修改-条件输入双击编辑+键盘键入恢复
-    def _enter_edit_mode_if_editable(self, row, col):
-        """检查单元格是否可编辑，如果可编辑则进入编辑模式"""
-        try:
-            item = self.table.item(row, col)
-            if item and (item.flags() & Qt.ItemIsEditable):
-                # 检查是否是特殊列（如设计数据第1列参数名）
-                if self.table.objectName() == "tableWidget_design_data" and col == 1:
-                    return
-                self.table.edit(self.table.model().index(row, col))
-        except Exception as e:
-            print(f"进入编辑模式失败: {e}")
 
 # 0506新修改-条件输入--下拉框禁用backspace+delete
 class TypeToStartEditFilter(QObject):
@@ -324,6 +414,20 @@ class TypeToStartEditFilter(QObject):
         if self.table.objectName() == "tableWidget_design_data" and current.column() == 1:
             return False
 
+        # 不可编辑的下拉格：禁止键入字符打开编辑（只能双击点选）
+        try:
+            if hasattr(self.smart_delegate, "is_dropdown_cell") and self.smart_delegate.is_dropdown_cell(current):
+                dd = getattr(self.smart_delegate, "dropdown_delegate", None)
+                if dd:
+                    param_item = self.table.item(current.row(), 1)
+                    from modules.condition_input.funcs.funcs_def_check import param_name_from_item
+                    param_name = param_name_from_item(param_item)
+                    conf = dd.config.get(param_name)
+                    if conf and conf.get("type") == "single" and not conf.get("editable", False):
+                        return False
+        except Exception:
+            pass
+
         self.table.edit(current)
         captured = ch
         QTimer.singleShot(0, lambda t=captured: self._inject_text_into_focus_editor(t))
@@ -374,12 +478,14 @@ def enable_full_undo(target_widget, parent_for_stack, mode: str = "design", drop
 
     target_widget.setItemDelegate(delegate)
     disable_keyboard_search(target_widget)
+    # 关闭 Qt 内置 Tab 导航（否则编辑态会无视可编辑标志跳到下一行第 0 列）
+    target_widget.setTabKeyNavigation(False)
     # 0506新修改-条件输入双击编辑+键盘键入恢复
-    # 只启用双击编辑
+    # 只启用双击编辑（普通格）；有下拉配置时另装过滤器，仅下拉格单击进编辑
     target_widget.setEditTriggers(QTableWidget.DoubleClicked)
-    # 注释掉单击编辑过滤器，禁用单击编辑功能
-    # filter = DropDownClickOnlyFilter(target_widget, delegate)
-    # target_widget.viewport().installEventFilter(filter)
+    if dropdown_config:
+        click_filter = DropDownClickOnlyFilter(target_widget, delegate)
+        target_widget.viewport().installEventFilter(click_filter)
 
     # ✅ 安装回车跳转事件过滤器
     target_widget.installEventFilter(ReturnKeyJumpFilter(target_widget))
@@ -406,30 +512,14 @@ class DropDownClickOnlyFilter(QObject):
         cur = self.table.currentIndex()
         return cur.isValid() and cur.row() == index.row() and cur.column() == index.column()
 
-    def _single_click_edit_line_cell(self, index):
-        """非下拉、但可编辑的单元格：单击即 edit（与下拉格一致）。"""
-        if not index.isValid() or self._already_editing(index):
-            return
-        # 设计数据第 1 列：参数名 + 多工况角标，勿抢点击
-        if self.table.objectName() == "tableWidget_design_data" and index.column() == 1:
-            return
-        item = self.table.item(index.row(), index.column())
-        if item is None or not (item.flags() & Qt.ItemIsEditable):
-            return
-        self.table.setCurrentIndex(index)
-        self.table.edit(index)
-
     def eventFilter(self, obj, event):
+        # 仅下拉格单击进入编辑；普通可编辑格仍走双击，避免影响原有输入行为
         if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
-            pos = event.pos()
-            index = self.table.indexAt(pos)
-            if index.isValid():
-                if getattr(self.smart_delegate, "is_dropdown_cell", lambda _i: False)(index):
-                    if not self._already_editing(index):
-                        self.table.setCurrentIndex(index)
-                        self.table.edit(index)
-                else:
-                    self._single_click_edit_line_cell(index)
+            index = self.table.indexAt(event.pos())
+            if index.isValid() and getattr(self.smart_delegate, "is_dropdown_cell", lambda _i: False)(index):
+                if not self._already_editing(index):
+                    self.table.setCurrentIndex(index)
+                    self.table.edit(index)
         return super().eventFilter(obj, event)
 
 class DeleteKeyFilter(QObject):
@@ -544,7 +634,8 @@ def handle_paste(table, undo_stack, line_tip=None, viewer=None):
 
             # ✅ 提前缓存参数名和列名，避免 Qt 崩溃
             param_item = table.item(row, 1)
-            param_name = param_item.text().strip() if param_item else ""
+            from modules.condition_input.funcs.funcs_def_check import param_name_from_item
+            param_name = param_name_from_item(param_item)
 
             column_item = table.horizontalHeaderItem(col)
             column_name = column_item.text().strip() if column_item else ""

@@ -7,6 +7,11 @@ import modules.chanpinguanli.bianl as bianl
 from PyQt5.QtWidgets import QMessageBox, QPushButton, QLineEdit
 import modules.chanpinguanli.common_usage as common_usage
 import modules.chanpinguanli.open_project as open_project
+from modules.chanpinguanli.ui_style import (
+    apply_chanpinguanli_dialog_style,
+    localize_messagebox_buttons,
+    show_chanpinguanli_message,
+)
 
 # 初始化提示定时器（确保只初始化一次）
 def init_tip_timer():
@@ -24,6 +29,56 @@ def clear_line_tip():
         bianl.main_window.line_tip.setToolTip("")
 
 
+def apply_msgbox_button_style(msg_box):
+    """为已构造的 QMessageBox 套用项目管理按钮/弹窗样式，并尽量中文化标准按钮。"""
+    if msg_box is None:
+        return None
+    try:
+        localize_messagebox_buttons(msg_box)
+    except Exception:
+        pass
+    return apply_chanpinguanli_dialog_style(msg_box)
+
+
+def show_info_dialog(parent, title, text, button_text="确认"):
+    """信息提示框（单按钮）。"""
+    show_chanpinguanli_message(parent, QMessageBox.Information, title, text, button_text)
+
+
+def show_warning_dialog(parent, title, text, button_text="确认"):
+    """警告提示框（单按钮）。"""
+    show_chanpinguanli_message(parent, QMessageBox.Warning, title, text, button_text)
+
+
+def show_critical_dialog(parent, title, text, button_text="确认"):
+    """错误/严重提示框（单按钮）。"""
+    show_chanpinguanli_message(parent, QMessageBox.Critical, title, text, button_text)
+
+
+def show_yes_no_dialog(
+    parent,
+    title,
+    text,
+    yes_text="是",
+    no_text="否",
+    default_no=False,
+):
+    """是/否对话框，返回 True 表示选了肯定按钮。"""
+    msg_box = QMessageBox(parent)
+    msg_box.setWindowTitle(title)
+    msg_box.setText(text)
+    msg_box.setIcon(QMessageBox.Question)
+
+    yes_button = QPushButton(yes_text)
+    no_button = QPushButton(no_text)
+    msg_box.addButton(yes_button, QMessageBox.YesRole)
+    msg_box.addButton(no_button, QMessageBox.NoRole)
+    msg_box.setDefaultButton(no_button if default_no else yes_button)
+    apply_msgbox_button_style(msg_box)
+    msg_box.exec_()
+    return msg_box.clickedButton() == yes_button
+
+
 def show_confirm_dialog(parent, title, text):
     """显示带有中文按钮（确认/取消）的确认对话框，返回True表示确认。"""
     msg_box = QMessageBox(parent)
@@ -36,6 +91,7 @@ def show_confirm_dialog(parent, title, text):
 
     msg_box.addButton(yes_button, QMessageBox.YesRole)
     msg_box.addButton(no_button, QMessageBox.NoRole)
+    apply_msgbox_button_style(msg_box)
 
     msg_box.exec_()
     return msg_box.clickedButton() == yes_button

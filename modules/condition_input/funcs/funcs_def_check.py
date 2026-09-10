@@ -2,6 +2,12 @@ from typing import Tuple, Set
 import re
 from modules.condition_input.funcs.db_cnt import get_connection
 
+# 隔板两侧压力差（原「进、出口压力差*」；库内/校验用单行 canonical 名）
+PARAM_BAFFLE_SIDE_PRESSURE_DIFF = "隔板两侧压力差值*（可取隔板两侧计算压降2倍）"
+PARAM_BAFFLE_SIDE_PRESSURE_DIFF_BASE = "隔板两侧压力差值*"  # 用于显示识别（* 在括号前）
+# 旧名兼容（已建产品活动表可能仍为「进、出口压力差*」）
+PARAM_BAFFLE_SIDE_PRESSURE_DIFF_LEGACY = "进、出口压力差*"
+
 # 0103新修改1-开始
 # 数据库配置（产品条件库）
 db_config_1 = {
@@ -109,6 +115,41 @@ def clear_dn_allowed_values_cache():
     }
 # 0103新修改1-结束
 
+def normalize_param_name(name: str) -> str:
+    """去掉显示用换行，得到与库内一致的参数名称。"""
+    return (name or "").replace("\n", "").replace("\r", "").strip()
+
+
+def param_name_from_item(item) -> str:
+    """
+    读取参数名称：优先 Qt.UserRole（canonical 单行），否则用 text 并去掉换行。
+    """
+    if item is None:
+        return ""
+    try:
+        from PyQt5.QtCore import Qt
+        orig = item.data(Qt.UserRole)
+        if orig is not None and str(orig).strip() != "":
+            return normalize_param_name(str(orig))
+    except Exception:
+        pass
+    return normalize_param_name(item.text() if hasattr(item, "text") else "")
+
+
+def is_baffle_side_pressure_diff_param(name: str) -> bool:
+    """判断是否为隔板两侧压力差值参数（兼容新旧名；活动库均为带 *）。"""
+    n = normalize_param_name(name)
+    return n in (
+        PARAM_BAFFLE_SIDE_PRESSURE_DIFF,
+        PARAM_BAFFLE_SIDE_PRESSURE_DIFF_LEGACY,
+    )
+
+
+def is_baffle_side_pressure_diff_starred(name: str) -> bool:
+    """带 * 的压差参数：保存时只强制管程数值。"""
+    return is_baffle_side_pressure_diff_param(name)
+
+
 def get_param_name(table_widget, row):
     """获取当前表格行的参数名称（根据表格名称判断大表/弹窗）"""
     name = ""
@@ -120,17 +161,117 @@ def get_param_name(table_widget, row):
     # 主界面大表
     if tbl_name == "tableWidget_design_data":
         item = table_widget.item(row, 1)  # 参数名在 col=1
-        if item and item.text().strip():
-            name = item.text().strip()
-            return name
+        name = param_name_from_item(item)
+        return name
 
     # 多工况弹窗
     elif tbl_name == "tableWidget":
         vh_item = table_widget.verticalHeaderItem(row)  # 参数名在 verticalHeader
         if vh_item and vh_item.text().strip():
-            name = vh_item.text().strip()
+            name = normalize_param_name(vh_item.text())
             return name
     return name
+
+
+def _is_multi_conditions_table(table_widget) -> bool:
+    """多工况弹窗表格（verticalHeader 存参数名；objectName 为 tableWidget）。"""
+    if not table_widget:
+        return False
+    name = table_widget.objectName()
+    if name == "tableWidget_multi_conditions":
+        return True
+    if name == "tableWidget":
+        vh = table_widget.verticalHeaderItem(0)
+        return bool(vh and vh.text().strip())
+    return False
+
+
+def _get_design_main_table(table_widget):
+    """联动读取设计数据大表：多工况弹窗时回退到 viewer.tableWidget_design_data。"""
+    if _is_multi_conditions_table(table_widget):
+        viewer = getattr(table_widget, "viewer", None)
+        if not viewer:
+            w = table_widget.parent()
+            while w is not None:
+                if hasattr(w, "tableWidget_design_data"):
+                    viewer = w
+                    break
+                w = w.parent()
+        if viewer and hasattr(viewer, "tableWidget_design_data"):
+            return viewer.tableWidget_design_data
+        return None
+    return table_widget
+
+
+def _get_design_value_col(table_widget, column_name: str, fallback_col: int) -> int:
+    """按逻辑列名（壳程数值/管程数值）解析大表数值列索引。"""
+    column_name = (column_name or "").strip()
+    if column_name == "数值":
+        column_name = "壳程数值"
+    try:
+        for col in range(table_widget.columnCount()):
+            item = table_widget.horizontalHeaderItem(col)
+            if not item:
+                continue
+            field = item.data(Qt.UserRole) or item.text()
+            field = (field or "").strip()
+            if field == column_name:
+                return col
+    except Exception:
+        pass
+    if column_name == "管程数值":
+        return 4
+    return fallback_col if fallback_col is not None else 3
+
+
+def _table_has_param(table_widget, param_name: str) -> bool:
+    """当前表格是否包含指定参数行（用于区分容器/换热器参数集）。"""
+    if not table_widget:
+        return False
+    target = (param_name or "").strip()
+    for row in range(table_widget.rowCount()):
+        if get_param_name(table_widget, row) == target:
+            return True
+    return False
+
+
+def _resolve_same_table_value_col(table_widget, col_index: int, column_name: str) -> int:
+    """多工况弹窗与主表列索引对齐（容器数值列=1，换热器壳程/管程=1/2）。"""
+    value_col = col_index
+    if _is_multi_conditions_table(table_widget):
+        if col_index in (3, 4):
+            value_col = 1 if col_index == 3 else 2
+        elif (column_name or "").strip() in ("数值", "壳程数值"):
+            value_col = 1
+        elif (column_name or "").strip() == "管程数值" and table_widget.columnCount() > 2:
+            value_col = 2
+    return value_col
+
+def check_container_outer_diameter(value, tip_widget, param_name, column_name, table_widget, col_index) -> Tuple[str, str]:
+    """容器外径*：正数；非数字报错（美标表值可能含一位小数，允许整数或小数）。"""
+    if value.strip() == "":
+        return "ok", ""
+    try:
+        v = float(value.strip())
+    except ValueError:
+        return "error", "输入数据类型有误，请确认后输入"
+    if v <= 0:
+        return "error", "外径必须大于0，请核对后输入"
+    return "ok", ""
+
+
+def check_container_shell_length(value, tip_widget, param_name, column_name, table_widget, col_index) -> Tuple[str, str]:
+    """容器壳体长度*：整数且 > 0（mm）。"""
+    if value.strip() == "":
+        return "ok", ""
+    try:
+        length_val = int(value.strip())
+    except ValueError:
+        return "error", "输入数据类型有误，请确认后输入"
+    if length_val <= 0:
+        return "error", "容器壳体长度必须大于0，请核对后输入"
+    return "ok", ""
+
 
 def check_dn(value, tip_widget, param_name, column_name, table_widget, col_index) -> Tuple[str, str]:
     if value.strip() == "":
@@ -139,6 +280,13 @@ def check_dn(value, tip_widget, param_name, column_name, table_widget, col_index
         dn_val = int(value)
     except ValueError:
         return "error", "输入数据类型有误，请确认后输入"
+
+    # 容器：公称直径必须大于 0（换热器仍仅校验整数，不加此下限）
+    if table_widget:
+        viewer = getattr(table_widget, "viewer", None)
+        if viewer and "容器" in (getattr(viewer, "product_type", "") or ""):
+            if dn_val <= 0:
+                return "error", "公称直径必须大于0，请核对后输入"
 
     # 0103新修改2
     # ✅ 新增：根据"是否以外径为基准*"参数值校验公称直径允许值（从数据库读取）
@@ -208,14 +356,17 @@ def check_dn(value, tip_widget, param_name, column_name, table_widget, col_index
                         pass
                 break
 
+        raw_product_form = _get_raw_product_form_from_product_db(table_widget)
+        raw_form = raw_product_form.strip().upper() if raw_product_form else ""
+        gx_types = {"AEU", "BEU", "AES", "BES", "AKU", "BKU", "AEM", "BEM", "NEN", "NEN(H)"}
+
         if dp_val is not None:
-            if dn_val * dp_val > 27000:
-                return "error", "公称直径与设计压力乘积超过GB/T 151-2014的适用范围，请核对后输入"
+            if raw_form in gx_types and dn_val * dp_val > 40500:
+                return "error", "设计压力（MPa）与公称直径（DN）的乘积＞4.05x10^4，不合规。"
 
         # AKU/BKU 特殊规则：
         # 仅当壳/管都已填写时，要求互不相等，且壳程 > 管程
-        raw_product_form = _get_raw_product_form_from_product_db(table_widget)
-        if raw_product_form in ("AKU", "BKU"):
+        if raw_form in ("AKU", "BKU"):
             if dn_shell is not None and dn_tube is not None:
                 if dn_shell == dn_tube:
                     return "error", "AKU/BKU产品公称直径要求壳程与管程数值不同，请核对后输入"
@@ -224,7 +375,7 @@ def check_dn(value, tip_widget, param_name, column_name, table_widget, col_index
 
         if dn_shell is not None and dn_tube is not None:
             # AKU/BKU 已有专属规则，不再提示“壳管不一致请确认”
-            if raw_product_form not in ("AKU", "BKU") and dn_shell != dn_tube:
+            if raw_form not in ("AKU", "BKU") and dn_shell != dn_tube:
                 return "warn", "管、壳程公称直径不一致，请确认"
 
     return "ok", ""
@@ -236,7 +387,7 @@ def check_work_pressure(value, tip_widget, param_name, column_name, table_widget
     - 必须 < 35
     - 联动检查：
         - 与设计压力*、设计压力2
-        - 与进、出口压力差
+        - 与隔板两侧压力差值
     """
     if value.strip() == "":
         return "ok", ""
@@ -269,24 +420,24 @@ def check_work_pressure(value, tip_widget, param_name, column_name, table_widget
             continue
         if name in ["设计压力*", "设计压力2（设计工况2）"]:
             dp_list.append((name, val))
-        elif name == "进、出口压力差":
+        elif is_baffle_side_pressure_diff_param(name):
             diff_val = val
 
     for name, dp in dp_list:
         if wp > 0 and dp > 0:
             if wp >= dp:
-                return "error", f"{name} 不应低于工作压力，请核对后输入"
-            elif dp / wp > 1.2:
-                return "warn", f"{name} 高于工作压力的幅度较大，请确认"
+                return "error", "设计压力应大于工作压力。"
+            elif dp / wp > 1.1:
+                return "warn", "设计压力相对工作压力的裕度较大。"
         elif wp < 0 and dp < 0:
             if abs(wp) >= abs(dp):
-                return "error", f"{name} 和工作压力均为负压，{name} 应低于工作压力，请核对后输入"
+                return "error", "设计压力和工作压力均为负压，设计压力应低于工作压力，请核对后输入"
         elif wp * dp < 0:
-            return "error", f"{name} 和工作压力必须同正压或同负压，如需校核一正压一负压，请使用多工况模式"
+            return "error", "设计压力和工作压力必须同正压或同负压，如需校核一正压一负压，请使用多工况模式"
 
     if diff_val is not None:
         if wp < diff_val:
-            return "error", "工作压力不应低于进、出口压力差，请核对后输入"
+            return "error", "工作压力不应低于隔板两侧压力差值，请核对后输入"
 
     return "ok", ""
 
@@ -510,13 +661,94 @@ def check_work_temp_out(value, tip_widget, param_name, column_name, table_widget
 
     return "ok", ""
 
+def check_max_min_work_temp(value, tip_widget, param_name, column_name, table_widget, col_index) -> Tuple[str, str]:
+    if value.strip() == "":
+        return "ok", ""
+    try:
+        temp = float(value)
+    except:
+        return "error", "输入数据类型有误，请确认后输入"
+    
+    if temp < -269:
+        return "warn", "输入数值超出介质工作温度界限"
+    elif temp > 900:
+        return "warn", "超出过程装备材料允许使用温度界限"
+        
+    if not table_widget:
+        return "ok", ""
+
+    # 获取设计温度相关参数
+    design_temp = None
+    min_design_temp = None
+
+    for row in range(table_widget.rowCount()):
+        name = get_param_name(table_widget, row)
+        if not name:
+            continue
+
+        val_item = table_widget.item(row, col_index)
+        if not val_item or not val_item.text().strip():
+            continue
+        try:
+            val = float(val_item.text())
+        except:
+            continue
+        
+        if name == "设计温度（最高）*":
+            design_temp = val
+        elif name == "最低设计温度":
+            min_design_temp = val
+
+    if temp > 0:
+        if design_temp is not None:
+            if temp >= design_temp:
+                return "warn", "最高（低）工作温度超过设计温度（最高）*，请核对后输入"
+    elif temp < 0:
+        if min_design_temp is not None:
+            if temp <= min_design_temp:
+                return "warn", "最高（低）工作温度低于最低设计温度，请核对后输入"
+
+    return "ok", ""
+
+def check_filling_factor(value, tip_widget, param_name, column_name, table_widget, col_index) -> Tuple[str, str]:
+    if value.strip() == "":
+        return "ok", ""
+    try:
+        val = float(value)
+    except:
+        return "error", "输入数据类型有误，请确认后输入"
+
+    if val <= 0 or val > 1:
+        return "error", "输入数值不合理，请填写 0 到 1 之间的数字"
+
+    if not table_widget:
+        return "ok", ""
+
+    media_char = None
+    for row in range(table_widget.rowCount()):
+        name = get_param_name(table_widget, row)
+        if not name:
+            continue
+
+        if name == "介质特性（是否液化气体）":
+            val_item = table_widget.item(row, col_index)
+            if val_item and val_item.text().strip():
+                media_char = val_item.text().strip()
+            break
+
+    if media_char == "液化气体" and val > 0.95:
+        return "error", "TSG 21-2016 规定，储存液化气体的压力容器，装量系数不得大于 0.95。"
+
+    return "ok", ""
+
+
 def check_work_pressure_max(value, tip_widget, param_name, column_name, table_widget, col_index) -> Tuple[str, str]:
     """
     校验“最高允许工作压力”：
     - 若设计压力 < 0，则禁止填写；
     - 若设计压力 ≥ 0，最高允许工作压力必须 ≥ 设计压力；
     - 类型要求：float
-    - 1）低于设计压力时，提醒：最高允许工作压力不得低于设计压力！不合理。
+    - 1）低于设计压力时，提醒：最高允许工作压力不应低于设计压力，请核对后输入。数据清空。
     - 2) 高于设计压力1.03倍时，提示：最高允许工作压力通过计算确定。
     - 3）高于耐压试验压力，提醒：最高允许工作压力超过耐压试验压力，不合规、不合理。（双向检验）
     """
@@ -532,6 +764,13 @@ def check_work_pressure_max(value, tip_widget, param_name, column_name, table_wi
 
     print(f"[check_work_pressure_max][DEBUG] 开始校核，param={param_name}, col={column_name}, value={value}, col_index={col_index}, table={table_widget.objectName()}")
 
+    value_col = col_index
+    if _is_multi_conditions_table(table_widget):
+        if col_index in (3, 4):
+            value_col = 1 if col_index == 3 else 2
+        elif column_name == "管程数值":
+            value_col = 2 if table_widget.columnCount() > 2 else col_index
+
     # === 第一部分：在当前表格查找设计压力*===
     for row in range(table_widget.rowCount()):
         pname = get_param_name(table_widget, row)
@@ -540,12 +779,10 @@ def check_work_pressure_max(value, tip_widget, param_name, column_name, table_wi
         print(f"[check_work_pressure_max][DEBUG] row={row}, pname={pname}")
 
         if pname == "设计压力*":
-            v_item = table_widget.item(row, col_index)
-            # 弹窗模式下 col_index 可能错位，尝试自动修正
-            if (not v_item or not v_item.text().strip()) and table_widget.objectName() == "tableWidget_multi_conditions":
-                alt_col = 1 if col_index == 3 else 2 if col_index == 4 else col_index
-                v_item = table_widget.item(row, alt_col)
-                print(f"[check_work_pressure_max][DEBUG] 弹窗模式切换列索引 col_index={col_index} → alt_col={alt_col}")
+            v_item = table_widget.item(row, value_col)
+            if (not v_item or not v_item.text().strip()) and value_col != col_index:
+                v_item = table_widget.item(row, col_index)
+                print(f"[check_work_pressure_max][DEBUG] 弹窗模式切换列索引 col_index={col_index} → value_col={value_col}")
 
             if v_item and v_item.text().strip():
                 try:
@@ -554,7 +791,7 @@ def check_work_pressure_max(value, tip_widget, param_name, column_name, table_wi
                     if dp < 0:
                         return "error", "设计压力为负时不允许填写最高允许工作压力，请核对后输入"
                     elif dp > max_wp:
-                        return "warn", "最高允许工作压力不得低于设计压力！不合理。"
+                        return "error", "最高允许工作压力不应低于设计压力，请核对后输入"
                     elif max_wp / dp > 1.03:
                         return "warn", "最高允许工作压力通过计算确定。"
                 except Exception as e:
@@ -563,17 +800,13 @@ def check_work_pressure_max(value, tip_widget, param_name, column_name, table_wi
                 print(f"[check_work_pressure_max][DEBUG] 未取到设计压力数值 (row={row}, col_index={col_index})")
             break
 
-    # === 第二部分：耐压试验压力 → 只能从界面大表取 ===
+    # === 第二部分：耐压试验压力 → 多工况时从主界面设计数据大表取 ===
     trial_pressures = []
     try:
-        if table_widget.objectName() == "tableWidget_multi_conditions":
-            parent_viewer = getattr(table_widget, "viewer", None)
-            if parent_viewer and hasattr(parent_viewer, "tableWidget_design_data"):
-                main_table = parent_viewer.tableWidget_design_data
-            else:
-                main_table = None
-        else:
-            main_table = table_widget
+        main_table = _get_design_main_table(table_widget)
+        trial_col = col_index
+        if main_table is not None and main_table is not table_widget:
+            trial_col = _get_design_value_col(main_table, column_name, col_index)
 
         if main_table:
             for row in range(main_table.rowCount()):
@@ -581,7 +814,7 @@ def check_work_pressure_max(value, tip_widget, param_name, column_name, table_wi
                 if not pname:
                     continue
                 if pname in ["自定义耐压试验压力（卧）", "自定义耐压试验压力（立）"]:
-                    v_item = main_table.item(row, col_index)
+                    v_item = main_table.item(row, trial_col)
                     if v_item and v_item.text().strip():
                         try:
                             trial_pressures.append(float(v_item.text()))
@@ -663,15 +896,16 @@ def check_design_pressure(value, tip_widget, param_name, column_name, table_widg
     """
     校验“设计压力*”：
     - 类型 float；
-    - 范围 0.1≤ ≤ 35 且不在 (-0.02, 0.1)；
+    - 范围 [-0.1, -0.02] U [0.1, 100]；
     - 联动：工作压力、公称直径、自定义耐压试验压力（卧/立）+ 耐压试验类型
-    - 返回值：(等级, 提示语) → error / warn / ok
-    1）低于0.1MPa，提示：建议按常压容器标准设计。
-    2）高于35MPa,提醒：设计压力超过规则设计标准界限！不合规。
-    3）高于100MPa，提醒：设计压力超过分析设计标准界限！不合规。
-    4）低于工作压力，提醒：设计压力应当不低于工作压力。
-    5）等于工作压力时，提示：设计压力应当不低于工作压力。
-    6）高于工作压力超过1.1倍时，提示：设计压力相对于工作压力的裕度较大。
+    1）当P<-0.1MPa时，提醒：设计压力不能小于-0.1MPa！不合规。数据清空。
+    2）当-0.02MPa<P<0.1MPa时，提醒：建议按照常压容器设计。数据不清空。
+    3）当P=0时，提醒：设计压力不能为0MPa！不合规。数据清空。
+    4）当35MPa＜P≤100MPa时，提醒：设计压力超过规则设计标准界限！不合规。数据不清空。
+    5）当P>100MPa时，提醒：设计压力超过分析设计标准界限！不合规。数据清空。
+    6）当P≤工作压力时，提醒：设计压力应大于工作压力。数据清空。
+    7）当P＞1.1倍的工作压力时，提示：设计压力相对工作压力的裕度较大。数据不清空。
+    8）当产品类型为“管壳式热交换器”时：P*DN>4.05x10^4时，提醒：设计压力（MPa）与公称直径（DN）的乘积＞4.05x10^4，不合规。数据清空。
     """
     if value.strip() == "":
         return "ok", ""
@@ -680,58 +914,63 @@ def check_design_pressure(value, tip_widget, param_name, column_name, table_widg
     except:
         return "error", "输入数据类型有误，请确认后输入"
 
-    if dp == 0:
-        return "warn", "设计压力不能为0！不合规。"
-    # 1）低于0.1MPa，提示（warn）
-    if dp < 0.1 and dp > -0.02:
-        return "warn", "建议按常压容器标准设计。"
-    # 2）高于35MPa但不超过100MPa，提醒（warn）
-    if 35 < dp <= 100:
-        return "warn", "设计压力超过规则设计标准界限！不合规。"
-    # 3）高于100MPa，提醒（warn）
-    if dp > 100:
-        return "warn", "设计压力超过分析设计标准界限！不合规。"
-
-    if not table_widget:
-        return "ok", ""
-
     wp = dn = None
     trial_pressure_lying = trial_pressure_stand = trial_type = None
 
-    for row in range(table_widget.rowCount()):
-        name = get_param_name(table_widget, row)
-        if not name:
-            continue
+    if table_widget:
+        for row in range(table_widget.rowCount()):
+            name = get_param_name(table_widget, row)
+            if not name:
+                continue
 
-        val_item = table_widget.item(row, col_index)
-        if not val_item or not val_item.text().strip():
-            continue
-        text = val_item.text().strip()
-        try:
-            if name == "工作压力":
-                wp = float(text)
-            elif name == "公称直径*":
-                dn = int(text)
-            elif name == "自定义耐压试验压力（卧）":
-                trial_pressure_lying = float(text)
-            elif name == "自定义耐压试验压力（立）":
-                trial_pressure_stand = float(text)
-            elif name == "耐压试验类型":
-                trial_type = text
-        except:
-            continue
+            val_item = table_widget.item(row, col_index)
+            if not val_item or not val_item.text().strip():
+                continue
+            text = val_item.text().strip()
+            try:
+                if name == "工作压力":
+                    wp = float(text)
+                elif name == "公称直径*":
+                    dn = int(text)
+                elif name == "自定义耐压试验压力（卧）":
+                    trial_pressure_lying = float(text)
+                elif name == "自定义耐压试验压力（立）":
+                    trial_pressure_stand = float(text)
+                elif name == "耐压试验类型*":
+                    trial_type = text
+            except:
+                continue
 
-    # 处理与工作压力的关系
-    if wp is not None:
-    # 4 5) 小于等于工作压力
-        if dp <= wp:
-            return "warn", "设计压力应当不低于工作压力。"
-        # 6）高于工作压力1.1倍
-        elif abs(wp) > 0 and dp / wp > 1.1:
-            return "warn", "设计压力相对于工作压力的裕度较大。"
+    # 1. 先判断所有必须“清空数据”的硬性错误 (Error)
+    if dp < -0.1:
+        return "error", "设计压力不能小于-0.1MPa！不合规。"
+    if dp == 0:
+        return "error", "设计压力不能为0MPa！不合规。"
+    if dp > 100:
+        return "error", "设计压力超过分析设计标准界限！不合规。"
 
-    if dn is not None and dp * dn > 27000:
-        return "error", "设计压力与公称直径的乘积超过GB/T 151-2014的适用范围，请核对后输入"
+    # 常压区间 (Warn) — 不清空；优先于下方联动 error
+    if -0.02 < dp < 0.1:
+        return "warn", "建议按照常压容器设计。"
+
+    if wp is not None and dp <= wp:
+        return "error", "设计压力应大于工作压力。"
+
+    if dn is not None and table_widget:
+        raw_product_form = _get_raw_product_form_from_product_db(table_widget)
+        if raw_product_form:
+            raw_form = raw_product_form.strip().upper()
+            gx_types = {"AEU", "BEU", "AES", "BES", "AKU", "BKU", "AEM", "BEM", "NEN", "NEN(H)"}
+            if raw_form in gx_types:
+                if dp * dn > 40500:
+                    return "error", "设计压力（MPa）与公称直径（DN）的乘积＞4.05x10^4，不合规。"
+
+    # 2. 再判断仅“提醒但不清空数据”的警告 (Warn)
+    if 35 < dp <= 100:
+        return "warn", "设计压力超过规则设计标准界限！不合规。"
+
+    if wp is not None and abs(wp) > 0 and dp / wp > 1.1:
+        return "warn", "设计压力相对工作压力的裕度较大。"
 
     def check_trial_pressure(val):
         if val is None or trial_type is None:
@@ -759,8 +998,10 @@ def check_design_temp_max(value, tip_widget, param_name, column_name, table_widg
     2）超出900℃时，提醒：超出过程装备材料允许使用温度界限！不合规。
     3）低于最高工作温度时，提醒：设计温度应当不低于最高工作温度。不合规。
     4）等于最高工作温度时，提示：设计温度应当不低于最高工作温度。
-    5）高于最高工作温度超过50℃时，提示：设计温度相对于工作温度的裕度较大。"
+    5）高于最高工作温度超过50℃时，提示：设计温度相对于工作温度的裕度较大。
 
+    容器：c) 关联「最高（低）工作温度」（含负值）。
+    换热器：c) 关联「工作温度（入口）」「工作温度（出口）」取较大值。
     """
     if value.strip() == "":
         return "ok", ""
@@ -778,41 +1019,55 @@ def check_design_temp_max(value, tip_widget, param_name, column_name, table_widg
     if not table_widget:
         return "ok", ""
 
-    # 获取工作温度（入口）和（出口）
-    work_temp_in = None
-    work_temp_out = None
-    for row in range(table_widget.rowCount()):
-        p_text = get_param_name(table_widget, row)
-        if not p_text:
-            continue
+    value_col = _resolve_same_table_value_col(table_widget, col_index, column_name)
+    work_temp_max = None
 
-        v_item = table_widget.item(row, col_index)
-        if not v_item or not v_item.text().strip():
-            continue
+    if _table_has_param(table_widget, "最高（低）工作温度"):
+        # 容器：以「最高（低）工作温度」作为关联工作温度（可为负值）
+        for row in range(table_widget.rowCount()):
+            p_text = get_param_name(table_widget, row)
+            if p_text != "最高（低）工作温度":
+                continue
+            v_item = table_widget.item(row, value_col)
+            if not v_item or not v_item.text().strip():
+                break
+            try:
+                work_temp_max = float(v_item.text().strip())
+            except ValueError:
+                break
+            break
+    else:
+        # 换热器：工作温度（入口）/（出口）取较大值
+        work_temp_in = None
+        work_temp_out = None
+        for row in range(table_widget.rowCount()):
+            p_text = get_param_name(table_widget, row)
+            if not p_text:
+                continue
 
-        try:
-            val = float(v_item.text().strip())
-        except ValueError:
-            continue
-        if p_text == "工作温度（入口）":
-            work_temp_in = val
-        elif p_text == "工作温度（出口）":
-            work_temp_out = val
+            v_item = table_widget.item(row, value_col)
+            if not v_item or not v_item.text().strip():
+                continue
 
-    # 计算最高工作温度（取两者较大值，存在至少一个时有效）
-    work_temp_max = max(filter(None, [work_temp_in, work_temp_out]), default=None)
+            try:
+                val = float(v_item.text().strip())
+            except ValueError:
+                continue
+            if p_text == "工作温度（入口）":
+                work_temp_in = val
+            elif p_text == "工作温度（出口）":
+                work_temp_out = val
+
+        work_temp_max = max(filter(None, [work_temp_in, work_temp_out]), default=None)
+
     # 条件3-5：仅当最高工作温度存在时执行
-    # 校验 最高工作温度 与设计温度（最高）*的关系
     if work_temp_max is not None:
         if temp < work_temp_max:
             return "warn", "设计温度应当不低于最高工作温度。不合规。"
         elif temp == work_temp_max:
             return "warn", "设计温度应当不低于最高工作温度。"
-            # pass
         elif (temp - work_temp_max) > 50:
             return "warn", "设计温度相对于工作温度的裕度较大。"
-        else:
-            pass
     # 0506新增：双向检验
     # 反向联动校验（NEN/BEM/AEM）：
     # 当先输入“沿长度平均的换热管金属温度*”后再输入“设计温度（最高）*”时，
@@ -822,7 +1077,7 @@ def check_design_temp_max(value, tip_widget, param_name, column_name, table_widg
     except Exception:
         raw_form = ""
 
-    if raw_form in {"nen", "bem", "aem","NEN(H)"}:
+    if raw_form in {"nen", "bem", "aem", "nen(h)"}:
         avg_tube_metal_temp = None
         avg_shell_metal_temp = None
         for row in range(table_widget.rowCount()):
@@ -852,18 +1107,13 @@ def check_design_temp_max(value, tip_widget, param_name, column_name, table_widg
 
 def check_design_temp_min(value, tip_widget, param_name, column_name, table_widget, col_index) -> Tuple[str, str]:
     """
-    校验“最低设计温度”：
-    1. 类型 float；
-    2. 值必须 ≥ -269；
-    3. 联动判断：
-       - 最低设计温度应低于“工作温度（入口）”、“工作温度（出口）”
-
     1）低于-269℃时，提醒：输入数值超出介质工作温度界限。不合理。
     2）超出900℃时，提醒：超出过程装备材料允许使用温度界限。不合规。
-    3）高于最低工作温度时，提醒：设计温度应当不高于最低工作温度。
-    4）等于最低工作温度时，提示：设计温度应当不低于最低工作温度。
-    5）低于最低工作温度超过50℃时，提示：设计温度相对于工作温度的裕度较大。
+    3）高于工作温度时，提醒：最低设计温度不应当高于工作温度。（容器关联「最高（低）工作温度」）
+    4）低于工作温度超过50℃时，提示：最低设计温度相对于工作温度的裕度较大。
 
+    容器：c) 关联「最高（低）工作温度」（含负值）。
+    换热器：c) 关联「工作温度（入口）」「工作温度（出口）」取较小值。
     """
     if value.strip() == "":
         return "ok", ""
@@ -878,38 +1128,49 @@ def check_design_temp_min(value, tip_widget, param_name, column_name, table_widg
     if not table_widget:
         return "ok", ""
 
-    # 获取工作温度（入口）和（出口）的值
-    work_in = work_out = None
-    for row in range(table_widget.rowCount()):
-        p_item = table_widget.item(row, 1)
-        if not p_item:
-            continue
-        name = p_item.text().strip()
-        val_item = table_widget.item(row, col_index)
-        if not val_item or not val_item.text().strip():
-            continue
-        try:
-            v = float(val_item.text())
-        except:
-            continue
+    value_col = _resolve_same_table_value_col(table_widget, col_index, column_name)
+    work_ref = None
+    is_container_work_temp = _table_has_param(table_widget, "最高（低）工作温度")
 
-        if name == "工作温度（入口）":
-            work_in = v
-        elif name == "工作温度（出口）":
-            work_out = v
+    if is_container_work_temp:
+        for row in range(table_widget.rowCount()):
+            p_text = get_param_name(table_widget, row)
+            if p_text != "最高（低）工作温度":
+                continue
+            val_item = table_widget.item(row, value_col)
+            if not val_item or not val_item.text().strip():
+                break
+            try:
+                work_ref = float(val_item.text().strip())
+            except ValueError:
+                break
+            break
+    else:
+        work_in = work_out = None
+        for row in range(table_widget.rowCount()):
+            p_text = get_param_name(table_widget, row)
+            if not p_text:
+                continue
+            val_item = table_widget.item(row, value_col)
+            if not val_item or not val_item.text().strip():
+                continue
+            try:
+                v = float(val_item.text().strip())
+            except ValueError:
+                continue
+            if p_text == "工作温度（入口）":
+                work_in = v
+            elif p_text == "工作温度（出口）":
+                work_out = v
+        work_ref = min(filter(None, [work_in, work_out]), default=None)
 
-    # 计算最低工作温度（入口和出口的最小值）
-    work_min = min(filter(None, [work_in, work_out]), default=None)
-
-    if work_min is not None:
-        if temp > work_min:
+    if work_ref is not None:
+        if temp > work_ref:
+            if is_container_work_temp:
+                return "warn", "最低设计温度不应当高于工作温度。"
             return "warn", "最低设计温度应当不高于最低工作温度。"
-        elif temp == work_min:
-            # return "warn", "设计温度应当不低于最低工作温度。"
-            pass
-        else:  # temp < work_min
-            if (work_min - temp) > 50:
-                return "warn", "最低设计温度相对于工作温度的裕度较大。"
+        if temp < work_ref and (work_ref - temp) > 50:
+            return "warn", "最低设计温度相对于工作温度的裕度较大。"
     # 0506新增：双向检验
     # 反向联动校验（NEN/BEM/AEM）：
     # 当先输入“沿长度平均的换热管/壳程圆筒金属温度*”后再输入“最低设计温度”时，
@@ -919,21 +1180,21 @@ def check_design_temp_min(value, tip_widget, param_name, column_name, table_widg
     except Exception:
         raw_form = ""
 
-    if raw_form in {"nen", "bem", "aem","nen(head)"}:
+    if raw_form in {"nen", "bem", "aem", "nen(h)"}:
         avg_tube_metal_temp = None
         avg_shell_metal_temp = None
 
         for row in range(table_widget.rowCount()):
             p_text = get_param_name(table_widget, row)
             if p_text == "沿长度平均的换热管金属温度*":
-                val_item = table_widget.item(row, col_index)
+                val_item = table_widget.item(row, value_col)
                 if val_item and val_item.text().strip():
                     try:
                         avg_tube_metal_temp = float(val_item.text().strip())
                     except ValueError:
                         pass
             elif p_text == "沿长度平均的壳程圆筒金属温度*":
-                val_item = table_widget.item(row, col_index)
+                val_item = table_widget.item(row, value_col)
                 if val_item and val_item.text().strip():
                     try:
                         avg_shell_metal_temp = float(val_item.text().strip())
@@ -947,18 +1208,9 @@ def check_design_temp_min(value, tip_widget, param_name, column_name, table_widg
             if avg_shell_metal_temp <= temp:
                 return "warn", "沿长度平均的壳程圆筒金属温度应大于最低设计温度，请核对后输入"
     return "ok", ""
-    # 根据与最低工作温度的比较结果返回相应提示   已修改
-    # if work_min is not None and temp >= work_min and work_min==work_in:
-    #     return "error", "最低设计温度应小于工作温度（入口）,请核对后输入"
-    # if work_min is not None and temp >= work_min and work_min==work_out:
-    #     return "error", "最低设计温度应小于工作温度（出口）,请核对后输入"
-
-    # if work_min is not None and (temp >= work_in or temp >= work_out):
-    #     return "error", "最低设计温度应小于工作温度（入口）/工作温度（出口）的最小值"
-
 def check_in_out_pressure_gap(value, tip_widget, param_name, column_name, table_widget, col_index) -> Tuple[str, str]:
     """
-    校验“进、出口压力差”：
+    校验“隔板两侧压力差值*（可取隔板两侧计算压降2倍）”：
     1. 类型 float；
     2. 值必须 ≥ 0；
     3. 不得高于当前壳程/管程的“工作压力”
@@ -980,20 +1232,19 @@ def check_in_out_pressure_gap(value, tip_widget, param_name, column_name, table_
 
     work_pressure = None
     for row in range(table_widget.rowCount()):
-        param_item = table_widget.item(row, 1)
-        if not param_item:
+        name = get_param_name(table_widget, row)
+        if name != "工作压力":
             continue
-        if param_item.text().strip() == "工作压力":
-            val_item = table_widget.item(row, col_index)
-            if val_item and val_item.text().strip():
-                try:
-                    work_pressure = float(val_item.text())
-                    break
-                except:
-                    pass
+        val_item = table_widget.item(row, col_index)
+        if val_item and val_item.text().strip():
+            try:
+                work_pressure = float(val_item.text())
+                break
+            except:
+                pass
 
     if work_pressure is not None and diff_val > work_pressure:
-        return "error", "进、出口压力差不应高于工作压力，请核对后输入"
+        return "error", "隔板两侧压力差值不应高于工作压力，请核对后输入"
 
     return "ok", ""
 
@@ -1096,14 +1347,14 @@ def check_def_trail_stand_pressure_lying(value, tip_widget, param_name, column_n
     if design_pressure is not None and pressure_type is not None:
         if 0.1 <= design_pressure <= 35:
             if pressure_type == "液压试验" and pressure_val < 1.25 * design_pressure:
-                return "error", "耐压试验压力低于标准规定，请确认后输入"
+                return "warn", "耐压试验压力低于标准规定，请确认后输入"
             elif pressure_type in ("气压试验", "气液组合试验") and pressure_val < 1.1 * design_pressure:
-                return "error", "耐压试验压力低于标准规定，请确认后输入"
+                return "warn", "耐压试验压力低于标准规定，请确认后输入"
         elif design_pressure <= -0.02:
             if pressure_type == "液压试验" and pressure_val < abs(1.25 * design_pressure):
-                return "error", "耐压试验压力低于标准规定，请确认后输入"
+                return "warn", "耐压试验压力低于标准规定，请确认后输入"
             elif pressure_type in ("气压试验", "气液组合试验") and pressure_val < abs(1.1 * design_pressure):
-                return "error", "耐压试验压力低于标准规定，请确认后输入"
+                return "warn", "耐压试验压力低于标准规定，请确认后输入"
 
     # 新增：校验与最高允许工作压力的关系（双向校验）
     max_wp = None
@@ -1191,14 +1442,14 @@ def check_def_trail_stand_pressure_stand(value, tip_widget, param_name, column_n
     if design_pressure is not None and pressure_type is not None:
         if 0.1 <= design_pressure <= 35:
             if pressure_type == "液压试验" and pressure_val < 1.25 * design_pressure:
-                return "error", "耐压试验压力低于标准规定，请确认后输入"
+                return "warn", "耐压试验压力低于标准规定，请确认后输入"
             elif pressure_type in ("气压试验", "气液组合试验") and pressure_val < 1.1 * design_pressure:
-                return "error", "耐压试验压力低于标准规定，请确认后输入"
+                return "warn", "耐压试验压力低于标准规定，请确认后输入"
         elif design_pressure <= -0.02:
             if pressure_type == "液压试验" and pressure_val < abs(1.25 * design_pressure):
-                return "error", "耐压试验压力低于标准规定，请确认后输入"
+                return "warn", "耐压试验压力低于标准规定，请确认后输入"
             elif pressure_type in ("气压试验", "气液组合试验") and pressure_val < abs(1.1 * design_pressure):
-                return "error", "耐压试验压力低于标准规定，请确认后输入"
+                return "warn", "耐压试验压力低于标准规定，请确认后输入"
 
     # 新增：校验与最高允许工作压力的关系（双向校验）
     max_wp = None
@@ -1282,7 +1533,7 @@ def check_trail_stand_pressure_type(value, tip_widget, param_name, column_name, 
         return True
 
     if not is_valid(trial_pressure_lying) or not is_valid(trial_pressure_stand):
-        return "warn", "耐压实验类型和耐压试验压力不符合标准规定，请核对后输入"
+        return "warn", "耐压试验类型和耐压试验压力不符合标准规定，请核对后输入"
 
     return "ok", ""
 

@@ -3,9 +3,20 @@ from PyQt5.QtGui import QColor
 from PyQt5.QtCore import QRect, Qt, QEvent
 
 class DesignDataDelegate(QItemDelegate):
-    """自定义代理，为"设计压力*"单元格添加多工况标识，并响应点击"""
+    """
+    作用:
+        表格渲染的自定义代理。专门用于“条件输入”模块中的“参数名称”列。
+        当参数名称包含“设计压力*”时，它会在单元格右侧手绘出一个“多工况...”的徽章（Badge），
+        并在用户点击该徽章时拦截事件，呼出多工况数据配置的弹窗。
+    """
 
     def paint(self, painter, option, index):
+        """
+        作用:
+            重写底层绘图逻辑。首先调用父类方法绘制默认的文本，
+            然后判断当前是否为“设计压力*”行，并根据当前设备是否已填充过“工况2/3”的数据，
+            动态改变手绘徽章的颜色（深蓝色代表有数据，浅灰色代表无数据）。
+        """
         super().paint(painter, option, index)
 
         if index.column() == 1:  # 参数名称列
@@ -54,6 +65,12 @@ class DesignDataDelegate(QItemDelegate):
                 painter.restore()
 
     def editorEvent(self, event, model, option, index):
+        """
+        作用:
+            事件拦截器。监听鼠标左键释放事件（MouseButtonRelease），
+            判断鼠标坐标是否精准落在手绘的“多工况”徽章矩形区域内。
+            若是，则阻断事件冒泡，并向外层 Viewer 发送弹窗指令。
+        """
         if event.type() == QEvent.MouseButtonRelease and index.column() == 1:
             cell_text = index.data(Qt.DisplayRole)
             if isinstance(cell_text, str) and "设计压力*" in cell_text:

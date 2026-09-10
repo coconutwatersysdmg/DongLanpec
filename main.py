@@ -253,12 +253,11 @@ class _FontScaleController(QtCore.QObject):
 
     def eventFilter(self, obj, event):
         try:
-            # 只在 Polish（控件首次初始化）时缩放。
-            # 切勿监听 Show：QTabWidget 切换会让数千子控件反复 Show，
-            # 每次都进入 Python 回调会导致模块切换严重卡顿。
-            # 改字号走 set_scale() -> apply_all()，不依赖 Show。
-            if event.type() == QEvent.Polish and isinstance(obj, QtWidgets.QWidget):
-                self.apply_widget(obj)
+            et = event.type()
+            # Polish: 控件完成初始化；Show: 弹窗/Tab 打开
+            if et in (QEvent.Polish, QEvent.Show):
+                if isinstance(obj, QtWidgets.QWidget):
+                    self.apply_widget(obj)
         except Exception:
             pass
         return super().eventFilter(obj, event)
@@ -274,13 +273,9 @@ class _FontScaleController(QtCore.QObject):
                     widget.setProperty(self._PROP_BASE_FONT_PT, pt)
                     base_pt = pt
             if base_pt is not None:
-                new_pt = max(1.0, float(base_pt) * self._scale)
-                cur_pt = float(widget.font().pointSizeF())
-                # 字号已是目标值则跳过 setFont，避免触发昂贵的样式重算
-                if abs(cur_pt - new_pt) > 0.01:
-                    f = QtGui.QFont(widget.font())
-                    f.setPointSizeF(new_pt)
-                    widget.setFont(f)
+                f = QtGui.QFont(widget.font())
+                f.setPointSizeF(max(1.0, float(base_pt) * self._scale))
+                widget.setFont(f)
         except Exception:
             pass
 
@@ -475,8 +470,7 @@ class UserPage(QWidget):
 
 from modules.chanpinguanli.chanpinguanli_main import product_manager
 from modules.chanpinguanli.common_usage import get_mysql_connection_product, get_mysql_connection_active
-from modules.chanpinguanli.project_confirm_btn import show_confirm_dialog
-from modules.peizhi.config_window import show_config_window
+from modules.chanpinguanli.project_confirm_btn import apply_msgbox_button_style, show_confirm_dialog
 
 
 def on_product_id_changed(new_id):
@@ -585,13 +579,17 @@ def get_product_form_from_db(product_id: str) -> str:
                 # 如果是 AEM，就返回 AEM
                 print(f"    ↳ 逻辑转换: 保持为 'AEM'")
                 return 'AEM'
-            # 0515新修改-NEN(H)产品型式（兼容旧名 NEN(Head)/NEN(HEAD)）
-            if raw_product_form in ('NEN(H)', 'NEN(Head)', 'NEN(HEAD)'):
-                # 统一为 NEN(H)
-                print(f"    ↳ 逻辑转换: '{raw_product_form}' → 'NEN(H)'")
+            # 0515新修改-NEN(H)产品型式
+            if raw_product_form == 'NEN(H)':
+                # 如果是 NEN(H)，就返回 NEN(H)
+                print(f"    ↳ 逻辑转换: 保持为 'NEN(H)'")
                 return 'NEN(H)'
+            # 0704新修改-新增容器单腔型、双腔型产品型式
+            if raw_product_form in ['单腔型', '双腔型']:
+                print(f"    ↳ 逻辑转换: 保持为 '{raw_product_form}'")
+                return raw_product_form
             else:
-                # 如果是其他任何值 (AES, BES, NEN、空值等)，都统一视为 'all'
+                # 如果是其他任何值 (AES, BES, NEN、NEN(Head)空值等)，都统一视为 'all'
                 print(f"    ↳ 逻辑转换: 将 '{raw_product_form}' 视为 'all'")
                 return 'all'
         else:
@@ -724,6 +722,12 @@ class MainWindow(QtWidgets.QMainWindow):
         # 将当前实例赋值给全局变量，这样任何地方都能稳定地访问到主窗口
         global APP_MAIN_WINDOW
         APP_MAIN_WINDOW = self
+        # 容器产品隐藏管束设计模块
+        import modules.chanpinguanli.bianl as bianl
+        bianl.app_top_window = self
+
+        from modules.chanpinguanli.tube_bundle_toolbar import install as install_tube_bundle_toolbar
+        install_tube_bundle_toolbar(self)
 
         # uic.loadUi(resource_path("main_viewer333.ui"), self)
         uic.loadUi(resource_path("main_viewer333_new.ui"), self)
@@ -791,16 +795,12 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.action_18:
             self.action_18.triggered.connect(self.yudingyi)  # 新增
 
-        # ✅ 字体大小（方案2）：放在“配置 -> 偏好设置”下，风格延续原菜单结构
+        # 0719菜单栏改动
+        # ✅ 字体大小：挂在菜单栏「偏好设置」下；顶栏配置仅保留预定义
         try:
             self._init_font_size_menu()
         except Exception as e:
             print(f"[font menu] init failed: {e}")
-
-        try:
-            self._init_config_menu()
-        except Exception as e:
-            print(f"[config menu] init failed: {e}")
 
         # 获取图片控件并添加点击事件
         self.login_image = self.findChild(QLabel, "label_2")  # 替换为你的图片控件的实际对象名称
@@ -888,44 +888,32 @@ class MainWindow(QtWidgets.QMainWindow):
         if dialog.exec_():
             self.process_output_selection(dialog)
 
+    # 0719菜单栏改动
     def _init_font_size_menu(self):
-        # 0226新修改-字体大小：配置菜单中的字体大小三档（大/默认/小）
+        # 偏好设置/帮助在菜单栏；顶栏「配置」只保留「预定义」
         global APP_FONT_SCALE_CTRL
         ctrl = APP_FONT_SCALE_CTRL
         if ctrl is None:
             return
 
-        # 偏好设置 submenu（objectName 在 ui 里叫 "menu"）
+        # 顶栏配置按钮：仅挂「预定义」
+        btn_config = self.findChild(QtWidgets.QToolButton, "btn_config")
+        if btn_config:
+            config_menu = btn_config.menu()
+            if config_menu is None:
+                config_menu = QtWidgets.QMenu(self)
+                btn_config.setMenu(config_menu)
+                btn_config.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+                config_menu.setStyleSheet("QMenu::right-arrow { image: url(icons/arrow_down.png); }")
+            act_18 = self.findChild(QtWidgets.QAction, "action_18")
+            if act_18 and act_18 not in config_menu.actions():
+                config_menu.addAction(act_18)
+
+        # 偏好设置（objectName 在 ui 里为 "menu"），用于挂「字体大小」
         prefs_menu = self.findChild(QtWidgets.QMenu, "menu")
         if prefs_menu is None:
-            # 如果没有找到 "menu"（在新 UI 中），尝试寻找 btn_config 按钮并把菜单挂在它下面
-            btn_config = self.findChild(QtWidgets.QToolButton, "btn_config")
-            if btn_config:
-                config_menu = btn_config.menu()
-                if config_menu is None:
-                    config_menu = QtWidgets.QMenu(self)
-                    btn_config.setMenu(config_menu)
-                    # 点击按钮时立刻弹出下拉菜单
-                    btn_config.setPopupMode(QtWidgets.QToolButton.InstantPopup)
-
-                # 把“预定义”加到配置菜单
-                act_18 = self.findChild(QtWidgets.QAction, "action_18")
-                if act_18:
-                    config_menu.addAction(act_18)
-
-                # 创建子菜单“偏好设置”
-                prefs_menu = config_menu.addMenu("偏好设置")
-                prefs_menu.setObjectName("menu")
-
-                # 把原来在偏好设置里的 action 加进去：界面、快捷键、存储路径
-                for act_name in ["action_15", "action_16", "action_17"]:
-                    act = self.findChild(QtWidgets.QAction, act_name)
-                    if act:
-                        prefs_menu.addAction(act)
-                prefs_menu.addSeparator()
-            else:
-                # 兜底：直接挂到菜单栏
-                prefs_menu = self.menuBar().addMenu("偏好设置")
+            prefs_menu = self.menuBar().addMenu("偏好设置")
+            prefs_menu.setObjectName("menu")
 
         font_menu = prefs_menu.addMenu("字体大小")
 
@@ -947,45 +935,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # 保留引用，避免被 GC
         self._font_scale_actions = (act_big, act_default, act_small)
-
-    def _get_config_menu(self):
-        """获取或创建「配置」按钮/菜单栏的下拉菜单。"""
-        btn_config = self.findChild(QtWidgets.QToolButton, "btn_config")
-        if btn_config:
-            menu = btn_config.menu()
-            if menu is None:
-                menu = QtWidgets.QMenu(self)
-                btn_config.setMenu(menu)
-                btn_config.setPopupMode(QtWidgets.QToolButton.InstantPopup)
-
-                act_18 = self.findChild(QtWidgets.QAction, "action_18")
-                if act_18:
-                    menu.addAction(act_18)
-
-                prefs_menu = menu.addMenu("偏好设置")
-                prefs_menu.setObjectName("menu")
-                for act_name in ["action_15", "action_16", "action_17"]:
-                    act = self.findChild(QtWidgets.QAction, act_name)
-                    if act:
-                        prefs_menu.addAction(act)
-                prefs_menu.addSeparator()
-            return menu
-
-        return self.findChild(QtWidgets.QMenu, "config")
-
-    def _init_config_menu(self):
-        """在配置下拉菜单中增加「配置」项，打开三块布局窗口。"""
-        config_menu = self._get_config_menu()
-        if config_menu is None:
-            return
-
-        if getattr(self, "_action_config_window", None) is not None:
-            return
-
-        act_config = QtWidgets.QAction("配置", self)
-        act_config.triggered.connect(lambda: show_config_window(self))
-        config_menu.addAction(act_config)
-        self._action_config_window = act_config
 
     def _font_scale_custom(self, ctrl: "_FontScaleController"):
         # 用百分比表达更直观：60%~160%
@@ -1069,8 +1018,14 @@ class MainWindow(QtWidgets.QMainWindow):
             w.setEnabled(not readonly)
         for w in root.findChildren(QCheckBox):
             w.setEnabled(not readonly)
+        # 0526新修改-模块化设计禁用
         for w in root.findChildren(QRadioButton):
-            w.setEnabled(not readonly)
+            if w.objectName() == "radio_modular_design":
+                w.setEnabled(False)
+            else:
+                w.setEnabled(not readonly)
+
+
 
         for w in root.findChildren(QTableWidget):
             if readonly:
@@ -1135,37 +1090,11 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as e:
             print(f"[_apply_readonly_unlock_project_management_product_areas] {e}")
 
-    def _apply_readonly_to_single_tab(self, title, widget):
-        """仅对单个新打开的 tab 应用当前只读标志（避免全量遍历其它已开模块）。"""
-        if widget is None:
-            return
-        import modules.chanpinguanli.bianl as bianl
-
-        ro = bool(getattr(bianl, "product_local_files_missing_readonly", False))
-        if title in ("", "项目管理"):
-            # 0506新修改-项目管理只读区域设置
-            self._apply_readonly_unlock_project_management_product_areas()
-        elif ro:
-            self.apply_readonly_to_widget_tree(widget, True)
-
     # 4，12新修改--本地文件夹误删2共7
-    def refresh_all_tabs_readonly_state(self, force=False):
-        """
-        将「本地文件缺失只读」状态同步到所有已打开模块。
-        切 tab 时若状态未变则跳过（全量 findChildren + 单元格遍历非常慢）；
-        状态变化或 force=True（本地恢复/新建界面）时才全量刷新。
-        """
+    def refresh_all_tabs_readonly_state(self):
         import modules.chanpinguanli.bianl as bianl
 
-        ro = bool(getattr(bianl, "product_local_files_missing_readonly", False))
-        last = getattr(self, "_last_readonly_applied", None)
-        # 从未加锁且仍非只读：控件默认即可编辑，无需全表扫描
-        if not force and last is None and not ro:
-            self._last_readonly_applied = False
-            return
-        if not force and last is not None and last == ro:
-            return
-
+        ro = getattr(bianl, "product_local_files_missing_readonly", False)
         for i in range(self.tab_widget.count()):
             title = self.tab_widget.tabText(i)
             w = self.tab_widget.widget(i)
@@ -1176,7 +1105,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._apply_readonly_unlock_project_management_product_areas()
             else:
                 self.apply_readonly_to_widget_tree(w, ro)
-        self._last_readonly_applied = ro
 
     def safe_open_tab(self, title, widget_class):
         """安全地打开tab，处理widget创建失败的情况"""
@@ -1209,6 +1137,13 @@ class MainWindow(QtWidgets.QMainWindow):
                     # 产品未定义，显示提示弹窗并阻止打开
                     QMessageBox.information(self, "提示", "产品还未定义，请先定义！")
                     return
+
+        # 容器产品隐藏管束设计模块
+        if title == "管束设计":
+            from modules.chanpinguanli.tube_bundle_toolbar import should_block_tube_bundle_tab
+            current_product_id = getattr(bianl, "current_product_id", None)
+            if should_block_tube_bundle_tab(current_product_id):
+                return
 
         try:
             widget = widget_class()
@@ -1268,6 +1203,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if not product_id:
             return False
 
+        # 容器产品隐藏管束设计模块
+        from modules.chanpinguanli.tube_bundle_toolbar import should_skip_tube_bundle_prerequisite
+        skip_tube_bundle = should_skip_tube_bundle_prerequisite(product_id)
+
         # ==================== 【核心修改：为所有查询添加别名】 ====================
         # 为所有 COUNT(*) 和计算结果添加 `AS count` 别名，以便按名称访问
         prerequisite_checks = {
@@ -1315,6 +1254,10 @@ class MainWindow(QtWidgets.QMainWindow):
             cursor = conn.cursor()
 
             for module_name, check_info in prerequisite_checks.items():
+                # 容器产品隐藏管束设计模块
+                if skip_tube_bundle and module_name.startswith("管束设计"):
+                    print(f"[DEBUG][DB_CHECK] 容器产品跳过: '{module_name}'")
+                    continue
                 print(f"[DEBUG][DB_CHECK] 正在检查模块: '{module_name}'")
                 query = check_info["query"]
                 params_count = check_info["params_count"]
@@ -1470,8 +1413,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
                 # 3. 如果数据库中的数据不完整，则提示用户并阻止打开
                 if not prerequisites_met_in_db:
-                    QMessageBox.warning(self, "操作提示",
-                                        "请先完成【条件输入】、【元件定义】、【管口及附件定义】和【管束设计】模块的数据定义与保存！\n\n")
+                    # 容器产品隐藏管束设计模块
+                    from modules.chanpinguanli.tube_bundle_toolbar import prerequisites_hint_message
+                    QMessageBox.warning(
+                        self, "操作提示",
+                        prerequisites_hint_message(current_product_id),
+                    )
                     return
 
         # 检查是否从条件输入切换到可切换的模块
@@ -1501,7 +1448,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.tab_widget.setCurrentIndex(i)
                 # 4，12新修改--本地文件夹误删3共7
                 self._last_tab_index = i
-                # 只读标志未变时跳过全量刷新，避免切模块卡顿
                 self.refresh_all_tabs_readonly_state()
                 return
 
@@ -1510,12 +1456,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tab_widget.setCurrentIndex(idx)
         self._last_tab_index = idx
         # 4，12新修改--本地文件夹误删4共7
-        # 新页面默认可编辑；仅在「本地缺失只读」开启时锁定本页，不重扫其它已开 tab
-        self._apply_readonly_to_single_tab(title, widget)
-        if getattr(self, "_last_readonly_applied", None) is None:
-            self._last_readonly_applied = bool(
-                getattr(bianl, "product_local_files_missing_readonly", False)
-            )
+        self.refresh_all_tabs_readonly_state()
 
     # === on_tab_changed 改进版 ===
     def on_tab_changed(self, index):
@@ -1570,8 +1511,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
                     # 3. 如果数据库中的数据不完整，则提示用户并阻止切换
                     if not prerequisites_met_in_db:
-                        QMessageBox.warning(self, "操作提示",
-                                            "请先完成【条件输入】、【元件定义】、【管口及附件定义】和【管束设计】模块的数据定义与保存！\n\n")
+                        # 容器产品隐藏管束设计模块
+                        from modules.chanpinguanli.tube_bundle_toolbar import prerequisites_hint_message
+                        QMessageBox.warning(
+                            self, "操作提示",
+                            prerequisites_hint_message(current_product_id),
+                        )
                         # 阻止标签页切换，界面返回上一个标签页
                         self.tab_widget.blockSignals(True)
                         self.tab_widget.setCurrentIndex(last_index)
@@ -1610,9 +1555,8 @@ class MainWindow(QtWidgets.QMainWindow):
                     self._last_tab_index = new_idx
                     print(f"[DEBUG] 已打开新产品界面: {ctitle}")
                     # 4，12新修改--本地文件夹误删5共7
-                    # 产品切换后界面是新建的，强制按当前只读标志同步
                     try:
-                        self.refresh_all_tabs_readonly_state(force=True)
+                        self.refresh_all_tabs_readonly_state()
                     except Exception:
                         pass
                 # 重新连接信号
@@ -1713,7 +1657,7 @@ class MainWindow(QtWidgets.QMainWindow):
                         print(f"[DEBUG] 已打开新产品界面: {ctitle}")
                         # 4，12新修改--本地文件夹误删6共7
                         try:
-                            self.refresh_all_tabs_readonly_state(force=True)
+                            self.refresh_all_tabs_readonly_state()
                         except Exception:
                             pass
                     else:
@@ -2498,6 +2442,7 @@ if __name__ == "__main__":
                 ok_btn = box.button(QtWidgets.QMessageBox.Ok)
                 if ok_btn is not None:
                     ok_btn.setText("确认")
+                apply_msgbox_button_style(box)
                 return box.exec_()
             else:
                 return _orig_information(parent, title, text, buttons, defaultButton)
@@ -2515,6 +2460,7 @@ if __name__ == "__main__":
                 ok_btn = box.button(QtWidgets.QMessageBox.Ok)
                 if ok_btn is not None:
                     ok_btn.setText("确认")
+                apply_msgbox_button_style(box)
                 return box.exec_()
             else:
                 return _orig_critical(parent, title, text, buttons, defaultButton)
@@ -2532,6 +2478,7 @@ if __name__ == "__main__":
                 ok_btn = box.button(QtWidgets.QMessageBox.Ok)
                 if ok_btn is not None:
                     ok_btn.setText("确认")
+                apply_msgbox_button_style(box)
                 return box.exec_()
             else:
                 return _orig_warning(parent, title, text, buttons, defaultButton)
@@ -2559,6 +2506,7 @@ if __name__ == "__main__":
                 btn = box.button(std_btn)
                 if btn is not None:
                     btn.setText(label)
+            apply_msgbox_button_style(box)
             return box.exec_()
 
 
@@ -2636,7 +2584,7 @@ if __name__ == "__main__":
     from modules.yudingyi.predefined import yudingyi
     from modules.chanpinguanli.main2 import cpgl_Stats
 
-    window.show()
+    window.showMaximized()#0524新修改-初始界面最大化
     # ✅ 关闭欢迎图
     if splash:
         splash.finish(window)

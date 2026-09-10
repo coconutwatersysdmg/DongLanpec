@@ -98,6 +98,10 @@ QScrollBar::sub-line:vertical {
 QScrollBar::add-page:vertical,
 QScrollBar::sub-page:vertical {
     background: none;
+}
+/* 仅替换表格内 QComboBox 的下拉箭头图片，其余样式继承全局 */
+QTableWidget QComboBox::down-arrow {
+    image: url(modules/chanpinguanli/icons/下箭头.png);
 }</string>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout" stretch="0,0">
@@ -162,7 +166,7 @@ QPushButton#btn_confirm:disabled {
      </property>
      <layout class="QVBoxLayout" name="verticalLayout_7">
       <item>
-       <layout class="QHBoxLayout" name="topRightButtonLayout" stretch="0,0,0,0,0,1">
+       <layout class="QHBoxLayout" name="topRightButtonLayout" stretch="0,0,0,0,1">
         <property name="spacing">
          <number>15</number>
         </property>
@@ -285,35 +289,6 @@ QPushButton#btn_confirm:disabled {
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="btn_confirm">
-          <property name="minimumSize">
-           <size>
-            <width>107</width>
-            <height>38</height>
-           </size>
-          </property>
-          <property name="maximumSize">
-           <size>
-            <width>16777215</width>
-            <height>38</height>
-           </size>
-          </property>
-          <property name="text">
-           <string>保存</string>
-          </property>
-          <property name="icon">
-           <iconset>
-            <normaloff>../chanpinguanli/icons/保存.png</normaloff>../chanpinguanli/icons/保存.png</iconset>
-          </property>
-          <property name="iconSize">
-           <size>
-            <width>18</width>
-            <height>18</height>
-           </size>
-          </property>
-         </widget>
-        </item>
-        <item>
          <spacer name="horizontalSpacer_2">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
@@ -331,7 +306,9 @@ QPushButton#btn_confirm:disabled {
       <item>
        <widget class="QTabWidget" name="tabWidget_datatable">
         <property name="styleSheet">
-         <string notr="true">QTabWidget#tabWidget_datatable { border: none; }</string>
+         <string notr="true">QTabWidget#tabWidget_datatable { border: none; }
+QTabWidget#tabWidget_datatable::pane { border: none; background: transparent; }
+QTabWidget#tabWidget_datatable::tab-bar { left: 0px; }</string>
         </property>
         <property name="currentIndex">
          <number>1</number>
@@ -400,6 +377,52 @@ QPushButton#btn_confirm:disabled {
          </layout>
         </widget>
        </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout">
+        <item>
+         <spacer name="horizontalSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btn_confirm">
+          <property name="minimumSize">
+           <size>
+            <width>107</width>
+            <height>38</height>
+           </size>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>38</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>保存</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../chanpinguanli/icons/保存.png</normaloff>../chanpinguanli/icons/保存.png</iconset>
+          </property>
+          <property name="iconSize">
+           <size>
+            <width>18</width>
+            <height>18</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
       </item>
      </layout>
     </widget>
