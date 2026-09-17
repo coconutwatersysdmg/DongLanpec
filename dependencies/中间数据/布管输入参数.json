@@ -377,8 +377,8 @@
     "IsRequired": false,
     "IsTube": false,
     "Item": {
-      "0": "滑道与管板焊接",
-      "1": "滑道与第一块折流板焊接"
+      "0": "固定管板",
+      "1": "第一块折流板或支持板"
     },
     "RefreshConstraint": false,
     "IsVisible": true

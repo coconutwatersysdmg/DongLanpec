@@ -5134,6 +5134,14 @@ class TubeLayoutEditor(QMainWindow):
                                                 and not keep_buguan_lagan
                                         ):
                                             final_value = design_data["参数值"]
+                                            if param_name == "滑道定位":
+                                                from modules.buguan.buguan_ziyong.component.slipway import (
+                                                    normalize_slipway_location,
+                                                )
+
+                                                final_value = normalize_slipway_location(
+                                                    final_value
+                                                )
                                             print(
                                                 f"更新{param_name}: {param_value} -> {final_value}"
                                             )
@@ -5156,6 +5164,17 @@ class TubeLayoutEditor(QMainWindow):
                                         final_value = final_value.strip()
                                 except Exception:
                                     pass
+                                if param_name == "滑道定位":
+                                    try:
+                                        from modules.buguan.buguan_ziyong.component.slipway import (
+                                            normalize_slipway_location,
+                                        )
+
+                                        final_value = normalize_slipway_location(
+                                            final_value
+                                        )
+                                    except Exception:
+                                        pass
 
                                 processed_params.append(
                                     {
@@ -17155,7 +17174,11 @@ class TubeLayoutEditor(QMainWindow):
                     elif param["参数名"] == "拉杆形式":
                         combo.addItems(["焊接拉杆", "螺纹拉杆"])
                     elif param["参数名"] == "滑道定位":
-                        combo.addItems(["滑道与管板焊接", "滑道与第一块折流板焊接"])
+                        from modules.buguan.buguan_ziyong.component.slipway import (
+                            SLIPWAY_LOCATION_OPTIONS,
+                        )
+
+                        combo.addItems(list(SLIPWAY_LOCATION_OPTIONS))
                     elif param["参数名"] == "滑道形式":
                         combo.addItems(["板式滑道", "圆钢滑道"])
                     elif param["参数名"] == "滑道数量":
@@ -17317,6 +17340,12 @@ class TubeLayoutEditor(QMainWindow):
                     ):
                         # 兼容旧参数名：圆钢条式滑道 → 圆钢滑道
                         param_value_str = "圆钢滑道"
+                    elif param["参数名"] == "滑道定位":
+                        from modules.buguan.buguan_ziyong.component.slipway import (
+                            normalize_slipway_location,
+                        )
+
+                        param_value_str = normalize_slipway_location(param_value_str)
 
                     try:
                         if param_value_str:
@@ -29231,6 +29260,15 @@ class TubeLayoutEditor(QMainWindow):
             holes_down = data.get("单位", "")
 
             if line_num in cross_params:
+                if line_num == "滑道定位":
+                    try:
+                        from modules.buguan.buguan_ziyong.component.slipway import (
+                            normalize_slipway_location,
+                        )
+
+                        holes_up = normalize_slipway_location(holes_up)
+                    except Exception:
+                        pass
                 cross_params[line_num] = holes_up
             if line_num == "是否以外径为基准":
                 base_on_outer_diameter = str(data.get("参数值", "")).strip()
@@ -29481,21 +29519,42 @@ class TubeLayoutEditor(QMainWindow):
             val = cross_params.get(tube_name)
             if val is None or str(val).strip() == "":
                 continue
+            if tube_name == "滑道定位":
+                try:
+                    from modules.buguan.buguan_ziyong.component.slipway import (
+                        normalize_slipway_location,
+                    )
+
+                    val = normalize_slipway_location(val)
+                except Exception:
+                    pass
             safe_comp_name = escape_str(comp_name)
             safe_val = escape_str(str(val))
 
-            # UPDATE
-            sql_statements.append(
-                f"UPDATE {component_table} SET `参数值` = '{safe_val}' "
-                f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}'"
-            )
-            # INSERT IF NOT EXISTS
-            sql_statements.append(
-                f"INSERT INTO {component_table} (`产品ID`, `参数名称`, `参数值`) "
-                f"SELECT '{productID}', '{safe_comp_name}', '{safe_val}' "
-                f"WHERE NOT EXISTS (SELECT 1 FROM {component_table} "
-                f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}')"
-            )
+            if tube_name == "滑道定位":
+                # 优先写到「滑道」元件；再按参数名兜底，兼容历史行
+                sql_statements.append(
+                    f"UPDATE {component_table} SET `参数值` = '{safe_val}' "
+                    f"WHERE `产品ID` = '{productID}' AND `元件名称` = '滑道' "
+                    f"AND `参数名称` = '{safe_comp_name}'"
+                )
+                sql_statements.append(
+                    f"UPDATE {component_table} SET `参数值` = '{safe_val}' "
+                    f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}'"
+                )
+            else:
+                # UPDATE
+                sql_statements.append(
+                    f"UPDATE {component_table} SET `参数值` = '{safe_val}' "
+                    f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}'"
+                )
+                # INSERT IF NOT EXISTS
+                sql_statements.append(
+                    f"INSERT INTO {component_table} (`产品ID`, `参数名称`, `参数值`) "
+                    f"SELECT '{productID}', '{safe_comp_name}', '{safe_val}' "
+                    f"WHERE NOT EXISTS (SELECT 1 FROM {component_table} "
+                    f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}')"
+                )
 
         # 管程=1 时，将固定管板管程侧槽深/槽宽及管箱平盖（或前端管箱平盖）槽深更新为 0
         if is_tube_pass_one:

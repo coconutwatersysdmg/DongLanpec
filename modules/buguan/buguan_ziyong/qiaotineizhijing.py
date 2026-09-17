@@ -5787,7 +5787,7 @@ def cal_qiaotineizhijing_KU(product_id, isDi_change, isDN_change, user_Di, user_
             val = row["参数值"].strip() if row and row.get("参数值") else ""
             print(f" 数据库中滑道定位 参数值 = {repr(val)}")
 
-            lianjie = "是" if val == "滑道与管板焊接" else "否"
+            lianjie = "是" if val in ("滑道与管板焊接", "固定管板") else "否"
 
         except Exception as e:
             print(f" 查询失败: {e}")
@@ -12007,7 +12007,7 @@ def cal_qiaotineizhijing_NEN(product_id, isDi_change, isDN_change, user_Di, user
         val = row["参数值"].strip() if row and row.get("参数值") else ""
         print(f"  数据库中滑道定位 参数值 = {repr(val)}")
 
-        lianjie = "是" if val == "滑道与管板焊接" else "否"
+        lianjie = "是" if val in ("滑道与管板焊接", "固定管板") else "否"
 
     except Exception as e:
         print(f"  查询失败: {e}")
@@ -14868,7 +14868,7 @@ def cal_qiaotineizhijing_AEM(product_id, isDi_change, isDN_change, user_Di, user
         val = row["参数值"].strip() if row and row.get("参数值") else ""
         print(f"  数据库中滑道定位 参数值 = {repr(val)}")
 
-        lianjie = "是" if val == "滑道与管板焊接" else "否"
+        lianjie = "是" if val in ("滑道与管板焊接", "固定管板") else "否"
 
     except Exception as e:
         print(f"  查询失败: {e}")

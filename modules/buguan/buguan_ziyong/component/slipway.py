@@ -28,6 +28,92 @@ from modules.buguan.buguan_ziyong.ui_style import (
     StyledDialog as QDialog,
 )
 
+# 滑道定位：界面新文案；读库时兼容旧文案
+SLIPWAY_LOCATION_OPTIONS = ["固定管板", "第一块折流板或支持板"]
+_SLIPWAY_LOCATION_LEGACY_TO_NEW = {
+    "滑道与管板焊接": "固定管板",
+    "固定管板": "固定管板",
+    "滑道与第一块折流板焊接": "第一块折流板或支持板",
+    "第一块折流板或支持板": "第一块折流板或支持板",
+}
+
+
+def normalize_slipway_location(value):
+    """将滑道定位旧/新文案统一为当前界面选项。"""
+    text = ("" if value is None else str(value)).strip()
+    if not text:
+        return SLIPWAY_LOCATION_OPTIONS[0]
+    return _SLIPWAY_LOCATION_LEGACY_TO_NEW.get(text, text)
+
+
+def is_slipway_welded_to_tubesheet(value):
+    """是否按「固定管板」侧焊接（兼容旧文案）。"""
+    return normalize_slipway_location(value) == "固定管板"
+
+
+def sync_slipway_location_to_dbs(editor, location_value):
+    """
+    将滑道定位同时写入布管参数表与元件附加参数表（元件名称=滑道）。
+    """
+    product_id = getattr(editor, "productID", None) or getattr(editor, "product_id", None)
+    if not product_id:
+        return False
+    value = normalize_slipway_location(location_value)
+    try:
+        from modules.buguan.buguan_ziyong.My_Piping import create_product_connection
+
+        conn = create_product_connection()
+        if not conn:
+            return False
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    UPDATE 产品设计活动表_布管参数表
+                    SET 参数值 = %s
+                    WHERE 产品ID = %s AND 参数名 = %s
+                    """,
+                    (value, product_id, "滑道定位"),
+                )
+                if cursor.rowcount == 0:
+                    cursor.execute(
+                        """
+                        INSERT INTO 产品设计活动表_布管参数表
+                            (产品ID, 参数名, 参数值, 单位)
+                        VALUES (%s, %s, %s, %s)
+                        """,
+                        (product_id, "滑道定位", value, ""),
+                    )
+
+                cursor.execute(
+                    """
+                    UPDATE 产品设计活动表_元件附加参数表
+                    SET 参数值 = %s
+                    WHERE 产品ID = %s AND 元件名称 = %s AND 参数名称 = %s
+                    """,
+                    (value, product_id, "滑道", "滑道定位"),
+                )
+                if cursor.rowcount == 0:
+                    # 无「滑道」元件行时，退化为按参数名更新（兼容历史数据）
+                    cursor.execute(
+                        """
+                        UPDATE 产品设计活动表_元件附加参数表
+                        SET 参数值 = %s
+                        WHERE 产品ID = %s AND 参数名称 = %s
+                        """,
+                        (value, product_id, "滑道定位"),
+                    )
+            conn.commit()
+            return True
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"[slipway] 同步滑道定位到数据库失败: {e}")
+        return False
+
 
 def _get_clickable_rect_item():
     """延迟导入 ClickableRectItem，避免循环导入。"""
@@ -169,7 +255,7 @@ def edit_slide(self, slide_item):
 
     # 读取当前参数表默认值
     default_values = {
-        "滑道定位": "滑道与管板焊接",
+        "滑道定位": SLIPWAY_LOCATION_OPTIONS[0],
         "滑道形式": "板式滑道",
         "滑道数量": "2",
         "滑道方位角": "180",
@@ -195,6 +281,12 @@ def edit_slide(self, slide_item):
                     )
     except Exception:
         pass
+    try:
+        default_values["滑道定位"] = normalize_slipway_location(
+            default_values.get("滑道定位", "")
+        )
+    except Exception:
+        default_values["滑道定位"] = SLIPWAY_LOCATION_OPTIONS[0]
 
     # 弹窗
     dialog = QDialog(self)
@@ -204,7 +296,7 @@ def edit_slide(self, slide_item):
     layout = QVBoxLayout(dialog)
 
     input_widgets = {}
-    slide_location_options = ["滑道与管板焊接", "滑道与第一块折流板焊接"]
+    slide_location_options = list(SLIPWAY_LOCATION_OPTIONS)
     slipway_form_options = ["板式滑道", "圆钢滑道"]
     slipway_count_options = ["1", "2"]
     guide_rail_options = ["支撑导轨1", "支撑导轨2"]
@@ -230,8 +322,9 @@ def edit_slide(self, slide_item):
         if param == "滑道定位":
             combo = QComboBox()
             combo.addItems(slide_location_options)
-            if default_values.get(param, "") in slide_location_options:
-                combo.setCurrentText(default_values[param])
+            loc_default = normalize_slipway_location(default_values.get(param, ""))
+            if loc_default in slide_location_options:
+                combo.setCurrentText(loc_default)
             input_widgets[param] = combo
             row_layout.addWidget(combo)
         elif param == "滑道形式":
@@ -428,7 +521,11 @@ def edit_slide(self, slide_item):
                 input_widgets[cut_key].setText(cut_text)
 
         # 同步参数表（含滑道形式/圆钢/导轨，避免仅改可见项）
-        sync_param_table("滑道定位", input_widgets["滑道定位"].currentText())
+        loc_val = normalize_slipway_location(
+            input_widgets["滑道定位"].currentText()
+        )
+        sync_param_table("滑道定位", loc_val)
+        sync_slipway_location_to_dbs(self, loc_val)
         sync_param_table("滑道形式", input_widgets["滑道形式"].currentText())
         sync_param_table("滑道数量", input_widgets["滑道数量"].currentText())
         sync_param_table("滑道方位角", input_widgets["滑道方位角"].text())
@@ -460,7 +557,7 @@ def edit_slide(self, slide_item):
                 angle_eff = _eff_line("滑道与竖直中心线夹角") or "20"
                 # height/thickness 占位：圆钢绘制读圆钢规格，不依赖高/厚
                 params = {
-                    "location": input_widgets["滑道定位"].currentText(),
+                    "location": loc_val,
                     "height": rs_text,
                     "thickness": rs_text,
                     "angle": angle_eff,
@@ -469,7 +566,7 @@ def edit_slide(self, slide_item):
                 }
             else:
                 params = {
-                    "location": input_widgets["滑道定位"].currentText(),
+                    "location": loc_val,
                     "height": input_widgets["滑道高度"].text(),
                     "thickness": input_widgets["滑道厚度"].text(),
                     "angle": input_widgets["滑道与竖直中心线夹角"].text(),
@@ -524,10 +621,15 @@ def on_green_slide_click(self):
                 item = self.param_table.item(row, 2)
                 default_values[param_name] = item.text() if item else ""
 
+    if "滑道定位" in default_values:
+        default_values["滑道定位"] = normalize_slipway_location(
+            default_values.get("滑道定位", "")
+        )
+
     # 创建输入控件
     input_widgets = {}
     # 定义滑道定位的选项列表
-    slide_location_options = ["滑道与管板焊接", "滑道与第一块折流板焊接"]
+    slide_location_options = list(SLIPWAY_LOCATION_OPTIONS)
     slipway_form_options = ["板式滑道", "圆钢滑道"]
     slipway_count_options = ["1", "2"]
     guide_rail_options = ["支撑导轨1", "支撑导轨2"]
@@ -544,9 +646,9 @@ def on_green_slide_click(self):
         if param == "滑道定位":
             combo = QComboBox()
             combo.addItems(slide_location_options)  # 使用预定义的选项列表
-            # 设置默认值 - 使用预定义的选项列表进行检查
-            if default_values.get(param, "") in slide_location_options:
-                combo.setCurrentText(default_values[param])
+            loc_default = normalize_slipway_location(default_values.get(param, ""))
+            if loc_default in slide_location_options:
+                combo.setCurrentText(loc_default)
             input_widgets[param] = combo
             row_layout.addWidget(label)
             row_layout.addWidget(combo)
@@ -731,6 +833,8 @@ def on_green_slide_click(self):
                     new_value = input_widgets[param_name].currentText()
                 else:
                     new_value = input_widgets[param_name].text()
+                if param_name == "滑道定位":
+                    new_value = normalize_slipway_location(new_value)
 
                 widget = self.param_table.cellWidget(row, 2)
                 if isinstance(widget, QComboBox):
@@ -748,6 +852,16 @@ def on_green_slide_click(self):
                         self.param_table.setItem(row, 2, QTableWidgetItem(new_value))
 
         try:
+            sync_slipway_location_to_dbs(
+                self,
+                normalize_slipway_location(
+                    input_widgets["滑道定位"].currentText()
+                ),
+            )
+        except Exception as e:
+            print(f"[slipway] 弹窗确认同步滑道定位失败: {e}")
+
+        try:
             self._apply_slipway_form_and_guide_visibility()
         except Exception:
             pass
@@ -755,8 +869,11 @@ def on_green_slide_click(self):
         if is_round:
             rs_text = str(input_widgets.get("圆钢规格").text()).strip()
             angle_eff = _eff_line("滑道与竖直中心线夹角") or "20"
+            loc_val = normalize_slipway_location(
+                input_widgets["滑道定位"].currentText()
+            )
             params = {
-                "location": input_widgets["滑道定位"].currentText(),
+                "location": loc_val,
                 "height": rs_text,
                 "thickness": rs_text,
                 "angle": angle_eff,
@@ -764,8 +881,11 @@ def on_green_slide_click(self):
                 "cut_height": _eff_line("滑道切边高度") or "15",
             }
         else:
+            loc_val = normalize_slipway_location(
+                input_widgets["滑道定位"].currentText()
+            )
             params = {
-                "location": input_widgets["滑道定位"].currentText(),
+                "location": loc_val,
                 "height": input_widgets["滑道高度"].text(),
                 "thickness": input_widgets["滑道厚度"].text(),
                 "angle": input_widgets["滑道与竖直中心线夹角"].text(),
