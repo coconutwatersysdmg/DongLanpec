@@ -1,0 +1,66 @@
+﻿<!doctype html>
+<!-- 
+Copyright (C) 2014 - present, Zoomer Analytics GmbH. All rights reserved.
+Licensed under BSD-3-Clause license, see: https://docs.xlwings.org/en/stable/license.html
+
+This file also contains code from Bootstrap
+Copyright (c) 2011-2023 The Bootstrap Authors, Licensed under MIT license, see https://raw.githubusercontent.com/twbs/bootstrap/main/LICENSE
+ -->
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alert</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/gh/xlwings/bootstrap-xlwings@5.3.3-1/dist/bootstrap-xlwings.min.css"
+    integrity="sha384-wssPI7ew3oAbNyf/TbEcfwVxseOnbEnlyoIUFSlfTHsFrHYm3ysVSwmsdE9yWuxc" crossorigin="anonymous">
+</head>
+
+<body>
+  <div id="callback" data-callback="{{ callback }}"></div>
+  <div class="container-fluid">
+    <div class="d-flex flex-column pb-3 px-2 vh-100">
+      <h1 class="pt-4">{{ title }}</h1>
+      <p>{{ prompt|replace("\n", "<br>"|safe) }}</p>
+      <div class="mt-auto">
+        <div class="float-end">
+          {% if "ok" in buttons %}
+          <button id="ok" type="button" class="btn btn-primary btn-xl-alert">OK</button>
+          {% endif %}
+          {% if "yes" in buttons %}
+          <button id="yes" type="button" class="btn btn-primary btn-xl-alert">Yes</button>
+          {% endif %}
+          {% if "no" in buttons %}
+          <button id="no" type="button" class="btn btn-outline-secondary btn-xl-alert">No</button>
+          {% endif %}
+          {% if "cancel" in buttons %}
+          <button id="cancel" type="button" class="btn btn-outline-secondary btn-xl-alert">Cancel</button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    Office.onReady(function (info) { });
+    if (document.getElementById("ok")) {
+      document.getElementById("ok").addEventListener("click", buttonCallback);
+    }
+    if (document.getElementById("yes")) {
+      document.getElementById("yes").addEventListener("click", buttonCallback);
+    }
+    if (document.getElementById("no")) {
+      document.getElementById("no").addEventListener("click", buttonCallback);
+    }
+    if (document.getElementById("cancel")) {
+      document.getElementById("cancel").addEventListener("click", buttonCallback);
+    }
+    function buttonCallback() {
+      Office.context.ui.messageParent(this.id + "|" + document.getElementById("callback").getAttribute("data-callback"));
+    }
+  </script>
+</body>
+
+</html>

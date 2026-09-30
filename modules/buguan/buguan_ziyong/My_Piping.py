@@ -29543,17 +29543,11 @@ class TubeLayoutEditor(QMainWindow):
                     f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}'"
                 )
             else:
-                # UPDATE
+                # 仅更新已有行；缺行说明材料模板未定义该参数，勿裸 INSERT
+                #（否则会生成 元件ID/元件名称 为空的孤儿行，污染另存模板并导致切换失败）
                 sql_statements.append(
                     f"UPDATE {component_table} SET `参数值` = '{safe_val}' "
                     f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}'"
-                )
-                # INSERT IF NOT EXISTS
-                sql_statements.append(
-                    f"INSERT INTO {component_table} (`产品ID`, `参数名称`, `参数值`) "
-                    f"SELECT '{productID}', '{safe_comp_name}', '{safe_val}' "
-                    f"WHERE NOT EXISTS (SELECT 1 FROM {component_table} "
-                    f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}')"
                 )
 
         # 管程=1 时，将固定管板管程侧槽深/槽宽及管箱平盖（或前端管箱平盖）槽深更新为 0
@@ -29638,17 +29632,11 @@ class TubeLayoutEditor(QMainWindow):
             f"WHERE `产品ID` = '{productID}' AND `参数名` = '{safe_param_name}')"
         )
 
-        # 同时更新元件附加参数表
+        # 同时更新元件附加参数表（仅 UPDATE，勿裸 INSERT 造孤儿行）
         safe_comp_name = escape_str("防冲板宽度")
         sql_statements.append(
             f"UPDATE {component_table} SET `参数值` = '{safe_param_value}' "
             f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}'"
-        )
-        sql_statements.append(
-            f"INSERT INTO {component_table} (`产品ID`, `参数名称`, `参数值`) "
-            f"SELECT '{productID}', '{safe_comp_name}', '{safe_param_value}' "
-            f"WHERE NOT EXISTS (SELECT 1 FROM {component_table} "
-            f"WHERE `产品ID` = '{productID}' AND `参数名称` = '{safe_comp_name}')"
         )
 
         # 执行所有 SQL

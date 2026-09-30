@@ -13,6 +13,10 @@ from modules.cailiaodingyi.controllers.style import exec_message_box, show_warni
 
 from modules.cailiaodingyi.controllers.checkcombo import CheckComboDelegate
 from modules.cailiaodingyi.controllers.combo import ComboPopupEventFilter, MultiSelectRowComboDelegate, ComboDelegate, NonNegativeDoubleDelegate
+from modules.cailiaodingyi.controllers.table import (
+    setup_param_detail_table,
+    install_param_detail_selection_highlight,
+)
 from modules.cailiaodingyi.funcs.funcs_pdf_input import db_config_1, db_config_2, get_options_for_param
 from modules.cailiaodingyi.funcs.funcs_pdf_render import _set_table_tooltips, _install_tooltip_updater
 from modules.cailiaodingyi.funcs.funcs_pdf_change import (
@@ -29,6 +33,47 @@ from modules.cailiaodingyi.controllers.datamanager import (
     refresh_attachment_schematic_image,
 )
 import pymysql
+import re
+
+
+def _strip_attachment_tab_suffix(name: str) -> str:
+    """Tab 名去掉末尾序号：接管法兰配对法兰2 → 接管法兰配对法兰。"""
+    n = (name or "").strip()
+    if not n:
+        return ""
+    n2 = re.sub(r"\d+$", "", n).strip()
+    return n2 or n
+
+
+def _attachment_part_name_for_material_row(table, param_col: int, type_row: int) -> str:
+    """
+    管口附件材料类型过滤用的零件名：
+      1) 优先用材料组上方折叠小标题（如 接管法兰配对法兰、螺栓(接管法兰)）
+      2) 否则用 table._attachment_type（= 附件类型 / tab 基名，如 防冲挡板、接管拉筋、破涡器）
+      3) 再否则用 table._tab_classification（去掉末尾数字）
+    """
+    try:
+        for i in range(type_row, -1, -1):
+            it = table.item(i, param_col)
+            if not it:
+                continue
+            info = it.data(Qt.UserRole)
+            if info and info.get("is_group_title"):
+                name = (info.get("group_name") or "").strip()
+                if name and name.lower() != "default":
+                    return name
+    except Exception:
+        pass
+    try:
+        at = (getattr(table, "_attachment_type", "") or "").strip()
+        if at:
+            return _strip_attachment_tab_suffix(at)
+        tab = (getattr(table, "_tab_classification", "") or "").strip()
+        if tab:
+            return _strip_attachment_tab_suffix(tab)
+    except Exception:
+        pass
+    return ""
 
 # 材料库配置（用于查询管口附件折叠表）
 db_config_material = {
@@ -519,6 +564,11 @@ def _setup_tab_bar(tab_widget, viewer_instance):
     bar.setElideMode(Qt.ElideNone)
     bar.setContextMenuPolicy(Qt.CustomContextMenu)
     bar.customContextMenuRequested.connect(lambda pos: _on_attachment_tab_right_menu(viewer_instance, pos))
+    try:
+        from modules.cailiaodingyi.controllers.style import skip_tab_bar_focus
+        skip_tab_bar_focus(tab_widget)
+    except Exception:
+        pass
     # 设置左右导航按钮背景为白色（背景色），边框也为白色
     bar.setStyleSheet("""
         QTabBar::scroller {
@@ -934,30 +984,9 @@ def _calculate_pipe_code_options(product_id, attachment_type, tab_classification
 
 
 def _setup_table_header_style(table):
-    """设置表头样式"""
-    header = table.horizontalHeader()
-    for i in range(table.columnCount()):
-        header.setSectionResizeMode(i, QHeaderView.Stretch)
-    
-    header_qss = """
-        QHeaderView::section {
-            background-color: #F2F2F2;
-            color: black;
-            font-weight: bold;
-            text-align: center;
-            padding: 5px;
-            border: 1px solid #CCCCCC;
-            border-right: 1px solid #CCCCCC;
-            border-bottom: 1px solid #CCCCCC;
-        }
-        QHeaderView::section:first {
-            border-left: 1px solid #CCCCCC;
-        }
-    """
-    table.setStyleSheet(header_qss)
-    header.setStyleSheet(header_qss)
-    header.setDefaultAlignment(Qt.AlignCenter)
-    table.horizontalHeader().setFixedHeight(35)
+    """设置详细定义表样式（表头 + 选中/高亮，与普通元件新 UI 一致）"""
+    setup_param_detail_table(table)
+    install_param_detail_selection_highlight(table)
 
 
 def _toggle_group_expand(table, title_row):
@@ -1100,20 +1129,27 @@ def _install_attachment_material_delegate_linkage(table, param_col, value_col, v
         cur_type = _get(type_row)
         cur_brand = _get(brand_row)
         cur_std = _get(std_row)
-        
-        # 获取选项
-        opts_type = (get_filtered_material_options({}) or {}).get("材料类型", []) or []
-        opts_brand = (get_filtered_material_options({"材料类型": cur_type} if cur_type else {}) or {}).get("材料牌号", []) or []
+        part_filter = _attachment_part_name_for_material_row(table, param_col, type_row)
+
+        def _mat_opts(selected: dict):
+            return get_filtered_material_options(selected, element_name=part_filter or None) or {}
+
+        # 获取选项（材料类型按分组零件过滤）
+        opts_type = _mat_opts({}).get("材料类型", []) or []
+        opts_brand = _mat_opts({"材料类型": cur_type} if cur_type else {}).get("材料牌号", []) or []
         basis_std = {k: v for k, v in {"材料类型": cur_type, "材料牌号": cur_brand}.items() if v}
-        opts_std = (get_filtered_material_options(basis_std) or {}).get("材料标准", []) or []
+        opts_std = _mat_opts(basis_std).get("材料标准", []) or []
         basis_stat = {k: v for k, v in {"材料类型": cur_type, "材料牌号": cur_brand, "材料标准": cur_std}.items() if v}
-        opts_stat = (get_filtered_material_options(basis_stat) or {}).get("供货状态", []) or []
+        opts_stat = _mat_opts(basis_stat).get("供货状态", []) or []
         
         # 创建独立的on_pick回调（使用闭包捕获当前组的行号）
-        def make_on_pick(tr, br, sr, st_row, is_first_group):
+        def make_on_pick(tr, br, sr, st_row, is_first_group, part_name):
             def on_pick(field_name: str, new_text: str, row: int, col: int):
                 if field_name not in ["材料类型", "材料牌号", "材料标准", "供货状态"]:
                     return
+
+                def _opts(selected: dict):
+                    return get_filtered_material_options(selected, element_name=part_name or None) or {}
                 
                 # 更新当前选择的值
                 if field_name == "材料类型":
@@ -1153,19 +1189,19 @@ def _install_attachment_material_delegate_linkage(table, param_col, value_col, v
                     _set(br, "")
                     _set(sr, "")
                     _set(st_row, "")
-                    b = get_filtered_material_options({"材料类型": new_text}) or {}
+                    b = _opts({"材料类型": new_text})
                     _install_row_delegate("材料牌号", br, b.get("材料牌号", []))
                     # 参照普通元件逻辑：即使材料牌号为空，只要有材料类型，材料标准和供货状态也应该有选项
                     basis_std = {"材料类型": new_text} if new_text else {}
-                    std_opts = (get_filtered_material_options(basis_std) or {}).get("材料标准", []) or []
-                    stat_opts = (get_filtered_material_options(basis_std) or {}).get("供货状态", []) or []
+                    std_opts = _opts(basis_std).get("材料标准", []) or []
+                    stat_opts = _opts(basis_std).get("供货状态", []) or []
                     _install_row_delegate("材料标准", sr, std_opts)
                     _install_row_delegate("供货状态", st_row, stat_opts)
                 elif field_name == "材料牌号":
                     # 材料牌号改变，清空标准和状态，更新选项
                     _set(sr, "")
                     _set(st_row, "")
-                    f = get_filtered_material_options({"材料类型": cur_t, "材料牌号": new_text}) or {}
+                    f = _opts({"材料类型": cur_t, "材料牌号": new_text})
                     std_opts = f.get("材料标准", []) or []
                     stat_opts = f.get("供货状态", []) or []
                     _install_row_delegate("材料标准", sr, std_opts)
@@ -1177,7 +1213,7 @@ def _install_attachment_material_delegate_linkage(table, param_col, value_col, v
                 elif field_name == "材料标准":
                     # 材料标准改变，清空状态，更新选项
                     _set(st_row, "")
-                    f = get_filtered_material_options({"材料类型": cur_t, "材料牌号": cur_b, "材料标准": new_text}) or {}
+                    f = _opts({"材料类型": cur_t, "材料牌号": cur_b, "材料标准": new_text})
                     stat_opts = f.get("供货状态", []) or []
                     _install_row_delegate("供货状态", st_row, stat_opts)
                     if (not _get(st_row)) and len(stat_opts) == 1:
@@ -1192,7 +1228,7 @@ def _install_attachment_material_delegate_linkage(table, param_col, value_col, v
         
         # 为当前组创建独立的on_pick回调
         is_first_group = (idx == 0)
-        on_pick = make_on_pick(type_row, brand_row, std_row, status_row, is_first_group)
+        on_pick = make_on_pick(type_row, brand_row, std_row, status_row, is_first_group, part_filter)
         
         # 安装delegate的函数
         def _install_row_delegate(field_name, row_idx, options):
@@ -2122,6 +2158,15 @@ def _render_attachment_table_data(table, attachment_type, guankou_codes, param_d
     :param tab_classification: Tab分类名称（用于计算可选项）
     :param product_id: 产品ID（用于查询）
     """
+    # 供材料类型过滤：简单附件（防冲挡板/破涡器/接管拉筋）无分组标题时读附件类型；
+    # 配对法兰多分组时优先读各折叠小标题。
+    try:
+        table._attachment_type = (attachment_type or "").strip()
+        table._tab_classification = (tab_classification or attachment_type or "").strip()
+        table._element_name = "管口附件"
+    except Exception:
+        pass
+
     # 保存折叠状态
     saved_expand_state, is_first_render = _save_table_expand_state(table)
     

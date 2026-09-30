@@ -93,24 +93,26 @@ def compute_centers(
             return half_dh if Layout == "S" else 0.0
 
     def xstart_rule_Snh(odd_row):
-        """基于Snh的xstart规则（从0.5*Snh开始）"""
+        """规则B：基于Snh的xstart。90°时任意布置均为 Snh/2（不再区分对中/跨中）。"""
         if Ang in (30, 45, 60):
             if Layout == "C":
                 return half_Snh if odd_row else (half_Snh + half_dh)
             else:
                 return (half_Snh + half_dh) if odd_row else half_Snh
         else:
-            return half_Snh + (half_dh if Layout == "S" else 0.0)
+            # Ang=90：文档规定任意布置均为 Snh/2
+            return half_Snh
 
     def xstart_rule_at_base(base_x, odd_row):
-        """RegionB/D 续布：在 base_x 上应用 Layout 偏移"""
+        """规则C/D：在 base_x（ColAmax+Snh 或 ColCmax+Snh）上续布。90°时任意布置均为 base_x。"""
         if Ang in (30, 45, 60):
             if Layout == "C":
                 return base_x if odd_row else base_x + half_dh
             else:
                 return base_x + half_dh if odd_row else base_x
         else:
-            return base_x + (half_dh if Layout == "S" else 0.0)
+            # Ang=90：文档规定任意布置均为 Col*max+Snh（即 base_x）
+            return base_x
 
     def xstart_rule_Snh_xmin(odd_row):
         """12c专用：基于Snh的xstart规则，带x下限检查"""

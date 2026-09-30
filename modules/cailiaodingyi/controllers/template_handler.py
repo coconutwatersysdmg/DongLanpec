@@ -12,18 +12,59 @@ from modules.cailiaodingyi.controllers.datamanager import (
 from modules.cailiaodingyi.demo import NoWheelComboBoxFilter
 from modules.cailiaodingyi.funcs.funcs_pdf_change import (
     update_guankou_define_data,
-    update_guankou_define_status,
-    load_element_data_by_product_id, is_all_guankou_parts_defined, get_filtered_material_options,
+    refresh_guankou_define_status,
+    get_filtered_material_options,
     query_template_name_by_product
 )
 from modules.cailiaodingyi.funcs.funcs_pdf_input import (
-    move_guankou_to_first, move_guankou_attachment_to_second, update_template_input_editable_state
+    update_template_input_editable_state
 )
 from modules.condition_input.funcs.funcs_cdt_input import clear_manual_flags_for_product
 
 
 
 
+
+
+def _template_combo_lookup_text(template_name: str) -> str:
+    """库内/缓存的模板名 → 下拉框 item 文本（空项对应 None）。"""
+    name = (template_name or "").strip()
+    if not name or name.lower() == "none":
+        return ""
+    return name
+
+
+def _restore_template_combo_after_cancel(viewer_instance, old_template: str):
+    """
+    用户取消切换时回滚「模板选用」下拉。
+    必须按旧模板名 findText，不能依赖可能未初始化的 _template_prev_index
+    （未初始化时默认 0，正好是空白项，多次取消后就会把名称清空）。
+    延后到下一轮事件循环执行，避免 QComboBox 弹层关闭时把回滚结果再盖掉。
+    """
+    lookup = _template_combo_lookup_text(old_template)
+    stored_name = "None" if not lookup else lookup
+
+    def _do_restore():
+        combo = getattr(viewer_instance, "comboBox_template", None)
+        if combo is None:
+            return
+        restore_idx = combo.findText(lookup)
+        if restore_idx < 0:
+            restore_idx = getattr(viewer_instance, "_template_prev_index", -1)
+        if restore_idx is None or restore_idx < 0 or restore_idx >= combo.count():
+            print(f"[模板切换] 取消回滚失败：找不到旧模板 {old_template!r}")
+            return
+        try:
+            viewer_instance._template_reverting = True
+            combo.blockSignals(True)
+            combo.setCurrentIndex(restore_idx)
+            viewer_instance._template_prev_index = restore_idx
+            viewer_instance.current_template_name = stored_name
+        finally:
+            combo.blockSignals(False)
+            viewer_instance._template_reverting = False
+
+    QTimer.singleShot(0, _do_restore)
 
 
 def handle_template_change(viewer_instance, index):
@@ -62,13 +103,7 @@ def handle_template_change(viewer_instance, index):
     )
     if not ok:
         print("[模板切换] 用户取消")
-        try:
-            viewer_instance._template_reverting = True
-            viewer_instance.comboBox_template.blockSignals(True)
-            viewer_instance.comboBox_template.setCurrentIndex(getattr(viewer_instance, "_template_prev_index", 0))
-        finally:
-            viewer_instance.comboBox_template.blockSignals(False)
-            viewer_instance._template_reverting = False
+        _restore_template_combo_after_cancel(viewer_instance, old_template)
         return
 
     # 真正切换
@@ -294,18 +329,10 @@ def on_combo_changed(guankou_define_info, table, row, col, product_id, viewer_in
     # 更新管口零件定义数据库
     update_guankou_define_data(product_id, new_value, field_name, guankou_id, category_label)
 
-    element_name = "管口"
-
-    # 执行元件表中管口的更新操作
-    if (is_all_guankou_parts_defined(viewer_instance.product_id)):
-        # update_guankou_define_status(product_id, element_name)
-        update_element_info = load_element_data_by_product_id(product_id)
-        updated_element_info = move_guankou_to_first(update_element_info)
-        updated_element_info = move_guankou_attachment_to_second(updated_element_info)
-        print(f"更新后的元件列表{updated_element_info}")
-        viewer_instance.render_data_to_table(updated_element_info)
-        # 存为模板
-        # update_template_input_editable_state(viewer_instance)
+    # 按附加参数表重算管口「是否定义」并刷新左侧
+    refresh_guankou_define_status(viewer_instance.product_id, viewer_instance)
+    # 存为模板
+    # update_template_input_editable_state(viewer_instance)
 
 
 def on_material_field_changed_row(table: QTableWidget, row: int):

@@ -6,7 +6,16 @@ from collections import defaultdict
 from PyQt5.QtWidgets import QTableWidget
 
 from modules.cailiaodingyi.db_cnt import get_connection
-from modules.cailiaodingyi.funcs.funcs_pdf_change import DEBUG_VERBOSE_DEFINE_UI
+from modules.cailiaodingyi.funcs.funcs_pdf_change import (
+    DEBUG_VERBOSE_DEFINE_UI,
+    FLOATING_HEAD_FLANGE_ELEMENT_NAME,
+    FLOATING_HEAD_HMIN_PARAM_NAME,
+    PULL_OUT_TEST_PARAM_NAME,
+    is_none_template_name,
+    resolve_floating_head_hmin_default_from_user_config,
+    resolve_pull_out_test_default_from_user_config,
+    resolve_to_standard_name,
+)
 import pymysql
 
 
@@ -448,7 +457,7 @@ def query_template_element_para_data(template_id):
     finally:
         connection.close()
 
-def insert_element_para_data(product_id, guankou_para_info):
+def insert_element_para_data(product_id, guankou_para_info, template_name=None):
     """将从材料库的元件附加参数表读出的数据写入产品设计活动库的元件附加参数表"""
     connection = get_connection(**db_config_1)
     try:
@@ -460,7 +469,25 @@ def insert_element_para_data(product_id, guankou_para_info):
                 print(f"产品ID{product_id} 对应的元件附加参数信息已存在，跳过插入")
                 return
 
+            # 是否型：None 模板也要带入；数值型 Hmin：None 模板不带入配置默认值
+            pull_out_test_default = resolve_pull_out_test_default_from_user_config()
+            apply_floating_head_hmin = not is_none_template_name(template_name)
+            floating_head_hmin_default = (
+                resolve_floating_head_hmin_default_from_user_config()
+                if apply_floating_head_hmin else None
+            )
             for item in guankou_para_info:
+                param_name = str(item.get('参数名称', '') or '').strip()
+                param_value = item.get('参数数值', '')
+                element_name = str(item.get('元件名称', '') or '').strip()
+                if param_name == PULL_OUT_TEST_PARAM_NAME:
+                    param_value = pull_out_test_default
+                elif (
+                    apply_floating_head_hmin
+                    and param_name == FLOATING_HEAD_HMIN_PARAM_NAME
+                    and resolve_to_standard_name(element_name) == FLOATING_HEAD_FLANGE_ELEMENT_NAME
+                ):
+                    param_value = floating_head_hmin_default
                 sql = """
                     INSERT INTO 产品设计活动表_元件附加参数表
                     (元件附加参数ID, 产品ID, 元件ID, 元件名称, 参数名称, 参数值, 参数单位)
@@ -473,7 +500,7 @@ def insert_element_para_data(product_id, guankou_para_info):
                     item['元件ID'],
                     item['元件名称'],
                     item['参数名称'],
-                    item['参数数值'],
+                    param_value,
                     item['参数单位']
                 ))
 

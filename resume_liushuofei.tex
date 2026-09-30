@@ -1,0 +1,182 @@
+\documentclass[UTF8]{ctexart}
+
+% 必须用 XeLaTeX 编译：Overleaf Menu -> Compiler -> XeLaTeX
+
+\usepackage{xeCJK}
+\usepackage{fontspec}
+
+% 中文字体
+\setCJKmainfont{FandolSong-Regular}[
+    BoldFont = FandolHei-Regular,
+    ItalicFont = FandolKai-Regular
+]
+\setCJKsansfont{FandolHei-Regular}
+\setCJKmonofont{FandolFang-Regular}
+
+% 英文字体
+\setmainfont{TeX Gyre Termes}
+\setsansfont{TeX Gyre Heros}
+\setmonofont{TeX Gyre Cursor}
+
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+\usepackage{fancyhdr}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{fontawesome5}
+\usepackage[colorlinks=true, linkcolor=black, urlcolor=blue]{hyperref}
+
+% ==================== 页面边距 ====================
+\geometry{left=1.5cm,right=1.5cm,top=1.2cm,bottom=1.2cm}
+
+% ==================== 全局行距 ====================
+\linespread{1.0}
+\setlength{\parskip}{0pt}
+\setlength{\parindent}{0pt}
+
+\usepackage{xcolor}
+\definecolor{mainblue}{RGB}{31,56,100}
+\definecolor{darkgray}{RGB}{31,56,100}
+
+% ==================== 列表 ====================
+\usepackage{enumitem}
+\setlist[itemize]{
+    leftmargin=1.2em,
+    itemsep=0.06em,
+    topsep=0.06em,
+    parsep=0em,
+    partopsep=0em
+}
+
+% ==================== 标题 ====================
+\usepackage{titlesec}
+\titleformat{\section}
+  {\normalsize\bfseries\color{mainblue}}
+  {}{0em}
+  {}
+  [\vspace{-0.45em}\color{mainblue}\rule{\textwidth}{0.6pt}]
+\titlespacing*{\section}{0pt}{0.5em}{0.22em}
+
+\titleformat{\subsection}
+  {\small\bfseries\color{darkgray}}
+  {}{0em}
+  {}
+\titlespacing*{\subsection}{0pt}{0.3em}{0.12em}
+
+% ==================== 姓名字体 ====================
+\newcommand{\namestyle}[1]{{\heiti\fontsize{26}{30}\selectfont #1}}
+
+% ==================== 自定义命令 ====================
+\newcommand{\eduItem}[4]{
+    \noindent
+    \textbf{#1} \hfill #2 \\
+    #3 \hfill #4
+    \vspace{0.05em}
+}
+
+\newcommand{\expItem}[3]{
+    \noindent
+    \textbf{#1} \hfill #2 \\
+    #3
+    \vspace{0.05em}
+}
+
+\newcommand{\projectItem}[2]{
+    \noindent
+    \textbf{#1} \hfill #2
+    \vspace{0.05em}
+}
+
+\begin{document}
+\pagestyle{empty}
+
+% ==================== 头部信息 ====================
+\noindent
+\begin{minipage}[c]{0.72\textwidth}
+    {\namestyle{刘朔飞}} \\[0.5em]
+    {\small 年龄：23岁 \quad | \quad 地址：上海松江} \\[0.2em]
+    {\small \faPhone* \ 17686553260（微信同号） \quad {\color{mainblue}\faEnvelope \ XMxm17686553260@163.com}}
+\end{minipage}%
+\hfill
+\begin{minipage}[c]{0.25\textwidth}
+    \raggedleft
+    \includegraphics[width=2.5cm,height=3.5cm,keepaspectratio]{一寸证件照.jpg}
+\end{minipage}
+
+\vspace{0.4em}
+
+% ==================== 教育背景 ====================
+\section*{教育背景}
+
+\eduItem{东华大学（211）}{2024.09 -- 至今}
+{软件工程 \quad 硕士研究生 \quad 信息与智能科学学院}{上海}
+
+\vspace{0.12em}
+
+\eduItem{东华大学（211）}{2020.09 -- 2024.06}
+{软件工程 \quad 本科 \quad 计算机科学与技术学院}{上海}
+
+% ==================== 英语能力 ====================
+\section*{英语能力}
+
+\expItem{大学英语四六级（CET-4 / CET-6）；剑桥商务英语（BEC）}{}
+{CET-4：632分；CET-6：618分；BEC 中级。}
+
+% ==================== 项目经历 ====================
+\section*{项目经历}
+
+\projectItem{重载龙门式托盘自动装车定位精度及效率提升技术开发（企业合作）}{}
+{\small 技术栈：Python、PySide6/QML、YOLO、PointNet++、OpenCV、Open3D、Modbus、MySQL}
+\begin{itemize}
+    \item 负责龙门架装车数字孪生与流程编排，打通雷达粗定位 $\rightarrow$ 相机精定位 $\rightarrow$ 区域规划 $\rightarrow$ 放货执行 $\rightarrow$ 偏差反馈闭环。
+    \item 基于 PySide6 + QtQuick3D 构建三维孪生界面与多轮装载状态机；集成 Livox 点云（PointNet++）与 RealSense RGB-D（YOLO），完成动态手眼外参下的 WORLD 坐标几何解算。
+    \item 实现高低板判定与 $2\times1200\,\mathrm{mm}$ 装载区域规划，落地 mock/real 设备适配（Modbus PLC / 雷达 / 相机）及 MySQL 会话落库，支撑现场联调与问题追溯。
+\end{itemize}
+
+\vspace{0.12em}
+
+\projectItem{面向混合堆码场景的智能装箱规划系统设计与实现}{}
+{\small 技术栈：Python、OR-Tools（CP-SAT/ILP）、PyQt5、PyVista、Snap7、FastAPI、MySQL}
+\begin{itemize}
+    \item 负责混码场景装箱算法与可视化，在几何、机械与业务约束下自动生成可执行三维码垛方案，并对接 WCS 与西门子 PLC。
+    \item 设计并实现 GCP 列式装箱主算法（柱级组合优化 + 集合划分 ILP + CP-SAT 二维落位），配套失败盘互借、指数互换与压实救援链路，提升达标托盘数。
+    \item 基于 PyQt5 规划看板与 PyVista 三维仿真完成方案可视化与执行顺序规划，经 Snap7（DB 握手）实现垛型下发与现场联调。
+\end{itemize}
+
+\vspace{0.12em}
+
+\projectItem{压力容器集成三维设计软件平台开发项目}{}
+{\small 技术栈：Python、PyQt5、MySQL、pythonnet/.NET、AutoCAD}
+\begin{itemize}
+    \item 负责管壳式换热器\emph{管束设计}模块开发，覆盖管板型式、布管、管-板连接与轴向设计，支撑换热管、拉杆、折流板、滑道等元件交互布置。
+    \item 基于 PyQt5 实现参数表 + 图形化布管编辑器；设计 ComboBox 参数级联（管径、节距、分程形式、折流板/滑道等联动校验），并完成本地多管程布管算法与 .NET（HE3DTB）计算引擎对接。
+    \item 通过 MySQL 落库布管参数/元件/结果，联动产品活动数据；配合强度计算与 AutoCAD 出图链路，降低手工查表与重复制图成本。
+\end{itemize}
+
+% ==================== 专业技能 ====================
+\section*{专业技能}
+
+\subsection*{编程语言与框架}
+\begin{itemize}
+    \item \textbf{Python：}熟练面向对象开发，具备 PyQt5/PySide6 复杂桌面应用与多模块工程化经验。
+    \item \textbf{Java：}熟练 JavaSE（集合、多线程、反射等）；熟悉 Spring IoC/AOP，了解 Spring Boot。
+    \item 熟练使用 Git；熟悉常用 Shell，具备云服务器部署与环境配置经验。
+\end{itemize}
+
+\subsection*{算法与智能感知}
+\begin{itemize}
+    \item 熟悉 YOLO、PointNet++、OpenCV 在工业检测/点云场景中的落地应用。
+\end{itemize}
+
+\subsection*{工程集成与数据库}
+\begin{itemize}
+    \item 具备现场联调经验：熟悉 PLC（Modbus/Snap7）、AutoCAD COM、pythonnet/.NET 跨语言调用。
+    \item 熟悉 MySQL 设计与开发，熟练使用 Navicat；了解 Redis 基本原理与使用场景。
+\end{itemize}
+
+\end{document}

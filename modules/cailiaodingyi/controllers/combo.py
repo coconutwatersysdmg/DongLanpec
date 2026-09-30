@@ -8,9 +8,217 @@ from modules.cailiaodingyi.funcs.funcs_pdf_change import get_filtered_material_o
 
 
 from PyQt5.QtGui import QColor, QStandardItem
-from PyQt5.QtWidgets import QTableWidgetItem, QComboBox, QStyledItemDelegate
+from PyQt5.QtWidgets import (
+    QTableWidgetItem, QComboBox, QStyledItemDelegate, QApplication, QStyle, QStyleOptionComboBox,
+)
 from PyQt5.QtCore import Qt, QObject, QTimer, QItemSelectionModel
 from PyQt5.QtCore import QEvent
+
+
+# 材料牌号（含垫板）：与批量替换一致 — 文本框 + 右侧下拉，手输快速筛选
+MATERIAL_BRAND_FIELD_NAMES = frozenset({"材料牌号", "垫板材料牌号"})
+
+
+def is_material_brand_field(field_name: str) -> bool:
+    n = (field_name or "").strip()
+    if not n:
+        return False
+    if n in MATERIAL_BRAND_FIELD_NAMES:
+        return True
+    return "材料牌号" in n
+
+
+class MaterialBrandComboBox(QComboBox):
+    """
+    材料牌号专用下拉：
+    - 可编辑 + 右侧箭头展开
+    - showPopup 前按当前文本做包含匹配筛选
+    - 避免点箭头时 FocusOut 导致表格局部编辑器被关掉
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._full_options = []
+        self._opening_popup = False
+        self.setEditable(True)
+        self.setInsertPolicy(QComboBox.NoInsert)
+        self.setCompleter(None)
+
+    def set_full_options(self, options):
+        seen = set()
+        full = []
+        for o in (options or []):
+            s = ("" if o is None else str(o)).strip()
+            if s and s not in seen:
+                seen.add(s)
+                full.append(s)
+        self._full_options = full
+        self.apply_filter(self.currentText())
+
+    def apply_filter(self, keyword=""):
+        kw = (keyword or "").strip()
+        src = list(self._full_options or [])
+        items = [x for x in src if kw in x] if kw else src
+        le = self.lineEdit()
+        keep = le.text() if le is not None else (keyword or "")
+        self.blockSignals(True)
+        try:
+            self.clear()
+            self.addItem("")
+            self.addItems(items)
+            if le is not None:
+                le.setText(keep)
+            elif keep:
+                self.setEditText(keep)
+            else:
+                self.setCurrentIndex(0)
+        finally:
+            self.blockSignals(False)
+
+    def showPopup(self):
+        self._opening_popup = True
+        self.apply_filter(self.currentText())
+        super().showPopup()
+        QTimer.singleShot(0, lambda: setattr(self, "_opening_popup", False))
+
+    def hidePopup(self):
+        super().hidePopup()
+        self._opening_popup = False
+
+    def mousePressEvent(self, event):
+        opt = QStyleOptionComboBox()
+        self.initStyleOption(opt)
+        arrow_rect = self.style().subControlRect(
+            QStyle.CC_ComboBox, opt, QStyle.SC_ComboBoxArrow, self
+        )
+        if arrow_rect.contains(event.pos()):
+            self._opening_popup = True
+        super().mousePressEvent(event)
+
+
+class _MaterialBrandFocusGuard(QObject):
+    """表格内嵌编辑器：下拉展开/点箭头时的 FocusOut 不关闭 delegate。"""
+
+    def __init__(self, combo: MaterialBrandComboBox):
+        super().__init__(combo)
+        self.combo = combo
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.FocusOut:
+            if getattr(self.combo, "_opening_popup", False):
+                return True
+            if QApplication.activePopupWidget() is not None:
+                return True
+            view = self.combo.view()
+            if view is not None and view.isVisible():
+                return True
+        return False
+
+
+def create_material_brand_combo(parent, options, *, current_text=""):
+    combo = MaterialBrandComboBox(parent)
+    combo.set_full_options(options)
+    cur = (current_text or "").strip()
+    if cur:
+        combo.setEditText(cur)
+    le = combo.lineEdit()
+    if le is not None:
+        le.setAlignment(Qt.AlignCenter)
+        le.textEdited.connect(combo.apply_filter)
+    return combo
+
+
+def wire_material_brand_combo_editor(combo: MaterialBrandComboBox, on_commit):
+    """为表格 delegate 编辑器安装焦点保护 + 提交信号。"""
+    guard = _MaterialBrandFocusGuard(combo)
+    combo.installEventFilter(guard)
+    combo._focus_guard = guard
+    le = combo.lineEdit()
+    if le is not None:
+        le.installEventFilter(guard)
+
+    def _on_activated(idx):
+        if idx < 0:
+            return
+        on_commit()
+
+    combo.activated.connect(_on_activated)
+    if le is not None:
+        le.returnPressed.connect(on_commit)
+
+
+def apply_material_brand_editable_combo(combo, options, *, current_text=""):
+    """
+    兼容旧调用：若传入已有 QComboBox 则就地配置；否则请用 create_material_brand_combo。
+    """
+    if isinstance(combo, MaterialBrandComboBox):
+        combo.set_full_options(options)
+        cur = (current_text or "").strip()
+        if cur:
+            combo.setEditText(cur)
+        return combo
+    # 非专用控件：就地改造（批量替换等场景）
+    seen = set()
+    full = []
+    for o in (options or []):
+        s = ("" if o is None else str(o)).strip()
+        if s and s not in seen:
+            seen.add(s)
+            full.append(s)
+    combo._material_brand_full_options = full
+    combo.setEditable(True)
+    combo.setInsertPolicy(QComboBox.NoInsert)
+    combo.setCompleter(None)
+
+    def _refill(keyword=""):
+        kw = (keyword or "").strip()
+        src = list(getattr(combo, "_material_brand_full_options", full) or [])
+        items = [x for x in src if kw in x] if kw else src
+        le = combo.lineEdit()
+        keep = le.text() if le is not None else (keyword or "")
+        combo.blockSignals(True)
+        try:
+            combo.clear()
+            combo.addItem("")
+            combo.addItems(items)
+            if keep:
+                combo.setEditText(keep)
+            else:
+                combo.setCurrentIndex(0)
+        finally:
+            combo.blockSignals(False)
+
+    combo.blockSignals(True)
+    try:
+        combo.clear()
+        combo.addItem("")
+        combo.addItems(full)
+        cur = (current_text or "").strip()
+        if cur:
+            combo.setEditText(cur)
+        else:
+            combo.setCurrentIndex(0)
+    finally:
+        combo.blockSignals(False)
+
+    le = combo.lineEdit()
+    if le is not None:
+        le.setAlignment(Qt.AlignCenter)
+        try:
+            le.textEdited.disconnect()
+        except Exception:
+            pass
+        le.textEdited.connect(_refill)
+
+    _orig_show = combo.showPopup
+
+    def _show_filtered():
+        txt = combo.currentText()
+        _refill(txt)
+        _orig_show()
+
+    combo.showPopup = _show_filtered
+    return combo
 
 
 class ComboDelegate(QStyledItemDelegate):
@@ -214,9 +422,10 @@ class NonNegativeDoubleDelegate(QStyledItemDelegate):
 
 class MaterialInstantDelegate(ComboDelegate):
     """
-    用于‘材料类型/材料牌号/材料标准/供货状态’四字段：
-    - 选项改变时，立即写回模型、关闭编辑器；
-    - 把“新值 + 行/列 + 字段名”回调给外部进行联动；
+    材料四字段（材料类型/牌号/标准/供货状态）统一代理：
+    - 普通元件与结构钢白名单元件（加强圈/膨胀节等）均通过 datamanager.install_material_delegate_linkage 安装本类；
+    - 选项改变时立即写回并关闭编辑器，再回调 on_pick 做级联（加强圈额外联动质量等级）。
+    - 材料牌号：与批量替换一致，可编辑文本 + 右侧下拉，手输快速筛选，不自动弹窗。
     """
     def __init__(self, options, table=None, field_name=None, on_pick=None):
         super().__init__(options, table)
@@ -224,6 +433,21 @@ class MaterialInstantDelegate(ComboDelegate):
         self.on_pick = on_pick  # 回调签名: on_pick(field_name, new_text, row, col)
 
     def createEditor(self, parent, option, index):
+        # 材料牌号：文本框 + 下拉筛选（不自动展开）
+        if is_material_brand_field(self.field_name):
+            ed = create_material_brand_combo(
+                parent, self.options, current_text=(index.data() or "")
+            )
+            if self.table:
+                self.highlight_row(index.row())
+
+            def _commit_and_close():
+                self.commitData.emit(ed)
+                self.closeEditor.emit(ed, QStyledItemDelegate.NoHint)
+
+            wire_material_brand_combo_editor(ed, _commit_and_close)
+            return ed
+
         ed = super().createEditor(parent, option, index)
 
         def _commit_and_close():
@@ -243,64 +467,25 @@ class MaterialInstantDelegate(ComboDelegate):
         ed.currentTextChanged.connect(lambda _=None: _commit_and_close())
         return ed
 
+    def setEditorData(self, editor, index):
+        if isinstance(editor, QComboBox) and editor.isEditable() and is_material_brand_field(self.field_name):
+            txt = (index.model().data(index, Qt.EditRole) or "").strip()
+            editor.setEditText(txt)
+            return
+        super().setEditorData(editor, index)
+
     def setModelData(self, editor, model, index):
         # 维持你原 ComboDelegate 的写回逻辑（包括居中对齐）
+        old_text = (index.data() or "").strip()
         super().setModelData(editor, model, index)
-
-
-class StructuralSteelMaterialDelegate(MaterialInstantDelegate):
-    """
-    结构钢材料四字段专用：
-    - 仅在用户 activated 选择时写回并联动（避免 currentIndexChanged 在展开下拉时误提交）
-    - setModelData 后强制刷新视图，确保单元格立即显示所选值
-    """
-    def createEditor(self, parent, option, index):
-        ed = QComboBox(parent)
-        ed.setEditable(False)
-
-        opts = self.options or []
-        if not opts or (opts and opts[0] != ""):
-            opts = [""] + list(dict.fromkeys(opts))
-        ed.addItems(opts)
-        if self.table:
-            self.highlight_row(index.row())
-
-        cur = index.data() or ""
-        i = ed.findText(cur)
-        ed.blockSignals(True)
-        ed.setCurrentIndex(max(0, i))
-        ed.blockSignals(False)
-
-        QTimer.singleShot(0, ed.showPopup)
-
-        def _commit_and_close():
-            self.commitData.emit(ed)
-            self.closeEditor.emit(ed, QStyledItemDelegate.NoHint)
-            if self.table:
-                r, c = index.row(), index.column()
-                self.table.setCurrentCell(r, c)
-            if self.on_pick:
-                r, c = index.row(), index.column()
-                new_text = ed.currentText()
-                QtCore.QTimer.singleShot(0, lambda: self.on_pick(self.field_name, new_text, r, c))
-
-        ed.activated.connect(lambda _=None: _commit_and_close())
-        return ed
-
-    def setModelData(self, editor, model, index):
-        super().setModelData(editor, model, index)
-        if self.table:
+        # 材料牌号：手输失焦/回车/点选写回后，走级联（不在 createEditor 里绑 currentTextChanged，避免打字中断）
+        if self.on_pick and is_material_brand_field(self.field_name):
+            new_text = editor.currentText() if isinstance(editor, QComboBox) else (index.data() or "")
+            new_text = (new_text or "").strip()
+            if new_text == old_text:
+                return
             r, c = index.row(), index.column()
-            self.table.setCurrentCell(r, c)
-            self.table.viewport().update()
-
-
-
-
-
-
-
-
+            QtCore.QTimer.singleShot(0, lambda: self.on_pick(self.field_name, new_text, r, c))
 
 
 class ComboPopupEventFilter(QObject):
@@ -493,8 +678,68 @@ class DynamicOptionsDelegate(ComboDelegate):
         gi = self.row2group.get(row, None)
         return (self.groups[gi] if gi is not None and 0 <= gi < len(self.groups) else {})
 
-    def _all_material_types(self):
-        all_map = get_filtered_material_options({}) or {}
+    def _part_name_for_type_filter(self, row: int, col: int = None):
+        """
+        管口多列：从参数名前缀推断零件（接管法兰/补强圈/接管）。
+        设备法兰紧固件：按当前列读「元件类型」（螺柱/螺母）。
+        否则回退到 table._material_type_filter_name / _element_name。
+        """
+        try:
+            it = self.table.item(row, 0) if self.table else None
+            raw = (it.text() or "").strip() if it else ""
+        except Exception:
+            raw = ""
+        if raw:
+            if "接管法兰" in raw:
+                return "接管法兰"
+            if "补强圈" in raw:
+                return "补强圈"
+            if "接管" in raw:
+                return "接管"
+
+        # 设备法兰紧固件：材料类型按列对应「元件类型」= 螺柱 / 螺母
+        try:
+            elem_type_row = None
+            for r in range(self.table.rowCount() if self.table else 0):
+                pit = self.table.item(r, 0)
+                if pit and pit.text().strip() == "元件类型":
+                    elem_type_row = r
+                    break
+            if elem_type_row is not None and col is not None and col >= 1:
+                vit = self.table.item(elem_type_row, col)
+                part = (vit.text() or "").strip() if vit else ""
+                if part:
+                    return part
+            # 无列信息时：若表上存在元件类型行，按螺柱/螺母并集过滤（二者均为钢棒）
+            if elem_type_row is not None:
+                parts = []
+                for c in range(1, self.table.columnCount()):
+                    vit = self.table.item(elem_type_row, c)
+                    p = (vit.text() or "").strip() if vit else ""
+                    if p and p not in parts:
+                        parts.append(p)
+                if parts:
+                    return parts
+        except Exception:
+            pass
+
+        for attr in ("_material_type_filter_name", "_element_name"):
+            try:
+                v = getattr(self.table, attr, None)
+            except Exception:
+                v = None
+            if v:
+                # 父级名「设备法兰紧固件」本身不在允许表中，勿直接用作过滤键
+                if isinstance(v, str) and v.strip() == "设备法兰紧固件":
+                    continue
+                if isinstance(v, (list, tuple)) and len(v) == 1 and str(v[0]).strip() == "设备法兰紧固件":
+                    continue
+                return v
+        return ""
+
+    def _all_material_types(self, row: int = -1, col: int = None):
+        part = self._part_name_for_type_filter(row, col) if row >= 0 else ""
+        all_map = get_filtered_material_options({}, element_name=part or None) or {}
         # 去重保序
         return list(dict.fromkeys(all_map.get('材料类型', [])))
 
@@ -512,14 +757,34 @@ class DynamicOptionsDelegate(ComboDelegate):
             it = self.table.item(rr, col) if rr is not None else None
             selected[k] = (it.text().strip() if it else "")
 
+        part = self._part_name_for_type_filter(row, col)
         if field == '材料类型':
-            opts = self._all_material_types()
+            opts = self._all_material_types(row, col)
+        elif field == '材料牌号':
+            # 牌号候选：仅按材料类型（与批量替换/多选牌号一致），便于手输筛选
+            basis = {"材料类型": selected.get("材料类型", "")} if selected.get("材料类型") else {}
+            all_options = get_filtered_material_options(basis, element_name=part or None) or {}
+            opts = all_options.get(field, [])
         else:
-            # 供货状态/材料标准/材料牌号：过滤条件不包含当前字段本身，否则会只返回当前选中值（如选正火后下拉只显示正火）
+            # 供货状态/材料标准：过滤条件不包含当前字段本身，否则会只返回当前选中值（如选正火后下拉只显示正火）
             # 参照普通元件 datamanager 中 basis_stat 的写法：供货状态选项基于 材料类型+牌号+标准，不包含供货状态
             basis = {k: v for k, v in selected.items() if k != field and v}
-            all_options = get_filtered_material_options(basis) or {}
+            all_options = get_filtered_material_options(basis, element_name=part or None) or {}
             opts = all_options.get(field, [])
+
+        if field == '材料牌号':
+            brand_opts = [o for o in list(dict.fromkeys(opts or [])) if (o or "").strip()]
+            ed = create_material_brand_combo(
+                parent, brand_opts, current_text=(index.data() or "")
+            )
+            self.options = [""] + brand_opts
+
+            def _commit_and_close():
+                self.commitData.emit(ed)
+                self.closeEditor.emit(ed, QStyledItemDelegate.NoHint)
+
+            wire_material_brand_combo_editor(ed, _commit_and_close)
+            return ed
 
         if not opts or opts[0] != "":
             opts = [""] + list(dict.fromkeys(opts))
@@ -532,6 +797,14 @@ class DynamicOptionsDelegate(ComboDelegate):
         i = ed.findText(cur)
         ed.setCurrentIndex(max(0, i))
         return ed
+
+    def setEditorData(self, editor, index):
+        field = self._field_of_row(index.row())
+        if isinstance(editor, QComboBox) and editor.isEditable() and field == '材料牌号':
+            txt = (index.data() or "").strip()
+            editor.setEditText(txt)
+            return
+        super().setEditorData(editor, index)
 
     def setModelData(self, editor, model, index):
         # 先拿旧值
@@ -624,14 +897,16 @@ class BulkFillDynamicOptionsDelegate(DynamicOptionsDelegate):
                 # 基于【该列】当前选择组合拿候选
                 cur_vals = self._current_group_values_at_col(group_map, cc)
 
+                type_row = group_map.get('材料类型')
+                part = self._part_name_for_type_filter(type_row if type_row is not None else row, cc)
                 if sender_field == '材料类型':
-                    # 材料类型的候选是全集（和你现逻辑一致）
-                    all_map = get_filtered_material_options({}) or {}
+                    # 材料类型候选按零件允许表过滤
+                    all_map = get_filtered_material_options({}, element_name=part or None) or {}
                     opts = list(dict.fromkeys(all_map.get('材料类型', [])))
                 else:
                     # 供货状态等：过滤条件不包含当前字段本身
                     basis = {k: v for k, v in cur_vals.items() if k != sender_field and v}
-                    filtered = get_filtered_material_options(basis) or {}
+                    filtered = get_filtered_material_options(basis, element_name=part or None) or {}
                     opts = filtered.get(sender_field, []) or []
 
                 # 保留你之前的“首个空项”习惯
@@ -745,7 +1020,7 @@ class MultiSelectDynamicOptionsDelegate(DynamicOptionsDelegate):
         })
         return cols if len(cols) >= 2 else []
 
-    # ---------- 新增：材料牌号进入编辑时，仅按“材料类型”取全集 ----------
+    # ---------- 材料牌号：可编辑 + 快速筛选（同批量替换）；进入编辑前快照多选列 ----------
     def createEditor(self, parent, option, index):
         from PyQt5.QtWidgets import QComboBox
         from modules.cailiaodingyi.funcs.funcs_pdf_change import get_filtered_material_options
@@ -769,24 +1044,15 @@ class MultiSelectDynamicOptionsDelegate(DynamicOptionsDelegate):
                 m = get_filtered_material_options({'材料类型': cur_type}) or {}
                 brand_opts = list(dict.fromkeys(m.get('材料牌号', []) or []))
 
-            # 构造一个简单的单选下拉（与 MaterialInstantDelegate 行为一致）
-            cb = QComboBox(parent)
-            cb.setEditable(False)
-            cb.addItems(brand_opts)
+            cb = create_material_brand_combo(
+                parent, brand_opts, current_text=(index.data() or "")
+            )
 
-            # 添加自动提交机制，模仿 MaterialInstantDelegate
             def _commit_and_close():
-                # 1) 写回
                 self.commitData.emit(cb)
-                # 2) 关闭编辑器（确保视觉与取值立刻更新）
                 self.closeEditor.emit(cb, QStyledItemDelegate.NoHint)
 
-            # 连接选择变化事件，立即提交
-            cb.activated.connect(lambda _=None: _commit_and_close())
-            cb.currentIndexChanged.connect(lambda _=None: _commit_and_close())
-
-            # 进入即弹出，体验一致
-            QTimer.singleShot(0, cb.showPopup)
+            wire_material_brand_combo_editor(cb, _commit_and_close)
             return cb
 
         # 其他字段仍用父类默认编辑器
@@ -800,17 +1066,19 @@ class MultiSelectDynamicOptionsDelegate(DynamicOptionsDelegate):
             d[k] = (it.text().strip() if it else "")
         return d
 
-    # 补充分支：当 editor 是我们为“材料牌号”创建的 QComboBox 时，正确设置当前值
+    # 补充分支：当 editor 是我们为“材料牌号”创建的可编辑 QComboBox 时，正确设置当前值
     def setEditorData(self, editor, index):
         from PyQt5.QtWidgets import QComboBox
         field = self._field_of_row(index.row())
         if isinstance(editor, QComboBox) and field == '材料牌号':
             cur = (index.data() or "").strip()
-            if cur:
+            if editor.isEditable():
+                editor.setEditText(cur)
+            elif cur:
                 pos = editor.findText(cur)
                 if pos >= 0:
                     editor.setCurrentIndex(pos)
-            return  # 其他字段交给父类
+            return
         return super().setEditorData(editor, index)
 
     # 写回：若是“材料牌号”的 QComboBox，用其 currentText 写回，然后继续走后续批量联动逻辑
@@ -885,16 +1153,20 @@ class MultiSelectDynamicOptionsDelegate(DynamicOptionsDelegate):
                     cur_vals[k] = (it.text().strip() if it else "")
 
                 # 候选生成逻辑：材料牌号只看“类型”，供货状态/材料标准不包含自身
+                type_row = grp.get('材料类型')
+                part = self._part_name_for_type_filter(type_row if type_row is not None else row, cc)
                 if sender_field == '材料类型':
-                    all_map = get_filtered_material_options({}) or {}
+                    all_map = get_filtered_material_options({}, element_name=part or None) or {}
                     opts = list(dict.fromkeys(all_map.get('材料类型', [])))
                 else:
                     if sender_field == '材料牌号' and cur_vals.get('材料类型'):
-                        filtered = get_filtered_material_options({'材料类型': cur_vals['材料类型']}) or {}
+                        filtered = get_filtered_material_options(
+                            {'材料类型': cur_vals['材料类型']}, element_name=part or None
+                        ) or {}
                         opts = filtered.get('材料牌号', []) or []
                     else:
                         basis = {k: v for k, v in cur_vals.items() if k != sender_field and v}
-                        filtered = get_filtered_material_options(basis) or {}
+                        filtered = get_filtered_material_options(basis, element_name=part or None) or {}
                         opts = filtered.get(sender_field, []) or []
 
                 if not opts or (opts and opts[0] != ""):

@@ -1,6 +1,126 @@
 from PyQt5 import QtWidgets, QtCore, QtGui
 
 
+# 与 paradefine_newui.ui 中详细定义表保持一致（表头走 QSS，不走 CustomHeaderView 旧自绘）
+PARAM_DETAIL_TABLE_QSS = """
+QTableWidget {
+    background-color: #ffffff;
+    alternate-background-color: #f7f9fc;
+    border: 1px solid #CCCCCC;
+    gridline-color: #CCCCCC;
+    color: #1f1f1f;
+    selection-background-color: #d9e6f7;
+    selection-color: #1f1f1f;
+}
+QHeaderView::section {
+    background-color: #f3f5f8;
+    color: #1f1f1f;
+    border: 1px solid #CCCCCC;
+    padding: 4px 6px;
+    font-weight: 600;
+}
+"""
+
+
+def setup_param_detail_table(table, *, use_custom_header=False, stretch_columns=True, header_height=None):
+    """
+    给动态创建的详细定义表套上与普通元件一致的新 UI 样式。
+
+    注意：普通元件 tableWidget_para 的表头实际由 Form QSS（#f3f5f8）绘制；
+    若再装 CustomHeaderView，会走 paintSection 旧自绘色，表头就会仍像旧 UI。
+    因此默认不装 CustomHeaderView，只套与 paradefine_newui.ui 一致的 QSS。
+    """
+    if table is None:
+        return table
+
+    if use_custom_header:
+        try:
+            table.setHorizontalHeader(CustomHeaderView(QtCore.Qt.Horizontal, table))
+        except Exception:
+            pass
+    else:
+        # 确保不是残留的 CustomHeaderView（否则仍会旧色自绘）
+        header = table.horizontalHeader()
+        if isinstance(header, CustomHeaderView):
+            table.setHorizontalHeader(QtWidgets.QHeaderView(QtCore.Qt.Horizontal, table))
+
+    table.setStyleSheet(PARAM_DETAIL_TABLE_QSS)
+    table.setAlternatingRowColors(False)
+    table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+    table.setEditTriggers(QtWidgets.QAbstractItemView.SelectedClicked)
+    table.verticalHeader().setVisible(False)
+
+    header = table.horizontalHeader()
+    header.setStyleSheet("")  # 避免旧的 header 局部 QSS 覆盖 Form 风格
+    if stretch_columns:
+        for i in range(max(table.columnCount(), 1)):
+            header.setSectionResizeMode(i, QtWidgets.QHeaderView.Stretch)
+    header.setDefaultAlignment(QtCore.Qt.AlignCenter)
+    if header_height:
+        header.setFixedHeight(header_height)
+    else:
+        # 取消此前固定 35 的旧高度，与普通元件表头高度一致
+        try:
+            header.setMinimumHeight(0)
+            header.setMaximumHeight(16777215)
+        except Exception:
+            pass
+
+    # Tab 仅落在可输入单元格（参数名称/单位/只读格自动跳过）
+    try:
+        from modules.cailiaodingyi.controllers.style import install_editable_only_tab
+        install_editable_only_tab(table, mode="editable")
+    except Exception:
+        pass
+    return table
+
+
+def highlight_param_detail_selection(table):
+    """
+    选中行高亮：未选中单元格刷 #d0e7ff，与普通元件 on_param_table_selection_changed 一致。
+    供动态详细定义表在 itemSelectionChanged 时调用。
+    """
+    if table is None:
+        return
+    selected_items = table.selectedItems()
+    selected_cells = {(item.row(), item.column()) for item in selected_items}
+    selected_rows = {row for row, _ in selected_cells}
+
+    for r in range(table.rowCount()):
+        for c in range(table.columnCount()):
+            item = table.item(r, c)
+            if not item:
+                continue
+            if (r, c) in selected_cells:
+                continue
+            item.setBackground(QtGui.QColor("#ffffff"))
+
+    for row in selected_rows:
+        for col in range(table.columnCount()):
+            if (row, col) in selected_cells:
+                continue
+            item = table.item(row, col)
+            if item:
+                item.setBackground(QtGui.QColor("#d0e7ff"))
+
+
+def install_param_detail_selection_highlight(table):
+    """给动态详细定义表挂上选中高亮（避免重复连接）。"""
+    if table is None:
+        return
+    if getattr(table, "_param_detail_sel_hl_installed", False):
+        return
+
+    def _on_sel_changed():
+        highlight_param_detail_selection(table)
+
+    try:
+        table.itemSelectionChanged.connect(_on_sel_changed)
+        table._param_detail_sel_hl_installed = True
+    except Exception:
+        pass
+
+
 class CustomHeaderView(QtWidgets.QHeaderView):
     """表头：可选 Excel 式筛选箭头，仅点击箭头触发筛选。"""
 
@@ -60,14 +180,13 @@ class CustomHeaderView(QtWidgets.QHeaderView):
     def paintSection(self, painter, rect, logicalIndex):
         painter.save()
 
-        # 背景填充色
-        painter.fillRect(rect, QtGui.QColor("#F2F2F2"))
+        # 与 paradefine_newui.ui 表头色一致
+        painter.fillRect(rect, QtGui.QColor("#f3f5f8"))
 
         # 绘制文字
         text = self.model().headerData(logicalIndex, self.orientation(), QtCore.Qt.DisplayRole)
-        painter.setPen(QtGui.QPen(QtCore.Qt.black))
+        painter.setPen(QtGui.QPen(QtGui.QColor("#1f1f1f")))
 
-        # 设置字体为加粗← 新增的代码(统一界面需求用)
         font = painter.font()
         font.setBold(True)
         painter.setFont(font)
