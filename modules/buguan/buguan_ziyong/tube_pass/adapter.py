@@ -111,9 +111,10 @@ DIVIDER_EXTRA_PARAM_CATS = {
     PARAM_WY2: _CAT_USES_WY2,
 }
 
+# Arr=换热管排列形式（需求：30/45/60/90）；正三角形=30、转角正三角形=60
 _ARR_TEXT_TO_DEG = {
-    "正三角形": 60,
-    "转角正三角形": 30,
+    "正三角形": 30,
+    "转角正三角形": 60,
     "正方形": 90,
     "转角正方形": 45,
 }
@@ -270,7 +271,7 @@ def build_compute_kwargs(
         Layout, lb_is_range_center = resolve_layout_code(layout_text)
 
     arr_text = param_map.get("换热管排列方式", "正三角形")
-    Arr = _ARR_TEXT_TO_DEG.get(arr_text, 60)
+    Arr = _ARR_TEXT_TO_DEG.get(arr_text, 30)
 
     cut_text = param_map.get("折流板切口方向", "垂直左右")
     Cut = _CUT_TEXT_TO_CODE.get(cut_text, "VSR")
