@@ -1941,17 +1941,26 @@ def build_impingement_plate(
             # print(f"  当前 impingement_plate_2 包含 {len(self.impingement_plate_2)} 个防冲板")
         current_coords = self.selected_to_current_coords(selected_centers)
 
-        # 参数验证
+        # 参数验证（圆弧形需要折边角；空/0 视为未配置，静默跳过，避免切换项目恢复时误弹窗）
         print(
             f"[防冲板绘制] 参数检查: baffle_angle={baffle_angle}, tube_outer_diameter={tube_outer_diameter}, tube_pitch={tube_pitch}"
         )
-        if baffle_angle is None:
-            print("❌ 防冲板折边角度为空，无法绘制")
+        try:
+            _ang = (
+                None
+                if baffle_angle is None or str(baffle_angle).strip() == ""
+                else float(baffle_angle)
+            )
+        except (TypeError, ValueError):
+            _ang = None
+        if _ang is None or _ang == 0:
+            print("❌ 防冲板折边角度为空或未配置，跳过圆弧形绘制")
             return
-        if not (15 <= baffle_angle <= 90):
-            print(f"❌ 防冲板折边角度 {baffle_angle} 不在15-90度范围内")
+        if not (15 <= _ang <= 90):
+            print(f"❌ 防冲板折边角度 {_ang} 不在15-90度范围内")
             QMessageBox.warning(self, "参数错误", "防冲板折边角度只能在15°到90°之间")
             return
+        baffle_angle = _ang
         if tube_outer_diameter is None or tube_pitch is None:
             print(
                 f"❌ 换热管参数缺失: 外径={tube_outer_diameter}, 中心距={tube_pitch}"

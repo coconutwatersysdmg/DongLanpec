@@ -6268,14 +6268,22 @@ class TubeLayoutEditor(QMainWindow):
             if not hasattr(self, "input_json") or not isinstance(self.input_json, dict):
                 raise ValueError("self.input_json不存在或不是字典类型")
 
-            side_dangban_thick = float(self.input_json.get("LB_BPBThick", 0))
-            baffle_thickness = float(self.input_json.get("LB_BaffleThick", 0))
-            baffle_angle = float(self.input_json.get("LB_BaffleA", 0))
-            tube_outer_diameter = float(self.input_json.get("LB_TubeD", 0))
-            tube_pitch = float(self.input_json.get("LB_S", 0))
-            height = float(self.input_json.get("LB_SlipWayHeight", 0))
-            thickness = float(self.input_json.get("LB_SlipWayThick", 0))
-            angle = float(self.input_json.get("LB_SlipWayAngle", 0))
+            side_dangban_thick = float(self.input_json.get("LB_BPBThick", 0) or 0)
+            baffle_thickness = float(self.input_json.get("LB_BaffleThick", 0) or 0)
+            # 折边角度：平板形常为空，勿转成 0（否则恢复圆弧形时会误弹 15°~90° 提示）
+            _raw_ba = self.input_json.get("LB_BaffleA", None)
+            if _raw_ba is None or str(_raw_ba).strip() == "":
+                baffle_angle = None
+            else:
+                try:
+                    baffle_angle = float(str(_raw_ba).strip())
+                except (ValueError, TypeError):
+                    baffle_angle = None
+            tube_outer_diameter = float(self.input_json.get("LB_TubeD", 0) or 0)
+            tube_pitch = float(self.input_json.get("LB_S", 0) or 0)
+            height = float(self.input_json.get("LB_SlipWayHeight", 0) or 0)
+            thickness = float(self.input_json.get("LB_SlipWayThick", 0) or 0)
+            angle = float(self.input_json.get("LB_SlipWayAngle", 0) or 0)
 
             if tube_outer_diameter <= 0:
                 print("管子外径必须大于0，使用默认值10")
@@ -6289,7 +6297,7 @@ class TubeLayoutEditor(QMainWindow):
             print(f"解析输入参数出错: {str(e)}")
             side_dangban_thick = 0
             baffle_thickness = 0
-            baffle_angle = 0
+            baffle_angle = None
             tube_outer_diameter = 10
             tube_pitch = 20
             height = 0
@@ -9152,6 +9160,7 @@ class TubeLayoutEditor(QMainWindow):
         """验证防冲板相关参数的正确性（仅在弹窗确定后调用）"""
         # 将参数转换为字典方便查找
         param_dict = {param["参数名"]: param["参数值"] for param in params}
+        baffle_form = str(param_dict.get("防冲板形式", "") or "").strip()
 
         # 验证每个参数
         for param in params:
@@ -9181,6 +9190,9 @@ class TubeLayoutEditor(QMainWindow):
                     return False
 
             elif param_name == "防冲板折边角度":
+                # 平板形不使用折边角度（控件禁用），不校验
+                if baffle_form == "平板形":
+                    continue
                 if not (15 <= value <= 90):
                     QMessageBox.warning(
                         self,
@@ -9415,7 +9427,20 @@ class TubeLayoutEditor(QMainWindow):
                     item.setText(original_value)
 
             elif param_name == "防冲板折边角度":
-                if not (15 <= value <= 90):
+                # 平板形不使用折边角度
+                _form = ""
+                try:
+                    _fr = self.baffle_param_rows.get("防冲板形式")
+                    if _fr is not None:
+                        _fw = self.param_table.cellWidget(_fr, 2)
+                        if isinstance(_fw, QComboBox):
+                            _form = _fw.currentText().strip()
+                        else:
+                            _fi = self.param_table.item(_fr, 2)
+                            _form = _fi.text().strip() if _fi else ""
+                except Exception:
+                    _form = ""
+                if _form != "平板形" and not (15 <= value <= 90):
                     QMessageBox.warning(
                         self,
                         "输入错误",
