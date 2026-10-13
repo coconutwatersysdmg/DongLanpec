@@ -8203,6 +8203,9 @@ class TubeLayoutEditor(QMainWindow):
                 json.dumps(input_json, indent=2, ensure_ascii=False)
             )
             self.output_data = json_str
+            # DLL 路径无本地分区量，避免沿用上次本地布管的 Ad 缓存
+            self._local_raw_calc = {}
+            self._local_compute_kwargs = {}
             # print(self.output_data)
             self.update_pipe_parameters()
 
@@ -8360,6 +8363,17 @@ class TubeLayoutEditor(QMainWindow):
         centers = packed["centers"]
         self.target_list = packed["target_list"]
         self.output_data = result.get("raw", {})
+        # 供 Ad 计算：分区极值 / Ang / dh / dv（不改变布管结果结构）
+        try:
+            self._local_raw_calc = packed.get("raw_calc") or {}
+            self._local_compute_kwargs = {
+                k: v
+                for k, v in (packed.get("kwargs") or {}).items()
+                if k not in ("layout_text", "LB_IsRangeCenter", "layout_auto_chosen")
+            }
+        except Exception:
+            self._local_raw_calc = {}
+            self._local_compute_kwargs = {}
         self.input_json = {
             "LB_Tubeform": str(cat),
             "LB_DL": DL,

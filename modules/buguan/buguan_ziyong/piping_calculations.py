@@ -101,6 +101,52 @@ def apply_rmax_and_outer_ring_to_calc_results(calc_results, centers):
     calc_results["换热管布管周长"] = str(round(perimeter, 3))
 
 
+def apply_ad_to_calc_results(editor, calc_results):
+    """
+    写入「管板分程处面积Ad」（本地分程 + 实际 current_centers）。
+    失败或条件不足时保持默认 0，绝不抛出（防闪退）；
+    原因与 traceback 一律打到控制台，便于调试。
+    """
+    import traceback
+
+    if not isinstance(calc_results, dict):
+        print("[Ad] apply 跳过: calc_results 不是 dict")
+        return
+    calc_results.setdefault("管板分程处面积Ad", "0")
+    try:
+        from modules.buguan.buguan_ziyong.tube_pass.ad_calculation import (
+            compute_ad_from_editor,
+        )
+
+        ad_res = compute_ad_from_editor(editor)
+        if not ad_res:
+            print(
+                "[Ad] 未得到计算结果，管板分程处面积Ad 保持 "
+                f"{calc_results.get('管板分程处面积Ad')!r} "
+                "（详见上方 [Ad] 跳过/异常日志；不影响其它写库）"
+            )
+            return
+        ad_val = ad_res.get("Ad")
+        if ad_val is None:
+            print(
+                f"[Ad] 结果字典无 Ad 字段，keys={list(ad_res.keys())}；"
+                "保持默认 0（不影响其它写库）"
+            )
+            return
+        calc_results["管板分程处面积Ad"] = str(round(float(ad_val), 3))
+        print(
+            f"[Ad] 成功 Ad={calc_results['管板分程处面积Ad']} "
+            f"A0={ad_res.get('A0')} A1={ad_res.get('A1')} A2={ad_res.get('A2')} "
+            f"Ntt={ad_res.get('Ntt')} supported={ad_res.get('supported')}"
+        )
+    except Exception as e:
+        print(
+            f"[Ad] apply 顶层异常（已捕获，不影响其它结果）: "
+            f"{type(e).__name__}: {e}"
+        )
+        traceback.print_exc()
+
+
 def build_sql_for_u_tube_calc(editor, create_product_connection):
     from collections import defaultdict as _dd
 
@@ -642,6 +688,7 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
 
     # 换热管圆心：Rmax、最外圈折线环周长（排除已删除管孔）
     apply_rmax_and_outer_ring_to_calc_results(calc_results, filtered_coords)
+    apply_ad_to_calc_results(editor, calc_results)
 
     table_name = "`产品设计活动表_布管计算结果表`"
     sql_statements = []
@@ -1383,6 +1430,7 @@ def build_sql_for_floating_head_calc(editor, create_product_connection):
 
     # 换热管圆心：Rmax、最外圈折线环周长（排除已删除管孔）
     apply_rmax_and_outer_ring_to_calc_results(calc_results, filtered_coords)
+    apply_ad_to_calc_results(editor, calc_results)
 
     table_name = "`产品设计活动表_布管计算结果表`"
     sql_statements = []
