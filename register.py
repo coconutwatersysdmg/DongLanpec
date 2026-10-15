@@ -44,23 +44,14 @@ def _setup_auth_header(dialog, logo_size=48):
     logo_label.setFixedSize(logo_size, logo_size)
 
 
-def _place_dialog_center_right(dialog, offset_x=360, offset_y=60):
-    """将对话框置于屏幕居中，再向右、向下偏移。"""
+def _place_dialog_center(dialog):
+    """将对话框置于屏幕正中间。"""
     screen = QApplication.primaryScreen()
     if screen is None:
         return
     available = screen.availableGeometry()
     frame = dialog.frameGeometry()
     frame.moveCenter(available.center())
-    frame.translate(offset_x, offset_y)
-    if frame.right() > available.right():
-        frame.moveRight(available.right())
-    if frame.left() < available.left():
-        frame.moveLeft(available.left())
-    if frame.bottom() > available.bottom():
-        frame.moveBottom(available.bottom())
-    if frame.top() < available.top():
-        frame.moveTop(available.top())
     dialog.move(frame.topLeft())
 
 
@@ -330,7 +321,7 @@ class LoginWindow(QtWidgets.QDialog):
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
         _setup_auth_header(self)
         self.setWindowTitle("欢迎登录")
-        _place_dialog_center_right(self)
+        _place_dialog_center(self)
 
         self.register_btn.clicked.connect(self.show_register)
         self.login_btn.clicked.connect(self.login)

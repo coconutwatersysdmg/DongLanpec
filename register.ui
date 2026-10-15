@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>700</width>
-    <height>520</height>
+    <width>500</width>
+    <height>400</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -22,7 +22,7 @@ QFrame#right_frame {
     border: 1px solid #b6bcc8;
 }
 QLabel#label_platform {
-    font-size: 15pt;
+    font-size: 13pt;
     font-weight: bold;
     color: #0f1a2d;
 }
@@ -34,19 +34,19 @@ QLabel#company_label,
 QLabel#password_label,
 QLabel#confirm_password_label,
 QLabel#captcha_label {
-    font-size: 14pt;
+    font-size: 11pt;
     color: #333333;
 }
 QLineEdit {
     background-color: #ffffff;
     border: 1px solid #c9c9c9;
-    min-height: 38px;
+    min-height: 30px;
     padding: 4px 10px;
-    font-size: 14pt;
+    font-size: 11pt;
 }
 QPushButton {
-    min-height: 42px;
-    font-size: 14pt;
+    min-height: 34px;
+    font-size: 12pt;
     color: #2b2b2b;
     border: 1px solid #c5ccd8;
     background-color: #edf1f7;
@@ -81,13 +81,13 @@ QPushButton:hover {
      </property>
      <property name="minimumSize">
       <size>
-       <width>660</width>
-       <height>480</height>
+       <width>460</width>
+       <height>360</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
-       <width>700</width>
+       <width>500</width>
        <height>16777215</height>
       </size>
      </property>
@@ -237,33 +237,33 @@ QPushButton:hover {
             </property>
            </widget>
           </item>
-         </layout>
-        </item>
-        <item>
-         <layout class="QHBoxLayout" name="captcha_layout">
-          <item>
+          <item row="4" column="0">
            <widget class="QLabel" name="captcha_label">
             <property name="text">
              <string>验证码</string>
             </property>
            </widget>
           </item>
-          <item>
-           <widget class="QLineEdit" name="captcha_input"/>
-          </item>
-          <item>
-           <widget class="QLabel" name="captcha_display">
-            <property name="text">
-             <string>7267</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="refresh_captcha_btn">
-            <property name="text">
-             <string>刷新</string>
-            </property>
-           </widget>
+          <item row="4" column="1">
+           <layout class="QHBoxLayout" name="captcha_layout">
+            <item>
+             <widget class="QLineEdit" name="captcha_input"/>
+            </item>
+            <item>
+             <widget class="QLabel" name="captcha_display">
+              <property name="text">
+               <string>7267</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="refresh_captcha_btn">
+              <property name="text">
+               <string>刷新</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
           </item>
          </layout>
         </item>

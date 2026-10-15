@@ -744,6 +744,8 @@ def set_pipe_function_column_readonly(stats_widget):
                 else:
                     belong_item.setFlags(belong_item.flags() | Qt.ItemIsEditable)
 
+    apply_container_pipe_purpose_lock(stats_widget)
+
 """管口删除"""
 def delete_selected_pipe_rows(stats_widget, product_id):
     """
@@ -1222,6 +1224,47 @@ def control_last_row_editable_state(stats_widget, enable_editing=True):
                 # 冻结：设为不可编辑
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 changed_count += 1
+    apply_container_pipe_purpose_lock(stats_widget)
+
+
+def apply_container_pipe_purpose_lock(stats_widget):
+    """
+    容器产品：管口代号已填写的行，管口用途固定显示「/」且不可编辑。
+    代号为空时不写「/」；非末行恢复可编辑，末行空白行仍交给 control_last_row 冻结。
+    """
+    if not getattr(stats_widget, "is_container_product", False):
+        return
+    table = getattr(stats_widget, "tableWidget_pipe", None)
+    if table is None:
+        return
+
+    purpose_col = 3
+    last_row = table.rowCount() - 1
+    editable_flags = Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled
+    locked_flags = Qt.ItemIsSelectable | Qt.ItemIsEnabled
+    prev_suppress = getattr(stats_widget, "suppress_cell_change", False)
+    stats_widget.suppress_cell_change = True
+    try:
+        for row in range(table.rowCount()):
+            code_item = table.item(row, 1)
+            code = code_item.text().strip() if code_item else ""
+            item = table.item(row, purpose_col)
+            if item is None:
+                item = QTableWidgetItem("")
+                item.setTextAlignment(Qt.AlignCenter)
+                table.setItem(row, purpose_col, item)
+            if code:
+                if item.text().strip() != "/":
+                    item.setText("/")
+                item.setTextAlignment(Qt.AlignCenter)
+                item.setFlags(locked_flags)
+            else:
+                if item.text().strip() == "/":
+                    item.setText("")
+                if row != last_row:
+                    item.setFlags(editable_flags)
+    finally:
+        stats_widget.suppress_cell_change = prev_suppress
 
 
 def control_last_attachment_row_editable_state(stats_widget, enable_editing=True):
@@ -1744,6 +1787,8 @@ def copy_attachment_row_data(stats_widget, source_row: int, product_id):
                 text = new_element_name
             elif col in (2, 3):
                 text = src.text() if src else ""
+            else:
+                text = ""
 
             new_item = QTableWidgetItem(text)
             new_item.setTextAlignment(Qt.AlignCenter)

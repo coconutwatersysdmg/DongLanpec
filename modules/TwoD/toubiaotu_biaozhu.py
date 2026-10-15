@@ -2,9 +2,10 @@
 import os
 import shutil
 
-from pyautocad import Autocad
+from types import SimpleNamespace
 
-acad = Autocad(create_if_not_exists=True)
+from modules.TwoD.cad_context import CAD_CTX
+from modules.TwoD.TwoD_peizhi import get_autocad_instance, get_current_doc, com_retry
 
 
 def is_dimension_object(obj):
@@ -51,8 +52,12 @@ try:
 except ImportError:
     com_error = Exception  # IDE fallback，不影响运行
 def get_acad():
-    # 每次都创建新的 Autocad 实例
-    return Autocad(create_if_not_exists=True)
+    # 总图标注沿用已就绪的实例和目标文档，不能每个 handle 都另走自动启动。
+    acad = get_autocad_instance()
+    doc = get_current_doc()
+    if acad is None or doc is None:
+        raise RuntimeError("没有可用的总图文档，无法修改尺寸标注。")
+    return SimpleNamespace(app=acad, doc=doc)
 def modify_dimension(handle, new_text=None, new_value=None, retries=3, delay=0.2):
     acad = get_acad()  # ⚡ 关键：重新获取 CAD COM 对象
     for i in range(retries):
@@ -143,13 +148,10 @@ from PyQt5.QtWidgets import QMessageBox, QApplication
 import sys
 
 def apply_dimension_labels(handle_text_dict, parent=None):
-    """
-    批量修改标注显示文字，并用 PyQt5 弹窗提示修改情况
-    :param handle_text_dict: 字典 {handle: label_text}
-    :param parent: 父窗口对象，可传入主窗口
-    """
+    doc = get_current_doc()
+    if doc is None:
+        raise RuntimeError("总图没有成功打开，已停止标注和后续图纸生成。")
     results = {}
-
     for handle, text in handle_text_dict.items():
         try:
             success = modify_dimension(handle, new_text=text)
@@ -158,111 +160,34 @@ def apply_dimension_labels(handle_text_dict, parent=None):
             results[handle] = (text, False)
             print(f"⚠️ 修改标注 {handle} 失败: {e}")
 
-    # 汇总未更新的标注
-    failed = {h: t for h, (t, ok) in results.items() if not ok or t in ("默认", "", None)}
+    # ✅ 直接保存当前副本，不再另存第二份
+    save_current_doc(doc)
 
-    # 弹窗
-    app_created = False
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication(sys.argv)
-        app_created = True
+    return results
+def save_current_doc(doc):
+    import time
 
-    if failed:
-        msg = "以下标注未能正确更新：\n"
-        msg += "\n".join([f"- Handle {h} → {t}" for h, t in failed.items()])
-        # QMessageBox.warning(parent, "更新结果", msg)
-    else:
-        # QMessageBox.information(parent, "更新结果", "✅ 所有标注均已更新成功")
-        pass
-    # 自动保存副本
     try:
-        doc = get_current_doc()  # 获取当前 DWG COM 文档
-        if doc:
-            auto_save_copy(doc, suffix="_生成")
-        else:
-            print("⚠️ 当前文档不存在，无法保存副本")
-    except Exception as e:
-        print(f"⚠️ auto_save_copy 出错: {e}")
-
-    if app_created:
-        app.exec_()
-
-def get_current_doc():
-    acad = Autocad(create_if_not_exists=True)
-    try:
-        return acad.app.ActiveDocument   # 而不是 acad.doc
-    except Exception as e:
-        print(f"⚠️ 获取当前文档失败: {e}")
-        return None
-
-def auto_save_copy(doc_or_path, suffix="_生成"):
-    """
-    安全保存 DWG 副本，自动加时间戳
-    doc_or_path: COM 文档对象 或 DWG 文件路径字符串
-    """
-    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-
-    if not doc_or_path:
-        print("❌ 保存失败: 参数为空")
-        return
-
-    # 传入路径字符串
-    if isinstance(doc_or_path, str):
-        full_path = os.path.abspath(doc_or_path.strip())
-        if not full_path or not os.path.exists(full_path):
-            print(f"❌ 文件不存在: {full_path}")
-            return
-
-        dir_path, filename = os.path.split(full_path)
-        name, ext = os.path.splitext(filename)
-        new_filename = f"{name.replace(' ','_')}{suffix}_{timestamp}{ext}"
-        new_full_path = os.path.join(dir_path, new_filename)
-
         try:
-            shutil.copyfile(full_path, new_full_path)
-            print(f"✅ 文件副本保存成功: {new_full_path}")
-        except Exception as e:
-            print(f"❌ 文件副本保存失败: {e}")
-        return
-
-    # 传入 COM 文档对象
-    doc = doc_or_path
-    doc_name = getattr(doc, "Name", "未命名图纸")
-    full_path = getattr(doc, "FullName", None)
-
-    # 统一使用 SaveAs 保存副本，避免 Save 出错
-    try:
-        if full_path and full_path.strip():
-            dir_path, filename = os.path.split(full_path)
-            name, ext = os.path.splitext(filename)
-        else:
-            # 未保存文档，存到当前目录
-            name = doc_name
-            ext = ".dwg"
-
-        new_filename = f"{name.replace(' ','_')}{suffix}_{timestamp}{ext}"
-        new_full_path = os.path.join(new_filename)
-
-        # 刷新 COM 文档
-        try:
-            doc.Regen()
-            time.sleep(0.3)  # 等待内存刷新
-        except:
+            com_retry(lambda: doc.Regen(1), quiet=True)
+            time.sleep(0.3)
+        except Exception:
             pass
 
-        # 保存副本
-        doc.SaveAs(new_full_path)
-        print(f"✅ {doc_name} SaveAs 副本成功: {new_full_path}")
-
+        com_retry(lambda: doc.Save(), quiet=True)
+        print(f"✅ 当前图纸已保存: {getattr(doc, 'FullName', getattr(doc, 'Name', '未命名图纸'))}")
+        return True
     except Exception as e:
-        print(f"❌ {doc_name} 保存失败: {e}")
+        raise RuntimeError(f"当前图纸保存失败，本次生成已停止：{e}") from e
 from modules.TwoD.toubiaotu_wenziduixiang_flange_ao import twoDgeneration as twoDgeneration_flange_ao
 from modules.TwoD.toubiaotu_wenziduixiang_flange_ao_fuceng import twoDgeneration as twoDgeneration_flange_ao_fuceng
 from modules.TwoD.toubiaotu_wenziduixiang_flange_tu import twoDgeneration as twoDgeneration_flange_tu
 from modules.TwoD.toubiaotu_wenziduixiang_flange_tu_fuceng import twoDgeneration as twoDgeneration_flange_tu_fuceng
+from modules.TwoD.toubiaotu_wenziduixiang_flange_pinggai import twoDgeneration as twoDgeneration_flange_pinggai
+from modules.TwoD.toubiaotu_wenziduixiang_flange_pinggai_fuceng import twoDgeneration as twoDgeneration_flange_pinggai_fuceng
 
 import time
+
 from datetime import datetime
 
 import os
@@ -271,17 +196,23 @@ import tempfile
 import time
 from datetime import datetime
 
-def generate_and_save_flange(product_id, flange_info):
+def generate_and_save_flange(product_id, flange_info, save_dir=None):
     """
-    安全生成法兰 DWG 并保存副本，自动加时间戳
+    生成法兰 DWG。
+    只保留生成函数内部创建的那一个副本，这里不再二次 SaveAs。
     flange_info: list of dict，每个 dict 包含：
         "法兰名称", "密封面", "覆层"
     """
     for item in flange_info:
-        flange = item["法兰名称"]
-        face = item["密封面"]
-        coating = item["覆层"]
-        print(f"\n🔹 开始生成法兰: {flange}, 覆层: {coating}")
+        flange = item.get("法兰名称", "") or ""
+        face = item.get("密封面", "") or ""
+        coating = item.get("覆层", "") or "否"
+
+        print(f"\n🔹 开始生成法兰: {flange}, 密封面: {face}, 覆层: {coating}")
+
+        CAD_CTX["doc"] = None
+        CAD_CTX["target_dwg"] = None
+        doc = None
 
         # 选择生成函数
         if "凹" in face and coating == "否":
@@ -292,47 +223,43 @@ def generate_and_save_flange(product_id, flange_info):
             doc = twoDgeneration_flange_tu(product_id, flange)
         elif "凸" in face and coating == "是":
             doc = twoDgeneration_flange_tu_fuceng(product_id, flange)
+        elif flange == "管箱平盖" and coating == "否":
+            doc = twoDgeneration_flange_pinggai(product_id, flange)
+        elif flange == "管箱平盖" and coating == "是":
+            doc = twoDgeneration_flange_pinggai_fuceng(product_id, flange)
+        elif flange == "前端管箱平盖" and coating == "否":
+            doc = twoDgeneration_flange_pinggai(product_id, flange)
+        elif flange == "前端管箱平盖" and coating == "是":
+            doc = twoDgeneration_flange_pinggai_fuceng(product_id, flange)
+        elif not face or not coating:
+            doc = twoDgeneration_flange_ao(product_id, flange)
         else:
-            print(f"⚠️ 法兰 {flange} 不符合生成条件，跳过")
-            continue
-
-        # 生成安全文件名
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
-        safe_flange = "".join(c if c.isalnum() or c in "_-" else "_" for c in flange)
-        final_name = f"{safe_flange}_{timestamp}.dwg"
-        final_path = final_name  # 当前工作目录
+            raise RuntimeError(f"法兰 {flange} 的密封面或覆层参数不符合生成条件，本次生成已停止。")
 
         if doc is None:
-            print(f"❌ 法兰 {flange} 生成返回 None，检查生成函数内部步骤")
-            cur_doc = get_current_doc()
-            if cur_doc:
-                print(f"⚠️ 当前活动文档: {getattr(cur_doc, 'Name', '未知')}")
-            else:
-                print("⚠️ 当前没有活动文档")
-            continue
-        else:
-            print(f"✅ 法兰 {flange} 生成成功，返回 COM 文档对象: {doc}")
+            raise RuntimeError(f"法兰 {flange} 未生成成功，本次生成已停止。")
 
         try:
-            # 🔹 强制刷新文档视口
             try:
                 doc.Regen(0)
-            except:
+            except Exception:
                 pass
 
-            # 🔹 更新所有标注对象
             try:
                 for obj in doc.ModelSpace:
                     if "Dimension" in getattr(obj, "ObjectName", ""):
-                        obj.Update()
-            except:
+                        try:
+                            obj.Update()
+                        except Exception:
+                            pass
+            except Exception:
                 pass
 
-            # 🔹 保存 DWG
-            doc.SaveAs(final_path)
+            # ✅ 这里只保存当前文档，不再另存为第二个副本
+            com_retry(lambda: doc.Save(), quiet=True)
+
+            final_path = getattr(doc, "FullName", "") or CAD_CTX.get("target_dwg", "")
             print(f"✅ 法兰 {flange} 已保存: {final_path}")
 
         except Exception as e:
-            print(f"❌ 法兰 {flange} 保存失败: {e}")
-            continue
-
+            raise RuntimeError(f"法兰 {flange} 保存失败，本次生成已停止：{e}") from e

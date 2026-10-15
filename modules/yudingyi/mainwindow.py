@@ -88,7 +88,7 @@ from fenchenggeban import fenchenggeban_config
 
 
 DB_CONFIG = {
-    'host': 'localhost',
+    'host': '10.32.41.132',
     'port': 3306,
     'user': 'root',
     'password': '123456',

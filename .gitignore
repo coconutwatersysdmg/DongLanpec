@@ -1,0 +1,64 @@
+# Python environments, caches and editor state
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.idea/
+.vscode/
+.codex/
+.agents/
+
+# Local credentials and login state
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+/config.ini
+/last_project_info.txt
+/last_project_path.txt
+
+# Build outputs and bundled Python runtimes
+build/
+dist/
+/internal/
+/_internal/
+*.egg-info/
+*.pdb
+*.rar
+
+# Runtime databases, backups, logs and generated output
+/mysql/data/
+/mysql/tmp/
+/mysql/backup*/
+/mysql_backup/
+/backup/
+/tmp/
+/outputs/
+/exports/
+logs/
+audit_logs/
+error_logs/
+*.log
+*.tmp
+*.bak
+*.dwl
+*.dwl2
+~$*
+db.sqlite3
+db.sqlite3-journal
+mysql_export_*.sql
+mysql_backup_*.sql
+/db_compare_report.txt
+/sql_compare_report.txt
+/debug_log.txt
+/error_log.txt
+
+# C# development caches
+.vs/
+obj/
+/modules/qiangdujisuan/jiekou/**/bin/

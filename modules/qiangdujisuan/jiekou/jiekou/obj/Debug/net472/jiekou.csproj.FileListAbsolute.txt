@@ -1,5 +1,0 @@
-C:\Users\zifeng qi\Desktop\main window\main window\modules\qiangdujisuan\jiekou\jiekou\obj\Debug\net472\jiekou.csproj.AssemblyReference.cache
-C:\Users\zifeng qi\Desktop\main window\main window\modules\qiangdujisuan\jiekou\jiekou\obj\Debug\net472\jiekou.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\zifeng qi\Desktop\main window\main window\modules\qiangdujisuan\jiekou\jiekou\obj\Debug\net472\jiekou.AssemblyInfoInputs.cache
-C:\Users\zifeng qi\Desktop\main window\main window\modules\qiangdujisuan\jiekou\jiekou\obj\Debug\net472\jiekou.AssemblyInfo.cs
-C:\Users\zifeng qi\Desktop\main window\main window\modules\qiangdujisuan\jiekou\jiekou\obj\Debug\net472\jiekou.csproj.CoreCompileInputs.cache

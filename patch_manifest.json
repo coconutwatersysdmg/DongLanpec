@@ -1,0 +1,11 @@
+{
+  "version": "5.59.1",
+  "notes": "修复若干问题",
+  "migrations": [
+    {
+      "id": "5_59_001",
+      "path": "migrations/buguan_record.sql"
+    }
+
+  ]
+}

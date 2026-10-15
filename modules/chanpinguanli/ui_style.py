@@ -53,18 +53,6 @@ QMessageBox QLabel {
 """ + CHANPINGUANLI_BUTTON_QSS
 
 
-_BUTTON_CN_LABELS = {
-    QMessageBox.Ok: "确认",
-    QMessageBox.Yes: "是",
-    QMessageBox.No: "否",
-    QMessageBox.Cancel: "取消",
-    QMessageBox.Abort: "中止",
-    QMessageBox.Retry: "重试",
-    QMessageBox.Ignore: "忽略",
-    QMessageBox.Close: "关闭",
-}
-
-
 def apply_chanpinguanli_font(widget):
     """与项目管理 main2.py 一致，继承应用当前实际字体。"""
     widget.setFont(QApplication.font())
@@ -78,15 +66,6 @@ def apply_chanpinguanli_dialog_style(dialog):
     return dialog
 
 
-def localize_messagebox_buttons(msg_box):
-    """将标准按钮文案改为中文（若该标准按钮存在）。"""
-    for std, label in _BUTTON_CN_LABELS.items():
-        btn = msg_box.button(std)
-        if btn is not None:
-            btn.setText(label)
-    return msg_box
-
-
 def show_chanpinguanli_message(parent, icon, title, text, button_text="确认"):
     """显示项目管理风格的单按钮消息框。"""
     msg_box = QMessageBox(parent)
@@ -98,86 +77,3 @@ def show_chanpinguanli_message(parent, icon, title, text, button_text="确认"):
     msg_box.addButton(confirm_button, QMessageBox.AcceptRole)
     apply_chanpinguanli_dialog_style(msg_box)
     msg_box.exec_()
-
-class StyledMessageBox(QMessageBox):
-    """
-    项目管理风格消息框总控。
-
-    用法（推荐，布管等模块可直接替换导入）::
-        from modules.chanpinguanli.ui_style import StyledMessageBox as QMessageBox
-
-    兼容 QMessageBox.warning / information / critical / question 静态接口，
-    以及 `QMessageBox()` 直接构造；返回值与原生 QMessageBox 一致。
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        apply_chanpinguanli_dialog_style(self)
-
-    @staticmethod
-    def _exec_standard(parent, icon, title, text, buttons, defaultButton):
-        box = StyledMessageBox(parent)
-        box.setIcon(icon)
-        box.setWindowTitle("" if title is None else str(title))
-        box.setText("" if text is None else str(text))
-        box.setStandardButtons(buttons)
-        if defaultButton != QMessageBox.NoButton:
-            box.setDefaultButton(defaultButton)
-        localize_messagebox_buttons(box)
-        apply_chanpinguanli_dialog_style(box)
-        return box.exec_()
-
-    @staticmethod
-    def information(
-        parent,
-        title,
-        text,
-        buttons=QMessageBox.Ok,
-        defaultButton=QMessageBox.NoButton,
-    ):
-        return StyledMessageBox._exec_standard(
-            parent, QMessageBox.Information, title, text, buttons, defaultButton
-        )
-
-    @staticmethod
-    def warning(
-        parent,
-        title,
-        text,
-        buttons=QMessageBox.Ok,
-        defaultButton=QMessageBox.NoButton,
-    ):
-        return StyledMessageBox._exec_standard(
-            parent, QMessageBox.Warning, title, text, buttons, defaultButton
-        )
-
-    @staticmethod
-    def critical(
-        parent,
-        title,
-        text,
-        buttons=QMessageBox.Ok,
-        defaultButton=QMessageBox.NoButton,
-    ):
-        return StyledMessageBox._exec_standard(
-            parent, QMessageBox.Critical, title, text, buttons, defaultButton
-        )
-
-    @staticmethod
-    def question(
-        parent,
-        title,
-        text,
-        buttons=QMessageBox.Yes | QMessageBox.No,
-        defaultButton=QMessageBox.NoButton,
-    ):
-        return StyledMessageBox._exec_standard(
-            parent, QMessageBox.Question, title, text, buttons, defaultButton
-        )
-
-    def exec_(self):
-        """构造后手动 addButton / setStandardButtons 的场景，弹出前再刷一次样式。"""
-        localize_messagebox_buttons(self)
-        apply_chanpinguanli_dialog_style(self)
-        return super().exec_()
-

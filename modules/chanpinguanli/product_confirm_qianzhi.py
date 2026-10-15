@@ -9,8 +9,6 @@ import modules.chanpinguanli.common_usage as common_usage
 
 import modules.chanpinguanli.auto_edit_row as auto_edit_row
 import traceback
-import shutil
-
 
 # 初始化提示定时器（确保只初始化一次）
 def init_tip_timer():
@@ -290,14 +288,8 @@ def save_new_product(row,curr_row_serial,curr_row_product_name,curr_row_product_
         os.makedirs(folder_path)
         with open(os.path.join(folder_path, "pro_id.csv"), "w", encoding="utf-8") as f:
             f.write(str(curr_product_id))
-        # 复制模板到新的路径
-        template_path = os.path.join(os.path.dirname(__file__), "条件输入数据表.xlsx")
-        target_path = os.path.join(folder_path, "条件输入数据表.xlsx")
-        shutil.copy(template_path, target_path)
-        template_path2 = os.path.join(os.path.dirname(__file__), "管口导入模板.xlsx")
-        target_path2 = os.path.join(folder_path, "管口导入模板.xlsx")
-        shutil.copy(template_path2, target_path2)
-        print(f"[save_new_product] ✅ 模板文件复制完成: {target_path}")
+        # 条件输入/管口导入模板在首次「产品定义」保存成功后，按产品类型再写入本地文件夹
+        print(f"[save_new_product] ✅ 产品文件夹已创建（模板待产品定义保存后写入）: {folder_path}")
 
         conn_pd = common_usage.get_mysql_connection_product()
         cursor_pd = conn_pd.cursor()
@@ -729,11 +721,19 @@ class ReadOnlyComboBoxFilter(QObject):
 
 # 之前的 只设置颜色
 def set_row_editable(row: int, editable: bool):
+    from modules.chanpinguanli.predefined_column import PREDEFINED_COLUMN, refresh_predefined_row
+
     log_debug(f"[set_row_editable] 设置第 {row} 行为 {'可编辑' if editable else '不可编辑'}")
     # 获取列数
     col_count = bianl.product_table.columnCount()
     # 从第一列开始
     for col in range(1, col_count):
+        if col == PREDEFINED_COLUMN:
+            refresh_predefined_row(
+                bianl.product_table, row,
+                bianl.product_table_row_status.get(row, {}).get("product_id"),
+            )
+            continue
         # 获取当前单元格的 QTableWidgetItem 项（单元格内容 + 属性）
         item = bianl.product_table.item(row, col)
         # 如果该单元格是空的（没有任何 item），就新建一个空单元格并放入表格

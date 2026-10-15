@@ -16,7 +16,7 @@
   <property name="styleSheet">
    <string notr="true"/>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout_6" stretch="21,0,0,1">
+  <layout class="QVBoxLayout" name="verticalLayout_6" stretch="21,0,1">
    <property name="spacing">
     <number>7</number>
    </property>
@@ -1074,76 +1074,6 @@ QPushButton:disabled {
       </layout>
      </widget>
     </widget>
-   </item>
-   <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_4">
-     <item>
-      <spacer name="horizontalSpacer_4">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item>
-      <widget class="QPushButton" name="Minimize">
-       <property name="font">
-        <font>
-         <pointsize>-1</pointsize>
-         <weight>75</weight>
-         <bold>true</bold>
-         <stylestrategy>PreferDefault</stylestrategy>
-        </font>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">QPushButton {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #ffffff, stop: 1 #e8edf5);
-    border: 1px solid #b8c8e0;
-    border-radius: 0px;
-    color: #000000;
-    font-size: 10px;
-    padding: 3px 3px;
-    text-align: center;
-    min-width: 30px;
-}
-QPushButton:hover {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #f0f4fa, stop: 1 #d8e0ed);
-    border-color: #9ab0d0;
-}
-QPushButton:pressed {
-    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                stop: 0 #e0e6f0, stop: 1 #c8d2e0);
-    border-color: #7a90b0;
-}
-QPushButton:disabled {
-    background: #f5f7fa;
-    color: #888888;
-    border-color: #d0d8e5;
-}</string>
-       </property>
-       <property name="text">
-        <string/>
-       </property>
-       <property name="icon">
-        <iconset>
-         <normaloff>../../chanpinguanli/icons/下箭头11.png</normaloff>../../chanpinguanli/icons/下箭头11.png</iconset>
-       </property>
-       <property name="iconSize">
-        <size>
-         <width>20</width>
-         <height>20</height>
-        </size>
-       </property>
-      </widget>
-     </item>
-    </layout>
    </item>
    <item>
     <widget class="QWidget" name="widget_control" native="true">

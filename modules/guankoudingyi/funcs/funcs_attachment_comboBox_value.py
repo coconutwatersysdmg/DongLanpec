@@ -4,11 +4,17 @@
 """
 import pymysql.cursors
 import re
-from PyQt5.QtCore import Qt
-from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem
+from PyQt5 import sip
+from PyQt5.QtCore import Qt, QObject, QEvent, QItemSelectionModel, QTimer
+from PyQt5.QtWidgets import QMessageBox, QTableWidgetItem, QApplication, QToolTip
 
 from modules.guankoudingyi.db_cnt import get_connection, db_config_1, db_config_2
-from modules.guankoudingyi.funcs.funcs_pipe_comboBox_value import ComboBoxDelegate
+from modules.guankoudingyi.funcs.funcs_pipe_comboBox_value import (
+    ComboBoxDelegate,
+    pipe_combo_arrow_rect,
+    _should_paint_pipe_combo_arrow,
+    _arm_pipe_combo_editor,
+)
 from modules.guankoudingyi.funcs.funcs_pipe_table import show_styled_warning
 from modules.guankoudingyi.obtain_product_type_version import get_product_type_and_version
 
@@ -55,13 +61,22 @@ def _attachment_get_nominal_diameter(product_id, belong_text):
     conn = None
     cursor = None
     try:
-        if ("管箱" in belong_text) or ("管板" in belong_text):
+        belong = (belong_text or "").strip()
+        product_type, _ = get_product_type_and_version(product_id)
+        is_container = bool(product_type and "容器" in str(product_type))
+        # 容器产品默认取壳程（圆筒/封头等均按壳程）
+        if is_container:
+            param_field = "壳程数值"
+        elif ("管箱" in belong) or ("管板" in belong):
             param_field = "管程数值"
         elif (
-            ("壳体" in belong_text)
-            or ("壳程" in belong_text)
-            or ("外头盖" in belong_text)
-            or ("锥壳" in belong_text)
+            ("壳体" in belong)
+            or ("壳程" in belong)
+            or ("外头盖" in belong)
+            or ("锥壳" in belong)
+            or ("右封头" in belong)
+            or ("左封头" in belong)
+            or belong == "圆筒"
         ):
             param_field = "壳程数值"
         else:
@@ -196,6 +211,70 @@ def get_attachment_belong_options(product_id):
         conn and conn.close()
 
 
+def _cached_attachment_belong_options(stats_widget):
+    """按产品缓存所属元件全量，避免多选时反复查库。"""
+    pid = getattr(stats_widget, "product_id", None)
+    cache = getattr(stats_widget, "_attachment_belong_options_cache", None)
+    if isinstance(cache, tuple) and len(cache) == 2 and cache[0] == pid:
+        return list(cache[1])
+    opts = list(get_attachment_belong_options(pid) or [])
+    stats_widget._attachment_belong_options_cache = (pid, opts)
+    return list(opts)
+
+
+def _attachment_element_family_name(element_name):
+    """元件名称归到可重复家族原名（保温支撑环1 → 保温支撑环）；其它原样返回。"""
+    name = (element_name or "").strip()
+    if not name:
+        return ""
+    for base in ("保温支撑环", "保温支撑板"):
+        if name == base or re.match(rf"^{re.escape(base)}\d+$", name):
+            return base
+    return name
+
+
+def _filter_belong_options_by_element_name(options, element_name):
+    """
+    保温支撑环：所属元件仅保留名称含「封头」的项；
+    保温支撑板：仅保留含「圆筒」的项；
+    其它元件不过滤。产品类型差异已由 get_attachment_belong_options 查出。
+    """
+    family = _attachment_element_family_name(element_name)
+    keyword = None
+    if family == "保温支撑环":
+        keyword = "封头"
+    elif family == "保温支撑板":
+        keyword = "圆筒"
+    if not keyword:
+        return list(options or [])
+    return [x for x in (options or []) if keyword in str(x)]
+
+
+def _filter_belong_options_for_rows(table, rows, options):
+    """
+    批量灌所属元件：对各行按元件名称过滤后再取交集（保持首行顺序）。
+    例如环（仅封头）与板（仅圆筒）混选时交集为空。
+    """
+    option_lists = []
+    for r in rows or []:
+        it = table.item(r, ATTACHMENT_COMPONENT_NAME_COLUMN) if table is not None else None
+        txt = it.text().strip() if it else ""
+        option_lists.append(_filter_belong_options_by_element_name(options, txt))
+    if not option_lists:
+        return list(options or [])
+    intersection_set = None
+    for opts in option_lists:
+        row_set = set(opts or [])
+        if intersection_set is None:
+            intersection_set = row_set
+        else:
+            intersection_set &= row_set
+        if not intersection_set:
+            return []
+    first = option_lists[0]
+    return [x for x in first if x in intersection_set]
+
+
 def get_attachment_axial_position_base_options(product_id, attachment_belong=None):
     """
     根据产品类型、产品型式、所属元件获取“轴向定位基准”下拉框选项（附件定义）。
@@ -266,11 +345,12 @@ def initialize_attachment_combobox_delegates(stats_widget):
     列定义（附件表）：
     2 元件类型（下拉）
     3 所属元件（下拉）
-    4 轴向定位基准（下拉）
-    5 轴向定位距离mm（可编辑下拉：程序推荐/居中）
-    7 间距（可编辑下拉：程序推荐）
-    11 外伸高度（可编辑下拉：程序推荐）
-    12 备注（可编辑下拉：固定鞍座+滑动鞍座 / 滑动鞍座+固定鞍座）
+    4 轴向定位基准（下拉）——当前界面禁用，代理预留
+    5 轴向定位距离mm（可编辑下拉）——当前界面禁用，代理预留
+    7 间距（可编辑下拉）——当前界面禁用，代理预留
+    11 外伸高度（可编辑下拉）——当前界面禁用，代理预留
+    12 备注（可编辑下拉）——当前界面禁用，代理预留
+    交互（箭头/空白/Tab/Enter）仅对 flags 可编辑的单元格生效，禁用列保持禁用。
     """
     table = getattr(stats_widget, "tableWidget_attachment", None)
     if table is None:
@@ -288,6 +368,8 @@ def initialize_attachment_combobox_delegates(stats_widget):
         delegate = ComboBoxDelegate(table, editable=True, overwrite_on_first_key=True)
         delegate.setItems(options)
         delegate.setParent(table)
+        delegate.stats_widget = stats_widget
+        delegate.show_dropdown_arrow = True
         table.setItemDelegateForColumn(col, delegate)
         stats_widget.attachment_column_delegates[col] = delegate
 
@@ -296,10 +378,170 @@ def initialize_attachment_combobox_delegates(stats_widget):
         delegate = ComboBoxDelegate(table, editable=False)
         delegate.setItems([])
         delegate.setParent(table)
+        delegate.stats_widget = stats_widget
+        delegate.show_dropdown_arrow = True
         table.setItemDelegateForColumn(col, delegate)
         stats_widget.attachment_column_delegates[col] = delegate
 
     stats_widget.attachment_dropdown_columns = set(static_columns.keys()) | set(dynamic_columns)
+
+
+# 当前界面实际启用的下拉列（其余下拉列代理预留，flags 仍禁用）
+ATTACHMENT_ACTIVE_DROPDOWN_COLUMNS = frozenset({2, 3})
+# 可编辑下拉（空白进编辑不展开；箭头才展开）——启用后与管口一致
+ATTACHMENT_EDITABLE_COMBO_COLUMNS = frozenset({5, 7, 11, 12})
+
+
+def _attachment_dropdown_columns(stats_widget):
+    return getattr(stats_widget, "attachment_dropdown_columns", None) or (
+        ATTACHMENT_ACTIVE_DROPDOWN_COLUMNS | ATTACHMENT_EDITABLE_COMBO_COLUMNS | {4}
+    )
+
+
+def _is_attachment_editable_combo_column(column):
+    return column in ATTACHMENT_EDITABLE_COMBO_COLUMNS
+
+
+def _attachment_cell_is_editable(table, row, column):
+    if table is None or row <= 0 or column < 0:
+        return False
+    item = table.item(row, column)
+    if item is None:
+        return False
+    flags = item.flags()
+    return bool(flags & Qt.ItemIsEnabled and flags & Qt.ItemIsEditable)
+
+
+class AttachmentComboArrowMouseFilter(QObject):
+    """
+    附件表下拉列：仅点右侧箭头打开；点空白只选中（便于多选）。
+    禁用列（不可编辑）不画箭头、不响应。
+    与管口一致：松手再打开，避免触控按下弹出、松手立刻收起。
+    """
+
+    def __init__(self, table, stats_widget):
+        super().__init__(table)
+        self.table = table
+        self.stats_widget = stats_widget
+        self._pending_arrow_cell = None
+
+    def _clear_pending_arrow(self):
+        self._pending_arrow_cell = None
+
+    def _open_arrow_combo(self, sw, row, col):
+        sw._attachment_ignore_cell_click = True
+        sw._attachment_arrow_click_cell = (row, col)
+        handle_attachment_cell_click(sw, row, col, force_open=True)
+
+        def _clear_ignore():
+            try:
+                if sw is None or sip.isdeleted(sw) or getattr(sw, "_pipe_closing", False):
+                    return
+                sw._attachment_ignore_cell_click = False
+            except RuntimeError:
+                pass
+
+        QTimer.singleShot(0, _clear_ignore)
+
+    def eventFilter(self, obj, event):
+        try:
+            if self.table is None or sip.isdeleted(self.table):
+                return False
+            if obj is not self.table.viewport():
+                return False
+        except RuntimeError:
+            return False
+
+        if event.type() == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton:
+            pending = self._pending_arrow_cell
+            if pending is None:
+                return False
+            self._pending_arrow_cell = None
+            sw = self.stats_widget
+            try:
+                if sw is None or sip.isdeleted(sw) or getattr(sw, "_pipe_closing", False):
+                    return True
+            except RuntimeError:
+                return True
+            row, col = pending
+            index = self.table.indexAt(event.pos())
+            if not index.isValid() or index.row() != row or index.column() != col:
+                sw._attachment_ignore_cell_click = False
+                return True
+            self._open_arrow_combo(sw, row, col)
+            return True
+
+        if event.type() != QEvent.MouseButtonPress or event.button() != Qt.LeftButton:
+            return False
+
+        sw = self.stats_widget
+        try:
+            if sw is None or sip.isdeleted(sw) or getattr(sw, "_pipe_closing", False):
+                return False
+        except RuntimeError:
+            return False
+
+        pos = event.pos()
+        index = self.table.indexAt(pos)
+        if not index.isValid() or index.row() <= 0:
+            self._clear_pending_arrow()
+            return False
+
+        if index.column() not in _attachment_dropdown_columns(sw):
+            self._clear_pending_arrow()
+            return False
+        if not _attachment_cell_is_editable(self.table, index.row(), index.column()):
+            self._clear_pending_arrow()
+            return False
+
+        delegate = self.table.itemDelegateForColumn(index.column())
+        if not isinstance(delegate, ComboBoxDelegate):
+            self._clear_pending_arrow()
+            return False
+        if not getattr(delegate, "show_dropdown_arrow", True):
+            self._clear_pending_arrow()
+            return False
+        if not _should_paint_pipe_combo_arrow(index):
+            self._clear_pending_arrow()
+            return False
+
+        cell_rect = self.table.visualRect(index)
+        if not pipe_combo_arrow_rect(cell_rect).contains(pos):
+            self._clear_pending_arrow()
+            return False
+
+        sw._attachment_ignore_cell_click = True
+        self._pending_arrow_cell = (index.row(), index.column())
+
+        sel_model = self.table.selectionModel()
+        selected = self.table.selectedIndexes()
+        already = any(
+            i.row() == index.row() and i.column() == index.column() for i in selected
+        )
+        if already:
+            sel_model.setCurrentIndex(index, QItemSelectionModel.NoUpdate)
+        elif event.modifiers() & (Qt.ControlModifier | Qt.ShiftModifier):
+            sel_model.select(
+                index, QItemSelectionModel.Select | QItemSelectionModel.Current
+            )
+        else:
+            self.table.setCurrentCell(index.row(), index.column())
+
+        try:
+            update_attachment_bulk_assign_state(sw)
+        except Exception:
+            pass
+
+        bulk_rows = list(getattr(sw, "attachment_bulk_assign_rows", []) or [])
+        bulk_col = getattr(sw, "attachment_bulk_assign_target_column", None)
+        if bulk_col == index.column() and len(bulk_rows) > 1:
+            sw._attachment_bulk_rows_snapshot = bulk_rows
+            sw._attachment_bulk_edit_active = True
+        else:
+            sw._attachment_bulk_rows_snapshot = []
+            sw._attachment_bulk_edit_active = False
+
+        return True
 
 
 # 附件表「元件名称」列（第 1 列）：仅可选中，由图示按钮程序填入
@@ -312,7 +554,7 @@ ATTACHMENT_SINGLETON_ELEMENT_NAMES = frozenset({"鞍式支座", "耳座", "铭�
 # 需要“重复时自动编号”的可重复元件名称：
 # - 首个保留原名（如 吊耳）
 # - 出现第二个同名时，首个自动改为 吊耳1，新增为 吊耳2
-ATTACHMENT_AUTO_INDEXED_REPEATABLE_NAMES = frozenset({"吊耳", "保温支撑圈", "保温支撑条"})
+ATTACHMENT_AUTO_INDEXED_REPEATABLE_NAMES = frozenset({"吊耳", "保温支撑环", "保温支撑板"})
 
 # 附件表与管口表同规则的数值列（管口 13–16 对应附件 8–11）
 ATTACHMENT_COL_BELONG = 3  # 所属元件，对应管口「管口所属元件」用于管板判断及偏心距/外伸高度校验
@@ -334,7 +576,8 @@ def update_attachment_bulk_assign_state(stats_widget):
     """
     附件表批量赋值状态跟踪：
     - 仅支持第3列「所属元件」
-    - 不做交集计算：各行可选项相同
+    - 各行可选项取交集；无交集则不进入批量赋值（对齐管口公称尺寸：
+      仍可多选高亮，打开下拉只改当前格）
     """
     table = getattr(stats_widget, "tableWidget_attachment", None)
     if table is None:
@@ -383,6 +626,16 @@ def update_attachment_bulk_assign_state(stats_widget):
     if len(selected_rows_in_current_col) != len(valid_rows):
         stats_widget.attachment_bulk_assign_target_column = None
         stats_widget.attachment_bulk_assign_rows = []
+        return
+
+    # 无交集：不进入批量，但保留多选
+    all_opts = _cached_attachment_belong_options(stats_widget)
+    inter = _filter_belong_options_for_rows(table, valid_rows, all_opts)
+    if not inter:
+        stats_widget.attachment_bulk_assign_target_column = None
+        stats_widget.attachment_bulk_assign_rows = []
+        stats_widget._attachment_bulk_edit_active = False
+        stats_widget._attachment_bulk_rows_snapshot = []
         return
 
     stats_widget.attachment_bulk_assign_target_column = current_col
@@ -515,7 +768,7 @@ def validate_attachment_element_name(table, row, proposed: str):
 def _normalize_last_repeatable_element_name(table):
     """
     可重复家族归一：
-    当某家族（吊耳/保温支撑圈/保温支撑条）仅剩一个成员且名称为“原名+数字”时，
+    当某家族（吊耳/保温支撑环/保温支撑板）仅剩一个成员且名称为“原名+数字”时，
     自动改回原名（例如 吊耳1 -> 吊耳）。
     """
     table.blockSignals(True)
@@ -577,7 +830,7 @@ def _finish_attachment_element_name_cell(stats_widget, row, proposed: str):
 
     ok, msg, resolved = validate_attachment_element_name(table, row, proposed)
     if not ok:
-        QMessageBox.warning(stats_widget, "元件名称", msg or "名称无效")
+        show_styled_warning(stats_widget, "元件名称", msg or "名称无效")
         try:
             stats_widget.suppress_cell_change = True
             item.setFlags(ATTACHMENT_COMPONENT_NAME_ITEM_FLAGS)
@@ -674,12 +927,34 @@ def on_attachment_component_picture_clicked(stats_widget, component_name: str):
     _finish_attachment_element_name_cell(stats_widget, row, component_name)
 
 
+class _AttachmentPicTooltipFilter(QObject):
+    """
+    图示按钮悬停提示：拦截默认 tip，用 QToolTip.showText 弹出纯文字，
+    """
+
+    def __init__(self, tip_text, parent=None):
+        super().__init__(parent)
+        self._tip_text = tip_text or ""
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.ToolTip:
+            if self._tip_text:
+                # 不传带 image 样式的按钮作 parent，避免 tip 继承黑底/图标
+                QToolTip.showText(event.globalPos(), self._tip_text)
+            else:
+                QToolTip.hideText()
+            return True
+        if event.type() == QEvent.Leave:
+            QToolTip.hideText()
+        return False
+
+
 def connect_attachment_component_picture_buttons(stats_widget):
     """pic_* 按钮 → 元件名称固定文案（默认写入元件名称列，无需预先选中该列）。"""
     mapping = (
         ("pic_anshizhizuo", "鞍式支座"),
-        ("pic_baowenzhichengquan", "保温支撑圈"),
-        ("pic_baowenzhichengtiao", "保温支撑条"),
+        ("pic_baowenzhichengquan", "保温支撑环"),
+        ("pic_baowenzhichengtiao", "保温支撑板"),
         ("pic_diaoer", "吊耳"),
         ("pic_erzuo", "耳座"),
         ("pic_mingpai", "铭牌"),
@@ -688,6 +963,21 @@ def connect_attachment_component_picture_buttons(stats_widget):
         btn = getattr(stats_widget, attr, None)
         if btn is None:
             continue
+        # 需非空 tip 才会发 ToolTip 事件；真正显示由 filter 用干净 showText 完成
+        btn.setToolTip(label)
+        old_filter = getattr(btn, "_attachment_pic_tip_filter", None)
+        if old_filter is not None:
+            try:
+                btn.removeEventFilter(old_filter)
+            except Exception:
+                pass
+        tip_filter = _AttachmentPicTooltipFilter(label, btn)
+        btn._attachment_pic_tip_filter = tip_filter
+        btn.installEventFilter(tip_filter)
+        try:
+            btn.setStatusTip(label)
+        except Exception:
+            pass
         try:
             btn.clicked.disconnect()
         except TypeError:
@@ -697,12 +987,11 @@ def connect_attachment_component_picture_buttons(stats_widget):
         )
 
 
-def handle_attachment_cell_click(stats_widget, row, column):
+def handle_attachment_cell_click(stats_widget, row, column, force_open=False):
     """
-    附件定义表的“单击即下拉”入口。
-    - 从 stats_widget.attachment_dropdown_columns 读取目标列集合
-    - 与 control_last_attachment_row_editable_state / sync_attachment_row_tail_editable_by_name、
-      AttachmentEmptyComponentNameEditProtector 配合
+    附件定义表单击入口（对齐管口：空白只选中，箭头/force_open 才打开下拉）。
+    :param force_open: True=箭头或键盘 Enter/Tab 进入，允许打开下拉并灌选项
+    禁用列（flags 无 Editable）一律不进入编辑，保持灰底禁用。
     """
     table = getattr(stats_widget, "tableWidget_attachment", None)
     if table is None:
@@ -714,9 +1003,15 @@ def handle_attachment_cell_click(stats_widget, row, column):
     name_item = table.item(row, 1)
     has_component_name = name_item.text().strip() != "" if name_item else False
 
-    # 轴向夹角、偏心距：非下拉列，仅记录编辑前旧值供 cellChanged 中互斥判断（与管口 13/15 列一致）
+    arrow_cell = getattr(stats_widget, "_attachment_arrow_click_cell", None)
+    opened_by_arrow = arrow_cell == (row, column)
+    if opened_by_arrow:
+        stats_widget._attachment_arrow_click_cell = None
+    allow_open = bool(force_open or opened_by_arrow)
+
+    # 轴向夹角、偏心距：非下拉列，仅记录编辑前旧值（列启用时才有意义）
     if column in (ATTACHMENT_COL_AXIAL_ANGLE, ATTACHMENT_COL_ECCENTRICITY):
-        if has_component_name:
+        if has_component_name and _attachment_cell_is_editable(table, row, column):
             cell = table.item(row, column)
             original_text = cell.text().strip() if cell else ""
             if not hasattr(stats_widget, "original_cell_value_map"):
@@ -728,9 +1023,29 @@ def handle_attachment_cell_click(stats_widget, row, column):
     if not has_component_name:
         return
 
-    dropdown_cols = getattr(stats_widget, "attachment_dropdown_columns", set())
-    if column not in dropdown_cols:
+    # 禁用列保持禁用
+    if not _attachment_cell_is_editable(table, row, column):
         return
+
+    dropdown_cols = _attachment_dropdown_columns(stats_widget)
+    is_editable_combo = _is_attachment_editable_combo_column(column)
+
+    if column in dropdown_cols and not allow_open:
+        if is_editable_combo:
+            pass  # 可编辑下拉：空白进编辑
+        else:
+            # 纯下拉：空白只选中
+            return
+
+    # 与管口共用 ComboBoxDelegate 的展开开关
+    if is_editable_combo:
+        stats_widget._pipe_combo_show_popup = bool(opened_by_arrow)
+    else:
+        stats_widget._pipe_combo_show_popup = True
+
+    # 与管口一致：editItem 前武装，否则 createEditor 会因未武装直接返回 None
+    if column in dropdown_cols:
+        _arm_pipe_combo_editor(stats_widget)
 
     item = table.item(row, column)
     if item is None:
@@ -745,32 +1060,50 @@ def handle_attachment_cell_click(stats_widget, row, column):
         return
 
     if column == 3:
-        # 批量赋值模式：多行同列选择时，直接把所选值写入所有行（不计算交集）
+        # 批量赋值模式：多行同列选择时，对各行所属元件可选项取交集
         is_bulk_mode = (
             hasattr(stats_widget, "attachment_bulk_assign_target_column")
             and stats_widget.attachment_bulk_assign_target_column == column
             and hasattr(stats_widget, "attachment_bulk_assign_rows")
             and len(stats_widget.attachment_bulk_assign_rows) > 1
         )
+        if getattr(stats_widget, "_attachment_bulk_edit_active", False):
+            snap = list(getattr(stats_widget, "_attachment_bulk_rows_snapshot", []) or [])
+            if len(snap) > 1:
+                stats_widget.attachment_bulk_assign_rows = snap
+                stats_widget.attachment_bulk_assign_target_column = column
+                is_bulk_mode = True
+
+        bulk_options = []
+        if is_bulk_mode:
+            bulk_options = _filter_belong_options_for_rows(
+                table,
+                stats_widget.attachment_bulk_assign_rows,
+                _cached_attachment_belong_options(stats_widget),
+            )
+            if not bulk_options:
+                is_bulk_mode = False
+                stats_widget.attachment_bulk_assign_target_column = None
+                stats_widget.attachment_bulk_assign_rows = []
+                stats_widget._attachment_bulk_edit_active = False
+                stats_widget._attachment_bulk_rows_snapshot = []
 
         if is_bulk_mode:
-            options = get_attachment_belong_options(getattr(stats_widget, "product_id", None))
-
             def bulk_assign_callback(value):
+                # 只写所属元件本身；不要走 handle_attachment_cell_changed。
+                # 该入口未挂到 cellChanged（单选不会触发），多选再调会多出
+                # 「管板 → 轴向夹角/偏心距写 -」等单选没有的副作用。
                 apply_attachment_bulk_assign_value_immediate(
                     stats_widget, column, stats_widget.attachment_bulk_assign_rows, value
                 )
-                # 批量写入后，逐行触发所属元件联动（锁定/基准联动等）
-                for rr in stats_widget.attachment_bulk_assign_rows:
-                    handle_attachment_cell_changed(
-                        stats_widget, rr, column, getattr(stats_widget, "product_id", None)
-                    )
+                stats_widget._attachment_bulk_edit_active = False
+                stats_widget._attachment_bulk_rows_snapshot = []
 
             delegate = delegates.get(column)
             if delegate:
                 delegate.bulk_select_callback = bulk_assign_callback
                 delegate.disable_wheel_scroll = True
-                delegate.setItems(options if options else ["None"])
+                delegate.setItems(bulk_options)
             table.editItem(item)
             return
 
@@ -781,10 +1114,20 @@ def handle_attachment_cell_click(stats_widget, row, column):
             stats_widget.attachment_belong_old_values[row] = (
                 cur.text().strip() if cur else ""
             )
-        options = get_attachment_belong_options(getattr(stats_widget, "product_id", None))
+        options = _cached_attachment_belong_options(stats_widget)
+        name_item = table.item(row, ATTACHMENT_COMPONENT_NAME_COLUMN)
+        element_name = name_item.text().strip() if name_item else ""
+        options = _filter_belong_options_by_element_name(options, element_name)
+
+        # 多选但无交集时仍走这里：选项按当前行过滤，
+        def belong_single_callback(value, _row=row, _col=column):
+            apply_attachment_bulk_assign_value_immediate(
+                stats_widget, _col, [_row], value
+            )
+
         delegate = delegates.get(column)
         if delegate:
-            delegate.bulk_select_callback = None
+            delegate.bulk_select_callback = belong_single_callback
             delegate.disable_wheel_scroll = False
             delegate.setItems(options if options else ["None"])
         table.editItem(item)

@@ -467,7 +467,7 @@ def install_reinforcement_group_toggle(
     """
     安装补强圈字段组的显示/隐藏切换功能
 
-    当"是否使用补强圈"选择"程序推荐"时，显示所有补强圈相关字段
+    当"是否使用补强圈"选择"是"时，显示所有补强圈相关字段
     当选择"否"时，隐藏所有补强圈相关字段
     """
     if not table or table.rowCount() == 0:
@@ -506,11 +506,11 @@ def install_reinforcement_group_toggle(
     def _refresh():
         """刷新补强圈字段的显示状态"""
         # 检查是否使用补强圈
-        has_reinforcement = False
+        has_reinforcement = True
         if toggle_row >= 0:
             toggle_value = _get_text(toggle_row, min(value_cols))
-            # 选择"程序推荐"时显示补强圈材料字段；选择"否"时隐藏
-            has_reinforcement = toggle_value == "程序推荐"
+            # 当选择"否"或"程序推荐"时隐藏，其他情况（"是"或空值）都显示
+            has_reinforcement = toggle_value not in ["否", "程序推荐"]
 
         # 控制补强圈相关字段的显示/隐藏
         for rr in reinforcement_rows:

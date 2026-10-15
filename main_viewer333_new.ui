@@ -14,32 +14,7 @@
    <string>Donlanpec</string>
   </property>
   <property name="styleSheet">
-   <string notr="true">   /* ====================== 复用文件1的下拉框样式 ====================== */
-QComboBox {
-    border: 1px solid #a9a9a9;
-    border-radius: 0px;
-    background-color: #ffffff;
-    color: #000;
-    padding: 2px 30px 2px 10px;
-    min-height: 30px;
-    font-size: 12pt;
-}
-
-QComboBox::drop-down {
-    subcontrol-origin: padding;
-    subcontrol-position: top right;
-    width: 26px;
-    border: none;
-    background-color: transparent;
-}
-
-QComboBox::down-arrow {
-    image: url(modules/chanpinguanli/icons/下箭头.png);  /* 你自己的箭头路径 */
-    width: 16px;
-    height: 16px;
-}
-
-/* 竖直滚动条整体样式 */
+   <string notr="true">/* 竖直滚动条整体样式 */
 QScrollBar:vertical {
     background-color: #f5f5f5;
     width: 14px;
@@ -112,6 +87,31 @@ QScrollBar::sub-line:horizontal {
 QScrollBar::add-page:horizontal,
 QScrollBar::sub-page:horizontal {
     background: none;
+}
+
+ /* ====================== 复用文件1的下拉框样式 ====================== */
+QComboBox {
+    border: 1px solid #a9a9a9;
+    border-radius: 0px;
+    background-color: #ffffff;
+    color: #000;
+    padding: 2px 30px 2px 10px;
+    min-height: 30px;
+    font-size: 12pt;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 26px;
+    border: none;
+    background-color: transparent;
+}
+
+QComboBox::down-arrow {
+    image: url(modules/chanpinguanli/icons/下箭头.png);  /* 你自己的箭头路径 */
+    width: 16px;
+    height: 16px;
 }</string>
   </property>
   <widget class="QWidget" name="centralwidget">
@@ -164,10 +164,10 @@ QFrame#frame_nav_strip QPushButton {
     background-color: transparent;
     border: 1px solid transparent;
     border-radius: 4px;
-    padding: 6px 8px;
-    min-width: 78px;
-    min-height: 76px;
-    max-height: 92px;
+    padding: 2px 6px;
+    min-width: 72px;
+    min-height: 50px;
+    max-height: 64px;
     font-size: 16px;
     color: #003366;
     font-family: &quot;Microsoft YaHei UI&quot;, &quot;Microsoft YaHei&quot;;
@@ -188,10 +188,10 @@ QFrame#frame_nav_strip QToolButton {
     background-color: transparent;
     border: 1px solid transparent;
     border-radius: 4px;
-    padding: 6px 8px;
-    min-width: 78px;
-    min-height: 76px;
-    max-height: 92px;
+    padding: 2px 6px;
+    min-width: 72px;
+    min-height: 50px;
+    max-height: 64px;
     font-size: 16px;
     color: #003366;
     font-family: &quot;Microsoft YaHei UI&quot;, &quot;Microsoft YaHei&quot;;
@@ -254,7 +254,7 @@ QFrame#current_product QLabel {
          <property name="minimumSize">
           <size>
            <width>0</width>
-           <height>98</height>
+           <height>68</height>
           </size>
          </property>
          <property name="frameShape">
@@ -268,13 +268,13 @@ QFrame#current_product QLabel {
            <number>8</number>
           </property>
           <property name="topMargin">
-           <number>6</number>
+           <number>4</number>
           </property>
           <property name="rightMargin">
            <number>12</number>
           </property>
           <property name="bottomMargin">
-           <number>6</number>
+           <number>4</number>
           </property>
           <item>
            <layout class="QHBoxLayout" name="horizontalLayout_nav_buttons">
@@ -304,8 +304,8 @@ QFrame#current_product QLabel {
               </property>
               <property name="iconSize">
                <size>
-                <width>36</width>
-                <height>36</height>
+                <width>28</width>
+                <height>28</height>
                </size>
               </property>
               <property name="toolButtonStyle">
@@ -327,8 +327,8 @@ QFrame#current_product QLabel {
               </property>
               <property name="iconSize">
                <size>
-                <width>36</width>
-                <height>36</height>
+                <width>28</width>
+                <height>28</height>
                </size>
               </property>
               <property name="toolButtonStyle">
@@ -350,8 +350,8 @@ QFrame#current_product QLabel {
               </property>
               <property name="iconSize">
                <size>
-                <width>36</width>
-                <height>36</height>
+                <width>28</width>
+                <height>28</height>
                </size>
               </property>
               <property name="toolButtonStyle">
@@ -373,8 +373,8 @@ QFrame#current_product QLabel {
               </property>
               <property name="iconSize">
                <size>
-                <width>36</width>
-                <height>36</height>
+                <width>28</width>
+                <height>28</height>
                </size>
               </property>
               <property name="toolButtonStyle">
@@ -396,8 +396,8 @@ QFrame#current_product QLabel {
               </property>
               <property name="iconSize">
                <size>
-                <width>36</width>
-                <height>36</height>
+                <width>28</width>
+                <height>28</height>
                </size>
               </property>
               <property name="toolButtonStyle">
@@ -419,8 +419,8 @@ QFrame#current_product QLabel {
               </property>
               <property name="iconSize">
                <size>
-                <width>36</width>
-                <height>36</height>
+                <width>28</width>
+                <height>28</height>
                </size>
               </property>
               <property name="toolButtonStyle">
@@ -442,8 +442,8 @@ QFrame#current_product QLabel {
               </property>
               <property name="iconSize">
                <size>
-                <width>36</width>
-                <height>36</height>
+                <width>28</width>
+                <height>28</height>
                </size>
               </property>
               <property name="toolButtonStyle">
@@ -465,8 +465,8 @@ QFrame#current_product QLabel {
               </property>
               <property name="iconSize">
                <size>
-                <width>36</width>
-                <height>36</height>
+                <width>28</width>
+                <height>28</height>
                </size>
               </property>
               <property name="toolButtonStyle">
@@ -488,8 +488,8 @@ QFrame#current_product QLabel {
               </property>
               <property name="iconSize">
                <size>
-                <width>36</width>
-                <height>36</height>
+                <width>28</width>
+                <height>28</height>
                </size>
               </property>
               <property name="toolButtonStyle">
@@ -511,8 +511,8 @@ QFrame#current_product QLabel {
               </property>
               <property name="iconSize">
                <size>
-                <width>36</width>
-                <height>36</height>
+                <width>28</width>
+                <height>28</height>
                </size>
               </property>
               <property name="popupMode">
@@ -546,7 +546,7 @@ QFrame#current_product QLabel {
             <property name="minimumSize">
              <size>
               <width>380</width>
-              <height>76</height>
+              <height>50</height>
              </size>
             </property>
             <property name="maximumSize">
@@ -714,6 +714,133 @@ border: 1px solid #dddddd;</string>
     </item>
    </layout>
   </widget>
+  <widget class="QMenuBar" name="menuBar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1598</width>
+     <height>29</height>
+    </rect>
+   </property>
+   <property name="styleSheet">
+    <string notr="true">font: 10pt &quot;Microsoft YaHei&quot;;</string>
+   </property>
+   <widget class="QMenu" name="document">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
+    <property name="tearOffEnabled">
+     <bool>false</bool>
+    </property>
+    <property name="title">
+     <string>文件</string>
+    </property>
+    <addaction name="action"/>
+    <addaction name="action_2"/>
+    <addaction name="action_3"/>
+    <addaction name="action_6"/>
+    <addaction name="action_14"/>
+    <addaction name="action_19"/>
+   </widget>
+   <widget class="QMenu" name="logo">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
+    <property name="minimumSize">
+     <size>
+      <width>0</width>
+      <height>0</height>
+     </size>
+    </property>
+    <property name="title">
+     <string/>
+    </property>
+    <property name="icon">
+     <iconset>
+      <normaloff>icons/logo.png</normaloff>icons/logo.png</iconset>
+    </property>
+   </widget>
+   <widget class="QMenu" name="design_mode">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
+    <property name="title">
+     <string>设计模式</string>
+    </property>
+    <addaction name="action_8"/>
+    <addaction name="action_9"/>
+   </widget>
+   <widget class="QMenu" name="menu_2">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
+    <property name="title">
+     <string>审核</string>
+    </property>
+    <addaction name="action_20"/>
+    <addaction name="action_21"/>
+    <addaction name="action_22"/>
+    <addaction name="action_23"/>
+   </widget>
+   <widget class="QMenu" name="menu_3">
+    <property name="title">
+     <string>输出</string>
+    </property>
+    <addaction name="scheme_design"/>
+    <addaction name="detailed_deisign"/>
+    <addaction name="action_26"/>
+   </widget>
+   <widget class="QMenu" name="menu_AI">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
+    <property name="title">
+     <string>AI+</string>
+    </property>
+    <addaction name="action_38"/>
+    <addaction name="action_39"/>
+    <addaction name="action_40"/>
+    <addaction name="action_41"/>
+    <addaction name="action_25"/>
+   </widget>
+   <widget class="QMenu" name="menu_tools">
+    <property name="title">
+     <string>工具</string>
+    </property>
+   </widget>
+   <widget class="QMenu" name="menu">
+    <property name="title">
+     <string>偏好设置</string>
+    </property>
+    <addaction name="action_15"/>
+    <addaction name="action_16"/>
+    <addaction name="action_17"/>
+   </widget>
+   <widget class="QMenu" name="help">
+    <property name="title">
+     <string>帮助</string>
+    </property>
+    <addaction name="action_help_doc"/>
+    <addaction name="action_13"/>
+    <addaction name="action_12"/>
+   </widget>
+   <addaction name="logo"/>
+   <addaction name="action"/>
+   <addaction name="action_2"/>
+   <addaction name="action_3"/>
+   <addaction name="action_6"/>
+   <addaction name="action_undo"/>
+   <addaction name="action_redo"/>
+   <addaction name="document"/>
+   <addaction name="design_mode"/>
+   <addaction name="menu_2"/>
+   <addaction name="menu_3"/>
+   <addaction name="menu_AI"/>
+   <addaction name="menu_tools"/>
+   <addaction name="menu"/>
+   <addaction name="help"/>
+  </widget>
   <action name="actionyonghuxinxi">
    <property name="text">
     <string>用户信息</string>
@@ -730,6 +857,9 @@ border: 1px solid #dddddd;</string>
    </property>
   </action>
   <action name="action">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="icon">
     <iconset>
      <normaloff>icons/新建.png</normaloff>icons/新建.png</iconset>
@@ -739,6 +869,9 @@ border: 1px solid #dddddd;</string>
    </property>
   </action>
   <action name="action_2">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="icon">
     <iconset>
      <normaloff>icons/打开.png</normaloff>icons/打开.png</iconset>
@@ -748,6 +881,9 @@ border: 1px solid #dddddd;</string>
    </property>
   </action>
   <action name="action_3">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="icon">
     <iconset>
      <normaloff>icons/保存.png</normaloff>icons/保存.png</iconset>
@@ -757,6 +893,9 @@ border: 1px solid #dddddd;</string>
    </property>
   </action>
   <action name="action_6">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="icon">
     <iconset>
      <normaloff>icons/另存为.png</normaloff>icons/另存为.png</iconset>
@@ -951,6 +1090,9 @@ border: 1px solid #dddddd;</string>
    </property>
   </action>
   <action name="action_undo">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="icon">
     <iconset>
      <normaloff>icons/撤销.png</normaloff>icons/撤销.png</iconset>
@@ -960,6 +1102,9 @@ border: 1px solid #dddddd;</string>
    </property>
   </action>
   <action name="action_redo">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
    <property name="icon">
     <iconset>
      <normaloff>icons/重做.png</normaloff>icons/重做.png</iconset>

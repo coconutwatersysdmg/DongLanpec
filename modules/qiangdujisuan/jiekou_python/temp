@@ -1,42 +1,359 @@
-浮头法兰:{
-        "浮头法兰内径含覆层": "1500",
-        "浮头法兰外径含覆层": "2080",
-        "法兰名义厚度": "123",
-        "球冠形封头名义厚度": "30",
-        "B型钩圈名义厚度": "50",
-        "B型钩圈颈部厚度": "30",
-        "壳体圆筒名义内径": "1000",
-        "球冠形封头预设厚度1": "0",
-        "球冠形封头预设厚度2": "10",
-        "球冠形封头预设厚度3": "20",
-        "外头盖内径距浮头法兰和钩圈外径最小距离": "10",
-        "外头盖圆筒内径递增值": "5",
-        "浮动管板名义厚度": "10",
-        "浮动管板名义外径": "990",
-        "管程法兰材料腐蚀裕量": "3",
-        "壳程法兰材料腐蚀裕量": "2",
-        "浮头法兰管程覆层厚度": "3",
-        "浮头法兰壳程覆层厚度": "4",
-        "球冠形封头材料类型": "钢板",
-        "球冠形封头材料牌号": "Q345R",
-        "球冠形封头耐压试验温度": "20",
-        "球冠形封头装入深度": "27",
-        "球冠形封头焊接接头系数": "1",
-        "法兰密封面凸台高度": "6",
-        "球冠形封头管程覆层厚度": "1",
-        "球冠形封头壳程覆层厚度": "2",
-        "管程球冠形封头腐蚀裕量": "2",
-        "壳程球冠形封头腐蚀裕量": "2",
-        "压紧面形状序号": "1a",
-        "法兰压紧面压紧宽度ω": "0",
-        "垫片名义外径": "990",
-        "垫片名义内径": "964",
-        "球冠形封头覆层复合方式": "堆焊",
-        "球冠形封头带覆层时的焊接凹槽深度": "2",
-        "B型钩圈试验温度": "20",
-        "B型钩圈材料类型": "钢板",
-        "B型钩圈材料名称": "Q345R",
-        "B型钩圈覆层厚度": "3",
-        "覆层位置": "双侧",
+    qiaoti_duanbuyuantong1 = {
+        "预设厚度1": "8",
+        "预设厚度2": "10",
+        "预设厚度3": "12",
+        "圆筒使用位置": "管箱圆筒",
+        "圆筒名义厚度": "0",
+        "圆筒内/外径": "1000",
+        "是否按外径计算": "1",
+        "液柱静压力": "0",
+        "用户自定义MAWP": "0",
+        "耐压试验温度": "15",
+        "耐压试验压力": "0",
+        "圆筒长度": "1200",
+        "外压圆筒计算长度": "1200",
+        "材料类型": "板材",
+        "材料牌号": "Q345R",
+        "腐蚀裕量": "1",
+        "焊接接头系数": "1",
+        "压力试验类型": "液压",
+        "覆层复合方式": "轧制复合",
+        "圆筒覆层厚度": "0",
+        "圆筒带覆层时的焊接凹槽深度": "0",
+        "泊松比": "0.3",
+        "换热管长度": "",
+        "是否覆层": "0",
+        "覆层材料类型": "钢板",
+        "公称直径": ''
+    }
+    try:
+        conn = pymysql.connect(
+            host="localhost", user="root", password="123456",
+            database="产品设计活动库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+        )
+        cursor = conn.cursor()
+        # === 查询换热管公称长度 LN ===
+        cursor.execute("""
+                       SELECT 壳程数值
+                       FROM 产品设计活动表_设计数据表
+                       WHERE 产品ID = %s AND 参数名称 = '公称直径*'
+                       LIMIT 1
+                   """, (product_id,))
+        row = cursor.fetchone()
+        raw_val = row["壳程数值"].strip() if row and row.get("壳程数值") else None
+        qiaoti_duanbuyuantong1["公称直径"] = raw_val
+        # === 查询换热管公称长度 LN ===
+        cursor.execute("""
+                SELECT 参数值
+                FROM 产品设计活动表_布管参数表
+                WHERE 产品ID = %s AND 参数名 = '换热管公称长度 LN'
+                LIMIT 1
+            """, (product_id,))
+        row = cursor.fetchone()
+        raw_val = row["参数值"].strip() if row and row.get("参数值") else None
 
-}
+    except Exception as e:
+        print(f"❌ 查询失败: {e}")
+
+    # === 处理参数值（空或无效则默认 6000） ===
+    tube_length = raw_val if raw_val not in (None, "", " ", "None") else "6000"
+
+    # 写入 qiaoti_yuantong
+    qiaoti_duanbuyuantong1["换热管长度"] = tube_length
+    cursor.execute("""
+               SELECT 参数名称, 参数值
+               FROM 产品设计活动表_元件附加参数表
+               WHERE 产品ID = %s AND 元件名称 = '端部圆筒'
+           """, (product_id,))
+    extra_rows = cursor.fetchall()
+    extra_map = {row["参数名称"].strip(): row["参数值"] for row in extra_rows}
+
+    # 是否添加覆层
+    if extra_map.get("是否添加覆层") == "是":
+        qiaoti_duanbuyuantong1["是否覆层"] = "1"
+        qiaoti_duanbuyuantong1["覆层材料类型"] = extra_map.get("覆层材料类型", "")
+        qiaoti_duanbuyuantong1["覆层复合方式"] = extra_map.get("覆层成型工艺", "轧制复合")  # 若为空可改为 "未知"
+        qiaoti_duanbuyuantong1["圆筒覆层厚度"] = str(extra_map.get("覆层厚度", "0"))
+    else:
+        qiaoti_duanbuyuantong1["覆层材料类型"] = "钢板"
+        qiaoti_duanbuyuantong1["是否覆层"] = "0"
+        qiaoti_duanbuyuantong1["覆层复合方式"] = "无"
+        qiaoti_duanbuyuantong1["圆筒覆层厚度"] = "0"
+    # === 查询数据库 ===
+    cursor.execute("""
+            SELECT 参数名称, 壳程数值, 管程数值
+            FROM 产品设计活动表_设计数据表
+            WHERE 产品ID = %s
+        """, (product_id,))
+    rows = cursor.fetchall()
+
+    # === 构建参数映射表 ===
+    param_map = {row["参数名称"].strip(): row for row in rows}
+
+    # === 获取两个自定义耐压试验压力 ===
+    def parse_float(value):
+        try:
+            return float(value)
+        except:
+            return None
+
+    val1 = parse_float(param_map.get("自定义耐压试验压力（卧）", {}).get("壳程数值", ""))
+    val2 = parse_float(param_map.get("自定义耐压试验压力（立）", {}).get("壳程数值", ""))
+
+    # === 最大允许工作压力（壳程数值） ===
+    value = param_map.get("最大允许工作压力", {}).get("壳程数值")
+    if value not in [None, ""]:
+        qiaoti_duanbuyuantong1["最大允许工作压力"] = str(value)
+
+    # === 耐压试验压力：取最大值 ===
+    if val1 is not None and val2 is not None:
+        qiaoti_duanbuyuantong1["耐压试验压力"] = str(max(val1, val2))
+    elif val1 is not None:
+        qiaoti_duanbuyuantong1["耐压试验压力"] = str(val1)
+    elif val2 is not None:
+        qiaoti_duanbuyuantong1["耐压试验压力"] = str(val2)
+    else:
+        qiaoti_duanbuyuantong1["耐压试验压力"] = "0"
+
+    # ===== 获取预设厚度1~3（来自元件附加参数表）=====
+    cursor.execute("""
+            SELECT 参数名称, 参数值 FROM 产品设计活动表_元件附加参数表
+            WHERE 产品ID = %s AND 元件名称 = '端部圆筒'
+        """, (product_id,))
+    rows = cursor.fetchall()
+    extra_param_map = {r["参数名称"].strip(): r["参数值"] for r in rows}
+
+    # 写入 guangxiang_fengtou 中的预设厚度
+    for i in range(1, 4):
+        key = f"预设厚度{i}"
+        if key in extra_param_map:
+            qiaoti_duanbuyuantong1[key] = str(extra_param_map[key])
+
+    # 从数据库获取“是否以外径为基准*”的壳程数值
+    cursor.execute("""
+            SELECT 数值 FROM 产品设计活动表_通用数据表
+            WHERE 产品ID = %s AND 参数名称 = '是否以外径为基准*'
+        """, (product_id,))
+    row = cursor.fetchone()
+    if row and "数值" in row:
+        qiaoti_duanbuyuantong1["是否按外径计算"] = "1" if row["数值"] == "是" else "0"
+        # 查询设计数据表，获取公称直径*
+    cursor.execute("""
+               SELECT 参数值 FROM 产品设计活动表_布管参数表
+               WHERE 产品ID = %s AND 参数名 = '壳体内直径 Di'
+           """, (product_id,))
+    row = cursor.fetchone()
+    if row and "参数值" in row:
+        qiaoti_duanbuyuantong1["圆筒内/外径"] = str(row["参数值"])
+
+    map3 = {
+        "液柱静压力": "液柱静压力",
+        "用户自定义MAWP": "最高允许工作压力",
+        "腐蚀裕量": "腐蚀裕量*",
+        "焊接接头系数": "焊接接头系数*",
+
+    }
+
+    for key, param_name in map3.items():
+        value = param_map.get(param_name, {}).get("壳程数值", "")
+        if value != "":
+            qiaoti_duanbuyuantong1[key] = str(value)
+
+    cursor.execute("""
+            SELECT 参数名称, 参数值
+            FROM 产品设计活动表_元件附加参数表
+            WHERE 产品ID = %s AND 元件名称 = '端部圆筒'
+        """, (product_id,))
+    rows = cursor.fetchall()
+    extra_map = {r["参数名称"]: r["参数值"] for r in rows}
+
+    if "材料类型" in extra_map:
+        raw_type = extra_map["材料类型"]
+        qiaoti_duanbuyuantong1["材料类型"] = material_type_map.get(raw_type, raw_type)
+    if "材料牌号" in extra_map:
+        qiaoti_duanbuyuantong1["材料牌号"] = extra_map["材料牌号"]
+    # ===== 压力试验类型（仅去掉末尾“试验”）=====
+    if "耐压试验类型*" in param_map:
+        val = param_map["耐压试验类型*"].get("壳程数值", "")
+        if val:
+            qiaoti_duanbuyuantong1["压力试验类型"] = str(val).replace("试验", "").strip()
+
+    qiaoti_duanbuyuantong2 = {
+        "预设厚度1": "8",
+        "预设厚度2": "10",
+        "预设厚度3": "12",
+        "圆筒使用位置": "管箱圆筒",
+        "圆筒名义厚度": "0",
+        "圆筒内/外径": "1000",
+        "是否按外径计算": "1",
+        "液柱静压力": "0",
+        "用户自定义MAWP": "0",
+        "耐压试验温度": "15",
+        "耐压试验压力": "0",
+        "圆筒长度": "1200",
+        "外压圆筒计算长度": "1200",
+        "材料类型": "板材",
+        "材料牌号": "Q345R",
+        "腐蚀裕量": "1",
+        "焊接接头系数": "1",
+        "压力试验类型": "液压",
+        "覆层复合方式": "轧制复合",
+        "圆筒覆层厚度": "0",
+        "圆筒带覆层时的焊接凹槽深度": "0",
+        "泊松比": "0.3",
+        "换热管长度": "",
+        "是否覆层": "0",
+        "覆层材料类型": "钢板",
+        "公称直径": ''
+    }
+    try:
+        conn = pymysql.connect(
+            host="localhost", user="root", password="123456",
+            database="产品设计活动库", charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor
+        )
+        cursor = conn.cursor()
+        # === 查询换热管公称长度 LN ===
+        cursor.execute("""
+                       SELECT 壳程数值
+                       FROM 产品设计活动表_设计数据表
+                       WHERE 产品ID = %s AND 参数名称 = '公称直径*'
+                       LIMIT 1
+                   """, (product_id,))
+        row = cursor.fetchone()
+        raw_val = row["壳程数值"].strip() if row and row.get("壳程数值") else None
+        qiaoti_duanbuyuantong2["公称直径"] = raw_val
+        # === 查询换热管公称长度 LN ===
+        cursor.execute("""
+                SELECT 参数值
+                FROM 产品设计活动表_布管参数表
+                WHERE 产品ID = %s AND 参数名 = '换热管公称长度 LN'
+                LIMIT 1
+            """, (product_id,))
+        row = cursor.fetchone()
+        raw_val = row["参数值"].strip() if row and row.get("参数值") else None
+
+    except Exception as e:
+        print(f"❌ 查询失败: {e}")
+
+    # === 处理参数值（空或无效则默认 6000） ===
+    tube_length = raw_val if raw_val not in (None, "", " ", "None") else "6000"
+
+    # 写入 qiaoti_yuantong
+    qiaoti_duanbuyuantong2["换热管长度"] = tube_length
+    cursor.execute("""
+               SELECT 参数名称, 参数值
+               FROM 产品设计活动表_元件附加参数表
+               WHERE 产品ID = %s AND 元件名称 = '端部圆筒'
+           """, (product_id,))
+    extra_rows = cursor.fetchall()
+    extra_map = {row["参数名称"].strip(): row["参数值"] for row in extra_rows}
+
+    # 是否添加覆层
+    if extra_map.get("是否添加覆层") == "是":
+        qiaoti_duanbuyuantong2["是否覆层"] = "1"
+        qiaoti_duanbuyuantong2["覆层材料类型"] = extra_map.get("覆层材料类型", "")
+        qiaoti_duanbuyuantong2["覆层复合方式"] = extra_map.get("覆层成型工艺", "轧制复合")  # 若为空可改为 "未知"
+        qiaoti_duanbuyuantong2["圆筒覆层厚度"] = str(extra_map.get("覆层厚度", "0"))
+    else:
+        qiaoti_duanbuyuantong2["覆层材料类型"] = "钢板"
+        qiaoti_duanbuyuantong2["是否覆层"] = "0"
+        qiaoti_duanbuyuantong2["覆层复合方式"] = "无"
+        qiaoti_duanbuyuantong2["圆筒覆层厚度"] = "0"
+    # === 查询数据库 ===
+    cursor.execute("""
+            SELECT 参数名称, 壳程数值, 管程数值
+            FROM 产品设计活动表_设计数据表
+            WHERE 产品ID = %s
+        """, (product_id,))
+    rows = cursor.fetchall()
+
+    # === 构建参数映射表 ===
+    param_map = {row["参数名称"].strip(): row for row in rows}
+
+    # === 获取两个自定义耐压试验压力 ===
+    def parse_float(value):
+        try:
+            return float(value)
+        except:
+            return None
+
+    val1 = parse_float(param_map.get("自定义耐压试验压力（卧）", {}).get("壳程数值", ""))
+    val2 = parse_float(param_map.get("自定义耐压试验压力（立）", {}).get("壳程数值", ""))
+
+    # === 最大允许工作压力（壳程数值） ===
+    value = param_map.get("最大允许工作压力", {}).get("壳程数值")
+    if value not in [None, ""]:
+        qiaoti_duanbuyuantong2["最大允许工作压力"] = str(value)
+
+    # === 耐压试验压力：取最大值 ===
+    if val1 is not None and val2 is not None:
+        qiaoti_duanbuyuantong2["耐压试验压力"] = str(max(val1, val2))
+    elif val1 is not None:
+        qiaoti_duanbuyuantong2["耐压试验压力"] = str(val1)
+    elif val2 is not None:
+        qiaoti_duanbuyuantong2["耐压试验压力"] = str(val2)
+    else:
+        qiaoti_duanbuyuantong2["耐压试验压力"] = "0"
+
+    # ===== 获取预设厚度1~3（来自元件附加参数表）=====
+    cursor.execute("""
+            SELECT 参数名称, 参数值 FROM 产品设计活动表_元件附加参数表
+            WHERE 产品ID = %s AND 元件名称 = '端部圆筒'
+        """, (product_id,))
+    rows = cursor.fetchall()
+    extra_param_map = {r["参数名称"].strip(): r["参数值"] for r in rows}
+
+    # 写入 guangxiang_fengtou 中的预设厚度
+    for i in range(1, 4):
+        key = f"预设厚度{i}"
+        if key in extra_param_map:
+            qiaoti_duanbuyuantong2[key] = str(extra_param_map[key])
+
+    # 从数据库获取“是否以外径为基准*”的壳程数值
+    cursor.execute("""
+            SELECT 数值 FROM 产品设计活动表_通用数据表
+            WHERE 产品ID = %s AND 参数名称 = '是否以外径为基准*'
+        """, (product_id,))
+    row = cursor.fetchone()
+    if row and "数值" in row:
+        qiaoti_duanbuyuantong2["是否按外径计算"] = "1" if row["数值"] == "是" else "0"
+        # 查询设计数据表，获取公称直径*
+    cursor.execute("""
+               SELECT 参数值 FROM 产品设计活动表_布管参数表
+               WHERE 产品ID = %s AND 参数名 = '壳体内直径 Di'
+           """, (product_id,))
+    row = cursor.fetchone()
+    if row and "参数值" in row:
+        qiaoti_duanbuyuantong2["圆筒内/外径"] = str(row["参数值"])
+
+    map3 = {
+        "液柱静压力": "液柱静压力",
+        "用户自定义MAWP": "最高允许工作压力",
+        "腐蚀裕量": "腐蚀裕量*",
+        "焊接接头系数": "焊接接头系数*",
+
+    }
+
+    for key, param_name in map3.items():
+        value = param_map.get(param_name, {}).get("壳程数值", "")
+        if value != "":
+            qiaoti_duanbuyuantong2[key] = str(value)
+
+    cursor.execute("""
+            SELECT 参数名称, 参数值
+            FROM 产品设计活动表_元件附加参数表
+            WHERE 产品ID = %s AND 元件名称 = '端部圆筒'
+        """, (product_id,))
+    rows = cursor.fetchall()
+    extra_map = {r["参数名称"]: r["参数值"] for r in rows}
+
+    if "材料类型" in extra_map:
+        raw_type = extra_map["材料类型"]
+        qiaoti_duanbuyuantong2["材料类型"] = material_type_map.get(raw_type, raw_type)
+    if "材料牌号" in extra_map:
+        qiaoti_duanbuyuantong2["材料牌号"] = extra_map["材料牌号"]
+    # ===== 压力试验类型（仅去掉末尾“试验”）=====
+    if "耐压试验类型*" in param_map:
+        val = param_map["耐压试验类型*"].get("壳程数值", "")
+        if val:
+            qiaoti_duanbuyuantong2["压力试验类型"] = str(val).replace("试验", "").strip()

@@ -1,8 +1,7 @@
 if product_type == "BEU" and (passes == "4" or passes == "6"):
     twoDgeneration_BEU_4(product_id)
     # extract_dimensions()
-    handle_label_dict = {
-        "818BB": "管程入口接管",
+    handle_label_dict = {        "818BB": "管程入口接管",
         "81905": "管程出口接管",
         "819E5": "壳程入口接管",
         "81A03": "壳程出口接管",
@@ -164,16 +163,7 @@ if product_type == "BEU" and (passes == "4" or passes == "6"):
 
             # 短暂延时，让 AutoCAD 处理内部消息
             time.sleep(0.1)  # 50ms，可根据情况调整
-        elif handle != "77991":
-            found = False
-            for module_name, entries in data_by_module.items():
-                for entry in entries:
-                    if entry.get("Name") == label:
-                        handle_label_dict[handle] = entry.get("Value", "")
-                        found = True
-                        break
-                if found:
-                    break
+
 
     cursor.execute("""
             SELECT Value
@@ -464,6 +454,7 @@ if product_type == "BEU" and (passes == "4" or passes == "6"):
     handle_label_dict["77992"] = l3_val
     print(f"✅ l3 → handle 77992 = {l3_val}")
     gp_exit_val = None
+    gp_exit_val1 = 0
     for entry in data_by_module.get("管程出口接管", []):
         if entry.get("Name") == "接管定位距":
             gp_exit_val = entry.get("Value", "")

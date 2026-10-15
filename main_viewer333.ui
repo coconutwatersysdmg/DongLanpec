@@ -746,6 +746,11 @@ QComboBox:disabled {
     <string>预定义</string>
    </property>
   </action>
+  <action name="action_flange_calculation">
+   <property name="text">
+    <string>单独法兰计算</string>
+   </property>
+  </action>
   <action name="action_14">
    <property name="text">
     <string>打印</string>

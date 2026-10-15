@@ -1,0 +1,223 @@
+{
+  "template": "图轮廓.dwg",
+  "source_sha256": "AD0F38D1CF14011447118D330B15A58A0BC2DD68C9BA681A71F2C0CF0D26B7D8",
+  "fields": [
+    {
+      "field": "equipment_name",
+      "handle": "8C2C2",
+      "template_text": "设备名称（设备位号）",
+      "insertion_xy": [
+        7890.876218705349,
+        -312.4599650022946
+      ],
+      "alignment_xy": [
+        7908.769919492751,
+        -309.9599650022946
+      ]
+    },
+    {
+      "field": "model",
+      "handle": "8C2C3",
+      "template_text": "产品定义中“型号”",
+      "insertion_xy": [
+        7907.529762012436,
+        -326.4599650022946
+      ],
+      "alignment_xy": [
+        7923.769919492751,
+        -323.9599650022946
+      ]
+    },
+    {
+      "field": "project",
+      "handle": "8C2C4",
+      "template_text": "项目名称",
+      "insertion_xy": [
+        7969.214801188799,
+        -304.9599650022946
+      ],
+      "alignment_xy": [
+        7976.269919299036,
+        -302.4599650022946
+      ]
+    },
+    {
+      "field": "owner",
+      "handle": "8C2C5",
+      "template_text": "业主名称",
+      "insertion_xy": [
+        7968.799446858091,
+        -297.4599650022946
+      ],
+      "alignment_xy": [
+        7976.269919299036,
+        -294.9599650022946
+      ]
+    },
+    {
+      "field": "revision",
+      "handle": "8C2C1",
+      "template_text": "设计版次(没填默认：A)",
+      "insertion_xy": [
+        7973.337832878578,
+        -329.7099650022946
+      ],
+      "alignment_xy": [
+        7991.269919492751,
+        -327.4599650022946
+      ]
+    },
+    {
+      "field": "revision_row",
+      "handle": "8C2BE",
+      "template_text": "A",
+      "insertion_xy": [
+        7835.249881834611,
+        -263.9398153229058
+      ],
+      "alignment_xy": [
+        7836.249881834611,
+        -261.9398153229058
+      ]
+    },
+    {
+      "field": "date",
+      "handle": "8C2BF",
+      "template_text": "2026.08.20",
+      "insertion_xy": [
+        7840.695866074778,
+        -263.9398142290208
+      ],
+      "alignment_xy": [
+        7848.784754963666,
+        -261.9398142290208
+      ]
+    },
+    {
+      "field": "stage",
+      "handle": "8C2C0",
+      "template_text": "供投标",
+      "insertion_xy": [
+        7860.182464218033,
+        -263.9398128396505
+      ],
+      "alignment_xy": [
+        7864.706086265277,
+        -261.9398128396505
+      ]
+    },
+    {
+      "field": "pressure",
+      "handle": "8C268",
+      "template_text": "1.0",
+      "insertion_xy": [
+        7889.241161618083,
+        219.0400349977054
+      ],
+      "alignment_xy": [
+        7892.241161618083,
+        221.0400349977054
+      ]
+    },
+    {
+      "field": "temperature",
+      "handle": "8C269",
+      "template_text": "280",
+      "insertion_xy": [
+        7888.90782828475,
+        211.0400349977054
+      ],
+      "alignment_xy": [
+        7892.241161618083,
+        213.0400349977054
+      ]
+    },
+    {
+      "field": "net_weight",
+      "handle": "8C26C",
+      "template_text": "1200",
+      "insertion_xy": [
+        7926.539855900191,
+        203.0400349977054
+      ],
+      "alignment_xy": [
+        7931.150967011303,
+        205.0400349977054
+      ]
+    },
+    {
+      "field": "water_weight",
+      "handle": "8C26D",
+      "template_text": "2400",
+      "insertion_xy": [
+        7926.706522566858,
+        195.0400349977054
+      ],
+      "alignment_xy": [
+        7931.150967011303,
+        197.0400349977054
+      ]
+    },
+    {
+      "field": "front_material",
+      "handle": "8C4A5",
+      "template_text": "Q345R",
+      "insertion_xy": [
+        7879.139778927487,
+        178.5128252234637
+      ],
+      "alignment_xy": [
+        7884.86200114971,
+        180.5128252234637
+      ]
+    },
+    {
+      "field": "shell_material",
+      "handle": "8C4A6",
+      "template_text": "Q345R",
+      "insertion_xy": [
+        7879.216906616983,
+        170.4879877210922
+      ],
+      "alignment_xy": [
+        7884.939128839205,
+        172.4879877210922
+      ]
+    },
+    {
+      "field": "rear_material",
+      "handle": "8C4A7",
+      "template_text": "16MnⅡ",
+      "insertion_xy": [
+        7968.925430721013,
+        178.5128252234637
+      ],
+      "alignment_xy": [
+        7974.86200114971,
+        180.5128252234637
+      ]
+    },
+    {
+      "field": "nozzle_material",
+      "handle": "8C4A8",
+      "template_text": "20(GB9948)",
+      "insertion_xy": [
+        7964.439128839205,
+        170.4879877210922
+      ],
+      "alignment_xy": [
+        7974.939128839205,
+        172.4879877210922
+      ]
+    }
+  ],
+  "template_checks": {
+    "8C195": "A1-零部件图-LANPEC-AUTOPRINT",
+    "8C2C2": "设备名称（设备位号）",
+    "8C2C3": "产品定义中“型号”",
+    "8C2C4": "项目名称",
+    "8C2C5": "业主名称",
+    "8C25D": "设计压力",
+    "8F76B": "管   口   表"
+  }
+}

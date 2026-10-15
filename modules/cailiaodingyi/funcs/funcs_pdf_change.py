@@ -590,6 +590,8 @@ def insert_or_update_element_para_data(product_id, element_para_info, template_n
                 if apply_floating_head_hmin else None
             )
 
+            legacy_slipway = None
+            legacy_slipway_checked = False
             for item in element_para_info:
                 param_name = str(item.get('参数名称', '') or '').strip()
                 param_value = item.get('参数数值', '') or ''
@@ -610,8 +612,25 @@ def insert_or_update_element_para_data(product_id, element_para_info, template_n
                 if element_para_id is None:
                     continue
                 
-                element_id = str(item.get('元件ID') or '').strip()
+                # 整数列保留 SQL NULL，不能把历史空 ID 转为 ''，否则一行会使整批回滚。
+                element_id = item.get('元件ID')
+                if isinstance(element_id, str):
+                    element_id = element_id.strip() or None
                 element_name = str(item.get('元件名称', '') or '').strip()
+
+                # 旧版布管曾将滑道切边参数保存为无归属记录，按当前产品补回归属。
+                if element_id in (None, 0, '0') and param_name in ('滑道切边长度', '滑道切边高度'):
+                    if not legacy_slipway_checked:
+                        cursor.execute("""
+                            SELECT 元件ID, 元件名称 FROM 产品设计活动表_元件材料表
+                            WHERE 产品ID = %s AND 元件名称 = %s
+                        """, (product_id, '滑道'))
+                        candidates = cursor.fetchall()
+                        legacy_slipway = candidates[0] if len(candidates) == 1 else None
+                        legacy_slipway_checked = True
+                    if legacy_slipway:
+                        element_id = legacy_slipway['元件ID']
+                        element_name = legacy_slipway['元件名称']
 
                 # 浮头法兰：螺栓孔边缘至密封槽最小距离 ← user_config(2.8.4.2)（非 None 模板）
                 if (

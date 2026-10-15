@@ -55,6 +55,9 @@ current_product_id = None
 # 本地产品目录三文件缺失且用户拒绝从数据库恢复时，业务标签页强制只读
 product_local_files_missing_readonly = False
 
+# 顶层 MainWindow（含顶部模块按钮）；区别于 main_window（项目管理子页 cpgl_Stats）
+app_top_window = None
+
 # 初始化状态表
 # 产品信息的字典
 product_table_row_status = {}

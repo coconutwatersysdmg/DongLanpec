@@ -1,9 +1,0 @@
-result_json = {
-    "BaseTube": {
-        "TubeID": "T1",
-        "Diameter": 100,
-        "Thickness": 10,
-        "Length": 1000
-    },
-    "OtherInfo": {...}
-}

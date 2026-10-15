@@ -1,11 +1,11 @@
 from PyQt5.QtWidgets import (
     QMessageBox, QComboBox, QTableWidgetItem,
     QStyledItemDelegate, QStyleOptionComboBox, QStyle,
-    QApplication, QLineEdit, QToolTip, QDialog
+    QStyleOptionViewItem, QApplication, QLineEdit, QToolTip, QDialog,
 )
-from PyQt5.QtCore import Qt, QEvent, QRect, QObject, QPoint
-from PyQt5.QtGui import QCursor, QBrush, QColor
-from PyQt5 import uic
+from PyQt5.QtCore import Qt, QEvent, QRect, QObject, QPoint, QItemSelectionModel
+from PyQt5.QtGui import QCursor, QBrush, QColor, QPolygon, QPalette, QPainterPath, QPen, QPainter
+from PyQt5 import uic, sip
 import os
 import math
 from modules.guankoudingyi.db_cnt import get_connection, db_config_1, db_config_2
@@ -22,6 +22,365 @@ from modules.guankoudingyi.funcs.funcs_pipe_table import (
     defer_styled_warning,
 )
 from PyQt5.QtCore import QTimer
+import re
+from fractions import Fraction
+
+
+# 下拉单元格右侧箭头可点区域宽度（像素）
+PIPE_COMBO_ARROW_WIDTH = 18
+
+
+def pipe_combo_arrow_rect(cell_rect):
+    """单元格右侧箭头命中区域。"""
+    w = PIPE_COMBO_ARROW_WIDTH
+    return QRect(cell_rect.right() - w + 1, cell_rect.top(), w, cell_rect.height())
+
+
+def _draw_pipe_combo_chevron(painter, arrow_rect, *, light_on_dark=False):
+    """
+    浅灰折线箭头，尺寸对齐编辑态原生 QComboBox 箭头。
+    """
+    color = QColor("#FFFFFF") if light_on_dark else QColor("#808080")
+    pen = QPen(color, 1.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+    cx = arrow_rect.center().x()
+    cy = arrow_rect.center().y()
+    half_w, half_h = 5.0, 2.5
+    path = QPainterPath()
+    path.moveTo(cx - half_w, cy - half_h)
+    path.lineTo(cx, cy + half_h)
+    path.lineTo(cx + half_w, cy - half_h)
+    painter.save()
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    painter.setPen(pen)
+    painter.setBrush(Qt.NoBrush)
+    painter.drawPath(path)
+    painter.restore()
+
+
+def _pipe_dropdown_columns(stats_widget):
+    """需要「箭头打开 / 空白只选中」的下拉列集合。"""
+    is_container = getattr(stats_widget, "is_container_product", False)
+    cols = get_pipe_special_columns(is_container)
+    result = {4, 5, 6, 7, 8, 9, 10, 11, 12}
+    for key in ("extension_height", "internal_height", "attachment"):
+        c = cols.get(key)
+        if c is not None:
+            result.add(c)
+    return result
+
+
+def _is_pipe_editable_combo_column(stats_widget, column):
+    """
+    可编辑下拉列：空白/Enter 只进编辑不展开；仅点单元格箭头才展开。
+    - 轴向定位距离（第12列）
+    - 焊端规格且当前单位为 mm
+    - 外伸高度 / 内伸高度
+    """
+    if column == 12:
+        return True
+    if column == 9:
+        try:
+            units = get_current_unit_types_from_ui(stats_widget) or {}
+        except Exception:
+            units = {}
+        return units.get("焊端规格类型", "Sch") == "mm"
+    is_container = getattr(stats_widget, "is_container_product", False)
+    cols = get_pipe_special_columns(is_container)
+    if column == cols.get("extension_height"):
+        return True
+    internal = cols.get("internal_height")
+    if internal is not None and column == internal:
+        return True
+    return False
+
+
+def _arm_pipe_combo_editor(stats_widget):
+    """允许下一次 createEditor（仅程序化 editItem / 箭头开编）。"""
+    if stats_widget is not None:
+        stats_widget._pipe_combo_editor_armed = True
+
+
+def _consume_pipe_combo_editor_arm(stats_widget):
+    """取出并清除开编武装；未武装则拒绝创建编辑器。"""
+    if stats_widget is None:
+        return False
+    armed = bool(getattr(stats_widget, "_pipe_combo_editor_armed", False))
+    stats_widget._pipe_combo_editor_armed = False
+    return armed
+
+
+def _should_paint_pipe_combo_arrow(index):
+    """锁定格（不可编辑或显示 —）不画箭头。"""
+    flags = index.flags()
+    if not (flags & Qt.ItemIsEnabled):
+        return False
+    if not (flags & Qt.ItemIsEditable):
+        return False
+    text = str(index.data(Qt.DisplayRole) or "").strip()
+    if text in ("-", "—", "－"):
+        return False
+    return True
+
+
+def _paint_pipe_combo_cell(delegate, painter, option, index):
+    """绘制单元格文本，并在右侧画下拉箭头（观感对齐表头 DN/Class/mm）。"""
+    show_arrow = getattr(delegate, "show_dropdown_arrow", True) and _should_paint_pipe_combo_arrow(index)
+
+    # 优先用 item 背景（高亮逻辑写入的 BackgroundRole），避免 State_Selected 与自绘冲突
+    bg = index.data(Qt.BackgroundRole)
+    bg_color = None
+    if isinstance(bg, QBrush):
+        bg_color = bg.color()
+    elif isinstance(bg, QColor):
+        bg_color = bg
+
+    painter.save()
+    if bg_color is not None and bg_color.alpha() > 0:
+        painter.fillRect(option.rect, bg_color)
+    elif option.state & QStyle.State_Selected:
+        painter.fillRect(
+            option.rect,
+            option.palette.color(option.palette.currentColorGroup(), QPalette.Highlight),
+        )
+
+    text_option = QStyleOptionViewItem(option)
+    # 去掉选中态，改由上面的背景填充，保证箭头区与文字区同色
+    text_option.state = text_option.state & ~QStyle.State_Selected & ~QStyle.State_HasFocus
+    if show_arrow:
+        text_option.rect = QRect(option.rect)
+        text_option.rect.setRight(option.rect.right() - PIPE_COMBO_ARROW_WIDTH)
+
+    fg = index.data(Qt.ForegroundRole)
+    if isinstance(fg, QBrush):
+        text_option.palette.setColor(QPalette.Text, fg.color())
+    elif isinstance(fg, QColor):
+        text_option.palette.setColor(QPalette.Text, fg)
+
+    QStyledItemDelegate.paint(delegate, painter, text_option, index)
+
+    if show_arrow:
+        arrow_area = pipe_combo_arrow_rect(option.rect)
+        # 深底用浅箭头，浅底用灰折线（对齐表头原生 QComboBox）
+        use_light_arrow = False
+        if bg_color is not None and bg_color.alpha() > 0:
+            use_light_arrow = (bg_color.red() + bg_color.green() + bg_color.blue()) < 380
+        _draw_pipe_combo_chevron(painter, arrow_area, light_on_dark=use_light_arrow)
+    painter.restore()
+
+
+class PipeComboArrowMouseFilter(QObject):
+    """
+    管口表下拉列：仅点击右侧箭头打开下拉；点击空白只选中（便于多选）。
+    箭头按下时吞掉事件，避免 Qt 清掉已有多选。
+    松手（MouseRelease）再打开下拉，避免触控「按下弹出、松开立刻收起」。
+    """
+
+    def __init__(self, table, stats_widget):
+        super().__init__(table)
+        self.table = table
+        self.stats_widget = stats_widget
+        self._pending_arrow_cell = None  # (row, col) 箭头按下待松手打开
+
+    def _clear_pending_arrow(self):
+        self._pending_arrow_cell = None
+
+    def _open_arrow_combo(self, sw, row, col):
+        """松手后打开下拉（此时已无按住，避免 Release 立刻关弹层）。"""
+        sw._pipe_ignore_cell_click = True
+        sw._pipe_arrow_click_cell = (row, col)
+
+        try:
+            update_bulk_assign_state(sw)
+        except Exception:
+            pass
+
+        # editItem 可能收成单格选中：快照多选行以保持高亮与批量赋值
+        bulk_rows = list(getattr(sw, "bulk_assign_rows", []) or [])
+        bulk_col = getattr(sw, "bulk_assign_target_column", None)
+        if bulk_col == col and len(bulk_rows) > 1:
+            sw._bulk_assign_rows_snapshot = bulk_rows
+            sw._pipe_bulk_edit_active = True
+            try:
+                self.table.setProperty("pipe_bulk_edit_active", True)
+            except Exception:
+                pass
+        else:
+            sw._bulk_assign_rows_snapshot = []
+            sw._pipe_bulk_edit_active = False
+            try:
+                self.table.setProperty("pipe_bulk_edit_active", False)
+            except Exception:
+                pass
+
+        handle_pipe_cell_click(sw, row, col, force_open=True)
+
+        def _clear_ignore():
+            try:
+                if sw is None or sip.isdeleted(sw) or getattr(sw, "_pipe_closing", False):
+                    return
+                sw._pipe_ignore_cell_click = False
+            except RuntimeError:
+                pass
+
+        QTimer.singleShot(0, _clear_ignore)
+
+    def eventFilter(self, obj, event):
+        try:
+            if self.table is None or sip.isdeleted(self.table):
+                return False
+            if obj is not self.table.viewport():
+                return False
+        except RuntimeError:
+            return False
+
+        # 双击下拉列：吞掉，避免误开未灌选项的空下拉编辑器
+        if event.type() == QEvent.MouseButtonDblClick and event.button() == Qt.LeftButton:
+            self._clear_pending_arrow()
+            sw = self.stats_widget
+            try:
+                if sw is None or sip.isdeleted(sw) or getattr(sw, "_pipe_closing", False):
+                    return False
+            except RuntimeError:
+                return False
+            index = self.table.indexAt(event.pos())
+            if index.isValid() and index.column() in _pipe_dropdown_columns(sw):
+                return True
+            return False
+
+        # 松手：若按下时点在箭头上，此时再打开下拉
+        if event.type() == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton:
+            pending = self._pending_arrow_cell
+            if pending is None:
+                return False
+            self._pending_arrow_cell = None
+            sw = self.stats_widget
+            try:
+                if sw is None or sip.isdeleted(sw) or getattr(sw, "_pipe_closing", False):
+                    return True
+            except RuntimeError:
+                return True
+            row, col = pending
+            index = self.table.indexAt(event.pos())
+            # 松手偏离该格则取消打开（拖出箭头区域）
+            if not index.isValid() or index.row() != row or index.column() != col:
+                sw._pipe_ignore_cell_click = False
+                return True
+            self._open_arrow_combo(sw, row, col)
+            return True
+
+        if event.type() != QEvent.MouseButtonPress or event.button() != Qt.LeftButton:
+            return False
+
+        sw = self.stats_widget
+        try:
+            if sw is None or sip.isdeleted(sw) or getattr(sw, "_pipe_closing", False):
+                return False
+        except RuntimeError:
+            return False
+
+        pos = event.pos()
+        index = self.table.indexAt(pos)
+        if not index.isValid():
+            self._clear_pending_arrow()
+            return False
+
+        if index.column() not in _pipe_dropdown_columns(sw):
+            self._clear_pending_arrow()
+            return False
+
+        delegate = self.table.itemDelegateForColumn(index.column())
+        if not isinstance(delegate, (ComboBoxDelegate, MultiSelectComboDelegate)):
+            self._clear_pending_arrow()
+            return False
+        if not getattr(delegate, "show_dropdown_arrow", True):
+            self._clear_pending_arrow()
+            return False
+        if not _should_paint_pipe_combo_arrow(index):
+            self._clear_pending_arrow()
+            return False
+
+        cell_rect = self.table.visualRect(index)
+        if not pipe_combo_arrow_rect(cell_rect).contains(pos):
+            self._clear_pending_arrow()
+            return False
+
+        # 箭头按下：只记录待打开、保持多选；松手再真正展开
+        sw._pipe_ignore_cell_click = True
+        self._pending_arrow_cell = (index.row(), index.column())
+
+        sel_model = self.table.selectionModel()
+        selected = self.table.selectedIndexes()
+        already = any(
+            i.row() == index.row() and i.column() == index.column() for i in selected
+        )
+        if already:
+            sel_model.setCurrentIndex(index, QItemSelectionModel.NoUpdate)
+        elif event.modifiers() & (Qt.ControlModifier | Qt.ShiftModifier):
+            sel_model.select(
+                index, QItemSelectionModel.Select | QItemSelectionModel.Current
+            )
+        else:
+            self.table.setCurrentCell(index.row(), index.column())
+
+        try:
+            update_bulk_assign_state(sw)
+        except Exception:
+            pass
+
+        return True
+
+
+def _parse_nps_sort_value(val):
+    """NPS 排序用数值：支持 3/8、2-1/2、1-1/4 等。"""
+    s = str(val).strip()
+    if not s:
+        return float("inf")
+    m = re.match(r"^(\d+)\s*-\s*(\d+/\d+)$", s)
+    if m:
+        return float(m.group(1)) + float(Fraction(m.group(2)))
+    if re.match(r"^\d+/\d+$", s):
+        return float(Fraction(s))
+    try:
+        return float(s)
+    except ValueError:
+        return float("inf")
+
+
+def _pipe_dropdown_sort_key(field, value, size_unit=None):
+    s = str(value or "").strip()
+    if not s:
+        return (2, 0.0, "")
+    if field == "公称尺寸":
+        if size_unit == "NPS":
+            return (0, _parse_nps_sort_value(s), s)
+        try:
+            return (0, float(s), s)
+        except ValueError:
+            return (1, 0.0, s.lower())
+    if field == "压力等级":
+        try:
+            return (0, float(s), s)
+        except ValueError:
+            return (1, 0.0, s.lower())
+    if field in ("法兰型式", "密封面型式"):
+        return (0, 0.0, s.lower())
+    return (0, 0.0, s.lower())
+
+
+def sort_pipe_dropdown_options(field, options, size_unit=None):
+    """
+    管口下拉框统一排序（单选/多选共用）。
+    多选交集结果应在此顺序上取子集，保证与单选顺序一致。
+    """
+    unique = []
+    seen = set()
+    for opt in options or []:
+        s = str(opt).strip()
+        if not s or s in seen:
+            continue
+        seen.add(s)
+        unique.append(s)
+    return sorted(unique, key=lambda x: _pipe_dropdown_sort_key(field, x, size_unit))
 
 
 # 补丁：禁止滚轮改值的下拉框
@@ -30,8 +389,88 @@ class NoWheelComboBox(QComboBox):
         # 忽略所有滚轮事件（不展开时不改值；展开后滚动由下拉视图接管，仍可滚动列表）
         e.ignore()
 
+
+class _EditableComboPopupKeyFilter(QObject):
+    """下拉列表若仍收到按键，转发到 lineEdit，保证展开后可手输。"""
+
+    def __init__(self, combo):
+        super().__init__(combo)
+        self.combo = combo
+
+    def eventFilter(self, obj, event):
+        if event.type() != QEvent.KeyPress:
+            return False
+        try:
+            if not self.combo.isEditable():
+                return False
+            line_edit = self.combo.lineEdit()
+            if line_edit is None:
+                return False
+        except RuntimeError:
+            return False
+
+        key = event.key()
+        # 列表方向键 / Esc 仍交给列表；Enter 由全局 ReturnKeyJumpFilter 处理
+        if key in (
+            Qt.Key_Up, Qt.Key_Down, Qt.Key_PageUp, Qt.Key_PageDown, Qt.Key_Escape,
+            Qt.Key_Return, Qt.Key_Enter,
+        ):
+            return False
+
+        if not line_edit.hasFocus():
+            line_edit.setFocus(Qt.OtherFocusReason)
+        QApplication.sendEvent(line_edit, event)
+        return True
+
+
+class EditableNoWheelComboBox(NoWheelComboBox):
+    """
+    可编辑下拉：展开列表时尽量不抢焦点；若列表仍收到键则转发给 lineEdit。
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._popup_key_filter = None
+
+    def showPopup(self):
+        view = self.view()
+        if view is not None:
+            view.setFocusPolicy(Qt.NoFocus)
+            parent = view.parentWidget()
+            if parent is not None:
+                parent.setFocusPolicy(Qt.NoFocus)
+            if self._popup_key_filter is None:
+                self._popup_key_filter = _EditableComboPopupKeyFilter(self)
+            for w in (view, view.viewport(), parent):
+                if w is not None:
+                    w.installEventFilter(self._popup_key_filter)
+        super().showPopup()
+        line_edit = self.lineEdit()
+        if line_edit is not None:
+            line_edit.setFocus(Qt.OtherFocusReason)
+
+
+def _pipe_cell_overflow_tooltip_help_event(delegate, event, view, option, index):
+    """单元格文本显示不全时显示悬浮提示（下拉列 / 管口附件列共用）。"""
+    if event.type() != QEvent.ToolTip:
+        return super(type(delegate), delegate).helpEvent(event, view, option, index)
+    text = index.data(Qt.DisplayRole)
+    text_str = str(text).strip() if text is not None else ""
+    if text_str:
+        font_metrics = view.fontMetrics()
+        text_width = font_metrics.horizontalAdvance(text_str)
+        cell_width = option.rect.width()
+        if text_width > cell_width - 10:  # 留10像素余量（含右侧箭头）
+            QToolTip.showText(event.globalPos(), text_str, view)
+        else:
+            QToolTip.hideText()
+    else:
+        QToolTip.hideText()
+    return True
+
+
 class ComboBoxDelegate(QStyledItemDelegate):
-    """自定义的下拉框代理类（支持第一次按键覆盖整体内容）"""
+    """自定义的下拉框代理类（支持第一次按键覆盖整体内容；右侧箭头打开下拉）"""
 
     def __init__(self, parent=None, editable=False, overwrite_on_first_key=False):
         """
@@ -47,20 +486,37 @@ class ComboBoxDelegate(QStyledItemDelegate):
         self.old_text = ""  # 保存旧值
         self.bulk_select_callback = None  # 批量选择回调函数
         self.disable_wheel_scroll = False  # 是否禁用滚轮滚动
+        self.show_dropdown_arrow = True  # 非编辑态绘制右侧下拉箭头
+        self.stats_widget = None
 
     def setItems(self, items):
         """设置下拉框的选项"""
         self.items = items
 
+    def paint(self, painter, option, index):
+        _paint_pipe_combo_cell(self, painter, option, index)
+
     def createEditor(self, parent, option, index):
         """创建编辑器（下拉框）"""
-        # editor = QComboBox(parent)
-        editor = NoWheelComboBox(parent)
+        # 未武装（双击/默认 EditTrigger 等）禁止创建，避免空选项下拉
+        sw = self.stats_widget
+        if not _consume_pipe_combo_editor_arm(sw):
+            return None
+
+        if self.editable:
+            editor = EditableNoWheelComboBox(parent)
+            # 允许手输不在列表中的值，且不自动插入为新项
+            editor.setInsertPolicy(QComboBox.NoInsert)
+        else:
+            editor = NoWheelComboBox(parent)
         editor.addItems(self.items)
         editor.setCurrentText("")
         editor.setEditable(self.editable)  # 根据参数决定是否可编辑
         # 增加下拉框选项之间的间距
         editor.view().setSpacing(5)  # 设置选项之间的间距为5像素
+        if self.editable:
+            # 列表不抢焦点，保证展开后仍可直接键入
+            editor.view().setFocusPolicy(Qt.NoFocus)
 
         # 如果是可编辑的，为lineEdit安装事件过滤器
         if self.editable and self.overwrite_on_first_key:
@@ -77,15 +533,49 @@ class ComboBoxDelegate(QStyledItemDelegate):
         # 为编辑器安装事件过滤器以处理滚轮事件
         editor.installEventFilter(self)
 
-        # 纯下拉：单击进入编辑后自动弹出选项列表，避免再点一次
-        if not self.editable:
-            QTimer.singleShot(0, editor.showPopup)
+        # 默认可不展开；仅箭头/显式 force 时 _pipe_combo_show_popup=True
+        show_popup = bool(getattr(sw, "_pipe_combo_show_popup", False)) if sw is not None else False
+        if show_popup:
+            def _popup_and_focus_edit():
+                try:
+                    editor.showPopup()
+                except RuntimeError:
+                    return
+                if not self.editable:
+                    return
+                try:
+                    line_edit = editor.lineEdit()
+                    if line_edit is None:
+                        return
+                    line_edit.setFocus(Qt.OtherFocusReason)
+                    if self.overwrite_on_first_key:
+                        line_edit.selectAll()
+                except RuntimeError:
+                    pass
+
+            QTimer.singleShot(0, _popup_and_focus_edit)
+        elif self.editable:
+            # Enter/空白：只进编辑，把焦点放到输入框便于立刻手输
+            def _focus_line_edit():
+                try:
+                    line_edit = editor.lineEdit()
+                    if line_edit is None:
+                        return
+                    line_edit.setFocus(Qt.OtherFocusReason)
+                    if self.overwrite_on_first_key:
+                        line_edit.selectAll()
+                except RuntimeError:
+                    pass
+
+            QTimer.singleShot(0, _focus_line_edit)
 
         return editor
 
     def setEditorData(self, editor, index):
         """设置编辑器的数据"""
         value = index.model().data(index, Qt.EditRole) or ""
+        # 供 setModelData 判断「是否相对进入编辑时有改动」（可编辑批量手输）
+        self._bulk_edit_original = str(value).strip()
 
         # 修复多选时值改变的bug：区分可编辑和不可编辑下拉框的处理方式
         current_items = [editor.itemText(i) for i in range(editor.count())]
@@ -93,8 +583,11 @@ class ComboBoxDelegate(QStyledItemDelegate):
         if not self.bulk_select_callback:  # 非批量模式
             if value and value not in current_items:
                 if self.editable:
-                    # 可编辑模式：直接设置文本，不改变下拉选项
-                    editor.setCurrentText(value)
+                    # 可编辑模式：直接设置文本，不改变下拉选项；index=-1 避免 Enter 激活第一项
+                    editor.setCurrentIndex(-1)
+                    editor.setEditText(str(value))
+                    if editor.lineEdit() is not None:
+                        editor.lineEdit().setText(str(value))
                 else:
                     # 不可编辑模式：临时添加原值但隐藏它，保持下拉选项不变
                     # print(f"[DEBUG] 非批量模式下不可编辑下拉框，原始值'{value}'不在选项中，临时显示原值")
@@ -112,7 +605,10 @@ class ComboBoxDelegate(QStyledItemDelegate):
                 if self.editable:
                     # 可编辑下拉框：直接设置文本显示原值，不改变下拉选项
                     # print(f"[DEBUG] 批量模式下可编辑下拉框，直接显示原值'{value}'，不改变选项")
-                    editor.setCurrentText(value)
+                    editor.setCurrentIndex(-1)
+                    editor.setEditText(str(value))
+                    if editor.lineEdit() is not None:
+                        editor.lineEdit().setText(str(value))
                 else:
                     # 不可编辑下拉框：临时显示原值，但下拉选项保持交集
                     # print(f"[DEBUG] 批量模式下不可编辑下拉框，原始值'{value}'不在交集中，临时显示原值")
@@ -135,40 +631,35 @@ class ComboBoxDelegate(QStyledItemDelegate):
 
     def setModelData(self, editor, model, index):
         """将编辑器的数据设置到模型中"""
-        value = editor.currentText()
-        # 批量模式（如焊端规格 mm 手输）：通过回调写入选中行，不单写当前格
+        # 可编辑下拉：以 lineEdit 手输为准，避免 currentIndex 高亮项覆盖
+        if isinstance(editor, QComboBox) and editor.isEditable():
+            line_edit = editor.lineEdit()
+            value = line_edit.text() if line_edit is not None else editor.currentText()
+        else:
+            value = editor.currentText()
+
+        # 批量模式：
+        # - 不可编辑下拉（公称尺寸/法兰标准/压力等级/法兰型式/密封面/焊端Sch/轴向定位距离等）：
+        #   只靠 activated 点选批量；关编辑器的 setModelData 绝不批量，避免未改就退出误刷。
+        # - 可编辑下拉（焊端mm/外伸高度等）：手输改值后点其它格提交时，仅当相对进入编辑旧值有变化才批量。
         if self.bulk_select_callback and self.disable_wheel_scroll:
-            self.bulk_select_callback(value)
+            if self.editable:
+                old_text = getattr(self, "_bulk_edit_original", None)
+                if old_text is None:
+                    old_text = str(index.model().data(index, Qt.EditRole) or "").strip()
+                new_text = str(value or "").strip()
+                if new_text != old_text:
+                    self.bulk_select_callback(value)
         else:
             model.setData(index, value, Qt.EditRole)
 
         # 重置状态
         self.first_key_pressed = False
+        self._bulk_edit_original = None
 
     def helpEvent(self, event, view, option, index):
         """处理帮助事件，只在单元格内容显示不全时显示悬浮提示"""
-        if event.type() == QEvent.ToolTip:
-            # 获取单元格的文本内容
-            text = index.data(Qt.DisplayRole)
-            if text:
-                text_str = str(text)
-
-                # 计算文本实际宽度
-                font_metrics = view.fontMetrics()
-                text_width = font_metrics.horizontalAdvance(text_str)
-
-                # 获取单元格的显示区域宽度
-                cell_width = option.rect.width()
-
-                # 只有当文本宽度超过单元格宽度时才显示悬浮提示
-                if text_width > cell_width - 10:  # 留10像素余量
-                    QToolTip.showText(event.globalPos(), text_str, view)
-                else:
-                    QToolTip.hideText()
-            else:
-                QToolTip.hideText()
-            return True
-        return super().helpEvent(event, view, option, index)
+        return _pipe_cell_overflow_tooltip_help_event(self, event, view, option, index)
 
     def eventFilter(self, editor, event):
         """事件过滤器，用于实现第一次按键覆盖整体内容、处理滚轮事件"""
@@ -206,6 +697,10 @@ class ComboBoxDelegate(QStyledItemDelegate):
                 self.first_key_pressed = False
                 return False
 
+            # Tab 交给管口表 TabKeyJumpFilter（应用级）处理切列，此处不拦截
+            elif event.key() in (Qt.Key_Tab, Qt.Key_Backtab):
+                return False
+
         # 处理焦点离开事件
         elif event.type() == QEvent.FocusOut:
             self.first_key_pressed = False
@@ -237,20 +732,33 @@ def initialize_pipe_combobox_delegates(stats_widget):
         delegate = ComboBoxDelegate(table, editable=True, overwrite_on_first_key=True)
         delegate.setItems(options)
         delegate.setParent(table)
+        delegate.stats_widget = stats_widget
         table.setItemDelegateForColumn(col, delegate)
         stats_widget.pipe_column_delegates[col] = delegate
 
     # 动态列：初始化空代理，后续在点击时更新选项
     attachment_col = get_pipe_col(is_container, "管口附件")
-    dynamic_columns = [4, 5, 6, 7, 8, 9, 10, 11, attachment_col]
+    dynamic_columns = [4, 5, 6, 7, 8, 9, 10, 11]
     for col in dynamic_columns:
         # 🚩 关键修改：列9初始化为不可编辑
         editable = False
         delegate = ComboBoxDelegate(table, editable=editable)
         delegate.setItems([])
         delegate.setParent(table)
+        delegate.stats_widget = stats_widget
         table.setItemDelegateForColumn(col, delegate)
         stats_widget.pipe_column_delegates[col] = delegate
+
+    # 管口附件：常驻多选下拉代理（便于始终绘制箭头）
+    if attachment_col is not None:
+        att_options = get_pipe_attachment_options()
+        att_delegate = MultiSelectComboDelegate(
+            att_options if att_options else ["None"], table
+        )
+        att_delegate.stats_widget = stats_widget
+        att_delegate.setParent(table)
+        table.setItemDelegateForColumn(attachment_col, att_delegate)
+        stats_widget.pipe_column_delegates[attachment_col] = att_delegate
 
 """获取法兰标准的默认值和压力等级的默认值"""
 def get_standard_flange_pressure_level_default_value(product_id, stats_widget=None):
@@ -350,7 +858,7 @@ def get_filtered_pipe_options(field, filters, unit_map, pressure_type = None):
             if value and str(value).strip():  # 只添加非空值
                 options.append(str(value))
 
-        return options
+        return sort_pipe_dropdown_options(field, options)
 
     except Exception as e:
         QMessageBox.warning(None, "错误", f"获取管口选项失败: {str(e)}")
@@ -732,6 +1240,85 @@ def get_weld_end_spec_bulk_options(stats_widget):
     return ["程序推荐"]
 
 
+def get_pipe_belong_options_for_row(stats_widget, row):
+    """按行计算「管口所属元件」下拉选项（与单击单选逻辑一致）。"""
+    table = stats_widget.tableWidget_pipe
+    product_type = getattr(stats_widget, "current_product_type", "")
+    product_version = getattr(stats_widget, "current_product_version", "")
+    pipe_function_item = table.item(row, 2)
+    pipe_function = pipe_function_item.text().strip() if pipe_function_item else ""
+
+    version_belong_map = {
+        ("NEN",): ["前端管箱平盖", "前端管箱圆筒", "后端管箱圆筒", "后端管箱平盖"],
+        ("BEM",): ["前端管箱封头", "前端管箱圆筒", "后端管箱圆筒", "后端管箱封头"],
+        ("AEM",): ["前端管箱平盖", "前端管箱圆筒", "后端管箱圆筒", "后端管箱封头"],
+        ("NEN(H)",): ["前端管箱封头", "前端管箱圆筒", "后端管箱圆筒", "后端管箱封头"],
+        ("AES", "AEU", "AKU"): ["管箱圆筒", "管箱平盖"],
+        ("BES", "BEU", "BKU"): ["管箱圆筒", "管箱封头"],
+    }
+
+    if product_type == "管壳式热交换器":
+        for versions, options in version_belong_map.items():
+            if product_version in versions:
+                if product_version in ["AKU", "BKU"] and pipe_function == "壳程入口":
+                    return ["大端壳体圆筒", "锥壳"]
+                if product_version in ["AKU", "BKU"] and pipe_function in [
+                    "壳程液位计1", "壳程液位计2", "壳程温度计"
+                ]:
+                    return ["大端壳体圆筒", "壳体封头"]
+                if pipe_function in ["管程入口", "管程出口"]:
+                    return list(options)
+                return get_belong_options(stats_widget.product_id) or []
+        return get_belong_options(stats_widget.product_id) or []
+    return get_belong_options(stats_widget.product_id) or []
+
+
+def get_axial_distance_dropdown_options_for_row(stats_widget, row):
+    """轴向定位距离：管板仅「居中」，其余「程序推荐/居中」。"""
+    table = stats_widget.tableWidget_pipe
+    belong_item = table.item(row, 10)
+    pipe_belong = belong_item.text().strip() if belong_item else ""
+    if "管板" in pipe_belong:
+        return ["居中"]
+    return ["程序推荐", "居中"]
+
+
+def _pipe_bulk_assign_columns(stats_widget):
+    """支持批量赋值的列：下拉列 + 轴向夹角/周向方位/偏心距（不含管口所属元件、轴向定位基准）。"""
+    is_container = getattr(stats_widget, "is_container_product", False)
+    cols = get_pipe_special_columns(is_container)
+    result = {
+        4, 5, 6, 7, 8, 9, 12,
+        13, 14, 15,  # 轴向夹角、周向方位、偏心距（纯输入批量）
+        cols["extension_height"],
+    }
+    internal = cols.get("internal_height")
+    if internal is not None:
+        result.add(internal)
+    return result
+
+
+# 纯输入批量列（无下拉交集，提交时统一写入再逐行校验）
+PIPE_PLAIN_BULK_COLUMNS = frozenset({13, 14, 15})
+
+
+def _intersection_of_row_option_lists(option_lists):
+    """多行选项列表取交集，保持首行出现顺序。"""
+    intersection_set = None
+    for opts in option_lists:
+        row_set = set(opts or [])
+        if intersection_set is None:
+            intersection_set = row_set
+        else:
+            intersection_set &= row_set
+        if not intersection_set:
+            return []
+    if not intersection_set:
+        return []
+    first = option_lists[0] if option_lists else []
+    return [x for x in first if x in intersection_set]
+
+
 """获取管口附件列的下拉框内容"""
 def get_pipe_attachment_options():
     """
@@ -806,7 +1393,7 @@ def get_nominal_size_options(product_id, stats_widget=None, flange_standard=None
                 elif size_type == "NPS":
                     base_sql += " AND CAST(`NPS` AS UNSIGNED) > 24"
 
-        base_sql += f" ORDER BY CAST(`{column_name}` AS UNSIGNED) ASC, `{column_name}` ASC"
+        base_sql += f" ORDER BY `{column_name}` ASC"
 
         cursor.execute(base_sql)
         results = cursor.fetchall()
@@ -817,7 +1404,7 @@ def get_nominal_size_options(product_id, stats_widget=None, flange_standard=None
             if value and str(value).strip():  # 只添加非空值
                 options.append(str(value))
 
-        return options
+        return sort_pipe_dropdown_options("公称尺寸", options, size_type)
 
     except Exception as e:
         QMessageBox.warning(None, "错误", f"获取公称尺寸选项失败: {str(e)}")
@@ -1091,19 +1678,54 @@ def apply_pipe_row_column_locks_by_belong(stats_widget, row):
 
 
 """处理单击出现下拉框的列"""
-def handle_pipe_cell_click(stats_widget, row, column):
+def handle_pipe_cell_click(stats_widget, row, column, force_open=False):
+    """
+    :param force_open: True 表示箭头点击或键盘 Enter 跳行，允许打开下拉；
+                       False 时下拉列仅选中不打开（便于多选）。
+    """
     # 用于记录当前用户点击的单元格
     stats_widget.current_editing_cell = (row, column)
+    # 用户主动点选（非校验失败重进/Enter 强制打开）：解除 sticky，便于之后合法清空 tip
+    # force_open 时先保住红字，再延后解除 sticky，避免重进编辑时被迟到校验清掉
+    if force_open:
+        sticky = getattr(stats_widget, "_pipe_sticky_error_tip", None)
+        if sticky:
+            _force_pipe_error_tip(stats_widget, sticky)
+            _release_pipe_sticky_error_tip_later(stats_widget, 150)
+    else:
+        stats_widget._pipe_sticky_error_tip = None
+
+    # 离开管口用途列时清掉用途说明 tip
+    if column != 3:
+        _clear_pipe_purpose_guide_tip_if_active(stats_widget)
+    # 离开压力等级列时清掉压力等级 tip
+    if column != 6:
+        _clear_pressure_level_guide_tip_if_active(stats_widget)
 
     table = stats_widget.tableWidget_pipe
     is_container = getattr(stats_widget, 'is_container_product', False)
     cols = get_pipe_special_columns(is_container)
 
+    arrow_cell = getattr(stats_widget, "_pipe_arrow_click_cell", None)
+    opened_by_arrow = arrow_cell == (row, column)
+    if opened_by_arrow:
+        stats_widget._pipe_arrow_click_cell = None
+    allow_open = bool(force_open or opened_by_arrow)
+
     is_last_row = (row == table.rowCount() - 1)
     pipe_code_item = table.item(row, 1)
     has_pipe_code = pipe_code_item.text().strip() != "" if pipe_code_item else False
-    if is_last_row and not has_pipe_code:
+
+    # 容器：代号已填的管口用途固定为「/」，不可进入编辑，也不弹用途说明
+    if is_container and column == 3 and has_pipe_code:
         return
+    # 末行无代号：只允许点开代号列输入，其它列仍拦截
+    if is_last_row and not has_pipe_code and column != 1:
+        return
+
+    # 压力等级：选中单元格即提示（不必等箭头展开）
+    if column == 6:
+        _show_pressure_level_guide_tip(stats_widget, row)
 
     belong_item = table.item(row, 10)
     pipe_belong = belong_item.text().strip() if belong_item else ""
@@ -1123,68 +1745,173 @@ def handle_pipe_cell_click(stats_widget, row, column):
             stats_widget.suppress_cell_change = False
         return
 
-    # ✅ 新增逻辑：单击即进入可编辑下拉
+    # 管板：禁用 13/14/15（第12列管板仍可下拉，仅「居中」）；空白点击也要落锁态
+    if column in (13, 14, 15) and "管板" in pipe_belong:
+        try:
+            stats_widget.suppress_cell_change = True
+            lock_item = table.item(row, column)
+            if not lock_item:
+                lock_item = QTableWidgetItem()
+                table.setItem(row, column, lock_item)
+            lock_item.setText("-")
+            lock_item.setTextAlignment(Qt.AlignCenter)
+            lock_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
+        finally:
+            stats_widget.suppress_cell_change = False
+        return
+
+    # 下拉列：
+    # - 纯下拉：非箭头/非键盘时只选中；打开时展开
+    # - 可编辑下拉：空白/Enter 只进编辑（可立刻手输）；仅点单元格箭头才展开
+    is_editable_combo = _is_pipe_editable_combo_column(stats_widget, column)
+    if column in _pipe_dropdown_columns(stats_widget) and not allow_open:
+        if is_editable_combo:
+            pass  # 空白：进入编辑
+        else:
+            _clear_pipe_bulk_edit_guard(stats_widget)
+            return
+    # 可编辑列：只有单元格箭头才展开（Enter 的 force_open 不展开，避免停在「程序推荐」上无法输入）
+    if is_editable_combo:
+        stats_widget._pipe_combo_show_popup = bool(opened_by_arrow)
+    else:
+        stats_widget._pipe_combo_show_popup = True
+
+    # 下拉列程序化开编前武装，拒绝双击等未灌选项路径创建空编辑器
+    if column in _pipe_dropdown_columns(stats_widget):
+        _arm_pipe_combo_editor(stats_widget)
+
+    # ✅ 新增逻辑：箭头/键盘进入可编辑下拉
     if column == 12:
-        # 根据管口所属元件（第10列）动态调整选项
+        is_bulk_mode = (hasattr(stats_widget, 'bulk_assign_target_column') and
+                        stats_widget.bulk_assign_target_column == column and
+                        hasattr(stats_widget, 'bulk_assign_rows') and
+                        len(stats_widget.bulk_assign_rows) > 1)
+        if is_bulk_mode:
+            # 批量：不可编辑下拉，仅允许点选交集项（程序推荐/居中）；禁止手输数值统一赋值
+            options = compute_intersection_options(
+                stats_widget, column, stats_widget.bulk_assign_rows
+            )
+            allowed = set(options or [])
+
+            def bulk_assign_callback(value):
+                text = str(value).strip() if value is not None else ""
+                if text not in allowed:
+                    return  # 非下拉合法项（含手输数值）不响应
+                rows = list(stats_widget.bulk_assign_rows)
+                apply_bulk_assign_value_immediate(stats_widget, column, rows, text)
+                _run_bulk_handle_pipe_cell_changed(
+                    stats_widget, column, rows, stats_widget.product_id
+                )
+
+            delegate = ComboBoxDelegate(table, editable=False)
+            delegate.stats_widget = stats_widget
+            delegate.setItems(options if options else ["None"])
+            delegate.bulk_select_callback = bulk_assign_callback
+            delegate.disable_wheel_scroll = True
+            table.setItemDelegateForColumn(column, delegate)
+            stats_widget.pipe_column_delegates[column] = delegate
+            table.editItem(table.item(row, column))
+            return
+
+        # 单选：可编辑下拉（可按行手输数值）
         belong_item = table.item(row, 10)
         pipe_belong = belong_item.text().strip() if belong_item else ""
         options = ["居中"] if ("管板" in pipe_belong) else ["程序推荐", "居中"]
 
-        delegate = stats_widget.pipe_column_delegates[column]
+        delegate = ComboBoxDelegate(table, editable=True, overwrite_on_first_key=True)
+        delegate.stats_widget = stats_widget
         delegate.setItems(options)
+        delegate.bulk_select_callback = None
+        delegate.disable_wheel_scroll = False
+        table.setItemDelegateForColumn(column, delegate)
+        stats_widget.pipe_column_delegates[column] = delegate
         table.editItem(table.item(row, column))
         return
 
     if column == cols["extension_height"]:
+        is_bulk_mode = (hasattr(stats_widget, 'bulk_assign_target_column') and
+                        stats_widget.bulk_assign_target_column == column and
+                        hasattr(stats_widget, 'bulk_assign_rows') and
+                        len(stats_widget.bulk_assign_rows) > 1)
+        if is_bulk_mode:
+            options = compute_intersection_options(
+                stats_widget, column, stats_widget.bulk_assign_rows
+            )
+
+            def bulk_assign_callback(value):
+                text = str(value).strip() if value is not None else ""
+                rows = list(stats_widget.bulk_assign_rows)
+                apply_bulk_assign_value_immediate(stats_widget, column, rows, text)
+                _run_bulk_handle_pipe_cell_changed(
+                    stats_widget, column, rows, stats_widget.product_id
+                )
+
+            delegate = stats_widget.pipe_column_delegates[column]
+            delegate.setItems(options if options else ["程序推荐"])
+            delegate.bulk_select_callback = bulk_assign_callback
+            delegate.disable_wheel_scroll = True
+            table.editItem(table.item(row, column))
+            return
+
         delegate = stats_widget.pipe_column_delegates[column]
+        delegate.bulk_select_callback = None
+        delegate.disable_wheel_scroll = False
         table.editItem(table.item(row, column))
         return
 
     internal_col = cols["internal_height"]
     if internal_col is not None and column == internal_col:
+        is_bulk_mode = (hasattr(stats_widget, 'bulk_assign_target_column') and
+                        stats_widget.bulk_assign_target_column == column and
+                        hasattr(stats_widget, 'bulk_assign_rows') and
+                        len(stats_widget.bulk_assign_rows) > 1)
+        if is_bulk_mode:
+            options = compute_intersection_options(
+                stats_widget, column, stats_widget.bulk_assign_rows
+            )
+
+            def bulk_assign_callback(value):
+                text = str(value).strip() if value is not None else ""
+                rows = list(stats_widget.bulk_assign_rows)
+                apply_bulk_assign_value_immediate(stats_widget, column, rows, text)
+                _run_bulk_handle_pipe_cell_changed(
+                    stats_widget, column, rows, stats_widget.product_id
+                )
+
+            delegate = stats_widget.pipe_column_delegates[column]
+            delegate.setItems(options if options else ["程序推荐"])
+            delegate.bulk_select_callback = bulk_assign_callback
+            delegate.disable_wheel_scroll = True
+            table.editItem(table.item(row, column))
+            return
+
         delegate = stats_widget.pipe_column_delegates[column]
+        delegate.bulk_select_callback = None
+        delegate.disable_wheel_scroll = False
         table.editItem(table.item(row, column))
         return
 
     # 管口附件逻辑
     if column == cols["attachment"]:
         attachment_options = get_pipe_attachment_options()
-        delegate = MultiSelectComboDelegate(
-            attachment_options if attachment_options else ["None"],
-            table
-        )
-        table.setItemDelegateForColumn(column, delegate)
+        delegate = stats_widget.pipe_column_delegates.get(column)
+        if not isinstance(delegate, MultiSelectComboDelegate):
+            delegate = MultiSelectComboDelegate(
+                attachment_options if attachment_options else ["None"],
+                table
+            )
+            delegate.stats_widget = stats_widget
+            table.setItemDelegateForColumn(column, delegate)
+            stats_widget.pipe_column_delegates[column] = delegate
+        else:
+            delegate.items = attachment_options if attachment_options else ["None"]
         table.editItem(table.item(row, column))
         return
 
-    # 管口载荷逻辑
+    # 管口载荷逻辑（非下拉，单击即可）
     if column == cols["load"]:
         _show_pipe_openingload_dialog(stats_widget, row)
         return
-
-    # 管板：禁用 13/14/15；封头/平盖：禁用 12（轴向定位距离）
-    if column in (12, 13, 14, 15):
-        belong_item = table.item(row, 10)
-        pipe_belong = belong_item.text().strip() if belong_item else ""
-        lock_cols = False
-        if "管板" in pipe_belong:
-            lock_cols = True
-        elif ("封头" in pipe_belong) or ("平盖" in pipe_belong):
-            lock_cols = column == 12
-
-        if lock_cols:
-            try:
-                stats_widget.suppress_cell_change = True
-                lock_item = table.item(row, column)
-                if not lock_item:
-                    lock_item = QTableWidgetItem()
-                    table.setItem(row, column, lock_item)
-                lock_item.setText("-")
-                lock_item.setTextAlignment(Qt.AlignCenter)
-                lock_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
-            finally:
-                stats_widget.suppress_cell_change = False
-            return
 
     # 焊端规格特殊逻辑
     if column == 9:
@@ -1216,6 +1943,7 @@ def handle_pipe_cell_click(stats_widget, row, column):
             else:
                 delegate = ComboBoxDelegate(table, editable=True, overwrite_on_first_key=True)
 
+            delegate.stats_widget = stats_widget
             delegate.setItems(options if options else ["None"])
             delegate.bulk_select_callback = bulk_assign_callback
             delegate.disable_wheel_scroll = True
@@ -1225,6 +1953,7 @@ def handle_pipe_cell_click(stats_widget, row, column):
         elif welding_type == "Sch":
             options = get_weld_end_spec_sch_options()
             delegate = ComboBoxDelegate(table, editable=False)
+            delegate.stats_widget = stats_widget
             delegate.setItems(options)
             delegate.bulk_select_callback = None
             delegate.disable_wheel_scroll = False
@@ -1233,6 +1962,7 @@ def handle_pipe_cell_click(stats_widget, row, column):
             table.editItem(table.item(row, column))
         else:
             delegate = ComboBoxDelegate(table, editable=True, overwrite_on_first_key=True)
+            delegate.stats_widget = stats_widget
             delegate.setItems(["程序推荐"])
             delegate.bulk_select_callback = None
             delegate.disable_wheel_scroll = False
@@ -1249,7 +1979,7 @@ def handle_pipe_cell_click(stats_widget, row, column):
             table.editItem(table.item(row, column))
         return
 
-    # 管口所属元件逻辑
+    # 管口所属元件逻辑（仅单选，不支持批量赋值）
     if column == 10:
         # ✅ 在编辑前保存当前值作为旧值（用于第一次切换时的判断）
         if not hasattr(stats_widget, 'pipe_belong_old_values'):
@@ -1263,59 +1993,24 @@ def handle_pipe_cell_click(stats_widget, row, column):
             else:
                 stats_widget.pipe_belong_old_values[row] = ""
 
-        # 获取产品类型和型式
-        product_type = getattr(stats_widget, "current_product_type", "")
-        product_version = getattr(stats_widget, "current_product_version", "")
-
-        # 获取当前行的管口功能
-        pipe_function_item = table.item(row, 2)  # 第2列为管口功能
-        pipe_function = pipe_function_item.text().strip() if pipe_function_item else ""
-        # 定义版本与对应"管程入口/出口"的管口所属元件选项映射
-        version_belong_map = {
-            ("NEN",): ["前端管箱平盖", "前端管箱圆筒", "后端管箱圆筒", "后端管箱平盖"],
-            ("BEM",): ["前端管箱封头", "前端管箱圆筒", "后端管箱圆筒", "后端管箱封头"],
-            ("AEM",): ["前端管箱平盖", "前端管箱圆筒", "后端管箱圆筒", "后端管箱封头"],
-            ("NEN(H)",): ["前端管箱封头", "前端管箱圆筒", "后端管箱圆筒", "后端管箱封头"],
-            ("AES", "AEU","AKU"): ["管箱圆筒", "管箱平盖"],
-            ("BES", "BEU","BKU"): ["管箱圆筒", "管箱封头"],
-
-        }
-
-        if product_type == "管壳式热交换器":
-            # 遍历映射，寻找匹配的版本
-            for versions, options in version_belong_map.items():
-                if product_version in versions:
-                    # 找到匹配版本，判断管口功能
-                    if product_version in ["AKU", "BKU"] and pipe_function == "壳程入口":
-                        belong_options = ["大端壳体圆筒", "锥壳"]
-                    elif product_version in ["AKU", "BKU"] and pipe_function in [
-                        "壳程液位计1", "壳程液位计2", "壳程温度计"
-                    ]:
-                        belong_options = ["大端壳体圆筒", "壳体封头"]
-                    elif pipe_function in ["管程入口", "管程出口"]:
-                        belong_options = options
-                    else:
-                        belong_options = get_belong_options(stats_widget.product_id)
-                    break  # 匹配后退出循环
-            else:
-                # 无匹配版本（理论上不会走到这里，除非新增了未定义的版本）
-                belong_options = get_belong_options(stats_widget.product_id)
-        else:
-            # 非管壳式热交换器，使用默认逻辑
-            belong_options = get_belong_options(stats_widget.product_id)
+        belong_options = get_pipe_belong_options_for_row(stats_widget, row)
 
         delegate = stats_widget.pipe_column_delegates[column]
-        delegate.setItems(belong_options)
+        delegate.setItems(belong_options if belong_options else ["None"])
+        delegate.bulk_select_callback = None
+        delegate.disable_wheel_scroll = False
         table.editItem(table.item(row, column))
         return
 
-    # 轴向定位基准逻辑
+    # 轴向定位基准逻辑（仅单选，不支持批量赋值）
     if column == 11:
         belong_item = table.item(row, 10)
         pipe_belong = belong_item.text().strip() if belong_item else None
         base_options = get_axial_position_base_options(stats_widget.product_id, pipe_belong)
         delegate = stats_widget.pipe_column_delegates[column]
-        delegate.setItems(base_options)
+        delegate.setItems(base_options if base_options else ["None"])
+        delegate.bulk_select_callback = None
+        delegate.disable_wheel_scroll = False
         table.editItem(table.item(row, column))
         return
 
@@ -1366,6 +2061,58 @@ def handle_pipe_cell_click(stats_widget, row, column):
             delegate.setItems(size_options if size_options else ["None"])
             table.editItem(table.item(row, column))
 
+        return
+
+    # 公称尺寸列逻辑（第4列）之后、法兰列之前：
+    # 普通输入列单击进入编辑（管口代号/功能/用途、轴向夹角、周向方位、偏心距）
+    plain_edit_columns = {1, 2, 3, 13, 14, 15}
+    if column in plain_edit_columns:
+        item = table.item(row, column)
+        if not item:
+            item = QTableWidgetItem("")
+            item.setTextAlignment(Qt.AlignCenter)
+            item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
+            table.setItem(row, column, item)
+
+        if not hasattr(stats_widget, "original_cell_value_map"):
+            stats_widget.original_cell_value_map = {}
+
+        # 轴向夹角/周向方位/偏心距：批量时快照行，避免 edit 收成单格丢失多选
+        is_plain_bulk = (
+            column in PIPE_PLAIN_BULK_COLUMNS
+            and getattr(stats_widget, "bulk_assign_target_column", None) == column
+            and len(getattr(stats_widget, "bulk_assign_rows", []) or []) > 1
+        )
+        if is_plain_bulk:
+            bulk_rows = list(stats_widget.bulk_assign_rows)
+            stats_widget._bulk_assign_rows_snapshot = bulk_rows
+            stats_widget._pipe_bulk_edit_active = True
+            try:
+                table.setProperty("pipe_bulk_edit_active", True)
+            except Exception:
+                pass
+            # 各行旧值：用于互斥判断，以及「同值提交不批量」
+            for r in bulk_rows:
+                cell = table.item(r, column)
+                stats_widget.original_cell_value_map[(r, column)] = (
+                    cell.text().strip() if cell else ""
+                )
+        elif column in PIPE_PLAIN_BULK_COLUMNS:
+            original_text = item.text().strip()
+            stats_widget.original_cell_value_map[(row, column)] = original_text
+            stats_widget.original_cell_value = original_text
+
+        # 延迟导入，避免与 dynamically_adjust_ui 循环依赖
+        from modules.guankoudingyi.dynamically_adjust_ui import (
+            _is_pipe_cell_editable,
+            _edit_pipe_cell,
+        )
+        if _is_pipe_cell_editable(table, stats_widget, row, column):
+            if column == 1:
+                stats_widget.old_port_code = item.text().strip()
+            if column == 3:
+                _show_pipe_purpose_guide_tip(stats_widget)
+            _edit_pipe_cell(table, stats_widget, row, column)
         return
 
     # 其它 5/6/7/8 列逻辑（移除公称尺寸的筛选）
@@ -1443,7 +2190,8 @@ def handle_pipe_cell_click(stats_widget, row, column):
                 if item and item.text().strip():
                     filters[field] = item.text().strip()
 
-        unit_types = get_unit_types_from_db(stats_widget.product_id)
+        # 优先读界面单位，避免每次点开都查库
+        unit_types = get_current_unit_types_from_ui(stats_widget) or get_unit_types_from_db(stats_widget.product_id)
         pressure_type, _, _, _ = get_standard_flange_pressure_level_default_value(stats_widget.product_id, stats_widget)
 
         # ✅ 新增：如果是法兰标准列（第5列）且压力类型为Class或PN，使用数据库中的对应选项
@@ -1452,85 +2200,7 @@ def handle_pipe_cell_click(stats_widget, row, column):
         else:
             options = get_filtered_pipe_options(current_field, filters, unit_types, pressure_type)
 
-        # ✅ 新增：如果是压力等级列（第6列），显示接管法兰最小压力等级提示
-        if column == 6:
-            # 获取管口所属元件
-            belong_item = table.item(row, 10)
-            pipe_belong = belong_item.text().strip() if belong_item else ""
-            # 读取当前行法兰标准（第5列）
-            flange_item = table.item(row, 5)
-            flange_std = flange_item.text().strip() if flange_item else ""
-
-
-            # 获取管口ID（从隐藏的管口ID映射中获取）
-            pipe_id = None
-            if hasattr(stats_widget, 'row_hidden_pipe_id') and row in stats_widget.row_hidden_pipe_id:
-                pipe_id = stats_widget.row_hidden_pipe_id[row]
-
-            # 读取管口代号（第1列）
-            pipe_code_item = table.item(row, 1)
-            pipe_code = pipe_code_item.text().strip() if pipe_code_item else ""
-
-            if pipe_belong and hasattr(stats_widget, 'line_tip'):
-                try:
-                    tip_message = generate_pressure_level_tips(stats_widget.product_id, pipe_belong,  pressure_type, pipe_id, pipe_code, flange_std)
-                    # # ✅ 显示提示：主显示 + tooltip 显示完整内容
-                    # display_text = tip_message[:80].replace("\n", " | ")
-                    # if len(tip_message) > 80:
-                    #     display_text += " ... (鼠标悬停查看完整内容)"
-                    # stats_widget.line_tip.setText(display_text)
-                    # stats_widget.line_tip.setToolTip(tip_message)
-                    # # 确保 tooltip 可见
-                    # stats_widget.line_tip.setStatusTip(tip_message)  # 状态栏提示作为备选
-                    # stats_widget.line_tip.setStyleSheet("color: orange;")
-
-                    # 使用 QFontMetrics 动态计算文字长度
-                    metrics = stats_widget.line_tip.fontMetrics()
-                    available_width = stats_widget.line_tip.width() - 30  # 给左右留点空隙
-                    elided_text = metrics.elidedText(tip_message.replace("\n", " | "), Qt.ElideRight, available_width)
-
-                    # 如果被省略了，加上提示
-                    if elided_text != tip_message:
-                        elided_text += "(鼠标悬停查看完整内容)"
-
-                    # 设置显示与悬浮完整提示
-                    stats_widget.line_tip.setText(elided_text)
-                    stats_widget.line_tip.setToolTip(tip_message)  # 鼠标悬停显示完整内容
-                    stats_widget.line_tip.setStatusTip(tip_message)  # 状态栏也显示完整内容
-                    stats_widget.line_tip.setStyleSheet("color: orange;")
-
-                except Exception as e:
-                    # error_message = f"提示信息获取失败: {str(e)}"
-                    # display_text = error_message[:60]
-                    # if len(error_message) > 60:
-                    #     display_text += "(鼠标悬停查看完整内容)"
-                    # stats_widget.line_tip.setText(display_text)
-                    # stats_widget.line_tip.setToolTip(error_message)
-                    # stats_widget.line_tip.setStatusTip(error_message)
-                    # stats_widget.line_tip.setStyleSheet("color: red;")
-
-                    error_message = f"提示信息获取失败: {str(e)}"
-
-                    # 使用 QFontMetrics 动态计算截断
-                    metrics = stats_widget.line_tip.fontMetrics()
-                    available_width = stats_widget.line_tip.width() - 30  # 给两边留点间距
-                    elided_text = metrics.elidedText(error_message.replace("\n", " | "), Qt.ElideRight, available_width)
-
-                    # 如果被省略了，加上提示
-                    if elided_text != error_message:
-                        elided_text += " ... (鼠标悬停查看完整内容)"
-
-                    # 设置显示和悬浮提示
-                    stats_widget.line_tip.setText(elided_text)
-                    stats_widget.line_tip.setToolTip(error_message)  # 鼠标悬停完整信息
-                    stats_widget.line_tip.setStatusTip(error_message)  # 状态栏完整信息
-                    stats_widget.line_tip.setStyleSheet("color: red;")
-
-            elif hasattr(stats_widget, 'line_tip'):
-                stats_widget.line_tip.setText("请先选择管口所属元件")
-                stats_widget.line_tip.setToolTip("请先选择管口所属元件")
-                stats_widget.line_tip.setStatusTip("请先选择管口所属元件")
-                stats_widget.line_tip.setStyleSheet("color: orange;")
+        # 压力等级 tip 已在选中单元格时触发，此处不再重复
 
         delegate = stats_widget.pipe_column_delegates[column]
         delegate.bulk_select_callback = None  # 清除批量回调
@@ -1545,21 +2215,70 @@ def handle_pipe_cell_click(stats_widget, row, column):
     if not hasattr(stats_widget, "original_cell_value_map"):
         stats_widget.original_cell_value_map = {}
 
-    if column in {13, 15}:
+    if column in PIPE_PLAIN_BULK_COLUMNS:
         stats_widget.original_cell_value_map[(row, column)] = original_text
         stats_widget.original_cell_value = original_text
 
 
 # ================= 批量赋值（多选行，列4-9）=================
 """当选择变化时，判断是否处于多选批量赋值状态"""
+def _clear_pipe_bulk_edit_guard(stats_widget):
+    """结束批量下拉编辑保护（高亮快照 / 防 selectionChanged 清行）。"""
+    stats_widget._pipe_bulk_edit_active = False
+    stats_widget._bulk_assign_rows_snapshot = []
+    table = getattr(stats_widget, "tableWidget_pipe", None)
+    if table is not None:
+        try:
+            table.setProperty("pipe_bulk_edit_active", False)
+        except Exception:
+            pass
+
+
+def release_bulk_assign_edit_guard(stats_widget, table=None):
+    """关闭界面时清理批量编辑保护（供 dynamically_adjust_ui.closeEvent 调用）。"""
+    try:
+        _clear_pipe_bulk_edit_guard(stats_widget)
+    except Exception:
+        pass
+
+
 def update_bulk_assign_state(stats_widget):
     table = stats_widget.tableWidget_pipe
     if table is None:
         return
 
+    # 批量编辑保护：仅在「仍在该批量列上编辑」时用快照保住多选；
+    # 点到其他列、或已结束编辑时必须清除，否则 13/14/15 等单击即编辑列无法取消多选。
+    if getattr(stats_widget, "_pipe_bulk_edit_active", False):
+        snap = list(getattr(stats_widget, "_bulk_assign_rows_snapshot", []) or [])
+        col = getattr(stats_widget, "bulk_assign_target_column", None)
+        current_col = table.currentColumn()
+        selected_indexes = table.selectedIndexes()
+        selected_cols = {idx.column() for idx in selected_indexes}
+
+        still_on_bulk_col = (
+            col is not None
+            and current_col == col
+            and (not selected_cols or selected_cols == {col})
+        )
+        editing = False
+        if still_on_bulk_col and len(snap) > 1:
+            try:
+                from modules.guankoudingyi.dynamically_adjust_ui import _pipe_is_editing
+                editing = _pipe_is_editing(table, stats_widget)
+            except Exception:
+                editing = False
+
+        if still_on_bulk_col and editing and len(snap) > 1:
+            stats_widget.bulk_assign_rows = snap
+            stats_widget.bulk_assign_target_column = col
+            return
+
+        _clear_pipe_bulk_edit_guard(stats_widget)
+
     # 仅在多行选择且当前列为目标列时进入批量模式
     current_col = table.currentColumn()
-    target_columns = {4, 5, 6, 7, 8, 9}
+    target_columns = _pipe_bulk_assign_columns(stats_widget)
     if current_col not in target_columns:
         stats_widget.bulk_assign_target_column = None
         stats_widget.bulk_assign_rows = []
@@ -1580,12 +2299,16 @@ def update_bulk_assign_state(stats_widget):
         stats_widget.bulk_assign_rows = []
         return
 
-    # 过滤：去掉没有管口代号的行
+    # 过滤：去掉没有管口代号的行，以及当前列不可编辑的锁定格（如封头轴向距离）
     valid_rows = []
     for r in selected_rows:
         code_item = table.item(r, 1)
-        if code_item and code_item.text().strip():
-            valid_rows.append(r)
+        if not (code_item and code_item.text().strip()):
+            continue
+        cell_item = table.item(r, current_col)
+        if cell_item is not None and not (cell_item.flags() & Qt.ItemIsEditable):
+            continue
+        valid_rows.append(r)
 
     if len(valid_rows) < 2:
         # 少于两行不进入批量模式
@@ -1602,24 +2325,31 @@ def update_bulk_assign_state(stats_widget):
         print(f"[DEBUG] 跨列选择，不进入批量模式：选中列={selected_columns}, 当前列={current_col}")
         return
 
-    # 确保所有选中的单元格都在当前列
-    selected_rows_in_current_col = [idx.row() for idx in selected_indexes if idx.column() == current_col]
-    if len(selected_rows_in_current_col) != len(valid_rows):
-        # 选中的行数与当前列的有效行数不匹配，不进入批量模式
+    # 确保所有选中的有效行在当前列都有选中单元格
+    selected_rows_in_current_col = {
+        idx.row() for idx in selected_indexes if idx.column() == current_col
+    }
+    if not set(valid_rows).issubset(selected_rows_in_current_col):
         stats_widget.bulk_assign_target_column = None
         stats_widget.bulk_assign_rows = []
         print(f"[DEBUG] 选中行数不匹配，不进入批量模式：当前列选中行={selected_rows_in_current_col}, 有效行={valid_rows}")
         return
 
-    # 列9：焊端规格用固定全集，不做交集；列4-8：取各行候选交集
+    # 列9：焊端规格用固定全集；13/14/15：纯输入无需交集；其余取各行候选交集
     if current_col == 9:
         options = get_weld_end_spec_bulk_options(stats_widget)
+        if not options:
+            stats_widget.bulk_assign_target_column = None
+            stats_widget.bulk_assign_rows = []
+            return
+    elif current_col in PIPE_PLAIN_BULK_COLUMNS:
+        pass  # 轴向夹角/周向方位/偏心距：有有效多选行即可批量
     else:
         options = compute_intersection_options(stats_widget, current_col, valid_rows)
-    if not options:
-        stats_widget.bulk_assign_target_column = None
-        stats_widget.bulk_assign_rows = []
-        return
+        if not options:
+            stats_widget.bulk_assign_target_column = None
+            stats_widget.bulk_assign_rows = []
+            return
 
     # 进入批量模式
     stats_widget.bulk_assign_target_column = current_col
@@ -1652,7 +2382,23 @@ def compute_intersection_options(stats_widget, column, rows):
                 # 交集已空，提前结束
                 return []
 
-        return sorted(intersection_set, key=lambda x: int(x) if x.isdigit() else float('inf')) if intersection_set else []
+        current_unit_types = get_current_unit_types_from_ui(stats_widget)
+        size_type = current_unit_types.get("公称尺寸类型", "DN")
+        return sort_pipe_dropdown_options("公称尺寸", list(intersection_set), size_type)
+
+    # 轴向定位距离：管板仅「居中」，其余「程序推荐/居中」→ 取交集
+    if column == 12:
+        return _intersection_of_row_option_lists(
+            [get_axial_distance_dropdown_options_for_row(stats_widget, r) for r in rows]
+        )
+
+    # 外伸高度 / 内伸高度：下拉候选固定为「程序推荐」（可手输其它值）
+    cols = get_pipe_special_columns(getattr(stats_widget, "is_container_product", False))
+    if column == cols.get("extension_height"):
+        return ["程序推荐"]
+    internal = cols.get("internal_height")
+    if internal is not None and column == internal:
+        return ["程序推荐"]
 
     # 5/6/7/8 列：根据每行已填的其他字段做筛选，最后取交集
     col_to_field = {5: "法兰标准", 6: "压力等级", 7: "法兰型式", 8: "密封面型式"}
@@ -1691,7 +2437,7 @@ def compute_intersection_options(stats_widget, column, rows):
             # 交集已空，提前结束
             return []
 
-    return sorted(intersection_set) if intersection_set else []
+    return sort_pipe_dropdown_options(current_field, list(intersection_set))
 
 
 """立即将值批量赋给指定行的指定列"""
@@ -1721,6 +2467,7 @@ def apply_bulk_assign_value_immediate(stats_widget, column, rows, value):
         # 恢复单元格变化信号
         if hasattr(stats_widget, 'suppress_cell_change'):
             stats_widget.suppress_cell_change = False
+        _clear_pipe_bulk_edit_guard(stats_widget)
 
 ################轴向夹角、周向方位、偏心距、外伸高度、轴向定位距离、管口所属元件、压力等级#############################
 """验证轴向夹角"""
@@ -1773,11 +2520,24 @@ def get_nominal_diameter(product_id, pipe_belong):
     # 判定取值字段：
     # - 管箱 → 管程数值
     # - 壳体 / 外头盖 → 壳程数值
+    # - 容器产品且所属元件为「圆筒」→ 壳程数值
     try:
-        if ("管箱" in pipe_belong) or ("管板" in pipe_belong)or("锥壳" in pipe_belong):
-            param_field = '管程数值'
-        elif ("壳体" in pipe_belong) or ("壳程" in pipe_belong) or ("外头盖" in pipe_belong) or("右封头" in pipe_belong)or("左封头" in pipe_belong) :
-            param_field = '壳程数值'
+        belong = (pipe_belong or "").strip()
+        # 容器：元件名「圆筒」默认取壳程公称直径
+        product_type, _ = get_product_type_and_version(product_id)
+        is_container = bool(product_type and "容器" in str(product_type))
+        if is_container and belong == "圆筒":
+            param_field = "壳程数值"
+        elif ("管箱" in belong) or ("管板" in belong) or ("锥壳" in belong):
+            param_field = "管程数值"
+        elif (
+            ("壳体" in belong)
+            or ("壳程" in belong)
+            or ("外头盖" in belong)
+            or ("右封头" in belong)
+            or ("左封头" in belong)
+        ):
+            param_field = "壳程数值"
         else:
             return False, "无效的管口所属元件字段"
 
@@ -2136,14 +2896,296 @@ def validate_internal_extension_height(height_text, product_id, pipe_belong, emi
         return False, "请输入有效数字或\"程序推荐\""
 
 """补丁：用于清空下方的提示条"""
+_PIPE_PURPOSE_GUIDE_TIP = (
+    "管口用途为非必填项。如内容与管口功能不同时，可自行填写，填写内容将显示在二维图纸管口表中。"
+)
+
+
+def _show_pipe_purpose_guide_tip(stats_widget):
+    """点击/进入管口用途列时，底部提示栏显示非必填说明（不覆盖 sticky 红字）。"""
+    if not hasattr(stats_widget, "line_tip") or stats_widget.line_tip is None:
+        return
+    if getattr(stats_widget, "_pipe_sticky_error_tip", None):
+        return
+    tip_message = _PIPE_PURPOSE_GUIDE_TIP
+    metrics = stats_widget.line_tip.fontMetrics()
+    available_width = max(0, stats_widget.line_tip.width() - 30)
+    elided_text = metrics.elidedText(
+        tip_message.replace("\n", " | "), Qt.ElideRight, available_width
+    )
+    if elided_text != tip_message:
+        elided_text += "(鼠标悬停查看完整内容)"
+    stats_widget.line_tip.setText(elided_text)
+    stats_widget.line_tip.setToolTip(tip_message)
+    stats_widget.line_tip.setStatusTip(tip_message)
+    stats_widget.line_tip.setStyleSheet("color: orange;")
+    stats_widget._pipe_purpose_guide_tip = True
+    stats_widget._pipe_pressure_guide_tip = False
+
+
+def _clear_pipe_purpose_guide_tip_if_active(stats_widget):
+    """离开管口用途列时，若当前 tip 为本说明则清空。"""
+    if not getattr(stats_widget, "_pipe_purpose_guide_tip", False):
+        return
+    stats_widget._pipe_purpose_guide_tip = False
+    if getattr(stats_widget, "_pipe_sticky_error_tip", None):
+        return
+    _set_tip(stats_widget, "")
+
+
+def _show_pressure_level_guide_tip(stats_widget, row):
+    """选中/进入压力等级列时显示适用最小压力等级说明（异步，不覆盖 sticky 红字）。"""
+    if not hasattr(stats_widget, "line_tip") or stats_widget.line_tip is None:
+        return
+    if getattr(stats_widget, "_pipe_sticky_error_tip", None):
+        return
+
+    table = getattr(stats_widget, "tableWidget_pipe", None)
+    if table is None:
+        return
+
+    belong_item = table.item(row, 10)
+    pipe_belong = belong_item.text().strip() if belong_item else ""
+    flange_item = table.item(row, 5)
+    flange_std = flange_item.text().strip() if flange_item else ""
+    pipe_id = None
+    if hasattr(stats_widget, "row_hidden_pipe_id") and row in stats_widget.row_hidden_pipe_id:
+        pipe_id = stats_widget.row_hidden_pipe_id[row]
+    pipe_code_item = table.item(row, 1)
+    pipe_code = pipe_code_item.text().strip() if pipe_code_item else ""
+
+    stats_widget._pipe_purpose_guide_tip = False
+
+    if not pipe_belong:
+        stats_widget.line_tip.setText("请先选择管口所属元件")
+        stats_widget.line_tip.setToolTip("请先选择管口所属元件")
+        stats_widget.line_tip.setStatusTip("请先选择管口所属元件")
+        stats_widget.line_tip.setStyleSheet("color: orange;")
+        stats_widget._pipe_pressure_guide_tip = True
+        return
+
+    tip_token = getattr(stats_widget, "_pressure_tip_token", 0) + 1
+    stats_widget._pressure_tip_token = tip_token
+    product_id = stats_widget.product_id
+    # 先占位，避免查询期间 tip 空白；标记为本说明以便离开列时清理
+    stats_widget._pipe_pressure_guide_tip = True
+
+    def pressure_tip_job():
+        if getattr(stats_widget, "_pressure_tip_token", 0) != tip_token:
+            return
+        if getattr(stats_widget, "_pipe_sticky_error_tip", None):
+            return
+        try:
+            pressure_type, _, _, _ = get_standard_flange_pressure_level_default_value(
+                product_id, stats_widget
+            )
+            tip_message = generate_pressure_level_tips(
+                product_id, pipe_belong, pressure_type, pipe_id, pipe_code, flange_std
+            )
+            style = "color: orange;"
+        except Exception as e:
+            tip_message = f"提示信息获取失败: {str(e)}"
+            style = "color: red;"
+        if getattr(stats_widget, "_pressure_tip_token", 0) != tip_token:
+            return
+        if getattr(stats_widget, "_pipe_sticky_error_tip", None):
+            return
+        if not hasattr(stats_widget, "line_tip") or stats_widget.line_tip is None:
+            return
+        metrics = stats_widget.line_tip.fontMetrics()
+        available_width = max(0, stats_widget.line_tip.width() - 30)
+        elided_text = metrics.elidedText(
+            tip_message.replace("\n", " | "), Qt.ElideRight, available_width
+        )
+        if elided_text != tip_message:
+            elided_text += "(鼠标悬停查看完整内容)"
+        stats_widget.line_tip.setText(elided_text)
+        stats_widget.line_tip.setToolTip(tip_message)
+        stats_widget.line_tip.setStatusTip(tip_message)
+        stats_widget.line_tip.setStyleSheet(style)
+        stats_widget._pipe_pressure_guide_tip = True
+        stats_widget._pipe_purpose_guide_tip = False
+
+    QTimer.singleShot(0, pressure_tip_job)
+
+
+def _clear_pressure_level_guide_tip_if_active(stats_widget):
+    """离开压力等级列时，若当前 tip 为本说明则清空。"""
+    if not getattr(stats_widget, "_pipe_pressure_guide_tip", False):
+        return
+    stats_widget._pipe_pressure_guide_tip = False
+    # 作废进行中的异步 tip，避免离开列后又刷回来
+    stats_widget._pressure_tip_token = getattr(stats_widget, "_pressure_tip_token", 0) + 1
+    if getattr(stats_widget, "_pipe_sticky_error_tip", None):
+        return
+    _set_tip(stats_widget, "")
+
+
+def _force_pipe_error_tip(stats_widget, text):
+    """强制显示红字 tip（绕过清空保护，用于批量非法后回写）。"""
+    if not hasattr(stats_widget, "line_tip") or not text:
+        return
+    stats_widget._pipe_purpose_guide_tip = False
+    stats_widget._pipe_pressure_guide_tip = False
+    stats_widget.line_tip.setText(text)
+    stats_widget.line_tip.setToolTip(text)
+    stats_widget.line_tip.setStatusTip(text)
+    stats_widget.line_tip.setStyleSheet("color: red;")
+
+
 def _set_tip(stats_widget, text="", color=None):
-    """统一设置/清空底部提示条"""
+    """统一设置/清空底部提示条。
+
+    批量逐行校验期间及 sticky 红字存在时，忽略空串清空，
+    避免回写默认值触发的合法分支把非法提示清掉。
+    """
     if not hasattr(stats_widget, "line_tip"):
         return
-    stats_widget.line_tip.setText(text or "")
-    stats_widget.line_tip.setToolTip(text or "")
-    stats_widget.line_tip.setStatusTip(text or "")
+    text = text or ""
+    if getattr(stats_widget, "_pipe_bulk_tip_guard", False):
+        if not str(text).strip():
+            return
+        if color == "red":
+            stats_widget._pipe_bulk_error_tip = str(text).strip()
+    elif not str(text).strip():
+        sticky = getattr(stats_widget, "_pipe_sticky_error_tip", None)
+        if sticky:
+            # 有人试图清空时，若仍处 sticky，强制回刷红字
+            _force_pipe_error_tip(stats_widget, sticky)
+            return
+
+    if str(text).strip():
+        stats_widget._pipe_purpose_guide_tip = False
+        stats_widget._pipe_pressure_guide_tip = False
+    stats_widget.line_tip.setText(text)
+    stats_widget.line_tip.setToolTip(text)
+    stats_widget.line_tip.setStatusTip(text)
     stats_widget.line_tip.setStyleSheet(f"color: {color};" if color else "")
+
+
+def _schedule_pipe_error_tip_restore(stats_widget, err):
+    """批量非法后多次回刷 tip，覆盖迟到的合法校验清空。"""
+    if not err:
+        return
+    token = getattr(stats_widget, "_pipe_tip_restore_token", 0) + 1
+    stats_widget._pipe_tip_restore_token = token
+    stats_widget._pipe_sticky_error_tip = err
+
+    def _restore(expected=token, message=err):
+        if getattr(stats_widget, "_pipe_tip_restore_token", 0) != expected:
+            return
+        if getattr(stats_widget, "_pipe_sticky_error_tip", None) != message:
+            return
+        _force_pipe_error_tip(stats_widget, message)
+
+    _force_pipe_error_tip(stats_widget, err)
+    for delay in (0, 0, 50, 100, 200, 300):
+        QTimer.singleShot(delay, _restore)
+
+
+def _release_pipe_sticky_error_tip_later(stats_widget, delay_ms=120):
+    """延后解除 sticky，让用户改对后可以清空 tip，且避开迟到 cellChanged。"""
+    token = getattr(stats_widget, "_pipe_tip_restore_token", 0)
+
+    def _release(expected=token):
+        if getattr(stats_widget, "_pipe_tip_restore_token", 0) != expected:
+            return
+        stats_widget._pipe_sticky_error_tip = None
+
+    QTimer.singleShot(delay_ms, _release)
+
+
+# 轴向夹角 ↔ 偏心距互斥提示（单行/批量共用文案）
+_ANGLE_ECC_MUTEX_WARNING_TEXT = (
+    "因轴向夹角和偏心距被同时赋值，基于GB/T 150规则无法对此管口进行强度校核"
+)
+
+
+def _pipe_code_at_row(stats_widget, row) -> str:
+    """取管口表指定行的管口代号（第1列）。"""
+    table = getattr(stats_widget, "tableWidget_pipe", None)
+    if table is None or row is None:
+        return ""
+    try:
+        item = table.item(int(row), 1)
+    except (TypeError, ValueError):
+        return ""
+    return item.text().strip() if item else ""
+
+
+def _format_angle_ecc_mutex_message(pipe_codes) -> str:
+    """
+    组装互斥提示：带管口代号。
+    例：N1管口因… / N1、N2管口因…
+    """
+    codes = []
+    seen = set()
+    for code in pipe_codes or []:
+        c = str(code or "").strip()
+        if not c or c in seen:
+            continue
+        seen.add(c)
+        codes.append(c)
+    if not codes:
+        return _ANGLE_ECC_MUTEX_WARNING_TEXT
+    return f'{"、".join(codes)}管口{_ANGLE_ECC_MUTEX_WARNING_TEXT}'
+
+
+def _warn_angle_eccentricity_mutex(stats_widget, row=None):
+    """
+    夹角/偏心距互斥弹窗（含管口代号）。
+    批量校验（_pipe_bulk_mutex_coalesce）时只收集代号，循环结束后统一弹一次。
+    """
+    _mark_pipe_cell_validation_blocked(stats_widget)
+    code = _pipe_code_at_row(stats_widget, row)
+    if getattr(stats_widget, "_pipe_bulk_mutex_coalesce", False):
+        stats_widget._pipe_bulk_mutex_conflict = True
+        codes = getattr(stats_widget, "_pipe_bulk_mutex_codes", None)
+        if not isinstance(codes, list):
+            codes = []
+            stats_widget._pipe_bulk_mutex_codes = codes
+        if code and code not in codes:
+            codes.append(code)
+        return
+    defer_styled_warning(
+        stats_widget,
+        "校验冲突",
+        _format_angle_ecc_mutex_message([code] if code else []),
+    )
+
+
+def _run_bulk_handle_pipe_cell_changed(stats_widget, column, rows, product_id):
+    """批量逐行跑 cell 变更/校验，并保留非法时的红字 tip（不被后续合法行清空）。"""
+    stats_widget._pipe_bulk_tip_guard = True
+    stats_widget._pipe_bulk_error_tip = None
+    # 夹角/偏心距互斥：多行冲突合并为一次弹窗
+    stats_widget._pipe_bulk_mutex_coalesce = True
+    stats_widget._pipe_bulk_mutex_conflict = False
+    stats_widget._pipe_bulk_mutex_codes = []
+    try:
+        for modified_row in rows:
+            handle_pipe_cell_changed(
+                stats_widget, modified_row, column, product_id, force=True
+            )
+    finally:
+        err = getattr(stats_widget, "_pipe_bulk_error_tip", None)
+        mutex_conflict = bool(getattr(stats_widget, "_pipe_bulk_mutex_conflict", False))
+        mutex_codes = list(getattr(stats_widget, "_pipe_bulk_mutex_codes", []) or [])
+        stats_widget._pipe_bulk_tip_guard = False
+        stats_widget._pipe_bulk_error_tip = None
+        stats_widget._pipe_bulk_mutex_coalesce = False
+        stats_widget._pipe_bulk_mutex_conflict = False
+        stats_widget._pipe_bulk_mutex_codes = []
+        if err:
+            _schedule_pipe_error_tip_restore(stats_widget, err)
+        else:
+            stats_widget._pipe_sticky_error_tip = None
+        if mutex_conflict:
+            defer_styled_warning(
+                stats_widget,
+                "校验冲突",
+                _format_angle_ecc_mutex_message(mutex_codes),
+            )
 
 """补丁：以下两个方法用于判断"零/非零"和"是否刚从零变为非零"""
 def _is_zero_like(text: str) -> bool:
@@ -2166,42 +3208,6 @@ def _just_turned_from_zero_to_nonzero(stats_widget, row: int, column: int, new_t
     old_text = value_map.get((row, column), default_old)
     return _is_zero_like(old_text) and (not _is_zero_like(new_text))
 
-"""检查并处理轴向夹角和偏心距的互斥逻辑"""
-def _check_angle_eccentricity_mutex(stats_widget, row):
-    """
-    检查指定行的轴向夹角和偏心距是否同时非零，如果是则清空其中一个并弹窗提示
-    :param stats_widget: Stats类实例
-    :param row: 行号
-    """
-    table = stats_widget.tableWidget_pipe
-    angle_item = table.item(row, 13)  # 轴向夹角列
-    ecc_item = table.item(row, 15)    # 偏心距列
-
-    angle_text = angle_item.text().strip() if angle_item else ""
-    ecc_text = ecc_item.text().strip() if ecc_item else ""
-
-    # 检查是否两个都不为0
-    if not _is_zero_like(angle_text) and not _is_zero_like(ecc_text):
-        # 两个都不为0，清空偏心距并弹窗
-        try:
-            stats_widget.suppress_cell_change = True
-            if ecc_item:
-                ecc_item.setText("0.0")
-            else:
-                ecc_item = QTableWidgetItem("0.0")
-                ecc_item.setTextAlignment(Qt.AlignCenter)
-                table.setItem(row, 15, ecc_item)
-            if hasattr(stats_widget, "original_cell_value_map"):
-                stats_widget.original_cell_value_map[(row, 15)] = "0.0"
-        finally:
-            stats_widget.suppress_cell_change = False
-
-        _mark_pipe_cell_validation_blocked(stats_widget)
-        defer_styled_warning(
-            stats_widget,
-            "校验冲突",
-            "因轴向夹角和偏心距被同时赋值，基于GB/T 150规则无法对此管口进行强度校核",
-        )
 
 """轴向定位基准互斥选择"""
 def enforce_shell_inout_axial_base_mutex(stats_widget, changed_row: int):
@@ -2404,13 +3410,14 @@ def validate_pipe_function_unique(stats_widget, row, function_text):
 
 
 """处理单元格内容改变时触发的验证"""
-def handle_pipe_cell_changed(stats_widget, row, column, product_id):
+def handle_pipe_cell_changed(stats_widget, row, column, product_id, force=False):
     """
     处理管口表格单元格值改变事件，对特定列进行值验证
     :param stats_widget: Stats类实例
     :param row: 修改的行号
     :param column: 修改的列号
     :param product_id: 产品ID
+    :param force: True 时跳过「仅处理当前编辑格」守卫（批量赋值逐行联动用）
     """
     # ✅ 跳过由 setText 触发的程序性修改
     if getattr(stats_widget, "suppress_cell_change", False):
@@ -2432,6 +3439,8 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
     if column == 1:
         if not validate_pipe_code_unique(stats_widget, row, item.text()):
             return
+        from modules.guankoudingyi.funcs.funcs_pipe_table import apply_container_pipe_purpose_lock
+        apply_container_pipe_purpose_lock(stats_widget)
 
     # 管口功能列：重复校验
     if column == 2:
@@ -2478,8 +3487,9 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
     validation_columns = {12, 13, 14, 15, 16}
     if cols["internal_height"] is not None:
         validation_columns.add(cols["internal_height"])
-    if column != 1 and column not in validation_columns:
+    if not force and column != 1 and column not in validation_columns:
         # 对于非验证列，仍然只处理当前点击编辑的单元格
+        # force=True：批量赋值需对选中行逐行跑联动（如所属元件→基准/距离/夹角等）
         if getattr(stats_widget, 'current_editing_cell', None) != (row, column):
             return
 
@@ -2491,6 +3501,34 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
     # 如果是最后一行且没有管口代号，不设置默认值
     if is_last_row and not has_pipe_code:
         return
+
+    # 轴向夹角/周向方位/偏心距：仅当相对编辑前旧值有改动时才批量写入，再逐行校验
+    if (
+        column in PIPE_PLAIN_BULK_COLUMNS
+        and not getattr(stats_widget, "_pipe_bulk_plain_propagating", False)
+    ):
+        bulk_col = getattr(stats_widget, "bulk_assign_target_column", None)
+        rows = list(
+            getattr(stats_widget, "_bulk_assign_rows_snapshot", None)
+            or getattr(stats_widget, "bulk_assign_rows", None)
+            or []
+        )
+        if bulk_col == column and len(rows) > 1 and row in rows:
+            text = item.text().strip()
+            original_map = getattr(stats_widget, "original_cell_value_map", {}) or {}
+            old_text = original_map.get((row, column))
+            # 无旧值快照、或提交值与旧值相同：不刷其它行（多选收尾/未改值确认）
+            if old_text is not None and text != str(old_text).strip():
+                stats_widget._pipe_bulk_plain_propagating = True
+                try:
+                    apply_bulk_assign_value_immediate(stats_widget, column, rows, text)
+                    _run_bulk_handle_pipe_cell_changed(
+                        stats_widget, column, rows, product_id
+                    )
+                finally:
+                    stats_widget._pipe_bulk_plain_propagating = False
+                return
+
     ##########################
     # 验证轴向夹角
     if column == 13:  # 轴向夹角列
@@ -2525,29 +3563,21 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
             item.setText(str(result))
             table.blockSignals(False)
 
-            # 🚩 新增逻辑：若偏心距 ≠ 0，则清空偏心距并弹窗
+            # 若偏心距已非零且本次轴向夹角由零变为非零：清空当前夹角，保留偏心距
             ecc_item = table.item(row, 15)
-            # if ecc_item and ecc_item.text().strip() not in ["", "0", "0.0"]:
             if (
                 ecc_item
                 and not _is_zero_like(ecc_item.text())
                 and _just_turned_from_zero_to_nonzero(stats_widget, row, 13, str(result))
             ):
                 stats_widget.suppress_cell_change = True
-
-                ecc_item.setText("0.0")
+                item.setText("0.0")
                 stats_widget.suppress_cell_change = False
                 if hasattr(stats_widget, "original_cell_value_map"):
-                    stats_widget.original_cell_value_map[(row, 15)] = "0.0"
-                # 延迟弹窗：避免在 cellChanged 栈内开模态框导致崩溃；并挂起 Enter 跳行
-                _mark_pipe_cell_validation_blocked(stats_widget)
-                defer_styled_warning(
-                    stats_widget,
-                    "校验冲突",
-                    "因轴向夹角和偏心距被同时赋值，基于GB/T 150规则无法对此管口进行强度校核",
-                )
-
-            if hasattr(stats_widget, "original_cell_value_map"):
+                    stats_widget.original_cell_value_map[(row, 13)] = "0.0"
+                # 延迟弹窗：批量时合并为一次；单行仍立即排队
+                _warn_angle_eccentricity_mutex(stats_widget, row)
+            elif hasattr(stats_widget, "original_cell_value_map"):
                 stats_widget.original_cell_value_map[(row, 13)] = str(result)
 
         # ✅ 轴向夹角改变后刷新绘图
@@ -2624,29 +3654,21 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
             table.blockSignals(True)
             item.setText(str(result))
             table.blockSignals(False)
-            # 🚩 新增逻辑：若轴向夹角 ≠ 0，则清空轴向夹角并弹窗
+            # 若轴向夹角已非零且本次偏心距由零变为非零：清空当前偏心距，保留轴向夹角
             angle_item = table.item(row, 13)
-            # if angle_item and angle_item.text().strip() not in ["", "0", "0.0"]:
             if (
                 angle_item
                 and not _is_zero_like(angle_item.text())
                 and _just_turned_from_zero_to_nonzero(stats_widget, row, 15, str(result))
             ):
                 stats_widget.suppress_cell_change = True
-
-                angle_item.setText("0.0")
+                item.setText("0.0")
                 stats_widget.suppress_cell_change = False
                 if hasattr(stats_widget, "original_cell_value_map"):
-                    stats_widget.original_cell_value_map[(row, 13)] = "0.0"
-                # 延迟弹窗：避免在 cellChanged 栈内开模态框导致崩溃；并挂起 Enter 跳行
-                _mark_pipe_cell_validation_blocked(stats_widget)
-                defer_styled_warning(
-                    stats_widget,
-                    "校验冲突",
-                    "因轴向夹角和偏心距被同时赋值，基于GB/T 150规则无法对此管口进行强度校核",
-                )
-
-            if hasattr(stats_widget, "original_cell_value_map"):
+                    stats_widget.original_cell_value_map[(row, 15)] = "0.0"
+                # 延迟弹窗：批量时合并为一次；单行仍立即排队
+                _warn_angle_eccentricity_mutex(stats_widget, row)
+            elif hasattr(stats_widget, "original_cell_value_map"):
                 stats_widget.original_cell_value_map[(row, 15)] = str(result)
 
         # ✅ 偏心距改变后刷新绘图
@@ -2742,8 +3764,14 @@ def handle_pipe_cell_changed(stats_widget, row, column, product_id):
         if not valid:
             # 显示错误提示
             _set_tip(stats_widget, result, "red")
-            # 根据管口功能设置默认值
-            if pipe_function in ["管程入口", "管程出口"] or pipe_belong in["固定管板","前端管板","后端管板"]:
+            # 容器：校验不通过时回填壳体长度的 1/2；换热器：管程/管板「居中」，其余「程序推荐」
+            if is_container:
+                shell_length = get_container_shell_length(product_id)
+                if shell_length is not None:
+                    default_value = f"{round(float(shell_length) / 2.0, 1):.1f}"
+                else:
+                    default_value = "程序推荐"
+            elif pipe_function in ["管程入口", "管程出口"] or pipe_belong in["固定管板","前端管板","后端管板"]:
                 default_value = "居中"
             else:
                 default_value = "程序推荐"
@@ -3297,22 +4325,33 @@ def get_material_category_number_by_product(product_id, pressure_type, pipe_id=N
         conn_design = get_connection(**db_config_2)
         cursor_design = conn_design.cursor(pymysql.cursors.DictCursor)
 
-        # 先从管口类别表查询该产品的管口类别
+        # 无 pipe_id 时优先用管口代号解析，避免扫全产品所有材料分类（管口多时极卡）
+        if not pipe_id and pipe_code:
+            cursor_design.execute(
+                """
+                SELECT 管口ID
+                FROM 产品设计活动表_管口表
+                WHERE 产品ID = %s AND 管口代号 = %s
+                LIMIT 1
+                """,
+                (product_id, pipe_code),
+            )
+            id_row = cursor_design.fetchone()
+            if id_row:
+                pipe_id = id_row.get("管口ID")
+
+        # 只查当前管口分类；禁止退化为全产品扫描
         if pipe_id:
-            # 查询特定管口的材料分类
-            cursor_design.execute("""
+            cursor_design.execute(
+                """
                 SELECT DISTINCT 材料分类
                 FROM 产品设计活动表_管口类别表
                 WHERE 产品ID = %s AND 管口ID = %s AND 材料分类 IS NOT NULL
-            """, (product_id, pipe_id))
+                """,
+                (product_id, pipe_id),
+            )
         else:
-            # 查询该产品所有管口的材料分类
-            cursor_design.execute("""
-                SELECT DISTINCT 材料分类
-                FROM 产品设计活动表_管口类别表
-                WHERE 产品ID = %s AND 材料分类 IS NOT NULL
-                ORDER BY 材料分类
-            """, (product_id,))
+            return None, "未找到当前管口材料分类（请先确认保存管口后再查看推荐）"
 
         categories = cursor_design.fetchall()
 
@@ -3434,9 +4473,15 @@ def get_max_working_temperature_by_belong(product_id, pipe_belong):
     conn = None
     cursor = None
     try:
-        if "管箱" in pipe_belong or "管板" in pipe_belong:
+        belong = (pipe_belong or "").strip()
+        product_type, _ = get_product_type_and_version(product_id)
+        is_container = bool(product_type and "容器" in str(product_type))
+        # 容器产品默认取壳程（圆筒/封头等均按壳程）
+        if is_container:
+            value_field = "壳程数值"
+        elif "管箱" in belong or "管板" in belong:
             value_field = "管程数值"
-        elif "壳体" in pipe_belong or "外头盖" in pipe_belong or "壳程" in pipe_belong or "锥壳" in pipe_belong:
+        elif "壳体" in belong or "外头盖" in belong or "壳程" in belong or "锥壳" in belong:
             value_field = "壳程数值"
         else:
             return None, "无效的管口所属元件字段"
@@ -3473,9 +4518,15 @@ def get_working_pressure_by_belong(product_id, pipe_belong):
     conn = None
     cursor = None
     try:
-        if "管箱" in pipe_belong or"管板" in pipe_belong:
+        belong = (pipe_belong or "").strip()
+        product_type, _ = get_product_type_and_version(product_id)
+        is_container = bool(product_type and "容器" in str(product_type))
+        # 容器产品默认取壳程（圆筒/封头等均按壳程）
+        if is_container:
+            value_field = "壳程数值"
+        elif "管箱" in belong or "管板" in belong:
             value_field = "管程数值"
-        elif "壳体" in pipe_belong or "外头盖" in pipe_belong or "壳程" in pipe_belong or "锥壳" in pipe_belong:
+        elif "壳体" in belong or "外头盖" in belong or "壳程" in belong or "锥壳" in belong:
             value_field = "壳程数值"
         else:
             return None, "无效的管口所属元件字段"
@@ -3580,6 +4631,7 @@ def get_product_type(product_id):
         """, (product_id,))
         row = cursor.fetchone()
         return row["产品型式"] if row else None
+
     finally:
         cursor.close()
         conn.close()
@@ -4418,17 +5470,28 @@ def get_container_shell_length(product_id):
 
 
 """管口附件下拉框实现多选"""
-from PyQt5.QtWidgets import QStyledItemDelegate
 
 class MultiSelectComboDelegate(QStyledItemDelegate):
     def __init__(self, items, parent=None):
         super().__init__(parent)
         self.items = items or ["None"]
+        self.show_dropdown_arrow = True
+        self.stats_widget = None
+
+    def paint(self, painter, option, index):
+        _paint_pipe_combo_cell(self, painter, option, index)
+
+    def helpEvent(self, event, view, option, index):
+        """内容显示不全时悬浮提示（与 ComboBoxDelegate 共用逻辑）"""
+        return _pipe_cell_overflow_tooltip_help_event(self, event, view, option, index)
 
     def createEditor(self, parent, option, index):
+        # 未武装禁止创建（与 ComboBoxDelegate 一致）
+        if not _consume_pipe_combo_editor_arm(self.stats_widget):
+            return None
         editor = CheckableComboBox(parent)
         editor.addItems(self.items)
-        # 与纯下拉一致：单击进入编辑后自动弹出，避免再点一次
+        # 箭头/键盘进入编辑后自动弹出，避免再点一次
         QTimer.singleShot(0, editor.showPopup)
         return editor
 

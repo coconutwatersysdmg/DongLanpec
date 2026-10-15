@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 :: 数据库连接参数
 set HOST=localhost
 set PORT=3306
-set USER=root
+set USER=donghua704
 set PASSWORD=123456
 set DATABASE=配置库
 

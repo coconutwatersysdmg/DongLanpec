@@ -1,5 +1,6 @@
 from PyQt5.QtCore import QTimer
-from PyQt5.QtWidgets import QMessageBox, QLabel, QComboBox
+from PyQt5.QtGui import QColor, QBrush
+from PyQt5.QtWidgets import QMessageBox, QLabel, QComboBox, QTableWidgetItem
 import pymysql
 import time
 from modules.guankoudingyi.db_cnt import get_connection, db_config_2,db_config_material
@@ -10,11 +11,140 @@ from modules.guankoudingyi.funcs.funcs_pipe_table import (
     get_next_attachment_id_runtime,
     get_pipe_column_map,
     get_pipe_col,
+    show_styled_warning,
 )
 from modules.cailiaodingyi.funcs.funcs_pdf_input import (
     _component_to_material_category,
     query_all_guankou_categories,
 )
+
+# 与 dynamically_adjust_ui._apply_highlight_to_table_cells 选中行非焦点格同色
+_PIPE_ROW_HIGHLIGHT_BG = QColor("#90d7ec")
+
+
+def _highlight_pipe_rows(stats_widget, rows):
+    """
+    整行统一浅蓝色高亮（#d0e7ff）。
+    不用选区高亮：无管口代号时部分列不可选，选区只会覆盖可点列，
+    再叠加「选中格深蓝 / 同行浅蓝」会表现为断断续续。
+    """
+    table = getattr(stats_widget, "tableWidget_pipe", None)
+    if table is None or not rows:
+        return
+    brush = QBrush(_PIPE_ROW_HIGHLIGHT_BG)
+    fg = QColor("black")
+    clear_bg = QColor(0, 0, 0, 0)
+    clear_fg = QColor(0, 0, 0)
+    col_count = table.columnCount()
+    row_count = table.rowCount()
+
+    # 先取消界面选中高亮：清选区 + 清批量快照，再整表抹掉旧底色
+    # （clearSelection 后 highlight_selected_rows 会因无选中行直接 return，旧蓝底残留）
+    table.blockSignals(True)
+    try:
+        table.clearSelection()
+        stats_widget._bulk_assign_rows_snapshot = []
+        stats_widget._pipe_bulk_edit_active = False
+        try:
+            table.setProperty("pipe_bulk_edit_active", False)
+        except Exception:
+            pass
+        for row in range(row_count):
+            for col in range(col_count):
+                item = table.item(row, col)
+                if item is None:
+                    continue
+                item.setBackground(clear_bg)
+                item.setForeground(clear_fg)
+        for row in rows:
+            for col in range(col_count):
+                item = table.item(row, col)
+                if item is None:
+                    item = QTableWidgetItem("")
+                    table.setItem(row, col, item)
+                item.setBackground(brush)
+                item.setForeground(fg)
+    finally:
+        table.blockSignals(False)
+
+    view = getattr(stats_widget, "view", None)
+    if view is not None and hasattr(view, "set_highlight_pipe_codes"):
+        try:
+            view.set_highlight_pipe_codes([])
+        except Exception:
+            pass
+
+    first_item = table.item(rows[0], 1) or table.item(rows[0], 0)
+    if first_item is not None:
+        table.scrollToItem(first_item)
+
+
+def _normalize_pipe_position_field(text):
+    """保存校验用：四元组比对前统一空白与锁定占位符。"""
+    t = (text or "").strip()
+    if t in ("", "-", "—", "－"):
+        return ""
+    return t
+
+
+def _read_pipe_position_tuple(table, row, is_container):
+    """读取一行管口的 (轴向定位距离, 轴向夹角, 周向方位, 偏心距) 归一化元组。"""
+    field_cols = [
+        get_pipe_col(is_container, "轴向定位距离"),
+        get_pipe_col(is_container, "轴向夹角（°）"),
+        get_pipe_col(is_container, "周向方位（°）"),
+        get_pipe_col(is_container, "偏心距"),
+    ]
+    if any(c is None for c in field_cols):
+        return None
+    parts = []
+    for col in field_cols:
+        item = table.item(row, col)
+        parts.append(_normalize_pipe_position_field(item.text() if item else ""))
+    return tuple(parts)
+
+
+def _find_container_duplicate_position_groups(table, is_container, last_row):
+    """容器产品：按四元组分组，返回 len>=2 的冲突组 [(row, code), ...]。"""
+    groups = {}
+    for row in range(last_row):
+        code_item = table.item(row, 1)
+        code = code_item.text().strip() if code_item else ""
+        if not code:
+            continue
+        key = _read_pipe_position_tuple(table, row, is_container)
+        if key is None:
+            continue
+        groups.setdefault(key, []).append((row, code))
+    return [entries for entries in groups.values() if len(entries) >= 2]
+
+
+def _validate_container_pipe_position_uniqueness(stats_widget, table, is_container):
+    """
+    容器产品保存前：各管口四元组不能完全一致。
+    失败时高亮冲突行并弹窗（风格同管口代号/功能重复提示）。
+    """
+    if not is_container or table is None:
+        return True
+
+    last_row = table.rowCount() - 1
+    conflict_groups = _find_container_duplicate_position_groups(table, is_container, last_row)
+    if not conflict_groups:
+        return True
+
+    messages = []
+    highlight_rows = []
+    for entries in conflict_groups:
+        codes = [code for _, code in entries]
+        highlight_rows.extend(r for r, _ in entries)
+        messages.append(
+            f"{'、'.join(codes)}管口的轴向定位距离、轴向夹角、周向方位、偏心距完全一致，请重新输入"
+        )
+
+    msg = "\n".join(messages)
+    _highlight_pipe_rows(stats_widget, sorted(set(highlight_rows)))
+    show_styled_warning(stats_widget, "提示", msg)
+    return False
 
 
 def save_all_pipe_data(stats_widget):
@@ -41,22 +171,38 @@ def save_all_pipe_data(stats_widget):
 
     is_container = getattr(stats_widget, 'is_container_product', False)
 
-    # ===== 保存前校验：“管口功能”必填（仅换热器；容器不校验） =====
-    if table is not None and not is_container:
-        missing_codes = []
+    # ===== 保存前校验：管口代号必填；管口功能必填（仅换热器；容器不校验） =====
+    if table is not None:
+        empty_code_rows = []
+        missing_func_rows = []
         last_row = table.rowCount() - 1  # 排除最后空行
         for row in range(last_row):
             code_item = table.item(row, 1)  # 管口代号
             func_item = table.item(row, 2)  # 管口功能
             code = code_item.text().strip() if code_item else ""
             func = func_item.text().strip() if func_item else ""
-            if code and not func:
-                missing_codes.append(code)
-        if missing_codes:
-            msg = "请输入管口代号为 " + "、".join(missing_codes) + " 的管口功能"
+            if not code:
+                empty_code_rows.append(row)
+            elif not func and not is_container:
+                missing_func_rows.append(row)
+
+        if empty_code_rows or missing_func_rows:
+            if empty_code_rows and missing_func_rows:
+                msg = '"管口代号"、"管口功能"不能为空，请补充'
+            elif empty_code_rows:
+                msg = '"管口代号"不能为空，请补充'
+            else:
+                msg = '"管口功能"不能为空，请补充'
             if hasattr(stats_widget, 'line_tip'):
                 stats_widget.line_tip.setText(msg)
                 stats_widget.line_tip.setStyleSheet("color: #FFA500;")  # 橘色提示
+            # 合并去重并保持行序，统一高亮
+            highlight_rows = sorted(set(empty_code_rows + missing_func_rows))
+            _highlight_pipe_rows(stats_widget, highlight_rows)
+            return
+
+        # 容器：四元组 (轴向定位距离/夹角/周向方位/偏心距) 不能完全一致
+        if not _validate_container_pipe_position_uniqueness(stats_widget, table, is_container):
             return
         # ===== 校验通过，继续原有保存逻辑 =====
 
@@ -141,6 +287,10 @@ def save_all_pipe_data(stats_widget):
                 txt = it.text().strip() if it else ""
                 # 对于"管口附件"字段，允许保存空字符串（用户取消所有选择时需要清空数据库中的值）
                 # 其他字段保持原有逻辑，空字符串不保存
+                if is_container and field == "管口用途":
+                    # 「/」只是界面禁用占位，不入库
+                    row_data[field] = "" if txt in ("", "/") else txt
+                    continue
                 if txt != "" or field == "管口附件":
                     row_data[field] = txt
 
@@ -290,6 +440,14 @@ def save_all_attachment_define_data(stats_widget):
     conn = None
     cur = None
     try:
+        from modules.cailiaodingyi.controllers.datamanager import (
+            query_insulation_attachment_bases,
+            sync_insulation_names_after_attachment_change,
+            ensure_insulation_device_visible_from_attachment,
+        )
+        # 保存前快照：用于差量取消元件侧保温勾选（用户自增的支撑环不会被误取消）
+        old_insul_bases = query_insulation_attachment_bases(product_id)
+
         conn = get_connection(**db_config_2)
         cur = conn.cursor(pymysql.cursors.DictCursor)
 
@@ -335,6 +493,23 @@ def save_all_attachment_define_data(stats_widget):
             cur.execute(sql, values)
 
         conn.commit()
+
+        # 附件保存后：按差量取消/追加保温勾选；必要时场景③强制显示并灌模板
+        try:
+            from modules.cailiaodingyi.controllers.datamanager import (
+                sync_insulation_names_after_attachment_add,
+            )
+            new_insul_bases = query_insulation_attachment_bases(product_id)
+            old_set = set(old_insul_bases or set())
+            new_set = set(new_insul_bases or set())
+            removed_bases = old_set - new_set
+            added_bases = new_set - old_set
+            sync_insulation_names_after_attachment_change(product_id, removed_bases=removed_bases)
+            ensure_insulation_device_visible_from_attachment(product_id, force=True)
+            # 已有合并表时：新增环→跟支撑板 Tab；新增板→板+支耳跟支撑环 Tab
+            sync_insulation_names_after_attachment_add(product_id, added_bases=added_bases)
+        except Exception as e:
+            print(f"[附件保存][保温装置] 同步合并表失败: {e}")
 
     except Exception as e:
         if conn:

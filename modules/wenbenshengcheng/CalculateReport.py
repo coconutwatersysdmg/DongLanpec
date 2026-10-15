@@ -168,7 +168,6 @@ sheet_config = {
     }
 }
 pipe_param_source = {
-    "接管腐蚀裕量": "产品设计活动表_管口零件材料参数表",
     "接管与壳体连接结构型式": "产品设计活动表_管口零件材料参数表",
     "接管材料类型": "产品设计活动表_管口零件材料表",
     "接管材料牌号": "产品设计活动表_管口零件材料表"
@@ -224,7 +223,7 @@ def copy_template_file(template_path: str, product_id: str) -> str:
     try:
         with connection.cursor() as cursor:
             cursor.execute("""
-                SELECT 管口代号, 管口用途, 管口所属元件
+                SELECT 管口代号, 管口功能, 管口所属元件
                 FROM 产品设计活动表_管口表
                 WHERE 产品ID = %s
             """, (product_id,))
@@ -234,7 +233,7 @@ def copy_template_file(template_path: str, product_id: str) -> str:
             for i, row in enumerate(rows):
                 try:
                     code = row["管口代号"]
-                    use = row["管口用途"]
+                    use = row["管口功能"]
                     owner = row["管口所属元件"]
                     new_title = f"{code}_{use}_{owner}"[:31]
 
@@ -320,7 +319,21 @@ def get_guankou_param(product_id: str, param_name: str):
             return row["参数值"] if row else None
     finally:
         conn.close()
-
+def get_jieguan_fushiyuliang_param(product_id: str, param_name: str):
+    """
+    从 产品设计活动表_管口零件材料参数表 中查询参数（无需零件名）
+    """
+    conn = get_connection(**db_config)
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT Value FROM 产品设计活动表_元件计算结果表
+                WHERE 产品ID = %s AND 元件名称 = %s
+            """, (product_id, param_name))
+            row = cursor.fetchone()
+            return row["Value"] if row else None
+    finally:
+        conn.close()
 
 def fill_template_with_data(file_path: str, product_id: str):
     try:
@@ -398,7 +411,7 @@ def get_conditionInput_data(file_path: str, product_id: str):
             "设计压力*": ["设计压力P", "壳程设计压力P", "管程设计压力P"],
             "设计温度（最高）*": ["设计温度T", "壳程设计温度T", "管程设计温度T", "管箱分程隔板设计温度",
                                 "管/壳程设计温度"],
-            "腐蚀裕量*": ["腐蚀裕量C", "壳程腐蚀裕量C", "管程腐蚀裕量C"],
+            "腐蚀裕量*": ["腐蚀裕量C", "壳程腐蚀裕量C", "管程腐蚀裕量C","管程腐蚀裕量","壳程腐蚀裕量"],
             "公称直径*": ["公称直径", "管口公称直径", "公称直径DN"],
             "焊接接头系数*": ["焊接接头系数", "焊接接头系数ф", "纵向焊接接头系数ϕ"],
             "耐压试验类型*": ["压力试验类型", "耐压试验类型"],
@@ -543,10 +556,18 @@ def fill_excel_with_data(file_path: str, product_id: str):
                     d_cell.value = unified_guankou_type
                 elif param_name == "接管材料牌号":
                     d_cell.value = unified_guankou_grade
-                elif param_name in ["接管腐蚀裕量", "接管与壳体连接结构型式"]:
+                elif param_name == "接管与壳体连接结构型式":
                     value = get_guankou_param(product_id, param_name)
                     if value is not None:
                         d_cell.value = value
+                elif param_name == "接管腐蚀裕量":
+                    print(param_name,"param_name")
+
+                    value = get_jieguan_fushiyuliang_param(product_id, param_name)
+                    print(param_name,"param_name")
+                    if value is not None:
+                        d_cell.value = value
+                    print(value,"d_cell.value")
                 elif param_name == f"{connected_part}材料类型":
                     if part_type:
                         d_cell.value = part_type.get("参数值", "")
@@ -758,6 +779,41 @@ def fill_excel_with_dictoutdatas(file_path: str, json_path: str):
                         value_map["校核条件"] = value
                     key = mapping.get(name, name)
                     value_map[key] = value
+        if sheet.title == "后端管箱圆筒":
+            cyl_data = outdatas.get("后端管箱圆筒", {})
+            if cyl_data and cyl_data.get("IsSuccess"):
+                for item in cyl_data.get("Datas", []):
+                    id_ = item.get("Id", "")
+                    name = item.get("Name", "")
+                    value = item.get("Value", "")
+                    if id_ == "工况1：YT9" and name == "计算压力":
+                        value_map["计算压力pc"] = value
+                    elif id_ == "工况1：YT3" and "圆筒内/外径" in name:
+                        value_map["圆筒内直径Di"] = value
+                        print(value)
+                        value_map["圆筒外直径Do"] = value
+                    elif id_ == "工况1：YT23" and name == "圆筒长度":
+                        value_map["圆筒长度L"] = value
+                    elif id_ == "工况1：YT30" and name == "材料试验温度下许用应力":
+                        value_map["耐压试验温度下材料许用应力[σ]"] = value
+                    elif id_ == "工况1：YT31" and name == "材料设计温度下许用应力":
+                        value_map["设计温度下材料许用应力[σ]t"] = value
+
+                        value_map["设计温度下计算应力σt"] = value
+                    elif id_ == "工况1：YT35" and name == "钢材厚度负偏差":
+                        value_map["材料厚度负偏差C1"] = value
+                    elif id_ == "工况1：YT54" and name == "圆筒压力试验压力":
+                        value_map["试验压力值PT"] = value
+                    elif id_ == "工况1：YT50" and name == "圆筒内压强度计算厚度δc":
+                        value_map["计算厚度δ"] = value
+                    elif id_ == "工况1：YT53" and name == "圆筒有效厚度":
+                        value_map["有效厚度δe"] = value
+                        value_map["最大允许工作压力[Pw]"] = value
+                    elif id_ == "工况2：YT1" and name == "圆筒名义厚度":
+                        value_map["名义厚度δn"] = value
+                        value_map["校核条件"] = value
+                    key = mapping.get(name, name)
+                    value_map[key] = value
              # ✅ 壳体封头字段映射
         if sheet.title == "管箱封头":
             head_data = outdatas.get("管箱封头", {})
@@ -922,6 +978,8 @@ def fill_excel_with_dictoutdatas(file_path: str, json_path: str):
 
                     key = mapping.get(name, name)
                     value_map[key] = value
+
+
         # ✅ 固定管板 + 换热管内压字段映射
             # 针对特定 sheet 加载对应模块数据
         if sheet.title == "换热管内压":

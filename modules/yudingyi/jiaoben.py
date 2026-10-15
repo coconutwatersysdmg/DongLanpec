@@ -10,9 +10,7 @@ df.columns = [f'col_{i}' for i in range(len(df.columns))]
 
 # === 3. 连接数据库 ===
 conn = pymysql.connect(
-    host='localhost',
-    user='root',
-    password='123456',   # 修改为你的密码
+    host="10.32.41.132", user="root", password="123456",port=3306,
     database='配置库',
     charset='utf8mb4'
 )

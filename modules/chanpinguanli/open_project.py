@@ -76,7 +76,9 @@ def lock_combo(combo: QComboBox):
             background-color: #EEE;
             color: #555;
             border: 1px solid #CCC;   /* 浅灰边框 */
-            padding: 2px 6px;
+            min-height: 29px;
+            max-height: 29px;
+            padding: 2px 8px;
         }
         QComboBox::drop-down {
             subcontrol-origin: padding;
@@ -105,7 +107,14 @@ def unlock_combo(combo: QComboBox):
                 color: black;
                 border: 1px solid rgb(180, 180, 180);  /* 中灰边框 */
                 border-radius: 2px;
-                padding: 6px 30px 6px 8px;  /* 左右内边距大一点，给右侧箭头留空间 */
+                min-height: 29px;
+                max-height: 29px;
+                padding: 2px 8px 2px 8px;
+                font-size: 9pt;
+                font-family: '宋体';
+            }}
+
+            QComboBox QAbstractItemView {{
                 font-size: 11pt;
                 font-family: '宋体';
             }}
@@ -118,15 +127,15 @@ def unlock_combo(combo: QComboBox):
             QComboBox::drop-down {{
                 subcontrol-origin: padding;
                 subcontrol-position: top right;
-                width: 30px;
+                width: 24px;
                 border: none;
                 background: transparent;
             }}
 
             QComboBox::down-arrow {{
                 image: url("{image_path}");
-                width: 30px;
-                height: 20px;
+                width: 14px;
+                height: 14px;
             }}
         """)
 
@@ -138,7 +147,9 @@ def lock_line_edit(line_edit: QLineEdit):
         QLineEdit {
             background-color: #EEE;
             color: #555;
-            padding: 0px;
+            min-height: 29px;
+            max-height: 29px;
+            padding: 2px 8px;
         }
     """)
 
@@ -146,7 +157,13 @@ def lock_line_edit(line_edit: QLineEdit):
 def unlock_line_edit(line_edit: QLineEdit):
     line_edit.setEnabled(True)
     line_edit.setReadOnly(False)
-    line_edit.setStyleSheet("")
+    line_edit.setStyleSheet("""
+        QLineEdit {
+            min-height: 29px;
+            max-height: 29px;
+            padding: 2px 8px;
+        }
+    """)
 
 # 1015
 def clear_and_lock_product_details():
@@ -197,14 +214,17 @@ def clear_and_lock_product_details():
 # ▲▲▲ 新函数结束 ▲▲▲
 
 
-def open_project():
+def open_project(folder_path=None):
     # ▼▼▼ 在函数内部添加导入语句 ▼▼▼
     from modules.chanpinguanli.chanpinguanli_main import product_manager
     # 初始化定时器
     init_tip_timer()
     try:
         default_path = get_last_used_path()
-        folder_path = QFileDialog.getExistingDirectory(bianl.main_window, "选择项目文件夹", default_path)
+        # 顶栏 .dlpec 导入成功后直接复用已有加载流程；clicked(bool) 仍打开目录选择框。
+        if not isinstance(folder_path, (str, os.PathLike)):
+            folder_path = QFileDialog.getExistingDirectory(bianl.main_window, "选择项目文件夹", default_path)
+        folder_path = os.fspath(folder_path) if folder_path else ""
         print("选择项目文件夹...")  # 调试信息
         # folder_path = QFileDialog.getExistingDirectory(bianl.main_window, "选择项目文件夹", "")
         if not folder_path:
@@ -596,6 +616,7 @@ def open_project():
         # save_last_used_path(parent_folder)
         # 产品信息字体颜色灰色刷新
         # apply_table_font_style()
+        return True
 
     except Exception as e:
         error_message = f"打开项目失败: {e}"
@@ -607,3 +628,4 @@ def open_project():
         bianl.main_window.line_tip.setToolTip( f"打开项目失败，请检查 error_log.txt\n\n错误信息:\n{e}")
         bianl.main_window.line_tip.setStyleSheet("color: black;")
         # QMessageBox.critical(bianl.main_window, "程序错误", f"打开项目失败，请检查 error_log.txt\n\n错误信息:\n{e}")
+        return False

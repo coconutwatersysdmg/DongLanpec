@@ -79,6 +79,8 @@ class cpgl_Stats(QtWidgets.QWidget):
 
         # 产品信息区
         bianl.product_table = self.findChild(QtWidgets.QTableWidget, "product_table")
+        from modules.chanpinguanli.predefined_column import install_predefined_column
+        install_predefined_column(bianl.product_table)
 
         # 0506新修改--项目信息非法字符约束
         # 安装自定义委托，实现实时非法字符验证
@@ -94,6 +96,17 @@ class cpgl_Stats(QtWidgets.QWidget):
         bianl.drawing_prefix_input = self.findChild(QtWidgets.QLineEdit, "drawing_prefix_input")
         bianl.image_label = self.findChild(QtWidgets.QLabel, "image_label")
         bianl.image_area = self.findChild(QtWidgets.QFrame, "image_area")
+
+        # 0526新修改-模块化设计禁用
+        bianl.radio_standard_design = self.findChild(QtWidgets.QRadioButton, "radio_standard_design")
+        bianl.radio_modular_design = self.findChild(QtWidgets.QRadioButton, "radio_modular_design")
+        if bianl.radio_modular_design:
+            bianl.radio_modular_design.setEnabled(False)
+            bianl.radio_modular_design.setChecked(False)
+        if bianl.radio_standard_design:
+            bianl.radio_standard_design.setChecked(True)
+
+
 
         #工作信息区 改77
         bianl.design_input = self.findChild(QtWidgets.QLineEdit, "design_input")
@@ -242,6 +255,7 @@ class cpgl_Stats(QtWidgets.QWidget):
         bianl.product_type_combo.currentTextChanged.connect(main.load_product_forms)
         # lxy101
         bianl.product_type_combo.currentTextChanged.connect(main.on_product_type_changed)
+        bianl.product_form_combo.currentTextChanged.connect(main.on_product_form_changed)
 
         # 设计阶段 下拉框  改88
         # bianl.design_stage_combo.showPopup = main.wrap_show_popup(bianl.design_stage_combo.showPopup,
@@ -593,6 +607,7 @@ class cpgl_Stats(QtWidgets.QWidget):
         if ok:
             if isinstance(st, dict):
                 st["definition_status"] = "view"
+                st["definition_dirty"] = False
                 print(f"【调试】第{row + 1}行 definition_status 复位为 view（定义/工作信息已保存）")
             if hasattr(self, "mark_clean"):
                 self.mark_clean()
@@ -616,7 +631,12 @@ class cpgl_Stats(QtWidgets.QWidget):
 
     # ======【项目管理页：脏标记与保存包装】======
     def _set_definition_edit_flag(self, *args):
-        """当前产品行进入编辑：把 definition_status=edit"""
+        """标记定义/工作信息有未保存修改。
+
+        已定义产品（definition_status=view）只置 definition_dirty，不改为 edit，
+        避免未保存切行后再选回来时类型/型式被解锁、后续模块误判未定义。
+        尚未完成首次定义的产品仍置 definition_status=edit。
+        """
         try:
             row = bianl.product_table.currentRow()
             if row is None or row < 0:
@@ -624,8 +644,13 @@ class cpgl_Stats(QtWidgets.QWidget):
             row_status = bianl.product_table_row_status.get(row)
             if not isinstance(row_status, dict):
                 return
-            # 只有有 product_id 的行才算“已有定义，可编辑”
+            # 只有有 product_id 的行才算“已有产品，可编辑定义区”
             if not row_status.get("product_id"):
+                return
+            if row_status.get("definition_status") == "view":
+                if not row_status.get("definition_dirty"):
+                    row_status["definition_dirty"] = True
+                    print(f"【调试】第{row + 1}行 definition_dirty=True（已定义产品，未保存修改）")
                 return
             if row_status.get("definition_status") != "edit":
                 row_status["definition_status"] = "edit"
@@ -753,30 +778,7 @@ class cpgl_Stats(QtWidgets.QWidget):
             # 建议：成功后，必要时可刷新一次界面并在刷新完成后保持 _dirty=False
             # 例如：self.reload_from_db(...)
 # lxy新增结束
-    def closeEvent(self, event):
-        # 检查有没有保存
-        if not self.check_if_all_saved():
-            # 自定义按钮文本
-            msg_box = QMessageBox(self)
-            msg_box.setWindowTitle("未保存的更改")
-            msg_box.setText("存在未保存的信息，是否仍要退出？")
-            msg_box.setIcon(QMessageBox.Warning)
-
-            # 自定义按钮
-            yes_button = QPushButton("是")
-            no_button = QPushButton("否")
-
-            msg_box.addButton(yes_button, QMessageBox.YesRole)
-            msg_box.addButton(no_button, QMessageBox.NoRole)
-
-            # 显示对话框并获取结果
-            result = msg_box.exec_()
-
-            if msg_box.clickedButton() == no_button:
-                event.ignore()  # 如果点击的是“否”，忽略退出操作
-                return
-        event.accept()
-    # 检查是否进行保存
+    # 检查是否进行保存（供 main.py 关 Tab / 关主窗口调用；关闭确认弹窗由主窗口统一处理）
     def check_if_all_saved(self):
         print("【调试】开始检查是否有未保存数据...")
 
@@ -837,9 +839,10 @@ class cpgl_Stats(QtWidgets.QWidget):
             if current_row is not None:
                 status_dict = bianl.product_table_row_status.get(current_row, {})
                 def_status = status_dict.get("definition_status", "view")
-                print(f"【调试】[产品定义] 当前产品行 {current_row + 1} definition_status = {def_status}")
+                def_dirty = bool(status_dict.get("definition_dirty"))
+                print(f"【调试】[产品定义] 当前产品行 {current_row + 1} definition_status = {def_status}, dirty = {def_dirty}")
 
-                if def_status == "edit":
+                if def_status == "edit" or def_dirty:
                     # 定义区
                     definition_fields = {
                         "产品类型": bianl.product_type_combo.currentText().strip(),
@@ -982,4 +985,3 @@ class cpgl_Stats(QtWidgets.QWidget):
 #     main.load_product_forms()
 #     main.load_product_types_design_t()
 #     sys.exit(App.exec_())
-

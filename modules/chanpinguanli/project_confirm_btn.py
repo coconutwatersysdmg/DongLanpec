@@ -2,16 +2,12 @@ import os
 import shutil
 
 from PyQt5.QtCore import QTimer
+from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import QApplication, QMessageBox, QPushButton, QLineEdit, QStyleFactory
 
 import modules.chanpinguanli.bianl as bianl
-from PyQt5.QtWidgets import QMessageBox, QPushButton, QLineEdit
 import modules.chanpinguanli.common_usage as common_usage
 import modules.chanpinguanli.open_project as open_project
-from modules.chanpinguanli.ui_style import (
-    apply_chanpinguanli_dialog_style,
-    localize_messagebox_buttons,
-    show_chanpinguanli_message,
-)
 
 # 初始化提示定时器（确保只初始化一次）
 def init_tip_timer():
@@ -29,54 +25,92 @@ def clear_line_tip():
         bianl.main_window.line_tip.setToolTip("")
 
 
+# 与 guanli_new.ui 中 QPushButton 一致（Windows 原生 QMessageBox 会忽略仅挂在父级的 QSS，
+# 需 Fusion + 直接写到每个按钮上才会生效）
+MSGBOX_BUTTON_STYLE = """
+QPushButton {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #ffffff, stop: 1 #e8edf5);
+    border: 1px solid #b8c8e0;
+    border-radius: 0px;
+    color: #000000;
+    font-size: 17px;
+    padding: 8px 20px;
+    text-align: center;
+    min-width: 65px;
+}
+QPushButton:hover {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #f0f4fa, stop: 1 #d8e0ed);
+    border-color: #9ab0d0;
+}
+QPushButton:pressed {
+    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
+                                stop: 0 #e0e6f0, stop: 1 #c8d2e0);
+    border-color: #7a90b0;
+}
+QPushButton:disabled {
+    background: #f5f7fa;
+    color: #888888;
+    border-color: #d0d8e5;
+}
+"""
+
+# 项目管理确认框观感：白底 + 宋体正文（与截图一致；按钮字体仍由 MSGBOX_BUTTON_STYLE 控制）
+MSGBOX_DIALOG_STYLE = """
+QMessageBox {
+    background-color: #ffffff;
+    color: #000000;
+    font-family: "宋体", SimSun;
+    font-size: 12pt;
+}
+QMessageBox QLabel {
+    background: transparent;
+    color: #000000;
+    font-family: "宋体", SimSun;
+    font-size: 12pt;
+}
+""" + MSGBOX_BUTTON_STYLE
+
+_FUSION_STYLE = None
+
+
+def _fusion_style():
+    global _FUSION_STYLE
+    if _FUSION_STYLE is None:
+        _FUSION_STYLE = QStyleFactory.create("Fusion")
+    return _FUSION_STYLE
+
+
+def _msgbox_body_font():
+    """项目管理弹窗正文：宋体，字号至少 12pt。"""
+    font = QFont(QApplication.font())
+    family = (font.family() or "").strip()
+    if family not in ("宋体", "SimSun"):
+        font.setFamily("宋体")
+    if font.pointSize() > 0 and font.pointSize() < 12:
+        font.setPointSize(12)
+    elif font.pointSize() <= 0:
+        font.setPointSize(12)
+    return font
+
+
 def apply_msgbox_button_style(msg_box):
-    """为已构造的 QMessageBox 套用项目管理按钮/弹窗样式，并尽量中文化标准按钮。"""
+    """给 QMessageBox 套用项目管理同款：白底、宋体正文、扁平按钮。"""
     if msg_box is None:
-        return None
-    try:
-        localize_messagebox_buttons(msg_box)
-    except Exception:
-        pass
-    return apply_chanpinguanli_dialog_style(msg_box)
-
-
-def show_info_dialog(parent, title, text, button_text="确认"):
-    """信息提示框（单按钮）。"""
-    show_chanpinguanli_message(parent, QMessageBox.Information, title, text, button_text)
-
-
-def show_warning_dialog(parent, title, text, button_text="确认"):
-    """警告提示框（单按钮）。"""
-    show_chanpinguanli_message(parent, QMessageBox.Warning, title, text, button_text)
-
-
-def show_critical_dialog(parent, title, text, button_text="确认"):
-    """错误/严重提示框（单按钮）。"""
-    show_chanpinguanli_message(parent, QMessageBox.Critical, title, text, button_text)
-
-
-def show_yes_no_dialog(
-    parent,
-    title,
-    text,
-    yes_text="是",
-    no_text="否",
-    default_no=False,
-):
-    """是/否对话框，返回 True 表示选了肯定按钮。"""
-    msg_box = QMessageBox(parent)
-    msg_box.setWindowTitle(title)
-    msg_box.setText(text)
-    msg_box.setIcon(QMessageBox.Question)
-
-    yes_button = QPushButton(yes_text)
-    no_button = QPushButton(no_text)
-    msg_box.addButton(yes_button, QMessageBox.YesRole)
-    msg_box.addButton(no_button, QMessageBox.NoRole)
-    msg_box.setDefaultButton(no_button if default_no else yes_button)
-    apply_msgbox_button_style(msg_box)
-    msg_box.exec_()
-    return msg_box.clickedButton() == yes_button
+        return
+    fusion = _fusion_style()
+    if fusion is not None:
+        msg_box.setStyle(fusion)
+    msg_box.setFont(_msgbox_body_font())
+    msg_box.setStyleSheet(MSGBOX_DIALOG_STYLE)
+    for btn in msg_box.buttons():
+        if fusion is not None:
+            btn.setStyle(fusion)
+        btn.setStyleSheet(MSGBOX_BUTTON_STYLE)
+        btn.setFlat(False)
+        # 避免 Windows 原生默认按钮粗边框盖住 QSS
+        btn.setAutoDefault(False)
 
 
 def show_confirm_dialog(parent, title, text):
@@ -93,6 +127,58 @@ def show_confirm_dialog(parent, title, text):
     msg_box.addButton(no_button, QMessageBox.NoRole)
     apply_msgbox_button_style(msg_box)
 
+    msg_box.exec_()
+    return msg_box.clickedButton() == yes_button
+
+
+def show_info_dialog(parent, title, text):
+    """信息提示（确认），样式与项目管理弹窗按钮一致。"""
+    msg_box = QMessageBox(parent)
+    msg_box.setIcon(QMessageBox.Information)
+    msg_box.setWindowTitle(title)
+    msg_box.setText(text)
+    ok_button = QPushButton("确认")
+    msg_box.addButton(ok_button, QMessageBox.AcceptRole)
+    apply_msgbox_button_style(msg_box)
+    msg_box.exec_()
+
+
+def show_warning_dialog(parent, title, text):
+    """警告提示（确认），样式与项目管理弹窗按钮一致。"""
+    msg_box = QMessageBox(parent)
+    msg_box.setIcon(QMessageBox.Warning)
+    msg_box.setWindowTitle(title)
+    msg_box.setText(text)
+    ok_button = QPushButton("确认")
+    msg_box.addButton(ok_button, QMessageBox.AcceptRole)
+    apply_msgbox_button_style(msg_box)
+    msg_box.exec_()
+
+
+def show_critical_dialog(parent, title, text):
+    """错误提示（确认），样式与项目管理弹窗按钮一致。"""
+    msg_box = QMessageBox(parent)
+    msg_box.setIcon(QMessageBox.Critical)
+    msg_box.setWindowTitle(title)
+    msg_box.setText(text)
+    ok_button = QPushButton("确认")
+    msg_box.addButton(ok_button, QMessageBox.AcceptRole)
+    apply_msgbox_button_style(msg_box)
+    msg_box.exec_()
+
+
+def show_yes_no_dialog(parent, title, text, yes_text="确认", no_text="取消", default_no=True):
+    """是/否（或自定义文案）确认框，返回 True 表示点了肯定按钮。"""
+    msg_box = QMessageBox(parent)
+    msg_box.setIcon(QMessageBox.Question)
+    msg_box.setWindowTitle(title)
+    msg_box.setText(text)
+    yes_button = QPushButton(yes_text)
+    no_button = QPushButton(no_text)
+    msg_box.addButton(yes_button, QMessageBox.YesRole)
+    msg_box.addButton(no_button, QMessageBox.NoRole)
+    apply_msgbox_button_style(msg_box)
+    msg_box.setDefaultButton(no_button if default_no else yes_button)
     msg_box.exec_()
     return msg_box.clickedButton() == yes_button
 

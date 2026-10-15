@@ -3128,6 +3128,7 @@ def sync_corrosion_to_guankou_param(product_id, guankou_codes, category_label=No
     """
     将条件输入（设计数据表）的腐蚀裕量同步到管口参数：
     - case1: 当管程/壳程腐蚀裕量数值相同 → 用该值填写管口3列默认值
+      （容器仅有壳程/数值列，视为单一腐蚀裕量，直接走 case1）
     - case2: 如果管口号都属于管程或壳程 → 用对应的腐蚀裕量值填写
     - case3: 以上两种情况都不满足时 → 不填，保持为空
     """
@@ -3136,13 +3137,36 @@ def sync_corrosion_to_guankou_param(product_id, guankou_codes, category_label=No
     ca_map = get_design_params_by_product_id(product_id)
     tube_ca = ca_map.get("腐蚀裕量*", {}).get("管程数值", "")
     shell_ca = ca_map.get("腐蚀裕量*", {}).get("壳程数值", "")
+    tube_ca_s = "" if tube_ca is None else str(tube_ca).strip()
+    shell_ca_s = "" if shell_ca is None else str(shell_ca).strip()
+
+    # 容器设计数据只有「数值」列（库字段=壳程数值），无管程列 → 按单一腐蚀裕量处理
+    product_type = ""
+    try:
+        product_type = get_product_type_from_db(product_id) or ""
+    except Exception as e:
+        print(f"[警告] 查询产品类型失败，按换热器双列逻辑处理: {e}")
+    is_container = "容器" in product_type
 
     # 如果没有腐蚀裕量则跳过
-    if not tube_ca and not shell_ca:
+    if is_container:
+        if not shell_ca_s:
+            print("[跳过] 容器条件输入没有腐蚀裕量(壳程/数值列)")
+            return
+    elif not tube_ca_s and not shell_ca_s:
         print("[跳过] 条件输入没有腐蚀裕量")
         return
 
-    print(f"[调试] tube_ca={tube_ca} ({type(tube_ca)}), shell_ca={shell_ca} ({type(shell_ca)})")
+    print(
+        f"[调试] tube_ca={tube_ca_s!r}, shell_ca={shell_ca_s!r}, "
+        f"product_type={product_type!r}, is_container={is_container}"
+    )
+
+    # 容器单列 或 管壳相同 → case1 统一值，不再按管口所属分支
+    case1_same = bool(tube_ca_s and shell_ca_s and tube_ca_s == shell_ca_s)
+    case1_container = bool(is_container and shell_ca_s)
+    is_case1 = case1_same or case1_container
+    case1_val = shell_ca_s if case1_container else (tube_ca_s if case1_same else "")
 
     # 额外新增：把每个【管口代号】的接管腐蚀裕量单独写入 产品设计活动表_管口类别表
     # - 不改变原有“接管腐蚀裕量(管口附加参数表)”的显示/写入逻辑
@@ -3191,19 +3215,18 @@ def sync_corrosion_to_guankou_param(product_id, guankou_codes, category_label=No
 
         if target_codes:
             code_to_value = {}
-            # 若管壳相同：不必区分所属，直接同值写入每个管口
-            if tube_ca and shell_ca and str(tube_ca) == str(shell_ca):
+            # case1（含容器单列）：不必区分所属，直接同值写入每个管口
+            if is_case1:
                 for code in target_codes:
-                    code_to_value[code] = str(tube_ca)
+                    code_to_value[code] = str(case1_val)
             else:
                 # 管壳不同：按管口所属写入对应值（取不到所属则留空）
                 for code in target_codes:
                     a = query_guankou_affiliation(product_id, code)
                     if a == "管程":
-                        code_to_value[code] = str(tube_ca) if tube_ca is not None and str(tube_ca).strip() != "" else ""
+                        code_to_value[code] = tube_ca_s
                     elif a == "壳程":
-                        code_to_value[code] = str(shell_ca) if shell_ca is not None and str(
-                            shell_ca).strip() != "" else ""
+                        code_to_value[code] = shell_ca_s
                     else:
                         code_to_value[code] = ""
 
@@ -3217,10 +3240,13 @@ def sync_corrosion_to_guankou_param(product_id, guankou_codes, category_label=No
         # 兼容：字段未加/库异常时，不影响主流程
         print(f"[警告] 同步到管口类别表.接管腐蚀裕量失败: {e}")
 
-    # === case1: 管壳程腐蚀裕量相同 ===
-    if tube_ca and shell_ca and str(tube_ca) == str(shell_ca):
-        update_guankou_param_flex_db(product_id, "接管腐蚀裕量", str(tube_ca), tab_name=category_label)
-        print(f"[case1] 管壳程腐蚀裕量相同，写入默认值 {tube_ca}")
+    # === case1: 管壳程腐蚀裕量相同，或容器仅壳程/数值列 ===
+    if is_case1:
+        update_guankou_param_flex_db(product_id, "接管腐蚀裕量", str(case1_val), tab_name=category_label)
+        if case1_container:
+            print(f"[case1] 容器仅壳程/数值列，写入默认值 {case1_val}")
+        else:
+            print(f"[case1] 管壳程腐蚀裕量相同，写入默认值 {case1_val}")
         return
 
     # === case2: 管壳程腐蚀裕量不同 ===
@@ -3230,18 +3256,18 @@ def sync_corrosion_to_guankou_param(product_id, guankou_codes, category_label=No
 
         # 如果所有管口号都属于管程
         if all(a == "管程" for a in affiliations if a):
-            if tube_ca:
-                update_guankou_param_flex_db(product_id, "接管腐蚀裕量", str(tube_ca), tab_name=category_label)
-                print(f"[case2] {guankou_codes} 都属于管程，写入 {tube_ca}")
+            if tube_ca_s:
+                update_guankou_param_flex_db(product_id, "接管腐蚀裕量", tube_ca_s, tab_name=category_label)
+                print(f"[case2] {guankou_codes} 都属于管程，写入 {tube_ca_s}")
             else:
                 update_guankou_param_flex_db(product_id, "接管腐蚀裕量", "", tab_name=category_label)
                 print(f"[case2] {guankou_codes} 管程腐蚀裕量为空，留空")
 
         # 如果所有管口号都属于壳程
         elif all(a == "壳程" for a in affiliations if a):
-            if shell_ca:
-                update_guankou_param_flex_db(product_id, "接管腐蚀裕量", str(shell_ca), tab_name=category_label)
-                print(f"[case2] {guankou_codes} 都属于壳程，写入 {shell_ca}")
+            if shell_ca_s:
+                update_guankou_param_flex_db(product_id, "接管腐蚀裕量", shell_ca_s, tab_name=category_label)
+                print(f"[case2] {guankou_codes} 都属于壳程，写入 {shell_ca_s}")
             else:
                 update_guankou_param_flex_db(product_id, "接管腐蚀裕量", "", tab_name=category_label)
                 print(f"[case2] {guankou_codes} 壳程腐蚀裕量为空，留空")
@@ -3255,6 +3281,7 @@ def sync_corrosion_to_guankou_param(product_id, guankou_codes, category_label=No
         # 如果没有管口号且腐蚀裕量不同，保持为空
         update_guankou_param_flex_db(product_id, "接管腐蚀裕量", "", tab_name=category_label)
         print("[case3] 没有管口号且腐蚀裕量不同，留空")
+
 
 
 def get_opening_weld_joint_default(product_id: str, category_label: str = None):

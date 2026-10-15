@@ -1,9 +1,30 @@
+import re
+from fractions import Fraction
+
 import pymysql
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QMessageBox, QLabel, QComboBox, QTableWidgetItem
 from modules.guankoudingyi.db_cnt import get_connection, db_config_1, db_config_2
 from modules.guankoudingyi.funcs.funcs_pipe_comboBox_value import get_standard_flange_pressure_level_default_value,get_weld_end_spec_sch_options, ComboBoxDelegate, update_nominal_size_delegate_options
 from modules.guankoudingyi.funcs.pipe_get_units_types import get_unit_types_from_db, get_current_unit_types_from_ui
+
+
+def _parse_nominal_size_number(size_text):
+    """
+    将公称尺寸文本转为可比较数值。
+    支持整数/小数，以及 NPS 分数写法：'3/8'、'2-1/2'、'1-1/4'。
+    """
+    s = str(size_text).strip()
+    if not s:
+        raise ValueError("empty size")
+    # 带分数：2-1/2 → 2 + 1/2
+    m = re.match(r"^(\d+)\s*-\s*(\d+/\d+)$", s)
+    if m:
+        return float(m.group(1)) + float(Fraction(m.group(2)))
+    # 纯分数：3/8
+    if re.match(r"^\d+/\d+$", s):
+        return float(Fraction(s))
+    return float(s)
 
 
 """三个类型的选择会有对应的事件发生，这里是对下拉框产生的事件处理"""
@@ -94,11 +115,11 @@ def setup_unit_selection_handlers(stats_widget):
                         
                         if current_nominal_size:
                             # 先进行数值大小检查：只保留DN≤600（或NPS≤24）的值
+                            # NPS 含分数（如 3/8、2-1/2），不能用 int()，否则会误清空
                             size_valid = False
                             try:
-                                # 直接转换为数值
-                                size_value = int(str(current_nominal_size).strip())
-                                
+                                size_value = _parse_nominal_size_number(current_nominal_size)
+
                                 if size_unit_type == "DN":
                                     # DN单位：只保留≤600的值
                                     if size_value <= 600:
@@ -107,7 +128,7 @@ def setup_unit_selection_handlers(stats_widget):
                                     # NPS单位：只保留≤24的值
                                     if size_value <= 24:
                                         size_valid = True
-                            except (ValueError, AttributeError):
+                            except (ValueError, AttributeError, ZeroDivisionError):
                                 # 如果无法解析数值，则认为无效
                                 size_valid = False
                             
