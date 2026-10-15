@@ -2829,41 +2829,90 @@ class TubeLayoutEditor(QMainWindow):
                 {"序号": num, "参数名": name, "参数值": value, "单位": unit}
             )
 
-    def _get_lagan_required_count(self):
-        """按公称直径DN+拉杆直径查标准要求数量。"""
+    def _map_lagan_d_to_standard_key(self, lagan_d):
+        """
+        标准数量表仅有 Φ10/12/16 列。
+        螺纹拉杆可选 20、焊接拉杆直径常等于 do（如 38），需映射到表列：
+          ≤10 → 10； (10,12] → 12； >12（含 16/20/38…）→ 16。
+        精确命中 10/12/16 时原样返回。
+        """
         try:
-            dn = float(self.get_gongchengzhijing_count())
-            lagan_d = float(self.get_laganzhijing_count())
+            d = float(lagan_d)
         except (TypeError, ValueError):
             return None
-
-        try:
-            print(f"[lagan标准查表] DN={dn}, 拉杆直径={lagan_d}")
-        except Exception:
-            pass
-
-        standard_table = {
-            10.0: [(0, 400, 4), (400, 700, 6), (700, 900, 10), (900, 1300, 12), (1300, 1500, 16), (1500, 1800, 18), (1800, 2000, 24), (2000, 2300, 32), (2300, 2600, 40), (2600, 2800, 48), (2800, 3000, 56), (3000, 3200, 64), (3200, 3400, 72), (3400, 3600, 80), (3600, 3800, 88), (3800, 4000, 98), (4000, 5000, 136), (5000, 6000, 178)],
-            12.0: [(0, 400, 4), (400, 700, 4), (700, 900, 8), (900, 1300, 10), (1300, 1500, 12), (1500, 1800, 14), (1800, 2000, 18), (2000, 2300, 24), (2300, 2600, 28), (2600, 2800, 32), (2800, 3000, 40), (3000, 3200, 44), (3200, 3400, 52), (3400, 3600, 56), (3600, 3800, 64), (3800, 4000, 68), (4000, 5000, 96), (5000, 6000, 124)],
-            16.0: [(0, 400, 4), (400, 700, 4), (700, 900, 6), (900, 1300, 6), (1300, 1500, 8), (1500, 1800, 10), (1800, 2000, 12), (2000, 2300, 14), (2300, 2600, 16), (2600, 2800, 20), (2800, 3000, 24), (3000, 3200, 26), (3200, 3400, 28), (3400, 3600, 32), (3600, 3800, 36), (3800, 4000, 40), (4000, 5000, 56), (5000, 6000, 74)],
-        }
-        if lagan_d not in standard_table:
-            try:
-                print(f"[lagan标准查表] 拉杆直径={lagan_d} 不在标准表(10/12/16)中，返回None")
-            except Exception:
-                pass
+        if d <= 0:
             return None
-        for low, high, required in standard_table[lagan_d]:
-            if low <= dn < high:
-                try:
-                    print(f"[lagan标准查表] 命中区间: [{low},{high}) -> {required}")
-                except Exception:
-                    pass
-                return required
+        for key in (10.0, 12.0, 16.0):
+            if abs(d - key) < 1e-6:
+                return key
+        if d <= 10.0:
+            return 10.0
+        if d <= 12.0:
+            return 12.0
+        return 16.0
+
+    def _get_lagan_standard_table(self):
+        """拉杆数量选用表（按拉杆直径 Φ10/12/16 × 公称直径 DN 区间）。"""
+        return {
+            10.0: [
+                (0, 400, 4), (400, 700, 6), (700, 900, 10), (900, 1300, 12),
+                (1300, 1500, 16), (1500, 1800, 18), (1800, 2000, 24),
+                (2000, 2300, 32), (2300, 2600, 40), (2600, 2800, 48),
+                (2800, 3000, 56), (3000, 3200, 64), (3200, 3400, 72),
+                (3400, 3600, 80), (3600, 3800, 88), (3800, 4000, 98),
+                (4000, 5000, 136), (5000, 6000, 178),
+            ],
+            12.0: [
+                (0, 400, 4), (400, 700, 4), (700, 900, 8), (900, 1300, 10),
+                (1300, 1500, 12), (1500, 1800, 14), (1800, 2000, 18),
+                (2000, 2300, 24), (2300, 2600, 28), (2600, 2800, 32),
+                (2800, 3000, 40), (3000, 3200, 44), (3200, 3400, 52),
+                (3400, 3600, 56), (3600, 3800, 64), (3800, 4000, 68),
+                (4000, 5000, 96), (5000, 6000, 124),
+            ],
+            16.0: [
+                (0, 400, 4), (400, 700, 4), (700, 900, 6), (900, 1300, 6),
+                (1300, 1500, 8), (1500, 1800, 10), (1800, 2000, 12),
+                (2000, 2300, 14), (2300, 2600, 16), (2600, 2800, 20),
+                (2800, 3000, 24), (3000, 3200, 26), (3200, 3400, 28),
+                (3400, 3600, 32), (3600, 3800, 36), (3800, 4000, 40),
+                (4000, 5000, 56), (5000, 6000, 74),
+            ],
+        }
+
+    def _get_lagan_required_count(self):
+        """按公称直径DN+拉杆直径查标准要求数量。"""
+        dn_raw = self.get_gongchengzhijing_count()
+        lagan_raw = self.get_laganzhijing_count()
         try:
-            print("[lagan标准查表] 未命中任何DN区间，返回None")
-        except Exception:
-            pass
+            dn = float(dn_raw)
+            lagan_d = float(lagan_raw)
+        except (TypeError, ValueError):
+            print(
+                f"[lagan标准查表] 参数无法解析为数字，返回None | "
+                f"DN原始={dn_raw!r}, 拉杆直径原始={lagan_raw!r}"
+            )
+            return None
+
+        key = self._map_lagan_d_to_standard_key(lagan_d)
+        print(
+            f"[lagan标准查表] DN={dn}, 拉杆直径={lagan_d}, 映射表列={key}"
+        )
+        if key is None:
+            print(f"[lagan标准查表] 拉杆直径无效({lagan_d})，返回None")
+            return None
+
+        standard_table = self._get_lagan_standard_table()
+        rows = standard_table.get(key) or []
+        for low, high, required in rows:
+            if low <= dn < high:
+                print(
+                    f"[lagan标准查表] 命中区间: Φ{key:g} × [{low},{high}) -> {required}"
+                )
+                return required
+        print(
+            f"[lagan标准查表] DN={dn} 未命中 Φ{key:g} 的任何区间，返回None"
+        )
         return None
 
     def update_total_holes_count(self):
@@ -27362,83 +27411,15 @@ class TubeLayoutEditor(QMainWindow):
         # 标准要求拉杆数量提示（使用当前参数表中的公称直径和拉杆直径）
         standard_tip_text = "当前拉杆直径无拉杆数量标准要求"
         try:
-            gongcheng_zhijing_raw = self.get_gongchengzhijing_count()
-            gongcheng_zhijing_val = float(gongcheng_zhijing_raw)
-            lagan_zhijing_val = float(default_dia)
-
-            standard_table = {
-                10.0: [
-                    (0, 400, 4),
-                    (400, 700, 6),
-                    (700, 900, 10),
-                    (900, 1300, 12),
-                    (1300, 1500, 16),
-                    (1500, 1800, 18),
-                    (1800, 2000, 24),
-                    (2000, 2300, 32),
-                    (2300, 2600, 40),
-                    (2600, 2800, 48),
-                    (2800, 3000, 56),
-                    (3000, 3200, 64),
-                    (3200, 3400, 72),
-                    (3400, 3600, 80),
-                    (3600, 3800, 88),
-                    (3800, 4000, 98),
-                    (4000, 5000, 136),
-                    (5000, 6000, 178),
-                ],
-                12.0: [
-                    (0, 400, 4),
-                    (400, 700, 4),
-                    (700, 900, 8),
-                    (900, 1300, 10),
-                    (1300, 1500, 12),
-                    (1500, 1800, 14),
-                    (1800, 2000, 18),
-                    (2000, 2300, 24),
-                    (2300, 2600, 28),
-                    (2600, 2800, 32),
-                    (2800, 3000, 40),
-                    (3000, 3200, 44),
-                    (3200, 3400, 52),
-                    (3400, 3600, 56),
-                    (3600, 3800, 64),
-                    (3800, 4000, 68),
-                    (4000, 5000, 96),
-                    (5000, 6000, 124),
-                ],
-                16.0: [
-                    (0, 400, 4),
-                    (400, 700, 4),
-                    (700, 900, 6),
-                    (900, 1300, 6),
-                    (1300, 1500, 8),
-                    (1500, 1800, 10),
-                    (1800, 2000, 12),
-                    (2000, 2300, 14),
-                    (2300, 2600, 16),
-                    (2600, 2800, 20),
-                    (2800, 3000, 24),
-                    (3000, 3200, 26),
-                    (3200, 3400, 28),
-                    (3400, 3600, 32),
-                    (3600, 3800, 36),
-                    (3800, 4000, 40),
-                    (4000, 5000, 56),
-                    (5000, 6000, 74),
-                ],
-            }
-
-            if lagan_zhijing_val in standard_table:
-                min_required = None
-                for low, high, required in standard_table[lagan_zhijing_val]:
+            gongcheng_zhijing_val = float(self.get_gongchengzhijing_count())
+            key = self._map_lagan_d_to_standard_key(default_dia)
+            if key is not None:
+                for low, high, required in self._get_lagan_standard_table().get(key, []):
                     if low <= gongcheng_zhijing_val < high:
-                        min_required = required
+                        standard_tip_text = (
+                            f"根据标准要求，拉杆数量不应小于 {required} 根"
+                        )
                         break
-                if min_required is not None:
-                    standard_tip_text = (
-                        f"根据标准要求，拉杆数量不应小于 {min_required} 根"
-                    )
         except Exception:
             # 异常时保持默认提示
             pass
@@ -27506,86 +27487,21 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 pass
             try:
-                gongcheng_zhijing_raw2 = self.get_gongchengzhijing_count()
-                gongcheng_zhijing_val2 = float(gongcheng_zhijing_raw2)
+                gongcheng_zhijing_val2 = float(self.get_gongchengzhijing_count())
                 cur_dia_val = float(parse_dia_from_choice(dia_combo.currentText()))
-
-                standard_table2 = {
-                    10.0: [
-                        (0, 400, 4),
-                        (400, 700, 6),
-                        (700, 900, 10),
-                        (900, 1300, 12),
-                        (1300, 1500, 16),
-                        (1500, 1800, 18),
-                        (1800, 2000, 24),
-                        (2000, 2300, 32),
-                        (2300, 2600, 40),
-                        (2600, 2800, 48),
-                        (2800, 3000, 56),
-                        (3000, 3200, 64),
-                        (3200, 3400, 72),
-                        (3400, 3600, 80),
-                        (3600, 3800, 88),
-                        (3800, 4000, 98),
-                        (4000, 5000, 136),
-                        (5000, 6000, 178),
-                    ],
-                    12.0: [
-                        (0, 400, 4),
-                        (400, 700, 4),
-                        (700, 900, 8),
-                        (900, 1300, 10),
-                        (1300, 1500, 12),
-                        (1500, 1800, 14),
-                        (1800, 2000, 18),
-                        (2000, 2300, 24),
-                        (2300, 2600, 28),
-                        (2600, 2800, 32),
-                        (2800, 3000, 40),
-                        (3000, 3200, 44),
-                        (3200, 3400, 52),
-                        (3400, 3600, 56),
-                        (3600, 3800, 64),
-                        (3800, 4000, 68),
-                        (4000, 5000, 96),
-                        (5000, 6000, 124),
-                    ],
-                    16.0: [
-                        (0, 400, 4),
-                        (400, 700, 4),
-                        (700, 900, 6),
-                        (900, 1300, 6),
-                        (1300, 1500, 8),
-                        (1500, 1800, 10),
-                        (1800, 2000, 12),
-                        (2000, 2300, 14),
-                        (2300, 2600, 16),
-                        (2600, 2800, 20),
-                        (2800, 3000, 24),
-                        (3000, 3200, 26),
-                        (3200, 3400, 28),
-                        (3400, 3600, 32),
-                        (3600, 3800, 36),
-                        (3800, 4000, 40),
-                        (4000, 5000, 56),
-                        (5000, 6000, 74),
-                    ],
-                }
-
-                if cur_dia_val in standard_table2:
-                    min_required2 = None
-                    for low, high, required in standard_table2[cur_dia_val]:
+                key2 = self._map_lagan_d_to_standard_key(cur_dia_val)
+                if key2 is not None:
+                    for low, high, required in self._get_lagan_standard_table().get(
+                        key2, []
+                    ):
                         if low <= gongcheng_zhijing_val2 < high:
-                            min_required2 = required
+                            text = f"根据标准要求，拉杆数量不应小于 {required} 根"
+                            # 记录当前标准要求的最小拉杆数量，供总拉杆数量标签显示
+                            try:
+                                self.current_lagan_standard_required = required
+                            except Exception:
+                                pass
                             break
-                    if min_required2 is not None:
-                        text = f"根据标准要求，拉杆数量不应小于 {min_required2} 根"
-                        # 记录当前标准要求的最小拉杆数量，供总拉杆数量标签显示
-                        try:
-                            self.current_lagan_standard_required = min_required2
-                        except Exception:
-                            pass
             except Exception:
                 pass
 
