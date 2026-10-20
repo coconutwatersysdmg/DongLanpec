@@ -8,18 +8,21 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib import error, request
+from urllib.parse import urlsplit
 
 
 CONFIG_PATH = Path(os.environ.get("APPDATA") or Path.home()) / "DongLanpec" / "ai_assistant.json"
+BAILIAN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+_SESSION_CONFIG = None
 
 
 @dataclass(frozen=True)
 class APIConfig:
     base_url: str = ""
-    api_key: str = ""
+    api_key: str = field(default="", repr=False)
     model: str = ""
 
     @property
@@ -28,6 +31,8 @@ class APIConfig:
 
     @classmethod
     def load(cls, path: Path = CONFIG_PATH):
+        if path == CONFIG_PATH and _SESSION_CONFIG is not None:
+            return _SESSION_CONFIG
         data = {}
         if path.exists():
             try:
@@ -35,10 +40,31 @@ class APIConfig:
             except (OSError, ValueError, TypeError):
                 data = {}
         return cls(
-            base_url=os.environ.get("DONG_LANPEC_AI_BASE_URL", data.get("base_url", "")),
-            api_key=os.environ.get("DONG_LANPEC_AI_API_KEY", data.get("api_key", "")),
-            model=os.environ.get("DONG_LANPEC_AI_MODEL", data.get("model", "")),
+            base_url=os.environ.get("DONG_LANPEC_AI_BASE_URL", data.get("base_url") or BAILIAN_BASE_URL),
+            api_key=os.environ.get("DONG_LANPEC_AI_API_KEY") or os.environ.get("DASHSCOPE_API_KEY") or data.get("api_key", ""),
+            model=os.environ.get("DONG_LANPEC_AI_MODEL", data.get("model") or "qwen-plus"),
         )
+
+    def use_for_session(self):
+        """GUI输入的密钥仅保留在当前进程内。"""
+        global _SESSION_CONFIG
+        _SESSION_CONFIG = self
+
+    def save_public_settings(self, path: Path = CONFIG_PATH):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"base_url": self.base_url, "model": self.model},
+                                   ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def endpoint(self) -> str:
+        url = self.base_url.strip().rstrip("/")
+        parsed = urlsplit(url)
+        host = parsed.hostname or ""
+        allowed = host in {"dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com", "dashscope-us.aliyuncs.com"} or host.endswith(".maas.aliyuncs.com")
+        if (parsed.scheme != "https" or not allowed or parsed.username or parsed.password
+                or parsed.query or parsed.fragment or parsed.port not in (None, 443)
+                or "{" in url or "}" in url):
+            raise ValueError("请填写百炼HTTPS兼容地址；业务空间域名中的WorkspaceId需替换为实际ID")
+        return url if url.endswith("/chat/completions") else url + "/chat/completions"
 
 
 def _strip_code_fence(text: str) -> str:
@@ -119,17 +145,39 @@ class CompatibleChatClient:
             '"region":"外围对称|上部|下部|左侧|右侧"}。'
             "无法识别时也不要编造工程参数。"
         )
+        content, _usage = self._complete_json(system_prompt, text)
+        return parse_structured_request(content)
+
+    def extract_parameters(self, user_text: str) -> dict:
+        from .extraction import extraction_prompt, validate_extraction
+        text = str(user_text or "").strip()
+        if not text or len(text) > 12000:
+            raise ValueError("请输入1到12000字的设计描述")
+        content, usage = self._complete_json(extraction_prompt(), text)
+        try:
+            raw = json.loads(_strip_code_fence(content))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("模型未返回有效JSON，请补充描述后重试") from exc
+        result = validate_extraction(raw, text)
+        result.update({"source_text": text, "mode": "百炼真实解析", "model": self.config.model,
+                       "usage": usage})
+        return result
+
+    def _complete_json(self, system_prompt: str, text: str):
+        if not self.config.configured:
+            raise RuntimeError("请先打开“百炼设置”，输入API Key（仅本次运行有效）")
         payload = {
             "model": self.config.model,
             "temperature": 0,
+            "enable_thinking": False,
+            "response_format": {"type": "json_object"},
+            "max_tokens": 4096,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": text},
             ],
         }
-        url = self.config.base_url.rstrip("/")
-        if not url.endswith("/chat/completions"):
-            url += "/chat/completions"
+        url = self.config.endpoint()
         req = request.Request(
             url,
             data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
@@ -140,14 +188,24 @@ class CompatibleChatClient:
             method="POST",
         )
         try:
-            with request.urlopen(req, timeout=30) as response:
+            with request.urlopen(req, timeout=45) as response:
                 result = json.loads(response.read().decode("utf-8"))
         except error.HTTPError as exc:
-            raise RuntimeError(f"模型 API 返回 HTTP {exc.code}") from exc
+            hints = {400: "检查模型是否支持JSON模式及非思考模式", 401: "检查密钥及其所属地域",
+                     403: "检查业务空间和模型调用权限", 404: "检查Base URL及模型名",
+                     429: "请求限流或额度不足，请到百炼控制台查看"}
+            raise RuntimeError(f"百炼返回 HTTP {exc.code}：{hints.get(exc.code, '请检查模型服务状态')}。未自动重试。") from None
         except (error.URLError, TimeoutError, OSError, ValueError) as exc:
-            raise RuntimeError(f"模型 API 调用失败：{exc}") from exc
+            raise RuntimeError("百炼请求失败或超时，请检查网络和地址后重试。未自动重试。") from None
         try:
+            if result["choices"][0].get("finish_reason") == "length":
+                raise RuntimeError("模型输出超出长度上限，请缩短设计描述后重试")
             content = result["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
             raise RuntimeError("模型 API 返回格式不符合兼容接口约定") from exc
-        return parse_structured_request(content)
+        if not isinstance(content, str) or not content.strip():
+            raise RuntimeError("百炼返回了空内容，请检查所选模型是否支持非思考JSON模式")
+        raw_usage = result.get("usage") or {}
+        usage = {k: v for k, v in raw_usage.items() if k in (
+            "prompt_tokens", "completion_tokens", "total_tokens") and type(v) is int and v >= 0} if isinstance(raw_usage, dict) else {}
+        return content, usage

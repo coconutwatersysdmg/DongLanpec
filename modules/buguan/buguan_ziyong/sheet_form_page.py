@@ -188,12 +188,19 @@ _PLATE_OLD_TO_NEW_BY_NODE = {
 
 
 def _normalize_plate_form_params(plate_type, param_dict):
-    """若库中仅有旧代号，则按节点映射补全新代号键（不覆盖已有新代号值）。"""
+    """先识别整组代号，再转换，避免旧 e(α2) 与新 e 等同名键串值。"""
     if not param_dict:
         return param_dict
     mapping = _PLATE_OLD_TO_NEW_BY_NODE.get(str(plate_type).strip())
     if not mapping:
         return param_dict
+    old_keys = set(mapping)
+    new_keys = set(mapping.values())
+    # 旧库按整组转换，必须从原始字典读值；逐键补全会把同名旧键误当新键。
+    if (old_keys - new_keys).intersection(param_dict) and not (
+        new_keys - old_keys
+    ).intersection(param_dict):
+        return {mapping.get(key, key): value for key, value in param_dict.items()}
     out = dict(param_dict)
     for old_k, new_k in mapping.items():
         new_v = out.get(new_k)
@@ -618,7 +625,9 @@ class SheetFormPage(QWidget):
             self.sheet_form_connection_type_combo.blockSignals(False)
 
             # 不允许修改时禁用下拉框，防止用户修改管板型式
-            self.sheet_form_connection_type_combo.setEnabled(allow_modify)
+            self.sheet_form_connection_type_combo.setEnabled(
+                allow_modify and not self._sheet_form_user_readonly
+            )
             if not allow_modify:
                 self._sheet_form_combo_popup_done = True
 
@@ -1144,6 +1153,9 @@ class SheetFormPage(QWidget):
             body_layout.addWidget(self.sheet_form_param_frame, 1)
             main_layout.addLayout(body_layout)
 
+            # 在延迟恢复保存节点之前即应用型式限制，避免首次操作落入兜底 a 型。
+            self._apply_plate_type_rule()
+
             #
             # 延迟检查父窗口的 heat_exchanger 值
             # 延迟检查父窗口的 heat_exchanger 值，并优先使用已保存的管板类型
@@ -1652,6 +1664,16 @@ class SheetFormPage(QWidget):
     # -----------------------------------------------------------------
     def sheet_form_updates_image_path(self, index):
         print(f"[DEBUG] 调用 sheet_form_updates_image_path, index={index}")
+        hx = getattr(self, "_sheet_form_hx_for_rule", None)
+        if hx:
+            target_type, allow_modify = self._resolve_plate_type_rule(hx)
+            target_index = ['a', 'b', 'c', 'd', 'e', 'f'].index(target_type)
+            if not allow_modify and index != target_index:
+                combo = self.sheet_form_connection_type_combo
+                was_blocked = combo.blockSignals(True)
+                combo.setCurrentIndex(target_index)
+                combo.blockSignals(was_blocked)
+                return
         if getattr(self, "_sheet_form_user_readonly", False):
             return
         try:

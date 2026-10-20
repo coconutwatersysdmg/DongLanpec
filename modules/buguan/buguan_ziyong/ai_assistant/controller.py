@@ -43,7 +43,7 @@ class TubeAssistantController:
         self._component_candidates = []
 
     def install(self):
-        assistant_button = QPushButton("方案助手")
+        assistant_button = QPushButton("AI 助手")
         assistant_button.setObjectName("tubeAssistantButton")
         assistant_button.setStyleSheet(
             "QPushButton{background:#17365D;color:white;border:1px solid #315B7D;"

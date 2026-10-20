@@ -181,6 +181,49 @@ class TubeLayoutCircleTests(unittest.TestCase):
     def test_aeu_default_plate_association_uses_a_type(self):
         self.assertEqual(SheetFormPage._resolve_plate_type_rule(None, "AEU"), ("a", True))
 
+    def test_nen_c_node_uses_distance_three_instead_of_angle_thirty(self):
+        self.editor.heat_exchanger = "NEN"
+        self.editor.setup_parameters(ProductConnection(saved_di="1200", saved_dl="1100").params)
+        self.editor.is_suitable_tube_sheet = True
+        for params in (
+            list(zip("abcdefgh", ("60", "2", "2", "1", "30", "2", "4", "3"))),
+            [("α1", "60"), ("b", "2"), ("p1", "2"), ("d1", "1"),
+             ("α2", "30"), ("R", "2"), ("n", "4"), ("e", "3")],
+        ):
+            with self.subTest(params=params):
+                self.editor.tube_sheet_params_snapshot = {
+                    "plate_type": "b_c", "main_category": "b", "node_name": "c", "params": params,
+                }
+                self.editor.update_tube_layout_circle_dl()
+                # min(1200 - 4*(1+sqrt(17)) - 6, 1200 - 16), rounded to 0.1 mm.
+                self.assertEqual(self.editor.value("布管限定圆 DL"), 1173.5)
+
+    def test_other_supported_plate_nodes_use_renamed_formula_parameters(self):
+        self.editor.setup_parameters(ProductConnection(saved_di="1200", saved_dl="1100").params)
+        self.editor.is_suitable_tube_sheet = True
+        cases = (
+            ("NEN", "b_a", {"x1": "1", "x2": "1", "α": "60"}, 1184),
+            ("NEN", "b_d", {"e": "3", "R3": "10", "R2": "12"}, 1170),
+            ("NEN", "b_h", {"e": "3", "R3": "10", "R5": "12"}, 1170),
+            ("NEN", "b_e", {"R2": "2", "e": "3", "R4": "2", "d2": "20", "α": "45"}, 1148.3),
+            ("AEM", "e_a", {"d3": "20"}, 1160),
+            ("AEM", "e_b", {"b": "20", "e": "3", "R1": "2"}, 1154),
+            ("BEM", "e_c", {"b": "20", "e": "3", "R1": "2"}, 1154),
+            ("AEM", "e_d", {"b": "2", "d1": "1", "e": "3", "α1": "45", "α2": "45"}, 1182.3),
+            ("BEM", "e_e", {"b": "2", "d2": "1", "e": "3", "α1": "45", "α2": "45"}, 1182.3),
+            ("BEM", "e_f", {"R1": "10", "e": "3"}, 1154),
+        )
+        for hx, plate, params, expected in cases:
+            with self.subTest(hx=hx, plate=plate):
+                self.editor.heat_exchanger = hx
+                main, node = plate.split("_")
+                self.editor.tube_sheet_params_snapshot = {
+                    "plate_type": plate, "main_category": main, "node_name": node,
+                    "params": list(params.items()),
+                }
+                self.editor.update_tube_layout_circle_dl()
+                self.assertEqual(self.editor.value("布管限定圆 DL"), expected)
+
 
 if __name__ == "__main__":
     unittest.main()

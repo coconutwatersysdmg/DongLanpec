@@ -79,7 +79,9 @@ from modules.buguan.buguan_ziyong.tube_pass.adapter import (
     normalize_local_tube_pass_cat,
     run_local_tube_layout,
 )
-from modules.buguan.buguan_ziyong.sheet_form_page import SheetFormPage, _PLATE_OLD_TO_NEW_BY_NODE
+from modules.buguan.buguan_ziyong.sheet_form_page import (
+    SheetFormPage, _PLATE_OLD_TO_NEW_BY_NODE, _normalize_plate_form_params,
+)
 from modules.buguan.buguan_ziyong.tube_sheet_connection import (
     TubeSheetConnectionPage,
     normalize_tube_conn_param_name,
@@ -10879,6 +10881,8 @@ class TubeLayoutEditor(QMainWindow):
                 node_name = snapshot.get("node_name")
                 params_list = snapshot.get("params", []) or []
                 params_dict = {str(k).strip(): v for k, v in params_list}
+                plate_key = snapshot.get("plate_type") or f"{main_category}_{node_name}"
+                params_dict = _normalize_plate_form_params(plate_key, params_dict)
 
                 # 兼容新旧参数名：统一键名后再检索（大小写/空白/下标数字等）
                 _SUB_TO_NORMAL = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")

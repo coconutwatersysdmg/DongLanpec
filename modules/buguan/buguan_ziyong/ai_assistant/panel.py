@@ -29,7 +29,7 @@ class TubeAssistantPanel(QDialog):
         self.controller = controller
         self.setWindowTitle("管束方案助手")
         self.setModal(False)
-        self.resize(880, 680)
+        self.resize(1080, 860)
         self.setStyleSheet(
             "QDialog{background:#F3F6F8;} QLabel{color:#243746;}"
             "QPushButton{padding:7px 13px;} QTabWidget::pane{border:1px solid #B8C4CE;}"
@@ -39,7 +39,8 @@ class TubeAssistantPanel(QDialog):
         banner.setStyleSheet("background:#E4EDF4;border-left:4px solid #1F5D85;padding:10px;font-weight:600;")
         root.addWidget(banner)
 
-        request_row = QHBoxLayout()
+        request_controls = QWidget()
+        request_row = QHBoxLayout(request_controls)
         self.request_text = QTextEdit()
         self.request_text.setMaximumHeight(70)
         self.request_text.setPlaceholderText("以后配置 API 后可输入：尽量多布管；或在上部对称布置 4 个拉杆")
@@ -48,11 +49,20 @@ class TubeAssistantPanel(QDialog):
         parse_button.setToolTip("只把自然语言转换成白名单选项，不直接修改设计")
         parse_button.clicked.connect(self._parse_request)
         request_row.addWidget(parse_button)
-        root.addLayout(request_row)
+        root.addWidget(request_controls)
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_tube_tab(), "布管方案")
         self.tabs.addTab(self._build_component_tab(), "元件方案")
+        from .extraction_panel import ExtractionPanel
+        self.extraction = ExtractionPanel(self, context_provider=lambda: {
+            "product_id": str(getattr(controller.editor, "productID", "")),
+            "parameters": controller.read_params(), "tube_pass": controller.tube_pass_cat(),
+        })
+        self.tabs.insertTab(0, self.extraction, "参数抽取 Demo")
+        self.tabs.setCurrentIndex(0)
+        request_controls.hide()
+        self.tabs.currentChanged.connect(lambda index: request_controls.setVisible(index != 0))
         root.addWidget(self.tabs, 1)
 
         self.status = QLabel("API 未配置：当前可直接使用结构化选项和本地工程算法。")
@@ -135,7 +145,15 @@ class TubeAssistantPanel(QDialog):
 
     def refresh_context(self):
         count = len(getattr(self.parent(), "current_centers", []) or [])
-        self.set_status(f"当前有效管孔：{count}。API 未配置，本地推荐功能可用。")
+        self.set_status(f"当前有效管孔：{count}。参数抽取为只读Demo；布管与元件方案保留原有操作流程。")
+        self.extraction.refresh_config_status()
+
+    def closeEvent(self, event):
+        if self.extraction.is_busy:
+            self.extraction.status.setText("百炼请求仍在进行，请等待返回或超时后再关闭。")
+            event.ignore()
+        else:
+            super().closeEvent(event)
 
     def set_status(self, text):
         self.status.setText(str(text))
@@ -164,13 +182,13 @@ class TubeAssistantPanel(QDialog):
         try:
             parsed = self.controller.parse_natural_language(self.request_text.toPlainText())
             if parsed["intent"] == "tube":
-                self.tabs.setCurrentIndex(0)
+                self.tabs.setCurrentIndex(1)
                 self.goal.setCurrentText(parsed["goal_mode"])
                 if "target_count" in parsed:
                     self.target.setValue(parsed["target_count"])
                 self._generate_tubes()
             else:
-                self.tabs.setCurrentIndex(1)
+                self.tabs.setCurrentIndex(2)
                 self.quantity.setValue(parsed["quantity"])
                 self.region.setCurrentText(parsed["region"])
                 self._generate_components()

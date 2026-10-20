@@ -1,0 +1,61 @@
+{
+  "component_before": [
+    {
+      "管板形式ID": 14,
+      "管板类型": "b_c",
+      "管板形式示意图": "E:\\Homework\\AA蓝滨项目\\A6.3\\industrial-software\\static\\管板与壳体、管箱的连接\\b\\b_c.png",
+      "参数符号": "a",
+      "默认值": "60"
+    },
+    {
+      "管板形式ID": 15,
+      "管板类型": "b_c",
+      "管板形式示意图": "E:\\Homework\\AA蓝滨项目\\A6.3\\industrial-software\\static\\管板与壳体、管箱的连接\\b\\b_c.png",
+      "参数符号": "b",
+      "默认值": "2"
+    },
+    {
+      "管板形式ID": 16,
+      "管板类型": "b_c",
+      "管板形式示意图": "E:\\Homework\\AA蓝滨项目\\A6.3\\industrial-software\\static\\管板与壳体、管箱的连接\\b\\b_c.png",
+      "参数符号": "c",
+      "默认值": "2"
+    },
+    {
+      "管板形式ID": 17,
+      "管板类型": "b_c",
+      "管板形式示意图": "E:\\Homework\\AA蓝滨项目\\A6.3\\industrial-software\\static\\管板与壳体、管箱的连接\\b\\b_c.png",
+      "参数符号": "d",
+      "默认值": "1"
+    },
+    {
+      "管板形式ID": 18,
+      "管板类型": "b_c",
+      "管板形式示意图": "E:\\Homework\\AA蓝滨项目\\A6.3\\industrial-software\\static\\管板与壳体、管箱的连接\\b\\b_c.png",
+      "参数符号": "e",
+      "默认值": "30"
+    },
+    {
+      "管板形式ID": 19,
+      "管板类型": "b_c",
+      "管板形式示意图": "E:\\Homework\\AA蓝滨项目\\A6.3\\industrial-software\\static\\管板与壳体、管箱的连接\\b\\b_c.png",
+      "参数符号": "f",
+      "默认值": "2"
+    },
+    {
+      "管板形式ID": 20,
+      "管板类型": "b_c",
+      "管板形式示意图": "E:\\Homework\\AA蓝滨项目\\A6.3\\industrial-software\\static\\管板与壳体、管箱的连接\\b\\b_c.png",
+      "参数符号": "g",
+      "默认值": "4"
+    },
+    {
+      "管板形式ID": 21,
+      "管板类型": "b_c",
+      "管板形式示意图": "E:\\Homework\\AA蓝滨项目\\A6.3\\industrial-software\\static\\管板与壳体、管箱的连接\\b\\b_c.png",
+      "参数符号": "h",
+      "默认值": "3"
+    }
+  ],
+  "product_before": []
+}
