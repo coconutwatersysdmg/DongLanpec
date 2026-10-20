@@ -1679,6 +1679,19 @@ class TubeLayoutEditor(QMainWindow):
 
         sync_from_editor(self)
 
+        # 管束方案助手：无 API 密钥时仍可使用本地工程算法生成候选方案。
+        # 大模型后续只负责自然语言转白名单输入，不直接写工程参数。
+        try:
+            from modules.buguan.buguan_ziyong.ai_assistant.controller import (
+                TubeAssistantController,
+            )
+
+            self.ai_assistant = TubeAssistantController(self)
+            self.ai_assistant.install()
+        except Exception as _assistant_init_error:
+            self.ai_assistant = None
+            print(f"[管束方案助手] 初始化失败: {_assistant_init_error}")
+
     def _sync_current_centers_lagan(self, reason: str = ""):
         """
         维护 current_centers_lagan 的一致性：
@@ -5349,23 +5362,8 @@ class TubeLayoutEditor(QMainWindow):
                                         print(
                                             f"[load_initial_data] 比较库中 DL 与推荐值失败: {_dl_preserve_e}"
                                         )
-                                elif saved_dl_from_table is not None and should_calculate_dl:
-                                    try:
-                                        _rec_dl = self._calc_recommended_dl(Di, do)
-                                        if (
-                                                _rec_dl is not None
-                                                and abs(saved_dl_from_table - _rec_dl)
-                                                > 0.001
-                                        ):
-                                            should_calculate_dl = False
-                                            print(
-                                                f"[load_initial_data] 库中 DL={saved_dl_from_table:.1f} "
-                                                f"与推荐值 {_rec_dl:.1f} 不同，保留库值（未布管但已保存）"
-                                            )
-                                    except Exception as _dl_preserve_e:
-                                        print(
-                                            f"[load_initial_data] 比较库中 DL 与推荐值失败: {_dl_preserve_e}"
-                                        )
+                                # Dis 已变化时，旧 DL（包括元件库复制值）已失去计算依据，
+                                # 不能仅因它与新推荐值不同就认定为用户覆盖并取消重算。
 
                             if should_calculate_dl:
                                 if not self.heat_exchanger:
@@ -9110,6 +9108,9 @@ class TubeLayoutEditor(QMainWindow):
         :param product_id: 当前产品ID
         :param input_json: dict 输入数据
         """
+        # 助手候选的一键应用先停留在当前编辑会话，避免在用户确认保存前写库。
+        if getattr(self, "_ai_assistant_no_persist", False):
+            return True
         conn = create_product_connection()
         if conn is None:
             return False
@@ -9162,6 +9163,8 @@ class TubeLayoutEditor(QMainWindow):
         :param product_id: 当前产品ID
         :param result: dict 结果数据
         """
+        if getattr(self, "_ai_assistant_no_persist", False):
+            return True
         conn = create_product_connection()
         if conn is None:
             return False
@@ -13929,7 +13932,11 @@ class TubeLayoutEditor(QMainWindow):
 
             # 检查值是否真的改变了
             new_di_value = f"{dn_value:.1f}"
-            if original_di_value == new_di_value:
+            try:
+                di_unchanged = abs(float(original_di_value) - dn_value) <= 0.001
+            except (ValueError, TypeError):
+                di_unchanged = False
+            if di_unchanged:
                 print(f"壳体内直径Di已经是{new_di_value}，无需更新")
                 return
 
@@ -13979,6 +13986,11 @@ class TubeLayoutEditor(QMainWindow):
                     f"'是否以外径为基准'为'否'，已将壳体内直径Di更新为公称直径DN: {dn_value:.1f}mm"
                 )
 
+                # 直径实际改变后，基于旧 Dis 保存的 DL 不再适用。
+                # 加载阶段也必须重算；否则旧值会被“保留已保存 DL”的标记锁住。
+                self._user_override_tube_layout_circle_dl = False
+                self.update_tube_layout_circle_dl(force_recalc=True)
+
                 # 重新连接信号，然后触发壳体内直径相关的联动函数
                 from PyQt5.QtCore import QTimer
 
@@ -13994,10 +14006,6 @@ class TubeLayoutEditor(QMainWindow):
                     try:
                         self.update_baffle_diameter()
                         self.update_tube_center_distance()
-                        if not getattr(
-                            self, "_user_override_tube_layout_circle_dl", False
-                        ):
-                            self.update_tube_layout_circle_dl()
                         self.update_divider_position_and_size()
                         print(f"[update_DN_Di] 已触发壳体内直径相关的联动函数")
                     except Exception as e:
