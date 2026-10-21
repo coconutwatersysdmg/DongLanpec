@@ -1681,19 +1681,6 @@ class TubeLayoutEditor(QMainWindow):
 
         sync_from_editor(self)
 
-        # 管束方案助手：无 API 密钥时仍可使用本地工程算法生成候选方案。
-        # 大模型后续只负责自然语言转白名单输入，不直接写工程参数。
-        try:
-            from modules.buguan.buguan_ziyong.ai_assistant.controller import (
-                TubeAssistantController,
-            )
-
-            self.ai_assistant = TubeAssistantController(self)
-            self.ai_assistant.install()
-        except Exception as _assistant_init_error:
-            self.ai_assistant = None
-            print(f"[管束方案助手] 初始化失败: {_assistant_init_error}")
-
     def _sync_current_centers_lagan(self, reason: str = ""):
         """
         维护 current_centers_lagan 的一致性：
@@ -2277,6 +2264,12 @@ class TubeLayoutEditor(QMainWindow):
     def selected_centers(self, value):
         if self._selected_centers != value:
             self._selected_centers = value
+            # 管束页内保留统计，避免只写到主窗口的5秒临时提示栏后消失。
+            summary = getattr(self, "selection_summary_label", None)
+            if summary is not None:
+                count = len(value or [])
+                summary.setText(f"已选中换热管孔：{count} 个" if count else "")
+                summary.setVisible(count > 0)
             # print("self.selected_centers发生变化")
             if getattr(self, "is_arrange_by_row", True):
                 self.highlight_right_table_row()
@@ -3548,6 +3541,11 @@ class TubeLayoutEditor(QMainWindow):
         self.wy0_correction_tip_label.setStyleSheet("font-size: 16px; color: #222;")
         self.wy0_correction_tip_label.setVisible(False)
         lagan_layout.addWidget(self.wy0_correction_tip_label)
+        self.selection_summary_label = QLabel("")
+        self.selection_summary_label.setWordWrap(True)
+        self.selection_summary_label.setStyleSheet("font-size: 16px; color: #222;")
+        self.selection_summary_label.setVisible(False)
+        lagan_layout.addWidget(self.selection_summary_label)
         param_layout.addWidget(self.lagan_summary_container)
 
         # 中间区域
@@ -9110,9 +9108,6 @@ class TubeLayoutEditor(QMainWindow):
         :param product_id: 当前产品ID
         :param input_json: dict 输入数据
         """
-        # 助手候选的一键应用先停留在当前编辑会话，避免在用户确认保存前写库。
-        if getattr(self, "_ai_assistant_no_persist", False):
-            return True
         conn = create_product_connection()
         if conn is None:
             return False
@@ -9165,8 +9160,6 @@ class TubeLayoutEditor(QMainWindow):
         :param product_id: 当前产品ID
         :param result: dict 结果数据
         """
-        if getattr(self, "_ai_assistant_no_persist", False):
-            return True
         conn = create_product_connection()
         if conn is None:
             return False
@@ -11521,6 +11514,20 @@ class TubeLayoutEditor(QMainWindow):
                                 print(f"[update_tube_layout_circle_dl] e-e 节点计算异常，回退原逻辑: {e}")
                                 dl_value = _calc_dl_by_type(di_value, do_value)
                     
+                    elif node_lower == "g":
+                        # e_g 的内侧圆角 R2 限制可布管直径；仍同时满足两侧孔边距。
+                        # 例如 Dis=Dit=700、R2=12、do=25 时取 min(676,684,684)。
+                        r2_raw = _get_formula_old("b")
+                        if r2_raw is None:
+                            dl_value = _calc_dl_by_type(di_value, do_value)
+                        else:
+                            r2 = float(r2_raw)
+                            if not math.isfinite(r2) or r2 < 0:
+                                raise ValueError("e_g 节点 R2 必须为非负有限数值")
+                            dl_value = min(float(di_value) - 2 * r2,
+                                           float(di_value) - 2 * b3,
+                                           float(dit_value) - 2 * b3)
+
                     elif node_lower == "f":
                         # e-f 节点：DL = min{(Dis - 4 * a - 2 * e), (Dis - 2 * b3), (Dit - 2 * b3)}
                         # 需要参数：a, e
@@ -20929,7 +20936,7 @@ class TubeLayoutEditor(QMainWindow):
                         active.close()
                 except Exception:
                     pass
-    def _sync_tube_sheet_snapshot_and_update_dl(self):
+    def _sync_tube_sheet_snapshot_and_update_dl(self, parameters_changed=False):
         """从管板形式页同步参数快照，并在命中特殊节点时重算布管限定圆 DL。"""
         plate_type = None
         full_params = []
@@ -20960,7 +20967,7 @@ class TubeLayoutEditor(QMainWindow):
         self.is_suitable_tube_sheet = (
             ((main_category == "b") and (node_name in ["c", "d", "e", "h", "a"]))
             or
-            ((main_category == "e") and (node_name in ["a", "b", "c", "d", "e", "f", "b"]))
+            ((main_category == "e") and (node_name in ["a", "b", "c", "d", "e", "f", "g"]))
             if main_category
             else False
         )
@@ -21005,21 +21012,6 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 pass
 
-            prev_suppress = getattr(self, "_suppress_open_s_dl_autoupdate", False)
-            if getattr(self, "_user_override_tube_layout_circle_dl", False):
-                print("[My_Piping] 用户已覆盖 DL，跳过管板形式触发的自动重算")
-            else:
-                if prev_suppress:
-                    print(
-                        "[My_Piping] 管板形式变更：临时允许 DL 自动重算（覆盖加载阶段抑制）"
-                    )
-                self._suppress_open_s_dl_autoupdate = False
-                try:
-                    self.update_tube_layout_circle_dl()
-                except Exception as e:
-                    print(f"[My_Piping] 根据管板形式快照更新 DL 时发生异常: {e}")
-                finally:
-                    self._suppress_open_s_dl_autoupdate = prev_suppress
         else:
             print("[My_Piping] 未命中特殊管板节点分支，清空管板参数快照。")
             try:
@@ -21030,6 +21022,21 @@ class TubeLayoutEditor(QMainWindow):
                 update_tube_sheet_params_snapshot({})
             except Exception:
                 pass
+
+        if full_params:
+            # 用户主动更改节点或参数，与修改管径一样，使基于旧条件保存的DL失效。
+            # 仅切页/读库时仍保留已保存值，避免打开产品就改动设计。
+            if parameters_changed:
+                self._user_override_tube_layout_circle_dl = False
+            prev_suppress = getattr(self, "_suppress_open_s_dl_autoupdate", False)
+            if not getattr(self, "_user_override_tube_layout_circle_dl", False):
+                self._suppress_open_s_dl_autoupdate = False
+                try:
+                    self.update_tube_layout_circle_dl()
+                except Exception as e:
+                    print(f"[My_Piping] 根据管板形式快照更新 DL 时发生异常: {e}")
+                finally:
+                    self._suppress_open_s_dl_autoupdate = prev_suppress
 
         try:
             from pprint import pformat
@@ -24238,6 +24245,10 @@ class TubeLayoutEditor(QMainWindow):
         if getattr(self, "_buguan_in_progress", False):
             try:
                 self._selected_centers = []
+                summary = getattr(self, "selection_summary_label", None)
+                if summary is not None:
+                    summary.clear()
+                    summary.hide()
             except Exception:
                 pass
             try:

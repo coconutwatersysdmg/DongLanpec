@@ -181,6 +181,63 @@ class TubeLayoutCircleTests(unittest.TestCase):
     def test_aeu_default_plate_association_uses_a_type(self):
         self.assertEqual(SheetFormPage._resolve_plate_type_rule(None, "AEU"), ("a", True))
 
+    def test_e_g_node_links_r2_and_recalculates_after_parameter_edit(self):
+        self.editor.heat_exchanger = "AEM"
+        self.editor.setup_parameters(ProductConnection(
+            diameter="700", saved_di="700", saved_dl="684"
+        ).params)
+        self.editor.param_table.item(1, 2).setText("700")
+        class Page:
+            radius = "12"
+            def get_current_tube_form_data(page):
+                return [("管板类型", "e_g"), ("R1", "12"), ("R2", page.radius),
+                        ("h1", "1.5"), ("h2", "60"), ("α", "2"), ("p", "3"), ("e", "0.5")]
+        page = Page()
+        self.editor.sheet_form_page = page
+        self.editor._sync_tube_sheet_snapshot_and_update_dl()
+        self.assertTrue(self.editor.is_suitable_tube_sheet)
+        self.assertEqual(self.editor.value("布管限定圆 DL"), 676)
+        page.radius = "15"
+        self.editor._sync_tube_sheet_snapshot_and_update_dl()
+        self.assertEqual(self.editor.value("布管限定圆 DL"), 670)
+
+    def test_e_g_constraint_honors_other_clearance_and_manual_dl(self):
+        self.editor.heat_exchanger = "AEM"
+        self.editor.setup_parameters(ProductConnection(saved_di="700", saved_dl="650").params)
+        self.editor.param_table.item(1, 2).setText("700")
+        self.editor.is_suitable_tube_sheet = True
+        self.editor.tube_sheet_params_snapshot = {
+            "plate_type": "e_g", "main_category": "e", "node_name": "g",
+            "params": [("R2", "2")],
+        }
+        self.editor.update_tube_layout_circle_dl()
+        self.assertEqual(self.editor.value("布管限定圆 DL"), 684)
+        self.editor._user_override_tube_layout_circle_dl = True
+        self.editor.param_table.item(4, 2).setText("650")
+        self.editor.update_tube_layout_circle_dl()
+        self.assertEqual(self.editor.value("布管限定圆 DL"), 650)
+
+    def test_explicit_plate_edit_releases_loaded_dl_but_tab_refresh_preserves_it(self):
+        self.editor.heat_exchanger = "AEM"
+        self.editor.setup_parameters(ProductConnection(saved_di="700", saved_dl="684").params)
+        self.editor.param_table.item(1, 2).setText("700")
+        class Page:
+            plate = "e_g"
+            def get_current_tube_form_data(page):
+                return [("管板类型", page.plate), ("R2", "12")]
+        page = Page()
+        self.editor.sheet_form_page = page
+        self.editor._suppress_open_s_dl_autoupdate = True
+        self.editor._user_override_tube_layout_circle_dl = True
+        self.editor._sync_tube_sheet_snapshot_and_update_dl()
+        self.assertEqual(self.editor.value("布管限定圆 DL"), 684)
+        self.editor._sync_tube_sheet_snapshot_and_update_dl(parameters_changed=True)
+        self.assertEqual(self.editor.value("布管限定圆 DL"), 676)
+        page.plate = "a_a"
+        self.editor._sync_tube_sheet_snapshot_and_update_dl(parameters_changed=True)
+        self.assertFalse(self.editor.is_suitable_tube_sheet)
+        self.assertEqual(self.editor.value("布管限定圆 DL"), 684)
+
     def test_nen_c_node_uses_distance_three_instead_of_angle_thirty(self):
         self.editor.heat_exchanger = "NEN"
         self.editor.setup_parameters(ProductConnection(saved_di="1200", saved_dl="1100").params)

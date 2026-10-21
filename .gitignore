@@ -2,4 +2,3 @@ __pycache__/
 *.py[cod]
 .env
 .env.local
-ai_assistant.local.json

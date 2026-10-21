@@ -103,6 +103,23 @@ class SheetFormRulesTests(unittest.TestCase):
                      "R": "2", "n": "4", "e": "5", "p2": "2", "d2": "1"}
         self.assertEqual(forms._normalize_plate_form_params("b_c", canonical), canonical)
 
+    def test_editing_node_parameter_synchronizes_parent_snapshot(self):
+        self.parent.heat_exchanger = "AEM"
+        self.page = forms.SheetFormPage(self.parent)
+        self.page._handle_image_click(None, 6)
+        changes = []
+        self.parent._sync_tube_sheet_snapshot_and_update_dl = lambda **kwargs: changes.append(
+            dict(self.page.get_current_tube_form_data()))
+        table = self.page.sheet_form_param_table
+        for row in range(table.rowCount()):
+            if table.item(row, 0).data(forms.Qt.UserRole) == "R2":
+                table.item(row, 1).setText("15")
+                break
+        else:
+            self.fail("e_g节点缺少R2参数")
+        self.assertTrue(changes, "编辑管板参数后必须同步父窗口")
+        self.assertEqual(changes[-1]["R2"], "15")
+
 
 if __name__ == "__main__":
     unittest.main()

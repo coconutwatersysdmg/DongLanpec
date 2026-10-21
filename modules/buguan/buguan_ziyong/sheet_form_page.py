@@ -714,6 +714,10 @@ class SheetFormPage(QWidget):
                     return
                 # 合法值，更新缓存
                 self._last_valid_DL = user_val
+            # 编辑参数与选择节点走同一同步入口，使用界面当前值重算布管限定圆。
+            sync = getattr(self.parent, "_sync_tube_sheet_snapshot_and_update_dl", None)
+            if callable(sync):
+                sync(parameters_changed=True)
         except Exception:
             pass
 
@@ -1593,7 +1597,9 @@ class SheetFormPage(QWidget):
                         self.parent, "_sync_tube_sheet_snapshot_and_update_dl"
                     ):
                         try:
-                            self.parent._sync_tube_sheet_snapshot_and_update_dl()
+                            self.parent._sync_tube_sheet_snapshot_and_update_dl(
+                                parameters_changed=not restoring
+                            )
                         except Exception as sync_err:
                             print(f"[sheet_form_page] 同步管板快照并重算 DL 失败: {sync_err}")
             else:
