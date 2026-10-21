@@ -15361,12 +15361,16 @@ class TubeLayoutEditor(QMainWindow):
                     baffle_od = self.get_baffle_diameter()
                     upper = (
                         (float(baffle_od) / 2.0)
-                        if baffle_od not in (None, "") and float(baffle_od) > 0
+                        if baffle_od not in (None, "")
+                        and math.isfinite(float(baffle_od))
+                        and float(baffle_od) > 0
                         else None
                     )
 
                     invalid = False
                     if h_val is None:
+                        invalid = True
+                    elif not math.isfinite(h_val):
                         invalid = True
                     elif h_val <= 0:
                         invalid = True
@@ -15414,6 +15418,8 @@ class TubeLayoutEditor(QMainWindow):
                     try:
                         pre_min = float(pre_min) if pre_min not in (None, "") else None
                     except Exception:
+                        pre_min = None
+                    if pre_min is not None and not math.isfinite(pre_min):
                         pre_min = None
 
                     if pre_min is not None and h_val < pre_min:
@@ -15488,7 +15494,7 @@ class TubeLayoutEditor(QMainWindow):
                     if cur_text != "":
                         try:
                             thickness_val = float(cur_text)
-                            if thickness_val <= 0:
+                            if not math.isfinite(thickness_val) or thickness_val <= 0:
                                 invalid = True
                         except Exception:
                             invalid = True
@@ -15525,6 +15531,8 @@ class TubeLayoutEditor(QMainWindow):
                     try:
                         pre_min = float(pre_min) if pre_min not in (None, "") else None
                     except Exception:
+                        pre_min = None
+                    if pre_min is not None and not math.isfinite(pre_min):
                         pre_min = None
 
                     if pre_min is not None and thickness_val is not None and thickness_val < pre_min:

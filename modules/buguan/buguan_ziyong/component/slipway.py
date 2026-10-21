@@ -210,6 +210,96 @@ def _warn_slipway_angle_range(parent, angle_text):
     return reply == QMessageBox.Yes
 
 
+def _validate_plate_slipway_inputs(editor, parent, input_widgets, default_values):
+    """校验板式滑道高/厚，并执行低于预定义时的用户确认。"""
+    height_widget = input_widgets["滑道高度"]
+    thickness_widget = input_widgets["滑道厚度"]
+    height_text = height_widget.text().strip()
+    thickness_text = thickness_widget.text().strip()
+
+    try:
+        height = float(height_text) if height_text else None
+    except (TypeError, ValueError):
+        height = None
+    try:
+        thickness = float(thickness_text) if thickness_text else None
+    except (TypeError, ValueError):
+        thickness = None
+
+    try:
+        baffle_diameter = float(editor.get_baffle_diameter())
+        height_upper = (
+            baffle_diameter / 2.0
+            if math.isfinite(baffle_diameter) and baffle_diameter > 0
+            else None
+        )
+    except (TypeError, ValueError):
+        height_upper = None
+
+    if height is None or not math.isfinite(height) or height <= 0 or (
+        height_upper is not None and height > height_upper
+    ):
+        QMessageBox.warning(
+            parent,
+            "输入错误",
+            "您输入的数值小于0或已超限，请重新输入！",
+        )
+        height_widget.setText(str(default_values.get("滑道高度", "") or ""))
+        return False
+
+    if thickness is None or not math.isfinite(thickness) or thickness <= 0:
+        QMessageBox.warning(
+            parent,
+            "输入错误",
+            "您输入的数值小于0，请重新输入！",
+        )
+        thickness_widget.setText(str(default_values.get("滑道厚度", "") or ""))
+        return False
+
+    try:
+        predefined = editor._get_slideway_predefined_defaults() or {}
+    except Exception as exc:
+        print(f"[slipway] 读取滑道预定义高/厚失败: {exc}")
+        predefined = {}
+
+    for key, value, predefined_key in (
+        ("滑道高度", height, "height"),
+        ("滑道厚度", thickness, "thickness"),
+    ):
+        try:
+            minimum = float(predefined.get(predefined_key))
+        except (TypeError, ValueError):
+            minimum = None
+        if minimum is not None and not math.isfinite(minimum):
+            minimum = None
+        if minimum is None or value >= minimum:
+            continue
+        reply = QMessageBox.question(
+            parent,
+            "提示",
+            "你输入的数值小于预定义要求，是否继续？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.No:
+            input_widgets[key].setText("")
+            return False
+
+    return True
+
+
+def _remember_accepted_plate_slipway_inputs(editor, input_widgets):
+    """在弹窗全部校验通过、即将写表时记录本次已确认的高/厚。"""
+    height_text = input_widgets["滑道高度"].text().strip()
+    thickness_text = input_widgets["滑道厚度"].text().strip()
+    editor._last_valid_slideway_height_text = height_text
+    editor._last_valid_slipway_thickness_text = thickness_text
+    editor._slideway_height_warn_last_text = height_text
+    editor._slideway_height_warn_pending = False
+    editor._slipway_thickness_warn_last_text = thickness_text
+    editor._slipway_thickness_warn_pending = False
+
+
 def restore_slipway_from_saved(self):
     """
     打开/重载复现滑道：有库中 slipway_centers 时先删管；没有干涉删管记录也应仅按参数绘制滑道。
@@ -450,35 +540,9 @@ def edit_slide(self, slide_item):
                 if not _warn_slipway_angle_range(dialog, angle_text):
                     return
         else:
-            # 板式：0 < 滑道高度；若参数表中有折流/支持板外径则再校验 <= 外径/2（AES 等可无此项，不得误报）
-            height_text = input_widgets["滑道高度"].text().strip()
-            try:
-                slipway_height = float(height_text) if height_text != "" else None
-            except Exception:
-                slipway_height = None
-            baffle_od = self.get_baffle_diameter()
-            upper_ok = (
-                baffle_od is not None
-                and baffle_od > 0
-                and slipway_height is not None
-                and slipway_height > baffle_od / 2.0
-            )
-            if slipway_height is None or slipway_height <= 0 or upper_ok:
-                try:
-                    print(
-                        "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入! "
-                        f"source=滑道参数弹窗 param=滑道高度 input='{height_text}' parsed={slipway_height} "
-                        f"upper(baffle_od/2)={(baffle_od / 2.0) if (baffle_od is not None and baffle_od > 0) else None} "
-                        "rule=(0,upper] reason=<=0/非数字/超上限 action=回滚为旧值"
-                    )
-                except Exception:
-                    pass
-                QMessageBox.warning(
-                    dialog,
-                    "输入错误",
-                    "您输入的数值小于0或已超限，请重新输入!",
-                )
-                input_widgets["滑道高度"].setText(default_values.get("滑道高度", ""))
+            if not _validate_plate_slipway_inputs(
+                self, dialog, input_widgets, default_values
+            ):
                 return
 
             angle_text = input_widgets["滑道与竖直中心线夹角"].text()
@@ -519,6 +583,10 @@ def edit_slide(self, slide_item):
                     input_widgets[cut_key].setText(cut_default)
                     return
                 input_widgets[cut_key].setText(cut_text)
+
+        # 全部字段均校验通过后再记录，取消/后续字段失败不得污染表格监听状态。
+        if not is_round:
+            _remember_accepted_plate_slipway_inputs(self, input_widgets)
 
         # 同步参数表（含滑道形式/圆钢/导轨，避免仅改可见项）
         loc_val = normalize_slipway_location(
@@ -753,34 +821,9 @@ def on_green_slide_click(self):
                     self.clear_selection_highlight()
                     return
         else:
-            height_text = input_widgets["滑道高度"].text().strip()
-            try:
-                slipway_height = float(height_text) if height_text != "" else None
-            except Exception:
-                slipway_height = None
-            baffle_od = self.get_baffle_diameter()
-            upper_ok = (
-                baffle_od is not None
-                and baffle_od > 0
-                and slipway_height is not None
-                and slipway_height > baffle_od / 2.0
-            )
-            if slipway_height is None or slipway_height <= 0 or upper_ok:
-                try:
-                    print(
-                        "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入! "
-                        f"source=滑道参数弹窗(含圆钢规格) param=滑道高度 input='{height_text}' parsed={slipway_height} "
-                        f"upper(baffle_od/2)={(baffle_od / 2.0) if (baffle_od is not None and baffle_od > 0) else None} "
-                        "rule=(0,upper] reason=<=0/非数字/超上限 action=回滚为旧值"
-                    )
-                except Exception:
-                    pass
-                QMessageBox.warning(
-                    dialog,
-                    "输入错误",
-                    "您输入的数值小于0或已超限，请重新输入!",
-                )
-                input_widgets["滑道高度"].setText(default_values.get("滑道高度", ""))
+            if not _validate_plate_slipway_inputs(
+                self, dialog, input_widgets, default_values
+            ):
                 return
 
             angle_text = input_widgets["滑道与竖直中心线夹角"].text()
@@ -823,6 +866,10 @@ def on_green_slide_click(self):
                     self.clear_selection_highlight()
                     return
                 input_widgets[cut_key].setText(cut_text)
+
+        # 全部字段均校验通过后再记录，取消/后续字段失败不得污染表格监听状态。
+        if not is_round:
+            _remember_accepted_plate_slipway_inputs(self, input_widgets)
 
         # 更新参数表中的值
         for row in range(self.param_table.rowCount()):

@@ -37,6 +37,7 @@ My_Piping.TubeLayoutEditor.get_config_value 已转发至本模块 L1，旧调用
 from __future__ import annotations
 
 import ast
+import re
 
 # L2 缓存：None 表示尚未尝试加载；加载后为 dict（可能为空）
 _TUBE_CENTER_DISTANCE_MAP_CACHE = None
@@ -184,12 +185,26 @@ def _parse_slipway_size_table(config_value):
     if not config_value:
         return cache
     try:
-        rows = (
-            ast.literal_eval(config_value)
-            if isinstance(config_value, str)
-            else config_value
-        )
-        for r in rows[1:] if isinstance(rows, list) and len(rows) > 1 else []:
+        rows = config_value
+        if isinstance(rows, str):
+            try:
+                rows = ast.literal_eval(rows)
+                # 兼容 value 被额外序列化一层字符串的情况。
+                if isinstance(rows, str):
+                    rows = ast.literal_eval(rows)
+            except (SyntaxError, ValueError):
+                # 当前配置库的 2.14.3.1 表头后三列没有引号，整段不是合法
+                # Python/JSON 字面量；数据行本身合法，逐行提取即可。
+                rows = []
+                for match in re.finditer(r"\[[^\[\]]*\]", config_value):
+                    try:
+                        row = ast.literal_eval(match.group(0))
+                    except (SyntaxError, ValueError):
+                        continue
+                    if isinstance(row, (list, tuple)):
+                        rows.append(row)
+
+        for r in rows if isinstance(rows, (list, tuple)) else []:
             if not isinstance(r, (list, tuple)) or len(r) < 5:
                 continue
             try:
