@@ -1158,7 +1158,7 @@ class PreviewDialog(QDialog):
         # 参数表格
         self.table = QTableWidget()
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["序号", "参数名", "参数值", "单位"])
+        self.table.setHorizontalHeaderLabels(["序号", "参数名称", "参数值", "单位"])
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
 
@@ -3470,7 +3470,7 @@ class TubeLayoutEditor(QMainWindow):
 
         self.param_table = NoWheelTableWidget()
         self.param_table.setColumnCount(4)
-        self.param_table.setHorizontalHeaderLabels(["序号", "参数名", "参数值", "单位"])
+        self.param_table.setHorizontalHeaderLabels(["序号", "参数名称", "参数值", "单位"])
         self.param_table.verticalHeader().setVisible(False)
         # 统一行高：略紧凑，管程分程形式示意图由自绘控件完整缩放
         self._param_table_row_height = 40
