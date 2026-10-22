@@ -20495,7 +20495,8 @@ class TubeLayoutEditor(QMainWindow):
                             for statement in sql:
                                 self.execute_sql(statement)
 
-                    if sql:
+                    # 仅用户在布管页主动保存时写回元件 Ad；级联静默保存不弹窗、不改元件定义
+                    if sql and not silent:
                         self._sync_tube_sheet_ad_after_save(
                             getattr(self, "_active_sql_conn", None)
                         )
