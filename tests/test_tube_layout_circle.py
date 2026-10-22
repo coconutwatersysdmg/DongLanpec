@@ -255,6 +255,21 @@ class TubeLayoutCircleTests(unittest.TestCase):
                 # min(1200 - 4*(1+sqrt(17)) - 6, 1200 - 16), rounded to 0.1 mm.
                 self.assertEqual(self.editor.value("布管限定圆 DL"), 1173.5)
 
+    def test_nen_e_node_uses_two_l_minus_q_formula(self):
+        self.editor.heat_exchanger = "NEN"
+        self.editor.setup_parameters(ProductConnection(saved_di="1200", saved_dl="1100").params)
+        self.editor.is_suitable_tube_sheet = True
+        self.editor.tube_sheet_params_snapshot = {
+            "plate_type": "b_e", "main_category": "b", "node_name": "e",
+            "params": [("R2", "2"), ("e", "3"), ("R4", "2"),
+                       ("d2", "20"), ("α", "45")],
+        }
+
+        self.editor.update_tube_layout_circle_dl()
+
+        # min(1190, 1216.3..., 1184) = 1184; q-l would incorrectly produce 1148.3.
+        self.assertEqual(self.editor.value("布管限定圆 DL"), 1184)
+
     def test_other_supported_plate_nodes_use_renamed_formula_parameters(self):
         self.editor.setup_parameters(ProductConnection(saved_di="1200", saved_dl="1100").params)
         self.editor.is_suitable_tube_sheet = True
@@ -262,7 +277,6 @@ class TubeLayoutCircleTests(unittest.TestCase):
             ("NEN", "b_a", {"x1": "1", "x2": "1", "α": "60"}, 1184),
             ("NEN", "b_d", {"e": "3", "R3": "10", "R2": "12"}, 1170),
             ("NEN", "b_h", {"e": "3", "R3": "10", "R5": "12"}, 1170),
-            ("NEN", "b_e", {"R2": "2", "e": "3", "R4": "2", "d2": "20", "α": "45"}, 1148.3),
             ("AEM", "e_a", {"d3": "20"}, 1160),
             ("AEM", "e_b", {"b": "20", "e": "3", "R1": "2"}, 1154),
             ("BEM", "e_c", {"b": "20", "e": "3", "R1": "2"}, 1154),

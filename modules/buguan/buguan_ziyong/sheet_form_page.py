@@ -183,7 +183,10 @@ _PLATE_OLD_TO_NEW_BY_NODE = {
     "e_d": {"a": "R1", "b": "R2", "c": "d1", "d": "b", "e": "α1", "f": "α2", "g": "p", "h": "h", "j": "e"},
     "e_e": {"a": "R1", "b": "R2", "c": "α1", "d": "d1", "e": "b", "f": "α2", "g": "p", "h": "h", "j": "e", "k": "d2"},
     "e_f": {"a": "R1", "b": "h", "c": "α", "d": "p", "e": "e"},
-    "e_g": {"a": "R1", "b": "R2", "c": "h1", "d": "h2", "e": "α", "f": "p", "g": "e"},
+    "e_g": {
+        "a": "R1", "b": "R2", "c1": "h1", "c2": "h2",
+        "d": "α", "e": "p", "f": "e",
+    },
 }
 
 
@@ -1530,12 +1533,12 @@ class SheetFormPage(QWidget):
                             pass
                         self.sheet_form_param_table.setItem(display_row, 0, name_item)
 
-                        # 对于 e_f、f_f 节点，如果参数名为 a，则根据公式重新计算默认值
+                        # e_f 的旧参数 a 已改名为 R1；按当前直径基准动态计算 R1。
                         adjusted_value = default_value
                         if (
-                            param_name == "a"
-                            and selected_folder in ["e", "f"]
-                            and image_name_without_ext in ["e_f", "f_f"]
+                            param_name == "R1"
+                            and selected_folder == "e"
+                            and image_name_without_ext == "e_f"
                         ):
                             try:
                                 dl = self.DL
@@ -1549,7 +1552,7 @@ class SheetFormPage(QWidget):
                                 if isinstance(adjusted_value, (int, float)):
                                     adjusted_value = f"{adjusted_value:.3f}"
                             except Exception as calc_err:
-                                print(f"计算 a 默认值时出错: {calc_err}")
+                                print(f"计算 e_f 节点 R1 默认值时出错: {calc_err}")
 
                         # 参数值列
                         display_text = str(adjusted_value)

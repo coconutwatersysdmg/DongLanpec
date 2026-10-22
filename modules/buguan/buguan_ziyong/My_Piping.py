@@ -10985,7 +10985,7 @@ class TubeLayoutEditor(QMainWindow):
                 # b 型管板的 e 节点处理
                 elif main_category == "b" and str(node_name).lower() == "e":
                     # b_e 节点：DL = min{(Dit - 2*e - 2*p),
-                    #                      (Dis - 2*[(q - l + l/cos s)/tan s + l] - 2*p),
+                    #                      (Dis - 2*[(2*l - q + l/cos s)/tan s + l] - 2*p),
                     #                      (Dit - 2*b3)}
                     # 其中 Dit/Dis/do 从左侧参数表获取，e,p,l,q,s 从快照参数中读取
 
@@ -11093,7 +11093,7 @@ class TubeLayoutEditor(QMainWindow):
                                 dl_value = _calc_dl_by_type(di_value, do_value)
                             else:
                                 # 三个表达式
-                                # 公式：DL = min{(Dit-2×e-2×p), (Dis-2×[(q-l+l/cos s)/tan s+l]-2×p), (Dit-2×b3)}
+                                # 公式：DL = min{(Dit-2×e-2×p), (Dis-2×[(2l-q+l/cos s)/tan s+l]-2×p), (Dit-2×b3)}
                                 
                                 print(f"\n[e节点] 计算表达式1: DL1 = Dit - 2×e - 2×p")
                                 expr1_part1 = 2 * e_val
@@ -11105,28 +11105,28 @@ class TubeLayoutEditor(QMainWindow):
                                 print(f"  2×e + 2×p = {expr1_sub:.3f}")
                                 print(f"  DL1 = {dit:.3f} - {expr1_sub:.3f} = {dl_expr1:.3f}")
                                 
-                                print(f"\n[e节点] 计算表达式2: DL2 = Dis - 2×[(q-l+l/cos s)/tan s+l] - 2×p")
-                                # 先计算括号内的内容：[(q-l+l/cos s)/tan s+l]
-                                print(f"  步骤1: 计算 (q - l + l/cos s)")
-                                part2_1 = q_val - l_val  # q - l
+                                print(f"\n[e节点] 计算表达式2: DL2 = Dis - 2×[(2l-q+l/cos s)/tan s+l] - 2×p")
+                                # 先计算括号内的内容：[(2l-q+l/cos s)/tan s+l]
+                                print(f"  步骤1: 计算 (2l - q + l/cos s)")
+                                part2_1 = 2 * l_val - q_val  # 2l - q
                                 part2_2 = l_val / cos_s  # l/cos s
-                                numerator = part2_1 + part2_2  # (q-l+l/cos s)
-                                print(f"    q - l = {q_val:.3f} - {l_val:.3f} = {part2_1:.3f}")
+                                numerator = part2_1 + part2_2  # (2l-q+l/cos s)
+                                print(f"    2l - q = 2×{l_val:.3f} - {q_val:.3f} = {part2_1:.3f}")
                                 print(f"    l/cos s = {l_val:.3f}/{cos_s:.6f} = {part2_2:.6f}")
-                                print(f"    (q - l + l/cos s) = {part2_1:.3f} + {part2_2:.6f} = {numerator:.6f}")
+                                print(f"    (2l - q + l/cos s) = {part2_1:.3f} + {part2_2:.6f} = {numerator:.6f}")
                                 
-                                print(f"  步骤2: 计算 [(q-l+l/cos s)/tan s + l]")
-                                part2_3 = numerator / tan_s  # (q-l+l/cos s)/tan s
-                                bracket_content = part2_3 + l_val  # [(q-l+l/cos s)/tan s+l]
-                                print(f"    (q-l+l/cos s)/tan s = {numerator:.6f}/{tan_s:.6f} = {part2_3:.6f}")
-                                print(f"    [(q-l+l/cos s)/tan s + l] = {part2_3:.6f} + {l_val:.3f} = {bracket_content:.6f}")
+                                print(f"  步骤2: 计算 [(2l-q+l/cos s)/tan s + l]")
+                                part2_3 = numerator / tan_s  # (2l-q+l/cos s)/tan s
+                                bracket_content = part2_3 + l_val  # [(2l-q+l/cos s)/tan s+l]
+                                print(f"    (2l-q+l/cos s)/tan s = {numerator:.6f}/{tan_s:.6f} = {part2_3:.6f}")
+                                print(f"    [(2l-q+l/cos s)/tan s + l] = {part2_3:.6f} + {l_val:.3f} = {bracket_content:.6f}")
                                 
                                 print(f"  步骤3: 计算 Dis - 2×[...] - 2×p")
                                 expr2_part1 = 2 * bracket_content
                                 expr2_part2 = 2 * p_val
                                 expr2_sub = expr2_part1 + expr2_part2
                                 dl_expr2 = dis - expr2_sub
-                                print(f"    2×[(q-l+l/cos s)/tan s+l] = 2×{bracket_content:.6f} = {expr2_part1:.6f}")
+                                print(f"    2×[(2l-q+l/cos s)/tan s+l] = 2×{bracket_content:.6f} = {expr2_part1:.6f}")
                                 print(f"    2×p = 2×{p_val:.3f} = {expr2_part2:.3f}")
                                 print(f"    2×[...] + 2×p = {expr2_sub:.6f}")
                                 print(f"    DL2 = {dis:.3f} - {expr2_sub:.6f} = {dl_expr2:.3f}")
@@ -20304,6 +20304,54 @@ class TubeLayoutEditor(QMainWindow):
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(safe_centers, f, ensure_ascii=False, indent=2)
 
+    def _confirm_tube_sheet_ad_update(self, calculated_value, user_value):
+        message = (
+            f"软件计算“管板分程处面积 Ad”的数值为{calculated_value}，"
+            "与在元件定义中自定义的数值差距超过5%，"
+            "是否更新元件定义？"
+        )
+        reply = QMessageBox.question(
+            self,
+            "提示",
+            message,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        return reply == QMessageBox.Yes
+
+    def _sync_tube_sheet_ad_after_save(self, connection):
+        """布管计算结果落库后，同步 Ad 到已有的固定管板元件参数行。"""
+        try:
+            if connection is None:
+                return "no_connection"
+
+            from modules.buguan.buguan_ziyong.tube_pass.ad_calculation import (
+                compute_ad_from_editor,
+            )
+            from modules.buguan.buguan_ziyong.tube_sheet_ad_sync import (
+                sync_tube_sheet_ad,
+            )
+
+            ad_result = compute_ad_from_editor(self)
+            if not ad_result or ad_result.get("Ad") is None:
+                return "no_calculation"
+
+            result = sync_tube_sheet_ad(
+                connection,
+                self.productID,
+                ad_result["Ad"],
+                self._confirm_tube_sheet_ad_update,
+            )
+            print(f"[Ad元件同步] result={result}", file=sys.stderr)
+            return result
+        except Exception as exc:
+            print(
+                f"[Ad元件同步] 同步失败，不影响原有布管保存: "
+                f"{type(exc).__name__}: {exc}",
+                file=sys.stderr,
+            )
+            return "error"
+
     def actual_save_operation(self, page_index, silent: bool = False):
         if page_index == 1:  # 布管页面
             if not self.has_piped:
@@ -20446,6 +20494,11 @@ class TubeLayoutEditor(QMainWindow):
                         if sql:
                             for statement in sql:
                                 self.execute_sql(statement)
+
+                    if sql:
+                        self._sync_tube_sheet_ad_after_save(
+                            getattr(self, "_active_sql_conn", None)
+                        )
 
             pass
         elif page_index == 3:  # 轴向设计页面

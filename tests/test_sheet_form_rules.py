@@ -98,6 +98,20 @@ class SheetFormRulesTests(unittest.TestCase):
         self.assertEqual(actual["d1"], "1")
         self.assertEqual(actual["e"], "3")
 
+    def test_legacy_e_g_uses_component_database_symbol_layout(self):
+        legacy = {
+            "a": "12", "b": "12", "c1": "1.5", "c2": "25",
+            "d": "60", "e": "2", "f": "3",
+        }
+
+        actual = forms._normalize_plate_form_params("e_g", legacy)
+
+        self.assertEqual(
+            {key: actual[key] for key in ("R1", "R2", "h1", "h2", "α", "p", "e")},
+            {"R1": "12", "R2": "12", "h1": "1.5", "h2": "25",
+             "α": "60", "p": "2", "e": "3"},
+        )
+
     def test_canonical_custom_values_are_preserved(self):
         canonical = {"α1": "60", "b": "2", "p1": "2", "d1": "1", "α2": "30",
                      "R": "2", "n": "4", "e": "5", "p2": "2", "d2": "1"}
@@ -119,6 +133,24 @@ class SheetFormRulesTests(unittest.TestCase):
             self.fail("e_g节点缺少R2参数")
         self.assertTrue(changes, "编辑管板参数后必须同步父窗口")
         self.assertEqual(changes[-1]["R2"], "15")
+
+    def test_e_f_r1_uses_the_diameter_selected_by_outer_base_flag(self):
+        self.parent.heat_exchanger = "BEM"
+        self.page = forms.SheetFormPage(self.parent)
+        forms.get_plate_form_params.return_value = {
+            "R1": "18", "h": "10", "α": "60", "p": "2", "e": "0",
+        }
+        self.page.DN = 1200.0
+        self.page.Di = 1144.0
+        self.page.DL = 1100.0
+
+        for outer_flag, expected in (("否", "25.000"), ("是", "11.000")):
+            with self.subTest(outer_flag=outer_flag):
+                self.page.use_outer_diameter_base = outer_flag
+                self.page._handle_image_click(None, 5)
+                current = dict(self.page.get_current_tube_form_data())
+                self.assertEqual(current["管板类型"], "e_f")
+                self.assertEqual(current["R1"], expected)
 
 
 if __name__ == "__main__":
