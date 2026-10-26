@@ -37060,6 +37060,9 @@ class TubeLayoutEditor(QMainWindow):
             draw_center_dangguan_at_position,
         )
 
+        # 新增多管程走通用分支时，用交点所在轴决定对称方向。
+        center_dangguan_intersection = None
+
         # 获取原始坐标的绝对坐标（父坐标）
         current_coords = self.selected_to_current_coords(self.selected_centers)
         if current_coords and len(current_coords) == 2:
@@ -38618,6 +38621,7 @@ class TubeLayoutEditor(QMainWindow):
                 elif len(intersections_in_range) == 1:
                     intersection = intersections_in_range[0]
                     ix, iy = intersection
+                    center_dangguan_intersection = intersection
 
                     # 判断是否为中点
                     if not is_point_midpoint(ix, iy, x1, y1, x2, y2):
@@ -38649,6 +38653,14 @@ class TubeLayoutEditor(QMainWindow):
                 selected_centers = self.judge_linkage_y(self.selected_centers)
             elif tube_num in ["4", "6"] and self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
                 selected_centers = self.judge_linkage_y(self.selected_centers)
+            elif tube_num in ["8", "10", "12"] and center_dangguan_intersection is not None:
+                ix, iy = center_dangguan_intersection
+                if abs(ix) < 1e-9:
+                    # 挡管在 y 轴上，生成关于 x 轴对称的一根。
+                    selected_centers = self.judge_linkage_x(self.selected_centers)
+                else:
+                    # 挡管在 x 轴上，生成关于 y 轴对称的一根。
+                    selected_centers = self.judge_linkage_y(self.selected_centers)
             else:
                 selected_centers = self.selected_centers
         else:
@@ -40937,13 +40949,28 @@ class TubeLayoutEditor(QMainWindow):
 
                     new_labels = []
                     marker_points = []
+                    current_center_keys = set()
+                    for coord in getattr(self, "current_centers", None) or []:
+                        try:
+                            current_center_keys.add(
+                                (
+                                    round(float(coord[0]), 6),
+                                    round(float(coord[1]), 6),
+                                )
+                            )
+                        except (TypeError, ValueError, IndexError):
+                            continue
 
                     for row, row_list in enumerate(
                             self.full_sorted_current_centers_up or []
                     ):
                         for col, coord in enumerate(row_list):
                             x, y = coord
-                            if rect.contains(QPointF(x, y)):
+                            coord_key = (round(float(x), 6), round(float(y), 6))
+                            if (
+                                    coord_key in current_center_keys
+                                    and rect.contains(QPointF(x, y))
+                            ):
                                 row_label = (row + 1) * 1
                                 x_mul = 1 if x >= 0 else -1
                                 col_label = (col + 1) * x_mul
@@ -40956,7 +40983,11 @@ class TubeLayoutEditor(QMainWindow):
                     ):
                         for col, coord in enumerate(row_list):
                             x, y = coord
-                            if rect.contains(QPointF(x, y)):
+                            coord_key = (round(float(x), 6), round(float(y), 6))
+                            if (
+                                    coord_key in current_center_keys
+                                    and rect.contains(QPointF(x, y))
+                            ):
                                 row_label = (row + 1) * -1
                                 x_mul = 1 if x >= 0 else -1
                                 col_label = (col + 1) * x_mul
