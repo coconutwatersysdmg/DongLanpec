@@ -20319,7 +20319,9 @@ class TubeLayoutEditor(QMainWindow):
         )
         return reply == QMessageBox.Yes
 
-    def _sync_tube_sheet_ad_after_save(self, connection):
+    def _sync_tube_sheet_ad_after_save(
+        self, connection, previous_calculated_value=None
+    ):
         """布管计算结果落库后，同步 Ad 到已有的固定管板元件参数行。"""
         try:
             if connection is None:
@@ -20341,6 +20343,7 @@ class TubeLayoutEditor(QMainWindow):
                 self.productID,
                 ad_result["Ad"],
                 self._confirm_tube_sheet_ad_update,
+                previous_calculated_value=previous_calculated_value,
             )
             print(f"[Ad元件同步] result={result}", file=sys.stderr)
             return result
@@ -20422,6 +20425,23 @@ class TubeLayoutEditor(QMainWindow):
                     print(f"[actual_save_operation] 保存 productID.json 失败: {e}")
                 # 以下 execute_sql 复用同一连接，每条仍单独 commit（与原逻辑一致）
                 with self._sql_connection_scope():
+                    previous_calculated_ad = None
+                    if not silent:
+                        try:
+                            from modules.buguan.buguan_ziyong.tube_sheet_ad_sync import (
+                                get_previous_calculated_ad,
+                            )
+
+                            previous_calculated_ad = get_previous_calculated_ad(
+                                getattr(self, "_active_sql_conn", None),
+                                self.productID,
+                            )
+                        except Exception as exc:
+                            print(
+                                f"[Ad元件同步] 读取上次计算值失败，按用户值规则处理: "
+                                f"{type(exc).__name__}: {exc}",
+                                file=sys.stderr,
+                            )
                     # 径向开孔
                     sql_list = self.build_sql_for_radial_holes()
                     if sql_list:
@@ -20498,7 +20518,8 @@ class TubeLayoutEditor(QMainWindow):
                     # 仅用户在布管页主动保存时写回元件 Ad；级联静默保存不弹窗、不改元件定义
                     if sql and not silent:
                         self._sync_tube_sheet_ad_after_save(
-                            getattr(self, "_active_sql_conn", None)
+                            getattr(self, "_active_sql_conn", None),
+                            previous_calculated_value=previous_calculated_ad,
                         )
 
             pass

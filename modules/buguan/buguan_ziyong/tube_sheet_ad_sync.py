@@ -6,6 +6,7 @@ from decimal import Decimal, InvalidOperation
 PARAMETER_NAME = "管板分程处面积 Ad"
 ELEMENT_NAME = "固定管板"
 RECOMMENDED_VALUE = "程序推荐"
+CALCULATION_NAME = "管板分程处面积Ad"
 FIVE_PERCENT = Decimal("0.05")
 
 
@@ -24,6 +25,18 @@ def _calculated_value_text(value):
     return str(round(float(value), 3))
 
 
+def _matches_previous_calculation(stored_value, previous_calculated_value):
+    """元件值与上次程序计算值一致时，仍按“程序推荐”状态处理。"""
+    if previous_calculated_value is None:
+        return False
+    try:
+        stored = _as_nonnegative_decimal(stored_value, "元件用户值")
+        previous = _as_nonnegative_decimal(previous_calculated_value, "上次布管计算值")
+    except ValueError:
+        return False
+    return _calculated_value_text(stored) == _calculated_value_text(previous)
+
+
 def _difference_exceeds_five_percent(calculated_value, user_value):
     """按 abs(1 - 用户值 / 布管值) 判断，恰好 5% 不超限。"""
     if calculated_value == 0:
@@ -31,7 +44,33 @@ def _difference_exceeds_five_percent(calculated_value, user_value):
     return abs(Decimal("1") - user_value / calculated_value) > FIVE_PERCENT
 
 
-def sync_tube_sheet_ad(connection, product_id, calculated_value, confirm_update):
+def get_previous_calculated_ad(connection, product_id):
+    """读取本次保存覆盖前的布管 AD，用于识别持续的“程序推荐”状态。"""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT 计算值
+            FROM 产品设计活动表_布管计算结果表
+            WHERE 产品ID = %s
+              AND 计算值名称 = %s
+            ORDER BY 计算ID DESC
+            LIMIT 1
+            """,
+            (product_id, CALCULATION_NAME),
+        )
+        row = cursor.fetchone()
+    if not row:
+        return None
+    return row.get("计算值")
+
+
+def sync_tube_sheet_ad(
+    connection,
+    product_id,
+    calculated_value,
+    confirm_update,
+    previous_calculated_value=None,
+):
     """
     更新当前产品已有的固定管板 Ad 参数行。
 
@@ -61,7 +100,9 @@ def sync_tube_sheet_ad(connection, product_id, calculated_value, confirm_update)
 
     row = rows[0]
     stored_text = str(row.get("参数值") or "").strip()
-    if stored_text == RECOMMENDED_VALUE:
+    if stored_text == RECOMMENDED_VALUE or _matches_previous_calculation(
+        stored_text, previous_calculated_value
+    ):
         result = "updated_recommended"
     else:
         try:

@@ -46,6 +46,18 @@ class FakeCursor:
             ]
             return
 
+        if normalized.startswith("SELECT 计算值"):
+            product_id, calculation_name = args
+            if (
+                product_id == "PD-AD-TEST"
+                and calculation_name == "管板分程处面积Ad"
+                and self.connection.calculated_ad is not None
+            ):
+                self.result = [{"计算值": self.connection.calculated_ad}]
+            else:
+                self.result = []
+            return
+
         if normalized.startswith("UPDATE 产品设计活动表_元件附加参数表"):
             new_value, product_id, parameter_id = args
             for row in self.connection.rows:
@@ -63,6 +75,9 @@ class FakeCursor:
     def fetchall(self):
         return list(self.result)
 
+    def fetchone(self):
+        return self.result[0] if self.result else None
+
     def __enter__(self):
         return self
 
@@ -71,7 +86,7 @@ class FakeCursor:
 
 
 class FakeConnection:
-    def __init__(self, value=None):
+    def __init__(self, value=None, calculated_ad=None):
         self.rows = []
         if value is not None:
             self.rows.append(
@@ -87,6 +102,7 @@ class FakeConnection:
             )
         self.executed = []
         self.commit_count = 0
+        self.calculated_ad = calculated_ad
 
     def cursor(self):
         return FakeCursor(self)
@@ -143,6 +159,9 @@ class SaveEditor(piping.TubeLayoutEditor):
 
     def execute_sql(self, sql, fetch=False, connection=None):
         self.executed_sql.append(sql)
+        prefix = "CALCULATION AD="
+        if sql.startswith(prefix):
+            self._test_connection.calculated_ad = sql[len(prefix):]
 
     def build_sql_for_radial_holes(self):
         return []
@@ -195,6 +214,40 @@ class TubeSheetAdSyncTests(unittest.TestCase):
 
         self.assertEqual(result, "kept_within_tolerance")
         self.assertEqual(connection.rows[0]["参数值"], "95")
+        self.assertEqual(confirmation.requests, [])
+        self.assertEqual(connection.commit_count, 0)
+
+    def test_previous_program_value_is_replaced_by_latest_calculation(self):
+        connection = FakeConnection("95")
+        confirmation = Confirmation(False)
+
+        result = ad_sync.sync_tube_sheet_ad(
+            connection,
+            "PD-AD-TEST",
+            100,
+            confirmation,
+            previous_calculated_value=95,
+        )
+
+        self.assertEqual(result, "updated_recommended")
+        self.assertEqual(connection.rows[0]["参数值"], "100.0")
+        self.assertEqual(confirmation.requests, [])
+        self.assertEqual(connection.commit_count, 1)
+
+    def test_user_value_different_from_previous_calculation_stays_protected(self):
+        connection = FakeConnection("96")
+        confirmation = Confirmation(False)
+
+        result = ad_sync.sync_tube_sheet_ad(
+            connection,
+            "PD-AD-TEST",
+            100,
+            confirmation,
+            previous_calculated_value=95,
+        )
+
+        self.assertEqual(result, "kept_within_tolerance")
+        self.assertEqual(connection.rows[0]["参数值"], "96")
         self.assertEqual(confirmation.requests, [])
         self.assertEqual(connection.commit_count, 0)
 
@@ -313,6 +366,35 @@ class TubeSheetAdSaveIntegrationTests(unittest.TestCase):
             self.assertEqual(editor.executed_sql, ["CALCULATION SQL"])
             self.assertEqual(connection.rows[0]["参数值"], "程序推荐")
             self.assertEqual(connection.commit_count, 0)
+        finally:
+            editor.close()
+            editor.deleteLater()
+
+    def test_repeated_save_updates_previous_program_calculation(self):
+        connection = FakeConnection("95", calculated_ad="95")
+        editor = SaveEditor(connection)
+        ad_result = {
+            "supported": True,
+            "message": "ok",
+            "Ad": 100,
+            "A0": 170,
+            "A1": 70,
+            "A2": 0,
+            "Ntt": 120,
+        }
+        try:
+            with patch.object(
+                piping.piping_calculations,
+                "build_sql_for_u_tube_calc",
+                return_value=["CALCULATION AD=100"],
+            ), patch(
+                "modules.buguan.buguan_ziyong.tube_pass.ad_calculation.compute_ad_from_editor",
+                return_value=ad_result,
+            ):
+                editor.actual_save_operation(1)
+
+            self.assertEqual(connection.rows[0]["参数值"], "100.0")
+            self.assertEqual(connection.commit_count, 1)
         finally:
             editor.close()
             editor.deleteLater()
