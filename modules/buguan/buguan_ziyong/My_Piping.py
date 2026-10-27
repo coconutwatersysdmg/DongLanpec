@@ -19206,9 +19206,73 @@ class TubeLayoutEditor(QMainWindow):
             except Exception:
                 pass
 
+    def _ensure_tube_pass_layout_before_save(self):
+        """管程形式改变后，先按当前参数布管，避免保存旧管孔计算出的 Ad。"""
+        import re
+
+        from modules.buguan.buguan_ziyong.tube_pass.adapter import (
+            is_local_tube_pass_cat,
+            normalize_local_tube_pass_cat,
+        )
+
+        current_form = str(self.get_selected_tube_pass_form() or "").strip()
+        try:
+            pass_count = str(self.get_tube_pass_count() or "").strip()
+        except Exception:
+            pass_count = ""
+
+        def form_pass_count(form):
+            match = re.match(r"^\d+", form)
+            return match.group(0) if match else ""
+
+        # 个别下拉框信号尚未处理完时，先把形式列表刷新到当前管程。
+        if pass_count and form_pass_count(current_form) != pass_count:
+            form_combo = getattr(self, "tube_pass_form_combo", None)
+            if form_combo is not None:
+                self.load_tube_pass_images(form_combo, pass_count)
+                current_form = str(self.get_selected_tube_pass_form() or "").strip()
+        if not current_form or (pass_count and form_pass_count(current_form) != pass_count):
+            return False
+
+        layout_input = getattr(self, "input_json", None)
+        layout_form = (
+            str(layout_input.get("LB_Tubeform") or "").strip()
+            if isinstance(layout_input, dict)
+            else ""
+        )
+        if layout_form == current_form and getattr(self, "current_centers", None):
+            return True
+
+        self.tube_pass_form_value = current_form
+        self.on_buguan_bt_click()
+
+        layout_input = getattr(self, "input_json", None)
+        updated_form = (
+            str(layout_input.get("LB_Tubeform") or "").strip()
+            if isinstance(layout_input, dict)
+            else ""
+        )
+        if updated_form != current_form or not getattr(self, "current_centers", None):
+            return False
+        if is_local_tube_pass_cat(current_form):
+            compute_kwargs = getattr(self, "_local_compute_kwargs", None) or {}
+            if normalize_local_tube_pass_cat(compute_kwargs.get("Cat")) != normalize_local_tube_pass_cat(current_form):
+                return False
+        return True
+
     # 10/29 修改，布管界面保存时需要先判断，满足条件才保存
     def save_data(self):
         current_page_index = self.header.currentIndex()
+
+        if current_page_index == 1:
+            try:
+                layout_ready = self._ensure_tube_pass_layout_before_save()
+            except Exception as exc:
+                print(f"[save_data] 保存前布管失败: {type(exc).__name__}: {exc}", file=sys.stderr)
+                layout_ready = False
+            if not layout_ready:
+                self._notify_save_success_ui("管程变更后布管未完成，本次未保存。", auto_clear=False)
+                return
 
         # 管板型式(0)、管-板连接(2)：只保存当前页。
         # 旧逻辑不论哪页都跑 0→1→2→3，会在管板连接保存时顺带全量落库布管
