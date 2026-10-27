@@ -678,6 +678,71 @@ def _raw_float(raw: Mapping[str, Any], key: str, default: float = 0.0) -> float:
         return default
 
 
+def _restore_local_raw_calc(editor: Any, cat: str) -> Dict[str, Any]:
+    """从上次本地布管输入恢复分区量；实际管孔仍取 current_centers。"""
+    from .adapter import normalize_local_tube_pass_cat
+    from .core_calculation import compute_centers
+
+    required = (
+        "D", "Snv", "Snh", "Wx0", "Wx1", "Wy0", "Wy1", "Wy2", "S", "d"
+    )
+
+    def valid_input(values: Any) -> bool:
+        return (
+            isinstance(values, Mapping)
+            and str(values.get("local_tube_pass", "")).lower() == "true"
+            and normalize_local_tube_pass_cat(values.get("Cat")) == str(cat)
+            and all(key in values for key in (*required, "Arr", "Layout", "Cut"))
+        )
+
+    saved = getattr(editor, "input_json", None)
+    if not valid_input(saved):
+        product_id = getattr(editor, "productID", None)
+        if not product_id:
+            return {}
+        connection = getattr(editor, "_active_sql_conn", None)
+        owns_connection = connection is None
+        if owns_connection:
+            from modules.buguan.buguan_ziyong.database_utils import create_connection
+
+            connection = create_connection()
+        if connection is None:
+            return {}
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT `key`, `value` FROM 产品设计活动表_布管输入表 "
+                    "WHERE 产品ID = %s",
+                    (product_id,),
+                )
+                saved = {row["key"]: row["value"] for row in cursor.fetchall()}
+        except Exception as exc:
+            _ad_log(f"读取历史布管输入失败: {type(exc).__name__}: {exc}")
+            return {}
+        finally:
+            if owns_connection:
+                connection.close()
+        if not valid_input(saved):
+            return {}
+
+    try:
+        kwargs = {key: float(saved[key]) for key in required}
+        kwargs.update(
+            Cat=str(cat),
+            Arr=int(saved["Arr"]),
+            Layout=str(saved["Layout"]),
+            Cut=str(saved["Cut"]),
+        )
+        if kwargs["Layout"] not in ("C", "S") or kwargs["Cut"] not in ("HUD", "VSR"):
+            return {}
+        raw = compute_centers(**kwargs)
+        _ad_log(f"已从历史布管输入恢复分区量 Cat={cat}")
+        return raw
+    except (TypeError, ValueError, OverflowError) as exc:
+        _ad_log(f"历史布管输入无法恢复分区量: {type(exc).__name__}: {exc}")
+        return {}
+
+
 def _ad_log(msg: str) -> None:
     print(f"[Ad] {msg}")
 
@@ -777,6 +842,8 @@ def build_ad_kwargs_from_editor(editor: Any) -> Optional[Dict[str, Any]]:
     snh = _to_float(param_map.get("分程隔板两侧相邻管中心距（水平）"), 0.0)
 
     raw = getattr(editor, "_local_raw_calc", None) or {}
+    if not raw:
+        raw = _restore_local_raw_calc(editor, cat)
     kw = getattr(editor, "_local_compute_kwargs", None) or {}
 
     arr = int(kw.get("Arr") or _ARR_TEXT_TO_DEG.get(
