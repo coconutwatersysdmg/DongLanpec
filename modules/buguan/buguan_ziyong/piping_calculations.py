@@ -451,7 +451,7 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
     if tube_form == "2":
         # 以 x 轴为参考 → 用 y
         axis_values = [abs(float(y)) for x, y in coords]
-    elif tube_form in ("4", "6"):
+    elif tube_form in ("4", "6", "8", "10", "12"):
         # 以 y 轴为参考 → 用 x
         axis_values = [abs(float(x)) for x, y in coords]
     else:
@@ -575,7 +575,7 @@ def build_sql_for_u_tube_calc(editor, create_product_connection):
                 conn.close()
         calc_results["沿水平隔板槽一侧的排管根数"] = str(int(vertical_total))
 
-    elif tube_form == "6":
+    elif tube_form in ("6", "8", "10", "12"):
         coords_local = []
         for center in editor.current_centers:
             if len(center) >= 2:
