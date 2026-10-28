@@ -91,6 +91,26 @@ class AdRecalculationTests(unittest.TestCase):
         self.assertEqual(kwargs["XY"], [tuple(p) for p in self.editor.current_centers])
         self.assertEqual(self.connection.queries[0][1], ("PD-AD-RELOAD",))
 
+    def test_reload_uses_saved_geometry_inputs_instead_of_drifted_parameter_table(self):
+        """参数表变化后，不得把新参数与历史布管坐标、分区量混算。"""
+        self.editor.left_data_pd.update(
+            {
+                "换热管中心距 S": "31",
+                "分程隔板两侧相邻管中心距（竖直）": "40",
+                "分程隔板两侧相邻管中心距（水平）": "46",
+                "换热管排列方式": "正三角形",
+                "折流板切口方向": "垂直左右",
+            }
+        )
+
+        kwargs = build_ad_kwargs_from_editor(self.editor)
+
+        self.assertIsNotNone(kwargs)
+        self.assertEqual(kwargs["S"], 32.0)
+        self.assertEqual(kwargs["Snv"], 44.0)
+        self.assertEqual(kwargs["Snh"], 50.0)
+        self.assertEqual(kwargs["Ang"], 45.0)
+
     def test_repeated_save_recalculates_after_tube_is_removed(self):
         first_results = {}
         piping_calculations.apply_ad_to_calc_results(self.editor, first_results)

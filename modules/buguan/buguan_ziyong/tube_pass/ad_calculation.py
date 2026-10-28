@@ -736,6 +736,9 @@ def _restore_local_raw_calc(editor: Any, cat: str) -> Dict[str, Any]:
         if kwargs["Layout"] not in ("C", "S") or kwargs["Cut"] not in ("HUD", "VSR"):
             return {}
         raw = compute_centers(**kwargs)
+        # Ad 的坐标、分区量和几何参数必须来自同一次布管。重开产品时
+        # _local_compute_kwargs 不存在，因此把已保存的布管入参随 raw 一起带回。
+        raw["_ad_layout_input"] = dict(kwargs)
         _ad_log(f"已从历史布管输入恢复分区量 Cat={cat}")
         return raw
     except (TypeError, ValueError, OverflowError) as exc:
@@ -826,10 +829,21 @@ def build_ad_kwargs_from_editor(editor: Any) -> Optional[Dict[str, Any]]:
         )
         return None
 
-    s = _to_float(param_map.get("换热管中心距 S"), 0.0)
+    raw = getattr(editor, "_local_raw_calc", None) or {}
+    if not raw:
+        raw = _restore_local_raw_calc(editor, cat)
+    kw = getattr(editor, "_local_compute_kwargs", None) or {}
+    layout_input = kw or (
+        raw.get("_ad_layout_input", {}) if isinstance(raw, Mapping) else {}
+    )
+
+    # current_centers、Row/Col 极值、S/Snv/Snh、Arr/Cut 必须属于同一次布管。
+    # 参数表可能在布管后被程序修正或被用户编辑，不能与历史坐标混算。
+    s = _to_float(layout_input.get("S"), 0.0)
     if s <= 0:
-        raw0 = getattr(editor, "_local_raw_calc", None) or {}
-        s = _raw_float(raw0, "S", 0.0)
+        s = _to_float(param_map.get("换热管中心距 S"), 0.0)
+    if s <= 0:
+        s = _raw_float(raw, "S", 0.0)
     if s <= 0:
         _ad_skip(
             "换热管中心距 S≤0",
@@ -838,18 +852,17 @@ def build_ad_kwargs_from_editor(editor: Any) -> Optional[Dict[str, Any]]:
         )
         return None
 
-    snv = _to_float(param_map.get("分程隔板两侧相邻管中心距（竖直）"), 0.0)
-    snh = _to_float(param_map.get("分程隔板两侧相邻管中心距（水平）"), 0.0)
+    snv = _to_float(layout_input.get("Snv"), 0.0)
+    if snv <= 0:
+        snv = _to_float(param_map.get("分程隔板两侧相邻管中心距（竖直）"), 0.0)
+    snh = _to_float(layout_input.get("Snh"), 0.0)
+    if snh <= 0:
+        snh = _to_float(param_map.get("分程隔板两侧相邻管中心距（水平）"), 0.0)
 
-    raw = getattr(editor, "_local_raw_calc", None) or {}
-    if not raw:
-        raw = _restore_local_raw_calc(editor, cat)
-    kw = getattr(editor, "_local_compute_kwargs", None) or {}
-
-    arr = int(kw.get("Arr") or _ARR_TEXT_TO_DEG.get(
+    arr = int(layout_input.get("Arr") or _ARR_TEXT_TO_DEG.get(
         str(param_map.get("换热管排列方式", "正三角形")).strip(), 30
     ))
-    cut = str(kw.get("Cut") or _CUT_TEXT_TO_CODE.get(
+    cut = str(layout_input.get("Cut") or _CUT_TEXT_TO_CODE.get(
         str(param_map.get("折流板切口方向", "垂直左右")).strip(), "VSR"
     ))
 
