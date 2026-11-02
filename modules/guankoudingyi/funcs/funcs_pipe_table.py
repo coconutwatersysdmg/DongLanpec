@@ -531,6 +531,7 @@ def read_pipe_temp(stats_widget, belong_type, belong_version, product_id):
         stats_widget.adjust_pipe_column_width()
         set_pipe_function_column_readonly(stats_widget)
         set_pipe_load_column_readonly(stats_widget)
+        apply_horizontal_pipe_pairing_lock(stats_widget)
         try:
             from modules.guankoudingyi.funcs.funcs_pipe_comboBox_value import \
                 apply_pipe_row_column_locks_by_belong
@@ -550,7 +551,7 @@ def read_pipe_temp(stats_widget, belong_type, belong_version, product_id):
             # 与管口表一致：按 元件ID 升序加载；保存时已将 ID 与界面自上而下顺序对齐，无需单独排序列
             cursor_product.execute("""
                 SELECT 元件ID, 元件名称, 元件类型, 所属元件, 轴向定位基准, 轴向定位距离mm,
-                       数量, 间距, `轴向夹角（°）`, `周向方位（°）`, 偏心距, 外伸高度, 备注
+                       `周向方位（°）`, 备注
                 FROM 产品设计活动表_附件表
                 WHERE 产品ID = %s
                 ORDER BY 元件ID ASC
@@ -568,11 +569,11 @@ def read_pipe_temp(stats_widget, belong_type, belong_version, product_id):
                         pass
                     stats_widget.row_hidden_attachment_id.clear()
 
-                    # 列映射（与附件定义表格列一致）
-                    attach_fields = [
-                        "元件名称", "元件类型", "所属元件", "轴向定位基准", "轴向定位距离mm",
-                        "数量", "间距", "轴向夹角(°)", "周向方位(°)", "偏心距", "外伸高度", "备注"
-                    ]
+                    # 列映射（与附件定义 8 列契约一致）
+                    from modules.guankoudingyi.funcs.funcs_attachment_comboBox_value import (
+                        ATTACHMENT_LOAD_FIELDS,
+                    )
+                    attach_fields = list(ATTACHMENT_LOAD_FIELDS)
 
                     # 从第1行开始回填
                     for rr, row in enumerate(attachment_rows, start=1):
@@ -581,9 +582,7 @@ def read_pipe_temp(stats_widget, belong_type, belong_version, product_id):
 
                         for cc, name in enumerate(attach_fields, start=1):
                             # 兼容数据库全角括号字段名
-                            if name == "轴向夹角(°)":
-                                val = row.get("轴向夹角(°)", row.get("轴向夹角（°）"))
-                            elif name == "周向方位(°)":
+                            if name == "周向方位(°)":
                                 val = row.get("周向方位(°)", row.get("周向方位（°）"))
                             else:
                                 val = row.get(name)
@@ -594,14 +593,9 @@ def read_pipe_temp(stats_widget, belong_type, belong_version, product_id):
                             if cc == 1:
                                 # 元件名称仅程序/按钮填入，不可手编
                                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-                            elif cc in (2, 3):
-                                # 当前附件策略：仅第2、3列启用编辑
-                                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
                             else:
-                                # 其余后续列暂不启用，保持冻结且不可选中
-                                item.setFlags(Qt.ItemIsEnabled)
-                            if 4 <= cc <= 12:
-                                item.setBackground(QBrush(QColor(235, 235, 235)))
+                                # 第2~12列：有名称时可编辑（随后 sync 再统一一遍）
+                                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
                             table_attach.setItem(rr, cc, item)
 
                     # 尾部空白行初始化（序号由 refresh_attachment_table_sequence 统一维护）
@@ -615,13 +609,8 @@ def read_pipe_temp(stats_widget, belong_type, belong_version, product_id):
                             if cc == 1:
                                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                             else:
-                                # 除元件名称外默认冻结；第4~12列不可编辑且不可选中
-                                if 4 <= cc <= 12:
-                                    item.setFlags(Qt.ItemIsEnabled)
-                                else:
-                                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-                            if 4 <= cc <= 12:
-                                item.setBackground(QBrush(QColor(235, 235, 235)))
+                                # 除元件名称外默认只可选；解冻由 control_last_attachment 同步
+                                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                             table_attach.setItem(blank_row, cc, item)
                     # 已加载数据行：按元件名称同步第 2 列及以后可编辑性
                     for rr in range(1, blank_row):
@@ -649,6 +638,17 @@ def read_pipe_temp(stats_widget, belong_type, belong_version, product_id):
             )
         except Exception as e:
             print(f"[ERROR] 自动推荐公称尺寸失败: {str(e)}")
+
+        # 容器新产品：默认表带入且容器壳体长度 < 5000 时，静默纠正轴向定位距离
+        if loaded_from_default and getattr(stats_widget, "is_container_product", False):
+            try:
+                from modules.guankoudingyi.funcs.funcs_pipe_comboBox_value import \
+                    refresh_container_default_axial_distances_if_shell_lt_5000
+                refresh_container_default_axial_distances_if_shell_lt_5000(
+                    stats_widget, product_id
+                )
+            except Exception as e:
+                print(f"[ERROR] 默认管口轴向定位距离刷新失败: {str(e)}")
 
     except Exception as e:
         conn_product.rollback()
@@ -743,6 +743,8 @@ def set_pipe_function_column_readonly(stats_widget):
                     belong_item.setFlags(belong_item.flags() & ~Qt.ItemIsEditable)
                 else:
                     belong_item.setFlags(belong_item.flags() | Qt.ItemIsEditable)
+
+    apply_container_pipe_purpose_lock(stats_widget)
 
 """管口删除"""
 def delete_selected_pipe_rows(stats_widget, product_id):
@@ -886,8 +888,8 @@ def delete_selected_attachment_rows(stats_widget, product_id):
         pass
 
     # 删除后：可重复元件家族名称重排
-    # - 多个成员：按界面行顺序压紧为 base1..baseN（例如 吊耳1,吊耳3,吊耳4 -> 吊耳1,吊耳2,吊耳3）
-    # - 单个成员：回退为 base（例如 吊耳1 -> 吊耳）
+    # - 多个成员：按界面行顺序压紧为 base1..baseN（例如 卧式设备板式吊耳1,3,4 -> 1,2,3）
+    # - 单个成员：回退为 base（例如 卧式设备板式吊耳1 -> 卧式设备板式吊耳）
     try:
         from modules.guankoudingyi.funcs.funcs_attachment_comboBox_value import (
             ATTACHMENT_AUTO_INDEXED_REPEATABLE_NAMES,
@@ -1161,12 +1163,8 @@ def check_last_attachment_row_and_add_new(stats_widget):
             elif col == 1:
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             else:
-                if 4 <= col <= 12:
-                    item.setFlags(Qt.ItemIsEnabled)
-                else:
-                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-            if 4 <= col <= 12:
-                item.setBackground(QBrush(QColor(235, 235, 235)))
+                # 第2~12列默认只可选；解冻由 control_last_attachment 同步
+                item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
             table.setItem(new_row, col, item)
         # 新空白行作为最后一行：后续列保持冻结（与管口新增空行一致）
         control_last_attachment_row_editable_state(stats_widget, enable_editing=False)
@@ -1222,13 +1220,100 @@ def control_last_row_editable_state(stats_widget, enable_editing=True):
                 # 冻结：设为不可编辑
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
                 changed_count += 1
+    apply_container_pipe_purpose_lock(stats_widget)
+
+
+def apply_container_pipe_purpose_lock(stats_widget):
+    """
+    容器产品：管口代号已填写的行，管口用途固定显示「/」且不可编辑。
+    代号为空时不写「/」；非末行恢复可编辑，末行空白行仍交给 control_last_row 冻结。
+    """
+    if not getattr(stats_widget, "is_container_product", False):
+        return
+    # 卧式容器：管口用途列复用为「配对关联管口」下拉，不做「/」锁定
+    if getattr(stats_widget, "is_horizontal_container", False):
+        return
+    table = getattr(stats_widget, "tableWidget_pipe", None)
+    if table is None:
+        return
+
+    purpose_col = 3
+    last_row = table.rowCount() - 1
+    editable_flags = Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled
+    locked_flags = Qt.ItemIsSelectable | Qt.ItemIsEnabled
+    prev_suppress = getattr(stats_widget, "suppress_cell_change", False)
+    stats_widget.suppress_cell_change = True
+    try:
+        for row in range(table.rowCount()):
+            code_item = table.item(row, 1)
+            code = code_item.text().strip() if code_item else ""
+            item = table.item(row, purpose_col)
+            if item is None:
+                item = QTableWidgetItem("")
+                item.setTextAlignment(Qt.AlignCenter)
+                table.setItem(row, purpose_col, item)
+            if code:
+                if item.text().strip() != "/":
+                    item.setText("/")
+                item.setTextAlignment(Qt.AlignCenter)
+                item.setFlags(locked_flags)
+            else:
+                if item.text().strip() == "/":
+                    item.setText("")
+                if row != last_row:
+                    item.setFlags(editable_flags)
+    finally:
+        stats_widget.suppress_cell_change = prev_suppress
+
+
+def apply_horizontal_pipe_pairing_lock(stats_widget):
+    """
+    卧式容器：管口用途列复用为「配对关联管口」。
+    加载数据后，凡该列已有关联值（非空）的行，锁定其 9 个联动列（不可编辑 + 灰显）。
+    第3列（配对关联管口）本身保持可编辑、不置灰。
+    未关联行不做任何改动，保持由 check_last_row_and_add_new / set_pipe_function_column_readonly
+    等其它逻辑决定的可编辑状态，避免破坏占位行冻结等锁定。
+    """
+    if not getattr(stats_widget, "is_horizontal_container", False):
+        return
+    table = getattr(stats_widget, "tableWidget_pipe", None)
+    if table is None:
+        return
+    purpose_col = 3
+    locked_flags = Qt.ItemIsSelectable | Qt.ItemIsEnabled
+    editable_flags = Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled
+    # 配对关联同步锁定的列（与 funcs_pipe_comboBox_value.PIPE_PAIRING_SYNC_COLUMNS 保持一致）
+    sync_cols = [4, 5, 6, 7, 8, 9, 10, 11, 12]
+    prev_suppress = getattr(stats_widget, "suppress_cell_change", False)
+    stats_widget.suppress_cell_change = True
+    try:
+        for row in range(table.rowCount()):
+            item = table.item(row, purpose_col)
+            if item is None:
+                continue
+            txt = item.text().strip()
+            if not txt:
+                continue
+            # 已关联行：第3列保持可编辑（黑字），只锁定 9 个联动列（不可编辑 + 灰显）
+            item.setFlags(editable_flags)
+            item.setForeground(Qt.black)
+            for col in sync_cols:
+                sync_item = table.item(row, col)
+                if sync_item is None:
+                    sync_item = QTableWidgetItem("")
+                    sync_item.setTextAlignment(Qt.AlignCenter)
+                    table.setItem(row, col, sync_item)
+                sync_item.setFlags(locked_flags)
+                sync_item.setForeground(Qt.gray)
+    finally:
+        stats_widget.suppress_cell_change = prev_suppress
 
 
 def control_last_attachment_row_editable_state(stats_widget, enable_editing=True):
     """
-    控制附件表最后一行仅第 2、3 列的可编辑状态（其余后续列暂不启用，保持冻结）。
+    控制附件表最后一行数据列的可编辑状态（对齐 8 列契约：第 2~7 列）。
     仅处理 tableWidget_attachment 的最后一行数据行（第 0 行为表头）。
-    :param enable_editing: True 解冻第 2、3 列；False 冻结
+    :param enable_editing: True 解冻；False 冻结（仅可选）
     """
     table = getattr(stats_widget, "tableWidget_attachment", None)
     if table is None:
@@ -1236,7 +1321,10 @@ def control_last_attachment_row_editable_state(stats_widget, enable_editing=True
     last_row = table.rowCount() - 1
     if last_row < 1:
         return
-    target_cols = [2, 3]
+    from modules.guankoudingyi.funcs.funcs_attachment_comboBox_value import (
+        attachment_editable_data_cols,
+    )
+    target_cols = attachment_editable_data_cols()
     for col in target_cols:
         if col >= table.columnCount():
             continue
@@ -1246,11 +1334,15 @@ def control_last_attachment_row_editable_state(stats_widget, enable_editing=True
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled)
             else:
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
+    from modules.guankoudingyi.funcs.funcs_attachment_comboBox_value import (
+        apply_attachment_row_column_locks_by_belong,
+    )
+    apply_attachment_row_column_locks_by_belong(stats_widget, last_row)
 
 
 def sync_attachment_row_tail_editable_by_name(stats_widget, row):
     """
-    仅一行：根据该行第 1 列是否已有元件名称，设置第 2、3 列是否可编辑。
+    仅一行：根据该行第 1 列是否已有元件名称，设置第 2~7 列是否可编辑。
     用于非「最后一行占位行」的数据行；整段在 blockSignals 下执行，减轻 cellChanged 重入。
     """
     table = getattr(stats_widget, "tableWidget_attachment", None)
@@ -1266,7 +1358,10 @@ def sync_attachment_row_tail_editable_by_name(stats_widget, row):
     try:
         # 元件名称列仅可选中，由界面 pic_* 按钮程序填入，不可手编
         name_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-        target_cols = [2, 3]
+        from modules.guankoudingyi.funcs.funcs_attachment_comboBox_value import (
+            attachment_editable_data_cols,
+        )
+        target_cols = attachment_editable_data_cols()
         for col in target_cols:
             if col >= table.columnCount():
                 continue
@@ -1281,6 +1376,11 @@ def sync_attachment_row_tail_editable_by_name(stats_widget, row):
                 item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
     finally:
         table.blockSignals(False)
+    # 元件名称解冻后，封头类所属元件仍保持定位列锁定
+    from modules.guankoudingyi.funcs.funcs_attachment_comboBox_value import (
+        apply_attachment_row_column_locks_by_belong,
+    )
+    apply_attachment_row_column_locks_by_belong(stats_widget, row)
 
 
 """判断新输入的管口代号是否在界面上已存在"""
@@ -1308,12 +1408,31 @@ def copy_pipe_data(stats_widget, product_id):
 
     table_pipe = stats_widget.tableWidget_pipe
 
-    # 收集当前界面所有已填写的管口号
+    # 收集「已参与配对关联」的管口代号（关联方 + 被关联方），从复制列表剔除
+    # 仅卧式容器下第3列复用为「配对关联管口」；其它产品类型第3列无关联语义，排除集为空
+    exclude_codes = set()
+    if getattr(stats_widget, "is_horizontal_container", False):
+        for row in range(table_pipe.rowCount() - 1):  # 排除最后空白行
+            purpose_item = table_pipe.item(row, 3)
+            purpose = purpose_item.text().strip() if purpose_item else ""
+            if not purpose:
+                continue
+            # 关联方：本行管口代号（第1列）
+            code_item = table_pipe.item(row, 1)
+            if code_item and code_item.text().strip():
+                exclude_codes.add(code_item.text().strip())
+            # 被关联方：第3列里出现的代号
+            exclude_codes.add(purpose)
+
+    # 收集当前界面所有已填写的管口号（剔除已关联双方）
     pipe_codes = []
     for row in range(table_pipe.rowCount() - 1):  # 排除最后空白行
         code_item = table_pipe.item(row, 1)  # 第1列为管口代号
         if code_item and code_item.text().strip():
-            pipe_codes.append(code_item.text().strip())
+            code = code_item.text().strip()
+            if code in exclude_codes:
+                continue
+            pipe_codes.append(code)
 
     if not pipe_codes:
         QMessageBox.information(stats_widget, "提示", "当前没有可复制的管口数据")
@@ -1525,11 +1644,7 @@ def generate_unique_pipe_code(table, base_code: str) -> str:
 
 
 # 附件元件复制：以下名称全表各至多一个，不提供复制入口
-ATTACHMENT_NON_COPYABLE_ELEMENT_NAMES = frozenset({"耳座", "鞍式支座", "铭牌"})
-# 粘贴到空白行时，与 validate_attachment_element_name 一致的全表单件名（用于重名时加后缀）
-_ATT_SINGLETON_ELEMENT_NAMES = frozenset({"鞍式支座", "耳座", "铭牌"})
-# 可重复且采用“第二个开始编号”规则的元件
-_ATT_AUTO_INDEXED_REPEATABLE_NAMES = frozenset({"吊耳", "保温支撑圈", "保温支撑条"})
+ATTACHMENT_NON_COPYABLE_ELEMENT_NAMES = frozenset({"铭牌"})
 
 
 def _existing_attachment_element_names_except_row(table, except_row: int):
@@ -1545,11 +1660,17 @@ def _existing_attachment_element_names_except_row(table, except_row: int):
 
 def _resolve_attachment_element_name_for_paste(table, target_row: int, proposed: str) -> str:
     """将源行元件名称粘贴到 target_row 时，与其它行去重（单件名与其它行冲突时加 1、2…）。"""
+    # 与新建校验共用同一套名称表，避免「环/板」与「圈/条」不一致导致复制不编号
+    from modules.guankoudingyi.funcs.funcs_attachment_comboBox_value import (
+        ATTACHMENT_AUTO_INDEXED_REPEATABLE_NAMES,
+        ATTACHMENT_SINGLETON_ELEMENT_NAMES,
+    )
+
     proposed = (proposed or "").strip()
     if not proposed:
         return proposed
     existing = _existing_attachment_element_names_except_row(table, target_row)
-    if proposed in _ATT_SINGLETON_ELEMENT_NAMES:
+    if proposed in ATTACHMENT_SINGLETON_ELEMENT_NAMES:
         if proposed not in existing:
             return proposed
         n = 1
@@ -1557,10 +1678,10 @@ def _resolve_attachment_element_name_for_paste(table, target_row: int, proposed:
             n += 1
         return f"{proposed}{n}"
 
-    # 可重复元件（吊耳/保温支撑圈/保温支撑条）：
+    # 可重复元件（卧式设备板式吊耳/保温支撑环/保温支撑板）：
     # - 家族首个保持原名；
     # - 当复制导致出现第二个时，把首个改为 name1，新复制为 name2。
-    if proposed in _ATT_AUTO_INDEXED_REPEATABLE_NAMES:
+    if proposed in ATTACHMENT_AUTO_INDEXED_REPEATABLE_NAMES:
         # 若存在“原名”行，先把它改为 name1（或当前可用的最小编号）
         if proposed in existing:
             plain_row = None
@@ -1631,7 +1752,7 @@ def copy_attachment_data(stats_widget, product_id):
     """
     元件复制：弹出对话框选择要复制的附件行，复制到最后一行空白行。
     第 0 行为表头，不参与收集与复制。
-    耳座、鞍式支座、铭牌不提供复制（全表各至多一个）。
+    铭牌不提供复制（全表至多一个）。
     """
     table = getattr(stats_widget, "tableWidget_attachment", None)
     if table is None:
@@ -1651,7 +1772,7 @@ def copy_attachment_data(stats_widget, product_id):
 
     if not copyable:
         QMessageBox.information(
-            stats_widget, "提示", "当前没有可复制的附件元件（耳座、鞍式支座、铭牌不可复制）"
+            stats_widget, "提示", "当前没有可复制的附件元件（铭牌不可复制）"
         )
         return
 
@@ -1731,6 +1852,14 @@ def copy_attachment_row_data(stats_widget, source_row: int, product_id):
         QMessageBox.warning(stats_widget, "警告", "该元件不允许复制")
         return
 
+    from modules.guankoudingyi.funcs.funcs_attachment_comboBox_value import (
+        attachment_family_add_blocked_message,
+    )
+    blocked = attachment_family_add_blocked_message(table, source_name, skip_row=target_row)
+    if blocked:
+        QMessageBox.warning(stats_widget, "警告", blocked)
+        return
+
     new_element_name = _resolve_attachment_element_name_for_paste(
         table, target_row, source_name
     )
@@ -1738,30 +1867,40 @@ def copy_attachment_row_data(stats_widget, source_row: int, product_id):
     try:
         table.blockSignals(True)
         for col in range(1, table.columnCount()):
-            # 复制策略：当前仅复制前3列；第4列及以后清空
+            # 整行复制：元件名称用去重后的新名，其余列原样带入
             src = table.item(source_row, col)
-            if col == 1:
-                text = new_element_name
-            elif col in (2, 3):
-                text = src.text() if src else ""
+            text = new_element_name if col == 1 else (src.text() if src else "")
 
             new_item = QTableWidgetItem(text)
             new_item.setTextAlignment(Qt.AlignCenter)
             if col == 1:
                 new_item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-            elif col in (2, 3):
-                # 当前附件策略：仅第2、3列可编辑
+            else:
                 new_item.setFlags(
                     Qt.ItemIsSelectable | Qt.ItemIsEditable | Qt.ItemIsEnabled
                 )
-            else:
-                # 第4列及以后暂不启用，保持冻结且不可选中
-                new_item.setFlags(Qt.ItemIsEnabled)
-            if 4 <= col <= 12:
-                new_item.setBackground(QBrush(QColor(235, 235, 235)))
             table.setItem(target_row, col, new_item)
     finally:
         table.blockSignals(False)
+
+    # 类型/备注/所属/基准为空时再按规则补默认（已复制的内容不覆盖）
+    try:
+        from modules.guankoudingyi.funcs.funcs_attachment_comboBox_value import (
+            _maybe_fill_default_component_type,
+            _maybe_fill_default_remark,
+            _maybe_fill_default_belong_and_axial_base,
+            _maybe_fill_default_circumferential,
+        )
+        _maybe_fill_default_component_type(stats_widget, target_row, new_element_name)
+        _maybe_fill_default_remark(stats_widget, target_row, new_element_name)
+        _maybe_fill_default_belong_and_axial_base(
+            stats_widget, target_row, new_element_name
+        )
+        _maybe_fill_default_circumferential(
+            stats_widget, target_row, new_element_name
+        )
+    except Exception:
+        pass
 
     if product_id:
         new_id = get_next_attachment_id_runtime(stats_widget, product_id)

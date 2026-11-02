@@ -2,7 +2,9 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="357ee038-b424-4db3-a1fd-be9e8b5f30dc" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/buguan_ziyong.rar" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../AAA/AAA_AAA/001_AEStest/PD2026082511191801.json" beforeDir="false" afterPath="$PROJECT_DIR$/../../AAA/AAA_AAA/001_AEStest/PD2026082511191801.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../../debug_log.txt" beforeDir="false" afterPath="$PROJECT_DIR$/../../debug_log.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/buguan_ziyong/buguan_info.json" beforeDir="false" afterPath="$PROJECT_DIR$/buguan_ziyong/buguan_info.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

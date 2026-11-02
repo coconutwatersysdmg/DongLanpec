@@ -18,6 +18,7 @@ import pymysql
 from modules.guankoudingyi.funcs.funcs_pipe_comboBox_value import (
     get_component_nominal_size_od,
     get_nominal_diameter,
+    get_container_shell_length,
     get_belong_options,
     get_axial_position_base_options,
     get_flange_standard_options_by_pressure_type,
@@ -32,6 +33,7 @@ from modules.guankoudingyi.funcs.funcs_pipe_table import (
     delete_selected_pipe_rows,
     get_pipe_column_map,
     show_styled_message,
+    show_styled_warning,
 )
 
 # —— 需要写入模板的字段（界面 -> 模板中文名）——
@@ -162,8 +164,90 @@ def _build_row_index_by_param_name(ws):
     return name2row
 
 
+def _resolve_product_and_project_id(stats_widget):
+    """从界面或产品管理上下文解析当前产品ID、项目ID。"""
+    product_id = getattr(stats_widget, "product_id", None)
+    project_id = getattr(stats_widget, "project_id", None)
+    if not product_id:
+        try:
+            from modules.chanpinguanli.chanpinguanli_main import product_manager
+            product_id = getattr(product_manager, "product_id", None)
+        except Exception:
+            pass
+    if not project_id:
+        try:
+            from modules.chanpinguanli import bianl
+            project_id = getattr(bianl, "current_project_id", None)
+        except Exception:
+            pass
+    return product_id, project_id
+
+
+def _get_product_folder_abs_path(stats_widget) -> str:
+    """
+    按项目ID+产品ID查询产品设计活动库.产品设计活动表.产品文件夹绝对路径，
+    作为导出默认目录。
+    """
+    product_id, project_id = _resolve_product_and_project_id(stats_widget)
+    if not product_id:
+        return ""
+    try:
+        connection = get_connection(**db_config_2)
+        with connection.cursor() as cursor:
+            if project_id:
+                cursor.execute(
+                    """
+                    SELECT `产品文件夹绝对路径`
+                    FROM `产品设计活动表`
+                    WHERE `产品ID` = %s AND `项目ID` = %s
+                    LIMIT 1
+                    """,
+                    (product_id, project_id),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT `产品文件夹绝对路径`
+                    FROM `产品设计活动表`
+                    WHERE `产品ID` = %s
+                    LIMIT 1
+                    """,
+                    (product_id,),
+                )
+            row = cursor.fetchone()
+        connection.close()
+        if not row:
+            return ""
+        raw = row.get("产品文件夹绝对路径") if isinstance(row, dict) else row[0]
+        folder = (raw or "").strip().strip("'\"")
+        return os.path.normpath(folder) if folder else ""
+    except Exception as e:
+        print(f"[_get_product_folder_abs_path] {e}")
+        return ""
+
+
+def _suggest_export_save_path(stats_widget, suggested_name: str) -> str:
+    """另存为对话框的默认路径：产品文件夹绝对路径 + 建议文件名。"""
+    folder = _get_product_folder_abs_path(stats_widget)
+    if folder:
+        return os.path.join(folder, suggested_name)
+    return suggested_name
+
+
+def _prompt_open_export_folder(parent, out_path: str) -> None:
+    """导出成功后直接打开文件所在文件夹，不再弹确认框。"""
+    if not out_path:
+        return
+    folder = os.path.dirname(os.path.abspath(out_path))
+    try:
+        if os.path.isdir(folder):
+            os.startfile(folder)
+    except Exception as e:
+        show_styled_warning(parent, "打开失败", f"无法打开文件夹：\n{folder}\n{e}")
+
+
 def export_nozzle_listing(stats_widget, template_rel_dir="guankoudingyi/table_template",
-                          template_name="管口导出模板.xlsx",
+                          template_name="管口总览表导出模板.xlsx",
                           out_dir_rel="exports"):
     """
     导出主方法：读取模板 → 填值 → 隐藏“隐藏列” → 另存
@@ -174,7 +258,7 @@ def export_nozzle_listing(stats_widget, template_rel_dir="guankoudingyi/table_te
     template_path = os.path.join(proj_root, template_rel_dir, template_name)
     # print("[调试] 当前模板路径 =", template_path)
     if not os.path.exists(template_path):
-        raise FileNotFoundError(f"未找到导出模板：{template_path}")
+        raise FileNotFoundError(f"未找到管口总览表导出模板：{template_path}")
 
     # 2) 收集界面数据
     nozzle_cols = _collect_nozzle_rows_from_ui(stats_widget)
@@ -299,15 +383,16 @@ def export_nozzle_listing(stats_widget, template_rel_dir="guankoudingyi/table_te
     title_cell = ws.cell(row=1, column=1)
     title_cell.alignment = openpyxl.styles.Alignment(horizontal="center", vertical="center")
 
-    # 10) 另存为：让用户选择保存路径和文件名（而不是固定到项目/exports）
+    # 10) 另存为：默认目录取产品设计活动表.产品文件夹绝对路径
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     suggested_name = f"管口总览表{ts}.xlsx"
+    default_path = _suggest_export_save_path(stats_widget, suggested_name)
 
     # 弹出“另存为”对话框
     out_path, _ = QFileDialog.getSaveFileName(
         stats_widget,  # 用你的窗口/控件作为父级
         "另存为",
-        suggested_name,  # 默认文件名
+        default_path,  # 默认：产品文件夹 + 文件名
         "Excel 工作簿 (*.xlsx)"  # 过滤器
     )
 
@@ -326,11 +411,12 @@ def export_nozzle_listing(stats_widget, template_rel_dir="guankoudingyi/table_te
         QMessageBox.warning(stats_widget, "保存失败", "文件可能正在被占用，请关闭后重试。")
         return None
 
+    _prompt_open_export_folder(stats_widget, out_path)
     return out_path
 
 
 # ——换热器「管口导出表」横表模板：Excel 列号(1起) → 界面字段名——
-# 对应 table_template/导出模板.xlsx（A~S）；容器模板后续另配映射
+# 对应 table_template/管口定义导出模板.xlsx（A~S）；容器模板后续另配映射
 NOZZLE_SHEET_EXPORT_COLUMNS = [
     (1, None),                 # 序号（导出时生成）
     (2, "管口代号"),
@@ -356,7 +442,7 @@ NOZZLE_SHEET_EXPORT_COLUMNS = [
 
 def _apply_export_sheet_unit_headers(ws, stats_widget):
     """
-    按界面当前单位同步导出模板表头单位后缀：
+    按界面当前单位同步管口定义导出模板表头单位后缀：
     E列 公称尺寸DN/NPS，G列 压力等级Class/PN，J列 焊端规格mm/Sch。
     """
     from modules.guankoudingyi.funcs.pipe_get_units_types import get_current_unit_types_from_ui
@@ -366,7 +452,7 @@ def _apply_export_sheet_unit_headers(ws, stats_widget):
     pressure_unit = (units.get("公称压力类型") or "Class").strip() or "Class"
     weld_unit = (units.get("焊端规格类型") or "mm").strip() or "mm"
 
-    # E1（合并区左上角）、G2、J2 —— 与导出模板.xlsx 一致
+    # E1（合并区左上角）、G2、J2 —— 与管口定义导出模板.xlsx 一致
     _set_cell_safely(ws, 1, 5, f"公称尺寸{size_unit}")
     _set_cell_safely(ws, 2, 7, f"压力等级{pressure_unit}")
     _set_cell_safely(ws, 2, 10, f"焊端规格{weld_unit}")
@@ -375,11 +461,11 @@ def _apply_export_sheet_unit_headers(ws, stats_widget):
 def export_nozzle_define_sheet(
     stats_widget,
     template_rel_dir="guankoudingyi/table_template",
-    template_name="导出模板.xlsx",
+    template_name="管口定义导出模板.xlsx",
 ):
     """
-    将管口定义界面数据填入横表模板（导出模板.xlsx），另存为「管口导出表+日期」。
-    与 export_nozzle_listing（管口总览表）相互独立；当前模板面向换热器。
+    将管口定义界面数据填入横表模板（管口定义导出模板.xlsx），另存为「管口导出表+日期」。
+    与 export_nozzle_listing（管口总览表导出模板）相互独立；当前模板面向换热器。
     返回导出绝对路径；用户取消返回 None。
     """
     proj_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -427,10 +513,11 @@ def export_nozzle_define_sheet(
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     suggested_name = f"管口导出表{ts}.xlsx"
+    default_path = _suggest_export_save_path(stats_widget, suggested_name)
     out_path, _ = QFileDialog.getSaveFileName(
         stats_widget,
         "另存为",
-        suggested_name,
+        default_path,
         "Excel 工作簿 (*.xlsx)",
     )
     if not out_path:
@@ -443,6 +530,8 @@ def export_nozzle_define_sheet(
     except PermissionError:
         QMessageBox.warning(stats_widget, "保存失败", "文件可能正在被占用，请关闭后重试。")
         return None
+
+    _prompt_open_export_folder(stats_widget, out_path)
     return out_path
 
 
@@ -458,18 +547,38 @@ def _set_cell_safely(ws, row, col, value):
         cell.value = value
 
 
-def _resolve_value_field_by_belong(pipe_belong: str):
+def _resolve_value_field_by_belong(pipe_belong: str, product_id: str = None):
     """
-    根据“管口所属元件”判断取值列：
-    - 包含“管箱” → 管程数值
-    - 包含“壳体”或“外头盖” → 壳程数值
+    根据“管口所属元件”判断取值列（与 get_nominal_diameter 一致）：
+    - 容器产品且所属元件为「圆筒」→ 壳程数值
+    - 管箱 / 管板 / 锥壳 → 管程数值
+    - 壳体 / 壳程 / 外头盖 / 右封头 / 左封头 → 壳程数值
     其余情况返回 None
     """
-    if not pipe_belong:
+    belong = (pipe_belong or "").strip()
+    if not belong:
         return None
-    if "管箱" in pipe_belong:
+
+    is_container = False
+    if product_id:
+        try:
+            from modules.guankoudingyi.obtain_product_type_version import get_product_type_and_version
+            product_type, _ = get_product_type_and_version(product_id)
+            is_container = bool(product_type and "容器" in str(product_type))
+        except Exception:
+            is_container = False
+
+    if is_container and belong == "圆筒":
+        return "壳程数值"
+    if ("管箱" in belong) or ("管板" in belong) or ("锥壳" in belong):
         return "管程数值"
-    if ("壳体" in pipe_belong) or ("外头盖" in pipe_belong):
+    if (
+        ("壳体" in belong)
+        or ("壳程" in belong)
+        or ("外头盖" in belong)
+        or ("右封头" in belong)
+        or ("左封头" in belong)
+    ):
         return "壳程数值"
     return None
 
@@ -480,7 +589,7 @@ def _get_weld_joint_efficiency(product_id: str, pipe_belong: str):
     会根据“管口所属元件”自动选择 管程数值/壳程数值。
     返回 (ok: bool, value_or_msg: float|str)
     """
-    value_field = _resolve_value_field_by_belong(pipe_belong)
+    value_field = _resolve_value_field_by_belong(pipe_belong, product_id)
     if not value_field:
         return False, "无效的管口所属元件"
 
@@ -709,7 +818,7 @@ def _clear_pipe_table_except_last_row(stats_widget):
 _CONTAINER_OUTPUT_FIELD_KEYWORDS = OrderedDict([
     ("管口代号", ["管口代号"]),
     ("管口功能", ["管口功能"]),
-    ("管口用途", ["管口用途", "用途"]),
+    ("管口用途", ["配对关联管口", "关联管口", "管口用途", "用途"]),
     ("公称尺寸", ["公称尺寸"]),
     ("法兰标准", ["法兰标准"]),
     ("压力等级", ["压力等级"]),
@@ -1112,7 +1221,13 @@ def validate_pipe_attachment(attachment_value, row):
     if not attachment_value:
         return attachment_value, errors
 
-    allowed_attachments = {"接管法兰配对法兰", "接管拉筋", "防冲挡板", "破涡器"}
+    # 附件类型合法值从元件库「管口附件表.附件类型」动态获取，与下拉框选项保持同一来源
+    try:
+        from modules.guankoudingyi.funcs.funcs_pipe_comboBox_value import get_pipe_attachment_options
+        _db_attachments = get_pipe_attachment_options() or []
+    except Exception:
+        _db_attachments = []
+    allowed_attachments = set(_db_attachments)
     attachment_text = str(attachment_value).strip()
     
     # 如果为空字符串，直接返回
@@ -1214,7 +1329,7 @@ def import_nozzle_from_excel(stats_widget):
             # 添加重复信息
             if template_duplicates:
                 duplicate_text = "\n".join(template_duplicates)
-                message_parts.append(f"管口代号列：发现以下重复的管口代号，已跳过重复项：\n{duplicate_text}")
+                message_parts.append(f"模板表管口代号列：发现以下重复的管口代号，已跳过重复项：\n{duplicate_text}")
 
             # 添加验证错误信息
             if validation_errors:
@@ -1296,52 +1411,52 @@ def import_nozzle_from_excel(stats_widget):
 
                 # 添加公称尺寸错误信息
                 if nominal_size_errors:
-                    message_parts.append(f"公称尺寸列：{', '.join(sorted(nominal_size_errors, key=_extract_row_number_for_sort))}")
+                    message_parts.append(f"模板表公称尺寸列：{', '.join(sorted(nominal_size_errors, key=_extract_row_number_for_sort))}")
 
                 if flange_standard_errors:
-                    message_parts.append(f"法兰标准列：{', '.join(sorted(flange_standard_errors, key=_extract_row_number_for_sort))}")
+                    message_parts.append(f"模板表法兰标准列：{', '.join(sorted(flange_standard_errors, key=_extract_row_number_for_sort))}")
 
                     # 添加压力等级错误信息
                 if pressure_level_errors:
-                    message_parts.append(f"压力等级列：{', '.join(sorted(pressure_level_errors, key=_extract_row_number_for_sort))}")
+                    message_parts.append(f"模板表压力等级列：{', '.join(sorted(pressure_level_errors, key=_extract_row_number_for_sort))}")
 
                     # 添加法兰型式错误信息
                 if flange_form_errors:
-                    message_parts.append(f"法兰型式列：{', '.join(sorted(flange_form_errors, key=_extract_row_number_for_sort))}")
+                    message_parts.append(f"模板表法兰型式列：{', '.join(sorted(flange_form_errors, key=_extract_row_number_for_sort))}")
 
                     # 添加密封面型式错误信息
                 if sealing_face_form_errors:
-                    message_parts.append(f"密封面型式列：{', '.join(sorted(sealing_face_form_errors, key=_extract_row_number_for_sort))}")
+                    message_parts.append(f"模板表密封面型式列：{', '.join(sorted(sealing_face_form_errors, key=_extract_row_number_for_sort))}")
 
                 # 添加焊端规格错误信息
                 if weld_end_spec_errors:
-                    message_parts.append(f"焊端规格列：{', '.join(sorted(weld_end_spec_errors, key=_extract_row_number_for_sort))}")
+                    message_parts.append(f"模板表焊端规格列：{', '.join(sorted(weld_end_spec_errors, key=_extract_row_number_for_sort))}")
 
                 # 添加管口所属元件和轴向定位基准错误信息（合并显示）
                 if pipe_belong_axial_errors:
-                    message_parts.append(f"管口所属元件和轴向定位基准列：{', '.join(sorted(pipe_belong_axial_errors, key=_extract_row_number_for_sort))}")
+                    message_parts.append(f"模板表管口所属元件和轴向定位基准列：{', '.join(sorted(pipe_belong_axial_errors, key=_extract_row_number_for_sort))}")
 
                 # 添加轴向定位距离错误信息
                 if axial_distance_errors:
-                    message_parts.append(f"轴向定位距离列：{', '.join(sorted(axial_distance_errors, key=_extract_row_number_for_sort))}")
+                    message_parts.append(f"模板表轴向定位距离列：{', '.join(sorted(axial_distance_errors, key=_extract_row_number_for_sort))}")
 
 
                 # 添加轴向夹角错误信息
                 if axial_angle_errors:
-                    message_parts.append(f"轴向夹角列：{', '.join(sorted(axial_angle_errors, key=_extract_row_number_for_sort))}")
+                    message_parts.append(f"模板表轴向夹角列：{', '.join(sorted(axial_angle_errors, key=_extract_row_number_for_sort))}")
 
                 # 添加周向方位错误信息
                 if circumferential_position_errors:
-                    message_parts.append(f"周向方位列：{', '.join(sorted(circumferential_position_errors, key=_extract_row_number_for_sort))}")
+                    message_parts.append(f"模板表周向方位列：{', '.join(sorted(circumferential_position_errors, key=_extract_row_number_for_sort))}")
 
                 # 添加偏心距错误信息
                 if eccentricity_errors:
                     print(f"调试：偏心距错误集合内容: {eccentricity_errors}")
-                    message_parts.append(f"偏心距列：{', '.join(sorted(eccentricity_errors, key=_extract_row_number_for_sort))}")
+                    message_parts.append(f"模板表偏心距列：{', '.join(sorted(eccentricity_errors, key=_extract_row_number_for_sort))}")
 
                 # 添加外伸高度错误信息
                 if extension_height_errors:
-                    message_parts.append(f"外伸高度列：{', '.join(sorted(extension_height_errors, key=_extract_row_number_for_sort))}")
+                    message_parts.append(f"模板表外伸高度列：{', '.join(sorted(extension_height_errors, key=_extract_row_number_for_sort))}")
 
             # 合并显示
             if message_parts and hasattr(stats_widget, 'line_tip'):
@@ -1399,6 +1514,87 @@ def import_nozzle_from_excel(stats_widget):
 
 
 """容器产品：从竖表模板导入管口数据"""
+def _find_container_param_value_col(worksheet):
+    """表头「管口参数值」列号；找不到时默认 G 列（7）。"""
+    for col in range(1, min(worksheet.max_column, 12) + 1):
+        if "管口参数值" in _get_cell_value(worksheet, 1, col):
+            return col
+    return 7
+
+
+def _read_container_template_actual_shell_params(worksheet):
+    """
+    读取模板中「实际圆筒长度」「实际公称直径」（D 列参数名，管口参数值列取值）。
+    :return: (actual_cylinder_length, actual_nominal_diameter)，缺省为 None
+    """
+    value_col = _find_container_param_value_col(worksheet)
+    cylinder_len = None
+    nominal_dn = None
+    scan_end = min(worksheet.max_row, 80)
+    for row in range(1, scan_end + 1):
+        label = ""
+        for col in (4, 3, 2):
+            label = _get_cell_value(worksheet, row, col)
+            if label:
+                break
+        if not label:
+            continue
+        raw = _get_cell_value(worksheet, row, value_col)
+        if not raw:
+            continue
+        try:
+            num = float(raw)
+        except (ValueError, TypeError):
+            continue
+        # 精确匹配参数项名，避免误命中「接管实际外伸高度」等
+        if label.strip() == "实际圆筒长度" and cylinder_len is None:
+            cylinder_len = num
+        elif label.strip() == "实际公称直径" and nominal_dn is None:
+            nominal_dn = num
+        if cylinder_len is not None and nominal_dn is not None:
+            break
+    return cylinder_len, nominal_dn
+
+
+def _floats_nearly_equal(a, b, tol=1e-3):
+    try:
+        return abs(float(a) - float(b)) <= tol
+    except (TypeError, ValueError):
+        return False
+
+
+def _check_container_template_shell_params_match(stats_widget, worksheet, product_id):
+    """
+    模板「实际圆筒长度/实际公称直径」须与条件输入中的容器壳体长度、公称直径一致。
+    任一不等（或任一侧缺失）则弹窗并返回 False。
+    """
+    tpl_len, tpl_dn = _read_container_template_actual_shell_params(worksheet)
+    db_len = get_container_shell_length(product_id) if product_id else None
+    ok_dn, db_dn = get_nominal_diameter(product_id, "壳体") if product_id else (False, None)
+    if not ok_dn:
+        db_dn = None
+
+    length_ok = (
+        tpl_len is not None
+        and db_len is not None
+        and _floats_nearly_equal(tpl_len, db_len)
+    )
+    dn_ok = (
+        tpl_dn is not None
+        and db_dn is not None
+        and _floats_nearly_equal(tpl_dn, db_dn)
+    )
+    if length_ok and dn_ok:
+        return True
+
+    show_styled_warning(
+        stats_widget,
+        "导入失败",
+        "表中实际圆筒长度、实际公称直径与条件输入中数据不一致，请修改统一后进行导入。",
+    )
+    return False
+
+
 def import_container_nozzle_from_excel(stats_widget):
     """
     容器竖表导入：只读取「输出至管口定义界面」块，
@@ -1427,8 +1623,11 @@ def import_container_nozzle_from_excel(stats_widget):
             QMessageBox.warning(stats_widget, "导入失败", detail)
             return False
 
+        product_id = getattr(stats_widget, 'product_id', None)
+        if not _check_container_template_shell_params_match(stats_widget, ws, product_id):
+            return False
+
         try:
-            product_id = getattr(stats_widget, 'product_id', None)
             imported_data, template_duplicates, validation_errors, series_units = _parse_container_excel_data(
                 ws, product_id
             )
@@ -1510,7 +1709,7 @@ def _show_import_validation_tips(stats_widget, validation_errors, template_dupli
     message_parts = []
     if template_duplicates:
         duplicate_text = "\n".join(template_duplicates)
-        message_parts.append(f"管口代号列：发现以下重复的管口代号，已跳过重复项：\n{duplicate_text}")
+        message_parts.append(f"模板表管口代号列：发现以下重复的管口代号，已跳过重复项：\n{duplicate_text}")
 
     if validation_errors:
         buckets = {
@@ -1590,19 +1789,19 @@ def _show_import_validation_tips(stats_widget, validation_errors, template_dupli
                     buckets["内伸高度"].add(label)
 
         display_order = [
-            ("公称尺寸", "公称尺寸列"),
-            ("法兰标准", "法兰标准列"),
-            ("压力等级", "压力等级列"),
-            ("法兰型式", "法兰型式列"),
-            ("密封面型式", "密封面型式列"),
-            ("焊端规格", "焊端规格列"),
-            ("管口所属元件和轴向定位基准", "管口所属元件和轴向定位基准列"),
-            ("轴向定位距离", "轴向定位距离列"),
-            ("轴向夹角", "轴向夹角列"),
-            ("周向方位", "周向方位列"),
-            ("偏心距", "偏心距列"),
-            ("外伸高度", "外伸高度列"),
-            ("内伸高度", "内伸高度列"),
+            ("公称尺寸", "模板表公称尺寸列"),
+            ("法兰标准", "模板表法兰标准列"),
+            ("压力等级", "模板表压力等级列"),
+            ("法兰型式", "模板表法兰型式列"),
+            ("密封面型式", "模板表密封面型式列"),
+            ("焊端规格", "模板表焊端规格列"),
+            ("管口所属元件和轴向定位基准", "模板表管口所属元件和轴向定位基准列"),
+            ("轴向定位距离", "模板表轴向定位距离列"),
+            ("轴向夹角", "模板表轴向夹角列"),
+            ("周向方位", "模板表周向方位列"),
+            ("偏心距", "模板表偏心距列"),
+            ("外伸高度", "模板表外伸高度列"),
+            ("内伸高度", "模板表内伸高度列"),
         ]
         for key, title in display_order:
             items = buckets.get(key) or set()
@@ -1787,13 +1986,11 @@ def _parse_container_excel_data(worksheet, product_id=None):
                 pipe_code=pipe_code,
             )
             if ok_ax:
-                axial_distance_validated = str(ax_result) if not isinstance(ax_result, str) else ax_result
-                if isinstance(ax_result, float):
-                    axial_distance_validated = (
-                        str(ax_result).rstrip("0").rstrip(".")
-                        if "." in str(ax_result)
-                        else str(int(ax_result) if ax_result == int(ax_result) else ax_result)
-                    )
+                # 文本项原样；数值先按原值校验，写入时统一四舍五入到一位小数
+                if isinstance(ax_result, str):
+                    axial_distance_validated = ax_result
+                else:
+                    axial_distance_validated = f"{round(float(ax_result), 1):.1f}"
             else:
                 axial_distance_validated = ""
                 msg = ax_result if isinstance(ax_result, str) else ""
@@ -2357,6 +2554,24 @@ def _fill_data_to_ui(stats_widget, imported_data):
             #     post_import_processing(stats_widget)
             # except Exception as e:
             #     print(f"后处理过程中发生错误: {e}")
+
+        # 卧式容器：导入时第3列已填关联代号，套用配对关联锁定（9 个联动列置灰不可编辑）
+        if getattr(stats_widget, "is_horizontal_container", False):
+            try:
+                from modules.guankoudingyi.funcs.funcs_pipe_table import (
+                    apply_horizontal_pipe_pairing_lock,
+                )
+                apply_horizontal_pipe_pairing_lock(stats_widget)
+            except Exception:
+                pass
+
+        # 导入填充绕过了 cellChanged，需主动把当前表格推给示意图
+        view = getattr(stats_widget, "view", None)
+        if view is None and hasattr(stats_widget, "widget_control"):
+            from modules.guankoudingyi.view_drawing.main_view import HeatExchangerView
+            view = stats_widget.widget_control.findChild(HeatExchangerView)
+        if view and hasattr(stats_widget, "get_all_pipe_data"):
+            view.set_pipe_data(stats_widget.get_all_pipe_data())
 
     except Exception as e:
         raise e

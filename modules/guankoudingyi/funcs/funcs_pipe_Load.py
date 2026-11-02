@@ -1609,6 +1609,24 @@ def setup_second_tab_table(dialog: QDialog):
     # 不设置最大宽度，允许水平扩展；高度固定为当前行数对应高度
     table.setMaximumSize(16777215, total_height)  # 16777215是Qt的最大整数值
 
+    # 单击即可编辑第二列可编辑单元格（夹角等锁定格仍不可编；不改动下拉）
+    def on_zaihecanshu_cell_clicked(clicked_row, clicked_col):
+        if clicked_col != 1:
+            return
+        target_item = table.item(clicked_row, clicked_col)
+        if target_item is None:
+            return
+        if not (target_item.flags() & Qt.ItemIsEditable):
+            return
+        table.editItem(target_item)
+
+    try:
+        table.cellClicked.disconnect(table._zaihecanshu_click_handler)
+    except Exception:
+        pass
+    table._zaihecanshu_click_handler = on_zaihecanshu_cell_clicked
+    table.cellClicked.connect(table._zaihecanshu_click_handler)
+
 
 
 """初始化管口载荷弹窗"""
@@ -1721,10 +1739,12 @@ def init_pipe_openingload_dialog(dialog: QDialog, pipe_code: str = None, product
     default_value = "柱壳上圆形附件或接管计算(WRC 537)"
     dialog._last_calc_type_value = default_value
 
-    # 连接单元格点击信号，实现单击即可显示下拉框
+    # 连接单元格点击信号：局部应力符号单击编辑；计算类型单击展开下拉
     def on_cell_clicked(row, column):
-        """处理单元格点击事件，第二行第二列单击时立即进入编辑模式"""
-        if row == 1 and column == 1:
+        """处理单元格点击事件：可编辑文本格单击进入编辑；下拉格单击展开"""
+        if column != 1:
+            return
+        if row == 1:
             # 确保item存在
             target_item = table.item(1, 1)
             if target_item is None:
@@ -1736,6 +1756,14 @@ def init_pipe_openingload_dialog(dialog: QDialog, pipe_code: str = None, product
                 # 如果item存在但为空，设置默认值
                 target_item.setText(default_value)
             # 立即进入编辑模式，显示下拉框
+            table.editItem(target_item)
+        elif row == 0:
+            # 局部应力符号：仅可编辑时单击进入输入
+            target_item = table.item(0, 1)
+            if target_item is None:
+                return
+            if not (target_item.flags() & Qt.ItemIsEditable):
+                return
             table.editItem(target_item)
 
     table.cellClicked.connect(on_cell_clicked)

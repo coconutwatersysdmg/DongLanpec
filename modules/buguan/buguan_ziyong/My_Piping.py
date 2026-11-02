@@ -6135,6 +6135,54 @@ class TubeLayoutEditor(QMainWindow):
         QTimer.singleShot(0, self.update_cross_pipe_button_state)
         QTimer.singleShot(200, self.update_cross_pipe_button_state)
 
+    def _read_restore_numeric_param(self, param_name, input_keys, default=None):
+        """恢复图元时优先读取布管参数表，旧输入字段仅用于兼容历史数据。"""
+        try:
+            table_value = self._read_param_table_float(param_name)
+        except Exception:
+            table_value = None
+        if table_value is not None:
+            return table_value
+
+        input_json = getattr(self, "input_json", {})
+        if not isinstance(input_json, dict):
+            input_json = {}
+        for key in input_keys:
+            raw_value = input_json.get(key)
+            if raw_value is None or str(raw_value).strip() == "":
+                continue
+            try:
+                return float(str(raw_value).strip())
+            except (TypeError, ValueError):
+                continue
+        return default
+
+    def _get_impingement_plate_restore_params(self):
+        """读取平板形、圆弧形和焊接式防冲板恢复时共用的参数。"""
+        return {
+            "baffle_thickness": self._read_restore_numeric_param(
+                "防冲板厚度", ("LB_BaffleThick",), 0.0
+            ),
+            "baffle_angle": self._read_restore_numeric_param(
+                "防冲板折边角度", ("LB_BaffleA",), None
+            ),
+            "baffle_width": self._read_restore_numeric_param(
+                "防冲板宽度", ("LB_BaffleW",), None
+            ),
+            "baffle_azimuth": self._read_restore_numeric_param(
+                "防冲板方位角", ("LB_BafflePosition",), None
+            ),
+            "baffle_distance": self._read_restore_numeric_param(
+                "至圆筒内壁距离", ("LB_BaffleDis",), None
+            ),
+            "tube_outer_diameter": self._read_restore_numeric_param(
+                "换热管外径 do", ("LB_TubeD",), 0.0
+            ),
+            "tube_pitch": self._read_restore_numeric_param(
+                "换热管中心距 S", ("LB_S", "S"), 0.0
+            ),
+        }
+
     def initial_operation(self):
         # 先根据产品ID从产品设计活动表_管口表读取管口代号及所属元件，存成全局数据字典
         # 字典结构：{管口代号: 管口所属元件}；若查询不到数据，也创建为空字典
@@ -6312,25 +6360,22 @@ class TubeLayoutEditor(QMainWindow):
             print(f"第一次计算布管布局出错: {str(e)}")
 
         try:
-            if not hasattr(self, "input_json") or not isinstance(self.input_json, dict):
-                raise ValueError("self.input_json不存在或不是字典类型")
+            input_json = getattr(self, "input_json", {})
+            if not isinstance(input_json, dict):
+                input_json = {}
 
-            side_dangban_thick = float(self.input_json.get("LB_BPBThick", 0) or 0)
-            baffle_thickness = float(self.input_json.get("LB_BaffleThick", 0) or 0)
-            # 折边角度：平板形常为空，勿转成 0（否则恢复圆弧形时会误弹 15°~90° 提示）
-            _raw_ba = self.input_json.get("LB_BaffleA", None)
-            if _raw_ba is None or str(_raw_ba).strip() == "":
-                baffle_angle = None
-            else:
-                try:
-                    baffle_angle = float(str(_raw_ba).strip())
-                except (ValueError, TypeError):
-                    baffle_angle = None
-            tube_outer_diameter = float(self.input_json.get("LB_TubeD", 0) or 0)
-            tube_pitch = float(self.input_json.get("LB_S", 0) or 0)
-            height = float(self.input_json.get("LB_SlipWayHeight", 0) or 0)
-            thickness = float(self.input_json.get("LB_SlipWayThick", 0) or 0)
-            angle = float(self.input_json.get("LB_SlipWayAngle", 0) or 0)
+            side_dangban_thick = float(input_json.get("LB_BPBThick", 0) or 0)
+            restore_params = self._get_impingement_plate_restore_params()
+            baffle_thickness = restore_params["baffle_thickness"]
+            baffle_angle = restore_params["baffle_angle"]
+            baffle_width = restore_params["baffle_width"]
+            baffle_azimuth = restore_params["baffle_azimuth"]
+            baffle_distance = restore_params["baffle_distance"]
+            tube_outer_diameter = restore_params["tube_outer_diameter"]
+            tube_pitch = restore_params["tube_pitch"]
+            height = float(input_json.get("LB_SlipWayHeight", 0) or 0)
+            thickness = float(input_json.get("LB_SlipWayThick", 0) or 0)
+            angle = float(input_json.get("LB_SlipWayAngle", 0) or 0)
 
             if tube_outer_diameter <= 0:
                 print("管子外径必须大于0，使用默认值10")
@@ -6345,6 +6390,9 @@ class TubeLayoutEditor(QMainWindow):
             side_dangban_thick = 0
             baffle_thickness = 0
             baffle_angle = None
+            baffle_width = None
+            baffle_azimuth = None
+            baffle_distance = None
             tube_outer_diameter = 10
             tube_pitch = 20
             height = 0
@@ -6884,6 +6932,12 @@ class TubeLayoutEditor(QMainWindow):
                         thk_f = baffle_thickness
                     if ang_f is None:
                         ang_f = baffle_angle
+                    if wid_f is None:
+                        wid_f = baffle_width
+                    if az_f is None:
+                        az_f = baffle_azimuth
+                    if dist_f is None:
+                        dist_f = baffle_distance
 
                     try:
                         self.build_impingement_plate(
