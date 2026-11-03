@@ -19295,6 +19295,7 @@ class TubeLayoutEditor(QMainWindow):
             else ""
         )
         if layout_form == current_form and getattr(self, "current_centers", None):
+            self.has_piped = True
             return True
 
         self.tube_pass_form_value = current_form
@@ -19312,6 +19313,7 @@ class TubeLayoutEditor(QMainWindow):
             compute_kwargs = getattr(self, "_local_compute_kwargs", None) or {}
             if normalize_local_tube_pass_cat(compute_kwargs.get("Cat")) != normalize_local_tube_pass_cat(current_form):
                 return False
+        self.has_piped = True
         return True
 
     # 10/29 修改，布管界面保存时需要先判断，满足条件才保存
@@ -29332,9 +29334,45 @@ class TubeLayoutEditor(QMainWindow):
 
         return _edit_screw_ring_params_dialog(self, screw_ring_id)
 
+    @staticmethod
+    def _normalize_support_plate_cut_params(tube_data):
+        """支持板落库时使用无切口的规范参数，不受灰显单元格旧值影响。"""
+        normalized_data = [dict(data) for data in tube_data]
+        is_support_plate = any(
+            str(data.get("参数名", "")).strip() == "折流板类型"
+            and str(data.get("参数值", "")).strip() == "支持板"
+            for data in normalized_data
+        )
+        if not is_support_plate:
+            return normalized_data
+
+        baffle_od = None
+        for data in normalized_data:
+            if matches_lb_baffle_od_param_row(data.get("参数名")):
+                try:
+                    baffle_od = float(str(data.get("参数值", "")).strip())
+                except (TypeError, ValueError):
+                    baffle_od = None
+                break
+
+        radius_text = None
+        if baffle_od is not None and math.isfinite(baffle_od):
+            radius_text = f"{baffle_od / 2.0:.12f}".rstrip("0").rstrip(".")
+
+        for data in normalized_data:
+            param_name = str(data.get("参数名", "")).strip()
+            if param_name == "折流板要求切口率":
+                data["参数值"] = "0"
+            elif param_name == "折流板切口与中心线间距a" and radius_text is not None:
+                data["参数值"] = radius_text
+
+        return normalized_data
+
     def build_sql_for_tube(self, tube_data):
         if not tube_data:
             return None
+
+        tube_data = self._normalize_support_plate_cut_params(tube_data)
 
         table_name = "`产品设计活动表_布管参数表`"
         component_table = "`产品设计活动表_元件附加参数表`"
@@ -32761,6 +32799,23 @@ class TubeLayoutEditor(QMainWindow):
                 # 若当前存在错误提示，则不允许直接关闭
                 if warning_label.text().strip():
                     return
+                # 点击“确定”时，当前文本编辑器可能尚未把新内容提交给 QTableWidgetItem。
+                # 先显式提交，避免首次读取到旧默认值、第二次打开才生效。
+                try:
+                    from PyQt5.QtWidgets import QAbstractItemView, QApplication
+
+                    if table.state() == QAbstractItemView.EditingState:
+                        index = table.currentIndex()
+                        if index.isValid():
+                            editor = table.indexWidget(index)
+                            if editor is None:
+                                editor = QApplication.focusWidget()
+                            if editor is not None and table.isAncestorOf(editor):
+                                delegate = table.itemDelegate(index)
+                                if delegate is not None:
+                                    delegate.setModelData(editor, table.model(), index)
+                except Exception as commit_error:
+                    print(f"[show_baffle_info] 提交当前编辑值失败: {commit_error}")
                 for r in range(table.rowCount()):
                     name_item = table.item(r, 0)
                     if not name_item:
