@@ -310,23 +310,15 @@ def collect_extra_impingement_delete_centers(
 ):
     """平板形/圆弧形防冲板：在原干涉之外，额外需要删除的换热管绝对坐标。
 
-    规则：
-    1) 以两选中管圆心连线为弦，删除布管限定圆 DL 内、弦靠壳壁外侧（背离圆心一侧）
-       弓形区域内的所有换热管；
-    2) 仅当两选中管在同一行时：删除该行上位于两选中管连线段外侧的其他换热管
-       （选中管本身不删；两选中管之间的管也不删）。
-       若两管不在同一行，则跳过本条，只保留弓形删除。
+    以两选中管圆心连线为弦，只删除布管限定圆 DL 内、弦靠壳壁外侧
+    （背离圆心一侧）且投影位于两端点之间的换热管。连线段两侧的换热管不删除。
     """
     extra = []
     if not selected_abs_centers or len(selected_abs_centers) < 2:
         return extra
 
-    def _is_heat_tube_center(abs_coord, heat_keys):
-        return _coord_key6(abs_coord) in heat_keys
-
     # 当前仍存在的换热管（不含已删除）
     heat_centers = list(getattr(self, "current_centers", None) or [])
-    heat_keys = {_coord_key6(c) for c in heat_centers}
     selected_keys = {_coord_key6(c) for c in selected_abs_centers}
 
     # ---------- 1) 弦外侧弓形（相对布管限定圆 DL）----------
@@ -339,6 +331,7 @@ def collect_extra_impingement_delete_centers(
         dy = y2 - y1
         line_len = math.hypot(dx, dy)
         if line_len > 1e-9:
+            line_len_sq = line_len * line_len
             # f(x,y) = (x2-x1)*(y-y1) - (y2-y1)*(x-x1)；原点在弦哪一侧
             f_origin = dx * (0.0 - y1) - dy * (0.0 - x1)
             # 弦近似过圆心时，无明确“外侧弓形”，跳过本规则
@@ -348,57 +341,15 @@ def collect_extra_impingement_delete_centers(
                         continue
                     if cx * cx + cy * cy > R2:
                         continue
+                    projection = (
+                        (cx - x1) * dx + (cy - y1) * dy
+                    ) / line_len_sq
+                    if projection < 0.0 or projection > 1.0:
+                        continue
                     f_pt = dx * (cy - y1) - dy * (cx - x1)
                     # 与原点异侧 => 靠壳壁的外侧
                     if f_pt * f_origin < 0:
                         extra.append((cx, cy))
-
-    # ---------- 2) 同行外侧删除：仅两选中管同一行时处理 ----------
-    if isinstance(selected_rel_centers, str):
-        try:
-            selected_rel_centers = ast.literal_eval(selected_rel_centers)
-        except Exception:
-            selected_rel_centers = []
-    if not isinstance(selected_rel_centers, (list, tuple)):
-        selected_rel_centers = []
-
-    sel_rows = []
-    for item in selected_rel_centers:
-        if isinstance(item, (list, tuple)) and len(item) == 2:
-            try:
-                sel_rows.append(int(item[0]))
-            except (TypeError, ValueError):
-                continue
-
-    # 不同行：不处理同行精细删除
-    if len(sel_rows) >= 2 and sel_rows[0] == sel_rows[1]:
-        row_label = sel_rows[0]
-        (ax, ay), (bx, by) = selected_abs_centers[0], selected_abs_centers[1]
-        abx, aby = bx - ax, by - ay
-        ab_len2 = abx * abx + aby * aby
-
-        up = getattr(self, "full_sorted_current_centers_up", None) or []
-        down = getattr(self, "full_sorted_current_centers_down", None) or []
-        row_idx = abs(row_label) - 1
-        if row_label > 0:
-            row_data = up[row_idx] if 0 <= row_idx < len(up) else []
-        else:
-            row_data = down[row_idx] if 0 <= row_idx < len(down) else []
-
-        for pt in row_data:
-            if not (isinstance(pt, (list, tuple)) and len(pt) == 2):
-                continue
-            abs_pt = (pt[0], pt[1])
-            if _coord_key6(abs_pt) in selected_keys:
-                continue
-            if not _is_heat_tube_center(abs_pt, heat_keys):
-                continue
-            # 投影到选中管连线：t∈(0,1) 为两管之间，不删除；外侧删除
-            if ab_len2 <= 1e-18:
-                continue
-            t = ((abs_pt[0] - ax) * abx + (abs_pt[1] - ay) * aby) / ab_len2
-            if t <= 0.0 or t >= 1.0:
-                extra.append(abs_pt)
 
     # 去重
     seen = set()
@@ -632,107 +583,56 @@ def calculate_welded_impingement_interfering_tubes(
     self.delete_huanreguan(unique_centers)
 
 
-def determine_y_axis(self, A, B, x_axis):
-    # print(A.x(), A.x(), B.x(), B.y())
-    # 计算绝对值比较结果，避免重复计算
-    a_gt_b_x = abs(A.x()) > abs(B.x())
-    a_lt_b_x = abs(A.x()) < abs(B.x())
-    a_gt_b_y = abs(A.y()) > abs(B.y())
-    a_lt_b_y = abs(A.y()) < abs(B.y())
+def build_arc_local_coordinate_system(point1, point2, opening_clearance=0.0):
+    """建立圆弧形防冲板局部坐标系，并让开口边始终位于圆心一侧。"""
+    A = QPointF(float(point1.x()), float(point1.y()))
+    B = QPointF(float(point2.x()), float(point2.y()))
 
-    # 主要决策条件
-    use_standard = False
+    # 先固定端点初始顺序，保证用户反向选择同一对管子时结果不翻转。
+    if (A.x(), A.y()) > (B.x(), B.y()):
+        A, B = B, A
 
-    if a_gt_b_x and a_gt_b_y:  # 第一种情况
-        if (
-                (A.x() > 0 > A.y() and B.x() > 0 and B.y() > 0)
-                or (
-                A.x() < 0
-                and A.y() < 0
-                and (B.x() > 0 > B.y() or B.x() < 0 and B.y() < 0)
-        )
-                or (
-                A.x() < 0 < A.y()
-                and (
-                        B.x() < 0 < B.y()
-                        or B.x() > 0 > B.y()
-                        or B.x() < 0
-                        and B.y() < 0
-                )
-        )
-                or (
-                A.x() > 0
-                and A.y() > 0
-                and (B.x() < 0 and B.y() < 0 or B.x() < 0 < B.y())
-        )
-        ):
-            use_standard = True
+    AB_vector = B - A
+    AB_length = math.hypot(AB_vector.x(), AB_vector.y())
+    if AB_length <= 1e-9:
+        raise ValueError("两个参照管圆心重合，无法建立防冲板局部坐标系")
 
-    elif a_lt_b_x and a_gt_b_y:  # 第二种情况
-        if (
-                (A.x() > 0 > A.y() and (B.x() > 0 and B.y() > 0 or B.x() > 0 > B.y()))
-                or (
-                A.x() < 0
-                and A.y() < 0
-                and (B.x() > 0 > B.y() or B.x() > 0 and B.y() > 0)
-        )
-                or (
-                A.x() < 0 < A.y() and (B.x() < 0 < B.y() or B.x() < 0 and B.y() < 0)
-        )
-                or (
-                A.x() > 0
-                and A.y() > 0
-                and (B.x() < 0 and B.y() < 0 or B.x() < 0 < B.y())
-        )
-        ):
-            use_standard = True
+    x_axis = AB_vector / AB_length
+    # 在 Qt 坐标系中按局部 x 轴顺时针旋转 90°得到候选正 y 轴。
+    y_axis = QPointF(x_axis.y(), -x_axis.x())
+    mid = QPointF((A.x() + B.x()) / 2.0, (A.y() + B.y()) / 2.0)
 
-    elif a_gt_b_x and a_lt_b_y:  # 第三种情况
-        if (
-                (A.x() > 0 > A.y() and (B.x() > 0 and B.y() > 0 or B.x() < 0 < B.y()))
-                or (
-                A.x() < 0
-                and A.y() < 0
-                and (B.x() > 0 > B.y() or B.x() < 0 and B.y() < 0)
-        )
-                or (
-                A.x() < 0 < A.y() and (B.x() > 0 > B.y() or B.x() < 0 and B.y() < 0)
-        )
-                or (
-                A.x() > 0
-                and A.y() > 0
-                and (B.x() < 0 < B.y() or B.x() > 0 and B.y() > 0)
-        )
-        ):
-            use_standard = True
-
-    elif a_lt_b_x and a_lt_b_y:  # 第四种情况
-        if (
-                (A.x() > 0 > A.y() and (B.x() > 0 and B.y() > 0 or B.x() > 0 > B.y()))
-                or (A.x() < 0 and A.y() < 0 and B.x() > 0 > B.y())
-                or (
-                A.x() < 0 < A.y() and (B.x() > 0 > B.y() or B.x() < 0 and B.y() < 0)
-        )
-                or (
-                A.x() > 0
-                and A.y() > 0
-                and (B.x() < 0 < B.y() or B.x() > 0 and B.y() > 0)
-        )
-        ):
-            use_standard = True
-
-    # 处理相等情况
-    elif abs(A.y()) == abs(B.y()):
-        use_standard = A.y() < 0
-    elif abs(A.x()) == abs(B.x()):
-        use_standard = A.x() >= 0  # 与原逻辑相反
-
-    # 返回结果
-    return (
-        QPointF(x_axis.y(), -x_axis.x())
-        if use_standard
-        else QPointF(-x_axis.y(), x_axis.x())
+    # 比较候选正/负 y 方向移动单位距离后到全局圆心的距离。
+    # 正 y 必须指向圆外；若指向圆内，则同时反转 A/B 和局部 x 轴。
+    positive_mid = mid + y_axis
+    negative_mid = mid - y_axis
+    positive_distance_sq = positive_mid.x() ** 2 + positive_mid.y() ** 2
+    negative_distance_sq = negative_mid.x() ** 2 + negative_mid.y() ** 2
+    tolerance = 1e-9 * max(
+        1.0,
+        positive_distance_sq,
+        negative_distance_sq,
     )
+    if positive_distance_sq + tolerance < negative_distance_sq:
+        A, B = B, A
+        x_axis = QPointF(-x_axis.x(), -x_axis.y())
+        y_axis = QPointF(x_axis.y(), -x_axis.x())
+
+    try:
+        clearance = max(0.0, float(opening_clearance))
+    except (TypeError, ValueError):
+        clearance = 0.0
+
+    # A-B 是未封闭的开口边，沿局部负 y（圆心方向）避让换热管。
+    A = A - y_axis * clearance
+    B = B - y_axis * clearance
+    return A, B, x_axis, y_axis
+
+
+def determine_y_axis(self, A, B, x_axis):
+    """兼容旧调用：按径向距离返回指向圆外的局部正 y 轴。"""
+    _A, _B, _x_axis, y_axis = build_arc_local_coordinate_system(A, B)
+    return y_axis
 
 # 防冲板
 
@@ -1832,7 +1732,7 @@ def build_impingement_plate(
         except Exception:
             pass
 
-        # 计算干涉管（原逻辑）+ 弓形外侧/同行额外删除
+        # 计算真实干涉管，并补充删除弦靠壳壁外侧的弓形区域换热管
         self.calculate_and_update_interfering_tubes(points, baffle_thickness)
         # 这个函数得到了干涉换热管坐标，为绝对坐标，更新的需求为不要删除选中的俩坐标，所以在这里做一下过滤
         actual_centers = self.selected_to_current_coords(selected_centers)
@@ -2008,8 +1908,7 @@ def build_impingement_plate(
             return
 
         print(f"✓ 获取到2个有效坐标点: {points}")
-        # 计算折边式防冲板的基准点：
-        # 要求“搭在换热管上方”，因此把参照管中心整体上移 (r + 防冲板半厚度)
+        # 计算开口边相对参照管的避让距离。
         tube_r_for_top = 0.0
         try:
             tube_r_for_top = float(do_value) / 2.0 if isinstance(do_value, (int, float)) and do_value > 0 else 0.0
@@ -2024,37 +1923,25 @@ def build_impingement_plate(
             plate_half_thk = (float(baffle_thickness) / 2.0) if baffle_thickness not in (None, "") else 0.0
         except Exception:
             plate_half_thk = 0.0
-        up_shift = max(0.0, tube_r_for_top + plate_half_thk)
+        opening_clearance = max(0.0, tube_r_for_top + plate_half_thk)
 
-        point1 = QPointF(points[0][0], points[0][1] - up_shift)
-        point2 = QPointF(points[1][0], points[1][1] - up_shift)
-
-        print(
-            f"[防冲板] 输入点: point1=({point1.x(): .2f}, {point1.y(): .2f}), point2=({point2.x(): .2f}, {point2.y(): .2f})"
-        )
-
-        # 简化A、B选择逻辑：按x坐标排序，x相同时按y坐标排序
-        # x坐标小的是A点，x坐标大的是B点
-        if point1.x() < point2.x():
-            A = point1
-            B = point2
-            is_original_order = True
-        elif point1.x() > point2.x():
-            A = point2
-            B = point1
-            is_original_order = False
-        else:  # x坐标相等，按y坐标排序
-            if point1.y() < point2.y():
-                A = point1
-                B = point2
-                is_original_order = True
-            else:
-                A = point2
-                B = point1
-                is_original_order = False
+        point1 = QPointF(points[0][0], points[0][1])
+        point2 = QPointF(points[1][0], points[1][1])
+        try:
+            A, B, x_axis, y_axis = build_arc_local_coordinate_system(
+                point1,
+                point2,
+                opening_clearance,
+            )
+        except ValueError as exc:
+            print(f"❌ {exc}")
+            return
 
         print(
-            f"[防冲板] 确定A、B点: A=({A.x(): .2f}, {A.y(): .2f}), B=({B.x(): .2f}, {B.y(): .2f})"
+            f"[防冲板] 局部坐标系: A=({A.x(): .2f}, {A.y(): .2f}), "
+            f"B=({B.x(): .2f}, {B.y(): .2f}), "
+            f"x_axis=({x_axis.x():.4f}, {x_axis.y():.4f}), "
+            f"y_axis=({y_axis.x():.4f}, {y_axis.y():.4f})"
         )
 
         # 计算AB向量和长度
@@ -2068,11 +1955,6 @@ def build_impingement_plate(
             # QMessageBox.warning(self, "错误", "两个选中的圆心位置重合，无法绘制防冲板")
             return
 
-        # 计算坐标轴向量
-        print(f"[防冲板] 计算坐标轴向量...")
-        x_axis = AB_vector / AB_length
-        print(f"✓ x_axis=({x_axis.x(): .4f}, {x_axis.y(): .4f})")
-
         # 计算防冲板参数
         print(f"[防冲板] 计算防冲板参数...")
         angle_rad = math.radians(baffle_angle)
@@ -2085,19 +1967,13 @@ def build_impingement_plate(
             f"✓ 防冲板参数计算完成: baffle_height={baffle_height}, top_length={top_length}"
         )
 
-        # 确定 y_axis 方向：圆弧形防冲板应搭在所选换热管“上方”
-        # Qt 坐标系中 y 越小越靠上，因此选择 y 分量更小（更负）的法向
-        # 计算两个候选 y_axis 方向（互为反向）
-        y_axis1 = QPointF(-x_axis.y(), x_axis.x())  # 逆时针90°
-        y_axis2 = QPointF(x_axis.y(), -x_axis.x())  # 顺时针90°（反向）
-        y_axis = y_axis1 if y_axis1.y() <= y_axis2.y() else y_axis2
         P = (
                 A
                 + x_axis * (incline_length * math.cos(angle_rad))
                 + y_axis * (incline_length * math.sin(angle_rad))
         )
         print(
-            f"[防冲板] 选择上方方向: y_axis=({y_axis.x():.4f}, {y_axis.y():.4f}), "
+            f"[防冲板] 选择圆外方向: y_axis=({y_axis.x():.4f}, {y_axis.y():.4f}), "
             f"P=({P.x():.2f}, {P.y():.2f})"
         )
 
@@ -2250,7 +2126,7 @@ def build_impingement_plate(
         except Exception:
             pass
 
-        # 计算干涉管（原逻辑）+ 弓形外侧/同行额外删除
+        # 计算真实干涉管，并补充删除弦靠壳壁外侧的弓形区域换热管
         self.calculate_and_update_bend_interfering_tubes(
             A, P, Q, B, baffle_thickness
         )
