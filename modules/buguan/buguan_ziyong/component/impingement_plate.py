@@ -310,8 +310,8 @@ def collect_extra_impingement_delete_centers(
 ):
     """平板形/圆弧形防冲板：在原干涉之外，额外需要删除的换热管绝对坐标。
 
-    以两选中管圆心连线为弦，只删除布管限定圆 DL 内、弦靠壳壁外侧
-    （背离圆心一侧）且投影位于两端点之间的换热管。连线段两侧的换热管不删除。
+    以两选中管圆心连线为弦，删除布管限定圆 DL 内、弦靠壳壁外侧
+    （背离圆心一侧）的所有换热管。弦上两端点外侧的换热管不删除。
     """
     extra = []
     if not selected_abs_centers or len(selected_abs_centers) < 2:
@@ -331,7 +331,6 @@ def collect_extra_impingement_delete_centers(
         dy = y2 - y1
         line_len = math.hypot(dx, dy)
         if line_len > 1e-9:
-            line_len_sq = line_len * line_len
             # f(x,y) = (x2-x1)*(y-y1) - (y2-y1)*(x-x1)；原点在弦哪一侧
             f_origin = dx * (0.0 - y1) - dy * (0.0 - x1)
             # 弦近似过圆心时，无明确“外侧弓形”，跳过本规则
@@ -340,11 +339,6 @@ def collect_extra_impingement_delete_centers(
                     if _coord_key6((cx, cy)) in selected_keys:
                         continue
                     if cx * cx + cy * cy > R2:
-                        continue
-                    projection = (
-                        (cx - x1) * dx + (cy - y1) * dy
-                    ) / line_len_sq
-                    if projection < 0.0 or projection > 1.0:
                         continue
                     f_pt = dx * (cy - y1) - dy * (cx - x1)
                     # 与原点异侧 => 靠壳壁的外侧
@@ -623,9 +617,10 @@ def build_arc_local_coordinate_system(point1, point2, opening_clearance=0.0):
     except (TypeError, ValueError):
         clearance = 0.0
 
-    # A-B 是未封闭的开口边，沿局部负 y（圆心方向）避让换热管。
-    A = A - y_axis * clearance
-    B = B - y_axis * clearance
+    # A、B 是两侧支脚与参照拉杆相接的基点，应沿局部正 y（圆外方向）
+    # 移到拉杆外侧切点；P、Q 再继续向圆外延伸，因此未封闭的开口仍朝圆心。
+    A = A + y_axis * clearance
+    B = B + y_axis * clearance
     return A, B, x_axis, y_axis
 
 

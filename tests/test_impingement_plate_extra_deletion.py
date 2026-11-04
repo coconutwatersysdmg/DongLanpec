@@ -58,7 +58,7 @@ class ImpingementPlateExtraDeletionTests(unittest.TestCase):
 
         self.assertEqual(extra, [(0.0, 100.0)])
 
-    def test_outer_cap_tubes_beyond_plate_endpoints_are_kept(self):
+    def test_entire_outer_cap_above_chord_is_deleted(self):
         editor = _Editor()
         editor.current_centers.extend(
             [(-40.0, 100.0), (40.0, 100.0)]
@@ -70,7 +70,10 @@ class ImpingementPlateExtraDeletionTests(unittest.TestCase):
             selected_rel_centers=[(1, 1), (1, 2)],
         )
 
-        self.assertEqual(extra, [(0.0, 100.0)])
+        self.assertEqual(
+            extra,
+            [(0.0, 100.0), (-40.0, 100.0), (40.0, 100.0)],
+        )
 
 
 if __name__ == "__main__":

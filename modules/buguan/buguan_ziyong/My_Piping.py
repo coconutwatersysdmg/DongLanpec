@@ -1,4 +1,5 @@
 import ast
+import hashlib
 import json
 import logging
 import os
@@ -8382,6 +8383,9 @@ class TubeLayoutEditor(QMainWindow):
             current_centers = none_tube_centers(
                 height_0_180, height_90_270, Di, do, centers
             )
+            self._layout_baseline_signature = self._center_set_signature(
+                current_centers
+            )
             # 给现有圆心赋值
             self.current_centers = current_centers
             self.current_centers_lagan = current_centers
@@ -8509,6 +8513,7 @@ class TubeLayoutEditor(QMainWindow):
         h0 = height_0_180 if height_0_180 is not None else 0
         h90 = height_90_270 if height_90_270 is not None else 0
         current_centers = none_tube_centers(h0, h90, Di, do, centers)
+        self._layout_baseline_signature = self._center_set_signature(current_centers)
         self.current_centers = current_centers
         self.current_centers_lagan = current_centers
         self._sync_current_centers_lagan()
@@ -20357,7 +20362,7 @@ class TubeLayoutEditor(QMainWindow):
         return sql_statements
 
     def _product_centers_snapshot_paths(self):
-        """返回产品管心快照的候选路径，产品目录优先、程序目录兜底。"""
+        """返回新版管心状态文件候选路径，产品目录优先、程序目录兜底。"""
         product_id = str(getattr(self, "productID", None) or "unknown").strip()
         fallback_dir = os.path.join(os.path.dirname(__file__), "coords")
         candidate_dirs = []
@@ -20393,19 +20398,37 @@ class TubeLayoutEditor(QMainWindow):
         candidate_dirs.append(fallback_dir)
         paths = []
         for directory in candidate_dirs:
-            path = os.path.join(directory, f"{product_id}.json")
+            path = os.path.join(directory, f"{product_id}.tube-state.json")
             if path not in paths:
                 paths.append(path)
         return paths
 
+    @staticmethod
+    def _center_set_signature(centers):
+        """生成与遍历顺序无关的管心集合签名。"""
+        normalized = sorted(
+            {
+                (round(float(center[0]), 6), round(float(center[1]), 6))
+                for center in (centers or [])
+            }
+        )
+        payload = ";".join(f"{x:.6f},{y:.6f}" for x, y in normalized)
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
     def _load_saved_current_centers_from_product_json(self):
-        """读取上次保存后的实际管心；无有效快照时返回 None。"""
+        """只读取带版本及布局签名的新版管心状态；旧裸 JSON 永不参与删管。"""
         for snapshot_path in TubeLayoutEditor._product_centers_snapshot_paths(self):
             if not os.path.isfile(snapshot_path):
                 continue
             try:
                 with open(snapshot_path, "r", encoding="utf-8") as snapshot_file:
-                    raw_centers = json.load(snapshot_file)
+                    state = json.load(snapshot_file)
+                if not isinstance(state, dict) or state.get("version") != 1:
+                    continue
+                layout_signature = state.get("layout_signature")
+                raw_centers = state.get("current_centers")
+                if not isinstance(layout_signature, str) or not layout_signature:
+                    continue
                 if not isinstance(raw_centers, list):
                     continue
 
@@ -20421,16 +20444,29 @@ class TubeLayoutEditor(QMainWindow):
                         break
                     centers.append((x, y))
                 if valid:
-                    return centers
+                    return {
+                        "version": 1,
+                        "layout_signature": layout_signature,
+                        "current_centers": centers,
+                    }
             except (OSError, TypeError, ValueError, json.JSONDecodeError):
                 continue
         return None
 
     def _restore_saved_current_centers_snapshot(self):
         """按已保存实际管心收敛重算结果；只删除重现管，不改变原删除分类。"""
-        saved_centers = self._load_saved_current_centers_from_product_json()
-        if saved_centers is None:
+        saved_state = self._load_saved_current_centers_from_product_json()
+        if saved_state is None:
             return False
+
+        current_signature = getattr(self, "_layout_baseline_signature", None)
+        if (
+            not current_signature
+            or saved_state.get("layout_signature") != current_signature
+        ):
+            print("[加载] 管心状态的布局签名与当前布管不一致，跳过快照兜底")
+            return False
+        saved_centers = saved_state.get("current_centers", [])
 
         try:
             current_centers = list(getattr(self, "current_centers", None) or [])
@@ -20531,6 +20567,21 @@ class TubeLayoutEditor(QMainWindow):
         # 覆盖写入（存在则截断，不存在则新建）
         with open(output_path, "w", encoding="utf-8") as f:
             json.dump(safe_centers, f, ensure_ascii=False, indent=2)
+
+        # 新版状态文件与历史 productID.json 分离。历史裸 JSON 可能只是旧算法或
+        # 某次中间状态，不能再被当作删管依据；只有带当前基础布局签名的新状态生效。
+        layout_signature = getattr(self, "_layout_baseline_signature", None)
+        if layout_signature:
+            state_path = os.path.join(
+                target_dir, f"{product_id}.tube-state.json"
+            )
+            state_payload = {
+                "version": 1,
+                "layout_signature": str(layout_signature),
+                "current_centers": safe_centers,
+            }
+            with open(state_path, "w", encoding="utf-8") as state_file:
+                json.dump(state_payload, state_file, ensure_ascii=False, indent=2)
 
     def _confirm_tube_sheet_ad_update(self, calculated_value, user_value):
         message = (

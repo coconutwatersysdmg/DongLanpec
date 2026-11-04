@@ -30,7 +30,8 @@ class ArcImpingementPlateOrientationTests(unittest.TestCase):
         self.assertAlmostEqual(x_axis.y(), 0.0)
         self.assertAlmostEqual(y_axis.x(), 0.0)
         self.assertAlmostEqual(y_axis.y(), 1.0)
-        self.assertAlmostEqual((A.y() + B.y()) / 2.0, 90.0)
+        # Qt 坐标中底部的圆外方向为 +y，支脚基点应落在拉杆外侧切点。
+        self.assertAlmostEqual((A.y() + B.y()) / 2.0, 110.0)
 
         open_mid = QPointF((A.x() + B.x()) / 2.0, (A.y() + B.y()) / 2.0)
         closed_mid = open_mid + y_axis * 30.0
@@ -52,6 +53,20 @@ class ArcImpingementPlateOrientationTests(unittest.TestCase):
                 A, B, _x_axis, y_axis = self._build_axes(point1, point2)
                 self.assertAlmostEqual(y_axis.x(), expected_y_axis[0])
                 self.assertAlmostEqual(y_axis.y(), expected_y_axis[1])
+
+                original_mid = QPointF(
+                    (point1[0] + point2[0]) / 2.0,
+                    (point1[1] + point2[1]) / 2.0,
+                )
+                shifted_mid = QPointF(
+                    (A.x() + B.x()) / 2.0,
+                    (A.y() + B.y()) / 2.0,
+                )
+                outward_shift = (
+                    (shifted_mid.x() - original_mid.x()) * y_axis.x()
+                    + (shifted_mid.y() - original_mid.y()) * y_axis.y()
+                )
+                self.assertAlmostEqual(outward_shift, 10.0)
 
                 open_mid = QPointF(
                     (A.x() + B.x()) / 2.0,
