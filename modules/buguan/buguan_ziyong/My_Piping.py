@@ -6463,6 +6463,12 @@ class TubeLayoutEditor(QMainWindow):
         self.slide_selected_centers = []
         # self.del_centers = del_centers
         self.delete_huanreguan(del_centers)
+        # 最终管心快照兜底：甲方环境中若元件类型7未完整保存/解析，仍以用户上次
+        # 保存后的实际管心为上限，只删除重算后多出来的管，不补管、不改变删除来源。
+        try:
+            self._restore_saved_current_centers_snapshot()
+        except Exception as e:
+            print(f"[加载] 恢复已保存管心快照失败，沿用原恢复逻辑: {e}")
         # delete_centers=self.actual_to_selected_coords(del_centers)
         # 将字符串形式的坐标列表转换为真正的列表
         if side_dangban_centers and isinstance(side_dangban_centers, str):
@@ -20349,6 +20355,108 @@ class TubeLayoutEditor(QMainWindow):
             )
             sql_statements.append(insert_sql)
         return sql_statements
+
+    def _product_centers_snapshot_paths(self):
+        """返回产品管心快照的候选路径，产品目录优先、程序目录兜底。"""
+        product_id = str(getattr(self, "productID", None) or "unknown").strip()
+        fallback_dir = os.path.join(os.path.dirname(__file__), "coords")
+        candidate_dirs = []
+
+        conn = None
+        try:
+            conn = create_product_connection()
+            if conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        SELECT 产品文件夹绝对路径
+                        FROM 产品设计活动表
+                        WHERE 产品ID = %s
+                        LIMIT 1
+                        """,
+                        (product_id,),
+                    )
+                    row = cursor.fetchone()
+                    if row and isinstance(row, dict):
+                        product_dir = str(row.get("产品文件夹绝对路径") or "").strip()
+                        if product_dir:
+                            candidate_dirs.append(product_dir)
+        except Exception:
+            pass
+        finally:
+            try:
+                if conn and conn.open:
+                    conn.close()
+            except Exception:
+                pass
+
+        candidate_dirs.append(fallback_dir)
+        paths = []
+        for directory in candidate_dirs:
+            path = os.path.join(directory, f"{product_id}.json")
+            if path not in paths:
+                paths.append(path)
+        return paths
+
+    def _load_saved_current_centers_from_product_json(self):
+        """读取上次保存后的实际管心；无有效快照时返回 None。"""
+        for snapshot_path in TubeLayoutEditor._product_centers_snapshot_paths(self):
+            if not os.path.isfile(snapshot_path):
+                continue
+            try:
+                with open(snapshot_path, "r", encoding="utf-8") as snapshot_file:
+                    raw_centers = json.load(snapshot_file)
+                if not isinstance(raw_centers, list):
+                    continue
+
+                centers = []
+                valid = True
+                for center in raw_centers:
+                    if not isinstance(center, (list, tuple)) or len(center) < 2:
+                        valid = False
+                        break
+                    x, y = float(center[0]), float(center[1])
+                    if not math.isfinite(x) or not math.isfinite(y):
+                        valid = False
+                        break
+                    centers.append((x, y))
+                if valid:
+                    return centers
+            except (OSError, TypeError, ValueError, json.JSONDecodeError):
+                continue
+        return None
+
+    def _restore_saved_current_centers_snapshot(self):
+        """按已保存实际管心收敛重算结果；只删除重现管，不改变原删除分类。"""
+        saved_centers = self._load_saved_current_centers_from_product_json()
+        if saved_centers is None:
+            return False
+
+        try:
+            current_centers = list(getattr(self, "current_centers", None) or [])
+
+            def key6(center):
+                return (round(float(center[0]), 6), round(float(center[1]), 6))
+
+            current_keys = {key6(center) for center in current_centers}
+            saved_keys = {key6(center) for center in saved_centers}
+        except (TypeError, ValueError, IndexError):
+            return False
+
+        # 快照包含本次重算布局中不存在的管心，说明参数/布管方案已经变化；
+        # 此时跳过整个快照，避免旧文件误删新布局。
+        if not saved_keys.issubset(current_keys):
+            print("[加载] 已保存管心快照与当前布管方案不一致，跳过快照兜底")
+            return False
+
+        reappeared_centers = [
+            center for center in current_centers if key6(center) not in saved_keys
+        ]
+        if reappeared_centers:
+            # 复用现有图元删除流程，但不写入 del_centers：滑道、防冲板、拉杆等
+            # 删除来源仍由各自原有数据恢复，避免改变后续撤销/重布逻辑。
+            self.delete_huanreguan(reappeared_centers, for_slipway=True)
+        return True
 
     def save_current_centers_to_product_json(self):
         """
