@@ -112,6 +112,35 @@ ENABLE_RADIAL_HOLES = True
 # TODO 吊环螺钉功能开关
 ENABLE_SCREW_RING = True
 
+TUBE_ARRANGEMENT_OPTIONS = [
+    "正三角形排列（30°）",
+    "转角正三角形排列（60°）",
+    "正方形排列（90°）",
+    "转角正方形排列（45°）",
+]
+_TUBE_ARRANGEMENT_CANONICAL_NAMES = {
+    "正三角形排列（30°）": "正三角形",
+    "转角正三角形排列（60°）": "转角正三角形",
+    "正方形排列（90°）": "正方形",
+    "转角正方形排列（45°）": "转角正方形",
+}
+_TUBE_ARRANGEMENT_CODES = {
+    "正三角形": "1",
+    "转角正三角形": "0",
+    "正方形": "2",
+    "转角正方形": "3",
+    "正三角形排列（30°）": "1",
+    "转角正三角形排列（60°）": "0",
+    "正方形排列（90°）": "2",
+    "转角正方形排列（45°）": "3",
+}
+
+
+def _normalize_tube_arrangement_name(value):
+    value = str(value or "").strip()
+    return _TUBE_ARRANGEMENT_CANONICAL_NAMES.get(value, value)
+
+
 edge_centers: List[Tuple[float, float]] = []
 
 # 预定义（配置库 user_config）读库/解析/缓存见：
@@ -7748,6 +7777,9 @@ class TubeLayoutEditor(QMainWindow):
                 item = table.item(row, 2)
                 param_value = item.text() if item else ""
 
+            if param_name == "换热管排列方式":
+                param_value = _normalize_tube_arrangement_name(param_value)
+
             self.left_data_pd.append({"参数名": param_name, "参数值": param_value})
 
             # 提取关键参数
@@ -7981,12 +8013,7 @@ class TubeLayoutEditor(QMainWindow):
             "换热管壁厚 δ": ("LB_TubeThick", None),
             "换热管排列方式": (
                 "LB_RangeType",
-                {
-                    "正三角形": "1",
-                    "转角正三角形": "0",
-                    "正方形": "2",
-                    "转角正方形": "3",
-                },
+                _TUBE_ARRANGEMENT_CODES,
             ),
             "换热管公称长度 LN": ("LB_TubeLong", None),
             "换热管中心距 S": ("LB_S", None),
@@ -8599,6 +8626,9 @@ class TubeLayoutEditor(QMainWindow):
                 item = table.item(row, 2)
                 param_value = item.text() if item else ""
 
+            if param_name == "换热管排列方式":
+                param_value = _normalize_tube_arrangement_name(param_value)
+
             self.left_data_pd.append({"参数名": param_name, "参数值": param_value})
 
             # 提取关键参数
@@ -8712,12 +8742,7 @@ class TubeLayoutEditor(QMainWindow):
             "换热管壁厚 δ": ("LB_TubeThick", None),
             "换热管排列方式": (
                 "LB_RangeType",
-                {
-                    "正三角形": "1",
-                    "转角正三角形": "0",
-                    "正方形": "2",
-                    "转角正方形": "3",
-                },
+                _TUBE_ARRANGEMENT_CODES,
             ),
             "换热管公称长度 LN": ("LB_TubeLong", None),
             "换热管中心距 S": ("LB_S", None),
@@ -11736,18 +11761,21 @@ class TubeLayoutEditor(QMainWindow):
 
         if not range_type_value:
             print(
-                "未选择换热管排列方式（需为'正三角形'/'转角正三角形'/'正方形'/'转角正方形'）"
+                "未选择换热管排列方式（请选择正三角形排列（30°）、"
+                "转角正三角形排列（60°）、正方形排列（90°）或转角正方形排列（45°））"
             )
             return
 
         # 排列方式归类：将细分类型统一为文档匹配的大类（三角形排列/正方形排列）
+        range_type_value = _normalize_tube_arrangement_name(range_type_value)
         if range_type_value in ["正三角形", "转角正三角形"]:
             unified_range_type = "三角形排列"
         elif range_type_value in ["正方形", "转角正方形"]:
             unified_range_type = "正方形排列"
         else:
             print(
-                f"无效的排列方式：{range_type_value}，仅支持'正三角形'/'转角正三角形'/'正方形'/'转角正方形'"
+                f"无效的排列方式：{range_type_value}，请选择正三角形排列（30°）、"
+                "转角正三角形排列（60°）、正方形排列（90°）或转角正方形排列（45°）"
             )
             return
 
@@ -11817,6 +11845,7 @@ class TubeLayoutEditor(QMainWindow):
             return None
 
         # 2) 归类排列方式
+        range_type_value = _normalize_tube_arrangement_name(range_type_value)
         if range_type_value in ["正三角形", "转角正三角形"]:
             unified_range_type = "三角形排列"
         elif range_type_value in ["正方形", "转角正方形"]:
@@ -14169,13 +14198,15 @@ class TubeLayoutEditor(QMainWindow):
             range_type_item = self.param_table.item(range_type_row, 2)
             range_type_raw = range_type_item.text().strip() if range_type_item else ""
         # 排列方式归类判断
+        range_type_raw = _normalize_tube_arrangement_name(range_type_raw)
         if range_type_raw in ["正三角形", "转角正三角形"]:
             range_type = "三角形排列"
         elif range_type_raw in ["正方形", "转角正方形"]:
             range_type = "正方形排列"
         else:
             print(
-                f"无效排列方式：{range_type_raw}，仅支持'正三角形'/'转角正三角形'/'正方形'/'转角正方形'"
+                f"无效排列方式：{range_type_raw}，请选择正三角形排列（30°）、"
+                "转角正三角形排列（60°）、正方形排列（90°）或转角正方形排列（45°）"
             )
             return
 
@@ -14458,6 +14489,7 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 range_type_raw = ""
 
+            range_type_raw = _normalize_tube_arrangement_name(range_type_raw)
             if range_type_raw in ["正三角形", "转角正三角形"]:
                 range_type = "三角形排列"
             elif range_type_raw in ["正方形", "转角正方形"]:
@@ -17347,9 +17379,22 @@ class TubeLayoutEditor(QMainWindow):
                     elif param["参数名"] == "分程布置形式":
                         combo.addItems(["未选择", "形式1", "形式2", "形式3"])
                     elif param["参数名"] == "换热管排列方式":
-                        combo.addItems(
-                            ["正三角形", "转角正三角形", "正方形", "转角正方形"]
+                        combo.addItems(TUBE_ARRANGEMENT_OPTIONS)
+                        current_value = str(param.get("参数值") or "").strip()
+                        canonical_value = _normalize_tube_arrangement_name(
+                            current_value
                         )
+                        display_value = next(
+                            (
+                                label
+                                for label, canonical in
+                                _TUBE_ARRANGEMENT_CANONICAL_NAMES.items()
+                                if canonical == canonical_value
+                            ),
+                            None,
+                        )
+                        if display_value is not None:
+                            combo.setCurrentText(display_value)
                     elif param["参数名"] == "折流板切口方向":
                         combo.addItems(["水平上下", "垂直左右"])
                     elif param["参数名"] == "拉杆形式":
@@ -22520,6 +22565,9 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 item = table.item(row, 2)
                 param_value = item.text() if item else ""
+
+            if param_name == "换热管排列方式":
+                param_value = _normalize_tube_arrangement_name(param_value)
 
             # 存入列表
             self.left_data_list.append({"参数名": param_name, "参数值": param_value})
