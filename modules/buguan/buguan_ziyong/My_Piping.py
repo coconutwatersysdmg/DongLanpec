@@ -18,9 +18,9 @@ import pandas as pd
 import pymysql
 from PyQt5.QtCore import QLineF
 from PyQt5.QtCore import QPointF, QRectF
-from PyQt5.QtCore import QSize, QTimer, QPoint, QEvent, Qt
+from PyQt5.QtCore import QSize, QTimer, QPoint, QEvent, Qt, QLocale
 from PyQt5.QtGui import QBrush, QIcon, QPixmap, QPainter
-from PyQt5.QtGui import QColor, QPen, QPolygonF, QPainterPath, QIntValidator
+from PyQt5.QtGui import QColor, QPen, QPolygonF, QPainterPath, QIntValidator, QDoubleValidator
 from PyQt5.QtWidgets import QGraphicsEllipseItem, QGraphicsLineItem
 from PyQt5.QtWidgets import (
     QMainWindow,
@@ -11466,58 +11466,56 @@ class TubeLayoutEditor(QMainWindow):
                                 dl_value = _calc_dl_by_type(di_value, do_value)
                     
                     elif node_lower == "d":
-                        # e-d 节点：DL = min{[Dis - 2 * ((b / cosf + c) * tanf + b) - 2 * j], (Dis - 2 * b3), (Dit - 2 * b3)}
-                        # 需要参数：b, c, j, cosf, tanf
-                        b_raw = _get_formula_old("d")
-                        c_raw = _get_formula_old("c")
-                        j_raw = _get_formula_old("j")
-                        cosf_raw = _get_formula_old("e")
-                        tanf_raw = _get_formula_old("f")
-                        if b_raw is None or c_raw is None or j_raw is None or cosf_raw is None or tanf_raw is None:
-                            print("[update_tube_layout_circle_dl] e-d 节点快照中缺少 b/c/j/cosf/tanf，回退到原逻辑计算 DL")
+                        # e-d 节点（需求文件 表1 图 d)，Ps>4MPa）：
+                        #   DL = Di - 2 × (2 × R2 + d1 × tanα2)
+                        # 只依赖 R2、d1、α2（α1、b、p、h、e 不参与该公式）；
+                        # 参数映射（e_d）：R2→R2，d1→d1，α2→α2（α2 按角度/度输入）。
+                        # 例：Di=800、R2=5、d1=5、α2=30° → 800-2×(2×5+5×tan30)=774.22
+
+                        def _num_or_none(_value):
+                            """空值/非数字统一返回 None，避免 float('') 直接抛异常。"""
+                            try:
+                                if _value is None:
+                                    return None
+                                _text = str(_value).strip()
+                                return float(_text) if _text else None
+                            except (TypeError, ValueError):
+                                return None
+
+                        r2_val = _num_or_none(_get_any("R2"))
+                        d1_val = _num_or_none(_get_any("d1"))
+                        a2_val = _num_or_none(_get_any("α2", "a2", "alpha2"))
+
+                        if r2_val is None or d1_val is None or a2_val is None:
+                            print(
+                                "[update_tube_layout_circle_dl] e-d 节点快照中缺少 R2/d1/α2，回退到原逻辑计算 DL: "
+                                f"R2={_get_any('R2')!r}, d1={_get_any('d1')!r}, α2={_get_any('α2')!r}"
+                            )
                             dl_value = _calc_dl_by_type(di_value, do_value)
                         else:
                             try:
                                 dis = float(di_value)
                                 dit = float(dit_value)
-                                b_val = float(b_raw)
-                                c_val = float(c_raw)
-                                j_val = float(j_raw)
-                                cosf_val = float(cosf_raw)
-                                tanf_val = float(tanf_raw)
-                                
-                                # 假设 cosf 和 tanf 是角度值（度），转换为弧度后计算 cos 和 tan
-                                # 如果值在 [-1, 1] 范围内，假设已经是计算好的 cos/tan 值
-                                # 否则假设是角度值（度），需要转换为弧度
-                                if abs(cosf_val) <= 1.0:
-                                    cos_f = cosf_val  # 已经是 cos 值
-                                else:
-                                    cos_f = math.cos(math.radians(cosf_val))  # 角度值，转换为弧度后计算 cos
-                                
-                                if abs(tanf_val) <= 1.0:
-                                    tan_f = tanf_val  # 已经是 tan 值
-                                else:
-                                    tanf_rad = math.radians(tanf_val)  # 角度值，转换为弧度
-                                    tan_f = math.tan(tanf_rad)  # 计算 tan
-                                
-                                # 检查除零和异常值
-                                if abs(cos_f) < 1e-8 or abs(tan_f) < 1e-8:
-                                    print("[update_tube_layout_circle_dl] e-d 节点 cosf 或 tanf 过小，回退原逻辑")
-                                    dl_value = _calc_dl_by_type(di_value, do_value)
-                                else:
-                                    # 计算表达式1：Dis - 2 * ((b / cosf + c) * tanf + b) - 2 * j
-                                    inner_part = (b_val / cos_f + c_val) * tan_f + b_val
-                                    dl_expr1 = dis - 2 * inner_part - 2 * j_val
-                                    dl_expr2 = dis - 2 * b3
-                                    dl_expr3 = dit - 2 * b3
-                                    
-                                    # 取最小值
-                                    dl_value = min(dl_expr1, dl_expr2, dl_expr3)
-                                    
-                                    print(f"[update_tube_layout_circle_dl] e-d 节点计算 DL: b={b_val}, c={c_val}, j={j_val}, "
-                                          f"cosf={cosf_val}, tanf={tanf_val}, b3={b3:.2f}, "
-                                          f"expr1={dl_expr1:.3f}, expr2={dl_expr2:.3f}, expr3={dl_expr3:.3f}, "
-                                          f"DL={dl_value:.3f}")
+                                a2_rad = math.radians(a2_val)
+                                if abs(math.cos(a2_rad)) < 1e-8:
+                                    raise ValueError("α2 不能为 90°")
+
+                                # 表达式1（需求文件公式）：Di - 2 × (2 × R2 + d1 × tanα2)
+                                offset = 2 * r2_val + d1_val * math.tan(a2_rad)
+                                dl_expr1 = dis - 2 * offset
+                                # 兜底：布管区边缘到壳体内壁的最小距离 b3=max(0.25do, 8)
+                                dl_expr2 = dis - 2 * b3
+                                dl_expr3 = dit - 2 * b3
+
+                                dl_value = min(dl_expr1, dl_expr2, dl_expr3)
+
+                                print(
+                                    f"[update_tube_layout_circle_dl] e-d 节点计算 DL: R2={r2_val}, d1={d1_val}, "
+                                    f"α2={a2_val}°, b3={b3:.2f}, "
+                                    f"expr1 = {dis:.2f} - 2×({2 * r2_val:.2f} + {d1_val:.2f}×tan{a2_val}°) "
+                                    f"= {dl_expr1:.3f}, expr2={dl_expr2:.3f}, expr3={dl_expr3:.3f}, "
+                                    f"DL={dl_value:.3f}"
+                                )
                             except Exception as e:
                                 print(f"[update_tube_layout_circle_dl] e-d 节点计算异常，回退原逻辑: {e}")
                                 dl_value = _calc_dl_by_type(di_value, do_value)
@@ -17293,8 +17291,11 @@ class TubeLayoutEditor(QMainWindow):
                         "57",
                     ]
                     combo.addItems(standard_dos)
-                    # 允许先输入再校验：超限时在提交链路弹窗回滚（若上限卡死在57则无法输入89）
-                    validator = QIntValidator(1, 99999, self)
+                    # 需求：参数类型为数值型(double)，手输允许小数（如 25.4、19.05）；
+                    # 上限仍不在输入阶段卡死，由提交链路校验 do ≤ 57（见 validate_tube_do_input）
+                    validator = QDoubleValidator(0.0, 99999.0, 2, self)
+                    validator.setNotation(QDoubleValidator.StandardNotation)
+                    validator.setLocale(QLocale.c())  # 小数点统一为 “.”，避免跟随系统区域变成 “,”
                     combo.setValidator(validator)
 
                     try:
@@ -21399,6 +21400,11 @@ class TubeLayoutEditor(QMainWindow):
                     print(f"[My_Piping] 根据管板形式快照更新 DL 时发生异常: {e}")
                 finally:
                     self._suppress_open_s_dl_autoupdate = prev_suppress
+            elif self.is_suitable_tube_sheet:
+                print(
+                    "[My_Piping] 保留库中布管限定圆 DL（非首次打开/切页刷新不自动覆盖）；"
+                    "需要按管板节点公式重算时，重新点选管板节点图或修改 Dis/换热管外径即可"
+                )
 
         try:
             from pprint import pformat

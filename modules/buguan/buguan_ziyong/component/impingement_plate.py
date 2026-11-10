@@ -38,6 +38,38 @@ def default_baffle_placement(baffle_type=None):
     return "参照管中心连线"
 
 
+def select_flat_plate_outward_normal(point1, point2):
+    """平板形防冲板的外移法向：始终指向背离坐标原点（筒体中心）的一侧。
+
+    与圆弧形 build_arc_local_coordinate_system 的判据一致：比较两候选法向
+    移动单位距离后到全局圆心的距离，取更远者。参照管在上半圆时结果等价于
+    原来的“屏幕上方”；在下半圆时自动镜像到参照管下方（外侧）。
+    退化情况（连线近似穿过圆心）沿用旧的“向上”规则，不改变历史行为。
+    """
+    p1x, p1y = float(point1[0]), float(point1[1])
+    p2x, p2y = float(point2[0]), float(point2[1])
+    dx = p2x - p1x
+    dy = p2y - p1y
+    length = math.hypot(dx, dy)
+    if length <= 1e-9:
+        return 0.0, -1.0
+    ux, uy = dx / length, dy / length
+    # 候选法向量：(-uy, ux) 与其反向 (uy, -ux)
+    n1x, n1y = -uy, ux
+    n2x, n2y = uy, -ux
+    mx = (p1x + p2x) / 2.0
+    my = (p1y + p2y) / 2.0
+    d1 = (mx + n1x) ** 2 + (my + n1y) ** 2
+    d2 = (mx + n2x) ** 2 + (my + n2y) ** 2
+    tolerance = 1e-9 * max(1.0, d1, d2)
+    if abs(d1 - d2) <= tolerance:
+        # 退化情况：连线近似穿过圆心，无法分辨外侧，沿用旧的“向上”规则
+        return (n1x, n1y) if n1y <= n2y else (n2x, n2y)
+    if d1 > d2:
+        return n1x, n1y
+    return n2x, n2y
+
+
 def _get_clickable_rect_item():
     """延迟导入 ClickableRectItem，避免循环导入。"""
     from ..My_Piping import ClickableRectItem
@@ -1450,7 +1482,7 @@ def build_impingement_plate(
 
         # 按“放置位置”规则重算平板形防冲板的绘制端点
         # Ⅰ 参照管中心连线：长度 = 两参照管中心连线长度 - 1*do，线段位于两参照管之间
-        # Ⅱ 参照管顶部连线：长度 = 两参照管中心连线长度，线段整体上移 do/2
+        # Ⅱ 参照管顶部连线：长度 = 两参照管中心连线长度，线段沿法向整体外移 do/2（背离圆心一侧）
         placement_mode = str(
             baffle_placement or default_baffle_placement("平板形")
         ).strip()
@@ -1529,7 +1561,7 @@ def build_impingement_plate(
         draw_p2 = (p2x, p2y)
 
         if "顶部" in placement_mode:
-            # 与参照管中心连线平行，并沿法向平移到“上方”
+            # 与参照管中心连线平行，并沿法向平移到背离圆心的外侧
             r_tube = (do_value / 2.0) if isinstance(do_value, (int, float)) and do_value > 0 else 0.0
             # 平板形防冲板的“厚度”会影响与换热管的重合：需要保证线段整体在两管外切圆之上
             thk_plate = 0.0
@@ -1538,26 +1570,20 @@ def build_impingement_plate(
             except Exception:
                 thk_plate = 0.0
             margin = 0.5  # mm，少量安全余量，避免视觉重叠/浮点误差
-            # 候选法向量：(-uy, ux) 与其反向 (uy, -ux)
-            n1x, n1y = -uy, ux
-            n2x, n2y = uy, -ux
-            # 选择更“向上”(y分量更小)的方向
-            if n1y <= n2y:
-                nx, ny = n1x, n1y
-            else:
-                nx, ny = n2x, n2y
-            # 计算最小平移量：确保新线段在两管“上方”（Qt坐标系 y 越小越上）
-            required_y_up = r_tube + (thk_plate / 2.0) + margin
+            # 法向始终指向背离圆心（坐标原点）的一侧：上半圆=上方，下半圆=下方镜像
+            nx, ny = select_flat_plate_outward_normal((p1x, p1y), (p2x, p2y))
+            # 计算最小平移量：确保新线段在两管外侧保持 required_gap 的净距
+            # （Qt 坐标系 y 越小越上；上/下半圆按 |ny| 对称，严格镜像）
+            required_gap = r_tube + (thk_plate / 2.0) + margin
             shift = r_tube  # 保留原逻辑基准（至少 do/2）
             try:
-                if ny < -1e-6:
-                    # ny 为负表示确实向上。保证 ny*shift <= -required_y_up
-                    shift = max(shift, required_y_up / (-ny))
+                if abs(ny) > 1e-6:
+                    # 保证沿法向的垂直净距 >= required_gap（|ny|*shift >= required_gap）
+                    shift = max(shift, required_gap / abs(ny))
                 else:
                     # 极端情况：法向几乎不带 y 分量（例如两管近似竖直连线）
-                    # 直接按“向上”移动 required_y_up
-                    nx, ny = 0.0, -1.0
-                    shift = max(shift, required_y_up)
+                    # 沿已选定的外侧法向直接平移 required_gap
+                    shift = max(shift, required_gap)
             except Exception:
                 pass
 

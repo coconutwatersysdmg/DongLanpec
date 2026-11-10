@@ -270,6 +270,26 @@ class TubeLayoutCircleTests(unittest.TestCase):
         # min(1190, 1216.3..., 1184) = 1184; q-l would incorrectly produce 1148.3.
         self.assertEqual(self.editor.value("布管限定圆 DL"), 1184)
 
+    def test_bem_d_plate_uses_requirement_formula_2r2_plus_d1_tana2(self):
+        """需求文件图 d)：DL = Di - 2×(2×R2 + d1×tanα2)，DN800/do25 → 774.2。"""
+        self.editor.heat_exchanger = "BEM"
+        self.editor.setup_parameters(ProductConnection(
+            diameter="800", saved_di="800", saved_dl="784.0"
+        ).params)
+        self.editor.param_table.item(1, 2).setText("800")
+        self.editor.is_suitable_tube_sheet = True
+        # α1/p/h/e 不参与图 d) 公式，即使为空也不应回退到 b3 公式
+        self.editor.tube_sheet_params_snapshot = {
+            "plate_type": "e_d", "main_category": "e", "node_name": "d",
+            "params": [("R1", "5"), ("R2", "5"), ("d1", "5"), ("b", "2"),
+                       ("α1", ""), ("α2", "30"), ("p", "2"), ("h", "10"), ("e", "0")],
+        }
+
+        self.editor.update_tube_layout_circle_dl()
+
+        # 800 - 2×(2×5 + 5×tan30°) = 774.23；b3 兜底 784 不得覆盖该值
+        self.assertAlmostEqual(self.editor.value("布管限定圆 DL"), 774.2, places=1)
+
     def test_other_supported_plate_nodes_use_renamed_formula_parameters(self):
         self.editor.setup_parameters(ProductConnection(saved_di="1200", saved_dl="1100").params)
         self.editor.is_suitable_tube_sheet = True
@@ -280,7 +300,8 @@ class TubeLayoutCircleTests(unittest.TestCase):
             ("AEM", "e_a", {"d3": "20"}, 1160),
             ("AEM", "e_b", {"b": "20", "e": "3", "R1": "2"}, 1154),
             ("BEM", "e_c", {"b": "20", "e": "3", "R1": "2"}, 1154),
-            ("AEM", "e_d", {"b": "2", "d1": "1", "e": "3", "α1": "45", "α2": "45"}, 1182.3),
+            # e_d 按需求文件图 d)：DL = Di - 2×(2×R2 + d1×tanα2)
+            ("AEM", "e_d", {"R2": "12", "d1": "5", "α1": "60", "α2": "30"}, 1146.2),
             ("BEM", "e_e", {"b": "2", "d2": "1", "e": "3", "α1": "45", "α2": "45"}, 1182.3),
             ("BEM", "e_f", {"R1": "10", "e": "3"}, 1154),
         )
