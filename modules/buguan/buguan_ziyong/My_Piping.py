@@ -14284,7 +14284,7 @@ class TubeLayoutEditor(QMainWindow):
 
         # 4. 按换热器类型+管程数更新中心距
         # 4.1 浮头式换热器（AES、BES）
-        if self.heat_exchanger in ["AES", "BES", "NEN", "BEM", "NEN(H)"]:
+        if self.heat_exchanger in ["AES", "BES", "NEN", "BEM", "AEM", "NEN(H)"]:
             # 获取浮头式对应的中心距（竖直/水平一致）
             if do_value not in aes_bes_map or range_type not in aes_bes_map[do_value]:
                 print(
@@ -16072,7 +16072,7 @@ class TubeLayoutEditor(QMainWindow):
                     QMessageBox.warning(
                         self,
                         "输入错误",
-                        "您输入的数值小于0或已超限，请重新输入！",
+                        "参数“隔条位置尺寸 W”必须大于0且小于布管限定圆 DL 的一半，请重新输入！",
                     )
                     rollback_text = str(
                         getattr(self, "_last_valid_divider_W_text", "")
@@ -23418,7 +23418,7 @@ class TubeLayoutEditor(QMainWindow):
                 QMessageBox.warning(
                     self,
                     "输入错误",
-                    "您输入的数值小于0或已超限，请重新输入！",
+                    "参数“隔条位置尺寸 W”必须大于0且小于布管限定圆 DL 的一半，请重新输入！",
                 )
 
             rollback_text = str(getattr(self, "_last_valid_divider_W_text", "")).strip()
