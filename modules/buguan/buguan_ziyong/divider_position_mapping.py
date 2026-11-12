@@ -156,7 +156,7 @@ def get_divider_position_w(dn_value, tube_pass_form, do_value):
     
     参数:
         dn_value: 公称直径（DN），如 300, 400, 500等
-        tube_pass_form: 管程分程形式，如 "4.1", "4.3", "6.1", "6.2"
+        tube_pass_form: 管程分程形式，如 "4.1"、"4a"、"4a.1" 等
         do_value: 换热管外径，如 19 或 25
     
     返回:
@@ -164,13 +164,24 @@ def get_divider_position_w(dn_value, tube_pass_form, do_value):
     """
     if dn_value not in DIVIDER_POSITION_DATA:
         return None
-    
+
+    form_key = str(tube_pass_form).strip().lower()
+    for local_cat, table_form in {
+        "4a": "4.1",
+        "4c": "4.3",
+        "6a": "6.1",
+        "6b": "6.2",
+    }.items():
+        if form_key == local_cat or form_key.startswith(f"{local_cat}."):
+            form_key = table_form
+            break
+
     dn_data = DIVIDER_POSITION_DATA[dn_value]
-    
-    if tube_pass_form not in dn_data:
+
+    if form_key not in dn_data:
         return None
-    
-    form_data = dn_data[tube_pass_form]
+
+    form_data = dn_data[form_key]
     
     if do_value not in form_data:
         return None

@@ -98,6 +98,11 @@ from modules.buguan.buguan_ziyong.component.center_dangguan import (
 # product_id = 'PD2025092421444001'
 product_id = "PD202509291"
 
+
+def _is_zero_divider_position_form(tube_pass_form):
+    """Whether this pass form intentionally has no divider-position dimension."""
+    return normalize_local_tube_pass_cat(tube_pass_form) == "4b"
+
 # product_id = 'PD2026011316323301'
 
 # TODO 轴向设计页面开关
@@ -9859,7 +9864,9 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 判断是否应该不可编辑：管程数为1或2 或 管程分程形式为"4.2"
                 should_disable = (
-                        (tube_pass == 1) or (tube_pass == 2) or (tube_pass_form == "4.2")
+                    (tube_pass == 1)
+                    or (tube_pass == 2)
+                    or _is_zero_divider_position_form(tube_pass_form)
                 )
 
                 # 当需要禁用时，直接隐藏整行；否则显示整行
@@ -13197,7 +13204,7 @@ class TubeLayoutEditor(QMainWindow):
             w_value = None
 
             # 根据Excel表格的数据映射关系
-            if tube_pass_form == "4.2":
+            if _is_zero_divider_position_form(tube_pass_form):
                 # 4.2 分程形式：隔条位置尺寸 W = 0，且该参数项变为灰色不可编辑
                 w_value = 0
                 print(
@@ -16006,6 +16013,11 @@ class TubeLayoutEditor(QMainWindow):
             # 如果是用户手动修改"隔条位置尺寸 W"，打印提示并调用用户更新函数
             # 注意：程序自动更新时已经在前面return了，这里只会是用户手动修改
             if param_name == "隔条位置尺寸 W":
+                if _is_zero_divider_position_form(
+                    getattr(self, "tube_pass_form_value", None)
+                ):
+                    return
+
                 # 若当前处于其它参数（如管程程数）触发的联动级联中，
                 # W 可能会被程序临时写成 0.00；此时不应按“手动输入”弹范围警告。
                 if getattr(self, "_in_on_combobox_cascade", False):
@@ -23324,6 +23336,11 @@ class TubeLayoutEditor(QMainWindow):
             Enter/Return 直接布管时，确保“隔条位置尺寸 W”也按范围校验：
             0 < W < DL/2
             """
+            if _is_zero_divider_position_form(
+                getattr(self, "tube_pass_form_value", None)
+            ):
+                return True
+
             try:
                 from PyQt5.QtWidgets import QComboBox, QTableWidgetItem
             except Exception:
