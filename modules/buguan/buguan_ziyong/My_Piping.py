@@ -9809,7 +9809,7 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 恢复行内单元格为默认可编辑、白色背景（与其他行保持一致）
                     for col in range(self.param_table.columnCount()):
-                        if col in [0, 1]:
+                        if col in [0, 1, 3]:
                             continue
 
                         cell_widget = self.param_table.cellWidget(target_row, col)
@@ -9838,7 +9838,7 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 恢复行内单元格为默认可编辑、白色背景（与其他行保持一致）
                     for col in range(self.param_table.columnCount()):
-                        if col in [0, 1]:
+                        if col in [0, 1, 3]:
                             continue
 
                         cell_widget = self.param_table.cellWidget(target_row, col)
@@ -9879,7 +9879,7 @@ class TubeLayoutEditor(QMainWindow):
 
                     # 恢复行内单元格为默认可编辑、白色背景（与其他行保持一致）
                     for col in range(self.param_table.columnCount()):
-                        if col in [0, 1]:
+                        if col in [0, 1, 3]:
                             continue
 
                         cell_widget = self.param_table.cellWidget(target_row, col)
@@ -13212,8 +13212,8 @@ class TubeLayoutEditor(QMainWindow):
                 )
                 # 设置参数行为灰色不可编辑状态
                 for col in range(self.param_table.columnCount()):
-                    # 跳过第0列（序号）和第1列（参数名），它们应该始终保持不可编辑
-                    if col in [0, 1]:
+                    # 序号、参数名和单位列不参与参数值的编辑状态切换
+                    if col in [0, 1, 3]:
                         continue
 
                     cell_widget = self.param_table.cellWidget(w_row, col)
@@ -13230,8 +13230,8 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 # 其他分程形式：恢复正常可编辑状态
                 for col in range(self.param_table.columnCount()):
-                    # 跳过第0列（序号）和第1列（参数名），它们应该始终保持不可编辑
-                    if col in [0, 1]:
+                    # 序号、参数名和单位列不参与参数值的编辑状态切换
+                    if col in [0, 1, 3]:
                         continue
 
                     cell_widget = self.param_table.cellWidget(w_row, col)
@@ -13521,8 +13521,8 @@ class TubeLayoutEditor(QMainWindow):
                 )
                 # 设置参数行为灰色不可编辑状态
                 for col in range(self.param_table.columnCount()):
-                    # 跳过第0列（序号）和第1列（参数名），它们应该始终保持不可编辑
-                    if col in [0, 1]:
+                    # 序号、参数名和单位列不参与参数值的编辑状态切换
+                    if col in [0, 1, 3]:
                         continue
 
                     cell_widget = self.param_table.cellWidget(w_row, col)
@@ -13539,8 +13539,8 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 # 其他分程形式：恢复正常可编辑状态
                 for col in range(self.param_table.columnCount()):
-                    # 跳过第0列（序号）和第1列（参数名），它们应该始终保持不可编辑
-                    if col in [0, 1]:
+                    # 序号、参数名和单位列不参与参数值的编辑状态切换
+                    if col in [0, 1, 3]:
                         continue
 
                     cell_widget = self.param_table.cellWidget(w_row, col)
