@@ -6,6 +6,14 @@ from ast import literal_eval
 import pymysql
 
 
+def call_piping_interface(interface, input_json, product_id):
+    """按当前产品生成并锁住 PreDefined.json，作为内直径计算的第二个参数。"""
+    from modules.yudingyi.product_config import product_predefined_json
+
+    with product_predefined_json(product_id) as predefined_json:
+        return interface.IntergratedDi(input_json, predefined_json)
+
+
 def _cross_oab(o, a, b):
     return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
 

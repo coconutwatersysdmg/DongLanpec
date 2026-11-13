@@ -25,6 +25,7 @@ import json
 import clr
 
 from modules.chanpinguanli.chanpinguanli_main import product_manager
+from modules.buguan.buguan_ziyong.piping_calculations import call_piping_interface
 
 
 def safe_str(val, default="0"):
@@ -1763,7 +1764,7 @@ def cal_qiaotineizhijing_U(product_id, isDi_change, isDN_change, user_Di, user_D
     parsed = json.loads(json_input)
     compact_json = json.dumps(parsed, separators=(',', ':'))
     cpi = CalPartInterface()
-    outputjsonstr = cpi.IntergratedDi(compact_json)
+    outputjsonstr = call_piping_interface(cpi, compact_json, product_id)
     print(outputjsonstr)
     print("U型管输出json")
     return outputjsonstr
@@ -7741,7 +7742,7 @@ def cal_qiaotineizhijing_KU(product_id, isDi_change, isDN_change, user_Di, user_
     parsed = json.loads(json_input)
     compact_json = json.dumps(parsed, separators=(',', ':'))
     cpi = CalPartInterface()
-    outputjsonstr = cpi.IntergratedDi(compact_json)
+    outputjsonstr = call_piping_interface(cpi, compact_json, product_id)
     print(outputjsonstr)
     print("U型管输出json")
     return outputjsonstr
@@ -10040,7 +10041,7 @@ def cal_qiaotineizhijing_S(product_id, isDi_change, isDN_change, user_Di, user_D
     parsed = json.loads(json_input)
     compact_json = json.dumps(parsed, separators=(',', ':'))
     cpi = CalPartInterface()
-    outputjsonstr = cpi.IntergratedDi(compact_json)
+    outputjsonstr = call_piping_interface(cpi, compact_json, product_id)
     print(outputjsonstr)
     print("浮头式输出json")
     return outputjsonstr
@@ -12902,7 +12903,7 @@ def cal_qiaotineizhijing_NEN(product_id, isDi_change, isDN_change, user_Di, user
     parsed = json.loads(json_input)
     compact_json = json.dumps(parsed, separators=(',', ':'))
     cpi = CalPartInterface()
-    outputjsonstr = cpi.IntergratedDi(compact_json)
+    outputjsonstr = call_piping_interface(cpi, compact_json, product_id)
     print("outputjsonsrt",outputjsonstr)
     print("NEN输入json")
     return outputjsonstr
@@ -15843,7 +15844,7 @@ def cal_qiaotineizhijing_AEM(product_id, isDi_change, isDN_change, user_Di, user
     parsed = json.loads(json_input)
     compact_json = json.dumps(parsed, separators=(',', ':'))
     cpi = CalPartInterface()
-    outputjsonstr = cpi.IntergratedDi(compact_json)
+    outputjsonstr = call_piping_interface(cpi, compact_json, product_id)
     print("outputjsonsrt",outputjsonstr)
     print("NEN输入json")
     return outputjsonstr
