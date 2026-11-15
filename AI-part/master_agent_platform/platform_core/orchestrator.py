@@ -18,6 +18,7 @@ import pymysql
 from .fabric import BASE, Fabric, digest
 from .private_database import _options, assert_private, atomic_json, start_private
 from .review_loop import ReviewLoop
+from .bundled_database import ensure_database
 
 
 class Cancelled(RuntimeError):
@@ -88,11 +89,7 @@ class Orchestrator:
             self.fabric.end_task(task_id, fingerprint, state, response)
 
     def foundation(self, product=None):
-        config_path = self.fabric.home / "mysql" / "connection.local.json"
-        if not config_path.is_file():
-            raise RuntimeError("尚未初始化独立基础库，请先运行 bootstrap_database.py。")
-        config = json.loads(config_path.read_text(encoding="utf-8"))
-        start_private(self.fabric.home, config["mysql_home"], config["port"], progress=self.progress)
+        config = ensure_database(self.fabric.home, self.progress)
         receipt = self.fabric.home / "snapshots" / "foundation-snapshot.json"
         if not receipt.is_file():
             raise RuntimeError("独立基础库没有已验证快照回执。")
@@ -167,7 +164,8 @@ class Orchestrator:
         self.run_id = self.fabric.create_run(request)
         session_id = self.fabric.start_session(self.run_id, "generation")
         summary = dict(run_id=self.run_id, status="running", products=[],
-                       full_product_generated=False, calculation_input_generated=False)
+                       full_product_generated=False, calculation_input_generated=False,
+                       run_directory=str(self.fabric.home / "runs" / self.run_id))
         try:
             self.log("核对独立基础库与模板")
             self.foundation()

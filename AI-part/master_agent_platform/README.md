@@ -17,7 +17,9 @@
 
 ## 运行
 
-当前机器运行 `start.ps1`，或：
+Windows 新电脑双击本目录的 `start.bat`，也可运行 `start.ps1`。启动器会查找现有 Python/Anaconda 环境（包括 `D:\ProgramData\anaconda3\python.exe`）；首次启动自动准备自带数据库，进度直接显示在对话界面，不需要安装 MySQL 服务、填写源库配置或手动运行初始化命令。后续启动复用本机数据。
+
+运行包自带数据库，但仍使用现有 Python 环境；若尚未安装 Python 依赖，在本目录用该环境执行 `python -m pip install -r requirements.txt`。也可直接启动：
 
 ```powershell
 & 'D:\python3.9\python.exe' 'E:\DongLanpec\AI-part\master_agent_platform\run.py'
@@ -48,11 +50,13 @@
 & 'D:\python3.9\python.exe' 'E:\DongLanpec\AI-part\master_agent_platform\run_pipeline.py' --recheck-run '<任务ID>'
 ```
 
-本机独立 MySQL 已初始化在 `workspace/mysql/data`，端口 `13316`；启动任务时可启动/复用该实例，校验 datadir 后才使用。连接配置位于忽略提交的 `workspace/mysql/connection.local.json`，正常任务不读取原库配置。MySQL 可执行引擎目前使用本机 `E:\DongLanpec\mysql` 安装目录；数据目录与原业务实例分离。迁机/打包时仍需安装或携带 MySQL 运行时，并显式更新该引擎位置，当前不是单文件免安装发行版。
+平台自带 `bundled_database/mysql` 下的 MySQL 8.0.43 Windows x64 运行时，以及经过校验的基础数据种子：148 张表、47,151 条记录，包含材料、元件、产品定义、条件模板及“默认”配置；项目、产品和活动库仅提供空表结构。不会携带历史产品、任务、其它项目配置或本机密码。程序自动生成 `workspace/mysql/data`、随机本机密码、连接配置和校验回执；优先使用端口13316，占用时自动选择其它独立端口，监听本机127.0.0.1，不连接原3306业务库。
 
-Git 版本只包含源码、必要后台副本和配置示例；不包含 `workspace` 中的数据库、输入文件、运行记录和本地密钥。可选的管口在线模型配置参见 `vendor/nozzle_agent/config.example.json`，按需复制为同目录下已忽略的 `config.json`；未配置时使用本地规则引擎。
+中文、空格或较长路径通过本机应用数据目录中的兼容路径映射启动 MySQL，数据库实体仍位于本平台 workspace。已初始化的独立数据库目录迁移后会核对所有权并更新连接路径；这不等于历史任务内所有原文绝对路径都已迁移。更新代码不覆盖已有基础库和产品数据。跨机接续历史任务仍需另行迁移数据空间和文件引用。
 
-初始化与复制工具只在建库时使用：`bootstrap_database.py`。它只读源基础库，拒绝覆盖已有目标业务库。`bootstrap_agents.py` 在构建时复制后台源码与必要 DLL，排除密钥、历史、虚拟环境和原业务模块；运行时使用 `vendor` 副本。
+Git 和运行包包含源码、后台副本、自带数据库引擎与默认基础数据；不包含 `workspace` 中的运行数据库、输入文件、任务记录和本地密钥。可选的管口在线模型配置参见 `vendor/nozzle_agent/config.example.json`，按需复制为同目录下已忽略的 `config.json`；未配置时使用本地规则引擎。
+
+`bootstrap_database.py` 不加参数也会自动准备自带数据库。原来的 `--source-config` 和 `--mysql-home` 组合仅用于维护时从指定源库只读复制，普通运行无需提供。构建工具 `build_bundled_database.py` 从平台已验证的独立副本生成默认基础包；`build_portable_package.py` 生成不含本机状态的ZIP运行包。后台源码仍由 `bootstrap_agents.py` 构建并在运行时使用 `vendor` 副本。
 
 文件：
 

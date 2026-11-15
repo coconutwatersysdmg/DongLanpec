@@ -1,0 +1,3 @@
+MySQL Community Server: see LICENSE and README in this directory.
+Microsoft Visual C++ runtime DLLs remain subject to their Microsoft runtime license terms.
+Only runtime binaries are included; no MySQL data directory, account or password is shipped.

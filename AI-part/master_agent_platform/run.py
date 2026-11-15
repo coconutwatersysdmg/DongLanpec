@@ -31,6 +31,7 @@ def main():
     if args.result: window.on_complete(json.loads(Path(args.result).read_text(encoding="utf-8")))
     window.navigate(("chat", "modules", "space", "execution", "review").index(args.page))
     window.show()
+    if not args.screenshot: QTimer.singleShot(0, window.prepare_database)
     if args.screenshot:
         def capture():
             path = Path(args.screenshot).resolve()

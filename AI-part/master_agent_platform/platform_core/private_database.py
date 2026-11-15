@@ -97,20 +97,30 @@ def start_private(workspace, mysql_home, port=13316, progress=None):
         atomic_json(config_path, config)
     if not marker.is_file():
         raise RuntimeError("缺少私有实例标记，拒绝启动。")
+    tempdir = directory / "tmp"
+    tempdir.mkdir(exist_ok=True)
+    from .mysql_paths import launch_paths
+    paths = launch_paths(mysql_home, directory)
+    launch_home, launch_instance = paths["home"], paths["instance"]
+    launch_executable = str(Path(launch_home) / "bin" / executable.name)
+    launch_datadir = str(Path(launch_instance) / "data")
+    launch_tmpdir = str(Path(launch_instance) / "tmp")
+    atomic_json(directory / "launch-paths.json", paths)
     new_datadir = not (datadir / "auto.cnf").is_file()
     if new_datadir:
         if progress:
             progress("初始化独立 MySQL 数据目录")
         with (directory / "initialize.log").open("ab") as log:
-            initialized = subprocess.run([str(executable), "--no-defaults", "--initialize-insecure",
-                "--basedir=" + str(mysql_home), "--datadir=" + str(datadir)],
+            initialized = subprocess.run([launch_executable, "--no-defaults", "--initialize-insecure",
+                "--basedir=" + launch_home, "--datadir=" + launch_datadir, "--tmpdir=" + launch_tmpdir],
                 stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
                 timeout=120, **_hidden())
         if initialized.returncode:
             raise RuntimeError("私有实例初始化失败，查看 workspace/mysql/initialize.log；原库未修改。")
     with (directory / "server.log").open("ab") as log:
-        process = subprocess.Popen([str(executable), "--no-defaults", "--console",
-            "--basedir=" + str(mysql_home), "--datadir=" + str(datadir),
+        process = subprocess.Popen([launch_executable, "--no-defaults", "--console",
+            "--basedir=" + launch_home, "--datadir=" + launch_datadir,
+            "--tmpdir=" + launch_tmpdir,
             "--port=" + str(config["port"]), "--bind-address=127.0.0.1", "--mysqlx=OFF",
             "--skip-log-bin", "--innodb-buffer-pool-size=134217728"],
             stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, **_hidden())

@@ -1,0 +1,2554 @@
+{
+  "schema": "donglanpec.bundled-database/1",
+  "mysql_version": "8.0.43",
+  "target": "windows-x64",
+  "databases": [
+    {
+      "name": "材料库",
+      "charset": "utf8mb4",
+      "collation": "utf8mb4_general_ci"
+    },
+    {
+      "name": "元件库",
+      "charset": "utf8mb4",
+      "collation": "utf8mb4_general_ci"
+    },
+    {
+      "name": "产品定义库",
+      "charset": "utf8mb4",
+      "collation": "utf8mb4_general_ci"
+    },
+    {
+      "name": "产品条件库",
+      "charset": "utf8mb4",
+      "collation": "utf8mb4_general_ci"
+    },
+    {
+      "name": "配置库",
+      "charset": "utf8mb4",
+      "collation": "utf8mb4_0900_ai_ci"
+    },
+    {
+      "name": "项目需求库",
+      "charset": "utf8mb4",
+      "collation": "utf8mb4_general_ci"
+    },
+    {
+      "name": "产品需求库",
+      "charset": "utf8mb4",
+      "collation": "utf8mb4_general_ci"
+    },
+    {
+      "name": "产品设计活动库",
+      "charset": "utf8mb4",
+      "collation": "utf8mb4_general_ci"
+    }
+  ],
+  "tables": [
+    {
+      "database": "材料库",
+      "table": "元件允许材料类型表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 72,
+      "file": "seed/table-0001.jsonl.gz",
+      "bytes": 1071,
+      "sha256": "4517b335e05096851da3f9d2bb93f4d042fe2f1a7fe77a9652e3a6a234d3ea69",
+      "ddl_sha256": "6bb9aa159511c7b19b006d0997b2b8c7428951e394d1839e55b81cdd958ca2af",
+      "logical_rows_sha256": "de375c19024899692288bb5f132cac6a57f2c23b4fc647d1bdaf8e0539b44916"
+    },
+    {
+      "database": "材料库",
+      "table": "元件名称对照表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 2,
+      "file": "seed/table-0002.jsonl.gz",
+      "bytes": 283,
+      "sha256": "ec311d9b2358f1be55af61ecb108de142e4ea06f1cf648e9e10d78e3e258a650",
+      "ddl_sha256": "3bdb54f1c91f08a12ed4c7b36fbaaa90685101711ea0eb04a252dc1db9abbefd",
+      "logical_rows_sha256": "971a83a1b42f8c529249c38fa6a3977b20448ac329c33da1139f117c8f63fb98"
+    },
+    {
+      "database": "材料库",
+      "table": "元件已定义参数表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 74,
+      "file": "seed/table-0003.jsonl.gz",
+      "bytes": 1691,
+      "sha256": "ea7f8fa5ee1dc456cac4c1b81ca4afe6ea83d9cb7a429cd6b798d13c92b7da52",
+      "ddl_sha256": "ef87d03a1285fbca070b6e85093fdecc494eb9f11f57955c68bda9c4b0089191",
+      "logical_rows_sha256": "7e3bc0147b9f0a6737febb52cf51c2e4e22c662f900845c5832edbc29729eb91"
+    },
+    {
+      "database": "材料库",
+      "table": "元件材料模板表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 1236,
+      "file": "seed/table-0004.jsonl.gz",
+      "bytes": 15857,
+      "sha256": "0cf4e84cb99c1684d415d09330bf3e9fb427bd3fc5c7ba94b563dc542562b31d",
+      "ddl_sha256": "dd86ab1a72f9bd27e43e141d975ca6e27fd4a41ac050484374daa1dbd5e4e67c",
+      "logical_rows_sha256": "f8bb7052009e95f9dac2fab9823e40e36cc146a912d6cf4b17665fc89f1f0f68"
+    },
+    {
+      "database": "材料库",
+      "table": "元件模型表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 0,
+      "file": "seed/table-0005.jsonl.gz",
+      "bytes": 282,
+      "sha256": "4ad446eb1ef005f9bdb8d6766eeb542088f9c303257220254b1744df66dcc586",
+      "ddl_sha256": "deee67f86d9fa5e11f6215288e66446f69ab49fd3a05a6a92a53fb9b69d94cb6",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "材料库",
+      "table": "元件附加参数合并表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 1953,
+      "file": "seed/table-0006.jsonl.gz",
+      "bytes": 12270,
+      "sha256": "63fbf8036ccc268b366e664e994499dc7b224f87a65258310d0c45dc73c18457",
+      "ddl_sha256": "86ae3b248fcfa3b680f44ec48a89e20d5de91b739be7a9f141ba355cca864209",
+      "logical_rows_sha256": "aab8fcd614f6ea7d70b0892624434ede364ce48134dd9d7d463c5a334267f2f5"
+    },
+    {
+      "database": "材料库",
+      "table": "元件附加参数表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 13954,
+      "file": "seed/table-0007.jsonl.gz",
+      "bytes": 102466,
+      "sha256": "83911b91508189f4dd0622ed56ef08faa35a11261526dac6e58d73f129cf1738",
+      "ddl_sha256": "1f4aeabb9018bbf485f1a577d286bacc9aa14e926964059e2884af322d785d3f",
+      "logical_rows_sha256": "07aa7846d2b20aae69278d6c8a167f2bcc49b4fa1e8d33afa1bb52e00688b5d6"
+    },
+    {
+      "database": "材料库",
+      "table": "分程隔板示意图表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 2,
+      "file": "seed/table-0008.jsonl.gz",
+      "bytes": 399,
+      "sha256": "8e17537fc5b5154d8c0156bd93981bb25dfa3779f5216099c3fa27e2d7d71461",
+      "ddl_sha256": "3c269e4d88bbe62f42742751764c8f7a178f020c93d028545a920ab83b8d1069",
+      "logical_rows_sha256": "62f6197dddec25cfb4458cb0e6c99432711da98b55e8d1535fc5039a1b4968eb"
+    },
+    {
+      "database": "材料库",
+      "table": "压力等级表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 51,
+      "file": "seed/table-0009.jsonl.gz",
+      "bytes": 1164,
+      "sha256": "cf7d32ad58b90a89032c5de3c2be65d6b2f13605e12a32195cd786b43b946141",
+      "ddl_sha256": "6fefd9eeb083c06e68a3a5156aab174299a1c731491179c33298b92cf7e99067",
+      "logical_rows_sha256": "c3ed3c46237bdf494640b15ab9d5bbdf39894bb46d3851245de3030b756d0e8d"
+    },
+    {
+      "database": "材料库",
+      "table": "参数显隐规则_附加条件表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 59,
+      "file": "seed/table-0010.jsonl.gz",
+      "bytes": 985,
+      "sha256": "7db3ba4c9ee98e2df0375261ad7bc234117769db0774a50f1f78d347a63de5bb",
+      "ddl_sha256": "4c4990b96aaa3797ddf29363c8ae6f55c2688b47582904c98b55da7b9d853b26",
+      "logical_rows_sha256": "8d66eb31f33ddacc6b00bbc999379af6e3702c1c52bd4138ee41436f021aaf93"
+    },
+    {
+      "database": "材料库",
+      "table": "参数显隐规则表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 316,
+      "file": "seed/table-0011.jsonl.gz",
+      "bytes": 3033,
+      "sha256": "82c36228d2f7a9d5cc183ec804ff4a2db4d9f585d91cd899c4df45ed7d9fd1f0",
+      "ddl_sha256": "0e724037c5674305e72e03f35a4aee49c293b72c88d5ce13a81daf31a6ea5a18",
+      "logical_rows_sha256": "a4cd8c0bc5073a2140028e3ddaffdbf850aa462fa7aaf75ca902c1219c2ddd3b"
+    },
+    {
+      "database": "材料库",
+      "table": "参数校验规则表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 96,
+      "file": "seed/table-0012.jsonl.gz",
+      "bytes": 1949,
+      "sha256": "10f1f53e7835241b4b96f91c32b1e5ac352617cb5245c8170ec81271546316b7",
+      "ddl_sha256": "a375c179bf5d6d3955eda63606428619af79859419a4c945ae5ffb6be4c21fe6",
+      "logical_rows_sha256": "a3e74c209fbcd1da7ffa8d3a72c84ed413a0b7cb656e7bad7d5571abca0095fd"
+    },
+    {
+      "database": "材料库",
+      "table": "参数程序推荐置回表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 14,
+      "file": "seed/table-0013.jsonl.gz",
+      "bytes": 536,
+      "sha256": "d4e838aa2f9d88ca5b22f26c266571ee4b452e9e11e9f2c1569bb544da4d1fa8",
+      "ddl_sha256": "f0833c994744ce5ea6861d784d1bc3c6ae71550f732231a27f63208b1b268205",
+      "logical_rows_sha256": "9cab22d491fba372b6308b2396e0fd93897fbf77c7e80bf550571ede12689082"
+    },
+    {
+      "database": "材料库",
+      "table": "参数表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 93,
+      "file": "seed/table-0014.jsonl.gz",
+      "bytes": 2330,
+      "sha256": "71ad04145a1e7602b1a20afde765f79fd1d733762167252f9150312d308f6aa0",
+      "ddl_sha256": "0dc495e11f5921dbfae7480b2c90695e19a6d78786b39bfc3c482834910dfbf2",
+      "logical_rows_sha256": "40b4f8d5735e4ae88a590be02b51c69976264e3b5815c739a13f1dead74c3576"
+    },
+    {
+      "database": "材料库",
+      "table": "垫片参数表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 155,
+      "file": "seed/table-0015.jsonl.gz",
+      "bytes": 1816,
+      "sha256": "e7f996775b5eb0735548f396c390417dc86aa7cc85b8620a0c542b1622d93434",
+      "ddl_sha256": "111f8c287d0361a1ea3b080a8da0bd6530dd33dd439f1d7c3a0aaf8b29e14d9c",
+      "logical_rows_sha256": "97f0c643098ee66f3567746bee2374d200543f2fdf93a78c8ee54458daf0787a"
+    },
+    {
+      "database": "材料库",
+      "table": "垫片定义表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 41,
+      "file": "seed/table-0016.jsonl.gz",
+      "bytes": 1616,
+      "sha256": "849edaba0a137e151014beda1adffe801fd4cd1f6264af01eb2379f753984d44",
+      "ddl_sha256": "f2b77b5c02b6701b592d9b6ba6de0bc9a4a87c8de309ff8b81522284c259c0d7",
+      "logical_rows_sha256": "c8d3ced3c05f553d242c70954ac09f7af75d06cfe3cf6d683826edcf55056408"
+    },
+    {
+      "database": "材料库",
+      "table": "垫片尺寸表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 1051,
+      "file": "seed/table-0017.jsonl.gz",
+      "bytes": 10650,
+      "sha256": "10bb8d3e682be0896b515db380cdf544292783a2e94675769771e529d7bf064c",
+      "ddl_sha256": "ac102f415b014c420425e68283b10424cb948b497060bd418f76deb8ae7cc916",
+      "logical_rows_sha256": "9283128672903325058c599f5ce3c3e660c92faa12e50ac4a8be85568bb19f10"
+    },
+    {
+      "database": "材料库",
+      "table": "垫片类型对照表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 5,
+      "file": "seed/table-0018.jsonl.gz",
+      "bytes": 334,
+      "sha256": "0fb433d3a21edb072a87e5f7dfb6ab3e2deacebd9f10dc982d8b8b560e39e9ac",
+      "ddl_sha256": "a8c8be2bdcb073510b82828cc0035cbfc400960f0e0a8c43f236d5466db7b7f1",
+      "logical_rows_sha256": "061883430692511604fe84da32c835e2e044d896947a1757f00fb7d13a314fc1"
+    },
+    {
+      "database": "材料库",
+      "table": "垫片配套法兰映射表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 16,
+      "file": "seed/table-0019.jsonl.gz",
+      "bytes": 501,
+      "sha256": "47b4b24ac1421d3d11744d3e2389063c2c293441f3076f0586fef380fb111f36",
+      "ddl_sha256": "d5bffef7f4064c54c9167f45267ae209e163ffc26c7d63220a0d738972a1dfe1",
+      "logical_rows_sha256": "9dbde72edc49e762b3d48225a594a397293146b3b4685bcdcd59260fde83e610"
+    },
+    {
+      "database": "材料库",
+      "table": "密封面表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 4,
+      "file": "seed/table-0020.jsonl.gz",
+      "bytes": 309,
+      "sha256": "9a41e2d01aeedbdb4e509d72d30e2e6479f1dc04f1d12e7f067b61b47f91bbd4",
+      "ddl_sha256": "33cde050bdb37a4ae0ec55b139465886f5b33867a98d8dfc5bf07af1b205ac0a",
+      "logical_rows_sha256": "b4883062e7d4579ac578a49cffc2091279aee089a16c0137a3d1ddf2874caf39"
+    },
+    {
+      "database": "材料库",
+      "table": "封头示意图表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 42,
+      "file": "seed/table-0021.jsonl.gz",
+      "bytes": 779,
+      "sha256": "fa9e3e43b858222432b45d95755dd3c5b8c54f0b05b8189f288c2543b48e60d0",
+      "ddl_sha256": "7b60596a7e3cab16c578a5b5a4c8f088ea0fb505da9225eb0d728a0ac0a728bf",
+      "logical_rows_sha256": "5f95d8c3e671b38b86afac9b5f3c0b6643f5ee34f861bf4f372e113c16478b0a"
+    },
+    {
+      "database": "材料库",
+      "table": "封头类型代号联动参数表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 4,
+      "file": "seed/table-0022.jsonl.gz",
+      "bytes": 626,
+      "sha256": "d275cd9b15464bea17fe5ab2cb3ff183b652e6ccfcb68fef1fe6cff2b41b1dd1",
+      "ddl_sha256": "4fcb17ab1279767d0d581d80619f44297eb2e6d2c7e6bbbd7da606a6a1a48c15",
+      "logical_rows_sha256": "175b999b3f0df6698b65458a41ead9ce1828510e6c934304f02b0f641b6d410c"
+    },
+    {
+      "database": "材料库",
+      "table": "换热管外径允许偏差表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 8,
+      "file": "seed/table-0023.jsonl.gz",
+      "bytes": 365,
+      "sha256": "a914fdb7ac162ea4bceb78d48d7cc6b79ac6b2a28dd57a3a6326f73ce585febc",
+      "ddl_sha256": "bb806658402d7fbac6ea06e5ba539084fbc1814718520845c09d48a27cb9c6ab",
+      "logical_rows_sha256": "4028128aa2224f3034659aff72b37d4a44cf970198810189f5b81957afec7daa"
+    },
+    {
+      "database": "材料库",
+      "table": "换热管管孔直径允许偏差表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 24,
+      "file": "seed/table-0024.jsonl.gz",
+      "bytes": 474,
+      "sha256": "e7495cab08561a9b9c1a4a5cf7b9a1edd96c0b8b7312589003560b3983b59cf7",
+      "ddl_sha256": "aea3c73f72f9f5148d9d75aaeb35b9c44f294c17937355acd8f4debb25000449",
+      "logical_rows_sha256": "17faa53dff3bc3bcabb4502ee98f8c77e60196e5470bc9f3d37b0d480a9f17f2"
+    },
+    {
+      "database": "材料库",
+      "table": "接地装置示意图表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 2,
+      "file": "seed/table-0025.jsonl.gz",
+      "bytes": 418,
+      "sha256": "3b5d782e69c438164070c9862ddd6401de6656040de4a6323ba64964bec762ef",
+      "ddl_sha256": "488830420b4d3212d576e1a7f8a3d281827ce679d73eca3b5165c1c2d3e365e8",
+      "logical_rows_sha256": "6de51ff7daa12937a98b4ca7a596455a8480dc35aa1a6939f94522b83bcdef62"
+    },
+    {
+      "database": "材料库",
+      "table": "支座型号鞍座高度对应表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 235,
+      "file": "seed/table-0026.jsonl.gz",
+      "bytes": 1504,
+      "sha256": "ec10061a51602a137688df1e99012e02ecc5157f79e3dad3362a1e3e1bc02670",
+      "ddl_sha256": "d42150fafcaca485a4396b40619604a3dfce5345a525d61bddf1e84a7faeb8a4",
+      "logical_rows_sha256": "1d9896a1ba17b448bd235d30433e2ef7303ff5f3c4f78ce1ffba7e014ad49084"
+    },
+    {
+      "database": "材料库",
+      "table": "支座示意图表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 2,
+      "file": "seed/table-0027.jsonl.gz",
+      "bytes": 356,
+      "sha256": "2e9471e5805e70013ce01b655d0b0542b37a55884648ba885188fb7dd2e1f0e6",
+      "ddl_sha256": "0e60b9052cf829c80de1b3efb2f82f15ff1568681015231bfedc3f1b68089d43",
+      "logical_rows_sha256": "21777b11b61928c19092b44dc26268f69e6e1871866a59551f1a7ab1debcdd1d"
+    },
+    {
+      "database": "材料库",
+      "table": "材料密度表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 494,
+      "file": "seed/table-0028.jsonl.gz",
+      "bytes": 2768,
+      "sha256": "b53c7736f179f69c6acadf1a03a68fbca71031f9db1330ba4b33d8e68c55273b",
+      "ddl_sha256": "aa2abd7a18d037843e49c1a1075c40d8eb61d5b8f738a00ed4fe96d8dc981efd",
+      "logical_rows_sha256": "80ab0b7f3ec0086bbaa59ea417675114a8221c8a570e0ba6bf08299a5bc93ab9"
+    },
+    {
+      "database": "材料库",
+      "table": "材料表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 400,
+      "file": "seed/table-0029.jsonl.gz",
+      "bytes": 3445,
+      "sha256": "24f42d25a9375c4a35df2c5c63ad187b62caed9f4d5f663347a8cf2061e13736",
+      "ddl_sha256": "30a608d3b76acbc3fbdf6358a5fb9fc00bc14d84ccca9e1de9788cc8f06bb4a8",
+      "logical_rows_sha256": "3a55a14da90350dca0d3232e3450435475be00754888dd3a6da62950c25ce806"
+    },
+    {
+      "database": "材料库",
+      "table": "标准表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 2,
+      "file": "seed/table-0030.jsonl.gz",
+      "bytes": 301,
+      "sha256": "b5369f67aa77738fc311378c118d510f72f43289d786428c89ab707e595a8e60",
+      "ddl_sha256": "027c80c716d7d43dd5ccbd3efd758766c995dc0ba9909e82eafde60050821670",
+      "logical_rows_sha256": "528e37cb74ff1612df5cbb62422f4c732b158ff4c39f227f9981a16a0c5d1ef1"
+    },
+    {
+      "database": "材料库",
+      "table": "法兰参数联动表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 28,
+      "file": "seed/table-0031.jsonl.gz",
+      "bytes": 1215,
+      "sha256": "a5fef509e348923b0c887834493f35643049e4a2f290ca6c84dd39dc17009d68",
+      "ddl_sha256": "6acb1b91b01c0bdce7637b91fdf2df8f0dfe46d1ee7875b1b630c7bcecb92bfb",
+      "logical_rows_sha256": "543de7185855c90265d82490eacb01248592cee447951ab62954241bd06f6730"
+    },
+    {
+      "database": "材料库",
+      "table": "法兰示意图表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 130,
+      "file": "seed/table-0032.jsonl.gz",
+      "bytes": 1521,
+      "sha256": "1c662925fae8e286526b6aea74b637fb9450499d1ec25887b31468b6b3947935",
+      "ddl_sha256": "aa2b9f64ef736b17266aec5a1989f7ca8c66d24c5f6939ee67f3eec03ef2b120",
+      "logical_rows_sha256": "2d08999579835d84bdfd231ab06bbb50d15eeffec1e809ec2aeaf259d9340d9f"
+    },
+    {
+      "database": "材料库",
+      "table": "法兰结构形式及尺寸表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 346,
+      "file": "seed/table-0033.jsonl.gz",
+      "bytes": 5517,
+      "sha256": "4212651362e5e273ceeb90fc80d78bb71e4eb0031fc4b7bd251efaacc3b5b05d",
+      "ddl_sha256": "d4ab86397de1c71bdc78fbeb0bbfe0008588686a8af6cb08ca0ee4ccb25d048e",
+      "logical_rows_sha256": "ee0da3fa90501b10f8c24b0ff47cbc97e996051e9cc5ba1725f54338badd3cf1"
+    },
+    {
+      "database": "材料库",
+      "table": "管口参数表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 41,
+      "file": "seed/table-0034.jsonl.gz",
+      "bytes": 1001,
+      "sha256": "ecf159bdef1bc83ac3b112da1d8262b5f3a3d7dd08e5e2e127f039a7f1c6929e",
+      "ddl_sha256": "4e96326bc7b592a0cd2bbf19f742cbfb8bfc45a3652dced701086d58cefd007b",
+      "logical_rows_sha256": "55171695530acef0a4c9d741f672f72373a3aa7d907c0cd9cb72b1ebb688e36f"
+    },
+    {
+      "database": "材料库",
+      "table": "管口附件折叠表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 12,
+      "file": "seed/table-0035.jsonl.gz",
+      "bytes": 513,
+      "sha256": "a930c5c7e796143c1daa334b2f3b10906009925e6b2af7e789c24a97edf30ba0",
+      "ddl_sha256": "915045db042f48c01fc808cc7fef53f70eba3f3802da6be311adb5551c5f277d",
+      "logical_rows_sha256": "5df9c657c853ec8ffab18662e3314472153166168cee7d0beb2ac13597350d81"
+    },
+    {
+      "database": "材料库",
+      "table": "管口附件接管法兰垫片型式明细表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 38,
+      "file": "seed/table-0036.jsonl.gz",
+      "bytes": 649,
+      "sha256": "6e626c1a9b03fc655387bab9a3515eabaebbadea94d513b6dc58b4643fa4f575",
+      "ddl_sha256": "69f5ab7bee6fcbf937f79549051c0d065e43de8ba3423378de31e8088741c17a",
+      "logical_rows_sha256": "4c29cbc60af4ff2d122296f18d5eb3249fe07858b1622e4af812406fb733fc34"
+    },
+    {
+      "database": "材料库",
+      "table": "管口附件接管法兰垫片联动主表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 12,
+      "file": "seed/table-0037.jsonl.gz",
+      "bytes": 707,
+      "sha256": "b5811574a2592d75be3bf22a9b73e5265188befa7a85d78b652c2a1f4e107d51",
+      "ddl_sha256": "39ccbf17e85f1bf0b379b26949d3d74de18bc7cce3328d55ac18fcff4c7d3a0a",
+      "logical_rows_sha256": "6a823c1008c8de9cf16c45bdda1f783047a8ef7672c04fcdc40d2d410f3bc6d1"
+    },
+    {
+      "database": "材料库",
+      "table": "管口附件示意图表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 6,
+      "file": "seed/table-0038.jsonl.gz",
+      "bytes": 436,
+      "sha256": "3fc9d95feb21461c51fb26a8ce1f10d85f053ff50ea59ca003d49a4e001d487a",
+      "ddl_sha256": "c5bd46e91bd189427f51f0c1618af75fb2416c44157aa32428d482fc17c2d2ec",
+      "logical_rows_sha256": "17850121cb351e5754dbce78f131419e3c0c2a6d3c8e3e01c179acad650164e9"
+    },
+    {
+      "database": "材料库",
+      "table": "管口附件附加参数表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 3366,
+      "file": "seed/table-0039.jsonl.gz",
+      "bytes": 21013,
+      "sha256": "2438391b8833872907de329c122fb6773c04e7634ef7de8bbab2a2ad1966aede",
+      "ddl_sha256": "6ebf69a204533698c959c244dbcdacc34d0322218859ce66b2719838e982e605",
+      "logical_rows_sha256": "3893d6b34e9b7c1e9e2ec3c8a8ca6c6b24882d79768c63c14593ebd4efb9f780"
+    },
+    {
+      "database": "材料库",
+      "table": "管口附加参数表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 7634,
+      "file": "seed/table-0040.jsonl.gz",
+      "bytes": 44551,
+      "sha256": "79a6a7c14657d4d4ec251a2c816770997d97b36dc1febefd8154405348296af4",
+      "ddl_sha256": "03dd5f9f0ca59b6e5e8fc3a0853bcd89a4e11ea8319af043d956f328a6d7a766",
+      "logical_rows_sha256": "34524092cb0424cb6d32c785fca4793f1afb6c54faed89a44181fa7745b54fc5"
+    },
+    {
+      "database": "材料库",
+      "table": "管口零件材料参数表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 610,
+      "file": "seed/table-0041.jsonl.gz",
+      "bytes": 4187,
+      "sha256": "2410c32f912b683ec6348f805c5ab9a90687768a977d42419795011cf630d732",
+      "ddl_sha256": "1e6902b8cf1bd754193d29f778a58cb8ad96af4fd543528d051700838126a954",
+      "logical_rows_sha256": "ad773c20cda24027f836be5cfed872bc59e56f01cbceee1d996d81686b2d0303"
+    },
+    {
+      "database": "材料库",
+      "table": "管口零件材料表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 80,
+      "file": "seed/table-0042.jsonl.gz",
+      "bytes": 1446,
+      "sha256": "83b23f3d8d50765209db0b8078ed13134103427da485f8d8d307b1151243d565",
+      "ddl_sha256": "e5e09ccc3ee5893da4682d9437de7df4624daa8b7652154739e8e3123660124a",
+      "logical_rows_sha256": "c0db330a013891bce137580787031c5db1a178d2e9c1c4d7c6d6db569c1c3e1f"
+    },
+    {
+      "database": "材料库",
+      "table": "管法兰外径表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 2810,
+      "file": "seed/table-0043.jsonl.gz",
+      "bytes": 16102,
+      "sha256": "3885904b9d0c20473fdcf606352c902fa8686b004551057efc137013878087d0",
+      "ddl_sha256": "fd423b290374f872e19b94d0ca1f697595a31ddbc79e74241e4dd931f2966f66",
+      "logical_rows_sha256": "c9f1c8c6486cd1ad0555348c17f2572fb136900ea73ed581e4bb4fa67e080fe0"
+    },
+    {
+      "database": "材料库",
+      "table": "管法兰质量表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 2897,
+      "file": "seed/table-0044.jsonl.gz",
+      "bytes": 36495,
+      "sha256": "cb6a2e2e84016243d8714e248d272c3aee11437cfaf0b89ae9913d6e26e5ce1a",
+      "ddl_sha256": "20a7fe7cde6d3b10fca00c6b16d93bbd12d49d6710c78b20af522c65aed8f3de",
+      "logical_rows_sha256": "d9d0e2e1063c3a4a99f654357cec9d9d644bd95f37125e9946b7e74c1840bf63"
+    },
+    {
+      "database": "材料库",
+      "table": "结构树配置表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 420,
+      "file": "seed/table-0045.jsonl.gz",
+      "bytes": 3136,
+      "sha256": "c21294518bd634d6a0db4d007618bc211d9ab2767dd66c4d90ca1119c15eb113",
+      "ddl_sha256": "2b1facb5b83338292ab4d22e5ff005770038e89ad65cd448dd194135a9a20e77",
+      "logical_rows_sha256": "3103dad74f9dd667f7035937a073801ae7330cd1152fe5afb044cad3578f052b"
+    },
+    {
+      "database": "材料库",
+      "table": "结构钢材料元件表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 2,
+      "file": "seed/table-0046.jsonl.gz",
+      "bytes": 317,
+      "sha256": "1cb43a6f2416953b973f5daa45f428c3b2d41db00bd09d4c7f3132d14772e8d4",
+      "ddl_sha256": "c5799089f1fc0d53c1ff2724fe24f75bf1054792570e58c84920c869831288cf",
+      "logical_rows_sha256": "35c8253d449f89586137533133e830cc7dda28375977eabc11e27edb52c41b0b"
+    },
+    {
+      "database": "材料库",
+      "table": "结构钢材料表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 90,
+      "file": "seed/table-0047.jsonl.gz",
+      "bytes": 1074,
+      "sha256": "bb63f7bd9951c2158a640337d57cdbd81443713c587d58d9dc79c02a96ba1719",
+      "ddl_sha256": "5b864df6c9111cdaedd58740cb124b6f5fc94db9bb879f750f8cc410713e43b1",
+      "logical_rows_sha256": "cf5c30dd3dd972801c66121c2df2242184e40ada49156ea3f594c61592a8ba15"
+    },
+    {
+      "database": "材料库",
+      "table": "螺栓直径对应表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 26,
+      "file": "seed/table-0048.jsonl.gz",
+      "bytes": 521,
+      "sha256": "15117153503dc9b0d79b90b5530e1712f850b6e5b8b34976b8a7ce4a64915fb7",
+      "ddl_sha256": "4d3cd57a42f6fdaa5952f8bfc1b779ac04cddf44aa777efff2fd4429ebf4f0e7",
+      "logical_rows_sha256": "b3372d4c290f6b8f8ef841380221c4210b06cd6d280314ef8a8560912e0ae230"
+    },
+    {
+      "database": "材料库",
+      "table": "螺母近似质量表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 33,
+      "file": "seed/table-0049.jsonl.gz",
+      "bytes": 670,
+      "sha256": "23cf62155d279e64771deefd4d7062ddecdabf8e0d6f7ef485898a47cdc66fe7",
+      "ddl_sha256": "2eed333f16288ad05625ccb50b2b9a0afd7fa7d4d3dee943dc53ee5ec5f87ac4",
+      "logical_rows_sha256": "bca90ec7c4113396d0445c26a005664e2cb4366240ee5e570b51afa93ed9f8c8"
+    },
+    {
+      "database": "材料库",
+      "table": "设备法兰紧固件元件所属映射表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 8,
+      "file": "seed/table-0050.jsonl.gz",
+      "bytes": 523,
+      "sha256": "169b2d8f393062ad9d55b3d8585ec111cc87b47679e7098a52e2c6c4adbee535",
+      "ddl_sha256": "87945e8d42ede84d2fe4c05cc447a36f5f9f721738f05f786b06a1456750a61e",
+      "logical_rows_sha256": "0f91ea691369737ae2cc5522262cddb7433a17993fd2c40c03b70c6300368360"
+    },
+    {
+      "database": "材料库",
+      "table": "设备法兰紧固件合并展示表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 11,
+      "file": "seed/table-0051.jsonl.gz",
+      "bytes": 597,
+      "sha256": "a679efbccf52354610596e4e9e5d8b88002f45eb7f0764aad9730d698f532ca7",
+      "ddl_sha256": "48c91f7c736209fadade70dfb6569e1319df06b65563ec37a2ad2fa5e339b3d5",
+      "logical_rows_sha256": "544cc4ad69f5cf814510837c3bbc067415afa19efb23413c1cc1f16e175e657e"
+    },
+    {
+      "database": "材料库",
+      "table": "钢材分类表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 541,
+      "file": "seed/table-0052.jsonl.gz",
+      "bytes": 2634,
+      "sha256": "bbbb8276d2e163ab9cb7c16e0052b79bd2d040ca429fdee9ee7906b42cb74508",
+      "ddl_sha256": "2274097ab7e367f57eb835cad6c0efb7e79ad3f3bd555abf8eaec9b2a673d05d",
+      "logical_rows_sha256": "3f03fdde31a7422d6d40983c77a16f1cff120d847b4c59797aac0badf2025d19"
+    },
+    {
+      "database": "材料库",
+      "table": "防冲板示意图表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 3,
+      "file": "seed/table-0053.jsonl.gz",
+      "bytes": 403,
+      "sha256": "acdbc3b7d49d256197723b9918fc22a035fcf1d31d531424a891b31c2d1a45d6",
+      "ddl_sha256": "7ce90b4976b6742e03933094863fd4b8d717d7ca9c27309485e59da4f0ab82b9",
+      "logical_rows_sha256": "a2fc1db79f80ff42efc4182224ee402e6b58736352686a5e53583ce69fae2b7a"
+    },
+    {
+      "database": "材料库",
+      "table": "鞍式支座型号适用范围表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 21,
+      "file": "seed/table-0054.jsonl.gz",
+      "bytes": 738,
+      "sha256": "0185b024eefb7d5f0caf11233f4027b01335114f9842ecc8db4f8f89aecef021",
+      "ddl_sha256": "24b294fc184bb325d9301a1e1aa6a2e9563f753e3418bd2886b03ec08835fa33",
+      "logical_rows_sha256": "74e76d41f22c3252ac9c6acc1b061b0cc7664eab46e004be321105b30e7a5c57"
+    },
+    {
+      "database": "元件库",
+      "table": "公称压力类型标准对应表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 8,
+      "file": "seed/table-0055.jsonl.gz",
+      "bytes": 415,
+      "sha256": "fa0cd45e8419ded462d6144cb96628c7dd45ac5742df7b0d7ac1606b81021237",
+      "ddl_sha256": "8b4c9c8883e96250ba8726f778f7611a30c3d3826bb3c0f9579ab09a2c3e52fc",
+      "logical_rows_sha256": "57e434c594915fc957feebf95646fbc33c520beb3d117f116ed3f2d32a89db97"
+    },
+    {
+      "database": "元件库",
+      "table": "公称尺寸表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 38,
+      "file": "seed/table-0056.jsonl.gz",
+      "bytes": 703,
+      "sha256": "f613a91c93b39fc56e8d7f99cf1386d19d3d5de7896a77e4760476ff3f4c1ee8",
+      "ddl_sha256": "f2de3de5d611300cb4e6ac33110d94492684f98baa1c4376b2565301e040fdf4",
+      "logical_rows_sha256": "531ce1580194f81f7dbb25a3b3e17c0413a080f1688ee018b64727b129cb51d5"
+    },
+    {
+      "database": "元件库",
+      "table": "吊环螺钉质量表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 10,
+      "file": "seed/table-0057.jsonl.gz",
+      "bytes": 379,
+      "sha256": "d44fb6b36546be88a44342ac7759bea75c8bf6ecb763bf9c4b500505fd7019a2",
+      "ddl_sha256": "943729d65a8f839dff1730b84746494e6c030decb510eed47fefd73690f37418",
+      "logical_rows_sha256": "6bcc9bc8483360b4500d75a916bd263273281590372ee8df06da8e320705e4c4"
+    },
+    {
+      "database": "元件库",
+      "table": "密封面表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 4,
+      "file": "seed/table-0058.jsonl.gz",
+      "bytes": 309,
+      "sha256": "9a41e2d01aeedbdb4e509d72d30e2e6479f1dc04f1d12e7f067b61b47f91bbd4",
+      "ddl_sha256": "33cde050bdb37a4ae0ec55b139465886f5b33867a98d8dfc5bf07af1b205ac0a",
+      "logical_rows_sha256": "b4883062e7d4579ac578a49cffc2091279aee089a16c0137a3d1ddf2874caf39"
+    },
+    {
+      "database": "元件库",
+      "table": "布管元件信息表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 2,
+      "file": "seed/table-0059.jsonl.gz",
+      "bytes": 407,
+      "sha256": "48029d838ec17d30e5eb4cb40913a12b87e32dca505f41c10b3aae11c850db02",
+      "ddl_sha256": "650d4b918fca3ccc4172fa88366a6b95470521aab7c9fc6d9febfe8cb738b4d6",
+      "logical_rows_sha256": "a63fca203f4ebf4b63ef14be46b0a7e1d9656339cf123f6f2c801462f7525b4a"
+    },
+    {
+      "database": "元件库",
+      "table": "布管参数默认表_u型管",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 63,
+      "file": "seed/table-0060.jsonl.gz",
+      "bytes": 1340,
+      "sha256": "79dc8ab0e78c81922189c26b6c1d0052e53aed846cf9060ca61984d555f764f7",
+      "ddl_sha256": "b32df1def257b9b5868150d485cb6dbfbb064e491f424156959cdefddc37b8d6",
+      "logical_rows_sha256": "65232afacd7c6c883975f75137511cc62b42255ae95b195aae8bdc841cb43e04"
+    },
+    {
+      "database": "元件库",
+      "table": "布管参数默认表_浮头式",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 63,
+      "file": "seed/table-0061.jsonl.gz",
+      "bytes": 1340,
+      "sha256": "b8cad8e1b958f64e2cc2d530606cfbc75d1f103c3e089a778b39704cd24f7c51",
+      "ddl_sha256": "6052e73c377bcb16896ff1b243577eb9ba625d71299746883d7efc2342312998",
+      "logical_rows_sha256": "5e2a2006057cf52172bcebc81ef4c22c120a759f159221f12219c6e779ba4ca8"
+    },
+    {
+      "database": "元件库",
+      "table": "布管换热管信息表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 3,
+      "file": "seed/table-0062.jsonl.gz",
+      "bytes": 416,
+      "sha256": "ef8efea18b5485a5f36fbb65cdd3186cb679ae8e0b4deb149d8bc24283801cd0",
+      "ddl_sha256": "785179b56c5671a932c6101a9555e2d27b9f72726b6493d3f0461ef09573eb8d",
+      "logical_rows_sha256": "45c6583fb0cbd94e900b4b12ab28d1bc5577d41f9ef9f082e49fdc3e06a300e7"
+    },
+    {
+      "database": "元件库",
+      "table": "材料温压值类别表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 270,
+      "file": "seed/table-0063.jsonl.gz",
+      "bytes": 1891,
+      "sha256": "e19c54a9c55548d285ce9b1a20dbb6fd67066ec1bcef1e8ad4978da2cedd6bb1",
+      "ddl_sha256": "70fff4569acf421afdd1ef37709e2975377f6482a28fdb4eaafdfed552cd1aed",
+      "logical_rows_sha256": "7d60c8dd091675d6098d5d84cba3c140fde8709762aeb9b8e1ce6185bb74869e"
+    },
+    {
+      "database": "元件库",
+      "table": "温压值表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 4050,
+      "file": "seed/table-0064.jsonl.gz",
+      "bytes": 28142,
+      "sha256": "2e37858c5aca8f8dd5ee88c1bd590cd3e5cf05f962d82e8c4b1e01112079aec6",
+      "ddl_sha256": "0c70cfe08a84b3ab2b9de0988f3f783c22d40c026b77cac551b3639c198d3b5d",
+      "logical_rows_sha256": "880cc5ca6994bd1e013376eb0831caf0abcdff632dd741f99aec3973d3c1dc42"
+    },
+    {
+      "database": "元件库",
+      "table": "热交换器管壳程进出口默认规格表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 9,
+      "file": "seed/table-0065.jsonl.gz",
+      "bytes": 538,
+      "sha256": "231e59eb89ec57404135d775b9bb1e9f8e95d473e01302d52305f9b9f4067dcd",
+      "ddl_sha256": "b869175d7dc27e731e2cb2fea242cff5bca9ce4e5ea0ac127ba2e08247e08531",
+      "logical_rows_sha256": "73d560181867f684e05c5635681d47394d4524b0981cbb5e181e6212fbc76319"
+    },
+    {
+      "database": "元件库",
+      "table": "焊端规格类型表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 17,
+      "file": "seed/table-0066.jsonl.gz",
+      "bytes": 380,
+      "sha256": "067fecd79ccd5ea0821ab9de4b91a9322b233035146994d3b694ae31f020de55",
+      "ddl_sha256": "5b22a0c19b19fe56b932a3a75e62d6ff70ec8ad734d471979df306c1aa060240",
+      "logical_rows_sha256": "f766660e6512c0acdf7664b0dc0db3d89591dc70998908d0a4c6cf07fb1bc9b8"
+    },
+    {
+      "database": "元件库",
+      "table": "管口元件类型表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 56,
+      "file": "seed/table-0067.jsonl.gz",
+      "bytes": 721,
+      "sha256": "595e168e8fe4d32451dbb991047bd819f90c5be6f5e20d9673990e493a0b851b",
+      "ddl_sha256": "257a7ceb32b2e52b0965d7b195ad757d5c413c2ecd1c4a9ae8b4a529de49c461",
+      "logical_rows_sha256": "f821ecf440bf458f813e9a1a42a3eb34a6bc7d6139b3ab447896f361090551e5"
+    },
+    {
+      "database": "元件库",
+      "table": "管口关系对应表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 795,
+      "file": "seed/table-0068.jsonl.gz",
+      "bytes": 4739,
+      "sha256": "6de9f5143d5cb397b941220104b517a18bbe6f243affdf5b2d689743f05efdcc",
+      "ddl_sha256": "a213fe87c2aae9d87a983dc157944c92e3291546506acdd5ed15e59d389796af",
+      "logical_rows_sha256": "6b0b8e61b8868e7a62bee35630d7fc9e415628d8d61e0f513f6685c5ca91ae51"
+    },
+    {
+      "database": "元件库",
+      "table": "管口压力等级表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 40,
+      "file": "seed/table-0069.jsonl.gz",
+      "bytes": 591,
+      "sha256": "0df983a22d528f8411067356aee11da0b3d0b28b83bfcdb1426241dbd43e85cd",
+      "ddl_sha256": "b54950e6545f4d919184c7913540e55a0b91c02b8e83533d80f445ee602a4f13",
+      "logical_rows_sha256": "1792dcd1421b77a97f01b5a41a9a71bfabd33b58650015ad50ddcb98f0704f68"
+    },
+    {
+      "database": "元件库",
+      "table": "管口参数层级表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 13,
+      "file": "seed/table-0070.jsonl.gz",
+      "bytes": 543,
+      "sha256": "e090b0d0d62047efff2c59fd7f37683ad593928d031f4a8e0c8c307acbefcb96",
+      "ddl_sha256": "17e2da6c95f95736553d5faeb3d5734da388af8d0f32c5e99cac2310c6c2ae7c",
+      "logical_rows_sha256": "b85de3810a3a1d00a68da1386ef75b482d6c8b7dceee2b229c8775c6254213d4"
+    },
+    {
+      "database": "元件库",
+      "table": "管口型式表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 18,
+      "file": "seed/table-0071.jsonl.gz",
+      "bytes": 547,
+      "sha256": "ac03cc74112043541e986cf64e119f8cfa43661164c50f7e4f0a70f1508c7816",
+      "ddl_sha256": "850349d837968046a0da4bd84f33ba61d8d4d3cc591b8f7bc6c787985a8156f7",
+      "logical_rows_sha256": "023f10b04e215eab5519caf129b0bb4ab59591cb23ce27b066bbd193dfafdd93"
+    },
+    {
+      "database": "元件库",
+      "table": "管口所属表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 18,
+      "file": "seed/table-0072.jsonl.gz",
+      "bytes": 423,
+      "sha256": "860bafa1042a5471fd499423a34b20f99379a47766ed0ca9ff6f1b79f769b19d",
+      "ddl_sha256": "2b8e629222369257039ce76cad2fd0e25ed7129150c6849567f53bffe6b458bd",
+      "logical_rows_sha256": "a3a98176b32a483ba3d3c588a0e530c30ad07f5dca973c3501d519d545d83a43"
+    },
+    {
+      "database": "元件库",
+      "table": "管口所属轴向定位基准表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 104,
+      "file": "seed/table-0073.jsonl.gz",
+      "bytes": 1078,
+      "sha256": "3e021c5568ec35fd58566b9ff3ede52fa4102e027620ce57f55f922c6c74cf04",
+      "ddl_sha256": "ae7bbe851a8ca638721e3900efa0e675207fe27d45469cdf1cefeaf057148df8",
+      "logical_rows_sha256": "8e4af3140e1a3d82f11a388c40a8d11644f7c3f3d7847922337891ab84d9d7dd"
+    },
+    {
+      "database": "元件库",
+      "table": "管口控件图形",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 0,
+      "file": "seed/table-0074.jsonl.gz",
+      "bytes": 286,
+      "sha256": "ad75486c938c0473a86a021a365134ebf10a1b2c941fe9cb0f7d9c99666a4540",
+      "ddl_sha256": "a8b7b4edd20a14b53dc7363af6b9d4afc855383a68fe1b77358e29abbc4d05ae",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "元件库",
+      "table": "管口载荷参数表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 34,
+      "file": "seed/table-0075.jsonl.gz",
+      "bytes": 737,
+      "sha256": "87953929b11b28a7e4e8afdc99af1381540465dfcf208058fb6a2b4bca3448db",
+      "ddl_sha256": "baff340a5b9e9e87cebe65cbecdb6a50419b544edd1911608ab882b501cfc1a2",
+      "logical_rows_sha256": "67585994d3cdfd3b3da69b46564dfcca8420156e2e261360e6cf82afd840d5a8"
+    },
+    {
+      "database": "元件库",
+      "table": "管口载荷图配置表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 6,
+      "file": "seed/table-0076.jsonl.gz",
+      "bytes": 532,
+      "sha256": "41a5904f2449cc61ee725eb5357dc073595b8288cec588c227c0d9cebb270908",
+      "ddl_sha256": "fcda584ba07166698e4025c31d2475cc404296258d817f4d76f6516e58a33d2a",
+      "logical_rows_sha256": "5e1e0e8d2bd7408f082068e024462b056b867edba492e851da0f79e748581ad8"
+    },
+    {
+      "database": "元件库",
+      "table": "管口载荷类型表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 6,
+      "file": "seed/table-0077.jsonl.gz",
+      "bytes": 527,
+      "sha256": "d5797c85b23dcb074c8163756fbcacf5d357eb85e95fdcc024c5af370c60cb97",
+      "ddl_sha256": "9a32a8d115e7391da4e299b57f1c5129ea3650a01800c4fc1a5862d54f914e3d",
+      "logical_rows_sha256": "5e1e0e8d2bd7408f082068e024462b056b867edba492e851da0f79e748581ad8"
+    },
+    {
+      "database": "元件库",
+      "table": "管口附件表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 6,
+      "file": "seed/table-0078.jsonl.gz",
+      "bytes": 380,
+      "sha256": "d213e4a0196ccd4954a92d90dd611b1376eb2e2264f148055d278510a1e56e19",
+      "ddl_sha256": "854a882c30c30805f6609fa8ebd92740681addc61156845ad1ee2253aea8effe",
+      "logical_rows_sha256": "5749e09bb86d694b7cf0a49d3f28a5b826a4277ac8e156d3a50de2e56ac1102d"
+    },
+    {
+      "database": "元件库",
+      "table": "管口默认表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 70,
+      "file": "seed/table-0079.jsonl.gz",
+      "bytes": 1513,
+      "sha256": "40dd799be5ecec304cabff5b02fcc4c68eb5d804495f2abf017adb2d4cad32d1",
+      "ddl_sha256": "c74da2eca190e308fa745a80fb30f86bd96943b4a91cd38fb580ada307df7387",
+      "logical_rows_sha256": "6b5040c0d0a86a75e8525b26c7a6c9f98f2596d68c5771ca7faf1336d851ac7b"
+    },
+    {
+      "database": "元件库",
+      "table": "管板形式表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 169,
+      "file": "seed/table-0080.jsonl.gz",
+      "bytes": 1682,
+      "sha256": "327342a68411745108c459140165337f6bbce8eab33fbbe7830d35424f9f7846",
+      "ddl_sha256": "e590d2b12ed887fb2c74cd93599f1a134751bbdb77883b70bafc55c4ac64747e",
+      "logical_rows_sha256": "0519a9f31cfac54ae730e6750b5be2b0a1a85a950531e101f65a6b25a30b24c0"
+    },
+    {
+      "database": "元件库",
+      "table": "管板连接表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 94,
+      "file": "seed/table-0081.jsonl.gz",
+      "bytes": 1519,
+      "sha256": "80d9240aedf35e721c44566bce76c5f0f514ba82805a639efdcfbff86abf4cfe",
+      "ddl_sha256": "47f917e6afab39b453c9ec226ed5e649e87787d167ed58688d43377d39b87d09",
+      "logical_rows_sha256": "32945bfdfcfe499438c283d1bc9b1c47824013df0bb16431c7999e52c4865295"
+    },
+    {
+      "database": "元件库",
+      "table": "附件所属轴向定位基准表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 104,
+      "file": "seed/table-0082.jsonl.gz",
+      "bytes": 1077,
+      "sha256": "e38d2adf047da92e5c13dc5490cc6de2f686dcea889d4dc1c24cc6599b21827a",
+      "ddl_sha256": "3eea90d7e7750fa744c8c8c4966bd876a9e55bdcfa49036c53cf44461b48f688",
+      "logical_rows_sha256": "771151ea6d3b73f4966255979c620275cbaa0c711cbf795f7eaae45894efb4c3"
+    },
+    {
+      "database": "产品定义库",
+      "table": "产品类型型式表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 14,
+      "file": "seed/table-0083.jsonl.gz",
+      "bytes": 528,
+      "sha256": "601a08b1c146ad2ac1357ade4afe3ffa631d3933fd0804f0bb0d120140e17cf1",
+      "ddl_sha256": "f3bfe2f8810ca7469c6af8daf81997417a863246e49e0c9ab35250d8a8d3c394",
+      "logical_rows_sha256": "c0b398a9c73fe1aa9baeb6ecd9ee1da9d58aefbb19e60b0660f1c6bd0af1786e"
+    },
+    {
+      "database": "产品定义库",
+      "table": "设计阶段表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 2,
+      "file": "seed/table-0084.jsonl.gz",
+      "bytes": 296,
+      "sha256": "be38fd15c9d23ad367a4c6a7869af7801b872cefab8712169446e6876176dd93",
+      "ddl_sha256": "ff5fd2ca6f0905b9e7585a4211e028ea1c926c7dde7575e13ae74ac8c6dec790",
+      "logical_rows_sha256": "cdb692a01f301854428608f7c99b72d3c1d6169cef3e41c17c339ccaae4c37ad"
+    },
+    {
+      "database": "产品条件库",
+      "table": "产品标准数据模板表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 12,
+      "file": "seed/table-0085.jsonl.gz",
+      "bytes": 691,
+      "sha256": "f300f5e89389b5a6a3a6e6f5d4ab5b1061d17e9082803b10de9587c5bf3fc252",
+      "ddl_sha256": "26ebc3cf8b65d0306b1f6c00d922839188d45c515d51da4aa2d43018f42fb050",
+      "logical_rows_sha256": "0de65d70f930d469351b93147d846be32d618a25666e00f57f3dae6078f43edf"
+    },
+    {
+      "database": "产品条件库",
+      "table": "公称直径允许值配置表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 277,
+      "file": "seed/table-0086.jsonl.gz",
+      "bytes": 1869,
+      "sha256": "05923252c1003f4b78cfca0525d2a71a4aa2031d41c8145a82d1f6a2cfcad9fe",
+      "ddl_sha256": "b9fb7183dc4ff12e1495009a7a88e168f57cc906271205a2b05fd8c7f74f8489",
+      "logical_rows_sha256": "f731c21861cf1e3fa3bf8443bf301ac42228787cb250bb7a9474cc7c585e2f13"
+    },
+    {
+      "database": "产品条件库",
+      "table": "参数显示顺序配置",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 2,
+      "file": "seed/table-0087.jsonl.gz",
+      "bytes": 752,
+      "sha256": "3e8573c3dd81db8f92ba939f8a00a264783c263f96073c5b6eb00b43ad692137",
+      "ddl_sha256": "bcf2221e4f9a1a2b7e2adf8bbd05b18617af82538ea98b0cc8f380d17bcecf9d",
+      "logical_rows_sha256": "400f18826874caedad106f33f330cdeea99dd9e781bee3edac199412c1aa7b4f"
+    },
+    {
+      "database": "产品条件库",
+      "table": "容器公称直径外径对应表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 29,
+      "file": "seed/table-0088.jsonl.gz",
+      "bytes": 846,
+      "sha256": "0fea7de25ba4c3cfff54da2207a9373bf45fae7fe0791f1db5c8e5c76434cc18",
+      "ddl_sha256": "db2ee304284ca3b0aeb345d7b9405dca4fbde4c5b918b040a8c7473a3cb0aa51",
+      "logical_rows_sha256": "974aa6eb918923f45ee21949685626777864aa317f837e8440b22d4e1d04f43b"
+    },
+    {
+      "database": "产品条件库",
+      "table": "无损检测数据模板表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 26,
+      "file": "seed/table-0089.jsonl.gz",
+      "bytes": 742,
+      "sha256": "0548aedaee4e4612bd5722bc601846c5257332c996706b747cf1c515ec8348e9",
+      "ddl_sha256": "b0e35304923b7984c91b908693464819bca63289e074ac60fbad9ce5b04f36a7",
+      "logical_rows_sha256": "fe3fa9f9d779a90b18f8e289be7f1d219016eea1f03ba65a6b8dcb8866491c5a"
+    },
+    {
+      "database": "产品条件库",
+      "table": "无损检测数据选项模板",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 14,
+      "file": "seed/table-0090.jsonl.gz",
+      "bytes": 427,
+      "sha256": "1128ca3c16f519674e50b8741ec3563063a478a238237031170e16df9d346059",
+      "ddl_sha256": "3ccef25742f5aa561fa9af4118cbf9fb72bc5ad52c6c3db9e75c4d4a50f8dd7f",
+      "logical_rows_sha256": "92885049fe42c930d27d0b2c60d1b0b4372d6742573c4cfbab13f3263be9c5b3"
+    },
+    {
+      "database": "产品条件库",
+      "table": "涂漆数据模板表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 18,
+      "file": "seed/table-0091.jsonl.gz",
+      "bytes": 628,
+      "sha256": "21b382ef14122ac77dc7d0ddfcf2987c9cf3d79d9ae4b10d3b02621b0f6a472d",
+      "ddl_sha256": "504e2fd9e3896841ecbab27dbecdb62fd2bf2eac01dad167e323d071a9554604",
+      "logical_rows_sha256": "d153f3f926e05b06920c2a6c5b3ee393054727132c33da719c7ce9410db3554d"
+    },
+    {
+      "database": "产品条件库",
+      "table": "设计数据参数顺序模板表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 4,
+      "file": "seed/table-0092.jsonl.gz",
+      "bytes": 500,
+      "sha256": "1b2117ec792fdd64852b8a1666b18524d69bb30c5fb451cb829136bbaa099315",
+      "ddl_sha256": "15a94ec839c93c25ae08c1ab9b50f1c9c519884aaaf579755c5afd8f560bcb73",
+      "logical_rows_sha256": "9c70b64f8b3ba4eea0c28e0871ffc662f90bf3afded5a330ce60e8ac95efc297"
+    },
+    {
+      "database": "产品条件库",
+      "table": "设计数据模板表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 57,
+      "file": "seed/table-0093.jsonl.gz",
+      "bytes": 1550,
+      "sha256": "9c7f708753fb951105140418a3984f9fc8254a68363fb3a4403a13be95a49dc1",
+      "ddl_sha256": "4c6648c98fe554164c5c770f6d1185e4952580aacacd1d8e895183684d5d4677",
+      "logical_rows_sha256": "1ac248bbcb7ad2b411af9f1a141d461d7264ce488f6743834a3d6b836411f241"
+    },
+    {
+      "database": "产品条件库",
+      "table": "设计数据选项模板",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 10,
+      "file": "seed/table-0094.jsonl.gz",
+      "bytes": 740,
+      "sha256": "cd0e15e726003a51c0c459bdb7cdd4bdecf28dcbc60f468dfefa92af391ec83d",
+      "ddl_sha256": "2969f121a40f3363bfd9e3b02440bb70e8eec11cd047f7d6e42c3ebe589d93e0",
+      "logical_rows_sha256": "37feef2257aeecc84393b7092cb114220b4d96eb53f80796101d6a3229cb2e74"
+    },
+    {
+      "database": "产品条件库",
+      "table": "通用数据模板表",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 18,
+      "file": "seed/table-0095.jsonl.gz",
+      "bytes": 798,
+      "sha256": "8d07a1d3f17574e62be553359093e79393adcc79c1303b39936790a78da10cd4",
+      "ddl_sha256": "54279f5a4f59cfb3707765f0cedc304545c1c1400c13303cafeb06ff822f7d47",
+      "logical_rows_sha256": "871d5dadac421f5f66344424fec05715a6bf21c88681ad94231f4f77f3b84656"
+    },
+    {
+      "database": "产品条件库",
+      "table": "通用数据选项模板",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "foundation-data",
+      "rows": 12,
+      "file": "seed/table-0096.jsonl.gz",
+      "bytes": 783,
+      "sha256": "a5117149619e3d2ebad82fea4a04f0b50b7ab2597ad7ed826349c5fc6c3187ba",
+      "ddl_sha256": "9166c1318a5056c6f8f38185b19e9a2a38b75e3630fd0caab67d4dc144825f15",
+      "logical_rows_sha256": "d124e7ac30cb86d8ca1d5fd67afd5be93f8f7cb4da7261497d88d9b478513b5b"
+    },
+    {
+      "database": "配置库",
+      "table": "user_config",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "default-config-only",
+      "rows": 507,
+      "file": "seed/table-0097.jsonl.gz",
+      "bytes": 21432,
+      "sha256": "18ad2e0b963e747a7aadba776a6ce2c4cb19fa77416c2fbd265714c2d6af5208",
+      "ddl_sha256": "d85a7ca72660c1c97247c5c0370c08d545fd435f29a3533df8574f3557b229d4",
+      "logical_rows_sha256": "f52cb0e1c8f0e3ba4ae551e08b5ad5a38116104c657943a1cb7bacdaef17cc68"
+    },
+    {
+      "database": "配置库",
+      "table": "user_config_beifen",
+      "engine": "InnoDB",
+      "mode": "data",
+      "policy": "default-config-only",
+      "rows": 507,
+      "file": "seed/table-0098.jsonl.gz",
+      "bytes": 21431,
+      "sha256": "358a9617dd6dbbb76253d513ee3dd0d0519ddf4e95663eb579d7db4b695efb67",
+      "ddl_sha256": "9dd9664f3e912f82bad1303034b210743faf6a322eb7e9e25dbaea66f469a2b1",
+      "logical_rows_sha256": "f52cb0e1c8f0e3ba4ae551e08b5ad5a38116104c657943a1cb7bacdaef17cc68"
+    },
+    {
+      "database": "项目需求库",
+      "table": "上一个项目id",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0099.jsonl.gz",
+      "bytes": 321,
+      "sha256": "bdebc1e985474698f271ffd43e6195891fc1a9db405bff672cd8ae54ed33ced6",
+      "ddl_sha256": "b256c1f8778d53fb4624eb08ed57ad959eb5d000536d8f5661b117ce840e0629",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "项目需求库",
+      "table": "项目需求表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0100.jsonl.gz",
+      "bytes": 441,
+      "sha256": "02ea79ef966f4bc621b7dacf2bc9af86d54b8b7c391859372958b985806e8549",
+      "ddl_sha256": "ae54f307247998a198f9da024dd43f6c057bb5c9ee4d844b7f96b09f4046db0f",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品需求库",
+      "table": "产品需求表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0101.jsonl.gz",
+      "bytes": 543,
+      "sha256": "328503e8d54aab8f677b5bb7a2f2902258d6d4db9d52982f587e66762d720186",
+      "ddl_sha256": "6cb5725a4a08f7d52b138882193dd21520d1193fbeaaace6b505e39bbb072566",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0102.jsonl.gz",
+      "bytes": 567,
+      "sha256": "775114ef4e403fdabdcbcd8a12e6a04473aa90351ff18b5241aec4a5eef167f5",
+      "ddl_sha256": "b521ae21537c32a852961afe75692b1c9ea41a71ecf368b1816aab572ae40240",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_产品标准数据表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0103.jsonl.gz",
+      "bytes": 363,
+      "sha256": "0094cdb72a8b93776bd95df681b96084cefed837963409a3fade6f15740c3ecb",
+      "ddl_sha256": "dcc92db8a808e76a6084a3598933d0998f56ed03aecf43f2801e4e8de8e82196",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_元件材料表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0104.jsonl.gz",
+      "bytes": 524,
+      "sha256": "3073bb0bc104c270905f98dfaf1a8f09a8a159aad885410fd70da9e0fda6023e",
+      "ddl_sha256": "6e87c115a743c85b44e03899d47d9e872d579655255253c6caa6d8b21875fd85",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_元件计算结果表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0105.jsonl.gz",
+      "bytes": 402,
+      "sha256": "87f2e5cbd0550e8c2d8b324bcebc0eeda566fd9510290c0fff3731553756789e",
+      "ddl_sha256": "f3b911e55b8d7baaa647df9a5dd0db718a0f07842c2b24c76ad12a0ca63a1cfc",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_元件附加参数合并表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0106.jsonl.gz",
+      "bytes": 490,
+      "sha256": "14e305c578743e7d63f73d8a8ca845a2359fc109619d8473e9df711913a9f510",
+      "ddl_sha256": "5ee44b7e10b29a29cf267197a4f52f0c480e24f459ea390ea996d5e2199fa34c",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_元件附加参数表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0107.jsonl.gz",
+      "bytes": 434,
+      "sha256": "6d20a6681e25434c89c3259672b6509dadc73e5a75c1a2ba755169fbd6421d93",
+      "ddl_sha256": "8a82e8fdec9ce2a526a51f47c0acf43a1fe2de56fbdcf7d224edc80ca1037f71",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管中间挡板表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0108.jsonl.gz",
+      "bytes": 409,
+      "sha256": "5943a1c508150b2d818aff5842e61ac9f90409f6c1a817db621c0be6ea805c89",
+      "ddl_sha256": "9d549837f6e6f379a3bc6e30b89091cd66c8146d1f96205efc5dac907bfcbeb3",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管交叉布管表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0109.jsonl.gz",
+      "bytes": 569,
+      "sha256": "e39e18d64e5ee65782f6af81b5d29c44d453a987608e896eb88f041149254513",
+      "ddl_sha256": "b02191d08b93ff90f016d1aee9e24be1ebb8f6d6e37c76e122097f05572ade5f",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管元件信息表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0110.jsonl.gz",
+      "bytes": 400,
+      "sha256": "0ba267a37a13330342fc552e8c9e07100d06919c4065c572e15ad7929e2d147f",
+      "ddl_sha256": "5146ad1f72fb51d88d6843d9b816968678acda4db8531ae841deeb4485290bca",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管元件表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0111.jsonl.gz",
+      "bytes": 539,
+      "sha256": "9ba6d3c62ace8613b2a752630b9fcb4981751377be870c559990a368907be8a7",
+      "ddl_sha256": "adb400fe71a64c63236eefd54192c43e586a31f178031fb95fb04b7b23058561",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管参数表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0112.jsonl.gz",
+      "bytes": 367,
+      "sha256": "1338d6ac7ceb7f63d754de5e403abba6c96a88fc4ddec5ceb14fb899e06a555e",
+      "ddl_sha256": "640c4f2610de009aebbc8e6d8f3e815c539fa4726383199072d625c837486397",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管吊环螺钉表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0113.jsonl.gz",
+      "bytes": 369,
+      "sha256": "0ee075307e82715f21db9d1e4fbc8897e648276df54c0267683ea332bac86b10",
+      "ddl_sha256": "45a5fa83197ec4bff8cc34b885417ef05d6ec3fc213c094b000351ee98487e67",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管坐标表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0114.jsonl.gz",
+      "bytes": 355,
+      "sha256": "b02cba0c91ab8a6e7b10aff979f3face25563d758ef03047a28c70ca16f945a2",
+      "ddl_sha256": "40121402bb47e284ae87e3c99066d70726998462bc4dfa955cf203502d7f33de",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管拉杆表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0115.jsonl.gz",
+      "bytes": 338,
+      "sha256": "c15261c08e4a06a6176e792f967b517994d1514d7ce04a996c8a4fb947f7561c",
+      "ddl_sha256": "73a9aaa6c5d57f62c1c01024133909bdb7a935b8200fe64de5b703fed833e690",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管换热管信息表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0116.jsonl.gz",
+      "bytes": 364,
+      "sha256": "806481b1d523da1178cc4f825663b92c08ec21611f2c71c737c45b693449aa34",
+      "ddl_sha256": "6ef2d7c0de9b2497fb8ab366c1962c39da0c2c5fbe818801487360848f765b85",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管换热管表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0117.jsonl.gz",
+      "bytes": 339,
+      "sha256": "dae24d5f4fc3cf7b13b6758c7f39a4807b1c197b73875ec1d39a774a2d3c4bf8",
+      "ddl_sha256": "34307615b775fb02cce608230a568c93be88ebd7621e50af0c0942519e25ce98",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管操作记录表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0118.jsonl.gz",
+      "bytes": 353,
+      "sha256": "911332d4293a829e51f725a6f244dcec16d10f0e014f19d7db25a1e2041f88a6",
+      "ddl_sha256": "fd3648696b8ecee8cc839bc55479751e574a2e79ceafcaff359845915d2dc0dc",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管数量表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0119.jsonl.gz",
+      "bytes": 442,
+      "sha256": "117e8ff05ecb7526bd71b4ae77dd0f0dfaa9b5c2d30a3b89a9906652b300b84c",
+      "ddl_sha256": "b8a00798b130294813177bb0640bee2f0aae1528ca13848a4b8da6e55d1d9797",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管数量表_显示",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0120.jsonl.gz",
+      "bytes": 448,
+      "sha256": "308d7c9c4cf8ae2c72e3a5348498a248eadf9d5d07e114d59417deb78bbc494b",
+      "ddl_sha256": "10b73a327b75734d571336cc0b34ef9c46583f293db97f0a01382330e7a424b7",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管数量表_水平",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0121.jsonl.gz",
+      "bytes": 445,
+      "sha256": "16bd7d2fb161374dd0d26c9d7674fdb885e6db458c35053d07162dcbd3b829b8",
+      "ddl_sha256": "831f18d41f3ed33d30ebb836b7ff96db484bd120936b9745b907ff92f4ad78fc",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管数量表_竖直",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0122.jsonl.gz",
+      "bytes": 447,
+      "sha256": "be192e227a1d12f4d928df937d3122a8a8658cd3e5af3e3dae311bcca1e7a271",
+      "ddl_sha256": "f7425e8fec6b646a0cf188bf1ef01461b6614f854e80933e5a6e6d7a8aec68bb",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管旁路挡板表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0123.jsonl.gz",
+      "bytes": 410,
+      "sha256": "edcb31913be9765b6bcf5ec1f4085b6291c4ad5e9baf201423df7c9f808ab007",
+      "ddl_sha256": "a61cb4cdc09ca6932adaf40e6fb1af2bb85c8763d006709f92f44bf7e1a4f2a7",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管焊接式防冲板表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0124.jsonl.gz",
+      "bytes": 449,
+      "sha256": "7b1f03af0d9c61da4ddf65ccd695ad662c4559c1154ebcb6e371c7119091625b",
+      "ddl_sha256": "8c6c506ffffa49627ce8227039718e5f9f6d8c730bfe4277512703188595b991",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管管口表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0125.jsonl.gz",
+      "bytes": 396,
+      "sha256": "aeaa534ad4eba8735ef7a1bd6e59ac7e07c17dc40f7b08e1539758ad37afea17",
+      "ddl_sha256": "ba042678f97825a490e10ef0c6a729c2bdb9ca1a385daa5a5296cd65df248006",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管结果表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0126.jsonl.gz",
+      "bytes": 350,
+      "sha256": "b0a87f35a1b93a6758cb262f9462da2c9ad1987afcc57e88630e009aa0099389",
+      "ddl_sha256": "2ca6fe31bc8fbae70061de423422704a62346042cae5f6096696e7feabd6e142",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管计算结果表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0127.jsonl.gz",
+      "bytes": 403,
+      "sha256": "a2c0ac95f87c17086cb90cd935b023df87a9eb69c044b1e3c893c5371b205d48",
+      "ddl_sha256": "e2e48befa7fd1ea1d57c0653931b41f2bae6cea937816af35c4123258d4bd82e",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管输入表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0128.jsonl.gz",
+      "bytes": 338,
+      "sha256": "2ccedb2cb0bc2f70bfc980cd78763c715e0e9918a58206be0bc27d3f6dd4a8fb",
+      "ddl_sha256": "d2b3daefc34c2c4aed5381935007156b83d2e58b462d63561908eefac3a7c9f5",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_布管防冲板表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0129.jsonl.gz",
+      "bytes": 528,
+      "sha256": "e33e7ed517aee689dbb9d03d1bd92f564aaf198663a77341039072ce6bae00cf",
+      "ddl_sha256": "ab26fd2103de93d6a8ff64732253b8ec0d9b3ebead61ad45434c12f62bd8c1af",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_无损检测数据表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0130.jsonl.gz",
+      "bytes": 470,
+      "sha256": "428a1b6c556cea618903ad8b50f799eff9952f77f4ce0c47bc3d40bb80cb9341",
+      "ddl_sha256": "d0dfd9a6a7a6e8f7d7df806ea0a08bff12d775bec0c9f38629e80c2915de4a63",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_涂漆数据表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0131.jsonl.gz",
+      "bytes": 447,
+      "sha256": "e2bb3d929453f6aec2a56476abe10a1a8c08f8e9ffedd0f7b641a5582c10c722",
+      "ddl_sha256": "c5fd8104ecc60689f43be6a5e8d66db2dec48ef2a1228f31791d313e3ab6b4bc",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_管口类别表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0132.jsonl.gz",
+      "bytes": 453,
+      "sha256": "ac529cc16ebcb8ab556b31d97b98b0d5213db3d2a2e1905bcf2fae2f35277cce",
+      "ddl_sha256": "3c44320ab086036ee52031112a82f68f3f6e047d746ae778ad0b08bf2345ed98",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_管口类型选择表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0133.jsonl.gz",
+      "bytes": 345,
+      "sha256": "eee37da58cac70a1905fb12695f919ac5889b8867d550a1a1b7115306a3da1bc",
+      "ddl_sha256": "4872a7abf170c721a6c5b66acea0036021328ea44028253c80f4529c2943a6ce",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_管口表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0134.jsonl.gz",
+      "bytes": 668,
+      "sha256": "ef80ba1c2de97fed07ccc094be105aadb029e50bd3a409505805ddd2df13145b",
+      "ddl_sha256": "0a95824f649d22b9b6006cc2ac28e87873a37f15e150c5ff9f7ef2c88fd23609",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_管口计算提交表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0135.jsonl.gz",
+      "bytes": 360,
+      "sha256": "6b9053747f033b02a31a5fd030608738165bef7a29b957f3075b1d3fb0187e87",
+      "ddl_sha256": "09367804b0d56c1d66a8e577c251a4d96021107932f015d160a552d89b13129b",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_管口载荷表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0136.jsonl.gz",
+      "bytes": 617,
+      "sha256": "7c786ee0e4220e2d8055cad445fb21ea2d99d92f2ac78825e2baa3b2b35ff2df",
+      "ddl_sha256": "db2eee300f98472b7be572a7d267f344c6bc7e8c68faca0ba3428e22fc7047e9",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_管口附件附加参数表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0137.jsonl.gz",
+      "bytes": 426,
+      "sha256": "22de83a62cfe6746a0c31623cf3bb539a5fab22cf549c6b7ea933c4516f012a4",
+      "ddl_sha256": "154bad6fc54a3ecbf700fd6bcc82802fa534bae65a7791fee58d98f1c7711580",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_管口附加参数表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0138.jsonl.gz",
+      "bytes": 405,
+      "sha256": "f444f5bb3b66c74eaea2523124b4e2c8ba9097380fc50a7a923aae63d3fa396d",
+      "ddl_sha256": "689e8db560ef0801fb0a0e5d0b0ba3698d4482109b84c545bb7b1b0b38fcc88f",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_管口零件材料参数表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0139.jsonl.gz",
+      "bytes": 390,
+      "sha256": "c3f00491aba171876ddf6fa1853ebb8ab1151ee19370a3d69d380ef9eaa7eee2",
+      "ddl_sha256": "70d126f2fc611bcf56e8421eaa7160174e8c23cfcc595e225ecaeed3c01dee61",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_管口零件材料表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0140.jsonl.gz",
+      "bytes": 433,
+      "sha256": "00e8c6f795e64422262e9b77c51731f29580d2efb01723496d235257d04c34ed",
+      "ddl_sha256": "c5dda3e36b567d6ac95daeb36cd8aadae0ab19cee17c1a8c644812f60496f5d0",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_管板形式表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0141.jsonl.gz",
+      "bytes": 425,
+      "sha256": "ab33c9980efede1fc1febb31cb15f7a134f7903acb294e01186125dbc2c242da",
+      "ddl_sha256": "4ea752109ca8b98e70c712ea4ce534ced0a56ccd657e7b9153a8667346e580cd",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_管板连接表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0142.jsonl.gz",
+      "bytes": 499,
+      "sha256": "1cb36b403d32f33b8085141d816736765db2f351fa0f20807ea7c38ec278bcd8",
+      "ddl_sha256": "d29ef23eb30ba525685f3f82aaa677a67c3119b05ecd401661078b8ff949df36",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_计算提交表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0143.jsonl.gz",
+      "bytes": 383,
+      "sha256": "6a7f22aa56c46179aef54411a1390faacaeb4e11a87e0c6692a553f1d0c050d3",
+      "ddl_sha256": "542e156e4745f20ccc8153cb3d9344533f2fa1fc8bd14d22452309a12c804495",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_计算结果日志表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0144.jsonl.gz",
+      "bytes": 377,
+      "sha256": "14bd6d405dee56fe5603dacf9c45ff80aa573cd955bae787f99a73d0e5d12fb5",
+      "ddl_sha256": "e500ac80f99d10c7f1bc19e457463599277dbd3ee15154f85c60151545b70bb3",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_设计数据表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0145.jsonl.gz",
+      "bytes": 377,
+      "sha256": "05ef2f8cdcabd3b668968bd34a09ad8c774f3f17c070edf42cb9525dc5c62d84",
+      "ddl_sha256": "e2ac7cc28df02359ec294570ca2888ca34955a419ba374a7ff99da9a75e8af7c",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_设计数据计算提交表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0146.jsonl.gz",
+      "bytes": 371,
+      "sha256": "96782073e45bb852acbd3b87a73b0e5ce131a5adbec658c909ac478755eddb76",
+      "ddl_sha256": "dc1cf7d3da53988df94a4cbb7392d005dcd94211363f870d74d7aa0f72302b1f",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_通用数据表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0147.jsonl.gz",
+      "bytes": 380,
+      "sha256": "6b1216b5b61adb79868aef6ad745223656b3ac3a7ee2ab8f557df84ffe859a37",
+      "ddl_sha256": "207dc096fd619d57c9ab039c9fbd26e3afa743cdf4a72784e145afeb076a60ae",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "database": "产品设计活动库",
+      "table": "产品设计活动表_附件表",
+      "engine": "InnoDB",
+      "mode": "schema-only",
+      "policy": "schema-only",
+      "rows": 0,
+      "file": "seed/table-0148.jsonl.gz",
+      "bytes": 582,
+      "sha256": "f6e9f021d3ba14f3196f08704e2803a2a75fd0419ff265f2eca52f825d156c36",
+      "ddl_sha256": "4b70c065416b215f7c4d09a5dc0ede2100f0017955e6cee8347f4a4b037c3380",
+      "logical_rows_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "runtime": {
+    "home": "mysql",
+    "files": [
+      {
+        "file": "mysql/bin/abseil_dll.dll",
+        "bytes": 1747528,
+        "sha256": "ec3f4e86cb17888455fe5a9568bc3323ff97590d769c666490face4f579cd1e3"
+      },
+      {
+        "file": "mysql/bin/comerr64.dll",
+        "bytes": 26176,
+        "sha256": "8ee75c496e5a4087d28793cf474c0ca4e70655eb5d35888c4415c9161a653db4"
+      },
+      {
+        "file": "mysql/bin/fido2.dll",
+        "bytes": 254528,
+        "sha256": "ab1624f579dfeafac282aa4facfb5a334e4d6013d65e0402fdf1915484a5efc3"
+      },
+      {
+        "file": "mysql/bin/gssapi64.dll",
+        "bytes": 403008,
+        "sha256": "18cab1c7cbd1011871b155b3656746e557ec4583d4a4378de74e25211f6989ba"
+      },
+      {
+        "file": "mysql/bin/jemalloc.dll",
+        "bytes": 505928,
+        "sha256": "5630e9c285066276bf373c7cffdef3af9573996792f4759d95d10a11668f1058"
+      },
+      {
+        "file": "mysql/bin/k5sprt64.dll",
+        "bytes": 69192,
+        "sha256": "2f0c87e300cc144f2685c09c1ce8275a21aec107a79a977ef95e8a1d517049d2"
+      },
+      {
+        "file": "mysql/bin/krb5_64.dll",
+        "bytes": 1224256,
+        "sha256": "e67655481addf058017617570807d1470c70267f007b9742475bfeb4397b6044"
+      },
+      {
+        "file": "mysql/bin/krbcc64.dll",
+        "bytes": 121920,
+        "sha256": "a823f5e86ea42bb2930bd5f101fb2e9a64fae9429f3497f2f96b3fb1dbcbee54"
+      },
+      {
+        "file": "mysql/bin/libcrypto-3-x64.dll",
+        "bytes": 5187152,
+        "sha256": "502592e68055fafd0058805ed1c06019a1878a88a8411a1424a2e1a54332a6e4"
+      },
+      {
+        "file": "mysql/bin/libmecab.dll",
+        "bytes": 1849928,
+        "sha256": "2bb46b5b603e3714750df5be16cac2024c60d4d9995be74260de2c43b7c3213b"
+      },
+      {
+        "file": "mysql/bin/libprotobuf-lite.dll",
+        "bytes": 653392,
+        "sha256": "b8a207fc1787c0fa3dfeabcf22cc603c7e077f91f6f064da03152023c013167c"
+      },
+      {
+        "file": "mysql/bin/libprotobuf.dll",
+        "bytes": 4129864,
+        "sha256": "e02c3b480131f8f191c787352d5e7cda5b005a660f1f4895b180f461fcf95041"
+      },
+      {
+        "file": "mysql/bin/libsasl.dll",
+        "bytes": 120896,
+        "sha256": "996b2fa21ebe1643f65d48d167bdcc6080190b904024a8b9cdccd12b7dc4f8ac"
+      },
+      {
+        "file": "mysql/bin/libssl-3-x64.dll",
+        "bytes": 788552,
+        "sha256": "1309db44b09244aa62d078345c527fbf734eb46e07b5c8be126bb5e33634a390"
+      },
+      {
+        "file": "mysql/bin/MSVCP140.dll",
+        "bytes": 643512,
+        "sha256": "7c26614e1d733892c2deac7e245ce115504b1d80592dd0a01b08e3e5a55f89ca"
+      },
+      {
+        "file": "mysql/bin/mysqld.exe",
+        "bytes": 54369856,
+        "sha256": "838732cda80a84abc8cf9ffa03a63feb2e95892dec983d3b05b755ee95ac1718"
+      },
+      {
+        "file": "mysql/bin/saslSCRAM.dll",
+        "bytes": 57416,
+        "sha256": "ffc08d3910426a0cc97e6074ed4abb19bfa9a0f2e42d3ced5220515855d081e9"
+      },
+      {
+        "file": "mysql/bin/VCRUNTIME140.dll",
+        "bytes": 178616,
+        "sha256": "d1f4225df2cd877dbf130d5668a021dce3f94118455ff5ec952061c30afc9ce7"
+      },
+      {
+        "file": "mysql/bin/VCRUNTIME140_1.dll",
+        "bytes": 50112,
+        "sha256": "a7146c08f89fe5b04541ab507cdb59ff7b44534d4ba3c668a426c6450a03434e"
+      },
+      {
+        "file": "mysql/bin/xpprof64.dll",
+        "bytes": 58432,
+        "sha256": "4042196f5ac4fdf0fc37288998ff5e7bb0ab918191886c95e4788424971da6dd"
+      },
+      {
+        "file": "mysql/lib/plugin/adt_null.dll",
+        "bytes": 36928,
+        "sha256": "8600ec1db7d7d221aab42099148bb3768f681777b560c323667f9fb712289879"
+      },
+      {
+        "file": "mysql/lib/plugin/authentication_fido_client.dll",
+        "bytes": 42088,
+        "sha256": "7198de9cf6cc7971eb9378ca3989e5bcfae1d73def56938fd108f3dafab6ea0d"
+      },
+      {
+        "file": "mysql/lib/plugin/authentication_kerberos_client.dll",
+        "bytes": 6269552,
+        "sha256": "690e96581f132070f55a74b578f055c0af27cc0ad6c78814ebac14faa8364e36"
+      },
+      {
+        "file": "mysql/lib/plugin/authentication_ldap_sasl_client.dll",
+        "bytes": 54896,
+        "sha256": "a840aa010be5282cb5147f44948a093d585b34d0b180ed6c5c6e1d11322760fe"
+      },
+      {
+        "file": "mysql/lib/plugin/authentication_oci_client.dll",
+        "bytes": 6317160,
+        "sha256": "b82ef3371f4b84c839f6f3c95a3823a8f4a50f767cb0faaef1ea76382fa258a0"
+      },
+      {
+        "file": "mysql/lib/plugin/component_audit_api_message_emit.dll",
+        "bytes": 35448,
+        "sha256": "2b3df9ac869c5ee0a4f22a0f7d69aa2c7fb741b4c68526d8633c24b7a1e4a03f"
+      },
+      {
+        "file": "mysql/lib/plugin/component_keyring_file.dll",
+        "bytes": 1252960,
+        "sha256": "ad25d0eb758c84716cb2133ef159504a207836af6ec2e83cad442d7e9503533b"
+      },
+      {
+        "file": "mysql/lib/plugin/component_log_filter_dragnet.dll",
+        "bytes": 43112,
+        "sha256": "5f97a72e2d364ac29b918869a9c4ea6655b9e75016c3b0bf6e4d4926082eb7be"
+      },
+      {
+        "file": "mysql/lib/plugin/component_log_sink_json.dll",
+        "bytes": 47200,
+        "sha256": "a27ea07bfd8431492c85827ab1ff1da187b7a6fc99dced08b2bfd77bb0d19db9"
+      },
+      {
+        "file": "mysql/lib/plugin/component_log_sink_syseventlog.dll",
+        "bytes": 28784,
+        "sha256": "cc2362bbedb6b7ffaed5bf1377d7d459005e2e1ebbf3bbc37eff7346e52a8e69"
+      },
+      {
+        "file": "mysql/lib/plugin/component_mysqlbackup.dll",
+        "bytes": 54880,
+        "sha256": "0a63e15ecfe408bfb483c4eea9534312e5371854db2392bf739d5b499a941506"
+      },
+      {
+        "file": "mysql/lib/plugin/component_query_attributes.dll",
+        "bytes": 25192,
+        "sha256": "5cb2ed701c502353884f9f0aae200c234c8f23fc82875e1e9a55c7a67030263d"
+      },
+      {
+        "file": "mysql/lib/plugin/component_reference_cache.dll",
+        "bytes": 56424,
+        "sha256": "62ce0fc4ace83969b9ac06f147458727f0e6f659670631ef437dbf92a2ebd6ed"
+      },
+      {
+        "file": "mysql/lib/plugin/component_validate_password.dll",
+        "bytes": 78952,
+        "sha256": "5eaea8e0c844bdf3ff64c1c9cfc21ff59747f172fadfdf594ff40eb10ee564af"
+      },
+      {
+        "file": "mysql/lib/plugin/connection_control.dll",
+        "bytes": 56408,
+        "sha256": "d3a87e4f559063ce0417d9d46f75aa88d5f8d508c4e29fd7efdf6c29d0a0035d"
+      },
+      {
+        "file": "mysql/lib/plugin/ddl_rewriter.dll",
+        "bytes": 81992,
+        "sha256": "1238a617dbb80187698c40cc18bcd7df917933d48dab404412cd5814f6c8a702"
+      },
+      {
+        "file": "mysql/lib/plugin/group_replication.dll",
+        "bytes": 1997912,
+        "sha256": "30da60747dca78e042f05212fc12280e76d61deee0a97eabd7a3f638fc114c60"
+      },
+      {
+        "file": "mysql/lib/plugin/ha_example.dll",
+        "bytes": 41544,
+        "sha256": "742ffb6856a4d753eedf0eac1f013526375492575502a59983f64d58e24bb114"
+      },
+      {
+        "file": "mysql/lib/plugin/ha_mock.dll",
+        "bytes": 51264,
+        "sha256": "004c504a0ba1b509fb6fcced4f8e2f7817a9de7c2f1669965f1f433224164bcf"
+      },
+      {
+        "file": "mysql/lib/plugin/keyring_file.dll",
+        "bytes": 105032,
+        "sha256": "71353cac81fb8833f09cbf3a08165e89a1b942b7d4202561caae5e07fecfc7ab"
+      },
+      {
+        "file": "mysql/lib/plugin/keyring_udf.dll",
+        "bytes": 37448,
+        "sha256": "d4a90f452703b39146d7edcd952f77d59b457fb8638c7d577b30aafa321279da"
+      },
+      {
+        "file": "mysql/lib/plugin/libpluginmecab.dll",
+        "bytes": 41552,
+        "sha256": "64c222bba1d92c225ed81c7ef128c4cecaf05e6637769bbabfbbd65f9f51a9f7"
+      },
+      {
+        "file": "mysql/lib/plugin/locking_service.dll",
+        "bytes": 24656,
+        "sha256": "0be525fdb553c00108ff76472aa61d891b6c3370fd45a44842dd4e380757b23f"
+      },
+      {
+        "file": "mysql/lib/plugin/mypluglib.dll",
+        "bytes": 25160,
+        "sha256": "f04a9572b9e20e41fc3e20bff4ce064b84df300b38bfaa88a2205f6fbf2355f0"
+      },
+      {
+        "file": "mysql/lib/plugin/mysql_clone.dll",
+        "bytes": 153160,
+        "sha256": "1e8bb170341af3fcb4070baf32811ebb3b7a0dbce2a562c1d65f40f9486c7932"
+      },
+      {
+        "file": "mysql/lib/plugin/mysql_no_login.dll",
+        "bytes": 23120,
+        "sha256": "a4129b8558a5b30006b720ae7aeea953c7d827048722fb41512041d66a9539b9"
+      },
+      {
+        "file": "mysql/lib/plugin/rewrite_example.dll",
+        "bytes": 24656,
+        "sha256": "5b80601180233c903fba31237ab207812c9be0041ea264e23de1c200867f2c69"
+      },
+      {
+        "file": "mysql/lib/plugin/rewriter.dll",
+        "bytes": 70728,
+        "sha256": "ac2e677321c76957eb0f840acd7bcb715bdd89ff202f9ac51cc8305859fba033"
+      },
+      {
+        "file": "mysql/lib/plugin/semisync_master.dll",
+        "bytes": 90704,
+        "sha256": "80513299b769d233abe40c7938cea17ee0fda760bf36d28757a2f8614ae3ce61"
+      },
+      {
+        "file": "mysql/lib/plugin/semisync_replica.dll",
+        "bytes": 46168,
+        "sha256": "f6837fc2412cf7aabbccded76fdad3a75036dbf61a18f248c75993898bcf9e94"
+      },
+      {
+        "file": "mysql/lib/plugin/semisync_slave.dll",
+        "bytes": 46672,
+        "sha256": "0b8eb0cc3343c63a226927429ae6a07c62cc7728ede8e8fdefe6090732f68047"
+      },
+      {
+        "file": "mysql/lib/plugin/semisync_source.dll",
+        "bytes": 89680,
+        "sha256": "4d4093bd6493461e4f6e16410ae80a19eae92e0bc6ff4e190eb20985830c9c32"
+      },
+      {
+        "file": "mysql/lib/plugin/validate_password.dll",
+        "bytes": 58456,
+        "sha256": "b0ed8a07c4e8143b85d95ad6118c8521786606c32fd6a9b91a787d8f02f53d4d"
+      },
+      {
+        "file": "mysql/lib/plugin/version_token.dll",
+        "bytes": 62032,
+        "sha256": "64f7b7dd92b4ba3238bbc42e3abcd0534f2f15a057cc17e8b6d2fed67eb6f2c6"
+      },
+      {
+        "file": "mysql/LICENSE",
+        "bytes": 259903,
+        "sha256": "b018a3f5bce31da047cff91c0941aa1af7aa7456b328509ed8a07e7b91f6e4b0"
+      },
+      {
+        "file": "mysql/README",
+        "bytes": 666,
+        "sha256": "f3306b0bacd6b0c7ef90eee75f67ee6db1e2dd123224aeaf0fd0efb74bda9d41"
+      },
+      {
+        "file": "mysql/RUNTIME-NOTICE.txt",
+        "bytes": 253,
+        "sha256": "5b9143a690ed7918176d7099265c9a26d3587611f41daffd80615751a7d52ad7"
+      },
+      {
+        "file": "mysql/share/bulgarian/errmsg.sys",
+        "bytes": 389434,
+        "sha256": "5a5046afcb6b5d159c13ea20335faa9f658e5ce37c9340c21a19c384d71032eb"
+      },
+      {
+        "file": "mysql/share/charsets/armscii8.xml",
+        "bytes": 6011,
+        "sha256": "159621074fcb079847c136cba758d0ac04da58b0d75385ce2d91f3ebc1c51d5a"
+      },
+      {
+        "file": "mysql/share/charsets/ascii.xml",
+        "bytes": 5997,
+        "sha256": "efec282317e350c69cd54f6fc86c2bd8ea2b84f5c3e14da55ff22d7cc67fe40b"
+      },
+      {
+        "file": "mysql/share/charsets/cp1250.xml",
+        "bytes": 8726,
+        "sha256": "42152b26193454ae463acb98244e3382419f8095d1416e8178cb8ba5600061c0"
+      },
+      {
+        "file": "mysql/share/charsets/cp1251.xml",
+        "bytes": 8812,
+        "sha256": "8e0cbe6a1a11acca345dee2b665cc424e1d08f43ee0bcfe1d42c280c57760961"
+      },
+      {
+        "file": "mysql/share/charsets/cp1256.xml",
+        "bytes": 6060,
+        "sha256": "e0ed76c6fee08ef84f5d6ac120474952405f2db601512b4a6baf6892eb2b0917"
+      },
+      {
+        "file": "mysql/share/charsets/cp1257.xml",
+        "bytes": 9393,
+        "sha256": "08e8646264af78fe4a2f6fc667d48e33aee21e349f4a9365a10f440529216c37"
+      },
+      {
+        "file": "mysql/share/charsets/cp850.xml",
+        "bytes": 5997,
+        "sha256": "2ba34b1f18f4e334740a4262d589ec11dc2417ceb8003cbf323d5452de3cefcf"
+      },
+      {
+        "file": "mysql/share/charsets/cp852.xml",
+        "bytes": 6013,
+        "sha256": "3d8ad7750fc19530406a090ee65f135ba251caf5b22b86cf9142019bc88db60b"
+      },
+      {
+        "file": "mysql/share/charsets/cp866.xml",
+        "bytes": 6104,
+        "sha256": "a717c03e02a073048b164399bc12f39eea763bcf441bb2867157e3b47a43812b"
+      },
+      {
+        "file": "mysql/share/charsets/dec8.xml",
+        "bytes": 7020,
+        "sha256": "1ce93950fcf29b11ada01cb4c7d88de1d03784f2aa16b175f0c8efcae337f917"
+      },
+      {
+        "file": "mysql/share/charsets/geostd8.xml",
+        "bytes": 6007,
+        "sha256": "1aec169b38fdac8dc6a7270f145e653d7c7ee7ae0e9e0a6537ed987212dd54b1"
+      },
+      {
+        "file": "mysql/share/charsets/greek.xml",
+        "bytes": 6219,
+        "sha256": "847edff0ee585c01255c11946ae03825da81f5b287f3493efb7ae6f3e9d88710"
+      },
+      {
+        "file": "mysql/share/charsets/hebrew.xml",
+        "bytes": 6002,
+        "sha256": "ff72933eafb1ed2b3dff3724733ea40f51d47a71b6edcdd7cb1f3637df3fc89b"
+      },
+      {
+        "file": "mysql/share/charsets/hp8.xml",
+        "bytes": 5993,
+        "sha256": "06b64d1c6cef5efa6fd69ad104dfcd4817f40288fbdb06168540759960823a6d"
+      },
+      {
+        "file": "mysql/share/charsets/Index.xml",
+        "bytes": 19525,
+        "sha256": "3d4ede5831b703a7bf06325eb3e3a672be44ce9ed5bbc8a82c1c75596a7ed1f9"
+      },
+      {
+        "file": "mysql/share/charsets/keybcs2.xml",
+        "bytes": 6020,
+        "sha256": "ffe65a58630f8f295d4edf7ebea8d597da55621f5d49a2f37e69f2363fa37c94"
+      },
+      {
+        "file": "mysql/share/charsets/koi8r.xml",
+        "bytes": 6001,
+        "sha256": "bc3a18d15b7aed78038a348a6e88946d3b51023255ec4371759efd1ec2094333"
+      },
+      {
+        "file": "mysql/share/charsets/koi8u.xml",
+        "bytes": 7023,
+        "sha256": "7ec6566641883eca777d75e5039aca0fe49ed82b9d5fa0bba0e94d6c33a0a0eb"
+      },
+      {
+        "file": "mysql/share/charsets/latin1.xml",
+        "bytes": 10301,
+        "sha256": "95389bf27b7170c196ce95f8d325de60309d9397131f1c6c7617944b647e1485"
+      },
+      {
+        "file": "mysql/share/charsets/latin2.xml",
+        "bytes": 7723,
+        "sha256": "11c36baa035f1ef93b929d2371ed76c315171d7470a63497133512f5482209d2"
+      },
+      {
+        "file": "mysql/share/charsets/latin5.xml",
+        "bytes": 6000,
+        "sha256": "3f809e0e357c15b2a357d3684fe6959f3e9692e0a51c3da1346e38f7d59a8531"
+      },
+      {
+        "file": "mysql/share/charsets/latin7.xml",
+        "bytes": 7929,
+        "sha256": "7cb7fab1cea9206cf3f6aa80d454ecea52436e3aba15655022f14b69a4ce6e9b"
+      },
+      {
+        "file": "mysql/share/charsets/macce.xml",
+        "bytes": 8538,
+        "sha256": "62d0799664146ae2f9be5eb638499dbbdde540d998a54f89d3bb0d34d736ea55"
+      },
+      {
+        "file": "mysql/share/charsets/macroman.xml",
+        "bytes": 8549,
+        "sha256": "fa6d43b909828d466560305029d9e99c5ddbd81d35f0b274cc21c12ca7292a02"
+      },
+      {
+        "file": "mysql/share/charsets/README",
+        "bytes": 1749,
+        "sha256": "0af62ce1ae651e980006f2e9d29bd2f24e1cd18c6a0b1914e9c437cc80e990ab"
+      },
+      {
+        "file": "mysql/share/charsets/swe7.xml",
+        "bytes": 7021,
+        "sha256": "4d2ff74829ae881f433575bacc8b6ee5d8baa2676204d650d6a0b9ae48543cee"
+      },
+      {
+        "file": "mysql/share/czech/errmsg.sys",
+        "bytes": 389356,
+        "sha256": "b4b8ad0b3e5215a31bdd16cca38620cb6d9a44e45b34f6eedb29b26f5910246b"
+      },
+      {
+        "file": "mysql/share/danish/errmsg.sys",
+        "bytes": 389330,
+        "sha256": "bbfb455df68201003f58d45ca66ad9ea897bb4bd9b1c282227e2936d00ed0cf5"
+      },
+      {
+        "file": "mysql/share/dictionary.txt",
+        "bytes": 25575,
+        "sha256": "d031a0f90d77595abe02112adf69a86560e3168ba379fd450176a8e070763077"
+      },
+      {
+        "file": "mysql/share/dutch/errmsg.sys",
+        "bytes": 390344,
+        "sha256": "a7b43c3172936b23a6ed96d25a4751e03bc9cc222c0f07f9133693a9a2526be1"
+      },
+      {
+        "file": "mysql/share/english/errmsg.sys",
+        "bytes": 388597,
+        "sha256": "e1e9e28158d349d6d3143cf9ccc8abe91ecbb672067f72048efc1677aea51d22"
+      },
+      {
+        "file": "mysql/share/errmsg.sys",
+        "bytes": 388597,
+        "sha256": "e1e9e28158d349d6d3143cf9ccc8abe91ecbb672067f72048efc1677aea51d22"
+      },
+      {
+        "file": "mysql/share/estonian/errmsg.sys",
+        "bytes": 388861,
+        "sha256": "e0dd95d716d02db7cd93c41516b8e99f8f2ee934bce3a68de9e0910ab9603f4e"
+      },
+      {
+        "file": "mysql/share/french/errmsg.sys",
+        "bytes": 389970,
+        "sha256": "4062d5493ada05e59d5a097a7d2e491a9b4641a04317ce3e6cd3ef4d9a49c462"
+      },
+      {
+        "file": "mysql/share/german/errmsg.sys",
+        "bytes": 396171,
+        "sha256": "798ec03c301cd9c7b8180e2d30e17b5e2610ca35a3511d1eed70e841215ef7a2"
+      },
+      {
+        "file": "mysql/share/greek/errmsg.sys",
+        "bytes": 395388,
+        "sha256": "1eabc3555bf2f6c74c7f7feb68f7dbcce9584e1821fa59e03fca1c05e6065a4b"
+      },
+      {
+        "file": "mysql/share/hungarian/errmsg.sys",
+        "bytes": 389238,
+        "sha256": "3d9f00b65c853de41058bf480a0add62bf78bf9e4a5efb12c169b214f4c93af9"
+      },
+      {
+        "file": "mysql/share/install_rewriter.sql",
+        "bytes": 2323,
+        "sha256": "56f78aebc20633b535d53b4b57355ca9d9c4270d94b5df375cab49abd8ddb72d"
+      },
+      {
+        "file": "mysql/share/italian/errmsg.sys",
+        "bytes": 390341,
+        "sha256": "b8a573af513082110fd4c9b409985af2091381b5c777e96d555aca1ebc6173ad"
+      },
+      {
+        "file": "mysql/share/japanese/errmsg.sys",
+        "bytes": 395981,
+        "sha256": "924d2ef4a117c0c50bb6f456baada5aa3e09190eeca34b52f562a78c92baa450"
+      },
+      {
+        "file": "mysql/share/korean/errmsg.sys",
+        "bytes": 391637,
+        "sha256": "0f213b8f341c8616364e43e3b720b57cd790787a1063cf9968e10f24b0dcedc5"
+      },
+      {
+        "file": "mysql/share/messages_to_clients.txt",
+        "bytes": 630457,
+        "sha256": "ead6a3ca10a8b08710f434d8eb634100722b3dffe43a122492055acd9d1401ba"
+      },
+      {
+        "file": "mysql/share/messages_to_error_log.txt",
+        "bytes": 397724,
+        "sha256": "98cb005c61e4b29c1e0304d0b98ad1b6e7f103466f383ff0de7ea05ef7129419"
+      },
+      {
+        "file": "mysql/share/norwegian/errmsg.sys",
+        "bytes": 388667,
+        "sha256": "98a0695142c93f9fd883937ca73af331e61aa5605bd623ad346bd8f4df2ed4f3"
+      },
+      {
+        "file": "mysql/share/norwegian-ny/errmsg.sys",
+        "bytes": 388720,
+        "sha256": "d985b5baad6e0dca35cf5b6969db6004e598730e944ee0702a28dfcdd418a937"
+      },
+      {
+        "file": "mysql/share/polish/errmsg.sys",
+        "bytes": 389526,
+        "sha256": "09f454670aca16a37fa0d6681940002e3fc8cafc118777a996eeb9cba51b7cee"
+      },
+      {
+        "file": "mysql/share/portuguese/errmsg.sys",
+        "bytes": 391503,
+        "sha256": "65b23cac14d7756a663f12a030bbf764bf8f573a45bbe2aa4e15dc9396b98e1d"
+      },
+      {
+        "file": "mysql/share/romanian/errmsg.sys",
+        "bytes": 390309,
+        "sha256": "120caa44437666d325f6b091e0fc63c1ac2a58993cf84d2b3068b1a5ab42189f"
+      },
+      {
+        "file": "mysql/share/russian/errmsg.sys",
+        "bytes": 403797,
+        "sha256": "e75a8998f7bb29e33c1f6b16a822c2e60fd7505d395367019d724c5f2a1162b3"
+      },
+      {
+        "file": "mysql/share/serbian/errmsg.sys",
+        "bytes": 390944,
+        "sha256": "93872608900af2478bb46e19ac4b61cfcb959267df1466c78b76d1be55b4dd05"
+      },
+      {
+        "file": "mysql/share/slovak/errmsg.sys",
+        "bytes": 389123,
+        "sha256": "f493578c0872eb711cd535a182693780ddf5ffb10c4d99c80cd5cc65b0f0a196"
+      },
+      {
+        "file": "mysql/share/spanish/errmsg.sys",
+        "bytes": 390197,
+        "sha256": "1b2d88d8ed51bd9eee8a8a02888fadf2475ab19613a8b88ba99b2122b54a8782"
+      },
+      {
+        "file": "mysql/share/swedish/errmsg.sys",
+        "bytes": 389410,
+        "sha256": "79795c4a329e134ddcd937d2765ad9cc8ba49ca355994bf5d500fdec36a60026"
+      },
+      {
+        "file": "mysql/share/ukrainian/errmsg.sys",
+        "bytes": 398420,
+        "sha256": "f9ad15215ad8842a061a43904b93df0b78e2e41097ac9a294ad9304f02fc4d80"
+      },
+      {
+        "file": "mysql/share/uninstall_rewriter.sql",
+        "bytes": 1325,
+        "sha256": "ffd797b595038fe94b19e99ebd5f0c6a85238bcbcfdde79806e4c37b28efbaf3"
+      }
+    ]
+  },
+  "product_rows_included": false,
+  "project_configurations_included": false,
+  "connection_credentials_included": false,
+  "foundations": [
+    "材料库",
+    "元件库",
+    "产品定义库",
+    "产品条件库",
+    "配置库"
+  ],
+  "configuration": "默认"
+}

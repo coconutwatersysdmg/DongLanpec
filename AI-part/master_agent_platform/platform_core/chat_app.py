@@ -47,6 +47,23 @@ class Worker(QThread):
         except Exception as exc: self.failure.emit(str(exc))
 
 
+class DatabaseWorker(QThread):
+    message = pyqtSignal(str)
+    complete = pyqtSignal(dict)
+    failure = pyqtSignal(str)
+
+    def __init__(self, workspace, parent=None):
+        super().__init__(parent)
+        self.workspace = workspace
+
+    def run(self):
+        try:
+            from .bundled_database import ensure_database
+            config = ensure_database(self.workspace, self.message.emit)
+            self.complete.emit(dict(port=config["port"]))
+        except Exception as exc: self.failure.emit(str(exc))
+
+
 STYLE = """
 QWidget{font-family:'Microsoft YaHei';font-size:13px;color:#26354a;}
 QMainWindow{background:#fff;} QWidget#sidebar{background:#f5f7fa;border-right:1px solid #e8edf3;}
@@ -76,6 +93,7 @@ class ChatWindow(QMainWindow):
         self.workspace = BASE / "workspace"
         self.fabric = Fabric(self.workspace)
         self.inputs, self.knowledge, self.worker = [], [], None
+        self.database_worker, self.close_after_database = None, False
         self.last_result, self.last_output, self.active_run_id = None, None, None
         self.review_editors, self.messages = [], []
         self.bubbles = []
@@ -139,9 +157,9 @@ class ChatWindow(QMainWindow):
         self.clock_label = QLabel("尚未运行")
         self.clock_label.setObjectName("muted")
         header.addWidget(self.clock_label)
-        badge = QLabel("数据空间已接入")
-        badge.setObjectName("badge")
-        header.addWidget(badge)
+        self.data_badge = QLabel("数据空间 · 本地托管")
+        self.data_badge.setObjectName("badge")
+        header.addWidget(self.data_badge)
         body_layout.addLayout(header)
         self.state = QLabel("等待提交文件")
         self.state.setObjectName("muted")
@@ -182,6 +200,37 @@ class ChatWindow(QMainWindow):
         self.navigate(0)
 
     def make_orchestrator(self, *args, **kwargs): return Orchestrator(*args, **kwargs)
+
+    def prepare_database(self):
+        if self.database_worker or self.worker or self.module_panel.busy: return
+        self.data_badge.setText("自带数据库准备中…")
+        self.state.setText("正在准备本机独立数据库，首次启动会自动导入基础数据。")
+        self.database_worker = DatabaseWorker(self.workspace, self)
+        self.database_worker.message.connect(self.append_log)
+        self.database_worker.complete.connect(self.database_ready)
+        self.database_worker.failure.connect(self.database_failed)
+        self.database_worker.finished.connect(self.database_finished)
+        self.module_panel.set_busy(True)
+        self.controls()
+        self.database_worker.start()
+
+    def database_ready(self, result):
+        self.data_badge.setText("数据空间与独立库已就绪")
+        if not self.last_result:
+            self.state.setText("数据库已准备完成，请加入文件并发送任务。")
+
+    def database_failed(self, message):
+        self.data_badge.setText("数据库准备未完成")
+        self.state.setText("数据库准备未完成 · 具体原因见下方")
+        self.welcome.hide()
+        self.bubble("assistant", "自带数据库准备未完成："+message)
+
+    def database_finished(self):
+        self.database_worker.deleteLater()
+        self.database_worker = None
+        self.module_panel.set_busy(False)
+        self.controls()
+        if self.close_after_database: QTimer.singleShot(0, self.close)
 
     def build_chat(self):
         page = QWidget()
@@ -367,7 +416,7 @@ class ChatWindow(QMainWindow):
         self.update_attachments()
 
     def send(self):
-        if self.worker or self.module_panel.busy or self.pending_new_chat: return
+        if self.worker or self.database_worker or self.module_panel.busy or self.pending_new_chat: return
         text = self.prompt.toPlainText().strip() or "整理输入中的全部产品，并继续自动审核。"
         self.welcome.hide()
         self.bubble("user", text)
@@ -410,7 +459,7 @@ class ChatWindow(QMainWindow):
         return True
 
     def start(self, goal=""):
-        if not self.inputs or self.worker or self.module_panel.busy or self.pending_new_chat: return
+        if not self.inputs or self.worker or self.database_worker or self.module_panel.busy or self.pending_new_chat: return
         self.last_result, self.active_run_id = None, None
         self.report_frame.hide()
         self.execution_card.show()
@@ -435,7 +484,7 @@ class ChatWindow(QMainWindow):
         self.worker.start()
 
     def controls(self, *args):
-        busy = self.worker is not None or self.module_panel.busy or self.pending_new_chat
+        busy = self.worker is not None or self.database_worker is not None or self.module_panel.busy or self.pending_new_chat
         self.begin.setEnabled(not busy)
         self.cancel.setEnabled(self.worker is not None)
         self.submit_review.setEnabled(bool(self.review_editors) and not busy)
@@ -448,7 +497,7 @@ class ChatWindow(QMainWindow):
     def append_log(self, message):
         message = str(message).replace("原界面", "模块").replace("原模块", "模块").replace("原窗口", "模块编辑器")
         self.log.append(message)
-        if self.worker: self.state.setText(message)
+        if self.worker or self.database_worker: self.state.setText(message)
 
     def tick(self):
         if self.started_at is not None:
@@ -495,6 +544,7 @@ class ChatWindow(QMainWindow):
             self.state.setText("等待人工审核必需参数" if count else "全部产品已完成本轮自动审核 · 仍有暂缓项及能力限制")
         lines = [f"识别产品：{result.get('discovered_products', 0)} 个；已逐台处理：{result.get('processed_products', len(result.get('products', [])))} 个。",
                  f"必需参数待审核 {count} 项；暂缓缺项 {result.get('deferred_count', 0)} 项。", ""]
+        if result.get("error"): lines += ["失败原因："+str(result["error"]), ""]
         self.review_tree.clear()
         self.review_editors = []
         for product in result.get("products", []):
@@ -573,7 +623,7 @@ class ChatWindow(QMainWindow):
         self.tick()
 
     def submit_answers(self):
-        if self.worker or self.module_panel.busy or self.pending_new_chat or not self.last_result: return
+        if self.worker or self.database_worker or self.module_panel.busy or self.pending_new_chat or not self.last_result: return
         answers = {}
         for product_id, gap_id, editor in self.review_editors:
             if editor.text().strip(): answers.setdefault(product_id, {})[gap_id] = dict(value=editor.text().strip(), reason="用户在统一审核面板填写")
@@ -583,7 +633,7 @@ class ChatWindow(QMainWindow):
         self.connect_worker()
 
     def recheck_current(self):
-        if self.worker or self.module_panel.busy or self.pending_new_chat or not self.last_result: return
+        if self.worker or self.database_worker or self.module_panel.busy or self.pending_new_chat or not self.last_result: return
         self.worker = Worker([], [], self, review_request=dict(run_id=self.last_result["run_id"], automatic=True), factory=self.make_orchestrator)
         self.connect_worker()
 
@@ -611,7 +661,7 @@ class ChatWindow(QMainWindow):
             self.history_ids.append(row["id"])
 
     def select_history(self, item):
-        if self.worker or self.module_panel.busy or self.pending_new_chat: return
+        if self.worker or self.database_worker or self.module_panel.busy or self.pending_new_chat: return
         index = self.history.row(item)
         if index < 0 or index >= len(self.history_ids): return
         path = self.workspace / "runs" / self.history_ids[index] / "summary.json"
@@ -620,7 +670,7 @@ class ChatWindow(QMainWindow):
             self.navigate(0)
 
     def load_result(self):
-        if self.worker or self.module_panel.busy or self.pending_new_chat: return
+        if self.worker or self.database_worker or self.module_panel.busy or self.pending_new_chat: return
         path, _ = QFileDialog.getOpenFileName(self, "载入任务结果", str(self.workspace / "runs"), "任务结果 (summary.json)")
         if path:
             try: self.on_complete(json.loads(Path(path).read_text(encoding="utf-8")))
@@ -640,6 +690,9 @@ class ChatWindow(QMainWindow):
 
     def finish_new_chat(self):
         if not self.pending_new_chat: return
+        if self.database_worker:
+            self.state.setText("数据库准备完成后将自动开启新对话。")
+            return
         if self.worker:
             self.state.setText("当前任务结束后将自动开启新对话；也可点击停止，已完成结果会保留。")
             return
@@ -680,7 +733,11 @@ class ChatWindow(QMainWindow):
         self.controls()
 
     def closeEvent(self, event):
-        if self.worker:
+        if self.database_worker:
+            self.close_after_database = True
+            self.state.setText("数据库准备完成后自动退出，正在保留当前初始化进度。")
+            event.ignore()
+        elif self.worker:
             self.worker.cancelled.set()
             self.state.setText("正在停止后台任务，释放后可关闭")
             event.ignore()
