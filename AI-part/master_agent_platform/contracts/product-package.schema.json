@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:donglanpec:product-package:manifest:1",
+  "title": "计算前产品数据包目标清单契约（设计稿）",
+  "description": "只验证包清单结构及发布声明；字段完整性、工程约束、文件摘要、映射覆盖和独立运行必须由运行时领域校验器核对。本契约本身不能证明可计算。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "package_id", "created_at", "stage", "scope", "project_id", "product", "basis", "files", "validation"],
+  "properties": {
+    "schema": {"const": "donglanpec.precalculation-package/1"},
+    "package_id": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "format": "date-time"},
+    "stage": {"enum": ["draft", "released"]},
+    "scope": {"const": "pre-strength-calculation"},
+    "project_id": {"type": "string", "minLength": 1},
+    "product": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "form", "revision"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "minLength": 1},
+        "form": {"type": "string", "minLength": 1},
+        "revision": {"type": "integer", "minimum": 1},
+        "equipment_tag": {"type": "string"},
+        "quantity": {"type": "integer", "minimum": 1},
+        "source_identity": {"type": "object"}
+      }
+    },
+    "basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshot_id", "snapshot_sha256", "foundation_snapshot_id", "knowledge_snapshot_id", "requirements_profile", "calculation_profile"],
+      "properties": {
+        "snapshot_id": {"type": "string", "minLength": 1},
+        "snapshot_sha256": {"$ref": "#/$defs/sha256"},
+        "foundation_snapshot_id": {"type": "string", "minLength": 1},
+        "knowledge_snapshot_id": {"type": "string", "minLength": 1},
+        "requirements_profile": {"type": ["string", "null"]},
+        "calculation_profile": {"type": ["string", "null"]}
+      }
+    },
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "role", "bytes", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1, "description": "ZIP内相对POSIX路径；运行时拒绝绝对路径、反斜线、空片段、.、..、重复成员及越界路径。"},
+          "role": {"enum": ["project", "product", "conditions", "elements", "nozzles", "tube_bundle", "calculation_input", "calculation_mapping", "validation", "provenance", "knowledge_references", "source", "receipt"]},
+          "bytes": {"type": "integer", "minimum": 0},
+          "sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "blocker_count", "checks", "strength_calculation_executed"],
+      "properties": {
+        "status": {"enum": ["not_checked", "blocked", "passed"]},
+        "blocker_count": {"type": "integer", "minimum": 0},
+        "checks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["required_fields", "identity_and_scope", "units_and_enums", "cross_module", "engineering_rules", "calculation_mapping", "snapshot_freshness", "self_contained_sources", "file_integrity"],
+          "properties": {
+            "required_fields": {"$ref": "#/$defs/check"},
+            "identity_and_scope": {"$ref": "#/$defs/check"},
+            "units_and_enums": {"$ref": "#/$defs/check"},
+            "cross_module": {"$ref": "#/$defs/check"},
+            "engineering_rules": {"$ref": "#/$defs/check"},
+            "calculation_mapping": {"$ref": "#/$defs/check"},
+            "snapshot_freshness": {"$ref": "#/$defs/check"},
+            "self_contained_sources": {"$ref": "#/$defs/check"},
+            "file_integrity": {"$ref": "#/$defs/check"}
+          }
+        },
+        "strength_calculation_executed": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "check": {"enum": ["not_checked", "blocked", "passed"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"stage": {"const": "released"}}},
+      "then": {
+        "properties": {
+          "basis": {
+            "properties": {
+              "requirements_profile": {"type": "string", "minLength": 1},
+              "calculation_profile": {"type": "string", "minLength": 1}
+            }
+          },
+          "files": {
+            "minItems": 12,
+            "allOf": [
+              {"contains": {"properties": {"role": {"const": "project"}}, "required": ["role"]}},
+              {"contains": {"properties": {"role": {"const": "product"}}, "required": ["role"]}},
+              {"contains": {"properties": {"role": {"const": "conditions"}}, "required": ["role"]}},
+              {"contains": {"properties": {"role": {"const": "elements"}}, "required": ["role"]}},
+              {"contains": {"properties": {"role": {"const": "nozzles"}}, "required": ["role"]}},
+              {"contains": {"properties": {"role": {"const": "tube_bundle"}}, "required": ["role"]}},
+              {"contains": {"properties": {"role": {"const": "calculation_input"}}, "required": ["role"]}, "minContains": 1, "maxContains": 1},
+              {"contains": {"properties": {"role": {"const": "calculation_mapping"}}, "required": ["role"]}},
+              {"contains": {"properties": {"role": {"const": "validation"}}, "required": ["role"]}},
+              {"contains": {"properties": {"role": {"const": "provenance"}}, "required": ["role"]}},
+              {"contains": {"properties": {"role": {"const": "knowledge_references"}}, "required": ["role"]}},
+              {"contains": {"properties": {"role": {"const": "receipt"}}, "required": ["role"]}}
+            ],
+            "items": {
+              "if": {"properties": {"role": {"const": "calculation_input"}}},
+              "then": {"properties": {"path": {"const": "calculation/input.json"}, "bytes": {"minimum": 1}}}
+            }
+          },
+          "validation": {
+            "properties": {
+              "status": {"const": "passed"},
+              "blocker_count": {"const": 0},
+              "checks": {"additionalProperties": {"const": "passed"}, "patternProperties": {".*": {"const": "passed"}}}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "files": {"not": {"contains": {"properties": {"role": {"const": "calculation_input"}}, "required": ["role"]}}}
+        }
+      }
+    }
+  ]
+}

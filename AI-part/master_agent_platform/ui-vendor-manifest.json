@@ -1,0 +1,2004 @@
+{
+  "schema": "donglanpec.original-agent-ui-copies/1",
+  "files": [
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\_v20.py",
+      "target": "ui_vendor\\project_agent\\_v20.py",
+      "source_sha256": "c59ef7831d8167dc1adee1ba58dee4b2655c8e19af920c343f5f68d22fd99e52",
+      "sha256": "c59ef7831d8167dc1adee1ba58dee4b2655c8e19af920c343f5f68d22fd99e52",
+      "bytes": 1335
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\_v26.py",
+      "target": "ui_vendor\\project_agent\\_v26.py",
+      "source_sha256": "a6e9870202aa47cc2201626fa16b8174e73b38c1f1a5abce38f4d381ca8c1fb7",
+      "sha256": "a6e9870202aa47cc2201626fa16b8174e73b38c1f1a5abce38f4d381ca8c1fb7",
+      "bytes": 1319
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\agent_core.py",
+      "target": "ui_vendor\\project_agent\\agent_core.py",
+      "source_sha256": "a8b241b8cc762bc307ced50ad72f5ce81bca86da325944d4642214a68f3f7197",
+      "sha256": "a8b241b8cc762bc307ced50ad72f5ce81bca86da325944d4642214a68f3f7197",
+      "bytes": 31591
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\app.py",
+      "target": "ui_vendor\\project_agent\\app.py",
+      "source_sha256": "2b454736b7a9f23ad7a2bdea58680db6e095ef35c902d25589032e75cf9092f1",
+      "sha256": "2b454736b7a9f23ad7a2bdea58680db6e095ef35c902d25589032e75cf9092f1",
+      "bytes": 46480
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\check_key.py",
+      "target": "ui_vendor\\project_agent\\check_key.py",
+      "source_sha256": "7a54895505fb8cd25c70f97463b9573993006dc01da7dd479fd7c5c46863de7f",
+      "sha256": "7a54895505fb8cd25c70f97463b9573993006dc01da7dd479fd7c5c46863de7f",
+      "bytes": 10211
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\config.py",
+      "target": "ui_vendor\\project_agent\\config.py",
+      "source_sha256": "4d81846bf4f22213a20e595e2bb52645fdcc2624b271912501a89aba73e7a33f",
+      "sha256": "4d81846bf4f22213a20e595e2bb52645fdcc2624b271912501a89aba73e7a33f",
+      "bytes": 6156
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\confirm_dialog.py",
+      "target": "ui_vendor\\project_agent\\confirm_dialog.py",
+      "source_sha256": "83077f400a80208ea480c85979467b731ab295ac77375337ac0e9a4f19ff37d2",
+      "sha256": "83077f400a80208ea480c85979467b731ab295ac77375337ac0e9a4f19ff37d2",
+      "bytes": 29013
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\evidence.py",
+      "target": "ui_vendor\\project_agent\\evidence.py",
+      "source_sha256": "d94901283def5e4394bcf51f4327c79d1c47bcc6bddeed270eef53b8edac8d94",
+      "sha256": "d94901283def5e4394bcf51f4327c79d1c47bcc6bddeed270eef53b8edac8d94",
+      "bytes": 13264
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\file_reader.py",
+      "target": "ui_vendor\\project_agent\\file_reader.py",
+      "source_sha256": "54235914982b40eeed0e3968b05ea10ff38c06ba9321e778bb44938a58cc302d",
+      "sha256": "54235914982b40eeed0e3968b05ea10ff38c06ba9321e778bb44938a58cc302d",
+      "bytes": 11158
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\multi_confirm_dialog.py",
+      "target": "ui_vendor\\project_agent\\multi_confirm_dialog.py",
+      "source_sha256": "0a82a554958a87142b47c64711b77f188bc81766160614cfbe205bd19401c7ec",
+      "sha256": "0a82a554958a87142b47c64711b77f188bc81766160614cfbe205bd19401c7ec",
+      "bytes": 33682
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\product_splitter.py",
+      "target": "ui_vendor\\project_agent\\product_splitter.py",
+      "source_sha256": "d18b8f5c38a0b7f5faa409a010726bf02132506d66fd9b665c309ecc4bc5b25b",
+      "sha256": "d18b8f5c38a0b7f5faa409a010726bf02132506d66fd9b665c309ecc4bc5b25b",
+      "bytes": 26620
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\record_store.py",
+      "target": "ui_vendor\\project_agent\\record_store.py",
+      "source_sha256": "8fffc5f63c444c43e300879d9a6b66e745f0e333e320663105822be815ae60c8",
+      "sha256": "8fffc5f63c444c43e300879d9a6b66e745f0e333e320663105822be815ae60c8",
+      "bytes": 4555
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\schema.py",
+      "target": "ui_vendor\\project_agent\\schema.py",
+      "source_sha256": "964c5d49656fda7198e3deff5ebb7ee14c010127e04e6923ca306ed0421261d0",
+      "sha256": "964c5d49656fda7198e3deff5ebb7ee14c010127e04e6923ca306ed0421261d0",
+      "bytes": 11779
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\selftest.py",
+      "target": "ui_vendor\\project_agent\\selftest.py",
+      "source_sha256": "5c097e1a65834cd838e4d6c638e8d6172f339142757d8e8f949cff2732d345f6",
+      "sha256": "5c097e1a65834cd838e4d6c638e8d6172f339142757d8e8f949cff2732d345f6",
+      "bytes": 5135
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\show_records.py",
+      "target": "ui_vendor\\project_agent\\show_records.py",
+      "source_sha256": "e377f1b936b08649bf40384eb50d7b70719c270ecf51f6de73e21afe2bf52d37",
+      "sha256": "e377f1b936b08649bf40384eb50d7b70719c270ecf51f6de73e21afe2bf52d37",
+      "bytes": 3763
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\test_multi_product.py",
+      "target": "ui_vendor\\project_agent\\test_multi_product.py",
+      "source_sha256": "21bb25badfd6ad0f130fac2222fbf64d7b76b864514be83547642a05098703f8",
+      "sha256": "21bb25badfd6ad0f130fac2222fbf64d7b76b864514be83547642a05098703f8",
+      "bytes": 11688
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\test_real_files.py",
+      "target": "ui_vendor\\project_agent\\test_real_files.py",
+      "source_sha256": "d4323ed0010f543c8ec51de82bb6f358b1aa5b3e780951604ffabb4676799db5",
+      "sha256": "d4323ed0010f543c8ec51de82bb6f358b1aa5b3e780951604ffabb4676799db5",
+      "bytes": 8497
+    },
+    {
+      "source": "AI-part\\ai_xiangmuguanli\\ui_msg.py",
+      "target": "ui_vendor\\project_agent\\ui_msg.py",
+      "source_sha256": "5dbe64cde680294d83f9de7a11096df3c6078dd67e9b8db441b14872982e754b",
+      "sha256": "5dbe64cde680294d83f9de7a11096df3c6078dd67e9b8db441b14872982e754b",
+      "bytes": 2616
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\api.py",
+      "target": "ui_vendor\\condition_agent\\api.py",
+      "source_sha256": "ada41924026a7429d44b8bbc7e9d059b86bb86ccf0173ebfb0307c7f7a35fa36",
+      "sha256": "ada41924026a7429d44b8bbc7e9d059b86bb86ccf0173ebfb0307c7f7a35fa36",
+      "bytes": 9898
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\config.py",
+      "target": "ui_vendor\\condition_agent\\config.py",
+      "source_sha256": "c7b6e520ff4ec8c140e082535519327b2386a653f7e181c24e00e5f7e2915f1e",
+      "sha256": "c7b6e520ff4ec8c140e082535519327b2386a653f7e181c24e00e5f7e2915f1e",
+      "bytes": 5891
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\core\\__init__.py",
+      "target": "ui_vendor\\condition_agent\\core\\__init__.py",
+      "source_sha256": "9552f854fcf77389160a08cfb4be2eb902cd9a0c0af76ab57df02cbf9125d369",
+      "sha256": "9552f854fcf77389160a08cfb4be2eb902cd9a0c0af76ab57df02cbf9125d369",
+      "bytes": 25
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\core\\evidence.py",
+      "target": "ui_vendor\\condition_agent\\core\\evidence.py",
+      "source_sha256": "ec559f000d0bc06a0258f43daea46ad638e3803a6746522c0020361ab293c37b",
+      "sha256": "ec559f000d0bc06a0258f43daea46ad638e3803a6746522c0020361ab293c37b",
+      "bytes": 30239
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\core\\extractor.py",
+      "target": "ui_vendor\\condition_agent\\core\\extractor.py",
+      "source_sha256": "70b1e430b24e193831fce1be6ba05c8b37c09698a07ea65ad51ced57d5ddf79e",
+      "sha256": "70b1e430b24e193831fce1be6ba05c8b37c09698a07ea65ad51ced57d5ddf79e",
+      "bytes": 37268
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\core\\linkage.py",
+      "target": "ui_vendor\\condition_agent\\core\\linkage.py",
+      "source_sha256": "2429256d2d874e007560797173eddf2cf79528dd67785fa5ccf76fb3b7873c07",
+      "sha256": "2429256d2d874e007560797173eddf2cf79528dd67785fa5ccf76fb3b7873c07",
+      "bytes": 7285
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\core\\ndt_paint.py",
+      "target": "ui_vendor\\condition_agent\\core\\ndt_paint.py",
+      "source_sha256": "f94f7a07756f4a54fcc8fabf307f6867f26390c9d3d551c7450cfba596b0220f",
+      "sha256": "f94f7a07756f4a54fcc8fabf307f6867f26390c9d3d551c7450cfba596b0220f",
+      "bytes": 21560
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\core\\param_spec.py",
+      "target": "ui_vendor\\condition_agent\\core\\param_spec.py",
+      "source_sha256": "71c3af76a5843df3b2747c0a4d302c615dede7cd6c8606880814293ab58fd24d",
+      "sha256": "71c3af76a5843df3b2747c0a4d302c615dede7cd6c8606880814293ab58fd24d",
+      "bytes": 27063
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\core\\proposal.py",
+      "target": "ui_vendor\\condition_agent\\core\\proposal.py",
+      "source_sha256": "3771b0829c57a128e9f9dcee37a6467877c1abf3d659832b67e1a850a948d1d9",
+      "sha256": "3771b0829c57a128e9f9dcee37a6467877c1abf3d659832b67e1a850a948d1d9",
+      "bytes": 10707
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\core\\source_priority.py",
+      "target": "ui_vendor\\condition_agent\\core\\source_priority.py",
+      "source_sha256": "04dbef4130c4c7ca902f2166dc11f90d7bafb5e4de4381dacd1cce90c5b14075",
+      "sha256": "04dbef4130c4c7ca902f2166dc11f90d7bafb5e4de4381dacd1cce90c5b14075",
+      "bytes": 5116
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\core\\std_table.py",
+      "target": "ui_vendor\\condition_agent\\core\\std_table.py",
+      "source_sha256": "449521ba10a8df3f52c5725812bf7d05ec45ad6f8f7ded3c6facbbc4f5ddfafd",
+      "sha256": "449521ba10a8df3f52c5725812bf7d05ec45ad6f8f7ded3c6facbbc4f5ddfafd",
+      "bytes": 35846
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\infra\\__init__.py",
+      "target": "ui_vendor\\condition_agent\\infra\\__init__.py",
+      "source_sha256": "9552f854fcf77389160a08cfb4be2eb902cd9a0c0af76ab57df02cbf9125d369",
+      "sha256": "9552f854fcf77389160a08cfb4be2eb902cd9a0c0af76ab57df02cbf9125d369",
+      "bytes": 25
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\infra\\build_dict.py",
+      "target": "ui_vendor\\condition_agent\\infra\\build_dict.py",
+      "source_sha256": "aa9e6404a34ff81059e52e318f6a8e585e5e95d20a1995988d3f5bdf4b4b3c67",
+      "sha256": "aa9e6404a34ff81059e52e318f6a8e585e5e95d20a1995988d3f5bdf4b4b3c67",
+      "bytes": 14283
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\infra\\equipment_split.py",
+      "target": "ui_vendor\\condition_agent\\infra\\equipment_split.py",
+      "source_sha256": "4d7afc93dc2c08df578424470b95052c766c009d1639b0ec2b20700b66fed136",
+      "sha256": "4d7afc93dc2c08df578424470b95052c766c009d1639b0ec2b20700b66fed136",
+      "bytes": 4728
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\infra\\file_reader.py",
+      "target": "ui_vendor\\condition_agent\\infra\\file_reader.py",
+      "source_sha256": "3f9851651a802eaa3a2c967d35af65cb33cd37367d782a8e57575912ed12a87c",
+      "sha256": "3f9851651a802eaa3a2c967d35af65cb33cd37367d782a8e57575912ed12a87c",
+      "bytes": 14674
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\infra\\product_scan.py",
+      "target": "ui_vendor\\condition_agent\\infra\\product_scan.py",
+      "source_sha256": "4faa671a48a91b2d804abdaf2001e0d00a39dbf50de6d508b99d019f66a50d57",
+      "sha256": "4faa671a48a91b2d804abdaf2001e0d00a39dbf50de6d508b99d019f66a50d57",
+      "bytes": 4076
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\infra\\record_store.py",
+      "target": "ui_vendor\\condition_agent\\infra\\record_store.py",
+      "source_sha256": "6fea3adb73fd776b88f192ead8bc28e814ff8cb1251ec613351efcbd37922bd3",
+      "sha256": "6fea3adb73fd776b88f192ead8bc28e814ff8cb1251ec613351efcbd37922bd3",
+      "bytes": 5651
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\param_dict.json",
+      "target": "ui_vendor\\condition_agent\\param_dict.json",
+      "source_sha256": "82f31af479252a895204864ee93571f953f13f864402b51978941c1b89e5b0eb",
+      "sha256": "82f31af479252a895204864ee93571f953f13f864402b51978941c1b89e5b0eb",
+      "bytes": 34368
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\ui\\__init__.py",
+      "target": "ui_vendor\\condition_agent\\ui\\__init__.py",
+      "source_sha256": "9552f854fcf77389160a08cfb4be2eb902cd9a0c0af76ab57df02cbf9125d369",
+      "sha256": "9552f854fcf77389160a08cfb4be2eb902cd9a0c0af76ab57df02cbf9125d369",
+      "bytes": 25
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\ui\\app.py",
+      "target": "ui_vendor\\condition_agent\\ui\\app.py",
+      "source_sha256": "3c974873ad342295141ed8359baa09d84c96a840692aaba82232a1d425e00e46",
+      "sha256": "3c974873ad342295141ed8359baa09d84c96a840692aaba82232a1d425e00e46",
+      "bytes": 44927
+    },
+    {
+      "source": "AI-part\\ai_tiaojianshuru\\ui\\confirm_dialog.py",
+      "target": "ui_vendor\\condition_agent\\ui\\confirm_dialog.py",
+      "source_sha256": "e1671d3cb1f5f2263267d3bfff9856bc93ea9f3b9488de38b756cba4e51bc350",
+      "sha256": "e1671d3cb1f5f2263267d3bfff9856bc93ea9f3b9488de38b756cba4e51bc350",
+      "bytes": 81043
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\__init__.py",
+      "target": "ui_vendor\\elements_agent\\__init__.py",
+      "source_sha256": "9326124d0bd81e42c6656a196b2674d6df0ee041700d3933a5271d19903f0333",
+      "sha256": "9326124d0bd81e42c6656a196b2674d6df0ee041700d3933a5271d19903f0333",
+      "bytes": 152
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\__main__.py",
+      "target": "ui_vendor\\elements_agent\\__main__.py",
+      "source_sha256": "0836784227c47fb1c833bc435696de492eec6b8ddc0765cc6480e3ad942e746c",
+      "sha256": "037f4f7370048860aee5e966009d29cc09a373fc986d7b363089c539d127d905",
+      "bytes": 235
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\agent_window.py",
+      "target": "ui_vendor\\elements_agent\\agent_window.py",
+      "source_sha256": "015f894d08c893c505dcef011f80ebc707404b26b8e19666e50a521e4e479ef3",
+      "sha256": "136aae8c1fd52e69edefe9bfbf149d6a2fa74cd8e2eec4424689896ba73fb9bb",
+      "bytes": 26688
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\cli.py",
+      "target": "ui_vendor\\elements_agent\\cli.py",
+      "source_sha256": "ddc86374915a2e603164698533cb286d03dbf8ac788dd85f2d9b743db583087e",
+      "sha256": "57f428541a52166e1464bfe3147e4bdaf6335e452e8a36ff9cd2699746d20cd3",
+      "bytes": 4360
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\confirm_dialog.py",
+      "target": "ui_vendor\\elements_agent\\confirm_dialog.py",
+      "source_sha256": "df6f8b31d17e37362db2c656b3992697da612f4b48c141d51127b210f121c185",
+      "sha256": "9148a0bd57f86f53177b150f5264f568ea4ef39af7d775e22ec6188c763f802f",
+      "bytes": 19854
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\dds_alias_map.py",
+      "target": "ui_vendor\\elements_agent\\dds_alias_map.py",
+      "source_sha256": "3e3203863666fd69aab2d0a07f1f44acc833a5687a07c751bde4341838287ef7",
+      "sha256": "3e3203863666fd69aab2d0a07f1f44acc833a5687a07c751bde4341838287ef7",
+      "bytes": 6756
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p1.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p1.png",
+      "source_sha256": "622b5d2bca9bcda1157751f17d1403743f3a73bd22dc1dbf8fa10c5c1b01dcce",
+      "sha256": "622b5d2bca9bcda1157751f17d1403743f3a73bd22dc1dbf8fa10c5c1b01dcce",
+      "bytes": 85904
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p10.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p10.png",
+      "source_sha256": "69b25afade5d85f388da79437875d5160591346a383ebf5344cf62cacca91acf",
+      "sha256": "69b25afade5d85f388da79437875d5160591346a383ebf5344cf62cacca91acf",
+      "bytes": 114306
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p11.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p11.png",
+      "source_sha256": "abbd63677d8949c2f376b82a8b3809a2eab7b107a5d27274aaf187b0933b5bd4",
+      "sha256": "abbd63677d8949c2f376b82a8b3809a2eab7b107a5d27274aaf187b0933b5bd4",
+      "bytes": 179392
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p12.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p12.png",
+      "source_sha256": "36103d16d081d7f3b0711bb952bac7deec11af1059567c4c7fd97fba8f32eef9",
+      "sha256": "36103d16d081d7f3b0711bb952bac7deec11af1059567c4c7fd97fba8f32eef9",
+      "bytes": 136075
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p13.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p13.png",
+      "source_sha256": "3410a591c528684d9e627ce71e402c6f9dd2e64f868fbd78b19405bac5ea7fde",
+      "sha256": "3410a591c528684d9e627ce71e402c6f9dd2e64f868fbd78b19405bac5ea7fde",
+      "bytes": 171184
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p14.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p14.png",
+      "source_sha256": "8fc54b4ada165d21a22529a2fa1e50b6ea33b566ff35da1db9fc4bae328afe8b",
+      "sha256": "8fc54b4ada165d21a22529a2fa1e50b6ea33b566ff35da1db9fc4bae328afe8b",
+      "bytes": 114941
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p15.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p15.png",
+      "source_sha256": "8eff087611f9fef5c6524dbea93ec063ec94f5c86b7f0c9113648cbebd05265f",
+      "sha256": "8eff087611f9fef5c6524dbea93ec063ec94f5c86b7f0c9113648cbebd05265f",
+      "bytes": 181732
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p16.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p16.png",
+      "source_sha256": "33ac976350c93ce72da302db492bbb82ebac5b19c6a1bc12603c3bc3058c9a34",
+      "sha256": "33ac976350c93ce72da302db492bbb82ebac5b19c6a1bc12603c3bc3058c9a34",
+      "bytes": 177930
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p17.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p17.png",
+      "source_sha256": "81e9eb1cec23ed1b31d0152b6b1029254c3dd15aab39525c02aef9ade864545a",
+      "sha256": "81e9eb1cec23ed1b31d0152b6b1029254c3dd15aab39525c02aef9ade864545a",
+      "bytes": 169486
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p18.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p18.png",
+      "source_sha256": "26438061c1ab13ebddc01193f676c66631315a7468dee0cc2651950de79ed9f8",
+      "sha256": "26438061c1ab13ebddc01193f676c66631315a7468dee0cc2651950de79ed9f8",
+      "bytes": 126086
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p19.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p19.png",
+      "source_sha256": "7a5efd43b5524dd5570b78043cd6605426c8e608acdc07d748dc46e3df262e80",
+      "sha256": "7a5efd43b5524dd5570b78043cd6605426c8e608acdc07d748dc46e3df262e80",
+      "bytes": 186610
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p2.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p2.png",
+      "source_sha256": "fd4ff3efaf24d8cd3ee524273ad58d6b9642c7184c47a2088890e283ac7b98a2",
+      "sha256": "fd4ff3efaf24d8cd3ee524273ad58d6b9642c7184c47a2088890e283ac7b98a2",
+      "bytes": 112511
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p20.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p20.png",
+      "source_sha256": "7f20a8696c55c8a3c206a17cff43ed42f3dfb74dc94ec22d29ff96e2713c5929",
+      "sha256": "7f20a8696c55c8a3c206a17cff43ed42f3dfb74dc94ec22d29ff96e2713c5929",
+      "bytes": 134301
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p21.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p21.png",
+      "source_sha256": "78e2aeca2a294868400c857951dd04dce6da0f99ff8f6ef83ffa9a25e4682d05",
+      "sha256": "78e2aeca2a294868400c857951dd04dce6da0f99ff8f6ef83ffa9a25e4682d05",
+      "bytes": 171621
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p22.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p22.png",
+      "source_sha256": "8e93488dad6e77a04710c516f3a906f3748276d4e7f27580ee583ec46bdd86ad",
+      "sha256": "8e93488dad6e77a04710c516f3a906f3748276d4e7f27580ee583ec46bdd86ad",
+      "bytes": 135516
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p23.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p23.png",
+      "source_sha256": "098d403a4d04e2f6082a5fb9851a99bc0eb7880321ebe043c002ac4c9e8b242c",
+      "sha256": "098d403a4d04e2f6082a5fb9851a99bc0eb7880321ebe043c002ac4c9e8b242c",
+      "bytes": 178551
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p24.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p24.png",
+      "source_sha256": "51ac783d1127145665e8fda52d726c7d04383761390088a9498c0f388e8831f3",
+      "sha256": "51ac783d1127145665e8fda52d726c7d04383761390088a9498c0f388e8831f3",
+      "bytes": 189603
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p25.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p25.png",
+      "source_sha256": "2d28d69cd527116d3c9661f106d8d2ab201cec63d6b4b8f299890b0f64de7274",
+      "sha256": "2d28d69cd527116d3c9661f106d8d2ab201cec63d6b4b8f299890b0f64de7274",
+      "bytes": 170363
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p26.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p26.png",
+      "source_sha256": "657f20346229ab92d258a718a032d46388d119b2b23bd5571a7abb3b2f1df546",
+      "sha256": "657f20346229ab92d258a718a032d46388d119b2b23bd5571a7abb3b2f1df546",
+      "bytes": 126042
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p27.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p27.png",
+      "source_sha256": "865ca72faf15f2e58704b07e1f27a6f9688a8e69546f33631ebfebcdf5135d6a",
+      "sha256": "865ca72faf15f2e58704b07e1f27a6f9688a8e69546f33631ebfebcdf5135d6a",
+      "bytes": 188460
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p28.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p28.png",
+      "source_sha256": "202d5b9e0180f2676db4250088b15618ee36cedca4065264b04ccf0c98081a18",
+      "sha256": "202d5b9e0180f2676db4250088b15618ee36cedca4065264b04ccf0c98081a18",
+      "bytes": 135507
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p29.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p29.png",
+      "source_sha256": "ba987b950a739ca570c320b255738d4864fb732cd1bb8d990aa66d47fbd76be0",
+      "sha256": "ba987b950a739ca570c320b255738d4864fb732cd1bb8d990aa66d47fbd76be0",
+      "bytes": 171641
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p3.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p3.png",
+      "source_sha256": "0f54249170540744f55ea997e4c7a5b17d9791291b7bda7231f6a9d66c4d4eb4",
+      "sha256": "0f54249170540744f55ea997e4c7a5b17d9791291b7bda7231f6a9d66c4d4eb4",
+      "bytes": 182137
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p30.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p30.png",
+      "source_sha256": "a0083eb4da82b6dfd1380fff550ad833bee8d69d0457993db8117a1150e6865f",
+      "sha256": "a0083eb4da82b6dfd1380fff550ad833bee8d69d0457993db8117a1150e6865f",
+      "bytes": 135539
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p31.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p31.png",
+      "source_sha256": "2b1442a55db58bb7860bc75d04c10cebf0ce375eebb9638ddbe2ee405f435ca4",
+      "sha256": "2b1442a55db58bb7860bc75d04c10cebf0ce375eebb9638ddbe2ee405f435ca4",
+      "bytes": 179732
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p32.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p32.png",
+      "source_sha256": "36db9892b0fbfee64f11116c8eeebafdd16c92d03648dbc22ca63017ca1e09f6",
+      "sha256": "36db9892b0fbfee64f11116c8eeebafdd16c92d03648dbc22ca63017ca1e09f6",
+      "bytes": 176554
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p33.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p33.png",
+      "source_sha256": "a225d8f900b339deaa02bbc00ac7e41475b1d4c49ce1895ea7ac55c117831bbd",
+      "sha256": "a225d8f900b339deaa02bbc00ac7e41475b1d4c49ce1895ea7ac55c117831bbd",
+      "bytes": 170242
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p34.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p34.png",
+      "source_sha256": "f754fd126d15f0bf4bd385d31cdb49bf408af24e6feffa2306dc3484cac072df",
+      "sha256": "f754fd126d15f0bf4bd385d31cdb49bf408af24e6feffa2306dc3484cac072df",
+      "bytes": 125973
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p35.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p35.png",
+      "source_sha256": "02a906856f001a5590b860394e3627d8984ad9603edd16b310798b4450d57863",
+      "sha256": "02a906856f001a5590b860394e3627d8984ad9603edd16b310798b4450d57863",
+      "bytes": 178892
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p36.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p36.png",
+      "source_sha256": "b7156a8372b1d1849644ae023b10c803e07ceca3e3b673c22db23aa4bdbd54a2",
+      "sha256": "b7156a8372b1d1849644ae023b10c803e07ceca3e3b673c22db23aa4bdbd54a2",
+      "bytes": 177143
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p37.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p37.png",
+      "source_sha256": "3bab75dd7213c7d6f12fe87d4771d86f48408560bc7966e2cb8f39c20dd03e94",
+      "sha256": "3bab75dd7213c7d6f12fe87d4771d86f48408560bc7966e2cb8f39c20dd03e94",
+      "bytes": 170294
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p38.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p38.png",
+      "source_sha256": "ae8faf3ced8599dd2eea914b4be5221d361568a634f8c62e69118986781b66d4",
+      "sha256": "ae8faf3ced8599dd2eea914b4be5221d361568a634f8c62e69118986781b66d4",
+      "bytes": 126036
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p39.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p39.png",
+      "source_sha256": "7658af1214bb1a46fc33a572781706c2e31cfd3eb4f04c60b9edf1eab1b8c8ea",
+      "sha256": "7658af1214bb1a46fc33a572781706c2e31cfd3eb4f04c60b9edf1eab1b8c8ea",
+      "bytes": 184809
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p4.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p4.png",
+      "source_sha256": "1e2a4c28751873892f5bb13b7d8726f9a77dc7f2312ed7a3bb1fdea4968428d4",
+      "sha256": "1e2a4c28751873892f5bb13b7d8726f9a77dc7f2312ed7a3bb1fdea4968428d4",
+      "bytes": 177872
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p40.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p40.png",
+      "source_sha256": "7ced46b4efc58f4677d7e7e26c8711985b8aa4e0b9365432741800015c09aeec",
+      "sha256": "7ced46b4efc58f4677d7e7e26c8711985b8aa4e0b9365432741800015c09aeec",
+      "bytes": 135521
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p41.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p41.png",
+      "source_sha256": "7c0d2de783c19c7f79b512fea81cd3a010a15be551489737d45a05c577468a86",
+      "sha256": "7c0d2de783c19c7f79b512fea81cd3a010a15be551489737d45a05c577468a86",
+      "bytes": 173542
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p42.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p42.png",
+      "source_sha256": "88d1328f93155fc31f3d92dba87ec097bd91c242c232a61f5aa66b95bad1464d",
+      "sha256": "88d1328f93155fc31f3d92dba87ec097bd91c242c232a61f5aa66b95bad1464d",
+      "bytes": 114941
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p43.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p43.png",
+      "source_sha256": "1403d35ac8286749bc4b1bf471070405c9b95e3312e0dd8bf3d48bc4a51ae16a",
+      "sha256": "1403d35ac8286749bc4b1bf471070405c9b95e3312e0dd8bf3d48bc4a51ae16a",
+      "bytes": 179650
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p44.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p44.png",
+      "source_sha256": "be8db2ba27d84c64b8098af74ed74d9be274996a6c83b3b417249658a98be63b",
+      "sha256": "be8db2ba27d84c64b8098af74ed74d9be274996a6c83b3b417249658a98be63b",
+      "bytes": 134816
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p45.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p45.png",
+      "source_sha256": "7277c8684a5f0dcf7a39078e70c2e44b1721567f2af2849c348bae0c374402d4",
+      "sha256": "7277c8684a5f0dcf7a39078e70c2e44b1721567f2af2849c348bae0c374402d4",
+      "bytes": 172170
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p46.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p46.png",
+      "source_sha256": "7177be9b29ad9501ba7727162718e82c9b2a40598c4529150c0853a677a8b71f",
+      "sha256": "7177be9b29ad9501ba7727162718e82c9b2a40598c4529150c0853a677a8b71f",
+      "bytes": 115187
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p5.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p5.png",
+      "source_sha256": "0947871b3c4c73cb163748cf4ba799760a97391723232462fb38f9056fc2d222",
+      "sha256": "0947871b3c4c73cb163748cf4ba799760a97391723232462fb38f9056fc2d222",
+      "bytes": 169266
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p6.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p6.png",
+      "source_sha256": "b5fb97cb0fb8d41251041124e8ce02dee4550f8f42a15f9203a0639cda4d27e5",
+      "sha256": "b5fb97cb0fb8d41251041124e8ce02dee4550f8f42a15f9203a0639cda4d27e5",
+      "bytes": 125966
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p7.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p7.png",
+      "source_sha256": "177aff8507e3a31bd287db2f1f3198547558c89f6b156a371977cef1843d0f24",
+      "sha256": "177aff8507e3a31bd287db2f1f3198547558c89f6b156a371977cef1843d0f24",
+      "bytes": 184900
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p8.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p8.png",
+      "source_sha256": "14e2ab944dbeac7dc75be9c5327ee22cb07006a6ca82be40a03911b2afd25c4a",
+      "sha256": "14e2ab944dbeac7dc75be9c5327ee22cb07006a6ca82be40a03911b2afd25c4a",
+      "bytes": 135919
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p9.png",
+      "target": "ui_vendor\\elements_agent\\evidence_cache\\DD-DDS-OST-PR-19001 管壳式换热器数据表 -20220808_p9.png",
+      "source_sha256": "1a36d5415ab74a8ac822da2d16ec908c389c0a077fdbff2718ad004706a69911",
+      "sha256": "1a36d5415ab74a8ac822da2d16ec908c389c0a077fdbff2718ad004706a69911",
+      "bytes": 168506
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\graph.py",
+      "target": "ui_vendor\\elements_agent\\graph.py",
+      "source_sha256": "51aa4538ed264cd1d1088914bb096e8629527fafc0a8794cbe5094c0670d5b6b",
+      "sha256": "304b0f1522550aa4024db89ded53d7b9e400811635cc2a6a69eb0738a9539c7b",
+      "bytes": 13286
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\llm\\__init__.py",
+      "target": "ui_vendor\\elements_agent\\llm\\__init__.py",
+      "source_sha256": "bec7b6e06ca04e39b016f37dcb4f890e1967d9d03761b1d811d5889e09c893b7",
+      "sha256": "bec7b6e06ca04e39b016f37dcb4f890e1967d9d03761b1d811d5889e09c893b7",
+      "bytes": 129
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\llm\\provider.py",
+      "target": "ui_vendor\\elements_agent\\llm\\provider.py",
+      "source_sha256": "40ab23f76bfcb4c99eb72487e09cfc9fc7c00786e288a6c436d1949788b63a37",
+      "sha256": "9e972d931faf14c9c30509cfb46c45e9406f7ab33237c6cb5c0c4798e8c5ac06",
+      "bytes": 4901
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\models.py",
+      "target": "ui_vendor\\elements_agent\\models.py",
+      "source_sha256": "a58a7650992de06c169ea21810f683467a926b09f351597611d42aa996b50558",
+      "sha256": "af4ae0a29865eadce744d9787cb30716b11d103d518cb97ae804c4e038de74d6",
+      "bytes": 5112
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\nodes\\__init__.py",
+      "target": "ui_vendor\\elements_agent\\nodes\\__init__.py",
+      "source_sha256": "aa378f312182ecda2337a48e1b8d2b36eaf534beb4c14190c787b896e0a1fed1",
+      "sha256": "c01186ad6f4417cba154216152b3def84802d0c353d3e0fd8c3da94245a89dd5",
+      "bytes": 998
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\nodes\\apply.py",
+      "target": "ui_vendor\\elements_agent\\nodes\\apply.py",
+      "source_sha256": "9cad0430b521abd791bd56a69eb6be3f7aa57e046648f9167f2c79b4b1e402ae",
+      "sha256": "99b0bb53e610faa222fa3f3481962d2dc67ccb688b301065406b57871b5ddbc2",
+      "bytes": 8312
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\nodes\\extract.py",
+      "target": "ui_vendor\\elements_agent\\nodes\\extract.py",
+      "source_sha256": "d7530c98c9dfc3e08942bcc44cd218d9a4ce69edc27b98eb8878c730b26281fb",
+      "sha256": "f466f6344f90e45d91cbbf8bcfa8c69e072b0ce0ed5c19eab223bffa66a164ea",
+      "bytes": 10488
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\nodes\\extract_dds.py",
+      "target": "ui_vendor\\elements_agent\\nodes\\extract_dds.py",
+      "source_sha256": "18426d7aef9af71dda77272f56791ef9d36424b0abcc59db88425d1ad47bd218",
+      "sha256": "ce79fadf903b64f8c1364e193c9173c3d5f564b3202f4f12abef8d716a3b3af2",
+      "bytes": 18845
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\nodes\\ingest.py",
+      "target": "ui_vendor\\elements_agent\\nodes\\ingest.py",
+      "source_sha256": "667894a0e556895cabf5624f2322594cbebaeb2c2c900772be44510356ab9f10",
+      "sha256": "5c9c92d8b702890f179244bd3f1d3f404a237f0376bd0733fa551c84fbcf7dc9",
+      "bytes": 15810
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\nodes\\map_elements.py",
+      "target": "ui_vendor\\elements_agent\\nodes\\map_elements.py",
+      "source_sha256": "e32ec9b206f81ab6a1eec578e0f5b4f3633efbfca6db72f51b3342038ced4351",
+      "sha256": "8f5ed6b703407100bddbca73487fb3dbfbe84a0b242fdb8b8463e9cc0c4ae72e",
+      "bytes": 10495
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\nodes\\merge_pool.py",
+      "target": "ui_vendor\\elements_agent\\nodes\\merge_pool.py",
+      "source_sha256": "fda0972a71f8d770ffb91f3f3d3477f6ad5234e32a57a795f9fd1bd7045f5b01",
+      "sha256": "d7bb69a8aa22c2f622ed4a010321a572852de51a41dc2308e567ce97bc183ddf",
+      "bytes": 1723
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\nodes\\normalize.py",
+      "target": "ui_vendor\\elements_agent\\nodes\\normalize.py",
+      "source_sha256": "743479950d4cc8dd06a6cbbb7c15b5e224dabcea26c328ffc68fe0ab0fbe2987",
+      "sha256": "22cd443216972a5364937084360a34b71b439f1c2a5a40b6c7cf6f94ded51339",
+      "bytes": 13501
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\nodes\\parse.py",
+      "target": "ui_vendor\\elements_agent\\nodes\\parse.py",
+      "source_sha256": "2de3091df135648b03136f47e8ba33f1303eb3e0a32f91e7d87b57364fbeef09",
+      "sha256": "c9b8b5821d3e7189db57698b779b17cb8e60186cc3bc07d62ec75f0b9ab84d1e",
+      "bytes": 10527
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\nodes\\preview.py",
+      "target": "ui_vendor\\elements_agent\\nodes\\preview.py",
+      "source_sha256": "0102f28f32c14c8e4137e31501cf4125830d9cdaf5f83988ae1fca6f4fc7b9ce",
+      "sha256": "931bd2633ba84982b7ce4d8a89037be8184021045db2015e6c25c6aa9382bd8b",
+      "bytes": 3912
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\nodes\\select_product.py",
+      "target": "ui_vendor\\elements_agent\\nodes\\select_product.py",
+      "source_sha256": "05af976e0321291d2fef39e946f4bc73348087a8b4c11fb240648ed89e045169",
+      "sha256": "7088db7b88b0898432c799c3af04e2e3322eefa318744958b859447b64a86225",
+      "bytes": 6461
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\nodes\\validate.py",
+      "target": "ui_vendor\\elements_agent\\nodes\\validate.py",
+      "source_sha256": "d80a2bea149494716e1cad2ea2b0fa3457fd071bde9620dc96d5ad3dd44f54b5",
+      "sha256": "b9bf0634b477594df5fc8620221a6cd9403ceae59d91b00c7d8353bb497b61bb",
+      "bytes": 13335
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\pdf_backend.py",
+      "target": "ui_vendor\\elements_agent\\pdf_backend.py",
+      "source_sha256": "a857febfc49dc4f6197ef93514a180a657955a00ba80603751ee15b7e17d37cc",
+      "sha256": "a857febfc49dc4f6197ef93514a180a657955a00ba80603751ee15b7e17d37cc",
+      "bytes": 1753
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\preview_dialog.py",
+      "target": "ui_vendor\\elements_agent\\preview_dialog.py",
+      "source_sha256": "244c38558a530a4e47bb92b4be9258cdd53c01af99776a8f1bb91f6a68955a6f",
+      "sha256": "bf8d9d9867a459291489abc5b75b9390c11288bcbdd74a7bc7e7af69e2f91ba2",
+      "bytes": 4082
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\product_batch_dialog.py",
+      "target": "ui_vendor\\elements_agent\\product_batch_dialog.py",
+      "source_sha256": "178faa23c7e809efa4fd275fc03c11fec9f4049e18c7265d6347fafcbb730c76",
+      "sha256": "c8e5deaf8df2329187427fe8097073ed3263f0fd45ebe1e64ce8a31aa0448ec7",
+      "bytes": 3148
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\product_picker.py",
+      "target": "ui_vendor\\elements_agent\\product_picker.py",
+      "source_sha256": "5f1d253dff65501632897be68219478b1b627e32fae0e49ccf634f5c641ee3b3",
+      "sha256": "2adabff6542a3e8eadb7a99c89a7860dd4161bc7138e58ccf41ddd963656b794",
+      "bytes": 13306
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\product_store.py",
+      "target": "ui_vendor\\elements_agent\\product_store.py",
+      "source_sha256": "e12aeaec276ef16d2c217b3a795edd66c251b262c09534b51cdde9aeab6496c2",
+      "sha256": "e12aeaec276ef16d2c217b3a795edd66c251b262c09534b51cdde9aeab6496c2",
+      "bytes": 2137
+    },
+    {
+      "source": "AI-part\\ai_yuanjiandingyi\\run_agent.py",
+      "target": "ui_vendor\\elements_agent\\run_agent.py",
+      "source_sha256": "263890b9867229911ce655814d891cd5472068b7950a1035cbadfee9c9af0701",
+      "sha256": "2eb16e3d0c0ad2c14a9eae1b9df51c4f4c033bac9a74a8e2cc0ee1c84f93fa11",
+      "bytes": 2377
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\04_nozzle_flow.png",
+      "target": "ui_vendor\\nozzle_agent\\04_nozzle_flow.png",
+      "source_sha256": "27e8e18de37315770f34aadf19947c2a2c790282c467b761c87c3ef5cd022363",
+      "sha256": "27e8e18de37315770f34aadf19947c2a2c790282c467b761c87c3ef5cd022363",
+      "bytes": 262876
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\agent\\__init__.py",
+      "target": "ui_vendor\\nozzle_agent\\agent\\__init__.py",
+      "source_sha256": "97f8a0435c1a7da2ae47facdcb19d0fd168ad7cf926ef46fd1d421d783bcbcef",
+      "sha256": "97f8a0435c1a7da2ae47facdcb19d0fd168ad7cf926ef46fd1d421d783bcbcef",
+      "bytes": 317
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\agent\\azimuth.py",
+      "target": "ui_vendor\\nozzle_agent\\agent\\azimuth.py",
+      "source_sha256": "849731ac43cbf0cfbe029a04bf6a0aa3120f413a940b0492a7285b1bb3ffa2ab",
+      "sha256": "849731ac43cbf0cfbe029a04bf6a0aa3120f413a940b0492a7285b1bb3ffa2ab",
+      "bytes": 31340
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\agent\\core.py",
+      "target": "ui_vendor\\nozzle_agent\\agent\\core.py",
+      "source_sha256": "a6be4ad237c15f72dabc05773a094daa24a69a400b8f608a646aa347d321a2b4",
+      "sha256": "a6be4ad237c15f72dabc05773a094daa24a69a400b8f608a646aa347d321a2b4",
+      "bytes": 34455
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\agent\\dataset.py",
+      "target": "ui_vendor\\nozzle_agent\\agent\\dataset.py",
+      "source_sha256": "165c2ce5275d60365f4bfaabb5c918c0f1462db7c0570b2fd6607284613b14d9",
+      "sha256": "165c2ce5275d60365f4bfaabb5c918c0f1462db7c0570b2fd6607284613b14d9",
+      "bytes": 10653
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\agent\\doc_import.py",
+      "target": "ui_vendor\\nozzle_agent\\agent\\doc_import.py",
+      "source_sha256": "0867cd2d743fef22998c0ba434e11cf719de54e84092af24877abf176cbe7ec9",
+      "sha256": "0867cd2d743fef22998c0ba434e11cf719de54e84092af24877abf176cbe7ec9",
+      "bytes": 10222
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\agent\\doc_reader.py",
+      "target": "ui_vendor\\nozzle_agent\\agent\\doc_reader.py",
+      "source_sha256": "55363651511eeab16afc8b719e402d5345e0f50a049acf0680c04306f343f788",
+      "sha256": "55363651511eeab16afc8b719e402d5345e0f50a049acf0680c04306f343f788",
+      "bytes": 16457
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\agent\\export.py",
+      "target": "ui_vendor\\nozzle_agent\\agent\\export.py",
+      "source_sha256": "a2bc544155000b50944aaac11fc8a61ba436cc92621eb0340f54cd12d711d930",
+      "sha256": "a2bc544155000b50944aaac11fc8a61ba436cc92621eb0340f54cd12d711d930",
+      "bytes": 6894
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\agent\\glyph.py",
+      "target": "ui_vendor\\nozzle_agent\\agent\\glyph.py",
+      "source_sha256": "c7eeb41926634027ffd2108021a1d4c61538663e7a820d6ef2830cf19b5da494",
+      "sha256": "c7eeb41926634027ffd2108021a1d4c61538663e7a820d6ef2830cf19b5da494",
+      "bytes": 5321
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\agent\\llm.py",
+      "target": "ui_vendor\\nozzle_agent\\agent\\llm.py",
+      "source_sha256": "71ae02c9356eba9d67566cac7cd4cac9bf276200bb792d3ee5f3ada4f430def6",
+      "sha256": "71ae02c9356eba9d67566cac7cd4cac9bf276200bb792d3ee5f3ada4f430def6",
+      "bytes": 9743
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\agent\\parser.py",
+      "target": "ui_vendor\\nozzle_agent\\agent\\parser.py",
+      "source_sha256": "490590981441057a0b4717b4efc90ade5b94b8b0d0dd4ce460caa7deafd9c2dc",
+      "sha256": "490590981441057a0b4717b4efc90ade5b94b8b0d0dd4ce460caa7deafd9c2dc",
+      "bytes": 22173
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\agent\\spec.py",
+      "target": "ui_vendor\\nozzle_agent\\agent\\spec.py",
+      "source_sha256": "675467d92b35d48c55c98333f163577f8726e1d02a44ae213c920dbeb369db42",
+      "sha256": "675467d92b35d48c55c98333f163577f8726e1d02a44ae213c920dbeb369db42",
+      "bytes": 12763
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\agent\\validator.py",
+      "target": "ui_vendor\\nozzle_agent\\agent\\validator.py",
+      "source_sha256": "2454a4bef08143b3d17a80791e754c6b842e55a2c565b0f7f9d1bf10d36fd189",
+      "sha256": "2454a4bef08143b3d17a80791e754c6b842e55a2c565b0f7f9d1bf10d36fd189",
+      "bytes": 20759
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\app.py",
+      "target": "ui_vendor\\nozzle_agent\\app.py",
+      "source_sha256": "85ea236c4e8eb786b900bfe9c65afe02b9dc744604108cc3eddaa6233a321337",
+      "sha256": "85ea236c4e8eb786b900bfe9c65afe02b9dc744604108cc3eddaa6233a321337",
+      "bytes": 16475
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\data\\pipe_ref.json",
+      "target": "ui_vendor\\nozzle_agent\\data\\pipe_ref.json",
+      "source_sha256": "4adf6e0c5f81d952bf4115c9ff70f9dd8d87cd3a4b1b8f85d835f79f6c548f88",
+      "sha256": "4adf6e0c5f81d952bf4115c9ff70f9dd8d87cd3a4b1b8f85d835f79f6c548f88",
+      "bytes": 66400
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\sdk\\__init__.py",
+      "target": "ui_vendor\\nozzle_agent\\sdk\\__init__.py",
+      "source_sha256": "cb2345f1334ca34c08f91f56d0c52c3e6e63de9b21773bbab7d2d47b84dde478",
+      "sha256": "cb2345f1334ca34c08f91f56d0c52c3e6e63de9b21773bbab7d2d47b84dde478",
+      "bytes": 202
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\sdk\\dlp_client.py",
+      "target": "ui_vendor\\nozzle_agent\\sdk\\dlp_client.py",
+      "source_sha256": "8aca0411ba7615dc86507ff30dbc6344b9c640b6f7a90fd6c7891edd74b6b1fc",
+      "sha256": "8aca0411ba7615dc86507ff30dbc6344b9c640b6f7a90fd6c7891edd74b6b1fc",
+      "bytes": 7677
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\serve.py",
+      "target": "ui_vendor\\nozzle_agent\\serve.py",
+      "source_sha256": "c904ef6a351b0646806a63d2b0531ef6dfaf77b400f2145c0ce4348d317b7232",
+      "sha256": "c904ef6a351b0646806a63d2b0531ef6dfaf77b400f2145c0ce4348d317b7232",
+      "bytes": 3670
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\server\\__init__.py",
+      "target": "ui_vendor\\nozzle_agent\\server\\__init__.py",
+      "source_sha256": "a0d0c2ca1927321cda43b9ff1a88861287a3725840f3c31b0b06fcca16acf637",
+      "sha256": "a0d0c2ca1927321cda43b9ff1a88861287a3725840f3c31b0b06fcca16acf637",
+      "bytes": 578
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\server\\contract.py",
+      "target": "ui_vendor\\nozzle_agent\\server\\contract.py",
+      "source_sha256": "3ad1249a579e6e3754602dcaf3963b06349a3a2948fbd2933f24e1718449acab",
+      "sha256": "3ad1249a579e6e3754602dcaf3963b06349a3a2948fbd2933f24e1718449acab",
+      "bytes": 8270
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\server\\docs_page.py",
+      "target": "ui_vendor\\nozzle_agent\\server\\docs_page.py",
+      "source_sha256": "024ecc6ca80271dea6ee77fb3054ceadad6932f96ea6142b339913b1261daf6e",
+      "sha256": "024ecc6ca80271dea6ee77fb3054ceadad6932f96ea6142b339913b1261daf6e",
+      "bytes": 921
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\server\\http_api.py",
+      "target": "ui_vendor\\nozzle_agent\\server\\http_api.py",
+      "source_sha256": "f03da294f8077272fc6e7cf281f14df8ad7195eaf116ab4538bfcd77630a691c",
+      "sha256": "f03da294f8077272fc6e7cf281f14df8ad7195eaf116ab4538bfcd77630a691c",
+      "bytes": 20883
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\server\\openapi.py",
+      "target": "ui_vendor\\nozzle_agent\\server\\openapi.py",
+      "source_sha256": "619210af66a1bdbeaec03e6ddc2f1521af776f0d797d31000a5acbcbbbba63e6",
+      "sha256": "619210af66a1bdbeaec03e6ddc2f1521af776f0d797d31000a5acbcbbbba63e6",
+      "bytes": 11116
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\server\\service.py",
+      "target": "ui_vendor\\nozzle_agent\\server\\service.py",
+      "source_sha256": "5b649ee3c68f93419d423f9084377fa0d623302274a5f8f32e7c44acc656cdcb",
+      "sha256": "5b649ee3c68f93419d423f9084377fa0d623302274a5f8f32e7c44acc656cdcb",
+      "bytes": 12587
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\shell\\__init__.py",
+      "target": "ui_vendor\\nozzle_agent\\shell\\__init__.py",
+      "source_sha256": "bf4e69722bedb8ffbe6bc8ab4be8a2af586b269b9bca4d7bf385e71ef870ae7c",
+      "sha256": "bf4e69722bedb8ffbe6bc8ab4be8a2af586b269b9bca4d7bf385e71ef870ae7c",
+      "bytes": 113
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\shell\\chat.py",
+      "target": "ui_vendor\\nozzle_agent\\shell\\chat.py",
+      "source_sha256": "28cb2c1d872f399a0b8b5b467f05adec6646757e7c96063bd9af3ee47bba5f61",
+      "sha256": "28cb2c1d872f399a0b8b5b467f05adec6646757e7c96063bd9af3ee47bba5f61",
+      "bytes": 34596
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\shell\\chat_theme.py",
+      "target": "ui_vendor\\nozzle_agent\\shell\\chat_theme.py",
+      "source_sha256": "6d60cdb0409ac3e20e05da916c32768a83779ecdd48e6e0ab47b079369bd164d",
+      "sha256": "6d60cdb0409ac3e20e05da916c32768a83779ecdd48e6e0ab47b079369bd164d",
+      "bytes": 7252
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\shell\\real_ui.py",
+      "target": "ui_vendor\\nozzle_agent\\shell\\real_ui.py",
+      "source_sha256": "5c8a9f5f570e6a659050c99f8f62ace2f9f88b853f341368eeaeb980b436eed8",
+      "sha256": "5c8a9f5f570e6a659050c99f8f62ace2f9f88b853f341368eeaeb980b436eed8",
+      "bytes": 24915
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\shell\\sketch.py",
+      "target": "ui_vendor\\nozzle_agent\\shell\\sketch.py",
+      "source_sha256": "6a57323979cc1e7e8af86ced62e9934c806b10efba8892c427832b07af7840e4",
+      "sha256": "6a57323979cc1e7e8af86ced62e9934c806b10efba8892c427832b07af7840e4",
+      "bytes": 8500
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\shell\\theme.py",
+      "target": "ui_vendor\\nozzle_agent\\shell\\theme.py",
+      "source_sha256": "a8c9562bdf4731a295d4c97fbad18c4ae31c76bdd5906791de43cd2848f07d6d",
+      "sha256": "a8c9562bdf4731a295d4c97fbad18c4ae31c76bdd5906791de43cd2848f07d6d",
+      "bytes": 2326
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\shots\\api_docs.png",
+      "target": "ui_vendor\\nozzle_agent\\shots\\api_docs.png",
+      "source_sha256": "a8945439ee6f81cc15c56490a43462f39c1438fd5e13423b2f08425e21b24354",
+      "sha256": "a8945439ee6f81cc15c56490a43462f39c1438fd5e13423b2f08425e21b24354",
+      "bytes": 96158
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\shots\\chat_demo.png",
+      "target": "ui_vendor\\nozzle_agent\\shots\\chat_demo.png",
+      "source_sha256": "21afe6c8676661ba1328d11324ddde630684eb46b14df01c6ef278d6dd0d8085",
+      "sha256": "21afe6c8676661ba1328d11324ddde630684eb46b14df01c6ef278d6dd0d8085",
+      "bytes": 90573
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\shots\\chat_doc.png",
+      "target": "ui_vendor\\nozzle_agent\\shots\\chat_doc.png",
+      "source_sha256": "1b7d1c1d8dcf8cb6a9b1eda5cd10d0a06deec69c229a068d9c04c2bec26afb9c",
+      "sha256": "1b7d1c1d8dcf8cb6a9b1eda5cd10d0a06deec69c229a068d9c04c2bec26afb9c",
+      "bytes": 93698
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\shots\\chat_doc_710.png",
+      "target": "ui_vendor\\nozzle_agent\\shots\\chat_doc_710.png",
+      "source_sha256": "416adb068842daab7015539b0f9c2d74be76abd35fcf9c47e971d4760c9fa639",
+      "sha256": "416adb068842daab7015539b0f9c2d74be76abd35fcf9c47e971d4760c9fa639",
+      "bytes": 85563
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\shots\\chat_doc_variant.png",
+      "target": "ui_vendor\\nozzle_agent\\shots\\chat_doc_variant.png",
+      "source_sha256": "64b2b08156981e690ca2797f785fff2c21ed7fd10a5589aaec06a1b19f025428",
+      "sha256": "64b2b08156981e690ca2797f785fff2c21ed7fd10a5589aaec06a1b19f025428",
+      "bytes": 68984
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\shots\\chat_greet.png",
+      "target": "ui_vendor\\nozzle_agent\\shots\\chat_greet.png",
+      "source_sha256": "90e4e462649d162a28a62180f93503874c55a78c8a9c020fef32fd9c13b8f2b6",
+      "sha256": "90e4e462649d162a28a62180f93503874c55a78c8a9c020fef32fd9c13b8f2b6",
+      "bytes": 50323
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\shots\\chat_invalid.png",
+      "target": "ui_vendor\\nozzle_agent\\shots\\chat_invalid.png",
+      "source_sha256": "70ce88d85301bb10f1dee1a77b9ee3a9c667b9a99d27780e761ff8dcdc3c11eb",
+      "sha256": "70ce88d85301bb10f1dee1a77b9ee3a9c667b9a99d27780e761ff8dcdc3c11eb",
+      "bytes": 93572
+    },
+    {
+      "source": "AI-part\\ai_guankoudingyi\\shots\\chat_welcome.png",
+      "target": "ui_vendor\\nozzle_agent\\shots\\chat_welcome.png",
+      "source_sha256": "e75466032ae09cb0db04bd96d753e92ab987d69a028d589c3ac312534f289333",
+      "sha256": "e75466032ae09cb0db04bd96d753e92ab987d69a028d589c3ac312534f289333",
+      "bytes": 35779
+    },
+    {
+      "source": "AI-part\\ai_buguan\\ai_support\\__init__.py",
+      "target": "ui_vendor\\tube_agent\\ai_support\\__init__.py",
+      "source_sha256": "fb8edf5424babf951382689d463f72164e83b2d13a723eb2ca662a3b8a1100da",
+      "sha256": "fb8edf5424babf951382689d463f72164e83b2d13a723eb2ca662a3b8a1100da",
+      "bytes": 66
+    },
+    {
+      "source": "AI-part\\ai_buguan\\ai_support\\api_client.py",
+      "target": "ui_vendor\\tube_agent\\ai_support\\api_client.py",
+      "source_sha256": "abbff2816d949c1912d441d8263fda2836d24e12ebe1b295ba93f455ec690d77",
+      "sha256": "abbff2816d949c1912d441d8263fda2836d24e12ebe1b295ba93f455ec690d77",
+      "bytes": 26383
+    },
+    {
+      "source": "AI-part\\ai_buguan\\assets\\combo_arrow_gray.svg",
+      "target": "ui_vendor\\tube_agent\\assets\\combo_arrow_gray.svg",
+      "source_sha256": "c9ce25b03898b42726f905973a11225ce2c5509bdd1ff1d1044b76f8621405ed",
+      "sha256": "c9ce25b03898b42726f905973a11225ce2c5509bdd1ff1d1044b76f8621405ed",
+      "bytes": 211
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bootstrap.py",
+      "target": "ui_vendor\\tube_agent\\bootstrap.py",
+      "source_sha256": "2e940ceed0d2da0a8e0d88b29fa8c885c7f3050221c7e51d7c42a25e3bea4914",
+      "sha256": "2e940ceed0d2da0a8e0d88b29fa8c885c7f3050221c7e51d7c42a25e3bea4914",
+      "bytes": 771
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\__init__.py",
+      "target": "ui_vendor\\tube_agent\\bundle\\__init__.py",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\api.py",
+      "target": "ui_vendor\\tube_agent\\bundle\\api.py",
+      "source_sha256": "af62bed1603741d1790e3f9496f2eef007342e41dcce2dce3a59fe7fdd79de7b",
+      "sha256": "af62bed1603741d1790e3f9496f2eef007342e41dcce2dce3a59fe7fdd79de7b",
+      "bytes": 3843
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\dll\\HE3DTB.dll",
+      "target": "ui_vendor\\tube_agent\\bundle\\dll\\HE3DTB.dll",
+      "source_sha256": "6dc508a2f96b76c9d92a0ce06598950d0c1adf23100e945d208b0deb7dc1e945",
+      "sha256": "6dc508a2f96b76c9d92a0ce06598950d0c1adf23100e945d208b0deb7dc1e945",
+      "bytes": 443904
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\dll\\Newtonsoft.Json.dll",
+      "target": "ui_vendor\\tube_agent\\bundle\\dll\\Newtonsoft.Json.dll",
+      "source_sha256": "e1e27af7b07eeedf5ce71a9255f0422816a6fc5849a483c6714e1b472044fa9d",
+      "sha256": "e1e27af7b07eeedf5ce71a9255f0422816a6fc5849a483c6714e1b472044fa9d",
+      "bytes": 711952
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\engine.py",
+      "target": "ui_vendor\\tube_agent\\bundle\\engine.py",
+      "source_sha256": "86b1c930e76ed0636e54c91e59410d98252f3ace5b4b6a1a804d1782f8848e4f",
+      "sha256": "86b1c930e76ed0636e54c91e59410d98252f3ace5b4b6a1a804d1782f8848e4f",
+      "bytes": 11481
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\geometry.py",
+      "target": "ui_vendor\\tube_agent\\bundle\\geometry.py",
+      "source_sha256": "086e220302c2ff186aac9078fb1d96e2f0a48bb46be8df70298be3dc641d24e2",
+      "sha256": "086e220302c2ff186aac9078fb1d96e2f0a48bb46be8df70298be3dc641d24e2",
+      "bytes": 4608
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\hole_table.py",
+      "target": "ui_vendor\\tube_agent\\bundle\\hole_table.py",
+      "source_sha256": "fc91f1a5e9146db1713ea91cf9ada93d4d0a498bcfb2de92e98c2714a6418505",
+      "sha256": "fc91f1a5e9146db1713ea91cf9ada93d4d0a498bcfb2de92e98c2714a6418505",
+      "bytes": 8519
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\impingement.py",
+      "target": "ui_vendor\\tube_agent\\bundle\\impingement.py",
+      "source_sha256": "b88ee64b4c71aaeaeaa0faa4921d596605ec5e6e87f925b97c3324b92716822f",
+      "sha256": "b88ee64b4c71aaeaeaa0faa4921d596605ec5e6e87f925b97c3324b92716822f",
+      "bytes": 21429
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\items.py",
+      "target": "ui_vendor\\tube_agent\\bundle\\items.py",
+      "source_sha256": "0cb09a57e4dd8bc71b9090ae05326e4f12782a68dd781bebb074f5aad3d3da62",
+      "sha256": "0cb09a57e4dd8bc71b9090ae05326e4f12782a68dd781bebb074f5aad3d3da62",
+      "bytes": 11659
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\json_process.py",
+      "target": "ui_vendor\\tube_agent\\bundle\\json_process.py",
+      "source_sha256": "bd12c4682d209510fa15b98cd6fca3ff00ab81e437c5ebeac97f482540500231",
+      "sha256": "bd12c4682d209510fa15b98cd6fca3ff00ab81e437c5ebeac97f482540500231",
+      "bytes": 1589
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\page.py",
+      "target": "ui_vendor\\tube_agent\\bundle\\page.py",
+      "source_sha256": "b0ec8574f771e33d11f1b7b7d9e55a7973c7100c311921a933756ff0e6706a13",
+      "sha256": "b0ec8574f771e33d11f1b7b7d9e55a7973c7100c311921a933756ff0e6706a13",
+      "bytes": 217932
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\params.py",
+      "target": "ui_vendor\\tube_agent\\bundle\\params.py",
+      "source_sha256": "f267a42e4001d07d9bd44de79e50ba374adcb3ff066d6b141076285a8a5642a2",
+      "sha256": "f267a42e4001d07d9bd44de79e50ba374adcb3ff066d6b141076285a8a5642a2",
+      "bytes": 19990
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\placement.py",
+      "target": "ui_vendor\\tube_agent\\bundle\\placement.py",
+      "source_sha256": "1951627827e4d135e46257c3c345add07fccb08b67f9998ba6fb2dc617799059",
+      "sha256": "1951627827e4d135e46257c3c345add07fccb08b67f9998ba6fb2dc617799059",
+      "bytes": 48495
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\stages.py",
+      "target": "ui_vendor\\tube_agent\\bundle\\stages.py",
+      "source_sha256": "06153126c83036280215c7b1bba760283a104d76056a1d89e691cc8f3c2c4057",
+      "sha256": "06153126c83036280215c7b1bba760283a104d76056a1d89e691cc8f3c2c4057",
+      "bytes": 34136
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\baffle\\A.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\baffle\\A.png",
+      "source_sha256": "ed2f2106d165d676e5bfd47e79f786dcb6203bdba16ac9f3cee354e5b073beba",
+      "sha256": "ed2f2106d165d676e5bfd47e79f786dcb6203bdba16ac9f3cee354e5b073beba",
+      "bytes": 6437
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\baffle\\B.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\baffle\\B.png",
+      "source_sha256": "df42fe6cd2ba8f0a307ec99d2f82f324436193af841f6b564d9901a6f367fe7e",
+      "sha256": "df42fe6cd2ba8f0a307ec99d2f82f324436193af841f6b564d9901a6f367fe7e",
+      "bytes": 8605
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\baffle\\单弓形.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\baffle\\单弓形.png",
+      "source_sha256": "9b1ddbfd0a09add7cccbb6d75c4f9a536f340c150bcb62ad0ced292c3a542ba7",
+      "sha256": "9b1ddbfd0a09add7cccbb6d75c4f9a536f340c150bcb62ad0ced292c3a542ba7",
+      "bytes": 7513
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\baffle\\单弓形垂直左右.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\baffle\\单弓形垂直左右.png",
+      "source_sha256": "eca6028d599e322215a013a9ba366edac6445ae4f5096132934c853b56fe29f9",
+      "sha256": "eca6028d599e322215a013a9ba366edac6445ae4f5096132934c853b56fe29f9",
+      "bytes": 6095
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\baffle\\支持板.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\baffle\\支持板.png",
+      "source_sha256": "c3f69c6d21a7bfbbae9408300752cdbbb05bdb55dec727c76b6cd33d393a3c61",
+      "sha256": "c3f69c6d21a7bfbbae9408300752cdbbb05bdb55dec727c76b6cd33d393a3c61",
+      "bytes": 15732
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\button1_1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\button1_1.png",
+      "source_sha256": "f4aae6d90da20e94df9acf118c4c783e4ee251ed1d74ba0506c94067e2673ca5",
+      "sha256": "f4aae6d90da20e94df9acf118c4c783e4ee251ed1d74ba0506c94067e2673ca5",
+      "bytes": 2034
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\button1_2.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\button1_2.png",
+      "source_sha256": "112d95e50927856b65b2a4cee0e935549ee3e109d15e7e60339fdd27ed07328a",
+      "sha256": "112d95e50927856b65b2a4cee0e935549ee3e109d15e7e60339fdd27ed07328a",
+      "bytes": 1777
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\button1_3.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\button1_3.png",
+      "source_sha256": "edfabd101658a12091b59fcbe166d3906e44f1e2dc3fdc0c899b0042fa1afb2e",
+      "sha256": "edfabd101658a12091b59fcbe166d3906e44f1e2dc3fdc0c899b0042fa1afb2e",
+      "bytes": 5640
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\button1_4.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\button1_4.png",
+      "source_sha256": "2404105c3ba60223d9686ed516dec5c51cbd9ff896493ee97d426b533cba4c35",
+      "sha256": "2404105c3ba60223d9686ed516dec5c51cbd9ff896493ee97d426b533cba4c35",
+      "bytes": 7566
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\button2_1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\button2_1.png",
+      "source_sha256": "b925eb8369fc9a5a197d073f1fa846f926eb8f8c78bbf0dde15fb14f24e44804",
+      "sha256": "b925eb8369fc9a5a197d073f1fa846f926eb8f8c78bbf0dde15fb14f24e44804",
+      "bytes": 4495
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\button2_2.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\button2_2.png",
+      "source_sha256": "6b056d8b3177a7cbac9902e4f28024cc91720eaa679881a9eb20d809702a4ad8",
+      "sha256": "6b056d8b3177a7cbac9902e4f28024cc91720eaa679881a9eb20d809702a4ad8",
+      "bytes": 1163
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\button2_3.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\button2_3.png",
+      "source_sha256": "a3750fe2e664e5a1f7a1ae7680cbc334779581eedfb6cf1547fff4179d87f659",
+      "sha256": "a3750fe2e664e5a1f7a1ae7680cbc334779581eedfb6cf1547fff4179d87f659",
+      "bytes": 1255
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\button3_1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\button3_1.png",
+      "source_sha256": "0e49c82e9cdfbad36af4636922f5695b4e266c4978fddea6d64f74d38583ad2f",
+      "sha256": "0e49c82e9cdfbad36af4636922f5695b4e266c4978fddea6d64f74d38583ad2f",
+      "bytes": 270
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\button3_2.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\button3_2.png",
+      "source_sha256": "809cfd8c047257ecf45eda11cbbf9d0732a1858047da2216f62a45f9ab9d664e",
+      "sha256": "809cfd8c047257ecf45eda11cbbf9d0732a1858047da2216f62a45f9ab9d664e",
+      "bytes": 1753
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\button3_3.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\button3_3.png",
+      "source_sha256": "51ab3c6ad58e3a7b8c2292e312cbfaf4037dce80f68c23069c01f48893110252",
+      "sha256": "51ab3c6ad58e3a7b8c2292e312cbfaf4037dce80f68c23069c01f48893110252",
+      "bytes": 2755
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\button3_4.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\button3_4.png",
+      "source_sha256": "d5702f312e4d1eca2bda6fa04f4ec94dbb16d50d0758ad1e65bff5a02a2a9a7e",
+      "sha256": "d5702f312e4d1eca2bda6fa04f4ec94dbb16d50d0758ad1e65bff5a02a2a9a7e",
+      "bytes": 971
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\button3_5.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\button3_5.png",
+      "source_sha256": "fca753d036a5468356c5e6fa7b33be65ea0025fe1263579e92368707b57afd5f",
+      "sha256": "fca753d036a5468356c5e6fa7b33be65ea0025fe1263579e92368707b57afd5f",
+      "bytes": 2487271
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\交叉布管.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\交叉布管.png",
+      "source_sha256": "05ba9ec10f314afdbcb55bf55ae404d6e75d5635856e8c3bb5f1c38b23933ccd",
+      "sha256": "05ba9ec10f314afdbcb55bf55ae404d6e75d5635856e8c3bb5f1c38b23933ccd",
+      "bytes": 594460
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\保存.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\保存.png",
+      "source_sha256": "bfd56aa4f04c827a0ae8ea06cf47005ac821aceed64ddf27fa0bd48fe906d24b",
+      "sha256": "bfd56aa4f04c827a0ae8ea06cf47005ac821aceed64ddf27fa0bd48fe906d24b",
+      "bytes": 516157
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\删除交叉布管.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\删除交叉布管.png",
+      "source_sha256": "c56664c4421f094780b5a3b65b086fec40d1dce1405537f128555c9b00fdd0ad",
+      "sha256": "c56664c4421f094780b5a3b65b086fec40d1dce1405537f128555c9b00fdd0ad",
+      "bytes": 655696
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\buttons\\布管.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\buttons\\布管.png",
+      "source_sha256": "386cbd50b50c5f9bb23dc7433ec3e2b4254db53cf27c9ae1ddc9c0e6960ca1f3",
+      "sha256": "386cbd50b50c5f9bb23dc7433ec3e2b4254db53cf27c9ae1ddc9c0e6960ca1f3",
+      "bytes": 461711
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\connection\\内孔焊接头形式\\a.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\connection\\内孔焊接头形式\\a.png",
+      "source_sha256": "d4e496107467e51ee7c04638e4df7b0c806aa32671a16b1263f7e4ab75ee576c",
+      "sha256": "d4e496107467e51ee7c04638e4df7b0c806aa32671a16b1263f7e4ab75ee576c",
+      "bytes": 9580
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\connection\\内孔焊接头形式\\b.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\connection\\内孔焊接头形式\\b.png",
+      "source_sha256": "dccba4098501da2986a37c87d154eb585cc89ea1595dc744459a2e1d63e6906e",
+      "sha256": "dccba4098501da2986a37c87d154eb585cc89ea1595dc744459a2e1d63e6906e",
+      "bytes": 10336
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\connection\\内孔焊接头形式\\c.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\connection\\内孔焊接头形式\\c.png",
+      "source_sha256": "5696a1ab49c73f356adbc5f07cd2d793eb6772352da0fd4892b2a2208efbbc89",
+      "sha256": "5696a1ab49c73f356adbc5f07cd2d793eb6772352da0fd4892b2a2208efbbc89",
+      "bytes": 10498
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\connection\\内孔焊接头形式\\d.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\connection\\内孔焊接头形式\\d.png",
+      "source_sha256": "2cdb94b04b3937e89dd4689065c7fb49c408bc4e822e0a8aafa5fdc85dc99d39",
+      "sha256": "2cdb94b04b3937e89dd4689065c7fb49c408bc4e822e0a8aafa5fdc85dc99d39",
+      "bytes": 9422
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\connection\\强度焊接加贴胀管孔结构\\复合管板.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\connection\\强度焊接加贴胀管孔结构\\复合管板.png",
+      "source_sha256": "f00ae9f6199191cd8557d3339059b90716c5967bbdbd8287099e95e16f34856b",
+      "sha256": "f00ae9f6199191cd8557d3339059b90716c5967bbdbd8287099e95e16f34856b",
+      "bytes": 14644
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\connection\\强度焊接加贴胀管孔结构\\整体管板.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\connection\\强度焊接加贴胀管孔结构\\整体管板.png",
+      "source_sha256": "4d8ccc59626b982ba4eef78eac2c0b2f57aa17f2124cd61a8c8331b909bba949",
+      "sha256": "4d8ccc59626b982ba4eef78eac2c0b2f57aa17f2124cd61a8c8331b909bba949",
+      "bytes": 12864
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\connection\\强度焊接的焊缝形式\\a.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\connection\\强度焊接的焊缝形式\\a.png",
+      "source_sha256": "61b21f941703c6dcc47ba1428124fb05de1ff580d5892fb43de808de8ba911ad",
+      "sha256": "61b21f941703c6dcc47ba1428124fb05de1ff580d5892fb43de808de8ba911ad",
+      "bytes": 13066
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\connection\\强度焊接的焊缝形式\\b.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\connection\\强度焊接的焊缝形式\\b.png",
+      "source_sha256": "4b764182f9b67f17e21d0812fee9ad0a8c2025b296e23f28916f2821b2e9813c",
+      "sha256": "4b764182f9b67f17e21d0812fee9ad0a8c2025b296e23f28916f2821b2e9813c",
+      "bytes": 20319
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\connection\\强度焊接的焊缝形式\\c.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\connection\\强度焊接的焊缝形式\\c.png",
+      "source_sha256": "0694793f799f7374e2aeebca409865cd63d312382605c7b66a51c6627dcc9bc8",
+      "sha256": "0694793f799f7374e2aeebca409865cd63d312382605c7b66a51c6627dcc9bc8",
+      "bytes": 14670
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\connection\\强度焊接的焊缝形式\\d.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\connection\\强度焊接的焊缝形式\\d.png",
+      "source_sha256": "cdb78fd74c80f5f81565c716f03aefb04cddb1327ca6c37fa01ebe9b1492d4ed",
+      "sha256": "cdb78fd74c80f5f81565c716f03aefb04cddb1327ca6c37fa01ebe9b1492d4ed",
+      "bytes": 14783
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\connection\\强度焊接的焊缝形式\\e.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\connection\\强度焊接的焊缝形式\\e.png",
+      "source_sha256": "a1c8eb038925e9407fb7d74e08145a8561c4cbdd97dd2cf6deeae8cb1cd57a9f",
+      "sha256": "a1c8eb038925e9407fb7d74e08145a8561c4cbdd97dd2cf6deeae8cb1cd57a9f",
+      "bytes": 25265
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\connection\\机械强度胀接加密封焊管孔结构\\复合管板.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\connection\\机械强度胀接加密封焊管孔结构\\复合管板.png",
+      "source_sha256": "64cc3352a79a2582eb8d9944963ad751d25a0d663b612e54dacfa0d8ab50ce6c",
+      "sha256": "64cc3352a79a2582eb8d9944963ad751d25a0d663b612e54dacfa0d8ab50ce6c",
+      "bytes": 16629
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\connection\\机械强度胀接加密封焊管孔结构\\整体管板.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\connection\\机械强度胀接加密封焊管孔结构\\整体管板.png",
+      "source_sha256": "b1f4eba686e3ea655f32c497eb6a55246ff058b641938e416fc83be8ac00b5ca",
+      "sha256": "b1f4eba686e3ea655f32c497eb6a55246ff058b641938e416fc83be8ac00b5ca",
+      "bytes": 14572
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\connection\\机械胀接管孔结构\\复合管板.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\connection\\机械胀接管孔结构\\复合管板.png",
+      "source_sha256": "087477d30f4ecd47ec0c7fc42fb0831b24c3025fd7a2704714dacc80fab8b9cf",
+      "sha256": "087477d30f4ecd47ec0c7fc42fb0831b24c3025fd7a2704714dacc80fab8b9cf",
+      "bytes": 17309
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\connection\\机械胀接管孔结构\\整体管板.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\connection\\机械胀接管孔结构\\整体管板.png",
+      "source_sha256": "9568e833daf941c8854a00809b09819c613d44cc7ad47066200d83dce953e9d6",
+      "sha256": "9568e833daf941c8854a00809b09819c613d44cc7ad47066200d83dce953e9d6",
+      "bytes": 13439
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\plate_form\\a.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\plate_form\\a.png",
+      "source_sha256": "b5a0a725886b14ddd19c61e51e1759bf55217d447d36c8c4eb003e9f445e342f",
+      "sha256": "b5a0a725886b14ddd19c61e51e1759bf55217d447d36c8c4eb003e9f445e342f",
+      "bytes": 5920
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\plate_form\\b.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\plate_form\\b.png",
+      "source_sha256": "25c3eaa40c295a361e88520402476b51efb4908974262f4e2eb2bf352a215802",
+      "sha256": "25c3eaa40c295a361e88520402476b51efb4908974262f4e2eb2bf352a215802",
+      "bytes": 6604
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\plate_form\\c.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\plate_form\\c.png",
+      "source_sha256": "dc415ea206d211facf648f6027c8c335ea9af98cf926d55d5ccfdd82fb626417",
+      "sha256": "dc415ea206d211facf648f6027c8c335ea9af98cf926d55d5ccfdd82fb626417",
+      "bytes": 8495
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\plate_form\\d.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\plate_form\\d.png",
+      "source_sha256": "44c1d275d25131a209ecd525084d17963642598c16ef8ad6d305f3a1ec5a7128",
+      "sha256": "44c1d275d25131a209ecd525084d17963642598c16ef8ad6d305f3a1ec5a7128",
+      "bytes": 8379
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\plate_form\\e.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\plate_form\\e.png",
+      "source_sha256": "b6f55ece271b613a685f391eecb1b2fdedc58cbed445186da4d36d3d3be05fc7",
+      "sha256": "b6f55ece271b613a685f391eecb1b2fdedc58cbed445186da4d36d3d3be05fc7",
+      "bytes": 10246
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\plate_form\\f.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\plate_form\\f.png",
+      "source_sha256": "164268a7cbcb97f6d8c856267de6976a7af73bfc44b7d94bf0cd09c0893fee71",
+      "sha256": "164268a7cbcb97f6d8c856267de6976a7af73bfc44b7d94bf0cd09c0893fee71",
+      "bytes": 9970
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\tube_sheet\\复合管板.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\tube_sheet\\复合管板.png",
+      "source_sha256": "f00ae9f6199191cd8557d3339059b90716c5967bbdbd8287099e95e16f34856b",
+      "sha256": "f00ae9f6199191cd8557d3339059b90716c5967bbdbd8287099e95e16f34856b",
+      "bytes": 14644
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\tube_sheet\\整体管板.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\tube_sheet\\整体管板.png",
+      "source_sha256": "4d8ccc59626b982ba4eef78eac2c0b2f57aa17f2124cd61a8c8331b909bba949",
+      "sha256": "4d8ccc59626b982ba4eef78eac2c0b2f57aa17f2124cd61a8c8331b909bba949",
+      "bytes": 12864
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\1.png",
+      "source_sha256": "c3b3fa68acfda2e71574e3647f6bca7fd46da22dd4cf98e6480a9b2f2bb15193",
+      "sha256": "c3b3fa68acfda2e71574e3647f6bca7fd46da22dd4cf98e6480a9b2f2bb15193",
+      "bytes": 5894
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\10a.1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\10a.1.png",
+      "source_sha256": "a572b5025774960af7fbe726284ff06751c6851aefd0134e5418b161b46642b6",
+      "sha256": "a572b5025774960af7fbe726284ff06751c6851aefd0134e5418b161b46642b6",
+      "bytes": 7671
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\10a.2.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\10a.2.png",
+      "source_sha256": "9cdecef39adfa8d424b8573a2dc052ca867638b0de113c46d01aa1e0c076821f",
+      "sha256": "9cdecef39adfa8d424b8573a2dc052ca867638b0de113c46d01aa1e0c076821f",
+      "bytes": 8082
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\10b.1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\10b.1.png",
+      "source_sha256": "4b27a35fcece4638547cdec380abf2a6b31ff6589ddce6458be5630cb476a881",
+      "sha256": "4b27a35fcece4638547cdec380abf2a6b31ff6589ddce6458be5630cb476a881",
+      "bytes": 7807
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\10b.2.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\10b.2.png",
+      "source_sha256": "7472e926c616ca10427e4f290974841ad1fac1a1a951a90c0d16f8ccbbf32678",
+      "sha256": "7472e926c616ca10427e4f290974841ad1fac1a1a951a90c0d16f8ccbbf32678",
+      "bytes": 8145
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\12a.1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\12a.1.png",
+      "source_sha256": "4b76e979eb553868a7b95524186855667bd372f330d932132a5296d3b9b1815b",
+      "sha256": "4b76e979eb553868a7b95524186855667bd372f330d932132a5296d3b9b1815b",
+      "bytes": 8252
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\12a.2.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\12a.2.png",
+      "source_sha256": "4c4ce943c526e4a90530d1cd41cf034bd5076679aec56f4cf6b55912f857bb5c",
+      "sha256": "4c4ce943c526e4a90530d1cd41cf034bd5076679aec56f4cf6b55912f857bb5c",
+      "bytes": 8622
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\12b.1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\12b.1.png",
+      "source_sha256": "e24172e61c4f3cdabf173ebaa2a525db1740bd82d7b4f7ea923be1c000b62851",
+      "sha256": "e24172e61c4f3cdabf173ebaa2a525db1740bd82d7b4f7ea923be1c000b62851",
+      "bytes": 8018
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\12b.2.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\12b.2.png",
+      "source_sha256": "b3a0b42226d0386b59e53c5dd4aefa6e5c0b435a1899764fb0e48ba85123f756",
+      "sha256": "b3a0b42226d0386b59e53c5dd4aefa6e5c0b435a1899764fb0e48ba85123f756",
+      "bytes": 8940
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\2.1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\2.1.png",
+      "source_sha256": "624bd047e5a564f783ce7a5804adc7501eb822616cff6b12052c81db5612fe2f",
+      "sha256": "624bd047e5a564f783ce7a5804adc7501eb822616cff6b12052c81db5612fe2f",
+      "bytes": 5797
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\4.1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\4.1.png",
+      "source_sha256": "f5d10672af9973e5d2f879ca2503a4c14051e3eb558e3cac9965bcd65b3c5be3",
+      "sha256": "f5d10672af9973e5d2f879ca2503a4c14051e3eb558e3cac9965bcd65b3c5be3",
+      "bytes": 6296
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\4.2.1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\4.2.1.png",
+      "source_sha256": "b49370267edf6acc4102714d85dff1a762bc271a3cc5e002e73d7540b4e3cd01",
+      "sha256": "b49370267edf6acc4102714d85dff1a762bc271a3cc5e002e73d7540b4e3cd01",
+      "bytes": 6351
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\4.2.2.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\4.2.2.png",
+      "source_sha256": "964201e81b29661d4989b1954d2fccae57c2cedd2afd6f2e32d28ed394420569",
+      "sha256": "964201e81b29661d4989b1954d2fccae57c2cedd2afd6f2e32d28ed394420569",
+      "bytes": 6561
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\4.3.1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\4.3.1.png",
+      "source_sha256": "09ba1113ec731095e46b6365b34aed18c6749e4b68d086ad039d767d8a8e8165",
+      "sha256": "09ba1113ec731095e46b6365b34aed18c6749e4b68d086ad039d767d8a8e8165",
+      "bytes": 6479
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\4.3.2.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\4.3.2.png",
+      "source_sha256": "0180f10513aab96636eef02c0482c6c313d8dd64ee4ccdd2ee3c6d28f4f516d6",
+      "sha256": "0180f10513aab96636eef02c0482c6c313d8dd64ee4ccdd2ee3c6d28f4f516d6",
+      "bytes": 6513
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\6.1.1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\6.1.1.png",
+      "source_sha256": "2e54136e85bd7fc7e86f7340c3d1a97d9d9e2b897089b574dfe2f157bd49aa26",
+      "sha256": "2e54136e85bd7fc7e86f7340c3d1a97d9d9e2b897089b574dfe2f157bd49aa26",
+      "bytes": 7098
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\6.1.2.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\6.1.2.png",
+      "source_sha256": "119dca2e8c1e6c47ebb6aca5b217e5bac21f9306880a7e9b1e5ca4b07eaf24df",
+      "sha256": "119dca2e8c1e6c47ebb6aca5b217e5bac21f9306880a7e9b1e5ca4b07eaf24df",
+      "bytes": 7317
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\6.2.1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\6.2.1.png",
+      "source_sha256": "198f0c45f326b959ed5498eaea1f11fa54f4fd2ac8af8e856e7cd8fe4633ac22",
+      "sha256": "198f0c45f326b959ed5498eaea1f11fa54f4fd2ac8af8e856e7cd8fe4633ac22",
+      "bytes": 7093
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\6.2.2.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\6.2.2.png",
+      "source_sha256": "d15e5a3ec81c73fb006e8c4ca36d23287bf855f89bbd80683e2fe460be14fdae",
+      "sha256": "d15e5a3ec81c73fb006e8c4ca36d23287bf855f89bbd80683e2fe460be14fdae",
+      "bytes": 7389
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\8a.1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\8a.1.png",
+      "source_sha256": "559393cfcb5f4378b7bc2cb5f96e245d84477e085ab52ffd97011695cef7480e",
+      "sha256": "559393cfcb5f4378b7bc2cb5f96e245d84477e085ab52ffd97011695cef7480e",
+      "bytes": 8065
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\8a.2.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\8a.2.png",
+      "source_sha256": "47b9ac4c3ac4f1b6665a7917c65e8b29029b59666d7a906cb037bc4cabdd5287",
+      "sha256": "47b9ac4c3ac4f1b6665a7917c65e8b29029b59666d7a906cb037bc4cabdd5287",
+      "bytes": 8180
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\8b.1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\8b.1.png",
+      "source_sha256": "1d11916b8933031652b7efbd3d476c689096000e1d3da60f47acd29809f5ffb1",
+      "sha256": "1d11916b8933031652b7efbd3d476c689096000e1d3da60f47acd29809f5ffb1",
+      "bytes": 7733
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\8b.2.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\8b.2.png",
+      "source_sha256": "ea6f986f4e644ebc88ebc0b5b5fc1eadbf22c5ff3de731b0c8ca8c82c6db21c0",
+      "sha256": "ea6f986f4e644ebc88ebc0b5b5fc1eadbf22c5ff3de731b0c8ca8c82c6db21c0",
+      "bytes": 7988
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\8c.1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\8c.1.png",
+      "source_sha256": "d1a317c4d48873eaf82c6e7aa80c930f25ad0131ecb6ccaf42acd1b310b97131",
+      "sha256": "d1a317c4d48873eaf82c6e7aa80c930f25ad0131ecb6ccaf42acd1b310b97131",
+      "bytes": 7584
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\8c.2.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\8c.2.png",
+      "source_sha256": "b25a8199adbedf082013d5360c7dd957765e7ca7ad27b8ddbbee7b22a1b83dca",
+      "sha256": "b25a8199adbedf082013d5360c7dd957765e7ca7ad27b8ddbbee7b22a1b83dca",
+      "bytes": 7617
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\8d.1.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\8d.1.png",
+      "source_sha256": "77174d21a81da9a824ac9e1a61e1b5a8ba913a1c9fd8364ec3233d59737e9410",
+      "sha256": "77174d21a81da9a824ac9e1a61e1b5a8ba913a1c9fd8364ec3233d59737e9410",
+      "bytes": 7641
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\TubePattern\\8d.2.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\TubePattern\\8d.2.png",
+      "source_sha256": "e3274772518addf5d8346f4f684064939852dc786561ee99c860690b2259e470",
+      "sha256": "e3274772518addf5d8346f4f684064939852dc786561ee99c860690b2259e470",
+      "bytes": 7657
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\weld\\a.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\weld\\a.png",
+      "source_sha256": "61b21f941703c6dcc47ba1428124fb05de1ff580d5892fb43de808de8ba911ad",
+      "sha256": "61b21f941703c6dcc47ba1428124fb05de1ff580d5892fb43de808de8ba911ad",
+      "bytes": 13066
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\weld\\b.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\weld\\b.png",
+      "source_sha256": "4b764182f9b67f17e21d0812fee9ad0a8c2025b296e23f28916f2821b2e9813c",
+      "sha256": "4b764182f9b67f17e21d0812fee9ad0a8c2025b296e23f28916f2821b2e9813c",
+      "bytes": 20319
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\weld\\c.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\weld\\c.png",
+      "source_sha256": "0694793f799f7374e2aeebca409865cd63d312382605c7b66a51c6627dcc9bc8",
+      "sha256": "0694793f799f7374e2aeebca409865cd63d312382605c7b66a51c6627dcc9bc8",
+      "bytes": 14670
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\weld\\d.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\weld\\d.png",
+      "source_sha256": "cdb78fd74c80f5f81565c716f03aefb04cddb1327ca6c37fa01ebe9b1492d4ed",
+      "sha256": "cdb78fd74c80f5f81565c716f03aefb04cddb1327ca6c37fa01ebe9b1492d4ed",
+      "bytes": 14783
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\weld\\e.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\weld\\e.png",
+      "source_sha256": "a1c8eb038925e9407fb7d74e08145a8561c4cbdd97dd2cf6deeae8cb1cd57a9f",
+      "sha256": "a1c8eb038925e9407fb7d74e08145a8561c4cbdd97dd2cf6deeae8cb1cd57a9f",
+      "bytes": 25265
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\weld_type\\a.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\weld_type\\a.png",
+      "source_sha256": "d4e496107467e51ee7c04638e4df7b0c806aa32671a16b1263f7e4ab75ee576c",
+      "sha256": "d4e496107467e51ee7c04638e4df7b0c806aa32671a16b1263f7e4ab75ee576c",
+      "bytes": 9580
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\weld_type\\b.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\weld_type\\b.png",
+      "source_sha256": "dccba4098501da2986a37c87d154eb585cc89ea1595dc744459a2e1d63e6906e",
+      "sha256": "dccba4098501da2986a37c87d154eb585cc89ea1595dc744459a2e1d63e6906e",
+      "bytes": 10336
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\weld_type\\c.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\weld_type\\c.png",
+      "source_sha256": "5696a1ab49c73f356adbc5f07cd2d793eb6772352da0fd4892b2a2208efbbc89",
+      "sha256": "5696a1ab49c73f356adbc5f07cd2d793eb6772352da0fd4892b2a2208efbbc89",
+      "bytes": 10498
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\static\\weld_type\\d.png",
+      "target": "ui_vendor\\tube_agent\\bundle\\static\\weld_type\\d.png",
+      "source_sha256": "2cdb94b04b3937e89dd4689065c7fb49c408bc4e822e0a8aafa5fdc85dc99d39",
+      "sha256": "2cdb94b04b3937e89dd4689065c7fb49c408bc4e822e0a8aafa5fdc85dc99d39",
+      "bytes": 9422
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\view.py",
+      "target": "ui_vendor\\tube_agent\\bundle\\view.py",
+      "source_sha256": "112e70faa4cfe1305537b5f1797774c3f01be1fade1f744784a280b37745f5a9",
+      "sha256": "112e70faa4cfe1305537b5f1797774c3f01be1fade1f744784a280b37745f5a9",
+      "bytes": 5524
+    },
+    {
+      "source": "AI-part\\ai_buguan\\bundle\\widgets.py",
+      "target": "ui_vendor\\tube_agent\\bundle\\widgets.py",
+      "source_sha256": "a7dd71c1030cd7c143f3e7ae7d2eb308ce3ee58666f9b66cf2ed497568dcc4df",
+      "sha256": "a7dd71c1030cd7c143f3e7ae7d2eb308ce3ee58666f9b66cf2ed497568dcc4df",
+      "bytes": 25402
+    },
+    {
+      "source": "AI-part\\ai_buguan\\db\\__init__.py",
+      "target": "ui_vendor\\tube_agent\\db\\__init__.py",
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "source": "AI-part\\ai_buguan\\db\\production.py",
+      "target": "ui_vendor\\tube_agent\\db\\production.py",
+      "source_sha256": "f70152858348cf1812ac2d43c8b09c069c800381c0a43af8275f6fc594dab4bc",
+      "sha256": "f70152858348cf1812ac2d43c8b09c069c800381c0a43af8275f6fc594dab4bc",
+      "bytes": 23014
+    },
+    {
+      "source": "AI-part\\ai_buguan\\main.py",
+      "target": "ui_vendor\\tube_agent\\main.py",
+      "source_sha256": "513f26c821497f08d84bd853bc1a09b1d3b1c696c8cd7b4762ab95c412e25c0d",
+      "sha256": "513f26c821497f08d84bd853bc1a09b1d3b1c696c8cd7b4762ab95c412e25c0d",
+      "bytes": 4259
+    },
+    {
+      "source": "AI-part\\ai_buguan\\models.py",
+      "target": "ui_vendor\\tube_agent\\models.py",
+      "source_sha256": "0f49a8a4376c09a624db1f0ff6b29eed3cd6bc1631f556f0c5b0ea3d09d8f87b",
+      "sha256": "0f49a8a4376c09a624db1f0ff6b29eed3cd6bc1631f556f0c5b0ea3d09d8f87b",
+      "bytes": 988
+    },
+    {
+      "source": "AI-part\\ai_buguan\\session.py",
+      "target": "ui_vendor\\tube_agent\\session.py",
+      "source_sha256": "1575ee197528b5ce047457aa2f2b3d3e8092159d7c256c75ce357a37bc4854fe",
+      "sha256": "1575ee197528b5ce047457aa2f2b3d3e8092159d7c256c75ce357a37bc4854fe",
+      "bytes": 7272
+    },
+    {
+      "source": "AI-part\\ai_buguan\\settings.py",
+      "target": "ui_vendor\\tube_agent\\settings.py",
+      "source_sha256": "9eb65d82a5d24cd2d42a323744a2ae03f7fa6fc33de43273a1f2431e4d0a02b5",
+      "sha256": "9eb65d82a5d24cd2d42a323744a2ae03f7fa6fc33de43273a1f2431e4d0a02b5",
+      "bytes": 4736
+    },
+    {
+      "source": "AI-part\\ai_buguan\\window.py",
+      "target": "ui_vendor\\tube_agent\\window.py",
+      "source_sha256": "bcdfe0a5a0a6ec91049c0cbfe5cdbb3a51fb3077d8ed81e66433868469b39086",
+      "sha256": "bcdfe0a5a0a6ec91049c0cbfe5cdbb3a51fb3077d8ed81e66433868469b39086",
+      "bytes": 132163
+    },
+    {
+      "source": "modules\\cailiaodingyi\\db_cnt.py",
+      "target": "ui_vendor\\modules\\cailiaodingyi\\db_cnt.py",
+      "source_sha256": "27a55e2dddf9e31395e83d819496e1d4f47424899f5f3120d0a591048a134358",
+      "sha256": "27a55e2dddf9e31395e83d819496e1d4f47424899f5f3120d0a591048a134358",
+      "bytes": 307
+    },
+    {
+      "source": "modules\\cailiaodingyi\\funcs\\funcs_pdf_change.py",
+      "target": "ui_vendor\\modules\\cailiaodingyi\\funcs\\funcs_pdf_change.py",
+      "source_sha256": "f6d4c9edad95a24be3e77969dc125c813622ad44e24a2a3f08f436026ae45740",
+      "sha256": "f6d4c9edad95a24be3e77969dc125c813622ad44e24a2a3f08f436026ae45740",
+      "bytes": 206427
+    },
+    {
+      "source": "modules\\cailiaodingyi\\funcs\\funcs_pdf_input.py",
+      "target": "ui_vendor\\modules\\cailiaodingyi\\funcs\\funcs_pdf_input.py",
+      "source_sha256": "4323eaa9429a0a5ca69a6a16172b93d3386a9df406550162dbe96de45aa50891",
+      "sha256": "4323eaa9429a0a5ca69a6a16172b93d3386a9df406550162dbe96de45aa50891",
+      "bytes": 80774
+    },
+    {
+      "source": "AI-part\\ai_buguan\\modules\\buguan\\buguan_ziyong\\tube_pass\\adapter.py",
+      "target": "ui_vendor\\modules\\buguan\\buguan_ziyong\\tube_pass\\adapter.py",
+      "source_sha256": "7b86a1dcfe0760752dfdf9de2d9f3a7d68fd2e592d06554ab6dc05b602580e56",
+      "sha256": "7b86a1dcfe0760752dfdf9de2d9f3a7d68fd2e592d06554ab6dc05b602580e56",
+      "bytes": 15813
+    },
+    {
+      "source": "AI-part\\ai_buguan\\modules\\buguan\\buguan_ziyong\\tube_pass\\ad_calculation.py",
+      "target": "ui_vendor\\modules\\buguan\\buguan_ziyong\\tube_pass\\ad_calculation.py",
+      "source_sha256": "d9422952e3e263db69ecbedb594d8c46de4a6bbbcae93bb3bb45bd6229182fb5",
+      "sha256": "d9422952e3e263db69ecbedb594d8c46de4a6bbbcae93bb3bb45bd6229182fb5",
+      "bytes": 35925
+    },
+    {
+      "source": "AI-part\\ai_buguan\\modules\\buguan\\buguan_ziyong\\tube_pass\\core_calculation.py",
+      "target": "ui_vendor\\modules\\buguan\\buguan_ziyong\\tube_pass\\core_calculation.py",
+      "source_sha256": "addecd03e096b6f91e828eda894cbc79c71185823cd9e9e9ef5ffacd6bddb1b6",
+      "sha256": "addecd03e096b6f91e828eda894cbc79c71185823cd9e9e9ef5ffacd6bddb1b6",
+      "bytes": 21482
+    },
+    {
+      "source": "AI-part\\ai_buguan\\modules\\buguan\\buguan_ziyong\\tube_pass\\main_gui.py",
+      "target": "ui_vendor\\modules\\buguan\\buguan_ziyong\\tube_pass\\main_gui.py",
+      "source_sha256": "81b9d12628fdc0408d319375c83985cd6c72bc47c27e05e48c6ed38c9605266d",
+      "sha256": "81b9d12628fdc0408d319375c83985cd6c72bc47c27e05e48c6ed38c9605266d",
+      "bytes": 15758
+    },
+    {
+      "source": "AI-part\\ai_buguan\\modules\\buguan\\buguan_ziyong\\tube_pass\\__init__.py",
+      "target": "ui_vendor\\modules\\buguan\\buguan_ziyong\\tube_pass\\__init__.py",
+      "source_sha256": "089a3e0962b01d61ae1f16507324c37f005afc978a98e0a27223e411a8a515dd",
+      "sha256": "089a3e0962b01d61ae1f16507324c37f005afc978a98e0a27223e411a8a515dd",
+      "bytes": 409
+    },
+    {
+      "source": "modules\\guankoudingyi\\ui\\pipe_openingload_L.ui",
+      "target": "ui_vendor\\nozzle_resources\\ui\\pipe_openingload_L.ui",
+      "source_sha256": "574b3f7bb5cf69323c42cb6cbf20783432d37a4428cc6ad1d49b3842e084db90",
+      "sha256": "574b3f7bb5cf69323c42cb6cbf20783432d37a4428cc6ad1d49b3842e084db90",
+      "bytes": 12722
+    },
+    {
+      "source": "modules\\guankoudingyi\\ui\\pipe_openingload_yuan.ui",
+      "target": "ui_vendor\\nozzle_resources\\ui\\pipe_openingload_yuan.ui",
+      "source_sha256": "8b5a8c3cde3f4e8d465890fb1810ff72a07df81e185eab23e17a2034d3a1b9f4",
+      "sha256": "8b5a8c3cde3f4e8d465890fb1810ff72a07df81e185eab23e17a2034d3a1b9f4",
+      "bytes": 11386
+    },
+    {
+      "source": "modules\\guankoudingyi\\ui\\pipe_openingload.ui",
+      "target": "ui_vendor\\nozzle_resources\\ui\\pipe_openingload.ui",
+      "source_sha256": "9a8989a327709b27fe6ff61aac500572f6235e11b04db80a62365fb8fe83234d",
+      "sha256": "9a8989a327709b27fe6ff61aac500572f6235e11b04db80a62365fb8fe83234d",
+      "bytes": 13700
+    },
+    {
+      "source": "modules\\guankoudingyi\\ui\\pipe_material_distri.ui",
+      "target": "ui_vendor\\nozzle_resources\\ui\\pipe_material_distri.ui",
+      "source_sha256": "358e3fda154ae4a69fa078a1baf78566e3b3df20147f9444ec43d26c215a2807",
+      "sha256": "358e3fda154ae4a69fa078a1baf78566e3b3df20147f9444ec43d26c215a2807",
+      "bytes": 14095
+    },
+    {
+      "source": "modules\\guankoudingyi\\ui\\pipe_attachment_define.ui",
+      "target": "ui_vendor\\nozzle_resources\\ui\\pipe_attachment_define.ui",
+      "source_sha256": "6bfc66f101e38bd9afba04601b1059a76a5eeb2d0d817c104bcebef83f2c2f37",
+      "sha256": "6bfc66f101e38bd9afba04601b1059a76a5eeb2d0d817c104bcebef83f2c2f37",
+      "bytes": 36863
+    },
+    {
+      "source": "modules\\guankoudingyi\\ui\\pipe_attachment_define_container.ui",
+      "target": "ui_vendor\\nozzle_resources\\ui\\pipe_attachment_define_container.ui",
+      "source_sha256": "e55d8ecb6d16e61493407c1bbb55c04b43fc5be09ffb6b1afdd47b09f7699455",
+      "sha256": "e55d8ecb6d16e61493407c1bbb55c04b43fc5be09ffb6b1afdd47b09f7699455",
+      "bytes": 36134
+    },
+    {
+      "source": "modules\\guankoudingyi\\resource\\下箭头.png",
+      "target": "ui_vendor\\nozzle_resources\\resource\\下箭头.png",
+      "source_sha256": "3ade001fbed083922e969fb819df881e224e514b3eadc5131ccafe7450e65740",
+      "sha256": "3ade001fbed083922e969fb819df881e224e514b3eadc5131ccafe7450e65740",
+      "bytes": 4739
+    },
+    {
+      "source": "modules\\guankoudingyi\\resource\\吊耳.png",
+      "target": "ui_vendor\\nozzle_resources\\resource\\吊耳.png",
+      "source_sha256": "db3c32e21b4bae48e57e8da0badee1de7c7eb52fe1c9fd3c003729b98baa61ef",
+      "sha256": "db3c32e21b4bae48e57e8da0badee1de7c7eb52fe1c9fd3c003729b98baa61ef",
+      "bytes": 18064
+    },
+    {
+      "source": "modules\\guankoudingyi\\resource\\耳座.png",
+      "target": "ui_vendor\\nozzle_resources\\resource\\耳座.png",
+      "source_sha256": "388e4b080d0c62548b6ff2bafa3843bcef8e8833fc266fd750858fa064741a34",
+      "sha256": "388e4b080d0c62548b6ff2bafa3843bcef8e8833fc266fd750858fa064741a34",
+      "bytes": 29822
+    },
+    {
+      "source": "modules\\guankoudingyi\\resource\\铭牌.png",
+      "target": "ui_vendor\\nozzle_resources\\resource\\铭牌.png",
+      "source_sha256": "a30dcab551e4bf559323d26a9aaf9ea7e5546d1d00babfde3716e7f4b262f8cb",
+      "sha256": "a30dcab551e4bf559323d26a9aaf9ea7e5546d1d00babfde3716e7f4b262f8cb",
+      "bytes": 17639
+    },
+    {
+      "source": "modules\\guankoudingyi\\resource\\pic.qrc",
+      "target": "ui_vendor\\nozzle_resources\\resource\\pic.qrc",
+      "source_sha256": "a56c4cf5ea045cf3183435f15c69448aa4b296de0ea6e5af99205c32b60dfa06",
+      "sha256": "a56c4cf5ea045cf3183435f15c69448aa4b296de0ea6e5af99205c32b60dfa06",
+      "bytes": 315
+    },
+    {
+      "source": "modules\\guankoudingyi\\resource\\加强圈.png",
+      "target": "ui_vendor\\nozzle_resources\\resource\\加强圈.png",
+      "source_sha256": "a648fd70b79abda6dcf132e1b44e5c61980c803fc78d3b0dea6b0ac701d1c0ca",
+      "sha256": "a648fd70b79abda6dcf132e1b44e5c61980c803fc78d3b0dea6b0ac701d1c0ca",
+      "bytes": 72071
+    },
+    {
+      "source": "modules\\guankoudingyi\\resource\\轴式吊耳.png",
+      "target": "ui_vendor\\nozzle_resources\\resource\\轴式吊耳.png",
+      "source_sha256": "a1642521188f934842ac30eb55395683fa382d4c3935cbe230e9e71318236890",
+      "sha256": "a1642521188f934842ac30eb55395683fa382d4c3935cbe230e9e71318236890",
+      "bytes": 36562
+    },
+    {
+      "source": "modules\\guankoudingyi\\resource\\鞍式支座.png",
+      "target": "ui_vendor\\nozzle_resources\\resource\\鞍式支座.png",
+      "source_sha256": "637b9a88eb48fcd51caab3de4586a715ed715b17d371cb11a664a9791402cf1b",
+      "sha256": "637b9a88eb48fcd51caab3de4586a715ed715b17d371cb11a664a9791402cf1b",
+      "bytes": 35233
+    },
+    {
+      "source": "modules\\guankoudingyi\\resource\\pic_rc.py",
+      "target": "ui_vendor\\nozzle_resources\\resource\\pic_rc.py",
+      "source_sha256": "2f2ee33525eefb5d15df5852c678ac38a89895b101c4dce14fe214449b7cfab9",
+      "sha256": "2f2ee33525eefb5d15df5852c678ac38a89895b101c4dce14fe214449b7cfab9",
+      "bytes": 1048200
+    },
+    {
+      "source": "modules\\guankoudingyi\\resource\\下箭头11.png",
+      "target": "ui_vendor\\nozzle_resources\\resource\\下箭头11.png",
+      "source_sha256": "88342cc37324b45583ee04e44df6118a2fd7f23c672b77dc2e22f7faa07f109c",
+      "sha256": "88342cc37324b45583ee04e44df6118a2fd7f23c672b77dc2e22f7faa07f109c",
+      "bytes": 3210
+    },
+    {
+      "source": "modules\\guankoudingyi\\resource\\保温支撑圈.png",
+      "target": "ui_vendor\\nozzle_resources\\resource\\保温支撑圈.png",
+      "source_sha256": "fda29557b5f364990ae2046ccf3e5da9fca3473770757c7b63eb6513f4420477",
+      "sha256": "fda29557b5f364990ae2046ccf3e5da9fca3473770757c7b63eb6513f4420477",
+      "bytes": 32089
+    },
+    {
+      "source": "modules\\guankoudingyi\\resource\\保温支撑条.png",
+      "target": "ui_vendor\\nozzle_resources\\resource\\保温支撑条.png",
+      "source_sha256": "266cc7c27862b04ae071a7ec48d5d5fc3dda3db091c39755fee7058dc463ed97",
+      "sha256": "266cc7c27862b04ae071a7ec48d5d5fc3dda3db091c39755fee7058dc463ed97",
+      "bytes": 8025
+    },
+    {
+      "source": "modules\\guankoudingyi\\resource\\_rebuild_pic_rc.py",
+      "target": "ui_vendor\\nozzle_resources\\resource\\_rebuild_pic_rc.py",
+      "source_sha256": "9db2350a7b60026b5d322bd30d71e2aefc3119730f2bd5dd044ec2f54d81c0c2",
+      "sha256": "9db2350a7b60026b5d322bd30d71e2aefc3119730f2bd5dd044ec2f54d81c0c2",
+      "bytes": 3066
+    }
+  ],
+  "generated_adapters": [
+    "ui_vendor\\modules\\chanpinguanli\\common_usage.py"
+  ],
+  "excludes": "credentials, histories, virtual environments and main program"
+}

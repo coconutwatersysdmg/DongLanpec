@@ -1,0 +1,9 @@
+{
+  "enabled": false,
+  "preset": "deepseek",
+  "base_url": "https://api.deepseek.com/v1",
+  "api_key": "",
+  "model": "deepseek-chat",
+  "json_mode": true,
+  "timeout": 30
+}

@@ -1,0 +1,22 @@
+# Reviewed after extraction: only instrumentation removed; business AST equivalence verified.
+REVIEWED = {
+    ('modules/buguan/buguan_ziyong/My_Piping.py', 'TubeLayoutEditor.actual_save_operation'): '67b87da8e2929d7218bc54fa96a5942d1f86ca1584a7f94097884fb027eae997',
+    ('modules/buguan/buguan_ziyong/My_Piping.py', 'TubeLayoutEditor.calculate_piping_layout'): 'abdc831bd3015143e8613580856575144787cd9060a96c50c193d01f3139f79a',
+    ('modules/buguan/buguan_ziyong/My_Piping.py', 'TubeLayoutEditor.save_layout_input'): '1df6c2bc1f10085f3afe45c1a31bbab0bb1eb219cab5f94f1deda6180aef2571',
+    ('modules/cailiaodingyi/controllers/datamanager.py', 'sync_component_params_to_buguan'): '9e3335f5ca1e73c305935908afe2b146f5e7ca6738454e592131f5e200331175',
+    ('modules/cailiaodingyi/controllers/datamanager.py', 'update_element_merged_para_tab_data_from_table'): '231326e3f71590d1fb2b126e346c0c55e95c8e99cd02442741490b1d0f0c0d73',
+    ('modules/cailiaodingyi/funcs/funcs_attachment_render.py', 'on_confirm_attachment_param_update'): 'dbcab608274c5daccbac03c7d76cb2b41cf33e20cf021eaccda763f326989242',
+    ('modules/cailiaodingyi/funcs/funcs_pdf_change.py', 'insert_or_update_guankou_para_data'): 'fc4efd6f4418fb1757ce5f1c8e86a0e9dfd10c1b94cae9cdbc4f90d9f902891b',
+    ('modules/cailiaodingyi/funcs/funcs_pdf_change.py', 'update_guankou_param'): '521263173d1dfd163ad6f54a1ceee96b60b16a2739ec3d0f4643dd4ead783b1e',
+    ('modules/cailiaodingyi/funcs/funcs_pdf_change.py', 'update_left_table_db_from_param_table'): '66bf32726304d825eaae77cca413a4f6773508d1eeef21a0cd677490ee7536a7',
+    ('modules/cailiaodingyi/funcs/funcs_pdf_change.py', 'update_param_table_data'): '8a43350745f7260cb3a900996ed685e4c03868ecdb5a61f4d77597aaf9a51ae3',
+    ('modules/condition_input/hrq_funcs_cdt_input.py', 'save_all_tables'): '183207b8c8ead1e1ebe4fcedb2e7c4390744cf2e6820ebcf3b36cef34ed37c26',
+    ('modules/condition_input/hrq_funcs_cdt_input.py', 'sync_corrosion_to_guankou_param'): '6486c24abc90440bdda56289f807dff077ec0bfb68bbf52a8f525a8af69ecf07',
+    ('modules/condition_input/hrq_funcs_cdt_input.py', 'sync_design_params_to_element_params'): 'ba262f1b98dec11b84e2ab0782e3bb71a2f72132b17742280dcf72c22404362d',
+    ('modules/condition_input/hrq_funcs_cdt_input.py', 'sync_opening_weld_joint_coeff_to_guankou_param'): '543d29e64101d78dfbd03833d5609772912841a375a7dc113015de166c090285',
+    ('modules/guankoudingyi/funcs/funcs_pipe_Load.py', 'save_pipe_load_data_by_table'): 'd50e806a28f29de84df1a3acb63bb90487fc82f08c240b6476013a3c5d0e71bd',
+    ('modules/guankoudingyi/funcs/funs_enter_key.py', 'save_all_attachment_define_data'): '27ab668684e4713e68b6902976c620e2ec122ad6caa4be5d6673aea5ae0c2398',
+    ('modules/guankoudingyi/funcs/funs_enter_key.py', 'save_all_pipe_data'): '29e10fa5990c8a5c03f5ca8d5a0c13a3634c2de1353f7ec99758215fa310aa15',
+    ('modules/guankoudingyi/funcs/funs_enter_key.py', 'save_pipe_type_selection'): 'afa1586604766723ce0e96d2634b6ffc2bb54ea16ec0bcac1c131307661ab054',
+    ('modules/qiangdujisuan/jiekou_python/combine_json_new.py', 'calculate_heat_exchanger_strength'): '75d7848ee0e58cad078bef1b3dca387c45893d7eb4605d227f777f760a29e28a',
+}

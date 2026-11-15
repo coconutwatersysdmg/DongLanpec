@@ -1,0 +1,11 @@
+workspace/
+config.local.json
+api_key.txt
+local_config.py
+/vendor/nozzle_agent/config.json
+/ui_vendor/nozzle_agent/config.json
+__pycache__/
+*.pyc
+ui_vendor/**/records.jsonl
+ui_vendor/**/_last_project_path.txt
+ui_vendor/**/output/

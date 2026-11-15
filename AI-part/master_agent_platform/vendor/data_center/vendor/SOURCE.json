@@ -1,0 +1,13 @@
+{
+  "source": "DogiCat-0.9.0.zip",
+  "version": "0.9.0",
+  "archive_sha256": "c1bf19a33efa444eb5f57af359e18332e1101aa9179d6db63c72c7f7b7dab527",
+  "files": {
+    "__init__.py": "2ef5ad31755f0094e90fba83bbae5d7090534fc4eb47428cbc8258e7af5112ec",
+    "core.py": "7c14a6ac378bd73d1fc3bab4b07b0d0e33e47147957e0b4c2278584ddf0594c6",
+    "cell_tools.py": "e5e3ef13edfeee0cbb4ed1a1ee6f75928ba454a9e43d9fe9867a2187558477d7",
+    "sql_export.py": "e32091b0c2eaf138b6305f15967c3e1d68fc6efb293b495185a80db18b832b90",
+    "sql_import.py": "5e7ba52ebea940c85d6144e4dd1500c90d747e2beb79333fd398610f1306e443"
+  },
+  "note": "Original database core. Personal settings and credentials are not imported. Qt integration resides outside vendor."
+}

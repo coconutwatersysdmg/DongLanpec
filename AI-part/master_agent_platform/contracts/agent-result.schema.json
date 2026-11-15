@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:donglanpec:agent-result:1",
+  "title": "子 Agent 结果目标契约（设计稿）",
+  "description": "候选结果必须经平台身份、输入版本、证据、字段权限及领域规则校验后才能接受；schema校验不执行这些业务操作。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "task_id", "workspace_id", "project_id", "product_id", "agent", "adapter_version", "attempt", "input_hash", "status", "candidates", "issues", "artifacts", "coverage"],
+  "properties": {
+    "schema": {"const": "donglanpec.agent-result/1"},
+    "task_id": {"type": "string", "minLength": 1},
+    "workspace_id": {"type": "string", "minLength": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "product_id": {"type": ["string", "null"], "description": "项目拆分阶段可以为空，产品级任务必须非空并匹配任务信封。"},
+    "agent": {"enum": ["project", "conditions", "elements", "nozzles", "tube_bundle"]},
+    "adapter_version": {"type": "string", "minLength": 1},
+    "attempt": {"type": "integer", "minimum": 1},
+    "input_hash": {"$ref": "#/$defs/sha256"},
+    "status": {"enum": ["succeeded", "needs_input", "failed", "cancelled"]},
+    "candidates": {"type": "array", "items": {"$ref": "#/$defs/candidate"}},
+    "issues": {"type": "array", "items": {"$ref": "#/$defs/issue"}},
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path", "bytes", "sha256"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "path": {"type": "string", "minLength": 1},
+          "bytes": {"type": "integer", "minimum": 0},
+          "sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_ids", "truncated", "unsupported_source_ids", "notes"],
+      "properties": {
+        "source_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "truncated": {"type": "boolean"},
+        "unsupported_source_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "notes": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field_id", "object_id", "qualifiers", "value", "unit", "state", "origin", "evidence_ids", "depends_on"],
+      "properties": {
+        "field_id": {"type": "string", "minLength": 1},
+        "object_id": {"type": "string", "minLength": 1},
+        "qualifiers": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "side": {"enum": ["shell", "tube", "common"]},
+            "condition_id": {"type": "string", "minLength": 1},
+            "instance_id": {"type": "string", "minLength": 1},
+            "tab_id": {"type": "string", "minLength": 1}
+          }
+        },
+        "value": {"type": ["string", "number", "integer", "boolean", "null"]},
+        "unit": {"type": ["string", "null"]},
+        "state": {"enum": ["found", "default", "derived", "user", "unknown", "not_applicable"]},
+        "origin": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "source_id", "version"],
+          "properties": {
+            "kind": {"enum": ["document", "foundation", "knowledge", "rule", "user"]},
+            "source_id": {"type": "string", "minLength": 1},
+            "version": {"type": "string", "minLength": 1}
+          }
+        },
+        "evidence_ids": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+        "depends_on": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"state": {"enum": ["unknown", "not_applicable"]}}},
+          "then": {"properties": {"value": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"state": {"enum": ["found", "default", "derived", "user", "not_applicable"]}}},
+          "then": {"properties": {"evidence_ids": {"minItems": 1}}}
+        }
+      ]
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "code", "message", "blocker", "field_ids", "evidence_ids"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "code": {"type": "string", "minLength": 1},
+        "message": {"type": "string", "minLength": 1},
+        "blocker": {"type": "boolean"},
+        "field_ids": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "evidence_ids": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "choices": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"enum": ["needs_input", "failed"]}}},
+      "then": {"properties": {"issues": {"contains": {"properties": {"blocker": {"const": true}}, "required": ["blocker"]}}}}
+    },
+    {
+      "if": {"properties": {"status": {"const": "succeeded"}}},
+      "then": {"properties": {"issues": {"items": {"properties": {"blocker": {"const": false}}}}}}
+    },
+    {
+      "if": {"properties": {"agent": {"enum": ["conditions", "elements", "nozzles", "tube_bundle"]}}},
+      "then": {"properties": {"product_id": {"type": "string", "minLength": 1}}}
+    }
+  ]
+}

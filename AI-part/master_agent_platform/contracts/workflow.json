@@ -1,0 +1,55 @@
+{
+  "schema": "donglanpec.agent-workflow-design/1",
+  "status": "design-only",
+  "scope": "pre-strength-calculation",
+  "policy": {
+    "source_database_runtime_access": false,
+    "business_ui_required": false,
+    "strength_calculation_enabled": false,
+    "user_input": "only-when-blocked",
+    "product_scope": "all-discovered",
+    "product_type_and_form": "per-product-discovery",
+    "missing_optional_data": "defer-and-review",
+    "unknown_requiredness": "defer-until-field-contract-is-confirmed",
+    "manual_review": "only-unresolved-required-fields-after-automatic-review",
+    "capability_gaps_are_not_missing_user_data": true,
+    "automatic_review_actions": ["recheck-product-sources", "check-scoped-defaults-and-field-rules"],
+    "retry_transient_errors": 2,
+    "max_replans_per_product": 3,
+    "successful_agent_does_not_mean_complete_product": true,
+    "upstream_change_invalidates_descendants": true
+  },
+  "nodes": [
+    {"id": "check_foundation", "executor": "fabric", "scope": "workspace", "depends_on": [], "output": "verified private foundation snapshot"},
+    {"id": "ingest", "executor": "fabric", "scope": "project", "depends_on": ["check_foundation"], "output": "managed input files and source identities"},
+    {"id": "identify_products", "executor": "project", "scope": "project", "depends_on": ["ingest"], "output": "project, product candidates, original page ranges"},
+    {"id": "create_product_scopes", "executor": "fabric", "scope": "project", "depends_on": ["identify_products"], "output": "verified product files and scoped knowledge references"},
+    {"id": "initialize_product", "executor": "fabric", "scope": "product", "depends_on": ["create_product_scopes"], "output": "applicable templates, instances and field requirements"},
+    {"id": "extract_conditions", "executor": "conditions", "scope": "product", "depends_on": ["initialize_product"], "output": "five condition groups and evidence"},
+    {"id": "extract_materials", "executor": "elements", "scope": "product", "depends_on": ["initialize_product"], "output": "component and material candidates with evidence"},
+    {"id": "extract_nozzles", "executor": "nozzles", "scope": "product", "depends_on": ["initialize_product"], "output": "nozzle and position candidates with evidence"},
+    {"id": "resolve_core_data", "executor": "fabric", "scope": "product", "depends_on": ["extract_conditions", "extract_materials", "extract_nozzles"], "output": "accepted core revision or consolidated blockers"},
+    {"id": "prepare_elements", "executor": "elements", "scope": "product", "depends_on": ["resolve_core_data"], "output": "component parameters needed for tube design"},
+    {"id": "design_tube_bundle", "executor": "tube_bundle", "scope": "product", "depends_on": ["prepare_elements"], "output": "sheet form, connection, layout and axial design"},
+    {"id": "complete_elements", "executor": "elements", "scope": "product", "depends_on": ["design_tube_bundle"], "output": "all applicable component parameters including geometry-derived values"},
+    {"id": "resolve_nozzle_relations", "executor": "nozzles", "scope": "product", "depends_on": ["complete_elements"], "output": "component, material and attachment references"},
+    {"id": "validate_product", "executor": "validation", "scope": "product", "depends_on": ["resolve_nozzle_relations"], "output": "versioned completeness and consistency checks"},
+    {"id": "build_calculation_input", "executor": "export", "scope": "product", "depends_on": ["validate_product"], "output": "pure calculation JSON and mapping coverage"},
+    {"id": "publish_package", "executor": "fabric", "scope": "product", "depends_on": ["build_calculation_input"], "output": "validated self-contained package and receipt"}
+  ],
+  "replanning": {
+    "mode": "new-attempt-on-affected-subgraph",
+    "requires_new_input_hash": true,
+    "reject_old_attempt_results": true,
+    "on_budget_exhausted": "consolidate blockers in the same workspace"
+  },
+  "readiness": {
+    "supported_form_and_profiles_required": true,
+    "all_applicable_instances_and_fields_required": true,
+    "unresolved_blockers_allowed": false,
+    "unexplained_zero_filling_allowed": false,
+    "stale_results_allowed": false,
+    "mapping_coverage_required": true,
+    "file_integrity_required": true
+  }
+}
