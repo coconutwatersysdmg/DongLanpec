@@ -80,7 +80,8 @@ def clapboard_type(parameters: dict) -> str:
     return "1"
 
 
-def build_input(parameters: dict, product_type: str, defaults: dict | None = None) -> dict:
+def build_input(parameters: dict, product_type: str, defaults: dict | None = None,
+                notes: list[str] | None = None) -> dict:
     """生成正式程序布管接口入参（键名与 LB_* 完全一致）。"""
     defaults = defaults or {}
     payload: dict[str, str] = dict(FALLBACK_INPUT)
@@ -112,6 +113,32 @@ def build_input(parameters: dict, product_type: str, defaults: dict | None = Non
         payload["LB_SNH"] = "0"
     if _text(parameters, "隔条位置尺寸 W") in {"", "程序推荐"}:
         payload["LB_W"] = "0"
+
+    # 一致性兜底：壳体内直径 ≤ 公称直径，布管限定圆/折流板外径 ≤ 壳体内直径。
+    # 元件库的“布管参数表”是按 1200 系列存量的（DN1200/Dis1144/DL1128/折流板1138），
+    # 上游把 DN 改成 400 之后这些值如果残留，DLL 就会按比公称直径还大的壳体布管，
+    # 图上也因此出现“比 DN 还大的大圆、换热管缩在中间一小块”。
+    def _float_or_none(key: str) -> float | None:
+        try:
+            return float(str(payload.get(key, "")).strip())
+        except (TypeError, ValueError):
+            return None
+
+    dn_value = _float_or_none("LB_DN")
+    di_value = _float_or_none("LB_Di")
+    if dn_value and di_value and di_value > dn_value + 1e-6:
+        payload["LB_Di"] = f"{dn_value:.1f}"
+        if notes is not None:
+            notes.append(f"壳体内直径 Dis 按公称直径截断 {di_value:g} → {dn_value:g}")
+        di_value = dn_value
+    ceiling = min(value for value in (di_value, dn_value) if value) if (di_value or dn_value) else None
+    if ceiling:
+        for key, label in (("LB_DL", "布管限定圆 DL"), ("LB_BaffleOD", "折流/支持板外径")):
+            value = _float_or_none(key)
+            if value and value > ceiling + 1e-6:
+                payload[key] = f"{ceiling:.1f}"
+                if notes is not None:
+                    notes.append(f"{label} 按壳体内直径截断 {value:g} → {ceiling:g}")
 
     for key in ("LB_DL", "LB_Di", "LB_DN"):
         if key in payload:
@@ -184,7 +211,8 @@ class LayoutResult:
 
 
 def compute(parameters: dict, product_type: str, defaults: dict | None = None) -> LayoutResult:
-    payload = build_input(parameters, product_type, defaults)
+    notes: list[str] = []
+    payload = build_input(parameters, product_type, defaults, notes)
     raw_text = api.run_layout_tube_calculate(json.dumps(payload, ensure_ascii=False))
     try:
         parsed = parse_heat_exchanger_json(raw_text)
@@ -200,7 +228,7 @@ def compute(parameters: dict, product_type: str, defaults: dict | None = None) -
     removed: list[tuple[float, float]] = []
     h1 = _number(parameters, "非布管区域弦高（0°/180°）", 0.0) or 0.0
     h2 = _number(parameters, "非布管区域弦高（90°/270°）", 0.0) or 0.0
-    note = ""
+    note = "；".join(notes)
     if h1 or h2:
         do = _number(parameters, "换热管外径 do", 25.0) or 25.0
         Di = _number(parameters, "壳体内直径 Dis", 0.0) or 0.0
@@ -208,7 +236,7 @@ def compute(parameters: dict, product_type: str, defaults: dict | None = None) -
         kept_keys = {(round(x, 6), round(y, 6)) for x, y in kept}
         removed = [c for c in centers if (round(c[0], 6), round(c[1], 6)) not in kept_keys]
         centers = kept
-        note = f"已按非布管区域弦高剔除 {len(removed)} 个管孔"
+        note = "；".join(filter(None, (note, f"已按非布管区域弦高剔除 {len(removed)} 个管孔")))
     return LayoutResult(payload, raw, centers, removed, note)
 
 

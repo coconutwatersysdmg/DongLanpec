@@ -35,6 +35,8 @@ def main():
     parser.add_argument("context")
     parser.add_argument("--embed", action="store_true")
     parser.add_argument("--snapshot")
+    parser.add_argument("--size", help="快照用的窗口尺寸，例如 1185x530（默认按模块默认尺寸）")
+    parser.add_argument("--stage", type=int, help="快照时切换到第几个页签（0 起）")
     parser.add_argument("--probe", action="store_true", help="在独立测试产品上验证统一控件与保存操作")
     args = parser.parse_args()
     context = UiContext(args.context)
@@ -95,8 +97,13 @@ def main():
         def __init__(self):
             super().__init__()
             self.setWindowTitle("模块结果")
-            self.resize(1040, 700)
+            self.resize(1040, 720)
             self.module = context.info["module"]
+            if self.module == "tube_bundle":
+                # 编辑器窗口被主平台按容器尺寸嵌入：下限要小，装不下的部分交给内部滚动区，
+                # 否则窗口比宿主还大，最大化/还原后内容会跑到可视区外面。
+                self.setMinimumSize(760, 460)
+                self.resize(1320, 940)
             self.data = context.data
             self.tables = {}
             self.attachments = []
@@ -105,7 +112,9 @@ def main():
             root = QWidget()
             self.setCentralWidget(root)
             layout = QVBoxLayout(root)
-            layout.setContentsMargins(14, 12, 14, 12)
+            # 管束页要放进平台里的窗格，四周留白压到最小，把高度留给参数表/图形
+            layout.setContentsMargins(10, 8, 10, 8)
+            layout.setSpacing(8)
             row = QHBoxLayout()
             name = self.data["product"].get("设备位号") or "产品"
             title = QLabel(name + " · " + dict(project="项目定义", conditions="条件数据", elements="元件与材料", nozzles="管口数据", tube_bundle="管束设计")[self.module])
@@ -119,7 +128,16 @@ def main():
             row.addWidget(add)
             layout.addLayout(row)
             self.tabs = QTabWidget()
-            layout.addWidget(self.tabs, 1)
+            if self.module == "tube_bundle":
+                # 管束页本身有最小宽度（参数表 360 + 图形 + 数量表），窗口变小时
+                # 用滚动区兜住，而不是把内容压扁或顶出窗口。
+                self.tabs_scroll = QScrollArea()
+                self.tabs_scroll.setWidgetResizable(True)
+                self.tabs_scroll.setFrameShape(QScrollArea.NoFrame)
+                self.tabs_scroll.setWidget(self.tabs)
+                layout.addWidget(self.tabs_scroll, 1)
+            else:
+                layout.addWidget(self.tabs, 1)
             self.command = QLineEdit()
             self.command.setPlaceholderText("输入本模块操作，例如：把 1 的外伸高度改成 180")
             self.command.returnPressed.connect(self.execute)
@@ -129,13 +147,22 @@ def main():
             self.command_button = execute
             execute.clicked.connect(self.execute)
             command_row.addWidget(execute)
-            layout.addLayout(command_row)
+            # 管束页高度紧张：指令输入与操作按钮挤在同一行，省下一整行给图形区
+            if self.module != "tube_bundle":
+                layout.addLayout(command_row)
             self.output = QPlainTextEdit()
             self.output.setReadOnly(True)
-            self.output.setMaximumHeight(95)
+            self.output.setMaximumHeight(64 if self.module == "tube_bundle" else 95)
             self.output.setPlaceholderText("校验结果、操作回执与依据说明")
             layout.addWidget(self.output)
+            if self.module == "tube_bundle":
+                # 回执框平时不占高度：只有真的有校验结果/操作回执时才展开
+                self.output.hide()
+                self.output.textChanged.connect(self._sync_output_visibility)
             actions = QHBoxLayout()
+            if self.module == "tube_bundle":
+                actions.addWidget(self.command, 1)
+                actions.addWidget(execute)
             export = QPushButton("导出当前模块 JSON")
             export.clicked.connect(self.export)
             actions.addWidget(export)
@@ -158,7 +185,14 @@ def main():
             self.status = QLabel("修改保留来源与版本；必需项仍由审核循环判断。")
             self.status.setObjectName("muted")
             layout.addWidget(self.status)
+            if self.module == "tube_bundle":
+                # 布管页自己有“需要修改/保留/选中状态”的底栏，这行说明只占高度
+                self.status.hide()
             self.safe(self.build)
+
+        def _sync_output_visibility(self):
+            text = self.output.toPlainText().strip()
+            self.output.setVisible(bool(text))
 
         def safe(self, function):
             from platform_core.fabric import Fabric, digest
@@ -532,6 +566,13 @@ def main():
     timer.timeout.connect(poll)
     timer.start(250)
     if args.embed and not args.snapshot and not args.probe: window.setWindowOpacity(0)
+    if args.size:
+        try:
+            width, height = (int(part) for part in args.size.lower().split("x"))
+            window.setMinimumSize(min(window.minimumWidth(), width), min(window.minimumHeight(), height))
+            window.resize(width, height)
+        except ValueError:
+            pass
     window.show()
     if args.probe:
         def probe():
@@ -580,8 +621,22 @@ def main():
         QTimer.singleShot(200, probe)
     elif args.snapshot:
         def capture():
+            if args.stage is not None:
+                window.tabs.setCurrentIndex(args.stage)
+                app.processEvents()
             window.grab().save(args.snapshot)
-            atomic_json(context.session / "unified-snapshot.json", dict(ok=True, module=window.module, tables={k: t.rowCount() for k, t in window.tables.items()}, old_workbench_visible=False))
+            # 记下页签区实际可用尺寸和是否出现滚动条：嵌入宿主后内容是否“显示不全”
+            # 靠这几个数值判断，比只看截图可靠。
+            scroll = getattr(window, "tabs_scroll", None)
+            atomic_json(context.session / "unified-snapshot.json", dict(
+                ok=True, module=window.module,
+                tables={k: t.rowCount() for k, t in window.tables.items()},
+                old_workbench_visible=False,
+                page_size=[window.tabs.width(), window.tabs.height()],
+                page_minimum=[window.tabs.minimumSizeHint().width(), window.tabs.minimumSizeHint().height()],
+                scrollbars=dict(horizontal=scroll.horizontalScrollBar().isVisible(),
+                                vertical=scroll.verticalScrollBar().isVisible()) if scroll else {},
+            ))
             app.quit()
         QTimer.singleShot(400, capture)
     else: emit("ready", handle=int(window.winId()), module=window.module, product_id=context.product_id)

@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from PyQt5.QtCore import QSize, Qt
+from PyQt5.QtCore import QLineF, QPoint, QRect, QRectF, QSize, Qt
 from PyQt5.QtGui import (
     QColor,
     QFont,
@@ -22,6 +22,7 @@ from PyQt5.QtGui import (
     QIcon,
     QPainter,
     QPalette,
+    QPen,
     QPixmap,
 )
 from PyQt5.QtWidgets import (
@@ -31,15 +32,198 @@ from PyQt5.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLayout,
     QLineEdit,
     QListView,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QStyle,
     QStyleOptionComboBox,
     QVBoxLayout,
     QWidget,
 )
+
+
+class FlowLayout(QLayout):
+    """左对齐自动换行布局：按钮按自身宽度排，装不下就换行。
+
+    工具条以前用 QGridLayout + 列拉伸，按钮被拉成整行等分的空框，字浮在中间，
+    窗口一窄又挤成两行；这里按内容宽度排布，宽了就一行、窄了自动折行。
+    """
+
+    def __init__(self, parent=None, margin: int = 0, h_spacing: int = 4, v_spacing: int = 4):
+        super().__init__(parent)
+        self._items: list = []
+        self._h_spacing = h_spacing
+        self._v_spacing = v_spacing
+        self.setContentsMargins(margin, margin, margin, margin)
+
+    # ---- QLayout 接口
+    def addItem(self, item) -> None:  # noqa: N802 - Qt API
+        self._items.append(item)
+
+    def count(self) -> int:
+        return len(self._items)
+
+    def itemAt(self, index):  # noqa: N802 - Qt API
+        return self._items[index] if 0 <= index < len(self._items) else None
+
+    def takeAt(self, index):  # noqa: N802 - Qt API
+        return self._items.pop(index) if 0 <= index < len(self._items) else None
+
+    def expandingDirections(self):  # noqa: N802 - Qt API
+        return Qt.Orientations(0)
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802 - Qt API
+        return True
+
+    def heightForWidth(self, width: int) -> int:  # noqa: N802 - Qt API
+        return self._do_layout(QRect(0, 0, width, 0), test_only=True)
+
+    def setGeometry(self, rect):  # noqa: N802 - Qt API
+        super().setGeometry(rect)
+        self._do_layout(rect, test_only=False)
+
+    def sizeHint(self):  # noqa: N802 - Qt API
+        return self.minimumSize()
+
+    def minimumSize(self):  # noqa: N802 - Qt API
+        size = QSize(0, 0)
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        margins = self.contentsMargins()
+        return size + QSize(margins.left() + margins.right(), margins.top() + margins.bottom())
+
+    def _do_layout(self, rect: QRect, test_only: bool) -> int:
+        margins = self.contentsMargins()
+        area = rect.adjusted(margins.left(), margins.top(), -margins.right(), -margins.bottom())
+        x, y, line_height = area.x(), area.y(), 0
+        for item in self._items:
+            hint = item.sizeHint()
+            next_x = x + hint.width() + self._h_spacing
+            if next_x - self._h_spacing > area.right() + 1 and line_height > 0:
+                x = area.x()
+                y = y + line_height + self._v_spacing
+                next_x = x + hint.width() + self._h_spacing
+                line_height = 0
+            if not test_only:
+                item.setGeometry(QRect(QPoint(x, y), hint))
+            x = next_x
+            line_height = max(line_height, hint.height())
+        return y + line_height - rect.y() + margins.bottom()
+
+
+class FlowBar(QWidget):
+    """承载 FlowLayout 的容器：把 heightForWidth 往上传，父布局才知道该给多高。"""
+
+    def __init__(self, parent=None, h_spacing: int = 4, v_spacing: int = 4):
+        super().__init__(parent)
+        self._flow = FlowLayout(self, 0, h_spacing, v_spacing)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+    def add_widget(self, widget: QWidget) -> None:
+        self._flow.addWidget(widget)
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802 - Qt API
+        return True
+
+    def heightForWidth(self, width: int) -> int:  # noqa: N802 - Qt API
+        return self._flow.heightForWidth(width)
+
+    def sizeHint(self):  # noqa: N802 - Qt API
+        width = self.width() or 960
+        return QSize(width, self._flow.heightForWidth(width))
+
+    def minimumSizeHint(self):  # noqa: N802 - Qt API
+        return self._flow.minimumSize()
+
+
+def element_icon(glyph: str, color: QColor, size: int = 16) -> QIcon:
+    """工具条用的矢量图标：形状对应图上元件，颜色与布管图里的元件配色一致。
+
+    正式程序那几个按钮位图只有 30~70px 且大小不一（还有一个 2048×2048 的截图），
+    缩到 16px 就会发虚成彩色色块，所以这里用 QPainter 现画，2 倍像素密度保证清晰。
+    """
+    scale = 2
+    pixmap = QPixmap(size * scale, size * scale)
+    pixmap.fill(Qt.transparent)
+    pixmap.setDevicePixelRatio(scale)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    pen = QPen(color, 1.3)
+    pen.setJoinStyle(Qt.RoundJoin)
+    painter.setPen(pen)
+    painter.setBrush(Qt.NoBrush)
+    soft = QColor(color)
+    soft.setAlpha(60)
+
+    if glyph == "tube":
+        painter.drawEllipse(QRectF(2.4, 2.4, 11.2, 11.2))
+        painter.drawEllipse(QRectF(5.6, 5.6, 4.8, 4.8))
+    elif glyph == "rod":
+        painter.setBrush(color)
+        painter.drawEllipse(QRectF(4.6, 4.6, 6.8, 6.8))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(QRectF(1.8, 1.8, 12.4, 12.4))
+    elif glyph == "side_rod":
+        # 实心圆中间留白 = 环形（不能画斜杠，会被看成“禁止”）
+        painter.setBrush(color)
+        painter.drawEllipse(QRectF(2.2, 2.2, 11.6, 11.6))
+        painter.setBrush(QColor("#ffffff"))
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(QRectF(5.6, 5.6, 4.8, 4.8))
+        painter.setPen(QPen(color, 1.3))
+        painter.setBrush(Qt.NoBrush)
+    elif glyph == "block_tube":
+        # 粗环 + 中心实心点（靶心）：和换热管的细双圈、拉杆的实心圆都能区分开，
+        # 也不会像“禁止/减号”那样有歧义
+        painter.setPen(QPen(color, 1.9))
+        painter.drawEllipse(QRectF(2.4, 2.4, 11.2, 11.2))
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(color)
+        painter.drawEllipse(QRectF(6.6, 6.6, 2.8, 2.8))
+        painter.setPen(QPen(color, 1.3))
+        painter.setBrush(Qt.NoBrush)
+    elif glyph == "bypass":
+        painter.setBrush(soft)
+        painter.drawRoundedRect(QRectF(1.6, 5.4, 12.8, 5.2), 1.6, 1.6)
+    elif glyph == "slide":
+        painter.setBrush(soft)
+        painter.drawRoundedRect(QRectF(1.6, 6.4, 12.8, 3.2), 1.2, 1.2)
+        painter.drawLine(QLineF(4.6, 3.8, 4.6, 12.2))
+        painter.drawLine(QLineF(11.4, 3.8, 11.4, 12.2))
+    elif glyph == "screw_ring":
+        painter.drawEllipse(QRectF(3.4, 1.8, 9.2, 9.2))
+        painter.setBrush(soft)
+        painter.drawRoundedRect(QRectF(6.4, 9.6, 3.2, 4.6), 1.0, 1.0)
+    elif glyph == "center_baffle":
+        painter.setBrush(soft)
+        painter.drawRoundedRect(QRectF(2.0, 6.6, 12.0, 3.4), 1.6, 1.6)
+        painter.drawLine(QLineF(8.0, 3.4, 8.0, 13.0))
+    elif glyph == "impingement":
+        # 板 + 两道斜向排线：小尺寸下不会看成“勾选框”
+        painter.setBrush(soft)
+        painter.drawRoundedRect(QRectF(2.0, 3.4, 12.0, 9.2), 1.6, 1.6)
+        painter.drawLine(QLineF(4.2, 10.8, 8.4, 5.4))
+        painter.drawLine(QLineF(7.6, 10.8, 11.8, 5.4))
+    elif glyph == "baffle":
+        painter.setBrush(soft)
+        painter.drawRect(QRectF(1.8, 6.6, 12.4, 2.8))
+        painter.drawLine(QLineF(3.8, 3.4, 3.8, 12.6))
+        painter.drawLine(QLineF(12.2, 3.4, 12.2, 12.6))
+    elif glyph == "radial_hole":
+        painter.drawEllipse(QRectF(1.8, 3.4, 10.8, 10.8))
+        painter.setBrush(color)
+        painter.drawEllipse(QRectF(11.2, 1.8, 3.6, 3.6))
+    elif glyph == "delete":
+        pen = QPen(QColor("#c0392b"), 1.7)
+        pen.setCapStyle(Qt.RoundCap)
+        painter.setPen(pen)
+        painter.drawLine(QLineF(4.2, 4.2, 11.8, 11.8))
+        painter.drawLine(QLineF(11.8, 4.2, 4.2, 11.8))
+    painter.end()
+    return QIcon(pixmap)
 
 
 class TubePassFormComboBox(QComboBox):

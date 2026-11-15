@@ -6,9 +6,9 @@ import os
 from pathlib import Path
 import sys
 
-from PyQt5.QtCore import QProcess, QProcessEnvironment, QThread, QTimer, Qt, pyqtSignal
+from PyQt5.QtCore import QEvent, QPoint, QProcess, QProcessEnvironment, QRect, QSize, QThread, QTimer, Qt, pyqtSignal
 from PyQt5.QtGui import QWindow
-from PyQt5.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QPushButton, QScrollArea,
+from PyQt5.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
                              QTabWidget, QVBoxLayout, QWidget)
 
 from .fabric import BASE
@@ -57,6 +57,7 @@ class EvidencePanel(QWidget):
         layout = QVBoxLayout(self)
         help_text = QLabel("选择任意产品打开原模块工作台，继续查看依据、编辑、校验及写入。原界面连接平台独立数据副本；点击“保存到平台并继续审核”回流结果。")
         help_text.setWordWrap(True)
+        self.help_text = help_text
         layout.addWidget(help_text)
         row = QHBoxLayout()
         self.product = QComboBox()
@@ -180,22 +181,37 @@ class EvidencePanel(QWidget):
         if session["ready"]: return
         if os.name == "nt" and os.environ.get("QT_QPA_PLATFORM") != "offscreen":
             foreign = QWindow.fromWinId(handle)
+            # 子进程窗口自带 1000×900 之类的最小尺寸时，容器就再也缩不回去，
+            # 在聊天页里会被顶出可视区、和输入区叠在一起。这里把下限放到容器能承受的范围。
+            try:
+                foreign.setMinimumSize(QSize(0, 0))
+            except Exception:
+                pass
             container = QWidget.createWindowContainer(foreign, session["page"])
             container.setFocusPolicy(Qt.StrongFocus)
-            # Retain the original minimum workspace size and scroll within the hub.
-            container.setMinimumSize(1180, 780)
-            scroll = QScrollArea()
-            scroll.setWidgetResizable(True)
-            scroll.setWidget(container)
-            session["layout"].addWidget(scroll)
-            session.update(container=container, foreign=foreign, scroll=scroll)
+            container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            container.setMinimumSize(520, 360)
+            session["layout"].addWidget(container)
+            session.update(container=container, foreign=foreign)
             session["placeholder"].hide()
+            # 容器尺寸变化时同步外部窗口几何：最大化/还原后不会再留下旧位置的残影。
+            container.installEventFilter(self)
         else:
             session["placeholder"].setText("当前环境不支持窗口嵌入，统一模块编辑器以独立窗口显示；保存结果仍返回本平台。")
         session["ready"] = True
         atomic_json(session["path"] / "command.json", dict(action="attached"))
         self.status.setText("模块数据已载入，可继续编辑、校验和保存。")
         self.message.emit("已载入模块：" + LABELS[session["info"]["module"]])
+
+    def eventFilter(self, obj, event):  # noqa: N802 - Qt API
+        if event.type() == QEvent.Resize:
+            session = next((s for s in self.sessions if s.get("container") is obj), None)
+            if session and session.get("foreign") is not None:
+                try:
+                    session["foreign"].setGeometry(QRect(QPoint(0, 0), obj.size()))
+                except Exception:
+                    pass
+        return super().eventFilter(obj, event)
 
     def close_tab(self, index):
         page = self.windows.widget(index)

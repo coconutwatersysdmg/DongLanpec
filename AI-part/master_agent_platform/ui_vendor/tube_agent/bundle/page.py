@@ -19,7 +19,6 @@ from PyQt5.QtGui import (
     QDoubleValidator,
     QFont,
     QFontMetrics,
-    QIcon,
     QIntValidator,
     QPainterPath,
     QPen,
@@ -53,11 +52,15 @@ from PyQt5.QtWidgets import (
 from . import engine, geometry, impingement
 from .hole_table import HoleDistributionTable
 from .items import (
+    BLOCK_TUBE_COLOR,
     BYPASS_COLOR,
     CENTER_BAFFLE_COLOR,
     IMPINGE_COLOR,
     IMPINGE_PEN_COLOR,
+    ROD_COLOR,
+    SIDE_ROD_COLOR,
     SLIDE_COLOR,
+    TUBE_PEN_COLOR,
     BlockTubeItem,
     ComponentRectItem,
     FoldedPlateItem,
@@ -83,11 +86,13 @@ from modules.buguan.buguan_ziyong.tube_pass.adapter import (
 )
 from .view import LayoutGraphicsView
 from .widgets import (
+    FlowBar,
     ParamComboBox,
     ParamField,
     TubePassFormComboBox,
     apply_param_combo_style,
     ask_component_params,
+    element_icon,
     param_combo_stylesheet,
 )
 
@@ -143,6 +148,19 @@ QTableWidget QLineEdit {{
     font-size: 10pt;
     min-height: 24px;
 }}
+"""
+
+# 元件工具条：浅底一条，按钮是白色胶囊；删除单独靠右、红色描边，避免误点
+TOOLBAR_STYLE = """
+QFrame#layoutToolbar{background:#f7f9fd;border:1px solid #e6ecf5;border-radius:8px;}
+QPushButton#toolChip{background:#ffffff;border:1px solid #e2e8f2;border-radius:6px;
+    padding:0 9px;font-size:9pt;color:#31405c;}
+QPushButton#toolChip:hover{background:#eef4ff;border-color:#b8d0f5;color:#1d4ed8;}
+QPushButton#toolChip:pressed{background:#dfeafe;border-color:#9dc0f2;}
+QPushButton#toolChipDanger{background:#ffffff;border:1px solid #f0d2cd;border-radius:6px;
+    padding:0 12px;font-size:9pt;color:#c0392b;}
+QPushButton#toolChipDanger:hover{background:#fdf2f0;border-color:#e3aca4;}
+QPushButton#toolChipDanger:pressed{background:#fbe4e0;}
 """
 
 # 方案卡上的参数名简称（完整参数名太长，卡片要短）
@@ -371,58 +389,82 @@ class TubeLayoutPage(QWidget):
         self.headless = False
         self._build_ui()
         self.rebuild_parameter_table()
+        # 参数表是 1200 系列的存量数据，而公称直径 DN 常来自上游设计数据表（例如 400）。
+        # 开算之前先按 DN 把 Dis/Dit/折流板外径/DL 校一遍，否则图上会出现比 DN 还大的
+        # “内圆”，管子缩在中间一小块，DLL 也按错误的壳体内径布管。
+        self._linkage_fixes: list[str] = []
+        self._apply_linkage("公称直径 DN")
         self.recompute(first=True)
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(8)
+        root.setSpacing(6)
 
         body = QHBoxLayout()
         self.body_layout = body
         body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(10)
+        body.setSpacing(8)
 
-        # 元件工具条：整页顶部独占一行，避免挤占中间图形的宽度
-        toolbar = QHBoxLayout()
-        toolbar.setSpacing(4)
+        # 元件工具条：整页顶部独占一行，避免挤占中间图形的宽度。
+        # 图标改为矢量绘制（颜色对应图上的元件），按钮按内容宽度左对齐排列、
+        # 装不下自动折行——旧版把按钮塞进等分列的网格里拉满整行，既空又难认。
+        toolbar_frame = QFrame()
+        self.toolbar_frame = toolbar_frame
+        toolbar_frame.setObjectName("layoutToolbar")
+        toolbar_frame.setStyleSheet(TOOLBAR_STYLE)
+        toolbar_row = QHBoxLayout(toolbar_frame)
+        toolbar_row.setContentsMargins(6, 4, 6, 4)
+        toolbar_row.setSpacing(6)
+        caption = QLabel("元件")
+        caption.setStyleSheet("color:#8b95a7;font-size:8.5pt;padding-right:2px;")
+        toolbar_row.addWidget(caption, 0, Qt.AlignVCenter)
+        tools = FlowBar(toolbar_frame, 4, 4)
         tool_specs = [
-            ("换热管", "button1_1.png", self.restore_tubes),
-            ("拉杆", "button1_2.png", lambda: self.place_rod(free=False)),
-            ("自由拉杆", "button1_3.png", lambda: self.place_rod(free=True)),
-            ("中间挡管", "button2_1.png", self.place_block_tube),
-            ("旁路挡板", "button2_2.png", lambda: self.place_plate("bypass")),
-            ("滑道", "button2_3.png", self.place_slide),
-            ("吊环螺钉", "button3_1.png", self.place_screw_ring),
-            ("中间挡板", "button3_2.png", lambda: self.place_plate("center_baffle")),
-            ("防冲板", "button3_3.png", self.place_impingement),
-            ("折流板", "button3_4.png", self.place_baffle),
-            ("径向开孔", "button3_5.png", self.place_radial_hole),
-            ("删除", "button1_4.png", self.delete_selected),
+            ("换热管", "tube", TUBE_PEN_COLOR, "恢复被删除的换热管，并重新布管", self.restore_tubes),
+            ("拉杆", "rod", ROD_COLOR, "在选中的管孔位置布置拉杆", lambda: self.place_rod(free=False)),
+            ("自由拉杆", "side_rod", SIDE_ROD_COLOR, "在选中的管孔位置布置自由拉杆", lambda: self.place_rod(free=True)),
+            ("中间挡管", "block_tube", BLOCK_TUBE_COLOR, "布置中间挡管", self.place_block_tube),
+            ("旁路挡板", "bypass", BYPASS_COLOR, "布置旁路挡板", lambda: self.place_plate("bypass")),
+            ("滑道", "slide", SLIDE_COLOR, "布置滑道", self.place_slide),
+            ("吊环螺钉", "screw_ring", QColor(0, 116, 160), "布置吊环螺钉", self.place_screw_ring),
+            ("中间挡板", "center_baffle", CENTER_BAFFLE_COLOR, "布置中间挡板", lambda: self.place_plate("center_baffle")),
+            ("防冲板", "impingement", IMPINGE_PEN_COLOR, "布置防冲板", self.place_impingement),
+            ("折流板", "baffle", QColor(170, 132, 20), "布置折流板", self.place_baffle),
+            ("径向开孔", "radial_hole", QColor(0, 110, 190), "在管板上径向开孔", self.place_radial_hole),
         ]
-        for text, icon, slot in tool_specs:
+        for text, glyph, color, tip, slot in tool_specs:
             button = QPushButton(text)
+            button.setObjectName("toolChip")
             button.setCursor(Qt.PointingHandCursor)
-            icon_path = STATIC_DIR / "buttons" / icon
-            if icon_path.exists():
-                button.setIcon(QIcon(str(icon_path)))
+            button.setToolTip(tip)
+            button.setIcon(element_icon(glyph, QColor(color)))
             button.setIconSize(QSize(16, 16))
-            button.setStyleSheet(
-                "QPushButton{background:#ffffff;border:1px solid #e2e3e6;border-radius:6px;"
-                "padding:3px 6px;font-size:9pt;color:#222;}"
-                "QPushButton:hover{background:#f2f6fd;border-color:#c9dbfb;}"
-            )
+            button.setFixedHeight(26)
+            button.setMinimumWidth(78)
             button.clicked.connect(slot)
-            toolbar.addWidget(button)
-        toolbar.addStretch()
-        root.addLayout(toolbar)
+            tools.add_widget(button)
+        toolbar_row.addWidget(tools, 1)
+        delete_button = QPushButton("删除")
+        delete_button.setObjectName("toolChipDanger")
+        delete_button.setCursor(Qt.PointingHandCursor)
+        delete_button.setToolTip("删除选中的管孔或元件（也可按 Delete 键）")
+        delete_button.setIcon(element_icon("delete", QColor("#c0392b")))
+        delete_button.setIconSize(QSize(16, 16))
+        delete_button.setFixedHeight(26)
+        delete_button.setMinimumWidth(74)
+        delete_button.clicked.connect(self.delete_selected)
+        toolbar_row.addWidget(delete_button, 0, Qt.AlignVCenter)
+        root.addWidget(toolbar_frame)
 
         # 左：参数表
         left = QFrame()
         self.left_frame = left
         left.setObjectName("layoutParamFrame")
-        left.setMinimumWidth(360)
+        # 三栏按 30/48/22 分宽度：左侧只要放得下“参数名 + 数值 + 单位”，
+        # 下限压到 330 才能在 1100 宽的编辑器里不出现整页横向滚动条。
+        left.setMinimumWidth(330)
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(4, 4, 4, 4)
         left_layout.setSpacing(4)
@@ -467,7 +509,7 @@ class TubeLayoutPage(QWidget):
         )
         self.divider_correction_tip.setVisible(False)
         left_layout.addWidget(self.divider_correction_tip)
-        body.addWidget(left, 36)
+        body.addWidget(left, 32)
 
         # 中：图形 + 操作栏
         center = QFrame()
@@ -479,6 +521,8 @@ class TubeLayoutPage(QWidget):
         self.scene = QGraphicsScene(self)
         self.view = LayoutGraphicsView(self.scene)
         self.view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # 图形区下限 240：图形本身按可用空间等比缩放，下限再高就会把整页顶出
+        # 嵌在平台里的窗格，变成“要拖滚动条才能看全”。
         self.view.setMinimumHeight(240)
         self.view.rubber_band_finished.connect(self.on_rubber_band)
         # 正式程序：页面/图形空白处右键 = 取消筛选（清掉表格与图形的选中）
@@ -525,19 +569,19 @@ class TubeLayoutPage(QWidget):
         self.selection_label.setStyleSheet("color:#8f949c;")
         action_bar.addWidget(self.selection_label)
         center_layout.addLayout(action_bar)
-        body.addWidget(center, 39)
+        body.addWidget(center, 46)
 
         # 右：管孔数量分布
         right = QFrame()
         self.right_frame = right
-        right.setMinimumWidth(340)
+        right.setMinimumWidth(300)
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(4, 4, 4, 4)
         self.hole_table = HoleDistributionTable()
         self.hole_table.rows_selected.connect(self.on_table_rows_selected)
         self.hole_table.arrangement_changed.connect(lambda _by_row: self.refresh_hole_table())
         right_layout.addWidget(self.hole_table)
-        body.addWidget(right, 25)
+        body.addWidget(right, 22)
 
         root.addLayout(body, 1)
 
@@ -548,14 +592,17 @@ class TubeLayoutPage(QWidget):
             "QFrame#layoutIssueFrame{background:#fff8f7;border:1px solid #f0ceca;border-radius:8px;}"
         )
         issue_layout = QVBoxLayout(self.issue_frame)
-        issue_layout.setContentsMargins(10, 8, 10, 8)
-        issue_layout.setSpacing(4)
+        issue_layout.setContentsMargins(8, 3, 8, 3)
+        issue_layout.setSpacing(1)
+        self.issue_frame.setMaximumHeight(64)
         self.issue_title = QLabel("需要修改")
-        self.issue_title.setStyleSheet("font-weight:600;color:#9b2c2c;")
+        self.issue_title.setStyleSheet("font-weight:600;color:#9b2c2c;font-size:8.5pt;")
         issue_layout.addWidget(self.issue_title)
         self.issue_list = QLabel("")
         self.issue_list.setWordWrap(True)
         self.issue_list.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.issue_list.setMaximumHeight(24)
+        self.issue_list.setStyleSheet("font-size:8.5pt;")
         issue_layout.addWidget(self.issue_list)
         self.recommend_box = QHBoxLayout()
         self.recommend_box.setContentsMargins(0, 0, 0, 0)
@@ -568,10 +615,10 @@ class TubeLayoutPage(QWidget):
         footer.addStretch()
         self.keep_button = QPushButton("保留")
         self.keep_button.setCursor(Qt.PointingHandCursor)
-        self.keep_button.setMinimumWidth(120)
+        self.keep_button.setMinimumWidth(88)
         self.keep_button.setStyleSheet(
-            "QPushButton{background:#2f6fe4;color:#fff;border:none;border-radius:9px;padding:9px 26px;"
-            "font-weight:600;font-size:10.5pt;}"
+            "QPushButton{background:#2f6fe4;color:#fff;border:none;border-radius:7px;padding:5px 16px;"
+            "font-weight:600;font-size:9.5pt;}"
             "QPushButton:hover{background:#2a63cc;}"
             "QPushButton:disabled{background:#eef2fa;color:#a8b6cc;}"
         )
@@ -835,7 +882,7 @@ class TubeLayoutPage(QWidget):
         if name == "换热管排列方式":
             text = canonical_tube_arrangement(text)      # 存库用规范名，与正式程序一致
         # 与正式程序一致：普通下拉只能是现有选项；只读参数不接受修改；数字必须能转成数
-        if spec.readonly and source not in {"联动计算", "程序默认值"}:
+        if spec.readonly and source not in {"联动计算", "程序默认值", "联动修正"}:
             if str(self.parameters[name].get("value", "")) != text:
                 self._warn("参数只读", f"{name} 由其他参数联动计算，不能直接修改。")
                 self._refresh_editor(name)
@@ -1004,24 +1051,50 @@ class TubeLayoutPage(QWidget):
             editor.setToolTip("由设计数据表/通用数据表决定，布管页不可修改")
 
     def _apply_linkage(self, changed: str) -> None:
-        """正式程序的参数联动：DN→Dis/Dit，Dis→折流板外径/DL，do+排列→S/Sn，管程→分程形式。"""
+        """正式程序的参数联动：DN→Dis/Dit，Dis→折流板外径/DL，do+排列→S/Sn，管程→分程形式。
+
+        除了“程序默认值/联动计算”这种可覆盖的来源，这里还有一条硬约束：
+        库里按 1200 系列存量的 Dis/Dit/折流板外径 一旦大于当前的公称直径 DN
+        （典型情形：上游把 DN 改成 400，参数表里还留着 1144），
+        画出来的“内圆”会比 DN 外圆还大、管子缩在中间一小块，DLL 也按错误直径布管。
+        所以只要和 DN 矛盾，就按 DN 修正，并在来源里标成“联动修正”。
+        """
         dn = self._float("公称直径 DN")
         dis = self._float("壳体内直径 Dis")
         r2 = self._float_from_sheet_form("R2", 8.0)
+        default_like = {"程序默认值", "联动计算", "联动修正"}
+
+        def fix(name: str, value: str) -> None:
+            """写入联动值，并把“旧值 → 新值”记进修正回执（显示在操作栏）。"""
+            old = self.parameters[name]["value"]
+            if self.set_parameter(name, value, "联动修正", run_linkage=False):
+                fixes = getattr(self, "_linkage_fixes", None)
+                if fixes is not None:
+                    fixes.append(f"{name} {old} → {value}")
 
         if changed == "公称直径 DN" and dn:
-            if self.parameters["壳体内直径 Dis"]["source"] in {"程序默认值", "联动计算"}:
-                self.set_parameter("壳体内直径 Dis", self._pretty(dn), "联动计算", run_linkage=False)
-            if self.parameters["管箱内直径 Dit"]["source"] in {"程序默认值", "联动计算"}:
-                self.set_parameter("管箱内直径 Dit", self._pretty(dn), "联动计算", run_linkage=False)
+            if (self.parameters["壳体内直径 Dis"]["source"] in default_like
+                    or dis is None or dis > dn):
+                fix("壳体内直径 Dis", self._pretty(dn))
+            dit = self._float("管箱内直径 Dit")
+            if (self.parameters["管箱内直径 Dit"]["source"] in default_like
+                    or dit is None or dit > dn):
+                fix("管箱内直径 Dit", self._pretty(dn))
+            dis = self._float("壳体内直径 Dis")
+        if changed == "壳体内直径 Dis" and dn and dis and dis > dn:
+            # 壳体内直径大于公称直径没有物理意义：按 DN 截断，再让下面联动 Dis 分支重算 DL
+            fix("壳体内直径 Dis", self._pretty(dn))
             dis = self._float("壳体内直径 Dis")
         if changed in {"壳体内直径 Dis", "公称直径 DN"} and dis:
-            if self.parameters["折流/支持板外径"]["source"] in {"程序默认值", "联动计算"}:
+            baffle = self._float("折流/支持板外径")
+            if (self.parameters["折流/支持板外径"]["source"] in default_like
+                    or baffle is None or baffle > dis):
                 # 正式程序：折流/支持板外径 = 壳体内直径 - 6（见默认表 1144→1138）
-                self.set_parameter("折流/支持板外径", self._pretty(dis - 6), "联动计算", run_linkage=False)
-            if self.parameters["布管限定圆 DL"]["source"] in {"程序默认值", "联动计算"}:
-                dl = max(dis - 2 * r2, 0)
-                self.set_parameter("布管限定圆 DL", self._pretty(dl), "联动计算", run_linkage=False)
+                fix("折流/支持板外径", self._pretty(max(dis - 6, 0)))
+            dl = self._float("布管限定圆 DL")
+            if (self.parameters["布管限定圆 DL"]["source"] in default_like
+                    or dl is None or dl > dis):
+                fix("布管限定圆 DL", self._pretty(max(dis - 2 * r2, 0)))
         if changed in {"换热管外径 do", "换热管排列方式"}:
             self._apply_center_distance()
         if changed == "管程程数":
@@ -1033,6 +1106,19 @@ class TubeLayoutPage(QWidget):
         if changed in {"是否以外径为基准", "管程程数", "管程分程形式"}:
             # 与正式程序一致：这几个参数变化后重算哪些行该隐藏
             self.apply_param_visibility()
+        if getattr(self, "_linkage_fixes", None) and (self.isVisible() or changed != "公称直径 DN"):
+            self._report_linkage_fixes()
+
+    def _report_linkage_fixes(self) -> None:
+        fixes = getattr(self, "_linkage_fixes", None)
+        if not fixes:
+            return
+        self._linkage_fixes = []
+        self.status_message.emit("已按公称直径 DN 校正参数：" + "；".join(fixes))
+
+    def showEvent(self, event):  # noqa: N802 - Qt API
+        super().showEvent(event)
+        self._report_linkage_fixes()
 
     def _rebuild_editor_options(self, name: str) -> None:
         old = self._editors.get(name)
@@ -1128,6 +1214,8 @@ class TubeLayoutPage(QWidget):
         self.rebuild_scene()
         self.refresh_hole_table()
         self.show_issues()
+        if result.note:
+            self.status_message.emit("布管数据已校正：" + result.note)
         if reason:
             total = len(self.current_centers())
             extra = f"，已清掉上次布置的 {had_components} 个元件" if had_components else ""
@@ -1222,12 +1310,14 @@ class TubeLayoutPage(QWidget):
         if self.result is None:
             return
         result = self.result
-        pad = max(result.big_r_wai, 10.0) * 0.18
+        radii = self._envelope_radii(result)
+        outer = max(radii["外圆"], radii["内圆"], radii["限定圆"]) or float(result.big_r_wai)
+        pad = max(outer, 10.0) * 0.18
         scene.setSceneRect(
-            -result.big_r_wai - pad, -result.big_r_wai - pad,
-            (result.big_r_wai + pad) * 2, (result.big_r_wai + pad) * 2,
+            -outer - pad, -outer - pad,
+            (outer + pad) * 2, (outer + pad) * 2,
         )
-        self._draw_axes(result.big_r_wai)
+        self._draw_axes(outer)
         self._draw_envelope(result)
         self._draw_baffle_chords(result)
         self._draw_partition(result)
@@ -1237,14 +1327,39 @@ class TubeLayoutPage(QWidget):
         self.view.fit_all()
         self._update_lagan_summary()
 
+    def _envelope_radii(self, result: engine.LayoutResult) -> dict[str, float]:
+        """图上三个同心圆的半径，与参数表一一对应且互为约束。
+
+        外圆 = 公称直径 DN；内圆 = 壳体内直径 Dis；限定圆 = 布管限定圆 DL。
+        物理上必然 Dis ≤ DN、DL ≤ Dis；但库里的“布管参数表”是按 1200 系列存量的，
+        当上游把 DN 改成 400 时，Dis/DL/折流板外径 可能仍留着 1144/1128/1138，
+        照抄就会画出“比公称直径还大的外圆”，管子缩在中间一小块。这里按
+        Dis ≤ DN、DL ≤ Dis、折流板外径 ≤ Dis 统一截断，保证图形与参数一致。
+        """
+        outer = max(float(result.big_r_wai), 0.0)
+        inner = max(float(result.big_r_di), 0.0)
+        limit = max(float(result.big_r_nei), 0.0)
+        baffle = max(float(result.baffle_r), 0.0)
+        if outer <= 0:
+            outer = inner or limit or baffle
+        if inner <= 0:
+            inner = outer
+        inner = min(inner, outer)
+        if limit <= 0:
+            limit = inner
+        limit = min(limit, inner)
+        baffle = min(baffle, inner)
+        return {"外圆": outer, "内圆": inner, "限定圆": limit, "折流/支持板外圆": baffle}
+
     def _draw_baffle_chords(self, result: engine.LayoutResult) -> None:
         """绘制正式程序中的单弓黄线或双弓 A/B 蓝红弦线。"""
         baffle_type = self._param_text("折流板类型")
+        radii = self._envelope_radii(result)
         # 正式程序：单弓形按壳体内径圆算黄线；双弓形优先按折流板外径圆算 A/B 线。
         radius = float(
-            (result.baffle_r or result.big_r_di)
+            (radii["折流/支持板外圆"] or radii["内圆"])
             if baffle_type in {"双弓型", "双弓形"}
-            else result.big_r_di
+            else radii["内圆"]
         )
         for spec in baffle_chord_specs(self.parameters, radius):
             pen = QPen(QColor(*spec["color"]))
@@ -1295,29 +1410,32 @@ class TubeLayoutPage(QWidget):
             text.setZValue(16)
 
     def _draw_envelope(self, result: engine.LayoutResult) -> None:
+        radii = self._envelope_radii(result)
         pens = {
             "外圆": QPen(Qt.black, 2),
             "内圆": QPen(Qt.gray, 2),
             "限定圆": QPen(QColor(0, 0, 0), 2),
         }
         for key, pen in pens.items():
-            radius = getattr(result, {"外圆": "big_r_wai", "内圆": "big_r_di", "限定圆": "big_r_nei"}[key])
+            radius = radii[key]
             if radius <= 0:
                 continue
             item = self.scene.addEllipse(-radius, -radius, radius * 2, radius * 2, pen, QBrush(Qt.NoBrush))
             item.setZValue(20)
-        if result.baffle_r > 0:
+        if radii["折流/支持板外圆"] > 0:
             pen = QPen(QColor(120, 120, 120), 1.6, Qt.DashLine)
             item = self.scene.addEllipse(
-                -result.baffle_r, -result.baffle_r, result.baffle_r * 2, result.baffle_r * 2,
+                -radii["折流/支持板外圆"], -radii["折流/支持板外圆"],
+                radii["折流/支持板外圆"] * 2, radii["折流/支持板外圆"] * 2,
                 pen, QBrush(Qt.NoBrush),
             )
             item.setZValue(18)
 
     def _draw_partition(self, result: engine.LayoutResult) -> None:
         """分程隔板：按 SN（竖直）/SNH（水平）在管孔带之间画隔板带。"""
+        radii = self._envelope_radii(result)
         do = result.small_r * 2
-        radius = result.big_r_nei or result.big_r_wai
+        radius = radii["限定圆"] or radii["外圆"]
         sn = result.SN
         snh = float(result.raw.get("SNH") or 0)
         band_pen = QPen(QColor(80, 80, 80), 1.4)

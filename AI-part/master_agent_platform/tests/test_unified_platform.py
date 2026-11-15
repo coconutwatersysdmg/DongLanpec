@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QApplication
 import fitz
 
@@ -123,6 +124,27 @@ class UnifiedPlatformTests(unittest.TestCase):
                 window.send()
                 dispatch.assert_called_once_with("P1 壳程设计压力改为 2.8 MPa", "conditions", self.summary["products"][0]["id"])
                 self.assertIsNone(window.worker)
+        finally:
+            window.close()
+            self.app.processEvents()
+
+    def test_tube_bundle_editor_keeps_other_inline_sections_and_scrollbar(self):
+        import run
+        window = run.MainWindow()
+        try:
+            window.on_complete(self.summary)
+            chat_page = window.pages.widget(0)
+            window.module_panel.setMinimumHeight(760)
+            window.module_editor_focus(True)
+            self.assertIs(window.pages.currentWidget(), chat_page)
+            self.assertIs(window.module_panel.parentWidget(), window.module_card)
+            self.assertGreaterEqual(window.module_panel.minimumHeight(), 760)
+            self.assertIn(window.execution_card, [window.chat_layout.itemAt(i).widget()
+                                                   for i in range(window.chat_layout.count())])
+            self.assertEqual(window.chat_scroll.verticalScrollBarPolicy(), Qt.ScrollBarAsNeeded)
+            window.module_editor_focus(False)
+            self.assertIs(window.pages.currentWidget(), chat_page)
+            self.assertIs(window.module_panel.parentWidget(), window.module_card)
         finally:
             window.close()
             self.app.processEvents()

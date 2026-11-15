@@ -11,9 +11,15 @@ from .fabric import BASE
 
 class ModulePanel(EvidencePanel):
     reply = pyqtSignal(str)
+    editor_focus_requested = pyqtSignal(bool)
 
     def __init__(self, workspace, parent=None):
         super().__init__(workspace, parent)
+        # 面板里嵌的是原生窗口：底色必须是不透明的，否则窗口尺寸变化时
+        # 上层透明重绘会和下面的原生画面叠在一起（看起来像文字重叠/残影）。
+        self.setObjectName("modulePanel")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setStyleSheet("QWidget#modulePanel{background:#ffffff;border-radius:10px;}")
         self.runtime = BASE / "module_runtime.py"
         self.layout().itemAt(0).widget().setText("结果按产品和模块组织。可查看来源、直接编辑、校验，并把修改送回同一审核循环。")
         self.open_button.setText("编辑模块数据")
@@ -29,8 +35,12 @@ class ModulePanel(EvidencePanel):
         self.module.setItemText(3, "管口数据")
         self.module.setItemText(4, "管束设计")
         self.pending_commands = []
+        # 记住面板原本的留白，退出专注视图时原样还原（不要自作主张改成 0）
+        base = self.layout().contentsMargins()
+        self._base_margins = (base.left(), base.top(), base.right(), base.bottom())
         self.windows.hide()
-        self.setFixedHeight(340)
+        self.setMaximumHeight(16777215)
+        self.setMinimumHeight(340)
 
     def set_summary(self, summary):
         super().set_summary(summary)
@@ -50,7 +60,8 @@ class ModulePanel(EvidencePanel):
         self.preview.clear()
         self.preview.show()
         self.windows.hide()
-        self.setFixedHeight(340)
+        self.setMaximumHeight(16777215)
+        self.setMinimumHeight(340)
         self.status.setText("生成结果后选择产品与模块。")
         self.refresh_controls()
 
@@ -60,8 +71,26 @@ class ModulePanel(EvidencePanel):
 
     def launch(self, path):
         self.windows.show()
-        self.setFixedHeight(680)
+        info = json.loads(Path(path).read_text(encoding="utf-8"))
+        # 面板只申请“够用”的高度：编辑器本身（子进程窗口）按容器尺寸自适应，
+        # 以前给 1050 会让聊天页总高度超过窗口，模块行和输入区互相压住。
+        if info.get("module") == "tube_bundle":
+            # 面板不再硬性要求一个很高的下限（那会把整个聊天页顶出窗口），
+            # 改由工作区按窗口高度分配；同时进入专注视图，把对话区收起来。
+            self.setMinimumHeight(340)
+            self.editor_focus_requested.emit(True)
+        else:
+            self.setMaximumHeight(16777215)
+            self.setMinimumHeight(420)
         super().launch(path)
+
+    def set_focus(self, active):
+        """编辑器活动时收起说明行、状态行和产品预览，高度全部让给编辑器窗口。"""
+        self.help_text.setVisible(not active)
+        self.status.setVisible(not active)
+        if active:
+            self.preview.hide()
+        self.layout().setContentsMargins(*((4, 2, 4, 2) if active else getattr(self, "_base_margins", (9, 9, 9, 9))))
 
     def dispatch_command(self, text, module, product_id=None):
         if not self.summary: return
@@ -116,8 +145,6 @@ class ModulePanel(EvidencePanel):
 
     def attach(self, session, handle):
         super().attach(session, handle)
-        if session.get("container"):
-            session["container"].setMinimumSize(940, 630)
         self.status.setText("模块数据已载入，可编辑、查看依据、校验及保存。")
         self.preview.hide()
 
@@ -127,7 +154,14 @@ class ModulePanel(EvidencePanel):
     def process_finished(self, session, code):
         super().process_finished(session, code)
         self.status.setText("编辑已关闭，当前工作副本已保留。" if code == 0 else "模块服务异常退出，操作记录已保留。")
+        if session["info"]["module"] == "tube_bundle" and not any(
+            item["info"]["module"] == "tube_bundle" for item in self.sessions
+        ):
+            self.editor_focus_requested.emit(False)
         if not self.sessions:
+            # 所有编辑器都关掉了：把“模块结果”卡搬回聊天流
+            self.editor_focus_requested.emit(False)
             self.preview.show()
             self.windows.hide()
-            self.setFixedHeight(340)
+            self.setMaximumHeight(16777215)
+            self.setMinimumHeight(340)

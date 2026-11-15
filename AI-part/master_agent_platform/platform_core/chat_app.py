@@ -149,7 +149,9 @@ class ChatWindow(QMainWindow):
         root.addWidget(sidebar)
         body = QWidget()
         body_layout = QVBoxLayout(body)
-        body_layout.setContentsMargins(28, 18, 28, 20)
+        self.body_layout = body_layout
+        self.body_margins = (28, 18, 28, 20)
+        body_layout.setContentsMargins(*self.body_margins)
         header = QHBoxLayout()
         self.page_title = QLabel("对话")
         self.page_title.setObjectName("sectionTitle")
@@ -174,7 +176,19 @@ class ChatWindow(QMainWindow):
         self.module_panel.message.connect(self.append_log)
         self.module_panel.busy_changed.connect(self.controls)
         self.module_panel.reply.connect(lambda text: self.bubble("assistant", text[:2400] + ("\n更多结果见模块面板。" if len(text)>2400 else "")))
-        self.module_card, self.module_toggle = self.inline_card("模块结果", self.module_panel)
+        self.module_panel.editor_focus_requested.connect(self.module_editor_focus)
+        # 编辑器占满工作区时用它把上方的对话区收/放，不会把原生窗口塞回滚动区
+        self.focus_exit = QPushButton("显示对话")
+        self.focus_exit.setCursor(Qt.PointingHandCursor)
+        self.focus_exit.setToolTip("自动展开/收起上方对话区，便于边看图边对话")
+        self.focus_exit.setStyleSheet(
+            "QPushButton{background:#f3f6fb;border:1px solid #dfe7f2;border-radius:6px;"
+            "padding:4px 12px;color:#31517e;font-size:9pt;}"
+            "QPushButton:hover{background:#e8f0fd;border-color:#c2d6f5;}"
+        )
+        self.focus_exit.clicked.connect(self.toggle_chat_view)
+        self.focus_exit.hide()
+        self.module_card, self.module_toggle = self.inline_card("模块结果", self.module_panel, self.focus_exit)
         self.pages.addWidget(QWidget())  # Navigation index remains a chat anchor.
         self.data_space = DataSpacePanel()
         self.data_space.open_file.connect(lambda path: QDesktopServices.openUrl(QUrl.fromLocalFile(path)))
@@ -239,6 +253,7 @@ class ChatWindow(QMainWindow):
         scroll = QScrollArea()
         self.chat_scroll = scroll
         scroll.setWidgetResizable(True)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         conversation = QWidget()
         conversation.setObjectName("threadSurface")
         self.chat_layout = QVBoxLayout(conversation)
@@ -262,8 +277,23 @@ class ChatWindow(QMainWindow):
         self.chat_layout.addWidget(self.report_frame)
         self.chat_layout.addStretch()
         scroll.setWidget(conversation)
+        self.conversation = conversation
         layout.addWidget(scroll, 1)
-        quick = QHBoxLayout()
+        # 模块结果卡展开编辑器时，里面装的是子进程的原生窗口（QWindow 容器）：
+        # 原生窗口不参与 QScrollArea 的裁剪与滚动，放进滚动区就会在最大化/还原后
+        # 与输入区互相压住、并在旧位置留下残影。所以编辑器活动期间把卡片搬到这里，
+        # 这块区域不滚动、按窗口高度自适应。
+        self.module_host = QWidget()
+        self.module_host_layout = QVBoxLayout(self.module_host)
+        self.module_host_layout.setContentsMargins(0, 0, 0, 0)
+        self.module_host_layout.setSpacing(0)
+        layout.addWidget(self.module_host, 3)
+        self.module_host.hide()
+        self.chat_page_layout = layout
+        quick_bar = QWidget()
+        self.quick_bar = quick_bar
+        quick = QHBoxLayout(quick_bar)
+        quick.setContentsMargins(0, 0, 0, 0)
         for label, index in (("查看模块结果", 1), ("查看数据空间", 2), ("查看执行图", 3)):
             button = QPushButton(label)
             button.clicked.connect(lambda _, i=index: self.navigate(i))
@@ -273,7 +303,7 @@ class ChatWindow(QMainWindow):
         self.open_output.setEnabled(False)
         self.open_output.clicked.connect(self.show_output)
         quick.addWidget(self.open_output)
-        layout.addLayout(quick)
+        layout.addWidget(quick_bar)
         self.attachments = QLabel("尚未选择文件")
         self.attachments.setObjectName("muted")
         self.attachments.setWordWrap(True)
@@ -306,10 +336,11 @@ class ChatWindow(QMainWindow):
         hint = QLabel("当前输出为可追溯的审核草稿；完整产品包和正式计算输入仍需完成工程规则与映射。")
         hint.setObjectName("muted")
         hint.setWordWrap(True)
+        self.hint = hint
         layout.addWidget(hint)
         self.pages.addWidget(page)
 
-    def inline_card(self, title, content):
+    def inline_card(self, title, content, extra=None):
         card = QFrame()
         card.setObjectName("assistantBubble")
         layout = QVBoxLayout(card)
@@ -324,14 +355,77 @@ class ChatWindow(QMainWindow):
             content.setVisible(checked)
             toggle.setArrowType(Qt.DownArrow if checked else Qt.RightArrow)
         toggle.toggled.connect(expanded)
-        layout.addWidget(toggle)
+        if extra is None:
+            layout.addWidget(toggle)
+        else:
+            header = QHBoxLayout()
+            header.setContentsMargins(0, 0, 8, 0)
+            header.addWidget(toggle)
+            header.addStretch()
+            header.addWidget(extra, 0, Qt.AlignVCenter)
+            layout.addLayout(header)
         layout.addWidget(content)
         self.chat_layout.insertWidget(self.chat_layout.count()-1, card)
         card.hide()
         return card, toggle
 
     def scroll_to_card(self, card):
+        if card.parent() is not getattr(self, "conversation", None):
+            return  # 已搬到不滚动的模块工作区，不需要也不应该滚动聊天区
         QTimer.singleShot(0, lambda: self.chat_scroll.verticalScrollBar().setValue(max(0, card.y()-12)))
+
+    def host_module_card(self, active):
+        """编辑器活动期间把“模块结果”卡搬到不滚动的工作区，关闭后再搬回聊天流。"""
+        host = getattr(self, "module_host", None)
+        if host is None:
+            return
+        if active:
+            if self.module_card.parent() is not host:
+                self.module_host_layout.addWidget(self.module_card)
+            self.module_toggle.setChecked(True)
+            self.module_card.show()
+            host.show()
+            self.chat_page_layout.setStretchFactor(self.chat_scroll, 0)
+            self.chat_page_layout.setStretchFactor(host, 10)
+        else:
+            if self.module_card.parent() is host:
+                self.chat_layout.insertWidget(self.chat_layout.count() - 1, self.module_card)
+            host.hide()
+            self.chat_scroll.setMaximumHeight(16777215)
+            self.chat_page_layout.setStretchFactor(self.chat_scroll, 1)
+            self.chat_page_layout.setStretchFactor(host, 3)
+        self.set_chat_visible(not active)
+        self.focus_exit.setText("展开对话")
+        self.focus_exit.setVisible(bool(active))
+
+    def set_chat_visible(self, show):
+        """编辑器占用窗格时，把对话流与说明行整块收起，高度全部让给模块工作区。
+
+        这是“窗格显示不全”的根因之一：聊天流、快捷入口、附件行、底部提示即使只留
+        一条，也会把 1100×700 左右的布管页面挤到需要滚动。收起后编辑器能拿到整块
+        工作区高度，需要边看图边对话时再点“对话区”放出来。
+        """
+        self.chat_visible = bool(show)
+        self.chat_scroll.setVisible(show)
+        self.state.setVisible(show)
+        self.quick_bar.setVisible(show)
+        self.attachments.setVisible(show)
+        self.hint.setVisible(show)
+        if hasattr(self, "body_layout"):
+            self.body_layout.setContentsMargins(*(self.body_margins if show else (16, 10, 16, 10)))
+        if hasattr(self, "prompt"):
+            self.prompt.setMaximumHeight(90 if show else 56)
+
+    def toggle_chat_view(self):
+        show = not getattr(self, "chat_visible", True)
+        self.set_chat_visible(show)
+        self.focus_exit.setText("收起对话" if show else "展开对话")
+        self.focus_exit.setToolTip("收起上方对话区，把整块工作区让给编辑器" if show else "展开上方对话区，边看图边对话")
+        host = getattr(self, "module_host", None)
+        if host is not None and host.isVisible():
+            # 编辑器还在：对话区按需占一部分高度，编辑器始终拿大头
+            self.chat_page_layout.setStretchFactor(self.chat_scroll, 3 if show else 0)
+            self.chat_page_layout.setStretchFactor(host, 10)
 
     def build_review(self):
         panel = QWidget()
@@ -361,7 +455,11 @@ class ChatWindow(QMainWindow):
     def navigate(self, index):
         self.current_section = index
         self.pages.setCurrentIndex(0 if index in (1, 3) else index)
-        self.page_title.setText("对话" if index in (0, 1, 3) else ("对话", "模块结果", "数据空间", "运行记录", "待审核")[index])
+        self.page_title.setText(
+            "模块结果" if index == 1 else
+            "对话" if index in (0, 3) else
+            ("对话", "模块结果", "数据空间", "运行记录", "待审核")[index]
+        )
         for i, button in enumerate(self.nav_buttons):
             button.setStyleSheet("background:#e8effa;color:#245bac;font-weight:600;" if i == index else "")
         if index == 2 and self.active_run_id:
@@ -372,6 +470,13 @@ class ChatWindow(QMainWindow):
             toggle.setChecked(True)
             if index == 3: self.execution.refresh(True)
             self.scroll_to_card(card)
+
+    def module_editor_focus(self, active):
+        self.host_module_card(active)
+        if hasattr(self, "module_panel"):
+            self.module_panel.set_focus(active)
+        if active:
+            self.navigate(1)
 
     def bubble(self, role, text, persist=True):
         frame = QFrame()
@@ -568,6 +673,8 @@ class ChatWindow(QMainWindow):
         self.report.document().setTextWidth(max(500, self.width()-370))
         self.report.setFixedHeight(min(470, max(220, int(self.report.document().size().height()+24))))
         for card in (self.report_frame, self.module_card, self.execution_card):
+            if card is self.module_card and card.parent() is getattr(self, "module_host", None):
+                continue  # 编辑器正在使用：卡片留在不滚动的模块工作区
             self.chat_layout.removeWidget(card)
             self.chat_layout.insertWidget(self.chat_layout.count()-1, card)
         self.report.show()
@@ -708,6 +815,7 @@ class ChatWindow(QMainWindow):
         self.bubbles = []
         self.report_frame.hide()
         self.report.clear()
+        self.host_module_card(False)  # 编辑器已全部关闭，模块卡搬回聊天流
         self.module_card.hide()
         self.execution_card.hide()
         self.welcome.show()
