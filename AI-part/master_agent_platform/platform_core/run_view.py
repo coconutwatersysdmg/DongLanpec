@@ -31,7 +31,7 @@ def execution_snapshot(fabric, run_id):
         tasks = [dict(r) for r in conn.execute("SELECT * FROM tasks WHERE run_id=? ORDER BY rowid", (run_id,))]
         sessions = [dict(r) for r in conn.execute("SELECT * FROM run_sessions WHERE run_id=? ORDER BY started", (run_id,))]
         events = [dict(r) for r in conn.execute("SELECT created,message FROM events WHERE run_id=? ORDER BY id", (run_id,))]
-    if run is None: return dict(tasks=[], events=[], sessions=[], elapsed_seconds=None)
+    if run is None: return dict(tasks=[], events=[], sessions=[], products=[], reviews=[], sources=[], elapsed_seconds=None, task_seconds=0)
     summary = json.loads(run["summary"])
     tags = {p["id"]: p.get("tag") or p.get("name") or p["id"] for p in summary.get("products", [])}
     known, last_by_product, project = set(), {}, None
@@ -57,6 +57,7 @@ def execution_snapshot(fabric, run_id):
             validation_state=response.get("validation_state"), validation_issues=response.get("validation_issues", []),
             returned_fields=list((response.get("data") or response).keys()) if isinstance(response.get("data") or response, dict) else [])
         request = json.loads(task.pop("request"))
+        if task["product_id"] not in tags and request.get("tag"): task["product"] = request["tag"]
         if request.get("operation"):
             operation = {"build": "载入/解析", "validate": "校验", "publish": "保存", "publish_draft": "草稿", "keep": "阶段保留", "action": "指令/补充"}.get(request["operation"], request["operation"])
             task["label"] += " · " + operation
@@ -67,7 +68,17 @@ def execution_snapshot(fabric, run_id):
         session["duration_seconds"] = seconds(session["started"], session["finished"]) if session["finished"] or session["state"] == "running" else None
     source_path = fabric.home / "runs" / run_id / "sources.json"
     sources = json.loads(source_path.read_text(encoding="utf-8")) if source_path.is_file() else []
+    reviews = []
+    for product in summary.get("products", []):
+        review = dict(rounds=product.get("review_rounds", []))
+        if product.get("draft_path"):
+            path = Path(product["draft_path"]).parent / "review.json"
+            if path.is_file():
+                try: review = json.loads(path.read_text(encoding="utf-8"))
+                except (OSError, ValueError): pass
+        reviews.append(dict(product_id=product["id"], product=tags[product["id"]], **review))
     return dict(run_id=run_id, state=run["state"], created=run["created"], tasks=tasks, sessions=sessions, events=events, sources=sources,
+                products=[{k: p.get(k) for k in ("id", "tag", "name", "form", "status")} for p in summary.get("products", [])], reviews=reviews,
                 elapsed_seconds=sum(s["duration_seconds"] or 0 for s in sessions) if sessions else None,
                 task_seconds=sum(t["duration_seconds"] or 0 for t in tasks),
                 legacy_dependencies=any(t["dependency_basis"] == "legacy-order" for t in tasks))

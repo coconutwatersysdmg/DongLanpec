@@ -29,10 +29,14 @@ class ModulePanel(EvidencePanel):
         self.module.setItemText(3, "管口数据")
         self.module.setItemText(4, "管束设计")
         self.pending_commands = []
+        self.windows.hide()
+        self.setFixedHeight(340)
 
     def set_summary(self, summary):
         super().set_summary(summary)
         self.refresh_preview()
+        if not self.sessions:
+            self.status.setText(f"已载入 {len(summary.get('products', []))} 个产品，可在当前对话中查看和编辑模块结果。")
 
     def refresh_controls(self):
         super().refresh_controls()
@@ -45,12 +49,19 @@ class ModulePanel(EvidencePanel):
         self.seen.clear()
         self.preview.clear()
         self.preview.show()
+        self.windows.hide()
+        self.setFixedHeight(340)
         self.status.setText("生成结果后选择产品与模块。")
         self.refresh_controls()
 
     def open_current(self):
         super().open_current()
         if self.job: self.status.setText("正在载入产品数据和模块服务…")
+
+    def launch(self, path):
+        self.windows.show()
+        self.setFixedHeight(680)
+        super().launch(path)
 
     def dispatch_command(self, text, module, product_id=None):
         if not self.summary: return
@@ -116,4 +127,7 @@ class ModulePanel(EvidencePanel):
     def process_finished(self, session, code):
         super().process_finished(session, code)
         self.status.setText("编辑已关闭，当前工作副本已保留。" if code == 0 else "模块服务异常退出，操作记录已保留。")
-        if not self.sessions: self.preview.show()
+        if not self.sessions:
+            self.preview.show()
+            self.windows.hide()
+            self.setFixedHeight(340)

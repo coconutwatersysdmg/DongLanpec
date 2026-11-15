@@ -186,7 +186,7 @@ def import_update(engine, event_path):
             for target_index, target_dir, target_data in pending:
                 engine.log(target_data["product"].get("设备位号", "") + "：接收模块修改并继续审核")
                 review = ReviewLoop(engine.check).run(target_data, source_recheck=lambda gaps, d=target_data: engine._recheck(d, gaps, d["product"]["platform_product_id"]),
-                                                      round_offset=len(target_data.get("review", {}).get("rounds", [])))
+                                                      round_offset=len(target_data.get("review", {}).get("rounds", [])), trigger="module-save")
                 target_data["capabilities"] = [c for c in target_data["capabilities"] if c.get("code") != "REVIEW_SOURCE_FAILED"] + review["capabilities"]
                 if event["payload"].get("confirmed"):
                     engine._mirror_evidence(event["module"], target_data)

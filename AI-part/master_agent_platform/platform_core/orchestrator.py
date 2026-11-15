@@ -282,7 +282,7 @@ class Orchestrator:
                 data["capabilities"].append(dict(code="LAYOUT_NOT_REGISTERED", scope="capability", module="tube_bundle",
                     message="当前几何引擎尚未登记该型式，未替换成其它产品型式。", blocking_final_release=True))
         self.log(label + "：Agent loop 复查来源、适用默认值与字段规则")
-        review = ReviewLoop(self.check).run(data, source_recheck=lambda gaps: self._recheck(data, gaps, identity))
+        review = ReviewLoop(self.check).run(data, source_recheck=lambda gaps: self._recheck(data, gaps, identity), trigger="generation")
         data["capabilities"].extend(review["capabilities"])
         data["capabilities"].extend(self.capability_status())
         return self._save_product(directory, data)
@@ -366,7 +366,8 @@ class Orchestrator:
             for index, directory, data in pending:
                 self.log(data["product"].get("设备位号", "") + "：继续 Agent loop 复查")
                 review = ReviewLoop(self.check).run(data, source_recheck=lambda gaps: self._recheck(data, gaps, data["product"]["platform_product_id"]),
-                                                   round_offset=len(data["review"]["rounds"]))
+                                                   round_offset=len(data["review"]["rounds"]),
+                                                   trigger="manual-review" if answers.get(data["product"]["platform_product_id"]) else "automatic-recheck")
                 data["capabilities"] = [c for c in data["capabilities"] if c.get("code") != "REVIEW_SOURCE_FAILED"] + review["capabilities"]
                 if (self.fabric.home / "mysql" / "connection.local.json").is_file():
                     self._mirror_evidence("conditions", data)

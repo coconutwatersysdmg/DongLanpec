@@ -8,6 +8,9 @@ from __future__ import annotations
 from copy import deepcopy
 import hashlib
 import math
+import datetime as dt
+import time
+import uuid
 from pathlib import Path
 
 
@@ -102,28 +105,37 @@ class ReviewLoop:
                                     value=row["value"], origin=origin))
         return changes
 
-    def run(self, data, source_recheck=None, round_offset=0):
+    def run(self, data, source_recheck=None, round_offset=0, trigger="automatic"):
         self.check()
+        cycle_id = uuid.uuid4().hex
+        started = dt.datetime.now(dt.timezone.utc).isoformat()
+        cycle_clock = time.monotonic()
+        def stage(action, stage_started, stage_clock, **values):
+            events.append(dict(round=round_offset+len(events)+1, action=action, cycle_id=cycle_id,
+                started=stage_started, finished=dt.datetime.now(dt.timezone.utc).isoformat(),
+                duration_seconds=time.monotonic()-stage_clock, **values))
         rows = (data.get("conditions") or {}).get("design_rows", [])
         validate_rows(rows)
         events, changes, failures = [], [], []
         unresolved = [r for r in rows if missing(r.get("value")) or r.get("errors") or r.get("review_conflict")]
         if unresolved:
             self.check()
+            stage_started, stage_clock = dt.datetime.now(dt.timezone.utc).isoformat(), time.monotonic()
             try:
                 candidates = source_recheck(deepcopy(unresolved)) if source_recheck else []
                 candidates = candidates or []
                 validate_rows(candidates)
                 accepted = self._apply_candidates(rows, candidates, "source-recheck")
                 changes.extend(accepted)
-                events.append(dict(round=round_offset+1, action="recheck-product-sources", searched_fields=len(unresolved),
-                                   candidate_count=len(candidates), accepted=accepted))
+                stage("recheck-product-sources", stage_started, stage_clock, searched_fields=len(unresolved),
+                      candidate_count=len(candidates), accepted=accepted)
             except Exception as exc:
                 # A tool failure is a capability issue, not a user data omission.
                 failures.append(dict(code="REVIEW_SOURCE_FAILED", scope="capability", module="review",
                                      message="来源复查未完成：" + str(exc), blocking_final_release=True))
-                events.append(dict(round=round_offset+1, action="recheck-product-sources", error=str(exc)))
+                stage("recheck-product-sources", stage_started, stage_clock, error=str(exc))
         self.check()
+        stage_started, stage_clock = dt.datetime.now(dt.timezone.utc).isoformat(), time.monotonic()
         defaults = []
         for template in data.get("foundation", {}).get("condition_requirements", []):
             for side, column in (("shell", "壳程数值"), ("tube", "管程数值")):
@@ -139,7 +151,7 @@ class ReviewLoop:
         accepted = self._apply_candidates(rows, [r for r in defaults if field_key(r) not in conflicted], "scoped-template")
         changes.extend(accepted)
         validate_rows(rows)
-        events.append(dict(round=round_offset+2, action="check-scoped-defaults-and-field-rules", accepted=accepted))
+        stage("check-scoped-defaults-and-field-rules", stage_started, stage_clock, accepted=accepted)
         gaps = []
         for index, row in enumerate(rows):
             unknown = missing(row.get("value"))
@@ -196,6 +208,11 @@ class ReviewLoop:
             validator_sha256=hashlib.sha256((rule_root / "core" / "param_spec.py").read_bytes()).hexdigest(),
             dictionary_sha256=hashlib.sha256((rule_root / "param_dict.json").read_bytes()).hexdigest(),
             rounds=previous.get("rounds", []) + events,
+            cycles=previous.get("cycles", []) + [dict(id=cycle_id, trigger=trigger, started=started,
+                finished=dt.datetime.now(dt.timezone.utc).isoformat(), duration_seconds=time.monotonic()-cycle_clock,
+                accepted_count=len(changes), manual_count=sum(g["state"] == "manual_review" for g in gaps),
+                deferred_count=sum(g["state"] == "deferred" for g in gaps),
+                state="needs_manual_review" if any(g["state"] == "manual_review" for g in gaps) else "reviewed")],
             changes=previous.get("changes", []) + changes, gaps=gaps,
             manual_review=[gap for gap in gaps if gap["state"] == "manual_review"],
             deferred=[gap for gap in gaps if gap["state"] == "deferred"], capabilities=failures)

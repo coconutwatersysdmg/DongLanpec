@@ -14,7 +14,7 @@ from PyQt5.QtCore import Qt, QThread, QTimer, QUrl, pyqtSignal
 from PyQt5.QtGui import QDesktopServices
 from PyQt5.QtWidgets import (QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QFrame,
     QLabel, QPushButton, QListWidget, QTextBrowser, QPlainTextEdit, QScrollArea,
-    QStackedWidget, QTreeWidget, QTreeWidgetItem, QLineEdit, QFileDialog, QMessageBox)
+    QStackedWidget, QTreeWidget, QTreeWidgetItem, QLineEdit, QFileDialog, QMessageBox, QToolButton)
 
 from .fabric import BASE, Fabric
 from .orchestrator import Orchestrator
@@ -84,6 +84,7 @@ class ChatWindow(QMainWindow):
         self.elapsed_value = 0
         self.history_ids = []
         self.pending_new_chat = False
+        self.current_section = 0
         central = QWidget()
         self.setCentralWidget(central)
         root = QHBoxLayout(central)
@@ -155,7 +156,8 @@ class ChatWindow(QMainWindow):
         self.module_panel.message.connect(self.append_log)
         self.module_panel.busy_changed.connect(self.controls)
         self.module_panel.reply.connect(lambda text: self.bubble("assistant", text[:2400] + ("\n更多结果见模块面板。" if len(text)>2400 else "")))
-        self.pages.addWidget(self.module_panel)
+        self.module_card, self.module_toggle = self.inline_card("模块结果", self.module_panel)
+        self.pages.addWidget(QWidget())  # Navigation index remains a chat anchor.
         self.data_space = DataSpacePanel()
         self.data_space.open_file.connect(lambda path: QDesktopServices.openUrl(QUrl.fromLocalFile(path)))
         self.pages.addWidget(self.data_space)
@@ -166,9 +168,11 @@ class ChatWindow(QMainWindow):
         execution_layout.addWidget(self.execution, 1)
         execution_layout.addWidget(QLabel("调用事件"))
         self.log = QTextBrowser()
-        self.log.setMaximumHeight(135)
+        self.log.setMaximumHeight(90)
         execution_layout.addWidget(self.log)
-        self.pages.addWidget(execution_page)
+        execution_page.setFixedHeight(860)
+        self.execution_card, self.execution_toggle = self.inline_card("运行记录", execution_page)
+        self.pages.addWidget(QWidget())
         self.build_review()
         self.setStyleSheet(STYLE)
         self.timer = QTimer(self)
@@ -256,6 +260,30 @@ class ChatWindow(QMainWindow):
         layout.addWidget(hint)
         self.pages.addWidget(page)
 
+    def inline_card(self, title, content):
+        card = QFrame()
+        card.setObjectName("assistantBubble")
+        layout = QVBoxLayout(card)
+        toggle = QToolButton()
+        toggle.setText(title)
+        toggle.setCheckable(True)
+        toggle.setChecked(True)
+        toggle.setArrowType(Qt.DownArrow)
+        toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        toggle.setStyleSheet("font-weight:600;font-size:15px;padding:8px;border:0;")
+        def expanded(checked):
+            content.setVisible(checked)
+            toggle.setArrowType(Qt.DownArrow if checked else Qt.RightArrow)
+        toggle.toggled.connect(expanded)
+        layout.addWidget(toggle)
+        layout.addWidget(content)
+        self.chat_layout.insertWidget(self.chat_layout.count()-1, card)
+        card.hide()
+        return card, toggle
+
+    def scroll_to_card(self, card):
+        QTimer.singleShot(0, lambda: self.chat_scroll.verticalScrollBar().setValue(max(0, card.y()-12)))
+
     def build_review(self):
         panel = QWidget()
         layout = QVBoxLayout(panel)
@@ -282,13 +310,19 @@ class ChatWindow(QMainWindow):
         self.pages.addWidget(panel)
 
     def navigate(self, index):
-        self.pages.setCurrentIndex(index)
-        self.page_title.setText(("对话", "模块结果", "数据空间", "运行记录", "待审核")[index])
+        self.current_section = index
+        self.pages.setCurrentIndex(0 if index in (1, 3) else index)
+        self.page_title.setText("对话" if index in (0, 1, 3) else ("对话", "模块结果", "数据空间", "运行记录", "待审核")[index])
         for i, button in enumerate(self.nav_buttons):
             button.setStyleSheet("background:#e8effa;color:#245bac;font-weight:600;" if i == index else "")
         if index == 2 and self.active_run_id:
             self.data_space.bind(self.workspace, self.active_run_id)
-        if index == 3: self.execution.refresh(True)
+        if index in (1, 3):
+            card, toggle = (self.module_card, self.module_toggle) if index == 1 else (self.execution_card, self.execution_toggle)
+            card.show()
+            toggle.setChecked(True)
+            if index == 3: self.execution.refresh(True)
+            self.scroll_to_card(card)
 
     def bubble(self, role, text, persist=True):
         frame = QFrame()
@@ -364,7 +398,7 @@ class ChatWindow(QMainWindow):
         elif any(k in text for k in ("材料", "牌号", "供货", "Q345", "Q355")): module = "elements"
         elif any(k in text for k in ("设计压力", "设计温度", "腐蚀裕量", "公称直径", "条件")): module = "conditions"
         elif any(k in text for k in ("新增产品", "删除选中", "产品清单")): module = "project"
-        elif self.pages.currentIndex() == 1: module = self.module_panel.module.currentData()
+        elif self.current_section == 1: module = self.module_panel.module.currentData()
         if not module: return False
         identity = self.module_panel.product.currentData()
         for product in sorted(self.last_result["products"], key=lambda p: len(p.get("tag") or ""), reverse=True):
@@ -379,6 +413,8 @@ class ChatWindow(QMainWindow):
         if not self.inputs or self.worker or self.module_panel.busy or self.pending_new_chat: return
         self.last_result, self.active_run_id = None, None
         self.report_frame.hide()
+        self.execution_card.show()
+        self.execution_toggle.setChecked(True)
         self.review_tree.clear()
         self.review_editors = []
         self.log.clear()
@@ -481,11 +517,15 @@ class ChatWindow(QMainWindow):
         self.report.setPlainText("\n".join(lines))
         self.report.document().setTextWidth(max(500, self.width()-370))
         self.report.setFixedHeight(min(470, max(220, int(self.report.document().size().height()+24))))
-        self.chat_layout.removeWidget(self.report_frame)
-        self.chat_layout.insertWidget(self.chat_layout.count()-1, self.report_frame)
+        for card in (self.report_frame, self.module_card, self.execution_card):
+            self.chat_layout.removeWidget(card)
+            self.chat_layout.insertWidget(self.chat_layout.count()-1, card)
         self.report.show()
         self.report_frame.show()
-        QTimer.singleShot(0, lambda: self.chat_scroll.verticalScrollBar().setValue(self.chat_scroll.verticalScrollBar().maximum()))
+        self.module_toggle.setText(f"模块结果 · {len(result.get('products', []))} 个产品")
+        self.module_card.show()
+        self.execution_card.show()
+        self.scroll_to_card(self.report_frame)
         self.welcome.hide()
         self.open_output.setEnabled(bool(self.last_output))
         self.nav_buttons[4].setText("待审核" + (f"  {count}" if count else ""))
@@ -615,6 +655,8 @@ class ChatWindow(QMainWindow):
         self.bubbles = []
         self.report_frame.hide()
         self.report.clear()
+        self.module_card.hide()
+        self.execution_card.hide()
         self.welcome.show()
         self.last_result, self.active_run_id, self.last_output = None, None, None
         self.module_panel.reset()
@@ -648,4 +690,6 @@ class ChatWindow(QMainWindow):
         else:
             self.timer.stop()
             self.module_panel.timer.stop()
+            self.execution.flush_layout()
+            self.execution.save_timer.stop()
             event.accept()
