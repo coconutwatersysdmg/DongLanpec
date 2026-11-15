@@ -83,6 +83,7 @@ class ChatWindow(QMainWindow):
         self.started_at = None
         self.elapsed_value = 0
         self.history_ids = []
+        self.pending_new_chat = False
         central = QWidget()
         self.setCentralWidget(central)
         root = QHBoxLayout(central)
@@ -100,9 +101,9 @@ class ChatWindow(QMainWindow):
         subtitle.setObjectName("muted")
         side.addWidget(subtitle)
         side.addSpacing(20)
-        new = QPushButton("＋  新建对话")
-        new.clicked.connect(self.new_chat)
-        side.addWidget(new)
+        self.new_chat_button = QPushButton("＋  新建对话")
+        self.new_chat_button.clicked.connect(self.new_chat)
+        side.addWidget(self.new_chat_button)
         self.nav_buttons = []
         for index, label in enumerate(("对话", "模块结果", "数据空间", "运行记录", "待审核")):
             button = QPushButton(label)
@@ -332,7 +333,7 @@ class ChatWindow(QMainWindow):
         self.update_attachments()
 
     def send(self):
-        if self.worker or self.module_panel.busy: return
+        if self.worker or self.module_panel.busy or self.pending_new_chat: return
         text = self.prompt.toPlainText().strip() or "整理输入中的全部产品，并继续自动审核。"
         self.welcome.hide()
         self.bubble("user", text)
@@ -375,7 +376,7 @@ class ChatWindow(QMainWindow):
         return True
 
     def start(self, goal=""):
-        if not self.inputs or self.worker or self.module_panel.busy: return
+        if not self.inputs or self.worker or self.module_panel.busy or self.pending_new_chat: return
         self.last_result, self.active_run_id = None, None
         self.report_frame.hide()
         self.review_tree.clear()
@@ -398,11 +399,15 @@ class ChatWindow(QMainWindow):
         self.worker.start()
 
     def controls(self, *args):
-        busy = self.worker is not None or self.module_panel.busy
+        busy = self.worker is not None or self.module_panel.busy or self.pending_new_chat
         self.begin.setEnabled(not busy)
         self.cancel.setEnabled(self.worker is not None)
         self.submit_review.setEnabled(bool(self.review_editors) and not busy)
         self.recheck_button.setEnabled(bool(self.last_result) and not busy)
+        self.new_chat_button.setEnabled(not self.pending_new_chat)
+        self.history.setEnabled(not busy)
+        self.module_panel.closing = self.pending_new_chat
+        self.module_panel.refresh_controls()
 
     def append_log(self, message):
         message = str(message).replace("原界面", "模块").replace("原模块", "模块").replace("原窗口", "模块编辑器")
@@ -423,6 +428,7 @@ class ChatWindow(QMainWindow):
         if self.active_run_id:
             try: self.execution.refresh()
             except (OSError, ValueError, sqlite3.DatabaseError): pass
+        self.finish_new_chat()
 
     def on_complete(self, result):
         previous_run = self.active_run_id
@@ -527,7 +533,7 @@ class ChatWindow(QMainWindow):
         self.tick()
 
     def submit_answers(self):
-        if self.worker or self.module_panel.busy or not self.last_result: return
+        if self.worker or self.module_panel.busy or self.pending_new_chat or not self.last_result: return
         answers = {}
         for product_id, gap_id, editor in self.review_editors:
             if editor.text().strip(): answers.setdefault(product_id, {})[gap_id] = dict(value=editor.text().strip(), reason="用户在统一审核面板填写")
@@ -537,7 +543,7 @@ class ChatWindow(QMainWindow):
         self.connect_worker()
 
     def recheck_current(self):
-        if self.worker or self.module_panel.busy or not self.last_result: return
+        if self.worker or self.module_panel.busy or self.pending_new_chat or not self.last_result: return
         self.worker = Worker([], [], self, review_request=dict(run_id=self.last_result["run_id"], automatic=True), factory=self.make_orchestrator)
         self.connect_worker()
 
@@ -565,7 +571,7 @@ class ChatWindow(QMainWindow):
             self.history_ids.append(row["id"])
 
     def select_history(self, item):
-        if self.worker or self.module_panel.busy: return
+        if self.worker or self.module_panel.busy or self.pending_new_chat: return
         index = self.history.row(item)
         if index < 0 or index >= len(self.history_ids): return
         path = self.workspace / "runs" / self.history_ids[index] / "summary.json"
@@ -574,7 +580,7 @@ class ChatWindow(QMainWindow):
             self.navigate(0)
 
     def load_result(self):
-        if self.worker or self.module_panel.busy: return
+        if self.worker or self.module_panel.busy or self.pending_new_chat: return
         path, _ = QFileDialog.getOpenFileName(self, "载入任务结果", str(self.workspace / "runs"), "任务结果 (summary.json)")
         if path:
             try: self.on_complete(json.loads(Path(path).read_text(encoding="utf-8")))
@@ -584,21 +590,43 @@ class ChatWindow(QMainWindow):
         if self.last_output: QDesktopServices.openUrl(QUrl.fromLocalFile(self.last_output))
 
     def new_chat(self):
-        if self.worker or self.module_panel.busy: return
-        if self.module_panel.sessions:
-            self.state.setText("请先保存并关闭当前模块编辑器，再新建对话。")
+        if self.pending_new_chat: return
+        self.persist_chat()
+        self.pending_new_chat = True
+        self.new_chat_button.setText("正在新建对话…")
+        self.module_panel.pending_commands.clear()
+        self.controls()
+        self.finish_new_chat()
+
+    def finish_new_chat(self):
+        if not self.pending_new_chat: return
+        if self.worker:
+            self.state.setText("当前任务结束后将自动开启新对话；也可点击停止，已完成结果会保留。")
             return
+        if not self.module_panel.request_close_all():
+            self.state.setText("正在保留模块草稿并开启新对话；如有依据对话框，请先关闭它。")
+            return
+        self.pending_new_chat = False
+        self.new_chat_button.setText("＋  新建对话")
         self.chat_id, self.messages = uuid.uuid4().hex, []
         for frame in self.bubbles:
             self.chat_layout.removeWidget(frame)
             frame.deleteLater()
         self.bubbles = []
         self.report_frame.hide()
+        self.report.clear()
         self.welcome.show()
         self.last_result, self.active_run_id, self.last_output = None, None, None
-        self.module_panel.summary = None
-        self.module_panel.product.clear()
-        self.module_panel.refresh_controls()
+        self.module_panel.reset()
+        self.execution.clear()
+        self.data_space.clear()
+        self.review_tree.clear()
+        self.review_editors = []
+        self.nav_buttons[4].setText("待审核")
+        self.log.clear()
+        self.history.clearSelection()
+        self.history.setCurrentRow(-1)
+        self.started_at, self.elapsed_value = None, 0
         self.open_output.setEnabled(False)
         self.state.setText("等待提交文件")
         self.clock_label.setText("尚未运行")
@@ -607,6 +635,7 @@ class ChatWindow(QMainWindow):
         self.update_attachments()
         self.navigate(0)
         self.bubble("assistant", "新对话已开始。请加入输入文件和本次知识资料。已有任务仍可从最近任务查看。")
+        self.controls()
 
     def closeEvent(self, event):
         if self.worker:

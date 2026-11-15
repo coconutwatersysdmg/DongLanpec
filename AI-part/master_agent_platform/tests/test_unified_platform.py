@@ -127,6 +127,133 @@ class UnifiedPlatformTests(unittest.TestCase):
             window.close()
             self.app.processEvents()
 
+    def test_new_chat_button_clears_all_views_and_preserves_previous_task(self):
+        import run
+        window = run.MainWindow()
+        window.on_complete(self.summary)
+        window.bubble("user", "整理当前产品")
+        old_id = window.chat_id
+        window.inputs, window.knowledge = [str(self.source)], [str(self.source)]
+        window.prompt.setPlainText("旧对话未发送内容")
+        window.nav_buttons[4].setText("待审核  3")
+        window.review_editors = [("old-product", "old-field", None)]
+        window.navigate(3)
+        try:
+            window.new_chat_button.click()
+            self.assertNotEqual(window.chat_id, old_id)
+            self.assertIsNone(window.last_result)
+            self.assertIsNone(window.active_run_id)
+            self.assertFalse(window.pending_new_chat)
+            self.assertEqual(window.pages.currentIndex(), 0)
+            self.assertEqual((window.inputs, window.knowledge), ([], []))
+            self.assertEqual(window.prompt.toPlainText(), "")
+            self.assertEqual(window.report.toPlainText(), "")
+            self.assertEqual(window.log.toPlainText(), "")
+            self.assertEqual(window.review_tree.topLevelItemCount(), 0)
+            self.assertEqual(window.review_editors, [])
+            self.assertEqual(window.nav_buttons[4].text(), "待审核")
+            self.assertEqual(window.module_panel.product.count(), 0)
+            self.assertEqual(window.module_panel.preview.toPlainText(), "")
+            self.assertEqual(window.execution.tasks, {})
+            self.assertIsNone(window.execution.run_id)
+            self.assertEqual(window.execution.scene.items(), [])
+            self.assertEqual(window.data_space.resources.topLevelItemCount(), 0)
+            self.assertEqual(window.data_space.fields.topLevelItemCount(), 0)
+            self.assertIsNone(window.data_space.snapshot)
+            self.assertTrue(window.begin.isEnabled())
+            self.assertFalse(window.recheck_button.isEnabled())
+            self.assertFalse(window.submit_review.isEnabled())
+            self.assertFalse(window.open_output.isEnabled())
+            previous = json.loads((self.engine.fabric.home / "conversations" / (old_id + ".json")).read_text(encoding="utf-8"))
+            self.assertEqual(previous["run_id"], self.summary["run_id"])
+            self.assertEqual(previous["messages"][-1]["text"], "整理当前产品")
+            self.assertIn(self.summary["run_id"], window.history_ids)
+            item = window.history.item(window.history_ids.index(self.summary["run_id"]))
+            window.select_history(item)
+            self.assertEqual(window.active_run_id, self.summary["run_id"])
+            self.assertEqual(window.messages[-1]["text"], "整理当前产品")
+        finally:
+            window.close()
+            self.app.processEvents()
+
+    def test_new_chat_closes_open_editors_without_overwriting_pending_commands(self):
+        import run
+        window = run.MainWindow()
+        window.on_complete(self.summary)
+        old_id = window.chat_id
+        session_path = self.home / "open-module"
+        session_path.mkdir()
+        command = session_path / "command.json"
+        atomic_json(command, dict(action="execute", text="保留当前操作"))
+        window.module_panel.sessions.append(dict(path=session_path))
+        try:
+            window.new_chat_button.click()
+            self.assertTrue(window.pending_new_chat)
+            self.assertEqual(window.chat_id, old_id)
+            self.assertFalse(window.new_chat_button.isEnabled())
+            self.assertFalse(window.begin.isEnabled())
+            self.assertFalse(window.module_panel.open_button.isEnabled())
+            self.assertEqual(json.loads(command.read_text(encoding="utf-8"))["action"], "execute")
+            command.unlink()
+            window.finish_new_chat()
+            self.assertEqual(json.loads(command.read_text(encoding="utf-8"))["action"], "close")
+            self.assertEqual(window.active_run_id, self.summary["run_id"])
+            # Editor acknowledges close only after retaining its working copy.
+            atomic_json(session_path / "working-copy.json", dict(confirmed=False, edited_value="草稿"))
+            window.module_panel.sessions.clear()
+            window.tick()
+            self.assertFalse(window.pending_new_chat)
+            self.assertNotEqual(window.chat_id, old_id)
+            self.assertTrue(window.new_chat_button.isEnabled())
+            self.assertEqual(json.loads((session_path / "working-copy.json").read_text(encoding="utf-8"))["edited_value"], "草稿")
+        finally:
+            window.module_panel.sessions.clear()
+            window.close()
+            self.app.processEvents()
+
+    def test_new_chat_queued_during_running_task_has_feedback_and_finishes_once(self):
+        import run
+        window = run.MainWindow()
+        window.on_complete(self.summary)
+        old_id = window.chat_id
+        window.worker = object()
+        try:
+            window.new_chat_button.click()
+            self.assertTrue(window.pending_new_chat)
+            self.assertIn("任务结束后", window.state.text())
+            self.assertEqual(window.chat_id, old_id)
+            window.new_chat()
+            window.worker = None
+            window.finish_new_chat()
+            new_id = window.chat_id
+            window.tick()
+            self.assertNotEqual(new_id, old_id)
+            self.assertEqual(window.chat_id, new_id)
+            self.assertFalse(window.pending_new_chat)
+        finally:
+            window.worker = None
+            window.close()
+            self.app.processEvents()
+
+    def test_new_chat_waits_for_pending_module_import(self):
+        import run
+        window = run.MainWindow()
+        window.on_complete(self.summary)
+        old_id = window.chat_id
+        window.module_panel.queue.append((None, self.home / "pending-update.json"))
+        try:
+            window.new_chat_button.click()
+            self.assertTrue(window.pending_new_chat)
+            self.assertEqual(window.chat_id, old_id)
+            window.module_panel.queue.clear()
+            window.finish_new_chat()
+            self.assertFalse(window.pending_new_chat)
+            self.assertNotEqual(window.chat_id, old_id)
+        finally:
+            window.module_panel.queue.clear()
+            window.close()
+            self.app.processEvents()
+
     def test_failed_product_is_not_presented_as_all_products_completed(self):
         from copy import deepcopy
         import run

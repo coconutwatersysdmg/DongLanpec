@@ -244,5 +244,6 @@ class EvidencePanel(QWidget):
     def request_close_all(self):
         if self.busy or self.queue: return False
         for session in self.sessions:
-            atomic_json(session["path"] / "command.json", dict(action="close"))
+            path = session["path"] / "command.json"
+            if not path.exists(): atomic_json(path, dict(action="close"))
         return not self.sessions

@@ -34,6 +34,20 @@ class ModulePanel(EvidencePanel):
         super().set_summary(summary)
         self.refresh_preview()
 
+    def refresh_controls(self):
+        super().refresh_controls()
+        if getattr(self, "closing", False): self.open_button.setEnabled(False)
+
+    def reset(self):
+        self.summary = None
+        self.product.clear()
+        self.pending_commands.clear()
+        self.seen.clear()
+        self.preview.clear()
+        self.preview.show()
+        self.status.setText("生成结果后选择产品与模块。")
+        self.refresh_controls()
+
     def open_current(self):
         super().open_current()
         if self.job: self.status.setText("正在载入产品数据和模块服务…")

@@ -62,6 +62,18 @@ class ExecutionPanel(QWidget):
         self.fabric, self.run_id = Fabric(workspace), run_id
         self.refresh()
 
+    def clear(self):
+        self.run_id, self.fabric, self.fingerprint = None, None, None
+        self.tasks, self.products = {}, {}
+        self.filter.blockSignals(True)
+        self.filter.clear()
+        self.filter.addItem("全部产品", "")
+        self.filter.blockSignals(False)
+        self.scene.clear()
+        self.details.clear()
+        self.view.resetTransform()
+        self.timing.setText("尚无任务回执")
+
     def refresh(self, force=False):
         if not self.fabric or not self.run_id: return
         value = self.fabric.execution(self.run_id)
@@ -189,6 +201,13 @@ class DataSpacePanel(QWidget):
         self.fields.setHeaderLabels(["产品 / 模块字段", "当前候选值", "单位 / 来源", "来源页"])
         self.tabs.addTab(self.fields, "结构化数据与基础库")
         layout.addWidget(self.tabs, 1)
+
+    def clear(self):
+        self.snapshot = None
+        self.stats.setText("输入文件与知识资料将在这里形成产品关联和分发记录。")
+        for tree in (self.resources, self.catalog, self.fields): tree.clear()
+        self.knowledge.clear()
+        self.tabs.setCurrentIndex(0)
 
     def bind(self, workspace, run_id):
         from html import escape

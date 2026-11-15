@@ -520,8 +520,14 @@ def main():
                 if context.pending or QApplication.activeModalWidget():
                     emit("operation-error", message="请先完成当前保存或关闭依据对话框。")
                 else:
-                    atomic_json(context.session / "working-copy.json", window.payload())
-                    window.close()
+                    try:
+                        payload = dict(window.payload(), confirmed=False)
+                        atomic_json(context.session / "working-copy.json", payload)
+                    except Exception as exc:
+                        window.output.setPlainText("草稿保留失败，编辑器尚未关闭：" + str(exc))
+                        emit("operation-error", message=window.output.toPlainText())
+                    else:
+                        window.close()
     timer = QTimer(window)
     timer.timeout.connect(poll)
     timer.start(250)
