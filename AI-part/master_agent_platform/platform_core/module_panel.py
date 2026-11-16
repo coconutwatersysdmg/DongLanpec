@@ -16,6 +16,7 @@ class ModulePanel(EvidencePanel):
     def __init__(self, workspace, parent=None):
         super().__init__(workspace, parent)
         self.runtime = BASE / "module_runtime.py"
+        self.embedded_minimum = (520, 360)
         self.ui_scale = read_scale(self.workspace)
         self.layout().itemAt(0).widget().setText("结果按产品和模块组织。可查看来源、直接编辑、校验，并把修改送回同一审核循环。")
         self.open_button.setText("编辑模块数据")
@@ -137,11 +138,18 @@ class ModulePanel(EvidencePanel):
 
     def attach(self, session, handle):
         super().attach(session, handle)
-        if session.get("container"):
-            session["container"].setMinimumSize(520, 340)
         self.set_ui_scale(self.ui_scale)
         self.status.setText("模块数据已载入，可编辑、查看依据、校验及保存。")
         self.preview.hide()
+
+    def update_view_metrics(self, session, value):
+        super().update_view_metrics(session, value)
+        card = self.parentWidget()
+        scroll = session.get('scroll')
+        if scroll and hasattr(card, 'set_content_height') and not card.user_sized:
+            minimum_height = session['container'].minimumHeight()
+            needed = minimum_height+self.height()-scroll.viewport().height()+8
+            if needed > card.expanded_height: card.set_content_height(needed)
 
     def failed(self, message):
         super().failed(message.replace("原窗口", "模块编辑器").replace("原界面", "模块"))

@@ -44,8 +44,9 @@ def main():
     from PyQt5.QtGui import QColor, QDesktopServices, QPixmap
     from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
         QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView, QPushButton, QLabel,
-        QLineEdit, QPlainTextEdit, QDialog, QSplitter, QMessageBox, QFileDialog, QScrollArea)
+        QLineEdit, QPlainTextEdit, QDialog, QSplitter, QMessageBox, QFileDialog, QScrollArea, QToolButton)
     from platform_core.ui_theme import enable_high_dpi, apply_theme, fit_initial_window, FlowLayout, scale_legacy_page
+    from platform_core.embedded_view import EmbeddedModuleView
     enable_high_dpi()
     app = QApplication(sys.argv[:1])
     app.setStyle("Fusion")
@@ -80,7 +81,12 @@ def main():
                     if record.get("errors"): item.setBackground(QColor("#fff1f2"))
                     self.setItem(i, j, item)
             self.resizeColumnsToContents()
-            for j in range(self.columnCount()): self.setColumnWidth(j, min(380, max(125, self.columnWidth(j))))
+            self.fit_columns()
+
+        def fit_columns(self):
+            self.resizeColumnsToContents()
+            for j in range(self.columnCount()):
+                self.setColumnWidth(j, min(round(380*ui_scale), max(round(125*ui_scale), self.columnWidth(j))))
 
         def collect(self):
             values = deepcopy(self.rows)
@@ -96,6 +102,7 @@ def main():
     class Editor(QMainWindow):
         def __init__(self):
             super().__init__()
+            if args.embed: self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
             self.setWindowTitle("模块结果")
             fit_initial_window(self, (1200, 820))
             self.setMinimumSize(540, 380)
@@ -124,6 +131,7 @@ def main():
             layout.addLayout(row)
             self.tabs = QTabWidget()
             self.tabs.setUsesScrollButtons(True)
+            self.tabs.setMinimumHeight(round(300*ui_scale))
             self.content_splitter = QSplitter(Qt.Vertical)
             self.content_splitter.setHandleWidth(8)
             self.content_splitter.setChildrenCollapsible(False)
@@ -145,6 +153,13 @@ def main():
             self.output.setPlaceholderText("校验结果、操作回执与依据说明")
             self.content_splitter.addWidget(self.output)
             self.content_splitter.setSizes([510, 100])
+            self.receipt_toggle = QToolButton()
+            self.receipt_toggle.setText('操作回执')
+            self.receipt_toggle.setCheckable(True)
+            self.receipt_toggle.toggled.connect(self.output.setVisible)
+            self.output.textChanged.connect(lambda: self.receipt_toggle.setChecked(True) if self.output.toPlainText().strip() else None)
+            self.output.hide()
+            command_row.addWidget(self.receipt_toggle)
             actions = FlowLayout()
             export = QPushButton("导出当前模块 JSON")
             export.clicked.connect(self.export)
@@ -512,21 +527,36 @@ def main():
 
     window = Editor()
     apply_theme(app, ui_scale)
+    embedded_view = EmbeddedModuleView(window, window.tabs, lambda value: emit('view-metrics', **value)) if args.embed else None
+    def apply_editor_scale(scale):
+        nonlocal ui_scale
+        ui_scale = scale
+        apply_theme(app, ui_scale)
+        window.setMinimumSize(round(540*scale), round(380*scale))
+        window.tabs.setMinimumHeight(round(300*scale))
+        for table in window.tables.values():
+            table.verticalHeader().setDefaultSectionSize(round(42*scale))
+            table.fit_columns()
+        if window.native:
+            for page in window.native.pages.values(): scale_legacy_page(page, scale)
+
+    def sync_viewport():
+        path = context.session/'viewport.json'
+        if not embedded_view or not path.is_file(): return False
+        try: return embedded_view.sync_viewport(json.loads(path.read_text(encoding='utf-8')), apply_editor_scale)
+        except (OSError, ValueError): return False
+
     last_appearance = None
     def poll():
         nonlocal last_appearance, ui_scale
         appearance = context.session / 'appearance.json'
-        if appearance.is_file():
+        coordinated = sync_viewport()
+        if not coordinated and appearance.is_file():
             try:
-                stamp = appearance.stat().st_mtime_ns
+                stamp = appearance.read_text(encoding='utf-8')
                 if stamp != last_appearance:
-                    value = json.loads(appearance.read_text(encoding='utf-8'))
-                    ui_scale = max(1.0, min(1.6, float(value['scale'])))
-                    apply_theme(app, ui_scale)
-                    for table in window.tables.values():
-                        table.verticalHeader().setDefaultSectionSize(round(42*ui_scale))
-                    if window.native:
-                        for page in window.native.pages.values(): scale_legacy_page(page, ui_scale)
+                    value = json.loads(stamp)
+                    apply_editor_scale(max(1.0, min(1.6, float(value['scale']))))
                     last_appearance = stamp
             except (OSError, ValueError, KeyError): pass
         ack = context.acknowledge()
@@ -538,6 +568,14 @@ def main():
             command = json.loads(path.read_text(encoding="utf-8"))
             path.unlink()
             if command.get("action") == "attached":
+                if embedded_view and command.get('parent_handle'):
+                    try:
+                        embedded_view.attach(command['parent_handle'])
+                        sync_viewport()
+                    except (RuntimeError, ValueError, TypeError) as exc:
+                        emit('failed', error='模块容器连接未完成：'+str(exc))
+                        app.exit(1)
+                        return
                 window.setWindowOpacity(1)
                 emit("attached", module=window.module)
             elif command.get("action") == "execute":
@@ -619,7 +657,9 @@ def main():
                 row_heights={k:t.verticalHeader().defaultSectionSize() for k,t in window.tables.items()}))
             app.quit()
         QTimer.singleShot(400, capture)
-    else: emit("ready", handle=int(window.winId()), module=window.module, product_id=context.product_id)
+    else:
+        emit("ready", handle=int(window.winId()), module=window.module, product_id=context.product_id,
+            view=embedded_view.metrics() if embedded_view else None)
     return app.exec_()
 
 

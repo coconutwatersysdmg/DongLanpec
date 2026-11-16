@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QPushButton, QScrol
 
 from .fabric import BASE
 from .private_database import atomic_json
+from .embedded_view import PROTOCOL, host_minimum, EmbeddedHostViewport
 
 LABELS = {"project": "项目 / 产品识别", "conditions": "条件输入", "elements": "元件材料定义",
           "nozzles": "管口定义", "tube_bundle": "管束设计"}
@@ -139,6 +140,7 @@ class EvidencePanel(QWidget):
         info = json.loads(path.read_text(encoding="utf-8"))
         page = QWidget()
         layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
         placeholder = QLabel("正在载入模块数据与功能…")
         layout.addWidget(placeholder)
         process = QProcess(self)
@@ -170,8 +172,11 @@ class EvidencePanel(QWidget):
             if marker < 0: continue
             try: value = json.loads(text[marker + len("@@EVIDENCE@@"):])
             except ValueError: continue
-            if value["kind"] == "ready": self.attach(session, value["handle"])
+            if value["kind"] == "ready":
+                session['view_metrics'] = value.get('view') or {}
+                self.attach(session, value["handle"])
             elif value["kind"] == "attached": session["attached"] = True
+            elif value['kind'] == 'view-metrics': self.update_view_metrics(session, value)
             elif value["kind"] == "module-result" and hasattr(self, "reply"):
                 self.reply.emit(value.get("text", ""))
             elif value["kind"] in ("failed", "operation-error"):
@@ -180,23 +185,51 @@ class EvidencePanel(QWidget):
     def attach(self, session, handle):
         if session["ready"]: return
         if os.name == "nt" and os.environ.get("QT_QPA_PLATFORM") != "offscreen":
-            foreign = QWindow.fromWinId(handle)
-            container = QWidget.createWindowContainer(foreign, session["page"])
+            coordinated = session.get('view_metrics', {}).get('protocol') == PROTOCOL
+            foreign = None
+            if coordinated:
+                container = QWidget(session['page'])
+                container.setAttribute(Qt.WA_NativeWindow)
+                container.setAttribute(Qt.WA_StyledBackground)
+                container.setStyleSheet('background:#f7f9fd;')
+            else:
+                foreign = QWindow.fromWinId(handle)
+                container = QWidget.createWindowContainer(foreign, session["page"])
             container.setFocusPolicy(Qt.StrongFocus)
-            # Retain the original minimum workspace size and scroll within the hub.
-            container.setMinimumSize(1180, 780)
+            minimum = getattr(self, 'embedded_minimum', (1180, 780))
+            if session.get('view_metrics', {}).get('protocol') == PROTOCOL:
+                container.setMinimumSize(host_minimum(session['view_metrics'], self.devicePixelRatioF(), minimum))
+            else: container.setMinimumSize(*minimum)
             scroll = QScrollArea()
+            scroll.setFrameShape(QScrollArea.NoFrame)
+            scroll.setStyleSheet('QScrollArea{background:#f7f9fd;border:0;}')
             scroll.setWidgetResizable(True)
             scroll.setWidget(container)
-            session["layout"].addWidget(scroll)
+            session["layout"].addWidget(scroll, 1)
             session.update(container=container, foreign=foreign, scroll=scroll)
+            if coordinated:
+                publisher = EmbeddedHostViewport(container, session['path']/'viewport.json',
+                    lambda: getattr(self, 'ui_scale', 1.0), self.failed)
+                session['viewport_publisher'] = publisher
+                publisher.publish()
             session["placeholder"].hide()
         else:
             session["placeholder"].setText("当前环境不支持窗口嵌入，统一模块编辑器以独立窗口显示；保存结果仍返回本平台。")
         session["ready"] = True
-        atomic_json(session["path"] / "command.json", dict(action="attached"))
+        command = dict(action='attached')
+        if session.get('container') and session.get('view_metrics', {}).get('protocol') == PROTOCOL:
+            command['parent_handle'] = int(session['container'].winId())
+        atomic_json(session["path"] / "command.json", command)
         self.status.setText("模块数据已载入，可继续编辑、校验和保存。")
         self.message.emit("已载入模块：" + LABELS[session["info"]["module"]])
+
+    def update_view_metrics(self, session, value):
+        if value.get('protocol') != PROTOCOL: return
+        session['view_metrics'] = value
+        container = session.get('container')
+        if container is None: return
+        minimum = host_minimum(value, self.devicePixelRatioF(), getattr(self, 'embedded_minimum', (1180, 780)))
+        if container.minimumSize() != minimum: container.setMinimumSize(minimum)
 
     def close_tab(self, index):
         page = self.windows.widget(index)
