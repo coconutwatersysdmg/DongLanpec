@@ -13025,6 +13025,122 @@ class TubeLayoutEditor(QMainWindow):
                 pass
             return False
 
+    def _try_heal_divider_w(self):
+        """按映射表静默校正一次「隔条位置尺寸 W」，成功返回校正后的文本，否则 None。
+
+        调用场景：
+        - 管程程数切换后：W 行由隐藏变可见时，其值可能仍是上一状态的 0.00
+          （1/2 管程该行隐藏且值为 0），不校正会在回车布管时误弹范围提示；
+        - 回车布管预检：读到 W 为 0/空时先自愈，避免把程序遗留状态当成用户输错。
+
+        背景：切换管程程数只刷新分程形式图片和 W 行显隐（update_SN），原先并不显式
+        重算 W，而是依赖分程形式下拉框信号“碰巧”触发 update_divider_position_and_size()。
+
+        这里只做“针对 W 的静默校正”：命中映射表才写入，未命中保持原值不动；
+        不调用 calculate_piping，也不重连 itemChanged，避免引入新的信号时序问题。
+        """
+        try:
+            from modules.buguan.buguan_ziyong.divider_position_mapping import (
+                get_divider_position_w,
+            )
+        except Exception:
+            return
+
+        form = getattr(self, "tube_pass_form_value", None)
+        if _is_zero_divider_position_form(form):
+            # 4b（4.2.x）：W 行为隐藏且值为 0 属正常，不校正
+            return
+
+        rows = {"公称直径 DN": -1, "换热管外径 do": -1, "隔条位置尺寸 W": -1}
+        try:
+            for r in range(self.param_table.rowCount()):
+                name_item = self.param_table.item(r, 1)
+                if not name_item:
+                    continue
+                key = name_item.text().strip()
+                if key in rows:
+                    rows[key] = r
+        except Exception:
+            return
+
+        dn_row = rows["公称直径 DN"]
+        do_row = rows["换热管外径 do"]
+        w_row = rows["隔条位置尺寸 W"]
+        if min(dn_row, do_row, w_row) < 0:
+            return
+
+        # 行仍处于隐藏状态（如 1/2 管程）时不做任何事
+        try:
+            if self.param_table.isRowHidden(w_row):
+                return
+        except Exception:
+            pass
+
+        def _read_text(row):
+            widget = self.param_table.cellWidget(row, 2)
+            if widget is not None and hasattr(widget, "currentText"):
+                try:
+                    return str(widget.currentText()).strip()
+                except Exception:
+                    return ""
+            item = self.param_table.item(row, 2)
+            return item.text().strip() if item else ""
+
+        try:
+            dn_value = float(_read_text(dn_row))
+            do_value = float(_read_text(do_row))
+        except (TypeError, ValueError):
+            return
+
+        w_value = get_divider_position_w(dn_value, form, do_value)
+        if w_value is None:
+            print(
+                f"[隔条W自愈] 映射表中无对应 W（DN={dn_value}, 分程形式={form}, do={do_value}），保留当前值"
+            )
+            return None
+
+        value_str = f"{float(w_value):.2f}"
+        cur_text = _read_text(w_row)
+        # 只修复“确实非法”的值（空 / 0 / 负数 / 非数字）。
+        # 已经是正数的值一律不动——那可能是用户按实际工况手工改过的 W，
+        # 切管程时不应被映射表的推荐值覆盖。
+        try:
+            if float(cur_text) > 0:
+                return None
+        except (TypeError, ValueError):
+            pass
+
+        # _update_table_cell 内部已用 QSignalBlocker 包住表格与单元格控件，
+        # 不会触发 itemChanged，因此不会走到 W 的范围校验分支。
+        self._update_table_cell(w_row, 2, value_str)
+        try:
+            self._last_valid_divider_W_text = value_str
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "modified_rows"):
+                self.modified_rows.add(w_row)
+            if hasattr(self, "highlight_modified_row"):
+                self.highlight_modified_row(w_row)
+        except Exception:
+            pass
+        print(f"[隔条W自愈] 已按映射表校正隔条位置尺寸 W：{cur_text!r} -> {value_str}")
+        return value_str
+
+    def _show_divider_w_tip(self, message):
+        """在左下角用非阻塞文字说明 W 的情况，替代弹窗。"""
+        try:
+            if getattr(self, "line_tip", None) is not None:
+                self.line_tip.setText(message)
+                self.line_tip.setStyleSheet("color: #b35c00;")
+                self.line_tip.setVisible(True)
+        except Exception:
+            pass
+        try:
+            print(f"[隔条W提示] {message}")
+        except Exception:
+            pass
+
     def update_divider_position_and_size(self):
         # TODO 更新隔条位置尺寸
         # 本地分程（1~12）不调布管 DLL 取 W；其余仍走原接口（Dis/Dit 不在此路径）
@@ -16018,6 +16134,15 @@ class TubeLayoutEditor(QMainWindow):
                 ):
                     return
 
+                # 参数行被隐藏时（管程=1/2 或 4b）其值不参与校验：
+                # 与回车预检 _precheck_divider_position_size_W 里的 isRowHidden 判断保持一致，
+                # 否则隐藏行里遗留的 0.00 会在切回 4/6 管程的瞬间被当成“用户输入”弹窗。
+                try:
+                    if self.param_table.isRowHidden(row):
+                        return
+                except Exception:
+                    pass
+
                 # 若当前处于其它参数（如管程程数）触发的联动级联中，
                 # W 可能会被程序临时写成 0.00；此时不应按“手动输入”弹范围警告。
                 if getattr(self, "_in_on_combobox_cascade", False):
@@ -16066,12 +16191,40 @@ class TubeLayoutEditor(QMainWindow):
 
                 # 做范围校验：0 < W < DL/2
                 upper = None if dl_val is None else (dl_val / 2.0)
+
+                # W 为 0/负 时界面上本就不该出现（管程=1/2 或 4b 时该行隐藏），
+                # 只可能是程序临时态或手输的无效值 —— 一律不弹窗：
+                # 先按映射表自愈，自愈不了就静默回滚，并在左下角给非阻塞提示。
+                if w_val is not None and w_val <= 0:
+                    healed = None
+                    try:
+                        healed = self._try_heal_divider_w()
+                    except Exception as _he:
+                        print(f"[W VALIDATION] 自愈失败: {_he}")
+                    if not healed:
+                        rollback_text = str(
+                            getattr(self, "_last_valid_divider_W_text", "")
+                        ).strip()
+                        try:
+                            if not (float(rollback_text) > 0):
+                                rollback_text = ""
+                        except (TypeError, ValueError):
+                            rollback_text = ""
+                        if rollback_text and rollback_text != cur_text:
+                            self._suppress_divider_W_warn = True
+                            try:
+                                changed_item.setText(rollback_text)
+                            finally:
+                                self._suppress_divider_W_warn = False
+                        self._show_divider_w_tip(
+                            "隔条位置尺寸 W 暂未取到推荐值，请核对 DN / 换热管外径 / 管程分程形式"
+                        )
+                    return
+
+                # 只有“达到或超过 DL/2”才需要提示（这是用户手输可能造成的真实错误）
                 invalid = False
-                if w_val is None or upper is None or dl_val <= 0:
-                    invalid = False  # 无法计算上限时，不拦截（交给原有联动/校验）
-                else:
-                    if w_val <= 0 or w_val >= upper:
-                        invalid = True
+                if w_val is not None and upper is not None and dl_val and dl_val > 0:
+                    invalid = w_val >= upper
 
                 if invalid and QMessageBox is not None:
                     try:
@@ -16084,7 +16237,8 @@ class TubeLayoutEditor(QMainWindow):
                     QMessageBox.warning(
                         self,
                         "输入错误",
-                        "参数“隔条位置尺寸 W”必须大于0且小于布管限定圆 DL 的一半，请重新输入！",
+                        f"参数“隔条位置尺寸 W”不能大于等于布管限定圆 DL 的一半"
+                        f"（{upper:.2f}），请重新输入！",
                     )
                     rollback_text = str(
                         getattr(self, "_last_valid_divider_W_text", "")
@@ -18449,6 +18603,13 @@ class TubeLayoutEditor(QMainWindow):
                     self.load_tube_pass_images(form_combo, tube_pass_text)
             except Exception as _e:
                 print(f"[管程程数] 刷新管程分程形式图片失败: {_e}")
+
+            # 管程程数切换后显式校正 W：W 行由隐藏变为可见时，其值可能仍是上一状态的
+            # 0.00（1/2 管程时该行隐藏且值为 0），不校正就会在回车布管时误弹范围提示。
+            try:
+                self._try_heal_divider_w()
+            except Exception as _we:
+                print(f"[管程程数] 校正隔条位置尺寸 W 失败: {_we}")
         elif param_name == "滑道形式":
             try:
                 self._apply_slipway_form_and_guide_visibility()
@@ -22715,25 +22876,61 @@ class TubeLayoutEditor(QMainWindow):
                     else:
                         value_str = str(param_value)
 
-                    if isinstance(cell_widget, QComboBox):
-                        # 如果是下拉框，尝试找到匹配的选项并设置
-                        index = cell_widget.findText(value_str)
-                        if index >= 0:
-                            cell_widget.setCurrentIndex(index)
-                        else:
-                            # 如果没有匹配项，直接添加并选中
-                            cell_widget.addItem(value_str)
-                            cell_widget.setCurrentText(value_str)
-                    else:
-                        # 如果是普通文本项，直接设置文本
-                        value_item = self.param_table.item(row, 2)
-                        if value_item:
-                            value_item.setText(value_str)
-                        else:
-                            # 如果单元格不存在，创建新项
-                            self.param_table.setItem(
-                                row, 2, QTableWidgetItem(value_str)
+                    if param_key == "W":
+                        # 非 4b 形式下 0/负值不是合法 W：绝不允许写回表格。
+                        # 这里若写回 "0.00"，itemChanged 会把它当成“用户输入 0”
+                        # 并弹出“必须大于0且小于 DL/2”的范围提示。
+                        try:
+                            _wv = float(param_value)
+                        except (TypeError, ValueError):
+                            _wv = None
+                        if (
+                                _wv is not None
+                                and _wv <= 0
+                                and not _is_zero_divider_position_form(
+                                    getattr(self, "tube_pass_form_value", None)
+                                )
+                        ):
+                            print(
+                                f"[update_pipe_parameters] 忽略非法 W 回写（{value_str}），"
+                                f"保留表格当前值；分程形式={getattr(self, 'tube_pass_form_value', None)}"
                             )
+                            break
+
+                    # 仅 W 的回写需要静默：否则 setText 触发的 itemChanged 会被当作手动输入校验。
+                    # S 等其它参数保持原有信号行为（它们的 itemChanged 联动不能丢）。
+                    _blockers = []
+                    if param_key == "W":
+                        try:
+                            from PyQt5.QtCore import QSignalBlocker
+
+                            _blockers.append(QSignalBlocker(self.param_table))
+                            if isinstance(cell_widget, QComboBox):
+                                _blockers.append(QSignalBlocker(cell_widget))
+                        except Exception:
+                            _blockers = []
+                    try:
+                        if isinstance(cell_widget, QComboBox):
+                            # 如果是下拉框，尝试找到匹配的选项并设置
+                            index = cell_widget.findText(value_str)
+                            if index >= 0:
+                                cell_widget.setCurrentIndex(index)
+                            else:
+                                # 如果没有匹配项，直接添加并选中
+                                cell_widget.addItem(value_str)
+                                cell_widget.setCurrentText(value_str)
+                        else:
+                            # 如果是普通文本项，直接设置文本
+                            value_item = self.param_table.item(row, 2)
+                            if value_item:
+                                value_item.setText(value_str)
+                            else:
+                                # 如果单元格不存在，创建新项
+                                self.param_table.setItem(
+                                    row, 2, QTableWidgetItem(value_str)
+                                )
+                    finally:
+                        _blockers = []
 
                     # 找到并更新后退出当前参数的行循环
                     break
@@ -23413,7 +23610,52 @@ class TubeLayoutEditor(QMainWindow):
             if w_val is None:
                 return True
 
-            invalid = (w_val <= 0) or (w_val >= upper)
+            # W 为 0/负 时界面上本就不该出现（管程=1/2 或 4b 时该行隐藏），
+            # 只可能是程序临时态或手输的无效值 —— 一律不弹窗：
+            # 先按映射表自愈，自愈不了就静默回滚并给非阻塞提示，然后继续布管。
+            if w_val <= 0:
+                _healed = None
+                try:
+                    _healed = self._try_heal_divider_w()
+                except Exception as _he:
+                    print(f"[回车预检] W 自愈失败: {_he}")
+                if _healed:
+                    try:
+                        self._last_valid_divider_W_text = _healed
+                    except Exception:
+                        pass
+                    print(
+                        f"[回车预检] W 非法（{w_text_debug!r}），已按映射表自愈为 {_healed}，不弹窗"
+                    )
+                    return True
+
+                # 映射表也无推荐值：静默回滚到最近合法值，仅做非阻塞提示
+                _rb = str(getattr(self, "_last_valid_divider_W_text", "")).strip()
+                try:
+                    if not (float(_rb) > 0):
+                        _rb = ""
+                except (TypeError, ValueError):
+                    _rb = ""
+                if _rb and w_row >= 0:
+                    widget = self.param_table.cellWidget(w_row, 2)
+                    if isinstance(widget, QComboBox):
+                        try:
+                            if widget.isEditable() and widget.lineEdit() is not None:
+                                widget.lineEdit().setText(_rb)
+                            widget.setCurrentText(_rb)
+                        except Exception:
+                            pass
+                    else:
+                        it = self.param_table.item(w_row, 2)
+                        if it:
+                            it.setText(_rb)
+                self._show_divider_w_tip(
+                    "隔条位置尺寸 W 暂未取到推荐值，已按最近合法值继续；请核对 DN / 换热管外径 / 管程分程形式"
+                )
+                return True
+
+            # 只有“达到或超过 DL/2”才提示（这是用户手输可能造成的真实错误）
+            invalid = w_val >= upper
             if not invalid:
                 # 更新最近合法值（供回滚使用）
                 try:
@@ -23426,16 +23668,17 @@ class TubeLayoutEditor(QMainWindow):
             if not suppress_precheck_dialogs:
                 try:
                     print(
-                        "[POPUP] type=warning title=输入错误 msg=您输入的数值小于0或已超限，请重新输入！ "
+                        "[POPUP] type=warning title=输入错误 msg=隔条位置尺寸W超过DL/2 "
                         f"param=隔条位置尺寸W(回车预检) input='{w_text_debug}' parsed={w_val} "
-                        f"upper(DL/2)={upper} rule=(0,DL/2) reason=<=0或>=上限 rollback='{str(getattr(self, '_last_valid_divider_W_text', '')).strip()}'"
+                        f"upper(DL/2)={upper} rule=(0,DL/2) reason=>=上限 rollback='{str(getattr(self, '_last_valid_divider_W_text', '')).strip()}'"
                     )
                 except Exception:
                     pass
                 QMessageBox.warning(
                     self,
                     "输入错误",
-                    "参数“隔条位置尺寸 W”必须大于0且小于布管限定圆 DL 的一半，请重新输入！",
+                    f"参数“隔条位置尺寸 W”不能大于等于布管限定圆 DL 的一半"
+                    f"（{upper:.2f}），当前为 {w_text_debug}，请重新输入！",
                 )
 
             rollback_text = str(getattr(self, "_last_valid_divider_W_text", "")).strip()
