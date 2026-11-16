@@ -2,8 +2,10 @@
 import hashlib
 import json
 import math
+import sqlite3
+import threading
 
-from PyQt5.QtCore import Qt, QPointF, QTimer
+from PyQt5.QtCore import Qt, QPointF, QTimer, QSaveFile, QIODevice, QLockFile
 from PyQt5.QtGui import QColor, QBrush, QPen, QFont, QFontMetrics, QPainter, QPainterPath, QPolygonF
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox,
     QGraphicsScene, QGraphicsView, QGraphicsRectItem, QGraphicsTextItem, QGraphicsPathItem,
@@ -12,7 +14,6 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushBut
 
 from .fabric import Fabric
 from .graph_model import execution_graph, review_cycles
-from .private_database import atomic_json
 from .run_view import duration
 
 COLORS = {"running": ("#eff6ff", "#2563eb"), "failed": ("#fff1f2", "#e11d48"),
@@ -20,6 +21,30 @@ COLORS = {"running": ("#eff6ff", "#2563eb"), "failed": ("#fff1f2", "#e11d48"),
           "needs_manual_review": ("#fffbeb", "#d97706")}
 STATES = {"running": "运行中", "failed": "失败", "processing_failed": "失败", "cancelled": "已停止",
           "succeeded": "完成", "reviewed": "已复核", "reviewed_with_deferred": "有暂缓项", "needs_manual_review": "待审核"}
+_LAYOUT_WRITE_LOCK = threading.Lock()
+
+
+def write_layout(path, value):
+    # Wait for local writers without holding the GIL inside QLockFile.tryLock.
+    with _LAYOUT_WRITE_LOCK:
+        _write_layout(path, value)
+
+
+def _write_layout(path, value):
+    path = path.resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock = QLockFile(str(path)+".lock")
+    if not lock.tryLock(500): raise OSError("布局文件正被其它窗口使用或目录不可写，请稍后重试。")
+    try:
+        data = json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
+        target = QSaveFile(str(path))
+        if not target.open(QIODevice.WriteOnly): raise OSError(target.errorString())
+        if target.write(data) != len(data):
+            error = target.errorString()
+            target.cancelWriting()
+            raise OSError(error)
+        if not target.commit(): raise OSError(target.errorString())
+    finally: lock.unlock()
 
 
 class GraphNode(QGraphicsRectItem):
@@ -61,17 +86,10 @@ class GraphNode(QGraphicsRectItem):
             self.owner.node_moved(self.record["id"], self.pos())
         return super().itemChange(change, value)
 
-    def mousePressEvent(self, event):
-        self.owner.dragging = True
-        super().mousePressEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        super().mouseReleaseEvent(event)
-        self.owner.dragging = False
-        QTimer.singleShot(0, self.owner.refresh)
-
     def mouseDoubleClickEvent(self, event):
-        if self.record["children"]: self.owner.toggle(self.record["id"])
+        if self.record["children"]:
+            self.owner.queue_toggle(self.record["id"])
+            event.accept()
         else: super().mouseDoubleClickEvent(event)
 
 
@@ -87,9 +105,11 @@ class GraphEdge(QGraphicsPathItem):
         if kind in ("feedback", "legacy"): pen.setStyle(Qt.DashLine)
         self.setPen(pen)
         self.arrow = QGraphicsPolygonItem(self)
+        self.arrow.setAcceptedMouseButtons(Qt.NoButton)
         self.arrow.setPen(QPen(QColor(color)))
         self.arrow.setBrush(QBrush(QColor(color)))
         self.label = QGraphicsSimpleTextItem(data.get("label", ""), self)
+        self.label.setAcceptedMouseButtons(Qt.NoButton)
         font = QFont("Microsoft YaHei")
         font.setPixelSize(11)
         self.label.setFont(font)
@@ -130,6 +150,30 @@ class GraphEdge(QGraphicsPathItem):
 
 
 class GraphView(QGraphicsView):
+    def __init__(self, scene, owner):
+        super().__init__(scene)
+        self.owner = owner
+
+    def mousePressEvent(self, event):
+        self.owner.dragging = True
+        super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        self.owner.dragging = True
+        super().mouseDoubleClickEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        try: super().mouseReleaseEvent(event)
+        finally:
+            self.owner.dragging = False
+            self.owner.queue_update(refresh=True)
+
+    def hideEvent(self, event):
+        active = self.owner.dragging
+        self.owner.dragging = False
+        if active: self.owner.queue_update()
+        super().hideEvent(event)
+
     def wheelEvent(self, event):
         if event.modifiers() & Qt.ControlModifier:
             self.scale(1.15 if event.angleDelta().y() > 0 else 1/1.15, 1.15 if event.angleDelta().y() > 0 else 1/1.15)
@@ -144,6 +188,10 @@ class ExecutionPanel(QWidget):
         self.tasks, self.nodes, self.node_items, self.edges = {}, {}, {}, []
         self.positions, self.expanded = {}, set()
         self.dragging, self.rendering, self.layout_loaded = False, False, False
+        self.pending_refresh, self.pending_render = False, False
+        self.pending_action, self.pending_toggles = None, []
+        self.notice_kind = None
+        self.stopped = False
         self.value = {}
         layout = QVBoxLayout(self)
         row = QHBoxLayout()
@@ -178,6 +226,11 @@ class ExecutionPanel(QWidget):
         policy.setObjectName("muted")
         policy.setWordWrap(True)
         layout.addWidget(policy)
+        self.notice = QLabel()
+        self.notice.setWordWrap(True)
+        self.notice.setStyleSheet("color:#b45309;")
+        self.notice.hide()
+        layout.addWidget(self.notice)
         split = QSplitter(Qt.Vertical)
         horizontal = QSplitter(Qt.Horizontal)
         self.navigator = QTreeWidget()
@@ -188,7 +241,7 @@ class ExecutionPanel(QWidget):
         horizontal.addWidget(self.navigator)
         self.scene = QGraphicsScene(self)
         self.scene.selectionChanged.connect(self.selection)
-        self.view = GraphView(self.scene)
+        self.view = GraphView(self.scene, self)
         self.view.setRenderHint(QPainter.Antialiasing)
         self.view.setDragMode(QGraphicsView.ScrollHandDrag)
         self.view.setAlignment(Qt.AlignLeft | Qt.AlignTop)
@@ -205,10 +258,66 @@ class ExecutionPanel(QWidget):
         self.save_timer = QTimer(self)
         self.save_timer.setSingleShot(True)
         self.save_timer.timeout.connect(self.flush_layout)
+        self.update_timer = QTimer(self)
+        self.update_timer.setSingleShot(True)
+        self.update_timer.timeout.connect(self.drain_updates)
+
+    def queue_update(self, refresh=False):
+        if self.stopped: return
+        self.pending_refresh |= refresh
+        if hasattr(self, "update_timer") and not self.dragging:
+            self.update_timer.start(0)
+
+    def queue_toggle(self, identity):
+        self.pending_toggles.append(identity)
+        self.queue_update()
+
+    def show_notice(self, kind, message):
+        self.notice_kind = kind
+        self.notice.setText(message)
+        self.notice.show()
+
+    def clear_notice(self, kind):
+        if self.notice_kind == kind:
+            self.notice_kind = None
+            self.notice.clear()
+            self.notice.hide()
+
+    def drain_updates(self):
+        if self.dragging or self.rendering or self.stopped: return
+        try: self.apply_updates()
+        except (OSError, ValueError, sqlite3.DatabaseError) as exc:
+            self.show_notice("refresh", "执行图暂未刷新，已有结果仍保留："+str(exc))
+
+    def apply_updates(self):
+        action, self.pending_action = self.pending_action, None
+        if action:
+            if action[0] == "clear": self.clear()
+            else: self.bind(*action[1:])
+        toggles, self.pending_toggles = self.pending_toggles, []
+        for identity in toggles:
+            if identity in self.nodes and self.nodes[identity]["children"]:
+                if identity in self.expanded: self.expanded.remove(identity)
+                else: self.expanded.add(identity)
+                self.pending_render = True
+                self.save_timer.start(350)
+        refresh, render = self.pending_refresh, self.pending_render
+        self.pending_refresh, self.pending_render = False, False
+        try:
+            if refresh: self.refresh(force=render)
+            elif render: self.render()
+            self.update_bounds()
+            self.clear_notice("refresh")
+        except (OSError, ValueError, sqlite3.DatabaseError) as exc:
+            self.show_notice("refresh", "执行图暂未刷新，已有结果仍保留："+str(exc))
 
     def bind(self, workspace, run_id):
+        if self.dragging:
+            self.pending_action = ("bind", workspace, run_id)
+            return
         if self.run_id != run_id or not self.fabric or str(self.fabric.home) != str(workspace):
             self.flush_layout()
+            self.pending_toggles = []
             self.fabric, self.run_id = Fabric(workspace), run_id
             self.fingerprint, self.positions, self.expanded = None, {}, set()
             self.layout_loaded = False
@@ -237,10 +346,30 @@ class ExecutionPanel(QWidget):
     def flush_layout(self):
         self.save_timer.stop()
         if not self.fabric or not self.run_id or not self.nodes: return
-        atomic_json(self.layout_path(), dict(schema="donglanpec.execution-layout/1", positions=self.positions, expanded=sorted(self.expanded)))
+        # QSaveFile uses a distinct temporary file for each writer. Two platform
+        # windows must not race over the same fixed '.partial' filename.
+        try:
+            write_layout(self.layout_path(), dict(schema="donglanpec.execution-layout/1", positions=self.positions,
+                expanded=sorted(self.expanded)))
+        except (OSError, RuntimeError) as exc:
+            self.show_notice("save", "布局暂未保存，当前拖动仍然有效："+str(exc))
+            return False
+        self.clear_notice("save")
+        return True
+
+    def stop_updates(self):
+        self.stopped = True
+        self.save_timer.stop()
+        self.update_timer.stop()
 
     def clear(self):
+        if self.dragging:
+            self.pending_action = ("clear",)
+            return
         self.flush_layout()
+        self.update_timer.stop()
+        self.pending_refresh, self.pending_render = False, False
+        self.pending_action, self.pending_toggles = None, []
         self.run_id, self.fabric, self.fingerprint = None, None, None
         self.tasks, self.nodes, self.node_items, self.edges, self.value = {}, {}, {}, [], {}
         self.positions, self.expanded = {}, set()
@@ -255,7 +384,10 @@ class ExecutionPanel(QWidget):
         self.timing.setText("尚无任务回执")
 
     def refresh(self, force=False):
-        if not self.fabric or not self.run_id or self.dragging: return
+        if self.dragging:
+            self.pending_refresh = True
+            return
+        if not self.fabric or not self.run_id: return
         value = self.fabric.execution(self.run_id)
         cycles = sum(len(review_cycles(r)) for r in value.get("reviews", []))
         self.timing.setText(("执行累计 "+duration(value["elapsed_seconds"]) if value["sessions"] else "任务耗时合计 "+duration(value["task_seconds"]))
@@ -313,7 +445,9 @@ class ExecutionPanel(QWidget):
         return identity
 
     def render(self):
-        if self.dragging: return
+        if self.dragging or self.rendering:
+            self.pending_render = True
+            return
         horizontal, vertical = self.view.horizontalScrollBar().value(), self.view.verticalScrollBar().value()
         graph = execution_graph(self.value, self.filter.currentData() or "")
         self.nodes = graph["nodes"]
@@ -376,11 +510,11 @@ class ExecutionPanel(QWidget):
         self.scene.setSceneRect(self.scene.itemsBoundingRect().adjusted(-18, -18, 38, 38))
 
     def node_moved(self, identity, pos):
-        if self.rendering: return
+        if self.rendering or self.stopped: return
         self.positions[identity] = [pos.x(), pos.y()]
         for edge in self.edges:
             if identity in (edge.source.record["id"], edge.target.record["id"]): edge.update_path()
-        self.update_bounds()
+        if not self.dragging: self.update_bounds()
         self.save_timer.start(350)
 
     def toggle(self, identity):
@@ -415,6 +549,7 @@ class ExecutionPanel(QWidget):
         self.view.fitInView(self.scene.sceneRect(), Qt.KeepAspectRatio)
 
     def selection(self):
+        if self.rendering: return
         for item in self.scene.selectedItems():
             node = self.nodes.get(item.data(0))
             if node:

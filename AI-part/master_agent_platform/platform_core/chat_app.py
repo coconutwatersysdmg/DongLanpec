@@ -748,5 +748,5 @@ class ChatWindow(QMainWindow):
             self.timer.stop()
             self.module_panel.timer.stop()
             self.execution.flush_layout()
-            self.execution.save_timer.stop()
+            self.execution.stop_updates()
             event.accept()

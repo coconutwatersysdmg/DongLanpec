@@ -3,14 +3,19 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+import sqlite3
+from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import fitz
 from PyQt5.QtCore import QPointF, Qt
 from PyQt5.QtWidgets import QApplication, QGraphicsItem
+from PyQt5.QtTest import QTest
+from PyQt5 import sip
 from test_batch_products import SimulatedOrchestrator
 from platform_core.graph_model import execution_graph, review_cycles
-from platform_core.execution_graph import ExecutionPanel
+from platform_core.execution_graph import ExecutionPanel, write_layout
 from platform_core.private_database import atomic_json
 
 
@@ -145,6 +150,105 @@ class ExecutionGraphTests(unittest.TestCase):
         panel.toggle(key)
         self.assertEqual(panel.node_items[key].pos(), point)
         self.assertTrue(any(n.record["kind"] == "task" for n in panel.node_items.values()))
+
+    def show_graph(self):
+        self.window.show()
+        self.window.navigate(3)
+        self.app.processEvents()
+        panel = self.window.execution
+        panel.view.fitInView(panel.scene.sceneRect(), Qt.KeepAspectRatio)
+        return panel
+
+    def test_dragging_defers_scene_replacement_until_mouse_release(self):
+        panel = self.show_graph()
+        key = "module:"+self.summary["products"][0]["id"]+":conditions"
+        node = panel.node_items[key]
+        point = panel.view.mapFromScene(node.sceneBoundingRect().center())
+        QTest.mousePress(panel.view.viewport(), Qt.LeftButton, Qt.NoModifier, point)
+        try:
+            panel.refresh(True)
+            panel.render()
+            self.assertIs(panel.node_items[key], node)
+            self.assertFalse(sip.isdeleted(node))
+        finally:
+            QTest.mouseRelease(panel.view.viewport(), Qt.LeftButton, Qt.NoModifier, point)
+        self.app.processEvents()
+        self.assertIsNot(panel.node_items[key], node)
+        self.assertFalse(panel.dragging)
+
+    def test_review_annotation_drag_also_defers_refresh(self):
+        panel = self.show_graph()
+        edge = next(e for e in panel.edges if e.record['kind'] == 'review-input')
+        self.assertEqual(edge.label.acceptedMouseButtons(), Qt.NoButton)
+        point = panel.view.mapFromScene(edge.label.sceneBoundingRect().center())
+        QTest.mousePress(panel.view.viewport(), Qt.LeftButton, Qt.NoModifier, point)
+        try:
+            panel.refresh(True)
+            panel.render()
+            self.assertIn(edge, panel.edges)
+            self.assertFalse(sip.isdeleted(edge))
+        finally:
+            QTest.mouseRelease(panel.view.viewport(), Qt.LeftButton, Qt.NoModifier, point)
+        self.app.processEvents()
+        self.assertFalse(panel.dragging)
+
+    def test_double_click_does_not_delete_the_item_inside_its_mouse_handler(self):
+        panel = self.show_graph()
+        key = "module:"+self.summary["products"][0]["id"]+":conditions"
+        node = panel.node_items[key]
+        point = panel.view.mapFromScene(node.sceneBoundingRect().center())
+        QTest.mouseDClick(panel.view.viewport(), Qt.LeftButton, Qt.NoModifier, point)
+        self.assertIs(panel.node_items[key], node)
+        self.assertFalse(sip.isdeleted(node))
+        QTest.mouseRelease(panel.view.viewport(), Qt.LeftButton, Qt.NoModifier, point)
+        self.app.processEvents()
+        self.assertIn(key, panel.expanded)
+        self.assertIsNot(panel.node_items[key], node)
+
+    def test_context_clear_waits_until_drag_has_released_its_item(self):
+        panel = self.show_graph()
+        node = next(n for n in panel.node_items.values() if n.record['kind'] == 'module')
+        point = panel.view.mapFromScene(node.sceneBoundingRect().center())
+        QTest.mousePress(panel.view.viewport(), Qt.LeftButton, Qt.NoModifier, point)
+        panel.clear()
+        self.assertFalse(sip.isdeleted(node))
+        self.assertTrue(panel.node_items)
+        QTest.mouseRelease(panel.view.viewport(), Qt.LeftButton, Qt.NoModifier, point)
+        self.app.processEvents()
+        self.assertIsNone(panel.run_id)
+        self.assertFalse(panel.node_items)
+
+    def test_layout_timer_io_error_is_visible_and_does_not_abort_the_application(self):
+        panel = self.window.execution
+        (self.engine.fabric.home / 'graph_layouts').write_text('a file blocks directory creation')
+        node = next(n for n in panel.node_items.values() if n.record['kind'] == 'module')
+        node.setPos(node.pos()+QPointF(15, 12))
+        panel.save_timer.start(1)
+        QTest.qWait(30)
+        self.assertIn('布局暂未保存', panel.notice.text())
+        self.assertTrue(panel.node_items)
+        self.assertEqual(self.window.active_run_id, self.summary['run_id'])
+
+    def test_release_refresh_error_preserves_existing_scene(self):
+        panel = self.window.execution
+        old_nodes = dict(panel.node_items)
+        with patch.object(panel.fabric, 'execution', side_effect=sqlite3.OperationalError('temporary database lock')):
+            panel.queue_update(refresh=True)
+            self.app.processEvents()
+        self.assertIn('暂未刷新', panel.notice.text())
+        self.assertEqual(panel.node_items, old_nodes)
+        panel.queue_update(refresh=True)
+        self.app.processEvents()
+        self.assertEqual(panel.notice.text(), '')
+
+    def test_two_layout_writers_never_share_a_temporary_filename(self):
+        path = self.root / 'parallel' / 'layout.json'
+        def save(index): write_layout(path, dict(writer=index, position=[index, -index]))
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            list(pool.map(save, range(20)))
+        result = json.loads(path.read_text(encoding='utf-8'))
+        self.assertEqual(result['position'], [result['writer'], -result['writer']])
+        self.assertEqual([p.name for p in path.parent.iterdir()], ['layout.json'])
 
 
 if __name__ == "__main__": unittest.main()
