@@ -15034,8 +15034,12 @@ class TubeLayoutEditor(QMainWindow):
                 if identifier:
                     return identifier
                 else:
+                    # 没有标识项：如 U 形管 + 10/12 管程的“不适用”提示，返回空串
+                    text = self.tube_pass_form_combo.currentText()
+                    if str(text).startswith("不适用"):
+                        return ""
                     # 如果没有存储标识，返回当前显示的文本
-                    return self.tube_pass_form_combo.currentText()
+                    return text
 
         # 如果下拉框不存在或未选择，返回当前存储的值
         return (
@@ -17080,15 +17084,11 @@ class TubeLayoutEditor(QMainWindow):
                         except Exception as e:
                             print(f"绘制折流板出错: {e}")
                     if param_name == "管程程数":
-                        self.tube_pass_form_value = {
-                            "1": "1",
-                            "2": "2.1",
-                            "4": "4.1",
-                            "6": "6.1",
-                            "8": "8a.1",
-                            "10": "10a.1",
-                            "12": "12a.1",
-                        }.get(param_value, self.tube_pass_form_value)
+                        # 默认分程形式按《附件4》取：U 形管 8 管程默认 8d.1，
+                        # 且 U 形管不适用 10/12 管程（返回空串，清空标识）。
+                        _default_form = self._default_tube_pass_form_for(param_value)
+                        if _default_form is not None:
+                            self.tube_pass_form_value = _default_form
                         print(
                             f"[on_table_item_changed] 管程分程形式: {self.tube_pass_form_value}"
                         )
@@ -17593,7 +17593,12 @@ class TubeLayoutEditor(QMainWindow):
                         )
 
                         if self.heat_exchanger in ["AEU", "BEU", "AKU", "BKU"]:
-                            combo.addItems(["2", "4", "6", "8", "10", "12"])
+                            # 《附件4》：U 形管换热器不适用 10 / 12 管程，下拉不再提供；
+                            # 历史数据若已是 10/12，仍保留该项以免被静默改成其它管程。
+                            _u_pass_items = ["2", "4", "6", "8"]
+                            if str(current_value).strip() in ("10", "12"):
+                                _u_pass_items.append(str(current_value).strip())
+                            combo.addItems(_u_pass_items)
                         elif self.heat_exchanger in ["AES", "BES"]:
                             combo.addItems(["2", "4", "6", "8", "10", "12"])
                             if current_value == "1":
@@ -18053,6 +18058,75 @@ class TubeLayoutEditor(QMainWindow):
             if self.tube_pass_form_combo:
                 self.load_tube_pass_images(self.tube_pass_form_combo, tube_pass)
 
+    # 《附件4_260819_管程分程形式_增加8-12管程分程形式》规定：
+    #   - U 形管换热器（AEU/BEU/AKU/BKU）8 管程只有 8d.1 / 8d.2 两种分程形式；
+    #   - 10 / 12 管程不适用于 U 形管换热器。
+    _U_TUBE_HEX_TYPES = ("AEU", "BEU", "AKU", "BKU")
+
+    def _is_u_tube_hex(self, heat_exchanger=None):
+        """当前换热器型式是否属于 U 形管（AEU/BEU/AKU/BKU）。"""
+        hx = str(
+            heat_exchanger
+            if heat_exchanger is not None
+            else getattr(self, "heat_exchanger", "") or ""
+        ).strip().upper()
+        return hx in self._U_TUBE_HEX_TYPES
+
+    def _default_tube_pass_form_for(self, tube_pass, heat_exchanger=None):
+        """按管程程数（与换热器型式）取默认分程形式标识，规则见《附件4》。
+
+        返回值语义：
+          - 字符串：该管程数下的默认标识（如 8a.1 / 8d.1 / 10a.1 …）；
+          - ""：该组合不适用（U 形管 + 10/12 管程），调用方应清空当前标识；
+          - None：管程数无规则（未知值），调用方保持原值不变。
+        """
+        text = str(tube_pass or "").strip()
+        is_u_tube = self._is_u_tube_hex(heat_exchanger)
+        if text == "8":
+            # 8 管程：非 U 形默认 8a.1；U 形仅 8d.1 / 8d.2，默认 8d.1
+            return "8d.1" if is_u_tube else "8a.1"
+        if text in ("10", "12"):
+            if is_u_tube:
+                return ""
+            return {"10": "10a.1", "12": "12a.1"}[text]
+        if text in ("4", "6"):
+            # 《附件4》：4 管程 U 形默认 4b.1（界面标识 4.2 / Cat 4b，无隔条位置尺寸），
+            # 非 U 形默认 4a（4.1）；6 管程 U 形默认 6b.1（界面标识 6.2 / Cat 6b），
+            # 非 U 形默认 6a.1（6.1）。仅改默认值，4/6 管程的可选项与布管逻辑不动。
+            if text == "4":
+                return "4.2" if is_u_tube else "4.1"
+            return "6.2" if is_u_tube else "6.1"
+        return {"1": "1", "2": "2.1"}.get(text)
+
+    def _local_tube_pass_form_ids(self, tube_pass, heat_exchanger=None):
+        """8 / 10 / 12 管程可选的分程形式标识（严格按《附件4》）。
+
+        - 8 管程：非 U 形 → 8a.1~8d.2（8 项）；U 形（AEU/BEU/AKU/BKU）→ 仅 8d.1/8d.2；
+        - 10 / 12 管程：仅非 U 形 → 10a/10b、12a/12b；U 形不适用，返回空列表；
+        - 其余管程数或未知型式 → None（沿用原有分支，不在本函数处理）。
+        """
+        text = str(tube_pass or "").strip()
+        hx = str(
+            heat_exchanger
+            if heat_exchanger is not None
+            else getattr(self, "heat_exchanger", "") or ""
+        ).strip().upper()
+        u_types = set(self._U_TUBE_HEX_TYPES)
+        non_u_types = {"AES", "BES", "NEN", "BEM", "AEM", "NEN(H)"}
+        if text not in ("8", "10", "12"):
+            return None
+        if hx not in u_types and hx not in non_u_types:
+            return None
+        is_u_tube = hx in u_types
+        if text == "8":
+            cids = ("8d",) if is_u_tube else ("8a", "8b", "8c", "8d")
+            return [f"{c}.{s}" for c in cids for s in ("1", "2")]
+        if is_u_tube:
+            # 10 / 12 管程不适用于 U 形管换热器
+            return []
+        cids = ("10a", "10b") if text == "10" else ("12a", "12b")
+        return [f"{c}.{s}" for c in cids for s in ("1", "2")]
+
     def add_image_to_combo(self, combo, base_path, filename, identifier):
         """添加带图片的下拉项，关联具体标识"""
         image_path = os.path.join(base_path, filename)
@@ -18170,25 +18244,16 @@ class TubeLayoutEditor(QMainWindow):
         elif tube_pass == "1":
             if hx_norm in non_u_types:
                 self.add_image_to_combo(combo, base_path, "1.png", "1")
-        elif tube_pass == "8":
-            # 本地分程 8a/8b/8c/8d，标识与图片名一致（8a.1 / 8a.2 …）
-            if hx_norm in u_and_common_types:
-                for _cid in ("8a", "8b", "8c", "8d"):
-                    for _suf in ("1", "2"):
-                        _id = f"{_cid}.{_suf}"
-                        self.add_image_to_combo(combo, base_path, f"{_id}.png", _id)
-        elif tube_pass == "10":
-            if hx_norm in u_and_common_types:
-                for _cid in ("10a", "10b"):
-                    for _suf in ("1", "2"):
-                        _id = f"{_cid}.{_suf}"
-                        self.add_image_to_combo(combo, base_path, f"{_id}.png", _id)
-        elif tube_pass == "12":
-            if hx_norm in u_and_common_types:
-                for _cid in ("12a", "12b"):
-                    for _suf in ("1", "2"):
-                        _id = f"{_cid}.{_suf}"
-                        self.add_image_to_combo(combo, base_path, f"{_id}.png", _id)
+        elif tube_pass in ("8", "10", "12"):
+            # 本地分程 8a~8d / 10a~10b / 12a~12b，标识与图片名一致
+            # 《附件4》：8 管程 U 形管仅 8d.1/8d.2；10/12 管程不适用于 U 形管
+            _form_ids = self._local_tube_pass_form_ids(tube_pass)
+            if _form_ids:
+                for _id in _form_ids:
+                    self.add_image_to_combo(combo, base_path, f"{_id}.png", _id)
+            elif _form_ids is not None:
+                combo.addItem(f"不适用（U形管无{tube_pass}管程分程形式）")
+                combo.setItemData(0, "", Qt.UserRole)
 
         else:
             combo.addItem("未选择")
@@ -18223,6 +18288,15 @@ class TubeLayoutEditor(QMainWindow):
                             break
                     if matched:
                         break
+            # 8/10/12 管程的可选集由 _local_tube_pass_form_ids 决定：
+            # 历史值若已不在新集合中（如 U 形管 8 管程残留 8a.1，或 U 形管 10/12
+            # 管程残留 10a.1），回落到当前第一项并同步标识，避免“界面显示 8d.1
+            # 但实际按 8a 布管”这类不一致。
+            if not matched and str(tube_pass).strip() in ("8", "10", "12"):
+                if combo.count() > 0:
+                    combo.setCurrentIndex(0)
+                    self.tube_pass_form_value = combo.itemData(0, Qt.UserRole) or ""
+                    matched = True
         else:
             # 设置默认选择为第一个选项
             if combo.count() > 0:
@@ -18278,8 +18352,12 @@ class TubeLayoutEditor(QMainWindow):
             else:
                 # 如果没有获取到标识，尝试从当前文本获取
                 current_text = self.tube_pass_form_combo.currentText()
-                print(f"警告：未获取到管程分程形式标识，使用文本: {current_text}")
-                self.tube_pass_form_value = current_text
+                if str(current_text).startswith("不适用"):
+                    # U 形管 10/12 管程无可用分程形式：保持空标识，不把提示文本当标识
+                    self.tube_pass_form_value = ""
+                else:
+                    print(f"警告：未获取到管程分程形式标识，使用文本: {current_text}")
+                    self.tube_pass_form_value = current_text
 
     # TODO 在load_initial函数后触发的下拉框改变的监听事件
     def on_combobox_changed(self, row, value):
@@ -18520,16 +18598,24 @@ class TubeLayoutEditor(QMainWindow):
                 tube_pass_text = str(value).strip()
 
             # 管程程数变化：更新管程分程形式值及对应图片
-            self.tube_pass_form_value = {
-                "1": "1",
-                "2": "2.1",
-                "4": "4.1",
-                "6": "6.1",
-                "8": "8a.1",
-                "10": "10a.1",
-                "12": "12a.1",
-            }.get(tube_pass_text, self.tube_pass_form_value)
+            # （默认值按《附件4》随换热器型式变化：U 形管 8 管程默认 8d.1）
+            _default_form = self._default_tube_pass_form_for(tube_pass_text)
+            if _default_form is not None:
+                self.tube_pass_form_value = _default_form
             print(f"当前管程分程形式: {self.tube_pass_form_value}")
+
+            # 《附件4》：U 形管换热器不适用 10 / 12 管程，切换后立即给出非阻塞提示
+            if _default_form == "" and str(tube_pass_text).strip() in ("10", "12"):
+                try:
+                    if hasattr(self, "line_tip") and self.line_tip is not None:
+                        self.line_tip.setText(
+                            f"U形管换热器（AEU/BEU/AKU/BKU）不适用{tube_pass_text}管程，"
+                            f"请调整“管程程数”或“产品型式”"
+                        )
+                        self.line_tip.setStyleSheet("color: #C05000;")
+                        self.line_tip.setVisible(True)
+                except Exception:
+                    pass
 
             # 交互前移：当管程程数改为1且型号为AEM/BEM/NEN时，立即询问是否置0固定管板槽宽/槽深
             if str(tube_pass_text).strip() == "1" and getattr(self, "heat_exchanger", None) in ("AEM", "BEM", "NEN", "NEN(H)"):
@@ -23834,6 +23920,57 @@ class TubeLayoutEditor(QMainWindow):
 
             return True
 
+        def _precheck_u_tube_tube_pass_combination():
+            """
+            布管前校验《附件4》的型式组合限制：
+            U 形管换热器（AEU/BEU/AKU/BKU）不适用 10 / 12 管程。
+            """
+            try:
+                from PyQt5.QtWidgets import QComboBox
+            except Exception:
+                return True
+            try:
+                if not self._is_u_tube_hex():
+                    return True
+
+                tube_pass_txt = ""
+                for r in range(self.param_table.rowCount()):
+                    it_name = self.param_table.item(r, 1)
+                    if it_name and it_name.text().strip() == "管程程数":
+                        w_tp = self.param_table.cellWidget(r, 2)
+                        if isinstance(w_tp, QComboBox):
+                            tube_pass_txt = w_tp.currentText().strip()
+                        else:
+                            it_tp = self.param_table.item(r, 2)
+                            tube_pass_txt = it_tp.text().strip() if it_tp else ""
+                        break
+
+                if tube_pass_txt not in ("10", "12"):
+                    return True
+
+                if not suppress_precheck_dialogs:
+                    try:
+                        print(
+                            "[POPUP] type=warning title=提示 "
+                            f"msg=U形管换热器不适用{tube_pass_txt}管程 "
+                            f"heat_exchanger={getattr(self, 'heat_exchanger', None)} tube_pass={tube_pass_txt}"
+                        )
+                    except Exception:
+                        pass
+                    QMessageBox.warning(
+                        self,
+                        "提示",
+                        f"U形管换热器（AEU/BEU/AKU/BKU）不适用{tube_pass_txt}管程，\n"
+                        f"请调整“管程程数”或“产品型式”后再布管。",
+                    )
+                return False
+            except Exception as _e:
+                try:
+                    print(f"[on_buguan_bt_click] 校验U形管管程组合失败: {_e}")
+                except Exception:
+                    pass
+                return True
+
         # 0) 必须在断开 itemChanged 之前：提交正在编辑的单元格并派发事件，让
         #    itemChanged → setup_parameter_listeners（含 Dis/Dit 联动、校验等）先跑完，再进入布管。
         #    原顺序若先 disconnect 再 _commit，则监听永远不会收到本次回车提交。
@@ -23880,6 +24017,10 @@ class TubeLayoutEditor(QMainWindow):
 
             # Enter/Return 直接布管：也先校验 非布管区域弦高范围（0 <= 值 <= DL/2）
             if not _precheck_nonbaffle_chord_heights():
+                return
+
+            # Enter/Return 直接布管：校验 U 形管换热器与 10 / 12 管程的互斥关系（《附件4》）
+            if not _precheck_u_tube_tube_pass_combination():
                 return
 
             # 布管前强制清理：场景中残留的“中间挡板”图形项 + 相关缓存
