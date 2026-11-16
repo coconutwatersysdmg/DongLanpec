@@ -145,6 +145,7 @@ class EvidencePanel(QWidget):
         process.setProcessChannelMode(QProcess.MergedChannels)
         environment = QProcessEnvironment.systemEnvironment()
         environment.insert("PYTHONIOENCODING", "utf-8")
+        environment.insert("ENGINEERING_UI_SCALE", str(getattr(self, 'ui_scale', 1.0)))
         process.setProcessEnvironment(environment)
         session = dict(process=process, path=path.parent, page=page, layout=layout, placeholder=placeholder,
                        info=info, buffer=b"", container=None, foreign=None, ready=False)

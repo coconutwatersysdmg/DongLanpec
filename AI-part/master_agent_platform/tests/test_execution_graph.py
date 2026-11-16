@@ -52,9 +52,9 @@ class ExecutionGraphTests(unittest.TestCase):
             self.assertFalse(card.isHidden())
             self.assertEqual(self.window.page_title.text(), "对话")
         self.window.execution_toggle.setChecked(False)
-        self.assertTrue(self.window.execution.parentWidget().isHidden())
+        self.assertFalse(self.window.execution.isVisibleTo(thread))
         self.window.navigate(3)
-        self.assertFalse(self.window.execution.parentWidget().isHidden())
+        self.assertTrue(self.window.execution.isVisibleTo(thread))
 
     def test_default_tree_contains_each_product_and_its_real_modules(self):
         panel = self.window.execution

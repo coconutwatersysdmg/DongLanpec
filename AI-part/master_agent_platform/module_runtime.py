@@ -41,17 +41,16 @@ def main():
     setup(context)
     if args.snapshot or args.probe: os.environ["QT_QPA_PLATFORM"] = "offscreen"
     from PyQt5.QtCore import Qt, QTimer, QUrl
-    from PyQt5.QtGui import QColor, QFont, QFontDatabase, QDesktopServices, QPixmap
+    from PyQt5.QtGui import QColor, QDesktopServices, QPixmap
     from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
         QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView, QPushButton, QLabel,
         QLineEdit, QPlainTextEdit, QDialog, QSplitter, QMessageBox, QFileDialog, QScrollArea)
+    from platform_core.ui_theme import enable_high_dpi, apply_theme, fit_initial_window, FlowLayout, scale_legacy_page
+    enable_high_dpi()
     app = QApplication(sys.argv[:1])
     app.setStyle("Fusion")
-    for filename in ("msyh.ttc", "msyhbd.ttc"):
-        font = Path("C:/Windows/Fonts") / filename
-        if font.is_file(): QFontDatabase.addApplicationFont(str(font))
-    app.setFont(QFont("Microsoft YaHei", 10))
-    app.setStyleSheet("QWidget{font-family:'Microsoft YaHei';font-size:13px;color:#25334a;} QMainWindow,QDialog{background:#fff;} QLineEdit,QPlainTextEdit,QTableWidget{background:#fff;border:1px solid #e2e8f0;border-radius:6px;} QPushButton{background:#fff;border:1px solid #d8e0ea;border-radius:6px;padding:7px 13px;} QPushButton:hover{background:#edf4ff;color:#2563eb;} QPushButton:disabled{color:#a3adbc;background:#f1f5f9;} QHeaderView::section{background:#f8fafc;border:0;border-bottom:1px solid #e2e8f0;padding:8px;} QTabWidget::pane{border:1px solid #e2e8f0;} QTabBar::tab{padding:9px 15px;background:#f8fafc;} QTabBar::tab:selected{background:#fff;color:#2563eb;} QLabel#muted{color:#768398;}")
+    ui_scale = max(1.0, min(1.6, float(os.environ.get('ENGINEERING_UI_SCALE', 1.0))))
+    apply_theme(app, ui_scale)
 
     class Records(QTableWidget):
         def __init__(self, rows, columns):
@@ -62,6 +61,9 @@ def main():
             self.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
             self.horizontalHeader().setStretchLastSection(True)
             self.setAlternatingRowColors(True)
+            self.verticalHeader().setDefaultSectionSize(round(42*ui_scale))
+            self.verticalHeader().setMinimumSectionSize(round(32*ui_scale))
+            self.verticalHeader().setSectionResizeMode(QHeaderView.Interactive)
             self.setSelectionBehavior(self.SelectRows)
             self.populate()
 
@@ -95,7 +97,8 @@ def main():
         def __init__(self):
             super().__init__()
             self.setWindowTitle("模块结果")
-            self.resize(1040, 700)
+            fit_initial_window(self, (1200, 820))
+            self.setMinimumSize(540, 380)
             self.module = context.info["module"]
             self.data = context.data
             self.tables = {}
@@ -109,7 +112,8 @@ def main():
             row = QHBoxLayout()
             name = self.data["product"].get("设备位号") or "产品"
             title = QLabel(name + " · " + dict(project="项目定义", conditions="条件数据", elements="元件与材料", nozzles="管口数据", tube_bundle="管束设计")[self.module])
-            title.setStyleSheet("font-size:17px;font-weight:600;")
+            title.setObjectName('sectionTitle')
+            title.setWordWrap(True)
             row.addWidget(title, 1)
             self.evidence = QPushButton("查看依据")
             self.evidence.clicked.connect(self.show_evidence)
@@ -119,7 +123,12 @@ def main():
             row.addWidget(add)
             layout.addLayout(row)
             self.tabs = QTabWidget()
-            layout.addWidget(self.tabs, 1)
+            self.tabs.setUsesScrollButtons(True)
+            self.content_splitter = QSplitter(Qt.Vertical)
+            self.content_splitter.setHandleWidth(8)
+            self.content_splitter.setChildrenCollapsible(False)
+            self.content_splitter.addWidget(self.tabs)
+            layout.addWidget(self.content_splitter, 1)
             self.command = QLineEdit()
             self.command.setPlaceholderText("输入本模块操作，例如：把 1 的外伸高度改成 180")
             self.command.returnPressed.connect(self.execute)
@@ -132,10 +141,11 @@ def main():
             layout.addLayout(command_row)
             self.output = QPlainTextEdit()
             self.output.setReadOnly(True)
-            self.output.setMaximumHeight(95)
+            self.output.setMinimumHeight(65)
             self.output.setPlaceholderText("校验结果、操作回执与依据说明")
-            layout.addWidget(self.output)
-            actions = QHBoxLayout()
+            self.content_splitter.addWidget(self.output)
+            self.content_splitter.setSizes([510, 100])
+            actions = FlowLayout()
             export = QPushButton("导出当前模块 JSON")
             export.clicked.connect(self.export)
             actions.addWidget(export)
@@ -149,9 +159,8 @@ def main():
                 keep = QPushButton("保留本阶段")
                 keep.clicked.connect(lambda: self.safe(self.keep))
                 actions.addWidget(keep)
-            actions.addStretch()
             self.save = QPushButton("保存并继续审核")
-            self.save.setStyleSheet("background:#2563eb;color:#fff;border:0;padding:9px 20px;")
+            self.save.setObjectName('send')
             self.save.clicked.connect(lambda: self.safe(self.publish))
             actions.addWidget(self.save)
             layout.addLayout(actions)
@@ -243,12 +252,17 @@ def main():
                 for index, stage in enumerate(STAGES):
                     page = self.native._ensure_page(index)
                     page.setStyleSheet("")
-                    self.tabs.addTab(page, stage)
+                    scale_legacy_page(page, ui_scale)
+                    scroll = QScrollArea()
+                    scroll.setWidgetResizable(True)
+                    scroll.setWidget(page)
+                    self.tabs.addTab(scroll, stage)
                 self.native.headless = True
                 self.native._render_stage = lambda index: self.tabs.setCurrentIndex(index)
                 self.native.final_save = lambda: self.output.setPlainText("四个阶段已保留，可保存并继续审核。")
                 self.native.append_chat = lambda role, text, **kwargs: self.output.setPlainText(str(text))
                 self.tabs.currentChanged.connect(lambda index: setattr(self.native.session, "current_index", index))
+                self.tabs.currentChanged.connect(lambda index: scale_legacy_page(self.native.pages[index], ui_scale))
                 self.native._refresh_stage_buttons = lambda: None
                 self.command.setPlaceholderText("保留几何、参数联动和图形操作；也可输入原管束参数修改指令")
 
@@ -471,7 +485,7 @@ def main():
             layout = QVBoxLayout(dialog)
             text = QPlainTextEdit(json.dumps(row or self.data["product_source"], ensure_ascii=False, indent=2))
             text.setReadOnly(True)
-            text.setMaximumHeight(170)
+            text.setMinimumHeight(120)
             layout.addWidget(text)
             image_label = QLabel()
             scroll = QScrollArea()
@@ -497,7 +511,23 @@ def main():
             dialog.exec_()
 
     window = Editor()
+    last_appearance = None
     def poll():
+        nonlocal last_appearance, ui_scale
+        appearance = context.session / 'appearance.json'
+        if appearance.is_file():
+            try:
+                stamp = appearance.stat().st_mtime_ns
+                if stamp != last_appearance:
+                    value = json.loads(appearance.read_text(encoding='utf-8'))
+                    ui_scale = max(1.0, min(1.6, float(value['scale'])))
+                    apply_theme(app, ui_scale)
+                    for table in window.tables.values():
+                        table.verticalHeader().setDefaultSectionSize(round(42*ui_scale))
+                    if window.native:
+                        for page in window.native.pages.values(): scale_legacy_page(page, ui_scale)
+                    last_appearance = stamp
+            except (OSError, ValueError, KeyError): pass
         ack = context.acknowledge()
         if ack:
             window.save.setEnabled(True)
@@ -581,7 +611,11 @@ def main():
     elif args.snapshot:
         def capture():
             window.grab().save(args.snapshot)
-            atomic_json(context.session / "unified-snapshot.json", dict(ok=True, module=window.module, tables={k: t.rowCount() for k, t in window.tables.items()}, old_workbench_visible=False))
+            atomic_json(context.session / "unified-snapshot.json", dict(ok=True, module=window.module,
+                tables={k: t.rowCount() for k, t in window.tables.items()}, old_workbench_visible=False,
+                font_points=window.font().pointSizeF(), device_pixel_ratio=window.devicePixelRatioF(),
+                content_size=[window.tabs.width(), window.tabs.height()],
+                row_heights={k:t.verticalHeader().defaultSectionSize() for k,t in window.tables.items()}))
             app.quit()
         QTimer.singleShot(400, capture)
     else: emit("ready", handle=int(window.winId()), module=window.module, product_id=context.product_id)

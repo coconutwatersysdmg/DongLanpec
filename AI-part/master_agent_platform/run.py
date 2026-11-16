@@ -4,10 +4,10 @@ import json
 from pathlib import Path
 import sys
 from PyQt5.QtCore import QTimer
-from PyQt5.QtGui import QFont, QFontDatabase
 from PyQt5.QtWidgets import QApplication
 from platform_core.orchestrator import Orchestrator
 from platform_core.chat_app import ChatWindow, Worker
+from platform_core.ui_theme import enable_high_dpi, apply_theme
 
 BASE = Path(__file__).resolve().parent
 
@@ -21,12 +21,10 @@ def main():
     parser.add_argument("--screenshot")
     parser.add_argument("--page", choices=("chat", "modules", "space", "execution", "review"), default="chat")
     args = parser.parse_args()
+    enable_high_dpi()
     app = QApplication(sys.argv[:1])
     app.setStyle("Fusion")
-    for filename in ("msyh.ttc", "msyhbd.ttc"):
-        path = Path("C:/Windows/Fonts") / filename
-        if path.is_file(): QFontDatabase.addApplicationFont(str(path))
-    app.setFont(QFont("Microsoft YaHei", 10))
+    apply_theme(app, 1.0)
     window = MainWindow()
     if args.result: window.on_complete(json.loads(Path(args.result).read_text(encoding="utf-8")))
     window.navigate(("chat", "modules", "space", "execution", "review").index(args.page))
