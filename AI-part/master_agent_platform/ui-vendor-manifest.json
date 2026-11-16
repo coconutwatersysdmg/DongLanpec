@@ -684,8 +684,9 @@
       "source": "AI-part\\ai_yuanjiandingyi\\nodes\\extract.py",
       "target": "ui_vendor\\elements_agent\\nodes\\extract.py",
       "source_sha256": "d7530c98c9dfc3e08942bcc44cd218d9a4ce69edc27b98eb8878c730b26281fb",
-      "sha256": "f466f6344f90e45d91cbbf8bcfa8c69e072b0ce0ed5c19eab223bffa66a164ea",
-      "bytes": 10488
+      "sha256": "f53583683b2ef6d9e78e97d8a9eab999ef3b8ea5b55f907e8b5759e552bba6dd",
+      "bytes": 10485,
+      "platform_patch": "Bind model evidence only to a unique matching quote; do not default to the first chunk."
     },
     {
       "source": "AI-part\\ai_yuanjiandingyi\\nodes\\extract_dds.py",

@@ -36,6 +36,8 @@ def run(request):
         data = api.run_condition_agent(request["path"], equipment_tag=request.get("tag"), save_record=False)
         if data.get("status") != "ok":
             raise RuntimeError(data.get("error") or "条件抽取失败")
+        from platform_core.source_evidence import bind_condition_sources
+        data = bind_condition_sources(data, request['path'])
         if agent == "review_conditions":
             requested = {(r["param"], r.get("side", "")) for r in request.get("requested_fields", [])}
             candidates = [dict(row, source_path=request["path"]) for row in data.get("design_rows", [])

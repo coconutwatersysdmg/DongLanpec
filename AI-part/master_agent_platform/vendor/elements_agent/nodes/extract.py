@@ -262,8 +262,7 @@ def _extract_with_llm(
     if not isinstance(data, list):
         return []
 
-    # evidence 粗挂到第一个 picked chunk
-    default_ch = picked[0] if picked else None
+    from platform_core.source_evidence import match_material_chunk
     out: List[MaterialIntent] = []
     for item in data:
         if not isinstance(item, dict):
@@ -272,14 +271,15 @@ def _extract_with_llm(
         if not name:
             continue
         snip = str(item.get("snippet") or "").strip()
+        matched = match_material_chunk(snip, picked)
         ev = None
-        if default_ch:
+        if matched:
             ev = Evidence(
-                file_path=default_ch.file_path,
-                page=default_ch.page,
-                sheet=default_ch.sheet,
-                screenshot_path=default_ch.screenshot_path,
-                snippet=snip or name,
+                file_path=matched.file_path,
+                page=matched.page,
+                sheet=matched.sheet,
+                screenshot_path=matched.screenshot_path,
+                snippet=snip,
             )
         out.append(
             MaterialIntent(
@@ -292,7 +292,7 @@ def _extract_with_llm(
                 材料标准=str(item.get("材料标准") or "").strip(),
                 供货状态=str(item.get("供货状态") or "").strip(),
                 evidence=ev,
-                source_tag=(default_ch.source_tag if default_ch else "其它"),
+                source_tag=(matched.source_tag if matched else "其它"),
             )
         )
     return out

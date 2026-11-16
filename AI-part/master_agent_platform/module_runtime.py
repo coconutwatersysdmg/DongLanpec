@@ -40,13 +40,14 @@ def main():
     context = UiContext(args.context)
     setup(context)
     if args.snapshot or args.probe: os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    from PyQt5.QtCore import Qt, QTimer, QUrl
-    from PyQt5.QtGui import QColor, QDesktopServices, QPixmap
+    from PyQt5.QtCore import Qt, QTimer, QSignalBlocker, pyqtSignal
+    from PyQt5.QtGui import QColor
     from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
         QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView, QPushButton, QLabel,
         QLineEdit, QPlainTextEdit, QDialog, QSplitter, QMessageBox, QFileDialog, QScrollArea, QToolButton)
     from platform_core.ui_theme import enable_high_dpi, apply_theme, fit_initial_window, FlowLayout, scale_legacy_page
     from platform_core.embedded_view import EmbeddedModuleView
+    from platform_core.evidence_view import EvidenceActions
     enable_high_dpi()
     app = QApplication(sys.argv[:1])
     app.setStyle("Fusion")
@@ -54,6 +55,8 @@ def main():
     apply_theme(app, ui_scale)
 
     class Records(QTableWidget):
+        rows_refreshed = pyqtSignal()
+
         def __init__(self, rows, columns):
             super().__init__()
             self.rows, self.columns = deepcopy(rows), columns
@@ -69,6 +72,7 @@ def main():
             self.populate()
 
         def populate(self):
+            blocker = QSignalBlocker(self)
             self.setRowCount(len(self.rows))
             for i, record in enumerate(self.rows):
                 for j, (_, key, editable) in enumerate(self.columns):
@@ -82,6 +86,19 @@ def main():
                     self.setItem(i, j, item)
             self.resizeColumnsToContents()
             self.fit_columns()
+            del blocker
+            self.rows_refreshed.emit()
+
+        def has_edits(self, index):
+            for column, (_, key, editable) in enumerate(self.columns):
+                if not editable: continue
+                value = self.rows[index]
+                for part in key if isinstance(key, tuple) else (key,):
+                    value = value.get(part, {}) if isinstance(value, dict) else ''
+                if value == {} or value is None: value = ''
+                text = json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else str(value)
+                if self.item(index, column).text().strip() != text.strip(): return True
+            return False
 
         def fit_columns(self):
             self.resizeColumnsToContents()
@@ -111,6 +128,7 @@ def main():
             self.tables = {}
             self.attachments = []
             self.native = None
+            self.material_source_values = {}
             self.confirmed = False
             root = QWidget()
             self.setCentralWidget(root)
@@ -123,8 +141,11 @@ def main():
             title.setWordWrap(True)
             row.addWidget(title, 1)
             self.evidence = QPushButton("查看依据")
-            self.evidence.clicked.connect(self.show_evidence)
             row.addWidget(self.evidence)
+            self.reference = QPushButton("产品原文（参考）")
+            row.addWidget(self.reference)
+            self.evidence_actions = EvidenceActions(self, self.evidence, self.reference,
+                self.selected_evidence, self.evidence_data)
             add = QPushButton("补充资料")
             add.clicked.connect(self.add_files)
             row.addWidget(add)
@@ -132,6 +153,7 @@ def main():
             self.tabs = QTabWidget()
             self.tabs.setUsesScrollButtons(True)
             self.tabs.setMinimumHeight(round(300*ui_scale))
+            self.tabs.currentChanged.connect(self.evidence_actions.refresh)
             self.content_splitter = QSplitter(Qt.Vertical)
             self.content_splitter.setHandleWidth(8)
             self.content_splitter.setChildrenCollapsible(False)
@@ -183,6 +205,7 @@ def main():
             self.status.setObjectName("muted")
             layout.addWidget(self.status)
             self.safe(self.build)
+            self.evidence_actions.refresh()
 
         def safe(self, function):
             from platform_core.fabric import Fabric, digest
@@ -208,8 +231,29 @@ def main():
         def add_table(self, key, label, rows, columns):
             table = Records(rows, columns)
             self.tables[key] = table
+            self.evidence_actions.bind_table(table)
             self.tabs.addTab(table, label)
             return table
+
+        def selected_evidence(self):
+            table = self.tabs.currentWidget()
+            if not isinstance(table, Records) or table.currentRow() < 0: return None, False
+            index = table.currentRow()
+            current = table.collect()[index]
+            if table.currentColumn() >= 0:
+                current['_selected_field'] = table.columns[table.currentColumn()][1]
+            return current, table.has_edits(index)
+
+        def evidence_data(self):
+            data = self.data
+            if self.module == 'project' and self.tables.get('products') is self.tabs.currentWidget():
+                table = self.tables['products']
+                if table.currentRow() >= 0:
+                    identity = table.rows[table.currentRow()].get('_platform_product_id')
+                    if identity not in context.products: return dict(product_source={}, sources=[])
+                    try: data = context.read_data(identity)
+                    except (OSError, ValueError): return dict(product_source={}, sources=[])
+            return dict(data, additional_sources=self.attachments)
 
         def build(self):
             source = self.data["product_source"]["path"]
@@ -220,7 +264,7 @@ def main():
                     if key == "ndt_rows": columns += [("壳程 · 等级/比例/级别", ("values", "shell"), True), ("管程 · 等级/比例/级别", ("values", "tube"), True)]
                     elif key == "paint_rows": columns += [(k, ("values", k), True) for k in ("用途", "油漆类别", "颜色", "干膜厚度（μm）", "涂漆面积", "备注")]
                     else: columns += [("数值", "value", True)]
-                    columns += [("来源页", "page", False), ("依据说明", "reason", False)]
+                    columns += [("文件页", "page", False), ("依据说明", "reason", False)]
                     self.add_table(key, title, (self.data.get("conditions") or {}).get(key, []), columns)
                 self.command.hide()
                 self.command_button.hide()
@@ -284,8 +328,13 @@ def main():
         def material_table(self):
             rows = []
             for change in self.state.changes:
+                identity = (change.intent.raw_name, change.intent.所属部件, change.intent.是否定义, change.intent.有无覆层)
+                extracted = self.material_source_values.setdefault(identity,
+                    {k: getattr(change.intent, k, '') for k in ('材料类型', '材料牌号', '材料标准', '供货状态')})
                 rows.append(dict(元件=change.intent.raw_name, **{k: change.new_values.get(k) or getattr(change.intent, k, "") for k in ("材料类型", "材料牌号", "材料标准", "供货状态")},
-                                 校验="通过" if change.ok else "；".join(change.reasons), 映射="、".join(m.element_name for m in change.mapped), evidence=deepcopy(change.intent.evidence.__dict__) if change.intent.evidence else {}))
+                                 校验="通过" if change.ok else "；".join(change.reasons), 映射="、".join(m.element_name for m in change.mapped),
+                                 _source_values=deepcopy(extracted), review_origin='human' if self.state.user_text.strip() else '',
+                                 evidence=deepcopy(change.intent.evidence.__dict__) if change.intent.evidence else {}))
             if "materials" in self.tables:
                 table = self.tables["materials"]
                 table.rows = rows
@@ -476,6 +525,8 @@ def main():
                     import api
                     value = api.run_condition_agent(managed[0], equipment_tag=self.data["product"].get("设备位号"), save_record=False)
                     if value.get("status") != "ok": raise ValueError(value.get("error", "条件读取失败"))
+                    from platform_core.source_evidence import bind_condition_sources
+                    value = bind_condition_sources(value, managed[0])
                     for key, table in self.tables.items():
                         table.rows = value.get(key, table.collect())
                         table.populate()
@@ -487,43 +538,6 @@ def main():
                 path, _ = QFileDialog.getSaveFileName(self, "导出模块草稿", self.module + "-draft.json", "JSON (*.json)")
                 if path: atomic_json(path, dict(scope="module-draft", full_product_generated=False, payload=self.payload()))
             self.safe(action)
-
-        def show_evidence(self):
-            table = self.tabs.currentWidget()
-            row = table.collect()[table.currentRow()] if isinstance(table, Records) and table.currentRow() >= 0 else {}
-            evidence = row.get("evidence") or {}
-            source = row.get("source_path") or evidence.get("file_path") or self.data["product_source"]["path"]
-            page_no = row.get("page") or evidence.get("page") or 1
-            dialog = QDialog(self)
-            dialog.setWindowTitle("字段依据与原文")
-            dialog.resize(960, 720)
-            layout = QVBoxLayout(dialog)
-            text = QPlainTextEdit(json.dumps(row or self.data["product_source"], ensure_ascii=False, indent=2))
-            text.setReadOnly(True)
-            text.setMinimumHeight(120)
-            layout.addWidget(text)
-            image_label = QLabel()
-            scroll = QScrollArea()
-            scroll.setWidget(image_label)
-            scroll.setWidgetResizable(True)
-            layout.addWidget(scroll, 1)
-            if str(source).lower().endswith(".pdf"):
-                try:
-                    import fitz
-                    from PyQt5.QtGui import QImage
-                    with fitz.open(source) as doc:
-                        page = doc[max(0, min(int(page_no)-1, len(doc)-1))]
-                        bbox = evidence.get("bbox")
-                        if bbox: page.draw_rect(fitz.Rect(bbox), color=(1, 0, 0), width=1.5)
-                        pix = page.get_pixmap(matrix=fitz.Matrix(1.1, 1.1), alpha=False)
-                        img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888).copy()
-                        image_label.setPixmap(QPixmap.fromImage(img))
-                except Exception as exc: image_label.setText(str(exc))
-            else: image_label.setText("当前文件可通过外部查看器打开：\n" + str(source))
-            button = QPushButton("打开托管原文")
-            button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(source))))
-            layout.addWidget(button)
-            dialog.exec_()
 
     window = Editor()
     apply_theme(app, ui_scale)
@@ -607,6 +621,25 @@ def main():
             checks = []
             try:
                 module = window.module
+                from platform_core.source_evidence import field_evidence
+                from platform_core.evidence_view import evidence_dialog
+                evidence_checks = []
+                assert not window.evidence.isEnabled()
+                for key, table in window.tables.items():
+                    window.tabs.setCurrentWidget(table)
+                    for index in range(min(2, table.rowCount())):
+                        table.setCurrentCell(index, 0)
+                        app.processEvents()
+                        row, changed = window.selected_evidence()
+                        assert not changed, 'Untouched row was treated as edited'
+                        evidence = field_evidence(window.evidence_data(), row, changed)
+                        assert window.evidence.isEnabled() == (evidence['kind'] in ('basis', 'document'))
+                        dialog = evidence_dialog(window, evidence, row)
+                        if evidence['kind'] in ('missing', 'invalid', 'basis'):
+                            assert dialog.findChild(QPushButton, 'openEvidenceFile') is None
+                        dialog.close()
+                        evidence_checks.append(dict(table=key, row=index, kind=evidence['kind'],
+                            page=evidence.get('page'), original_page=evidence.get('original_page')))
                 if module == "project":
                     table = window.tables["products"]
                     index = next(i for i, column in enumerate(table.columns) if column[1] == "产品名称")
@@ -639,7 +672,7 @@ def main():
                     checks.append("four-unified-stages-and-unconfirmed-draft")
                 assert (context.session / "update.json").is_file(), window.output.toPlainText()
                 result = dict(ok=True, module=module, checks=checks, old_workbench_visible=False,
-                              private_port=context.config["port"], context=str(context.path))
+                              private_port=context.config["port"], context=str(context.path), evidence_checks=evidence_checks)
                 assert window.native is None or not window.native.isVisible()
                 atomic_json(context.session / "unified-interaction.json", result)
                 app.quit()
