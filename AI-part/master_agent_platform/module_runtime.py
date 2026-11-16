@@ -511,6 +511,7 @@ def main():
             dialog.exec_()
 
     window = Editor()
+    apply_theme(app, ui_scale)
     last_appearance = None
     def poll():
         nonlocal last_appearance, ui_scale

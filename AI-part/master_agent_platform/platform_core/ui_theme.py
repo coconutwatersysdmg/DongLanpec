@@ -2,9 +2,10 @@
 from PyQt5.QtCore import Qt, QSize, QRect, QSettings, pyqtSignal
 from pathlib import Path
 import re
-from PyQt5.QtGui import QFont, QFontDatabase
+from PyQt5.QtGui import QFont, QFontDatabase, QPainter, QColor
 from PyQt5.QtWidgets import (QApplication, QLayout, QWidget, QFrame, QVBoxLayout,
-    QHBoxLayout, QToolButton, QLabel, QSizePolicy, QLineEdit, QComboBox, QTableWidget)
+    QHBoxLayout, QToolButton, QLabel, QSizePolicy, QLineEdit, QComboBox, QTableWidget,
+    QListView, QStyledItemDelegate, QStyleOptionViewItem, QStyle)
 
 
 def enable_high_dpi():
@@ -73,7 +74,66 @@ def theme(scale=1.0):
     """
     for key, points in [('BASE', 12), ('BRAND', 15), ('TITLE', 17), ('HERO', 24)]:
         css = css.replace(key+'pt', f'{points*scale:.2f}pt')
-    return css
+    return css+combo_style()
+
+
+def combo_style():
+    arrow = (Path(__file__).resolve().parent/'icons/chevron-down.svg').as_posix()
+    return """
+    QComboBox{background:#fff;color:#334460;border:1px solid #dce4f2;border-radius:9px;
+        padding:7px 34px 7px 12px;min-height:22px;}
+    QComboBox:hover{background:#f8faff;border-color:#b7c3ee;}
+    QComboBox:focus,QComboBox:on{border-color:#899bea;background:#f6f8ff;}
+    QComboBox:disabled{color:#99a5b9;background:#f2f5fa;border-color:#e4eaf3;}
+    QComboBox::drop-down{subcontrol-origin:padding;subcontrol-position:top right;
+        width:30px;border:0;background:transparent;}
+    QComboBox::down-arrow{image:url("ARROW");width:14px;height:10px;}
+    QComboBox QAbstractItemView{background:#fff;color:#334460;border:1px solid #dce4f2;
+        border-radius:8px;padding:5px;outline:0;selection-background-color:#edf1ff;selection-color:#4357c8;}
+    QComboBox QAbstractItemView::item{min-height:30px;padding:5px 10px;border-radius:5px;}
+    """.replace('ARROW', arrow)
+
+
+class WorkspaceSurface(QWidget):
+    """Paint every exposed pixel when child controls move or change visibility."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_OpaquePaintEvent)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.fillRect(event.rect(), QColor('#f7f9fd'))
+
+
+class PopupItemDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        styled = QStyleOptionViewItem(option)
+        styled.state &= ~QStyle.State_HasFocus
+        super().paint(painter, styled, index)
+
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        size.setHeight(max(size.height(), option.fontMetrics.height()+14))
+        return size
+
+
+def style_combo_popup(combo):
+    if combo.property('workspacePopup'): return
+    view = combo.view()
+    if isinstance(view, QListView): view.setSpacing(2)
+    view.setFrameShape(QFrame.NoFrame)
+    view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    combo.setMaxVisibleItems(12)
+    popup = view.window()
+    popup.setStyleSheet("""
+        QFrame{background:#fff;border:1px solid #dce4f2;border-radius:9px;}
+        QListView{background:#fff;border:0;padding:5px;outline:0;}
+        QListView::item{padding:5px 10px;border:0;border-radius:6px;color:#334460;}
+        QListView::item:selected,QListView::item:hover{background:#edf1ff;color:#4357c8;}
+    """)
+    combo._workspace_popup_delegate = PopupItemDelegate(view)
+    combo.setItemDelegate(combo._workspace_popup_delegate)
+    combo.setProperty('workspacePopup', True)
 
 
 _FONTS_LOADED = False
@@ -90,6 +150,9 @@ def apply_theme(target, scale):
     font.setPointSizeF(12*scale)
     target.setFont(font)
     target.setStyleSheet(theme(scale))
+    widgets = QApplication.allWidgets() if isinstance(target, QApplication) else target.findChildren(QComboBox)
+    for widget in widgets:
+        if isinstance(widget, QComboBox): style_combo_popup(widget)
 
 
 def fit_initial_window(window, preferred=(1480, 960)):
@@ -109,6 +172,9 @@ def scale_legacy_page(root, scale):
         font.setPointSizeF(12*scale)
         widget.setFont(font)
         if isinstance(widget, (QLineEdit, QComboBox)):
+            if isinstance(widget, QComboBox):
+                widget.setStyleSheet(combo_style())
+                style_combo_popup(widget)
             if widget.maximumWidth() == widget.minimumWidth():
                 widget.setMaximumWidth(16777215)
             widget.setMinimumWidth(max(90, widget.fontMetrics().horizontalAdvance('000000')+24))
@@ -152,11 +218,12 @@ class FlowLayout(QLayout):
             if item.isEmpty(): continue
             hint = item.sizeHint()
             width = min(hint.width(), max(1, rect.width()-left-right))
+            height = max(hint.height(), item.heightForWidth(width)) if item.hasHeightForWidth() else hint.height()
             if line and x+width > limit:
                 x, y, line = rect.x()+left, y+line+self.spacing(), 0
-            if not measure: item.setGeometry(QRect(x, y, width, hint.height()))
+            if not measure: item.setGeometry(QRect(x, y, width, height))
             x += width+self.spacing()
-            line = max(line, hint.height())
+            line = max(line, height)
         return y+line+bottom-rect.y()
 
 

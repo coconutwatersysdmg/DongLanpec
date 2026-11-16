@@ -92,7 +92,7 @@ class ResponsiveUiTests(unittest.TestCase):
                                      (1024, 720, 1.4), (1280, 720, 1.6)):
             self.window.font_zoom.setCurrentIndex(self.window.font_zoom.findData(scale))
             self.window.resize(width, height)
-            self.app.processEvents()
+            QTest.qWait(20)
             self.assertLessEqual(self.window.minimumSizeHint().width(), width)
             self.assertLessEqual(self.window.minimumSizeHint().height(), height)
             for widget in (self.window.begin, self.window.cancel, self.window.font_zoom):

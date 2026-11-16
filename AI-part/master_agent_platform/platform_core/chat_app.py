@@ -22,7 +22,7 @@ from .presentation import ExecutionPanel, DataSpacePanel
 from .run_view import duration
 from .module_panel import ModulePanel
 from .ui_theme import (apply_theme, read_scale, save_scale, fit_initial_window,
-    ResizableCard, FlowLayout)
+    ResizableCard, FlowLayout, WorkspaceSurface)
 
 
 class Worker(QThread):
@@ -87,7 +87,11 @@ class ChatWindow(QMainWindow):
         self.history_ids = []
         self.pending_new_chat = False
         self.current_section = 0
-        central = QWidget()
+        self.layout_timer = QTimer(self)
+        self.layout_timer.setSingleShot(True)
+        self.layout_timer.timeout.connect(self.adjust_layout)
+        self.layout_closing = False
+        central = WorkspaceSurface()
         self.setCentralWidget(central)
         root = QHBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
@@ -150,10 +154,14 @@ class ChatWindow(QMainWindow):
         sidebar_scroll.setMaximumWidth(340)
         self.sidebar = sidebar_scroll
         self.shell_splitter.addWidget(sidebar_scroll)
-        body = QWidget()
+        body = self.body_surface = WorkspaceSurface()
         body_layout = QVBoxLayout(body)
         self.body_layout = body_layout
         body_layout.setContentsMargins(28, 18, 28, 20)
+        self.header_surface = WorkspaceSurface()
+        header_layout = QVBoxLayout(self.header_surface)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.addWidget(self.header_surface)
         header = QHBoxLayout()
         self.sidebar_button = QToolButton()
         self.sidebar_button.setText("侧栏")
@@ -170,7 +178,7 @@ class ChatWindow(QMainWindow):
         self.font_zoom.setToolTip("调整整个工作台和模块编辑器的字号；屏幕 DPI 缩放由系统自动适配")
         self.font_zoom.currentIndexChanged.connect(self.change_scale)
         header.addWidget(self.font_zoom)
-        body_layout.addLayout(header)
+        header_layout.addLayout(header)
         badges = FlowLayout()
         self.clock_label = QLabel("尚未运行")
         self.clock_label.setObjectName("clock")
@@ -178,11 +186,11 @@ class ChatWindow(QMainWindow):
         self.data_badge = QLabel("数据空间 · 本地托管")
         self.data_badge.setObjectName("badge")
         badges.addWidget(self.data_badge)
-        body_layout.addLayout(badges)
+        header_layout.addLayout(badges)
         self.state = QLabel("等待提交文件")
         self.state.setObjectName("muted")
         self.state.setWordWrap(True)
-        body_layout.addWidget(self.state)
+        header_layout.addWidget(self.state)
         self.pages = QStackedWidget()
         body_layout.addWidget(self.pages, 1)
         self.shell_splitter.addWidget(body)
@@ -235,7 +243,7 @@ class ChatWindow(QMainWindow):
         self.timer.start(600)
         self.load_history()
         self.navigate(0)
-        self.adapt_sidebar()
+        self.layout_timer.start(0)
 
     def toggle_sidebar(self):
         self.sidebar_manual = True
@@ -245,29 +253,43 @@ class ChatWindow(QMainWindow):
         if hasattr(self, 'sidebar') and not self.sidebar_manual:
             body = self.shell_splitter.widget(1)
             required = (body.minimumSizeHint().width() if body else 700)+self.sidebar.minimumWidth()+24
-            self.sidebar.setVisible(self.width() >= max(1020, required))
-            self.centralWidget().layout().invalidate()
-            self.layout().invalidate()
+            visible = self.width() >= max(1020, required)
+            if self.sidebar.isHidden() == visible:
+                self.sidebar.setVisible(visible)
+                self.centralWidget().layout().invalidate()
+                self.layout().invalidate()
 
     def change_scale(self):
         self.ui_scale = self.font_zoom.currentData() or 1.0
         save_scale(self.workspace, self.ui_scale)
-        apply_theme(self, self.ui_scale)
-        self.adapt_sidebar()
-        if hasattr(self, "execution"):
-            self.execution.set_ui_scale(self.ui_scale)
-            self.module_panel.set_ui_scale(self.ui_scale)
+        self.setUpdatesEnabled(False)
+        try:
+            apply_theme(self, self.ui_scale)
+            if hasattr(self, "execution"):
+                self.execution.set_ui_scale(self.ui_scale)
+                self.module_panel.set_ui_scale(self.ui_scale)
+        finally: self.setUpdatesEnabled(True)
+        self.layout_timer.start(0)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if hasattr(self, 'sidebar_manual'): self.adapt_sidebar()
+        if hasattr(self, 'layout_timer') and not self.layout_closing: self.layout_timer.start(0)
+
+    def adjust_layout(self):
+        if self.layout_closing: return
         if hasattr(self, "body_layout"):
             margin = 16 if self.width() < 1200 else 28
-            self.body_layout.setContentsMargins(margin, 16, margin, 16)
+            current = self.body_layout.contentsMargins()
+            if (current.left(), current.top(), current.right(), current.bottom()) != (margin, 16, margin, 16):
+                self.body_layout.setContentsMargins(margin, 16, margin, 16)
+        self.adapt_sidebar()
         for name in ("module_card", "execution_card"):
             card = getattr(self, name, None)
             if card and not card.user_sized:
-                card.set_content_height(max(440, int(self.height()*.66)))
+                height = max(440, int(self.height()*.66))
+                if height != card.expanded_height: card.set_content_height(height)
+        self.body_surface.update()
+        self.header_surface.update()
 
     def make_orchestrator(self, *args, **kwargs): return Orchestrator(*args, **kwargs)
 
@@ -309,7 +331,7 @@ class ChatWindow(QMainWindow):
         scroll = QScrollArea()
         self.chat_scroll = scroll
         scroll.setWidgetResizable(True)
-        conversation = QWidget()
+        conversation = WorkspaceSurface()
         conversation.setObjectName("threadSurface")
         self.chat_layout = QVBoxLayout(conversation)
         self.chat_layout.setContentsMargins(12, 20, 12, 20)
@@ -334,9 +356,12 @@ class ChatWindow(QMainWindow):
         stages.setWordWrap(True)
         hero.addWidget(stages)
         examples = FlowLayout()
-        for text in ("整理文件中的全部产品", "核对必需参数与来源", "查看 Agent 执行路径"):
+        self.shortcut_buttons = {}
+        for action, text in (("products", "整理文件中的全部产品"), ("review", "核对必需参数与来源"),
+                             ("execution", "查看 Agent 执行路径")):
             button = QPushButton(text+"  ↗")
-            button.clicked.connect(lambda _, value=text: self.prompt.setPlainText(value))
+            button.clicked.connect(lambda _, key=action: self.execute_shortcut(key))
+            self.shortcut_buttons[action] = button
             examples.addWidget(button)
         hero.addLayout(examples)
         self.chat_layout.addWidget(self.welcome)
@@ -358,7 +383,7 @@ class ChatWindow(QMainWindow):
         self.chat_splitter.setHandleWidth(8)
         self.chat_splitter.setChildrenCollapsible(False)
         self.chat_splitter.addWidget(scroll)
-        self.composer_area = QWidget()
+        self.composer_area = WorkspaceSurface()
         dock = QVBoxLayout(self.composer_area)
         dock.setContentsMargins(0, 4, 0, 0)
         quick = FlowLayout()
@@ -515,6 +540,26 @@ class ChatWindow(QMainWindow):
         self.inputs, self.knowledge = [], []
         self.update_attachments()
 
+    def execute_shortcut(self, action):
+        if action == 'execution':
+            self.navigate(3)
+            return
+        if self.worker or self.database_worker or self.module_panel.busy or self.pending_new_chat: return
+        if action == 'review' and self.last_result:
+            self.welcome.hide()
+            self.bubble('user', '核对必需参数与来源')
+            self.navigate(3)
+            self.recheck_current()
+            return
+        if not self.inputs:
+            self.add_inputs()
+            if not self.inputs: return
+        goal = ('整理输入文件中的全部产品，并核对必需参数与来源。' if action == 'review'
+                else '整理输入文件中的全部产品。')
+        self.welcome.hide()
+        self.bubble('user', goal)
+        self.start(goal)
+
     def send(self):
         if self.worker or self.database_worker or self.module_panel.busy or self.pending_new_chat: return
         text = self.prompt.toPlainText().strip() or "整理输入中的全部产品，并继续自动审核。"
@@ -585,6 +630,8 @@ class ChatWindow(QMainWindow):
 
     def controls(self, *args):
         busy = self.worker is not None or self.database_worker is not None or self.module_panel.busy or self.pending_new_chat
+        for action, button in self.shortcut_buttons.items():
+            button.setEnabled(action == 'execution' or not busy)
         self.begin.setEnabled(not busy)
         self.cancel.setEnabled(self.worker is not None)
         self.submit_review.setEnabled(bool(self.review_editors) and not busy)
@@ -847,6 +894,8 @@ class ChatWindow(QMainWindow):
             self.state.setText("正在保存模块工作副本，编辑器关闭后可退出")
             event.ignore()
         else:
+            self.layout_closing = True
+            self.layout_timer.stop()
             self.timer.stop()
             self.module_panel.timer.stop()
             self.execution.flush_layout()
