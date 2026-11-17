@@ -25969,6 +25969,67 @@ class TubeLayoutEditor(QMainWindow):
         # 返回计算得到的两个序列
         return pair_x_info_up, pair_x_info_down
 
+    def _get_8d_horizontal_gap_ys(self, row_ys=None):
+        """推断 8d 壳程水平隔板槽中心的 y 坐标列表（如 [-110, 0, 110]）。
+
+        8d 第一象限按 half_Snv 起布、RegionA/RegionB 之间留 Wy0 槽，四象限镜像后
+        在 y=0 与 y=±Wy0 共形成 3 条水平槽。相邻管行的 y 间距在这些位置明显大于
+        正常行距 dv，故用“间距跃迁”定位；单列因正三角形交错会漏检，必须用全部行。
+
+        row_ys: 可选，行的 |y| 列表（便于测试注入）；为 None 时从满布行分组计算。
+        """
+        if not row_ys:
+            rows = getattr(self, "full_sorted_current_centers_up", None)
+            if not rows:
+                try:
+                    (
+                        self.full_sorted_current_centers_up,
+                        self.full_sorted_current_centers_down,
+                    ) = self.group_centers_by_y(self.global_centers)
+                    rows = self.full_sorted_current_centers_up
+                except Exception:
+                    rows = None
+            if rows:
+                row_ys = [abs(float(r[0][1])) for r in rows if r]
+        if not row_ys:
+            return []
+        ys = sorted(set(float(y) for y in row_ys))
+        if len(ys) < 2:
+            return []
+        steps = [ys[i] - ys[i - 1] for i in range(1, len(ys))]
+        base = min(steps)
+        if base <= 1e-9:
+            return []
+        gaps = {0.0}
+        for i, step in enumerate(steps):
+            if step > 1.5 * base + 1e-9:
+                center = (ys[i] + ys[i + 1]) / 2.0
+                gaps.add(center)
+                gaps.add(-center)
+        return sorted(gaps)
+
+    @staticmethod
+    def _filter_y_pairs_cross_gap(pairs, num_to_y, gap_ys, eps=1e-6):
+        """过滤掉两条腿跨越水平槽的左右配对。
+
+        pairs: [(左编号, 右编号), ...]；num_to_y: {编号: y}；gap_ys: 水平槽中心 y 列表。
+        左右列镜像对称，同一编号在两列的 y 相同，故两腿 y 均可从 num_to_y 查到。
+        """
+        if not gap_ys:
+            return list(pairs)
+        kept = []
+        for left_num, right_num in pairs:
+            y_left = num_to_y.get(int(left_num))
+            y_right = num_to_y.get(int(right_num))
+            if y_left is None or y_right is None:
+                kept.append((left_num, right_num))
+                continue
+            lo, hi = (y_left, y_right) if y_left <= y_right else (y_right, y_left)
+            if any(lo + eps < g < hi - eps for g in gap_ys):
+                continue
+            kept.append((left_num, right_num))
+        return kept
+
     def get_y_2_number_sequences(self, result, print_cross_y_left):
         # 初始化返回变量
         pair_y_info_left = []
@@ -26091,6 +26152,28 @@ class TubeLayoutEditor(QMainWindow):
             # 更新列表
             pair_y_info_left = filtered_left
             pair_y_info_right = filtered_right
+        elif tubeline_num == "8":
+            # 8d（U 形管唯一 8 管程分程形式）：y 向 = 左右跨中间竖槽配对。
+            # 沿用“错位序列”生成参照跨度 D 的候选配对，再按真实水平槽位置过滤跨槽对。
+            left_num = result["left_number"]
+            right_num = result["right_number"]
+            total_count = len(print_cross_y_left)
+            diff = abs(left_num - right_num)
+            sequence_length = max(0, total_count - diff)
+
+            seq_start = list(range(1, 1 + sequence_length))
+            seq_end = list(range(total_count - sequence_length + 1, total_count + 1))
+            if left_num < right_num:
+                cand = list(zip(seq_start, seq_end))
+            else:
+                cand = list(zip(seq_end, seq_start))
+
+            num_to_y = {int(it[0]): float(it[2]) for it in (print_cross_y_left or [])}
+            gap_ys = self._get_8d_horizontal_gap_ys()
+            cand = self._filter_y_pairs_cross_gap(cand, num_to_y, gap_ys)
+            for u, d in cand:
+                pair_y_info_left.append(u)
+                pair_y_info_right.append(d)
         else:
             # QMessageBox.warning(self, "选择错误", "该管程程数交叉布管尚未开发")
             self.clear_selection_highlight()
@@ -26686,19 +26769,21 @@ class TubeLayoutEditor(QMainWindow):
         return pair_x_info_up, pair_x_info_down
 
     def get_y_4_number_sequences(self, result, print_cross_y_left):
-        # 只看上半轴，row1在下，row2在上
-        row2, row1 = self.find_strange_tube_row_numbers()
-        row2 = row2 - 1
-
         pair_x_info_up = []
         pair_x_info_down = []
         tubeline_num = self.get_tube_pass_count()
         total_count = len(print_cross_y_left)
-        # 向下取整
-        actual_gap_line1 = (total_count - (row1 - 1)) // 2
-        actual_gap_line2 = (total_count - (row2 - 1)) // 2
-        actual_gap_line3 = total_count - actual_gap_line1
-        actual_gap_line4 = total_count - actual_gap_line2
+
+        # 单槽行号推断仅供 4/6 管程的跨间隔过滤使用；8d 用真实槽位，不做此推断。
+        if tubeline_num in ("4", "6"):
+            # 只看上半轴，row1在下，row2在上
+            row2, row1 = self.find_strange_tube_row_numbers()
+            row2 = row2 - 1
+            # 向下取整
+            actual_gap_line1 = (total_count - (row1 - 1)) // 2
+            actual_gap_line2 = (total_count - (row2 - 1)) // 2
+            actual_gap_line3 = total_count - actual_gap_line1
+            actual_gap_line4 = total_count - actual_gap_line2
 
         # 4管程的间隔边界（单一间隔）
         if tubeline_num == "4":
@@ -26799,6 +26884,22 @@ class TubeLayoutEditor(QMainWindow):
             ]
 
             # 生成最终序列
+            for up_tube, down_tube in filtered_pairs:
+                pair_x_info_up.append(up_tube)
+                pair_x_info_down.append(down_tube)
+
+        elif tubeline_num == "8":
+            # 8d（U 形管唯一 8 管程分程形式）：y 向 4 点配对复用同一套“参照间距”生成，
+            # 仅把跨槽判定由编号推断换成真实水平槽位置（y=0, ±Wy0）过滤。
+            up_num1, up_num2 = result["up_numbers"]
+            A, B = sorted([up_num1, up_num2])
+            D = B - A
+
+            all_pairs = _all_pairs_for_cross_y(A, B, D, total_count)
+            num_to_y = {int(it[0]): float(it[2]) for it in (print_cross_y_left or [])}
+            gap_ys = self._get_8d_horizontal_gap_ys()
+            filtered_pairs = self._filter_y_pairs_cross_gap(all_pairs, num_to_y, gap_ys)
+
             for up_tube, down_tube in filtered_pairs:
                 pair_x_info_up.append(up_tube)
                 pair_x_info_down.append(down_tube)
@@ -27395,9 +27496,11 @@ class TubeLayoutEditor(QMainWindow):
         ).strip()
         tube_num = str(self.get_tube_pass_count() or "").strip()
         hx = str(getattr(self, "heat_exchanger", "") or "").strip()
+        # 8 管程（U 形管 8d）与 4 管程 U 形管同理：只做 y 向（左右跨中间竖槽），
+        # x 向（上下跨水平槽）禁用；8d 的多条水平槽使 x 向跨槽判定不成立。
         block_vertical = cross_kind == "x" and (
             tube_pass_form == "4.2"
-            or (tube_num == "4" and hx in ("AEU", "BEU", "AKU", "BKU"))
+            or (tube_num in ("4", "8") and hx in ("AEU", "BEU", "AKU", "BKU"))
         )
         if block_vertical:
             QMessageBox.warning(
