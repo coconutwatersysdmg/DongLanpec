@@ -3420,6 +3420,24 @@ class TubeLayoutEditor(QMainWindow):
             self._align_side_table_bottoms()
         except Exception:
             pass
+        # 打开老产品时 draw_layout() 里的 fitInView 发生在构造函数中，
+        # 那时 viewport 还没经过布局计算，图会被缩得很小。
+        # 窗口首次显示后延迟补一次自适应缩放（只做视图缩放，不动任何布管数据）。
+        if not getattr(self, "_initial_view_fit_done", False):
+            self._initial_view_fit_done = True
+            QTimer.singleShot(0, self._fit_layout_view)
+            QTimer.singleShot(50, self._fit_layout_view)
+
+    def _fit_layout_view(self):
+        """按当前 viewport 尺寸把布管图自适应到视图中央。"""
+        if not (hasattr(self, "graphics_view") and hasattr(self, "graphics_scene")):
+            return
+        try:
+            self.graphics_view.fitInView(
+                self.graphics_scene.sceneRect(), Qt.KeepAspectRatio
+            )
+        except Exception:
+            pass
 
     def _align_side_table_bottoms(self):
         """右侧数量表底部留白，与左侧拉杆摘要行等高，使两侧表框底边平齐。"""
