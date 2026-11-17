@@ -14333,7 +14333,7 @@ class TubeLayoutEditor(QMainWindow):
             )
             return
 
-        # 2.3 管程程数（仅支持2/4/6管程，匹配文档）
+        # 2.3 管程程数（支持2/4/6/8/10/12管程，匹配文档）
         tube_pass = None
         tube_pass_widget = self.param_table.cellWidget(tube_pass_row, 2)
         if isinstance(tube_pass_widget, QComboBox):
@@ -14341,8 +14341,8 @@ class TubeLayoutEditor(QMainWindow):
         else:
             tube_pass_item = self.param_table.item(tube_pass_row, 2)
             tube_pass = tube_pass_item.text().strip() if tube_pass_item else ""
-        if tube_pass not in ["2", "4", "6"]:
-            print(f"不支持的管程数：{tube_pass}，仅支持2/4/6管程")
+        if tube_pass not in ["2", "4", "6", "8", "10", "12"]:
+            print(f"不支持的管程数：{tube_pass}，仅支持2/4/6/8/10/12管程")
             return
 
         # 3. 构建文档匹配的分程隔板中心距映射表（按换热器类型分类）
@@ -14466,8 +14466,8 @@ class TubeLayoutEditor(QMainWindow):
                         f"U形管式-2管程：水平中心距默认取竖直值：{sn_vertical_value:.1f}mm（建议隐藏）"
                     )
 
-            # 4/6管程：更新竖直+水平中心距（竖直数据来自浮头式，水平数据来自U形管专用表）
-            elif tube_pass in ["4", "6"]:
+            # 4/6/8/10/12管程：更新竖直+水平中心距（竖直数据来自浮头式，水平数据来自U形管专用表）
+            elif tube_pass in ["4", "6", "8", "10", "12"]:
                 # 获取竖直中心距（与浮头式数据一致）
                 if (
                         do_value not in aes_bes_map
@@ -14505,7 +14505,7 @@ class TubeLayoutEditor(QMainWindow):
 
             # 不支持的管程数
             else:
-                print(f"U形管式换热器：不支持{tube_pass}管程，仅支持2/4/6管程")
+                print(f"U形管式换热器：不支持{tube_pass}管程，仅支持2/4/6/8/10/12管程")
 
         # 4.3 未匹配的换热器类型
         else:
@@ -14632,7 +14632,7 @@ class TubeLayoutEditor(QMainWindow):
                     return None
                 # 2管程：水平中心距默认取竖直值
                 return float(u_tube_2pass_vertical_map[do_key])
-            if tube_pass in ["4", "6"]:
+            if tube_pass in ["4", "6", "8", "10", "12"]:
                 if do_key not in u_tube_horizontal_map:
                     return None
                 return float(u_tube_horizontal_map[do_key])
