@@ -15673,7 +15673,7 @@ class TubeLayoutEditor(QMainWindow):
                             self._suppress_slideway_height_warn = True
                             try:
                                 print(
-                                    "[POPUP] type=question title=提示 msg=你输入的数值小于预定义要求，是否继续？ "
+                                    "[POPUP] type=question title=提示 msg=您输入的滑道高度参数的数值小于预定义的规定，是否继续？"
                                     f"param=滑道高度 input='{cur_text}' parsed={h_val} expected_min={pre_min} "
                                     "reason=输入值低于预定义下限"
                                 )
@@ -15682,7 +15682,7 @@ class TubeLayoutEditor(QMainWindow):
                             reply = QMessageBox.question(
                                 self,
                                 "提示",
-                                "你输入的数值小于预定义要求，是否继续？",
+                                "您输入的滑道高度参数的数值小于预定义的规定，是否继续？",
                                 QMessageBox.Yes | QMessageBox.No,
                                 QMessageBox.No,
                             )
@@ -15785,7 +15785,7 @@ class TubeLayoutEditor(QMainWindow):
                             self._suppress_slipway_thickness_warn = True
                             try:
                                 print(
-                                    "[POPUP] type=question title=提示 msg=你输入的数值小于预定义要求，是否继续？ "
+                                    "[POPUP] type=question title=提示 msg=您输入的滑道厚度参数的数值小于预定义的规定，是否继续？ "
                                     f"param=滑道厚度 input='{cur_text}' parsed={thickness_val} expected_min={pre_min} "
                                     "reason=输入值低于预定义下限"
                                 )
@@ -15794,7 +15794,7 @@ class TubeLayoutEditor(QMainWindow):
                             reply = QMessageBox.question(
                                 self,
                                 "提示",
-                                "你输入的数值小于预定义要求，是否继续？",
+                                "您输入的滑道厚度参数的数值小于预定义的规定，是否继续？",
                                 QMessageBox.Yes | QMessageBox.No,
                                 QMessageBox.No,
                             )
@@ -16525,7 +16525,7 @@ class TubeLayoutEditor(QMainWindow):
 
                         try:
                             print(
-                                "[POPUP] type=question title=提示 msg=您输入的数值小于预定义的规定，是否继续？ "
+                                "[POPUP] type=question title=提示 msg=您输入的分程隔板两侧相邻管中心距（水平）参数的数值小于预定义的规定，是否继续？ "
                                 f"param=分程隔板两侧相邻管中心距（水平） input='{cur_text}' parsed={new_snh} "
                                 f"expected_min={expected_min} reason=输入值小于预定义规定",
                                 flush=True,
@@ -16535,7 +16535,7 @@ class TubeLayoutEditor(QMainWindow):
                         reply = QMessageBox.question(
                             self,
                             "提示",
-                            "您输入的数值小于预定义的规定，是否继续？",
+                            "您输入的分程隔板两侧相邻管中心距（水平）参数的数值小于预定义的规定，是否继续？",
                             QMessageBox.Yes | QMessageBox.No,
                             QMessageBox.No,
                         )
@@ -23560,13 +23560,13 @@ class TubeLayoutEditor(QMainWindow):
                 reply = QMessageBox.question(
                     self,
                     "提示",
-                    "您输入的数值小于预定义的规定，是否继续？",
+                    "您输入的分程隔板两侧相邻管中心距（水平）参数的数值小于预定义的规定，是否继续？",
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.No,
                 )
                 try:
                     print(
-                        "[POPUP] type=question title=提示 msg=您输入的数值小于预定义的规定，是否继续？ "
+                        "[POPUP] type=question title=提示 msg=您输入的分程隔板两侧相邻管中心距（水平）参数的数值小于预定义的规定，是否继续？ "
                         f"param=分程隔板两侧相邻管中心距（水平）(回车预检) input='{cur_text}' parsed={sn_val} "
                         f"expected_min={expected_min} result={'Yes' if reply == QMessageBox.Yes else 'No'}",
                         flush=True,

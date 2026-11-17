@@ -277,7 +277,7 @@ def _validate_plate_slipway_inputs(editor, parent, input_widgets, default_values
         reply = QMessageBox.question(
             parent,
             "提示",
-            "你输入的数值小于预定义要求，是否继续？",
+            f"您输入的{key}参数的数值小于预定义的规定，是否继续？",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
         )
