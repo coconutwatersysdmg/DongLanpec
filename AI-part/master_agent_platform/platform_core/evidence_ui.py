@@ -8,12 +8,13 @@ import sys
 
 from PyQt5.QtCore import QProcess, QProcessEnvironment, QThread, QTimer, Qt, pyqtSignal
 from PyQt5.QtGui import QWindow
-from PyQt5.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QPushButton, QScrollArea,
+from PyQt5.QtWidgets import (QHBoxLayout, QLabel, QPushButton, QScrollArea,
                              QTabWidget, QVBoxLayout, QWidget)
 
 from .fabric import BASE
 from .private_database import atomic_json
 from .embedded_view import PROTOCOL, host_minimum, EmbeddedHostViewport
+from .ui_theme import WorkspaceComboBox
 
 LABELS = {"project": "项目 / 产品识别", "conditions": "条件输入", "elements": "元件材料定义",
           "nozzles": "管口定义", "tube_bundle": "管束设计"}
@@ -60,8 +61,10 @@ class EvidencePanel(QWidget):
         help_text.setWordWrap(True)
         layout.addWidget(help_text)
         row = QHBoxLayout()
-        self.product = QComboBox()
-        self.module = QComboBox()
+        self.product = WorkspaceComboBox()
+        self.product.setAccessibleName("选择产品")
+        self.module = WorkspaceComboBox()
+        self.module.setAccessibleName("选择模块")
         for key, label in LABELS.items(): self.module.addItem(label, key)
         self.open_button = QPushButton("打开原模块工作台")
         self.open_button.clicked.connect(self.open_current)

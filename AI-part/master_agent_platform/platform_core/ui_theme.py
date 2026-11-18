@@ -1,12 +1,13 @@
 """Shared readable typography and resizable surfaces for the Qt workspace."""
-from PyQt5.QtCore import Qt, QSize, QRect, QSettings, pyqtSignal
+from PyQt5.QtCore import Qt, QSize, QRect, QEvent, QSettings, pyqtSignal
 from pathlib import Path
 import math
 import re
 from PyQt5.QtGui import QFont, QFontDatabase, QPainter, QColor
 from PyQt5.QtWidgets import (QApplication, QLayout, QWidget, QFrame, QVBoxLayout,
     QHBoxLayout, QToolButton, QLabel, QSizePolicy, QLineEdit, QComboBox, QTableWidget,
-    QListView, QStyledItemDelegate, QStyleOptionViewItem, QStyle)
+    QListView, QStyledItemDelegate, QStyleOptionViewItem, QStyleOptionComboBox, QStylePainter,
+    QStyle, QToolTip, QAbstractItemView)
 
 ZOOM_PERCENTAGES = (50, 60, 75, 90, 100, 110, 125, 140, 160)
 MIN_UI_SCALE = ZOOM_PERCENTAGES[0] / 100
@@ -64,7 +65,8 @@ def theme(scale=1.0):
     QFrame#composer{background:#fff;border:1px solid #ccd6ef;border-radius:16px;}
     QPlainTextEdit#prompt{border:0;background:transparent;padding:5px;}
     QFrame#assistantBubble{background:#fff;border:1px solid #e0e7f2;border-radius:14px;}
-    QFrame#userBubble{background:#eef2ff;border:1px solid #dde4ff;border-radius:14px;}
+    QFrame#userBubble{background:#e9efff;border:1px solid #e0e8fb;border-radius:16px;}
+    QLabel#messageAuthor{color:#51617a;font-weight:600;}
     QToolButton#settingsButton,QToolButton#sidebarButton,QToolButton#navigationButton{
         background:transparent;border-color:transparent;padding:7px;}
     QToolButton#settingsButton:hover,QToolButton#settingsButton:focus,
@@ -76,7 +78,7 @@ def theme(scale=1.0):
     QMenu::item:selected{background:#edf1ff;color:#4357c8;}
     QMenu::item:disabled{color:#95a0b2;}
     QMenu::separator{height:1px;background:#e6ebf4;margin:3px 5px;}
-    QTextBrowser,QPlainTextEdit,QTreeWidget,QListWidget,QTableWidget,QLineEdit,QComboBox{
+    QTextBrowser,QPlainTextEdit,QTreeWidget,QListWidget,QTableWidget,QLineEdit{
         background:#fff;border:1px solid #dde5f0;border-radius:8px;padding:7px;selection-background-color:#e7edff;selection-color:#243f91;}
     QTextBrowser#conversation{border:0;} QTreeWidget::item,QListWidget::item{padding:6px 3px;}
     QTreeWidget::item:selected,QListWidget::item:selected{background:#e7edff;color:#2542a0;border-radius:6px;}
@@ -101,14 +103,14 @@ def theme(scale=1.0):
 def combo_style():
     arrow = (Path(__file__).resolve().parent/'icons/chevron-down.svg').as_posix()
     return """
-    QComboBox{background:#fff;color:#334460;border:1px solid #dce4f2;border-radius:9px;
-        padding:7px 34px 7px 12px;min-height:22px;}
+    QComboBox{background:#fff;color:#334460;border:1px solid #d8e1ee;border-radius:8px;
+        padding:6px 28px 6px 10px;min-height:22px;}
     QComboBox:hover{background:#f8faff;border-color:#b7c3ee;}
     QComboBox:focus,QComboBox:on{border-color:#899bea;background:#f6f8ff;}
     QComboBox:disabled{color:#99a5b9;background:#f2f5fa;border-color:#e4eaf3;}
     QComboBox::drop-down{subcontrol-origin:padding;subcontrol-position:top right;
-        width:30px;border:0;background:transparent;}
-    QComboBox::down-arrow{image:url("ARROW");width:14px;height:10px;}
+        width:24px;border:0;background:transparent;}
+    QComboBox::down-arrow{image:url("ARROW");width:12px;height:8px;}
     QComboBox QAbstractItemView{background:#fff;color:#334460;border:1px solid #dce4f2;
         border-radius:8px;padding:5px;outline:0;selection-background-color:#edf1ff;selection-color:#4357c8;}
     QComboBox QAbstractItemView::item{min-height:30px;padding:5px 10px;border-radius:5px;}
@@ -127,14 +129,31 @@ class WorkspaceSurface(QWidget):
 
 
 class PopupItemDelegate(QStyledItemDelegate):
+    text_width = 0
+
     def paint(self, painter, option, index):
         styled = QStyleOptionViewItem(option)
         styled.state &= ~QStyle.State_HasFocus
-        super().paint(painter, styled, index)
+        if not self.text_width:
+            super().paint(painter, styled, index)
+            return
+        self.initStyleOption(styled, index)
+        text, styled.text = styled.text, ''
+        styled.widget.style().drawControl(QStyle.CE_ItemViewItem, styled, painter, styled.widget)
+        painter.save()
+        painter.setFont(styled.font)
+        painter.setPen(QColor('#354bc1' if styled.state & QStyle.State_Selected else '#334460'))
+        painter.drawText(styled.rect.adjusted(10, 4, -10, -4), Qt.AlignVCenter | Qt.TextWrapAnywhere, text)
+        painter.restore()
 
     def sizeHint(self, option, index):
         size = super().sizeHint(option, index)
-        size.setHeight(max(size.height(), option.fontMetrics.height()+14))
+        height = option.fontMetrics.height()
+        if self.text_width:
+            height = option.fontMetrics.boundingRect(QRect(0, 0, self.text_width, 10000),
+                Qt.TextWrapAnywhere, str(index.data() or '')).height()
+            size.setWidth(min(size.width(), self.text_width+20))
+        size.setHeight(max(size.height(), height+12))
         return size
 
 
@@ -155,6 +174,55 @@ def style_combo_popup(combo):
     combo._workspace_popup_delegate = PopupItemDelegate(view)
     combo.setItemDelegate(combo._workspace_popup_delegate)
     combo.setProperty('workspacePopup', True)
+
+
+class WorkspaceComboBox(QComboBox):
+    """Keep a compact field while giving long choices room in the popup."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setSizeAdjustPolicy(QComboBox.AdjustToContents)
+        self.view().setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+
+    def sizeHint(self):
+        size = super().sizeHint()
+        size.setWidth(min(size.width()+10, 500))
+        return size
+
+    def minimumSizeHint(self):
+        size = super().minimumSizeHint()
+        size.setWidth(min(size.width(), 112))
+        return size
+
+    def event(self, event):
+        if event.type() == QEvent.ToolTip and self.currentText():
+            QToolTip.showText(event.globalPos(), self.currentText(), self)
+            return True
+        return super().event(event)
+
+    def paintEvent(self, event):
+        option = QStyleOptionComboBox()
+        self.initStyleOption(option)
+        field = self.style().subControlRect(QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField, self)
+        option.currentText = self.fontMetrics().elidedText(option.currentText, Qt.ElideRight, max(0, field.width()-4))
+        painter = QStylePainter(self)
+        painter.drawComplexControl(QStyle.CC_ComboBox, option)
+        painter.drawControl(QStyle.CE_ComboBoxLabel, option)
+
+    def showPopup(self):
+        if not self.count():
+            return
+        style_combo_popup(self)
+        metrics = self.fontMetrics()
+        text_width = max(metrics.horizontalAdvance(self.itemText(i)) for i in range(self.count()))
+        screen = self.screen().availableGeometry()
+        width = min(max(self.width(), text_width+42), screen.width()-8, 760)
+        view = self.view()
+        view.setMinimumWidth(max(0, width-2))
+        self.itemDelegate().text_width = max(10, width-44)
+        view.doItemsLayout()
+        super().showPopup()
+        popup = view.window()
+        popup.move(max(screen.left(), min(popup.x(), screen.right()-popup.width()+1)), popup.y())
 
 
 _FONTS_LOADED = False

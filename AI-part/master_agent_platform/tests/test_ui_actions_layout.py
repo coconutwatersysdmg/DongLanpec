@@ -11,7 +11,7 @@ import fitz
 from PyQt5.QtCore import Qt, QPoint, QRect, QSize, QTimer
 from PyQt5.QtGui import QImage, QPainter, QPixmap, QRegion
 from PyQt5.QtTest import QTest
-from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QVBoxLayout, QComboBox, QListView
+from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QVBoxLayout, QComboBox, QListView, QFrame
 from platform_core import chat_app
 from platform_core.export_settings import ExportSettingsDialog, default_save_directory, default_save_file
 from platform_core.graph_model import review_cycles
@@ -272,6 +272,73 @@ class ActionLayoutTests(unittest.TestCase):
         QTest.qWait(10)
         self.assertEqual(combo.currentData(), 1.1)
         self.assertEqual(self.window.ui_scale, 1.1)
+
+    def test_messages_align_inside_the_same_centered_column_as_the_composer(self):
+        window = self.window
+        window.resize(1600, 900)
+        window.show()
+        window.welcome.hide()
+        text = '请核对设计条件和材料。'
+        window.bubble('user', text, persist=False)
+        window.bubble('assistant', '已完成复核。', persist=False)
+        window.bubble('user', '换热设备条件和材料复核说明。'*35, persist=False)
+        QTest.qWait(40)
+        user = window.bubbles[0].findChild(QFrame, 'userBubble')
+        assistant = window.bubbles[1].findChild(QFrame, 'assistantMessage')
+        long_user = window.bubbles[2].findChild(QFrame, 'userBubble')
+        label = user.findChild(QLabel, 'messageText')
+        self.assertGreaterEqual(label.width(), label.fontMetrics().horizontalAdvance(text))
+        self.assertLessEqual(long_user.width(), 650)
+        self.assertGreater(long_user.height(), user.height()*2)
+        self.assertGreater(user.mapTo(window, QPoint()).x(), assistant.mapTo(window, QPoint()).x())
+        composer = window.composer_area.findChild(QFrame, 'composer')
+        self.assertLessEqual(abs(user.mapTo(window, user.rect().topRight()).x()
+                                 - composer.mapTo(window, composer.rect().topRight()).x()), 2)
+
+    def test_recent_task_selection_survives_refresh_and_loading_a_different_task(self):
+        engine = SimulatedOrchestrator(self.home/'workspace')
+        engine._mirror_evidence = lambda *args: None
+        title = '核对多台换热设备的工况参数与材料来源，保留完整任务名称'
+        first = engine.run([self.source], user_goal=title)
+        second = engine.run([self.source], user_goal='核对设计压力')
+        self.window.on_complete(first)
+        self.window.bubble('user', '第一份任务的消息。')
+        original_id = self.window.chat_id
+        original = self.window.workspace/'conversations'/(original_id+'.json')
+        snapshot = original.read_bytes()
+        self.window.on_complete(second)
+        self.assertNotEqual(self.window.chat_id, original_id)
+        self.assertEqual(original.read_bytes(), snapshot)
+        row = self.window.history_ids.index(first['run_id'])
+        self.window.select_history(self.window.history.item(row))
+        self.window.load_history()
+        selected = self.window.history.currentItem()
+        self.assertTrue(selected.isSelected())
+        self.assertEqual(selected.text(), title)
+        self.assertEqual(selected.data(Qt.UserRole), first['run_id'])
+        self.assertEqual(self.window.chat_id, original_id)
+        self.assertEqual(self.window.messages[-1]['text'], '第一份任务的消息。')
+
+    def test_long_product_choice_has_room_to_wrap_in_the_popup(self):
+        window = self.window
+        window.resize(1024, 720)
+        window.show()
+        window.navigate(1)
+        window.font_zoom.setCurrentIndex(window.font_zoom.findData(1.4))
+        product = window.module_panel.product
+        long_text = 'OST-E-1901 · 常温脱硫塔入口多工况丙烷冷却器换热设备' * 4
+        product.addItem(long_text, 'long-product')
+        QTest.qWait(20)
+        product.showPopup()
+        QTest.qWait(20)
+        try:
+            view = product.view()
+            self.assertGreater(view.window().width(), product.width())
+            self.assertGreater(view.sizeHintForRow(0), product.fontMetrics().height()*2)
+            self.assertEqual(product.currentText(), long_text)
+            self.assertEqual(product.currentData(), 'long-product')
+        finally:
+            product.hidePopup()
 
     def test_native_dropdown_keeps_its_original_image_view_and_bindings(self):
         page = QWidget()
