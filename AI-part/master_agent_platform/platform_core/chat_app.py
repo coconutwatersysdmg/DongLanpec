@@ -14,7 +14,8 @@ from PyQt5.QtCore import Qt, QSize, QThread, QTimer, QUrl, pyqtSignal
 from PyQt5.QtGui import QDesktopServices, QIcon
 from PyQt5.QtWidgets import (QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QFrame, QSplitter, QComboBox,
     QLabel, QPushButton, QListWidget, QTextBrowser, QPlainTextEdit, QScrollArea,
-    QStackedWidget, QTreeWidget, QTreeWidgetItem, QLineEdit, QFileDialog, QMessageBox, QToolButton, QMenu)
+    QStackedWidget, QTreeWidget, QTreeWidgetItem, QLineEdit, QFileDialog, QMessageBox, QToolButton, QMenu,
+    QActionGroup)
 
 from .fabric import BASE, Fabric
 from .orchestrator import Orchestrator
@@ -23,7 +24,9 @@ from .run_view import duration
 from .module_panel import ModulePanel
 from .export_settings import ExportSettingsDialog, default_save_file, export_task_drafts
 from .ui_theme import (apply_theme, read_scale, save_scale, fit_initial_window,
-    ResizableCard, FlowLayout, WorkspaceSurface)
+    ResizableCard, FlowLayout, WorkspaceSurface, ZOOM_PERCENTAGES)
+
+SECTIONS = ("对话", "模块结果", "数据空间", "运行记录", "待审核")
 
 
 class Worker(QThread):
@@ -116,13 +119,6 @@ class ChatWindow(QMainWindow):
         self.new_chat_button.setObjectName("newChat")
         self.new_chat_button.clicked.connect(self.new_chat)
         side.addWidget(self.new_chat_button)
-        self.nav_buttons = []
-        for index, label in enumerate(("对话", "模块结果", "数据空间", "运行记录", "待审核")):
-            button = QPushButton(label)
-            button.setObjectName("nav")
-            button.clicked.connect(lambda _, i=index: self.navigate(i))
-            side.addWidget(button)
-            self.nav_buttons.append(button)
         side.addSpacing(12)
         label = QLabel("最近任务")
         label.setObjectName("muted")
@@ -133,9 +129,6 @@ class ChatWindow(QMainWindow):
         self.history.setTextElideMode(Qt.ElideRight)
         self.history.itemClicked.connect(self.select_history)
         side.addWidget(self.history, 1)
-        load = QPushButton("载入任务结果")
-        load.clicked.connect(self.load_result)
-        side.addWidget(load)
         sidebar_scroll = QScrollArea()
         sidebar_scroll.setWidgetResizable(True)
         sidebar_scroll.setWidget(sidebar)
@@ -153,23 +146,51 @@ class ChatWindow(QMainWindow):
         body_layout.addWidget(self.header_surface)
         header = QHBoxLayout()
         self.sidebar_button = QToolButton()
-        self.sidebar_button.setText("侧栏")
-        self.sidebar_button.setToolTip("显示或收起侧栏，扩大内容区")
+        self.sidebar_button.setObjectName('sidebarButton')
+        self.sidebar_button.setIconSize(QSize(19, 19))
+        self.sidebar_button.setMinimumSize(34, 34)
+        icons = Path(__file__).with_name('icons')
+        self.sidebar_icons = {
+            True: QIcon(str(icons / 'sidebar-collapse.svg')),
+            False: QIcon(str(icons / 'sidebar-expand.svg')),
+        }
+        self.set_sidebar_visible(True)
         self.sidebar_button.clicked.connect(self.toggle_sidebar)
         header.addWidget(self.sidebar_button)
         self.page_title = QLabel("对话")
         self.page_title.setObjectName("sectionTitle")
-        header.addWidget(self.page_title, 1)
+        header.addWidget(self.page_title)
+        self.navigation_button = QToolButton()
+        self.navigation_button.setText("菜单")
+        self.navigation_button.setAccessibleName("工作台菜单")
+        self.navigation_button.setPopupMode(QToolButton.InstantPopup)
+        menu = QMenu(self.navigation_button)
+        group = QActionGroup(menu)
+        self.nav_actions = []
+        for index, label in enumerate(SECTIONS):
+            action = menu.addAction(label)
+            action.setCheckable(True)
+            group.addAction(action)
+            action.triggered.connect(lambda _, i=index: self.navigate(i))
+            self.nav_actions.append(action)
+        menu.addSeparator()
+        self.load_result_action = menu.addAction("载入任务结果", self.load_result)
+        self.navigation_button.setMenu(menu)
+        header.addWidget(self.navigation_button)
+        header.addStretch(1)
         header.addWidget(QLabel("字号"))
         self.font_zoom = QComboBox()
-        for percent in (100, 110, 125, 140, 160): self.font_zoom.addItem(f"{percent}%", percent/100)
-        self.font_zoom.setCurrentIndex(max(0, self.font_zoom.findData(self.ui_scale)))
+        for percent in ZOOM_PERCENTAGES:
+            self.font_zoom.addItem(f"{percent}%", percent/100)
+        closest = min(ZOOM_PERCENTAGES, key=lambda percent: abs(percent - self.ui_scale*100))
+        self.ui_scale = closest / 100
+        self.font_zoom.setCurrentIndex(self.font_zoom.findData(self.ui_scale))
         self.font_zoom.setToolTip("调整整个工作台和模块编辑器的字号；屏幕 DPI 缩放由系统自动适配")
         self.font_zoom.currentIndexChanged.connect(self.change_scale)
         header.addWidget(self.font_zoom)
         self.settings_button = QToolButton()
         self.settings_button.setObjectName('settingsButton')
-        self.settings_button.setIcon(QIcon(str(Path(__file__).with_name('icons') / 'settings.svg')))
+        self.settings_button.setIcon(QIcon(str(icons / 'settings.svg')))
         self.settings_button.setIconSize(QSize(19, 19))
         self.settings_button.setAccessibleName('设置')
         self.settings_button.setToolTip('设置')
@@ -245,7 +266,14 @@ class ChatWindow(QMainWindow):
 
     def toggle_sidebar(self):
         self.sidebar_manual = True
-        self.sidebar.setVisible(self.sidebar.isHidden())
+        self.set_sidebar_visible(self.sidebar.isHidden())
+
+    def set_sidebar_visible(self, visible):
+        self.sidebar.setVisible(visible)
+        self.sidebar_button.setIcon(self.sidebar_icons[visible])
+        label = "收起侧栏" if visible else "展开侧栏"
+        self.sidebar_button.setToolTip(label)
+        self.sidebar_button.setAccessibleName(label)
 
     def adapt_sidebar(self):
         if hasattr(self, 'sidebar') and not self.sidebar_manual:
@@ -253,13 +281,13 @@ class ChatWindow(QMainWindow):
             required = (body.minimumSizeHint().width() if body else 700)+self.sidebar.minimumWidth()+24
             visible = self.width() >= max(1020, required)
             if self.sidebar.isHidden() == visible:
-                self.sidebar.setVisible(visible)
+                self.set_sidebar_visible(visible)
                 self.centralWidget().layout().invalidate()
                 self.layout().invalidate()
 
     def change_scale(self):
         self.ui_scale = self.font_zoom.currentData() or 1.0
-        save_scale(self.workspace, self.ui_scale)
+        save_scale(self.settings_workspace, self.ui_scale)
         self.setUpdatesEnabled(False)
         try:
             apply_theme(self, self.ui_scale)
@@ -483,9 +511,8 @@ class ChatWindow(QMainWindow):
     def navigate(self, index):
         self.current_section = index
         self.pages.setCurrentIndex(0 if index in (1, 3) else index)
-        self.page_title.setText("对话" if index in (0, 1, 3) else ("对话", "模块结果", "数据空间", "运行记录", "待审核")[index])
-        for i, button in enumerate(self.nav_buttons):
-            button.setStyleSheet("background:#e8effa;color:#245bac;font-weight:600;" if i == index else "")
+        self.page_title.setText("对话" if index in (1, 3) else SECTIONS[index])
+        self.nav_actions[index].setChecked(True)
         if index == 2 and self.active_run_id:
             self.data_space.bind(self.workspace, self.active_run_id)
         if index in (1, 3):
@@ -643,6 +670,7 @@ class ChatWindow(QMainWindow):
         self.recheck_button.setEnabled(bool(self.last_result) and not busy)
         self.new_chat_button.setEnabled(not self.pending_new_chat)
         self.history.setEnabled(not busy)
+        self.load_result_action.setEnabled(not busy)
         self.module_panel.closing = self.pending_new_chat
         self.module_panel.refresh_controls()
 
@@ -733,7 +761,7 @@ class ChatWindow(QMainWindow):
         self.scroll_to_card(self.report_frame)
         self.welcome.hide()
         self.open_output.setEnabled(bool(self.last_output))
-        self.nav_buttons[4].setText("待审核" + (f"  {count}" if count else ""))
+        self.nav_actions[4].setText("待审核" + (f"  {count}" if count else ""))
         if self.started_at is None:
             timing = self.fabric.execution(self.active_run_id)
             self.clock_label.setText("累计执行 " + duration(timing["elapsed_seconds"]) if timing["sessions"] else "任务耗时合计 " + duration(timing["task_seconds"]) if timing["tasks"] else "运行时间未记录")
@@ -830,7 +858,9 @@ class ChatWindow(QMainWindow):
         if self.worker or self.database_worker or self.module_panel.busy or self.pending_new_chat: return
         path, _ = QFileDialog.getOpenFileName(self, "载入任务结果", str(self.workspace / "runs"), "任务结果 (summary.json)")
         if path:
-            try: self.on_complete(json.loads(Path(path).read_text(encoding="utf-8")))
+            try:
+                self.on_complete(json.loads(Path(path).read_text(encoding="utf-8")))
+                self.navigate(0)
             except Exception as exc: QMessageBox.warning(self, "任务结果", str(exc))
 
     def show_output(self):
@@ -893,7 +923,7 @@ class ChatWindow(QMainWindow):
         self.data_space.clear()
         self.review_tree.clear()
         self.review_editors = []
-        self.nav_buttons[4].setText("待审核")
+        self.nav_actions[4].setText("待审核")
         self.log.clear()
         self.history.clearSelection()
         self.history.setCurrentRow(-1)

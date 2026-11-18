@@ -4,6 +4,7 @@ import json
 
 from PyQt5.QtCore import QObject, QEvent, QTimer, QSize, QSaveFile, QIODevice
 from PyQt5.QtGui import QWindow
+from .ui_theme import MIN_UI_SCALE, MAX_UI_SCALE
 
 PROTOCOL = 'donglanpec.embedded-module/1'
 
@@ -53,7 +54,8 @@ class EmbeddedModuleView(QObject):
         try:
             width, height = value['size']
             host_dpr, user_scale = float(value['dpr']), float(value['scale'])
-            if not (0 < width < 32768 and 0 < height < 32768 and .25 <= host_dpr <= 8 and 1 <= user_scale <= 1.6):
+            if not (0 < width < 32768 and 0 < height < 32768 and .25 <= host_dpr <= 8
+                    and MIN_UI_SCALE <= user_scale <= MAX_UI_SCALE):
                 return False
         except (KeyError, TypeError, ValueError): return False
         ratio = host_dpr/self.window.devicePixelRatioF()

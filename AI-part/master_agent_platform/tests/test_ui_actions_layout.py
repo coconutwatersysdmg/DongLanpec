@@ -84,6 +84,37 @@ class ActionLayoutTests(unittest.TestCase):
         self.assertFalse(self.window.execution_card.isHidden())
         self.assertIsNone(self.window.worker)
 
+    def test_menu_routes_every_entry_when_sidebar_is_collapsed(self):
+        self.window.resize(1280, 820)
+        self.window.show()
+        QTest.qWait(15)
+        collapse = self.window.sidebar_button.icon()
+        self.assertFalse(collapse.pixmap(19, 19).isNull())
+        self.assertEqual(self.window.sidebar_button.toolTip(), "收起侧栏")
+        self.window.sidebar_button.click()
+        self.assertTrue(self.window.sidebar.isHidden())
+        expand = self.window.sidebar_button.icon()
+        self.assertFalse(expand.pixmap(19, 19).isNull())
+        self.assertNotEqual(expand.cacheKey(), collapse.cacheKey())
+        self.assertEqual(self.window.sidebar_button.toolTip(), "展开侧栏")
+        self.assertTrue(self.window.navigation_button.isVisible())
+        for index, action in enumerate(self.window.nav_actions):
+            action.trigger()
+            self.assertEqual(self.window.current_section, index)
+            self.assertEqual(self.window.pages.currentIndex(), 0 if index in (1, 3) else index)
+            self.assertTrue(action.isChecked())
+        engine = SimulatedOrchestrator(self.home / 'workspace')
+        engine._mirror_evidence = lambda *args: None
+        result = engine.run([self.source])
+        summary = Path(result['run_directory']) / 'summary.json'
+        with patch.object(chat_app.QFileDialog, 'getOpenFileName', return_value=(str(summary), '')):
+            self.window.load_result_action.trigger()
+        self.assertEqual(self.window.active_run_id, result['run_id'])
+        self.assertEqual(self.window.current_section, 0)
+        self.window.sidebar_button.click()
+        self.assertFalse(self.window.sidebar.isHidden())
+        self.assertEqual(self.window.sidebar_button.icon().cacheKey(), collapse.cacheKey())
+
     def test_gear_saves_a_directory_that_the_task_export_uses(self):
         directory = self.home / '结果目录'
         directory.mkdir()
@@ -173,7 +204,7 @@ class ActionLayoutTests(unittest.TestCase):
         self.window.show()
         for index in range(24):
             self.window.resize(1024+index%3*200, 720+index%2*120)
-            self.window.font_zoom.setCurrentIndex(index%5)
+            self.window.font_zoom.setCurrentIndex(index % self.window.font_zoom.count())
             self.window.data_badge.setText('数据空间与独立库已就绪' if index%2 else '数据空间准备中')
             self.window.state.setText('等待提交文件' if index%2 else '正在准备本机独立数据库，首次启动会自动导入基础数据。'*3)
             QTest.qWait(5)

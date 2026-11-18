@@ -45,13 +45,14 @@ def main():
     from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
         QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView, QPushButton, QLabel,
         QLineEdit, QPlainTextEdit, QDialog, QSplitter, QMessageBox, QFileDialog, QScrollArea, QToolButton)
-    from platform_core.ui_theme import enable_high_dpi, apply_theme, fit_initial_window, FlowLayout, scale_legacy_page
+    from platform_core.ui_theme import (enable_high_dpi, apply_theme, fit_initial_window, FlowLayout,
+        scale_legacy_page, clamp_ui_scale)
     from platform_core.embedded_view import EmbeddedModuleView
     from platform_core.evidence_view import EvidenceActions
     enable_high_dpi()
     app = QApplication(sys.argv[:1])
     app.setStyle("Fusion")
-    ui_scale = max(1.0, min(1.6, float(os.environ.get('ENGINEERING_UI_SCALE', 1.0))))
+    ui_scale = clamp_ui_scale(os.environ.get('ENGINEERING_UI_SCALE', 1.0))
     apply_theme(app, ui_scale)
 
     class Records(QTableWidget):
@@ -573,7 +574,7 @@ def main():
                 stamp = appearance.read_text(encoding='utf-8')
                 if stamp != last_appearance:
                     value = json.loads(stamp)
-                    apply_editor_scale(max(1.0, min(1.6, float(value['scale']))))
+                    apply_editor_scale(clamp_ui_scale(value['scale']))
                     last_appearance = stamp
             except (OSError, ValueError, KeyError): pass
         ack = context.acknowledge()

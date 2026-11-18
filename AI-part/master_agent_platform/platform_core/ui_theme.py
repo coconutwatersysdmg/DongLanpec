@@ -1,11 +1,26 @@
 """Shared readable typography and resizable surfaces for the Qt workspace."""
 from PyQt5.QtCore import Qt, QSize, QRect, QSettings, pyqtSignal
 from pathlib import Path
+import math
 import re
 from PyQt5.QtGui import QFont, QFontDatabase, QPainter, QColor
 from PyQt5.QtWidgets import (QApplication, QLayout, QWidget, QFrame, QVBoxLayout,
     QHBoxLayout, QToolButton, QLabel, QSizePolicy, QLineEdit, QComboBox, QTableWidget,
     QListView, QStyledItemDelegate, QStyleOptionViewItem, QStyle)
+
+ZOOM_PERCENTAGES = (50, 60, 75, 90, 100, 110, 125, 140, 160)
+MIN_UI_SCALE = ZOOM_PERCENTAGES[0] / 100
+MAX_UI_SCALE = ZOOM_PERCENTAGES[-1] / 100
+
+
+def clamp_ui_scale(value):
+    try:
+        scale = float(value)
+    except (TypeError, ValueError):
+        return 1.0
+    if not math.isfinite(scale):
+        return 1.0
+    return max(MIN_UI_SCALE, min(MAX_UI_SCALE, scale))
 
 
 def enable_high_dpi():
@@ -21,8 +36,7 @@ def appearance_settings(workspace):
 
 
 def read_scale(workspace):
-    try: return max(1.0, min(1.6, float(appearance_settings(workspace).value('text_scale', 1.0))))
-    except (TypeError, ValueError): return 1.0
+    return clamp_ui_scale(appearance_settings(workspace).value('text_scale', 1.0))
 
 
 def save_scale(workspace, scale):
@@ -45,15 +59,15 @@ def theme(scale=1.0):
     QPushButton,QToolButton{background:#fff;border:1px solid #dce3ef;border-radius:9px;padding:8px 12px;}
     QPushButton:hover,QToolButton:hover{background:#eef2ff;color:#485de0;border-color:#b8c4f5;}
     QPushButton:disabled,QToolButton:disabled{color:#95a0b2;background:#f1f4f9;border-color:#e5eaf3;}
-    QPushButton#nav{text-align:left;background:transparent;border:0;padding:11px 12px;}
     QPushButton#newChat,QPushButton#send{background:#5363e8;color:white;border:0;font-weight:600;}
     QPushButton#send:hover,QPushButton#newChat:hover{background:#4253d6;}
     QFrame#composer{background:#fff;border:1px solid #ccd6ef;border-radius:16px;}
     QPlainTextEdit#prompt{border:0;background:transparent;padding:5px;}
     QFrame#assistantBubble{background:#fff;border:1px solid #e0e7f2;border-radius:14px;}
     QFrame#userBubble{background:#eef2ff;border:1px solid #dde4ff;border-radius:14px;}
-    QToolButton#settingsButton{background:transparent;border-color:transparent;padding:7px;}
-    QToolButton#settingsButton:hover,QToolButton#settingsButton:focus{background:#eef2ff;border-color:#dce4f2;}
+    QToolButton#settingsButton,QToolButton#sidebarButton{background:transparent;border-color:transparent;padding:7px;}
+    QToolButton#settingsButton:hover,QToolButton#settingsButton:focus,
+    QToolButton#sidebarButton:hover,QToolButton#sidebarButton:focus{background:#eef2ff;border-color:#dce4f2;}
     QMenu{background:#fff;border:1px solid #dce4f2;border-radius:8px;padding:5px;}
     QMenu::item{padding:7px 15px;border-radius:5px;}
     QMenu::item:selected{background:#edf1ff;color:#4357c8;}

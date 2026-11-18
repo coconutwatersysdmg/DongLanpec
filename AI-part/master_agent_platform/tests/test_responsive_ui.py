@@ -78,17 +78,25 @@ class ResponsiveUiTests(unittest.TestCase):
         self.window.module_panel.sessions = [dict(path=folder)]
         try:
             self.window.show()
-            self.window.font_zoom.setCurrentIndex(self.window.font_zoom.findData(1.4))
-            self.app.processEvents()
-            self.assertAlmostEqual(self.window.prompt.font().pointSizeF(), 16.8, places=1)
-            self.assertEqual(read_scale(self.window.workspace), 1.4)
-            self.assertEqual(self.window.execution.ui_scale, 1.4)
-            self.assertEqual(json.loads((folder/'appearance.json').read_text())['scale'], 1.4)
+            for scale in (1.4, 0.5):
+                self.window.font_zoom.setCurrentIndex(self.window.font_zoom.findData(scale))
+                self.app.processEvents()
+                self.assertAlmostEqual(self.window.prompt.font().pointSizeF(), 12 * scale, places=1)
+                self.assertEqual(read_scale(self.window.settings_workspace), scale)
+                self.assertEqual(self.window.execution.ui_scale, scale)
+                self.assertEqual(json.loads((folder/'appearance.json').read_text())['scale'], scale)
+            with patch.object(chat_app, 'BASE', self.home):
+                reopened = chat_app.ChatWindow()
+            try:
+                self.assertEqual(reopened.font_zoom.currentData(), 0.5)
+                self.assertEqual(reopened.prompt.font().pointSizeF(), 6.0)
+            finally:
+                reopened.close()
         finally: self.window.module_panel.sessions = []
 
     def test_small_and_large_windows_keep_the_composer_controls_accessible(self):
         self.window.show()
-        for width, height, scale in ((1024, 720, 1.0), (1920, 1080, 1.0), (1280, 720, 1.4),
+        for width, height, scale in ((880, 600, 0.5), (1024, 720, 1.0), (1920, 1080, 1.0), (1280, 720, 1.4),
                                      (1024, 720, 1.4), (1280, 720, 1.6)):
             self.window.font_zoom.setCurrentIndex(self.window.font_zoom.findData(scale))
             self.window.resize(width, height)
@@ -97,12 +105,12 @@ class ResponsiveUiTests(unittest.TestCase):
             self.assertLessEqual(self.window.minimumSizeHint().height(), height)
             self.assertTrue(self.window.cancel.isHidden())
             for widget in (self.window.begin, self.window.attachment_button, self.window.font_zoom,
-                           self.window.settings_button):
+                           self.window.settings_button, self.window.navigation_button, self.window.sidebar_button):
                 rect = widget.rect()
                 corner = widget.mapTo(self.window, rect.bottomRight())
                 self.assertLess(corner.x(), self.window.width())
                 self.assertLess(corner.y(), self.window.height())
-            self.assertGreaterEqual(self.window.prompt.fontMetrics().height(), 16)
+            self.assertAlmostEqual(self.window.prompt.font().pointSizeF(), 12 * scale, places=1)
 
     def test_agent_ownership_comes_from_receipts_and_rules_are_named_as_services(self):
         tasks = [dict(id='t', product_id='p', product='P', label='抽取', agent='conditions', state='succeeded'),

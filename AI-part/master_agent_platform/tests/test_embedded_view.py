@@ -79,9 +79,9 @@ class EmbeddedViewTests(unittest.TestCase):
             self.assertAlmostEqual(scales[-1], 2.8)
             self.assertTrue(view.sync_viewport(value, scales.append))
             self.assertEqual(len(scales), 1)
-            value['scale'] = 1.0
+            value['scale'] = 0.5
             self.assertTrue(view.sync_viewport(value, scales.append))
-            self.assertEqual(scales, [2.8, 2.0])
+            self.assertEqual(scales, [2.8, 1.0])
         finally:
             window.close()
             self.app.processEvents()
@@ -94,6 +94,7 @@ class EmbeddedViewTests(unittest.TestCase):
             for value in ({}, dict(size=[0, 600], dpr=1, scale=1),
                           dict(size=[900, float('nan')], dpr=1, scale=1),
                           dict(size=[900, 600], dpr=float('inf'), scale=1),
+                          dict(size=[900, 600], dpr=1, scale=.49),
                           dict(size=[900, 600], dpr=1, scale=20)):
                 self.assertFalse(view.sync_viewport(value, scales.append))
             self.assertEqual(window.size(), before)

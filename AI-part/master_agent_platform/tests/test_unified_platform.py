@@ -98,10 +98,11 @@ class UnifiedPlatformTests(unittest.TestCase):
         window = run.MainWindow()
         window.on_complete(self.summary)
         try:
-            labels = [b.text() for b in window.nav_buttons]
+            labels = [action.text() for action in window.navigation_button.menu().actions()]
             self.assertIn("数据空间", labels)
             self.assertIn("模块结果", labels)
             self.assertIn("运行记录", labels)
+            self.assertIn("载入任务结果", labels)
             self.assertFalse(any("原模块" in s or "工作台" in s for s in labels))
             self.assertEqual(window.data_space.resources.topLevelItemCount(), 1)
             self.assertTrue(window.execution.tasks)
@@ -135,7 +136,7 @@ class UnifiedPlatformTests(unittest.TestCase):
         old_id = window.chat_id
         window.inputs, window.knowledge = [str(self.source)], [str(self.source)]
         window.prompt.setPlainText("旧对话未发送内容")
-        window.nav_buttons[4].setText("待审核  3")
+        window.nav_actions[4].setText("待审核  3")
         window.review_editors = [("old-product", "old-field", None)]
         window.navigate(3)
         try:
@@ -151,7 +152,7 @@ class UnifiedPlatformTests(unittest.TestCase):
             self.assertEqual(window.log.toPlainText(), "")
             self.assertEqual(window.review_tree.topLevelItemCount(), 0)
             self.assertEqual(window.review_editors, [])
-            self.assertEqual(window.nav_buttons[4].text(), "待审核")
+            self.assertEqual(window.nav_actions[4].text(), "待审核")
             self.assertEqual(window.module_panel.product.count(), 0)
             self.assertEqual(window.module_panel.preview.toPlainText(), "")
             self.assertEqual(window.execution.tasks, {})
