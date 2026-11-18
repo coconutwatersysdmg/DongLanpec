@@ -22,7 +22,7 @@ from .orchestrator import Orchestrator
 from .presentation import ExecutionPanel, DataSpacePanel
 from .run_view import duration
 from .module_panel import ModulePanel
-from .chat_widgets import centered_row, message_row, RecentChatDelegate
+from .chat_widgets import message_row, RecentChatDelegate
 from .export_settings import ExportSettingsDialog, default_save_file, export_task_drafts
 from .ui_theme import (apply_theme, read_scale, save_scale, fit_initial_window,
     ResizableCard, FlowLayout, WorkspaceSurface, WorkspaceComboBox, ZOOM_PERCENTAGES)
@@ -373,9 +373,11 @@ class ChatWindow(QMainWindow):
         # scrollbar, sidebar and window decoration have finished resizing.
         left = viewport.mapTo(self, QPoint()).x() - self.composer_area.mapTo(self, QPoint()).x()
         right = self.composer_area.width() - left - viewport.width()
-        margins = (max(0, self.chat_layout.contentsMargins().left()+left), 0,
-                   max(0, self.chat_layout.contentsMargins().right()+right), 0)
-        if margins != self.composer_layout.getContentsMargins():
+        transcript = self.chat_layout.contentsMargins()
+        current = self.composer_layout.getContentsMargins()
+        margins = (max(0, transcript.left()+left), current[1],
+                   max(0, transcript.right()+right), current[3])
+        if margins != current:
             self.composer_layout.setContentsMargins(*margins)
 
     def adjust_layout(self):
@@ -440,23 +442,19 @@ class ChatWindow(QMainWindow):
         self.chat_layout = QVBoxLayout(conversation)
         self.chat_layout.setContentsMargins(8, 14, 8, 14)
         self.chat_layout.setSpacing(16)
-        welcome = QWidget()
-        self.welcome = centered_row(welcome)
-        hero = QVBoxLayout(welcome)
+        self.welcome = QWidget()
+        hero = QVBoxLayout(self.welcome)
         hero.setContentsMargins(14, 48, 14, 18)
         hero.setSpacing(10)
         heading = QLabel("从工程资料生成产品数据")
         heading.setObjectName("heroTitle")
         heading.setWordWrap(True)
-        heading.setAlignment(Qt.AlignCenter)
         hero.addWidget(heading)
         explanation = QLabel("添加文件并描述任务，结果和审核记录会显示在对话中。")
         explanation.setWordWrap(True)
-        explanation.setAlignment(Qt.AlignCenter)
         explanation.setObjectName("muted")
         hero.addWidget(explanation)
-        shortcuts = QWidget()
-        examples = FlowLayout(shortcuts)
+        examples = FlowLayout()
         self.shortcut_buttons = {}
         for action, text in (("products", "整理全部产品"), ("review", "核对参数与来源"),
                              ("execution", "查看执行图")):
@@ -464,7 +462,7 @@ class ChatWindow(QMainWindow):
             button.clicked.connect(lambda _, key=action: self.execute_shortcut(key))
             self.shortcut_buttons[action] = button
             examples.addWidget(button)
-        hero.addWidget(centered_row(shortcuts, 460))
+        hero.addLayout(examples)
         self.chat_layout.addWidget(self.welcome)
         self.report = QTextBrowser()
         self.report.setObjectName("conversation")
@@ -487,8 +485,7 @@ class ChatWindow(QMainWindow):
         result_actions.addWidget(self.open_output)
         report_layout.addLayout(result_actions)
         self.report_frame.hide()
-        self.report_row = centered_row(self.report_frame)
-        self.chat_layout.addWidget(self.report_row)
+        self.chat_layout.addWidget(self.report_frame)
         self.chat_layout.addStretch()
         scroll.setWidget(conversation)
         self.chat_splitter = QSplitter(Qt.Vertical)
@@ -498,12 +495,8 @@ class ChatWindow(QMainWindow):
         self.composer_area = WorkspaceSurface()
         scroll.viewport().installEventFilter(self)
         self.composer_area.installEventFilter(self)
-        composer_lane = QWidget()
-        self.composer_layout = QVBoxLayout(self.composer_area)
-        self.composer_layout.setContentsMargins(8, 0, 8, 0)
-        self.composer_layout.addWidget(centered_row(composer_lane))
-        dock = QVBoxLayout(composer_lane)
-        dock.setContentsMargins(0, 4, 0, 0)
+        dock = self.composer_layout = QVBoxLayout(self.composer_area)
+        dock.setContentsMargins(8, 4, 8, 0)
         self.attachments = QLabel()
         self.attachments.setObjectName("muted")
         self.attachments.setWordWrap(True)
@@ -834,7 +827,7 @@ class ChatWindow(QMainWindow):
         self.report.setPlainText("\n".join(lines))
         self.report.setMinimumHeight(200)
         self.report.setMaximumHeight(440)
-        for card in (self.report_row, self.module_card, self.execution_card):
+        for card in (self.report_frame, self.module_card, self.execution_card):
             self.chat_layout.removeWidget(card)
             self.chat_layout.insertWidget(self.chat_layout.count()-1, card)
         self.report.show()
@@ -845,7 +838,7 @@ class ChatWindow(QMainWindow):
         if restoring_chat and self.bubbles:
             self.scroll_to_card(self.bubbles[0])
         else:
-            self.scroll_to_card(self.report_row)
+            self.scroll_to_card(self.report_frame)
         self.welcome.hide()
         self.open_output.setEnabled(bool(self.last_output))
         self.nav_actions[4].setText("待审核" + (f"  {count}" if count else ""))

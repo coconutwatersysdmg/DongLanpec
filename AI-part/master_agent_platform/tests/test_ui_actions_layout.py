@@ -273,7 +273,7 @@ class ActionLayoutTests(unittest.TestCase):
         self.assertEqual(combo.currentData(), 1.1)
         self.assertEqual(self.window.ui_scale, 1.1)
 
-    def test_messages_align_inside_the_same_centered_column_as_the_composer(self):
+    def test_messages_and_result_use_the_available_width_with_users_on_the_right(self):
         window = self.window
         window.resize(1600, 900)
         window.show()
@@ -282,9 +282,11 @@ class ActionLayoutTests(unittest.TestCase):
         window.bubble('user', text, persist=False)
         window.bubble('assistant', '已完成复核。', persist=False)
         window.bubble('user', '换热设备条件和材料复核说明。'*35, persist=False)
+        window.report_frame.show()
         QTest.qWait(40)
         user = window.bubbles[0].findChild(QFrame, 'userBubble')
-        assistant = window.bubbles[1].findChild(QFrame, 'assistantMessage')
+        assistant = window.bubbles[1]
+        self.assertEqual(assistant.objectName(), 'assistantMessage')
         long_user = window.bubbles[2].findChild(QFrame, 'userBubble')
         label = user.findChild(QLabel, 'messageText')
         self.assertGreaterEqual(label.width(), label.fontMetrics().horizontalAdvance(text))
@@ -292,6 +294,11 @@ class ActionLayoutTests(unittest.TestCase):
         self.assertGreater(long_user.height(), user.height()*2)
         self.assertGreater(user.mapTo(window, QPoint()).x(), assistant.mapTo(window, QPoint()).x())
         composer = window.composer_area.findChild(QFrame, 'composer')
+        viewport = window.chat_scroll.viewport()
+        self.assertEqual(composer.width(), viewport.width()-16)
+        self.assertGreater(composer.width(), 860)
+        self.assertEqual(window.report_frame.width(), composer.width())
+        self.assertLessEqual(abs(assistant.mapTo(window, QPoint()).x() - composer.mapTo(window, QPoint()).x()), 1)
         self.assertLessEqual(abs(user.mapTo(window, user.rect().topRight()).x()
                                  - composer.mapTo(window, composer.rect().topRight()).x()), 2)
 

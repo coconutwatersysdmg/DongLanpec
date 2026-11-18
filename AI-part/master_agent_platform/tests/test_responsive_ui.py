@@ -118,18 +118,20 @@ class ResponsiveUiTests(unittest.TestCase):
         window.show()
         window.welcome.hide()
         window.bubble('assistant', '请加入设备资料。', persist=False)
-        message = window.bubbles[0].findChild(QFrame, 'assistantMessage')
+        message = window.bubbles[0]
         composer = window.composer_area.findChild(QFrame, 'composer')
 
-        def center(widget):
-            return widget.mapTo(window, QPoint()).x() + widget.width()/2
+        def left(widget):
+            return widget.mapTo(window, QPoint()).x()
 
         for policy in (Qt.ScrollBarAlwaysOn, Qt.ScrollBarAlwaysOff):
             window.chat_scroll.setVerticalScrollBarPolicy(policy)
             QTest.qWait(20)
             self.assertEqual(window.chat_scroll.verticalScrollBar().maximum(), 0)
-            self.assertLessEqual(abs(center(composer)-center(message)), 1)
-            self.assertLessEqual(abs(center(composer)-center(window.chat_scroll.viewport())), 1)
+            viewport = window.chat_scroll.viewport()
+            self.assertEqual(left(composer), left(viewport) + 8)
+            self.assertEqual(left(composer), left(message))
+            self.assertEqual(composer.width(), viewport.width() - 16)
 
     def test_agent_ownership_comes_from_receipts_and_rules_are_named_as_services(self):
         tasks = [dict(id='t', product_id='p', product='P', label='抽取', agent='conditions', state='succeeded'),

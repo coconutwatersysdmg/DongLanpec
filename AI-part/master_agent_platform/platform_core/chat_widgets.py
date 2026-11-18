@@ -5,20 +5,7 @@ from PyQt5.QtWidgets import (QFrame, QHBoxLayout, QLabel, QSizePolicy, QStyle,
                              QStyledItemDelegate, QVBoxLayout, QWidget)
 
 
-CHAT_WIDTH = 860
 USER_MESSAGE_WIDTH = 650
-
-
-def centered_row(content, width=CHAT_WIDTH):
-    row = QWidget()
-    layout = QHBoxLayout(row)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(0)
-    content.setMaximumWidth(width)
-    layout.addStretch(1)
-    layout.addWidget(content, 100)
-    layout.addStretch(1)
-    return row
 
 
 class UserMessageText(QLabel):
@@ -48,14 +35,14 @@ def message_row(role, text):
     label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
     layout.addWidget(label)
     if not user:
-        return centered_row(frame)
+        return frame
     frame.setMaximumWidth(USER_MESSAGE_WIDTH)
     lane = QWidget()
     alignment = QHBoxLayout(lane)
     alignment.setContentsMargins(0, 0, 0, 0)
     alignment.addStretch(1)
     alignment.addWidget(frame)
-    return centered_row(lane)
+    return lane
 
 
 class RecentChatDelegate(QStyledItemDelegate):
