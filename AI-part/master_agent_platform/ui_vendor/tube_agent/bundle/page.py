@@ -462,7 +462,7 @@ class TubeLayoutPage(QWidget):
         left = QFrame()
         self.left_frame = left
         left.setObjectName("layoutParamFrame")
-        # 三栏按 30/48/22 分宽度：左侧只要放得下“参数名 + 数值 + 单位”，
+        # 三栏按 3:5:2 分宽度：左侧只要放得下“参数名 + 数值 + 单位”，
         # 下限压到 330 才能在 1100 宽的编辑器里不出现整页横向滚动条。
         left.setMinimumWidth(330)
         left_layout = QVBoxLayout(left)
@@ -509,7 +509,7 @@ class TubeLayoutPage(QWidget):
         )
         self.divider_correction_tip.setVisible(False)
         left_layout.addWidget(self.divider_correction_tip)
-        body.addWidget(left, 32)
+        body.addWidget(left, 30)
 
         # 中：图形 + 操作栏
         center = QFrame()
@@ -569,19 +569,20 @@ class TubeLayoutPage(QWidget):
         self.selection_label.setStyleSheet("color:#8f949c;")
         action_bar.addWidget(self.selection_label)
         center_layout.addLayout(action_bar)
-        body.addWidget(center, 46)
+        body.addWidget(center, 50)
 
         # 右：管孔数量分布
         right = QFrame()
         self.right_frame = right
-        right.setMinimumWidth(300)
+        right.setObjectName("layoutHoleFrame")
+        right.setMinimumWidth(220)
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(4, 4, 4, 4)
         self.hole_table = HoleDistributionTable()
         self.hole_table.rows_selected.connect(self.on_table_rows_selected)
         self.hole_table.arrangement_changed.connect(lambda _by_row: self.refresh_hole_table())
         right_layout.addWidget(self.hole_table)
-        body.addWidget(right, 22)
+        body.addWidget(right, 20)
 
         root.addLayout(body, 1)
 
@@ -1325,6 +1326,7 @@ class TubeLayoutPage(QWidget):
         self._draw_components()
         self._draw_center_lines(result)
         self.view.fit_all()
+        QTimer.singleShot(0, self.view.fit_all)
         self._update_lagan_summary()
 
     def _envelope_radii(self, result: engine.LayoutResult) -> dict[str, float]:
@@ -2535,9 +2537,9 @@ class TubeLayoutPage(QWidget):
         self.graphics_expanded = bool(enabled)
         self.left_frame.setVisible(not self.graphics_expanded)
         self.right_frame.setVisible(not self.graphics_expanded)
-        self.body_layout.setStretch(0, 0 if self.graphics_expanded else 36)
-        self.body_layout.setStretch(1, 1 if self.graphics_expanded else 39)
-        self.body_layout.setStretch(2, 0 if self.graphics_expanded else 25)
+        self.body_layout.setStretch(0, 0 if self.graphics_expanded else 30)
+        self.body_layout.setStretch(1, 1 if self.graphics_expanded else 50)
+        self.body_layout.setStretch(2, 0 if self.graphics_expanded else 20)
         if self.fullscreen_button is not None:
             self.fullscreen_button.setText("退出全屏" if self.graphics_expanded else "全屏")
         self.body_layout.invalidate()

@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import math
 from copy import deepcopy
 
 from PyQt5.QtCore import QObject, pyqtSignal
@@ -49,18 +50,21 @@ class DesignSession(QObject):
                 return index
         return None
 
-    def dn(self) -> float:
+    def dn(self) -> float | None:
         for key in ("公称直径", "公称直径 DN", "DN"):
             row = self.upstream.get(key)
-            if isinstance(row, dict) and row.get("value"):
+            if isinstance(row, dict) and row.get("value") not in (None, ""):
                 try:
-                    return float(str(row["value"]).strip())
+                    value = float(str(row["value"]).strip())
                 except (TypeError, ValueError):
-                    continue
-        return 1000.0
+                    return None
+                return value if math.isfinite(value) and value > 0 else None
+        return None
 
     def header_text(self) -> str:
-        return f"{self.product_id} · {self.product_type} · DN{self.dn():g}"
+        dn = self.dn()
+        dn_label = f"DN{dn:g}" if dn is not None else "DN待补录"
+        return f"{self.product_id} · {self.product_type} · {dn_label}"
 
     # ------------------------------------------------------------------ 保留
     def mark_kept(self, stage: str, payload: dict) -> None:
@@ -146,6 +150,8 @@ class DesignSession(QObject):
     def layout_linkage(self, sheet_payload: dict) -> dict:
         """管板型式 → 布管：布管限定圆 DL 由 DN 与 R2 决定（正式程序同名联动）。"""
         dn = self.dn()
+        if dn is None:
+            raise ValueError("缺少有效公称直径，无法联动计算布管限定圆 DL。")
         try:
             r2 = float(str(sheet_payload.get("R2", 8.0)))
         except (TypeError, ValueError):

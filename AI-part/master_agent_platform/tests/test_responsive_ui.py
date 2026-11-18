@@ -9,7 +9,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from PyQt5.QtCore import QPoint, QPointF, QEvent, Qt
 from PyQt5.QtGui import QMouseEvent
 from PyQt5.QtTest import QTest
-from PyQt5.QtWidgets import QApplication, QPushButton, QWidget, QLineEdit, QTableWidget, QFrame
+from PyQt5.QtWidgets import QApplication, QPushButton, QWidget, QLineEdit, QTableWidget, QFrame, QComboBox
 from platform_core import chat_app
 from platform_core.graph_model import execution_graph
 from platform_core.ui_theme import FlowLayout, ResizableCard, read_scale, scale_legacy_page
@@ -166,6 +166,22 @@ class ResponsiveUiTests(unittest.TestCase):
         self.assertGreaterEqual(table.rowHeight(0), 58)
         self.assertIn('color:#123456', edit.styleSheet())
         self.assertNotIn('font-size', edit.styleSheet())
+        page.close()
+
+    def test_table_combo_keeps_its_compact_style_and_fits_its_row(self):
+        page = QWidget()
+        layout = QTableWidget(1, 1, page)
+        layout.setRowHeight(0, 40)
+        combo = QComboBox()
+        combo.setStyleSheet('QComboBox{padding:1px;min-height:22px;}')
+        layout.setCellWidget(0, 0, combo)
+        page.show()
+        self.app.processEvents()
+        scale_legacy_page(page, 0.6)
+        self.app.processEvents()
+        self.assertIn('padding:1px', combo.styleSheet())
+        self.assertLess(combo.minimumWidth(), 90)
+        self.assertLessEqual(combo.geometry().height(), layout.rowHeight(0))
         page.close()
 
 

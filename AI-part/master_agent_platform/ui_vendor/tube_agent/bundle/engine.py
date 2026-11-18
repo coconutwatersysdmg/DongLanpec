@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 
 from . import api, geometry
@@ -24,9 +25,9 @@ HE_TYPE_BY_PRODUCT = {
 }
 
 # HE3DTB.dll 对缺失键不健壮（会抛 NullReferenceException），因此这里放一份与
-# 元件库.布管参数默认表_U型管 一致的兜底入参，仅用于补齐调用方没给的键。
+# 元件库.布管参数默认表_U型管 一致的兜底入参；公称直径必须由条件输入提供。
 FALLBACK_INPUT = {
-    "LB_DN": "1200", "LB_Di": "1144", "LB_TubePassCount": "2", "LB_Tubeform": "2.1",
+    "LB_Di": "1144", "LB_TubePassCount": "2", "LB_Tubeform": "2.1",
     "LB_IsRangeCenter": "1", "LB_TotalTubesCountNeed": "10000", "LB_TubeD": "25",
     "LB_TubeThick": "2", "LB_RangeType": "3", "LB_TubeLong": "4500",
     "LB_BaffleDirection": "1", "LB_BafflePerStr": "25", "LB_BaffleToODistance": "123.2",
@@ -87,7 +88,7 @@ def build_input(parameters: dict, product_type: str, defaults: dict | None = Non
     payload: dict[str, str] = dict(FALLBACK_INPUT)
     for name, key in LB_MAPPING.items():
         value = _text(parameters, name)
-        if value == "":
+        if value == "" and name != "公称直径 DN":
             value = str(defaults.get(name, "") or "")
         if value == "":
             continue
@@ -125,6 +126,8 @@ def build_input(parameters: dict, product_type: str, defaults: dict | None = Non
             return None
 
     dn_value = _float_or_none("LB_DN")
+    if dn_value is None or not math.isfinite(dn_value) or dn_value <= 0:
+        raise LayoutError("缺少有效的公称直径 DN，请先从条件输入读取或补齐该参数")
     di_value = _float_or_none("LB_Di")
     if dn_value and di_value and di_value > dn_value + 1e-6:
         payload["LB_Di"] = f"{dn_value:.1f}"
@@ -147,7 +150,7 @@ def build_input(parameters: dict, product_type: str, defaults: dict | None = Non
             except (TypeError, ValueError):
                 pass
 
-    for required in ("LB_DN", "LB_Di", "LB_TubeD", "LB_TubePassCount", "LB_S"):
+    for required in ("LB_Di", "LB_TubeD", "LB_TubePassCount", "LB_S"):
         if not payload.get(required):
             raise LayoutError(f"缺少布管必需参数 {required}，请先补齐参数表或读取前序模块数据")
     return payload

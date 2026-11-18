@@ -398,9 +398,12 @@ def param_combo_stylesheet(disabled: bool = False, border: str | None = None) ->
     """正式程序 get_param_combo_stylesheet() 的同款实现（border 可给校验红框）。"""
     arrow = combo_arrow_url()
     line_color = border or PARAM_COMBO_BORDER
+    # 字号与高度不写死：由 scale_legacy_page 按平台「字号」设置的 12*scale pt
+    # 与 min/max height 控制。若在这里写死 font-size:10pt/min-height:22px，
+    # 缩放到 0.6（行高仅 25px）时下拉框会被重新撑破单元格（点「布管」重绘后尤其明显）。
     base = (
         f"background-color: #ffffff;border: 1px solid {line_color};"
-        f"color: {PARAM_COMBO_TEXT};font-size: 10pt;min-height: 22px;"
+        f"color: {PARAM_COMBO_TEXT};"
         "padding: 1px 16px 1px 4px;"
     )
     popup = (
@@ -430,7 +433,19 @@ def apply_param_combo_style(
     """套样式 + 修调色板（正式程序同名函数），避免选中整行时文字变白。"""
     if not isinstance(combo, QComboBox):
         return
-    combo.setStyleSheet(param_combo_stylesheet(disabled=disabled, border=border))
+    css = param_combo_stylesheet(disabled=disabled, border=border)
+    # 全局主题 theme() 给所有 QComboBox 套了 border-radius:8px / min-height:22px /
+    # padding:6px。控件自身 setStyleSheet 与全局样式是级联关系，未声明的属性仍继承
+    # 全局，于是点「布管」重绘后圆角和大高度又冒出来撑破单元格。这里显式覆盖成
+    # 紧凑方角；字号沿用 scale_legacy_page 按平台「字号」设置的字体，行高始终一致。
+    point_size = combo.font().pointSizeF()
+    font_css = f"font-size:{point_size:.2f}pt;" if point_size > 0 else ""
+    css = css.replace(
+        "QComboBox{",
+        "QComboBox{" + font_css + "border-radius:0px;min-height:0px;",
+        1,
+    )
+    combo.setStyleSheet(css)
     text_color = QColor(
         PARAM_COMBO_TEXT if (border or not disabled) else PARAM_COMBO_DISABLED_TEXT
     )

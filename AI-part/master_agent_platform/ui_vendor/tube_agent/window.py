@@ -1151,6 +1151,17 @@ class ComponentCoordinateCard(QFrame):
         self.copy_button.setText("已复制")
 
 
+def apply_extracted_parameters(parameters: dict, extracted: dict) -> None:
+    condition_fields = {"公称直径", "公称直径 DN", "DN"}
+    for name, row in (extracted or {}).items():
+        if name in condition_fields:
+            continue
+        value = row.get("value")
+        if name in parameters and value not in (None, ""):
+            parameters[name]["value"] = str(value)
+            parameters[name]["source"] = "输入文件提取"
+
+
 class DesignWindow(QMainWindow):
     def __init__(self, repository=None):
         super().__init__()
@@ -1491,7 +1502,19 @@ class DesignWindow(QMainWindow):
             return
 
         params = self._merge_defaults(params, defaults, upstream)
-        self.session = DesignSession(self.repository, product, upstream, self)
+        session = DesignSession(self.repository, product, upstream, self)
+        if session.dn() is None:
+            self.session = None
+            self.pages.clear()
+            self._clear_preview()
+            self._clear_inline_card()
+            self.append_chat(
+                "assistant",
+                "条件输入和已保存设计数据中都没有有效的公称直径；已停止启动管束设计，"
+                "不会使用布管默认 DN。请先补齐条件输入后重试。",
+            )
+            return
+        self.session = session
         self.session.stage_changed.connect(self._on_stage_changed)
         self.pages.clear()
         self._clear_preview()
@@ -1526,12 +1549,18 @@ class DesignWindow(QMainWindow):
                 "source": "布管参数表" if str(value or "").strip() else "程序默认值",
             }
         for name, value in (defaults or {}).items():
+            if name in {"公称直径", "公称直径 DN", "DN"}:
+                continue
             if name not in merged or not str(merged[name].get("value") or "").strip():
                 merged[name] = {"value": value, "unit": merged.get(name, {}).get("unit", ""), "source": "程序默认值"}
         # 前序模块数据优先：公称直径、是否以外径为基准
         dn = upstream.get("公称直径") or upstream.get("公称直径 DN")
         if dn and str(dn.get("value", "")).strip():
-            merged["公称直径 DN"] = {"value": str(dn["value"]).strip(), "unit": "mm", "source": "设计数据表"}
+            merged["公称直径 DN"] = {
+                "value": str(dn["value"]).strip(),
+                "unit": dn.get("unit") or "mm",
+                "source": dn.get("source") or "设计数据表",
+            }
         basis = upstream.get("是否以外径为基准")
         if basis and str(basis.get("value", "")).strip() in {"是", "否"}:
             merged["是否以外径为基准"] = {"value": str(basis["value"]).strip(), "unit": "", "source": "通用数据表"}
@@ -1572,11 +1601,9 @@ class DesignWindow(QMainWindow):
                 {"R2": sheet_values.get("R2", 8.0)}
             )["布管限定圆 DL"]
             params["布管限定圆 DL"]["source"] = "联动计算"
-        for name, extracted in getattr(self, "_platform_extracted_parameters", {}).items():
-            value = extracted.get("value")
-            if name in params and value not in (None, ""):
-                params[name]["value"] = str(value)
-                params[name]["source"] = "输入文件提取"
+        apply_extracted_parameters(
+            params, getattr(self, "_platform_extracted_parameters", {})
+        )
         page = TubeLayoutPage(
             params,
             self.session.product_type,

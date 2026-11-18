@@ -261,17 +261,64 @@ def scale_legacy_page(root, scale):
         font.setPointSizeF(12*scale)
         widget.setFont(font)
         if isinstance(widget, (QLineEdit, QComboBox)):
-            if isinstance(widget, QComboBox):
+            in_table = _is_table_editor(widget)
+            if isinstance(widget, QComboBox) and not in_table:
                 widget.setStyleSheet(combo_style())
+                style_combo_popup(widget)
+            elif isinstance(widget, QComboBox) and in_table:
+                # 表格内的下拉框必须保持方角紧凑：否则会继承全局 theme() 里的
+                # combo_style()（border-radius:8px / padding / min-height），在
+                # 60% 字号、行高仅 25px 时被撑破单元格。这里显式清除圆角与
+                # 写死的字号/最小高度，字号交给上面的 12*scale，高度交给 min/max。
+                css = widget.styleSheet()
+                css = re.sub(r'border-radius\s*:\s*[^;}]+;?', '', css, flags=re.I)
+                css = re.sub(r'font-size\s*:\s*[^;}]+;?', '', css, flags=re.I)
+                css = re.sub(r'min-height\s*:\s*[^;}]+;?', '', css, flags=re.I)
+                css = re.sub(r'padding\s*:\s*[^;}]+;?', 'padding:1px 16px 1px 4px;', css, flags=re.I)
+                if 'QComboBox' not in css:
+                    css = "QComboBox{background:#ffffff;border:1px solid #CCCCCC;padding:1px 16px 1px 4px;}" + css
+                widget.setStyleSheet(css)
                 style_combo_popup(widget)
             if widget.maximumWidth() == widget.minimumWidth():
                 widget.setMaximumWidth(16777215)
-            widget.setMinimumWidth(max(90, widget.fontMetrics().horizontalAdvance('000000')+24))
+            if not in_table:
+                widget.setMinimumWidth(max(90, widget.fontMetrics().horizontalAdvance('000000')+24))
             if widget.maximumHeight() == widget.minimumHeight(): widget.setMaximumHeight(16777215)
-            widget.setMinimumHeight(round(32*scale))
+            minimum_height = 26 if in_table else 32
+            widget.setMinimumHeight(round(minimum_height*scale))
+            if in_table:
+                widget.setMaximumHeight(max(22, round(28*scale)))
         elif isinstance(widget, QTableWidget):
             widget.verticalHeader().setDefaultSectionSize(round(42*scale))
             for row in range(widget.rowCount()): widget.setRowHeight(row, round(42*scale))
+    # 布管页三栏的左右下限原本写死为 330 / 220（合计 550px）。嵌入到平台面板
+    # 后可用宽度往往只有 ~730px，中间图形区被挤压到不足 180px。这里按字号
+    # 比例缩放左右下限，保证中间 50% 的图形区始终可见。
+    from PyQt5.QtWidgets import QFrame
+    for frame in [root]+root.findChildren(QFrame):
+        name = frame.objectName()
+        if name == 'layoutParamFrame':
+            frame.setMinimumWidth(round(330*scale))
+        elif name == 'layoutHoleFrame':
+            frame.setMinimumWidth(round(220*scale))
+
+    for table in root.findChildren(QTableWidget):
+        for row in range(table.rowCount()):
+            row_height = table.rowHeight(row)
+            for column in range(table.columnCount()):
+                editor = table.cellWidget(row, column)
+                if editor is not None:
+                    row_height = max(row_height, editor.sizeHint().height())
+            table.setRowHeight(row, row_height)
+
+
+def _is_table_editor(widget):
+    parent = widget.parentWidget()
+    while parent is not None:
+        if isinstance(parent, QTableWidget):
+            return True
+        parent = parent.parentWidget()
+    return False
 
 
 class FlowLayout(QLayout):

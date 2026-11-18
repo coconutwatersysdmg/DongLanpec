@@ -37,6 +37,30 @@ def canonical_nozzles(data):
         for r in exported.get("nozzles", [])]
 
 
+def with_condition_input_dn(upstream, data):
+    rows = (data.get("conditions") or {}).get("design_rows") or []
+    for side in ("tube", "shell"):
+        row = next(
+            (row for row in rows
+             if str(row.get("param", "")).replace("*", "").strip() == "公称直径"
+             and row.get("side") == side
+             and row.get("value") not in (None, "")
+             and str(row.get("value")).strip() != "/"),
+            None,
+        )
+        if row is not None:
+            values = dict(upstream or {})
+            values.pop("公称直径 DN", None)
+            values.pop("DN", None)
+            values["公称直径"] = {
+                "value": row["value"],
+                "unit": row.get("unit") or "mm",
+                "source": "条件输入",
+            }
+            return values
+    return dict(upstream or {})
+
+
 def create_window(context):
     root = Path(context.info["ui_root"])
     module = context.info["module"]
@@ -199,6 +223,13 @@ def create_window(context):
         ChatTranscript._reveal = reveal
         repository = ProductionRepository(config=DBConfig(host=context.config["host"], port=context.config["port"],
             user=context.config["user"], password=context.config["password"]))
+        old_upstream = repository.upstream
+        def upstream(identity):
+            values = old_upstream(identity)
+            if identity != context.product_id:
+                return values
+            return with_condition_input_dn(values, context.data)
+        repository.upstream = upstream
         old_list = repository.list_products
         def products(limit=200):
             rows = [row for row in old_list(max(limit, len(context.products))) if row["产品ID"] in context.products]

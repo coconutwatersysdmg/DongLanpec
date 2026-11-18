@@ -21,6 +21,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -121,6 +122,8 @@ class StagePage(QWidget):
     SHOW_GRAPHICS = True
     COMPACT_PREVIEW_LAYOUT = False
     PREVIEW_IMAGE_MIN_HEIGHT = 70
+    # 示意图最大显示高度：原图只有约 280px，放大过头既发虚又会把整页撑高
+    PREVIEW_IMAGE_MAX_HEIGHT = 360
     SELECTOR_FIELDS: tuple[str, ...] = ()
     keep_requested = pyqtSignal()
     parameters_changed = pyqtSignal(dict)
@@ -196,6 +199,10 @@ class StagePage(QWidget):
         self.image_label = QLabel("")
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setMinimumHeight(self.PREVIEW_IMAGE_MIN_HEIGHT)
+        # 示意图只做“按可用空间缩放”，不用图片本身的尺寸去撑大布局：
+        # 否则原图（约 280×290）一旦被放大，就会把预览框和整页撑出可视区，
+        # 底部被裁掉，看起来就是“示意图显示不全”。
+        self.image_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
         preview_layout.addWidget(self.image_label, 1)
         self.scene = QGraphicsScene(self)
         self.view = LayoutGraphicsView(self.scene)
@@ -224,10 +231,10 @@ class StagePage(QWidget):
         footer.addStretch()
         self.keep_button = QPushButton("保留")
         self.keep_button.setCursor(Qt.PointingHandCursor)
-        self.keep_button.setMinimumWidth(120)
+        self.keep_button.setMinimumWidth(88)
         self.keep_button.setStyleSheet(
-            "QPushButton{background:#2f6fe4;color:#fff;border:none;border-radius:9px;padding:9px 26px;"
-            "font-weight:600;font-size:10.5pt;}"
+            "QPushButton{background:#2f6fe4;color:#fff;border:none;border-radius:7px;padding:5px 16px;"
+            "font-weight:600;font-size:9.5pt;}"
             "QPushButton:hover{background:#2a63cc;}"
             "QPushButton:disabled{background:#eef2fa;color:#a8b6cc;}"
         )
@@ -255,7 +262,9 @@ class StagePage(QWidget):
             self.table.verticalHeader().defaultSectionSize() * self.table.rowCount()
         )
         header_height = self.table.horizontalHeader().sizeHint().height()
-        self.table.setMinimumHeight(rows_height + header_height + 4)
+        # 让每一行都露出来是好事，但不能无限撑高：整页被它顶到比宿主窗格还高，
+        # 就会变成“要拖滚动条才能看全”。超过 360 之后交给表格自己的滚动条。
+        self.table.setMinimumHeight(min(rows_height + header_height + 4, 360))
 
     def rebuild(self) -> None:
         table = self.table
@@ -473,16 +482,23 @@ class StagePage(QWidget):
         self._scale_image()
 
     def _scale_image(self) -> None:
+        """把示意图缩放到当前可用空间内：宽高都取实际可用尺寸，且不超过 PREVIEW_IMAGE_MAX_HEIGHT。"""
         if getattr(self, "_pixmap", None) is None:
             return
-        width = max(self.image_label.width() - 10, 200)
-        height = max(min(self.image_label.height() - 8, 520), 120)
+        width = max(self.image_label.width() - 8, 80)
+        height = max(self.image_label.height() - 8, 60)
+        height = min(height, self.PREVIEW_IMAGE_MAX_HEIGHT)
         self.image_label.setPixmap(
             self._pixmap.scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         )
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._scale_image()
+
+    def showEvent(self, event):  # noqa: N802 - Qt API
+        super().showEvent(event)
+        # 首次显示时标签才拿到真实尺寸，这里补一次缩放，避免按初始小尺寸画糊
         self._scale_image()
 
 
@@ -493,7 +509,8 @@ class SheetFormStage(StagePage):
     SHOW_SCENE = False
     SHOW_GRAPHICS = True
     COMPACT_PREVIEW_LAYOUT = True
-    PREVIEW_IMAGE_MIN_HEIGHT = 260
+    PREVIEW_IMAGE_MIN_HEIGHT = 220
+    PREVIEW_IMAGE_MAX_HEIGHT = 300
     SELECTOR_FIELDS = ("管板类型",)
 
     def __init__(self, repository=None, product_type: str = "AEU", dn: float = 1000.0,
@@ -596,7 +613,8 @@ class TubeConnectionStage(StagePage):
     SHOW_SCENE = False
     SHOW_GRAPHICS = True
     COMPACT_PREVIEW_LAYOUT = True
-    PREVIEW_IMAGE_MIN_HEIGHT = 260
+    PREVIEW_IMAGE_MIN_HEIGHT = 180
+    PREVIEW_IMAGE_MAX_HEIGHT = 320
     SELECTOR_FIELDS = ("管板连接方式", "管板类型")
 
     def __init__(self, repository=None, mode: str | None = None, plate_type: str = "0", parent=None):
