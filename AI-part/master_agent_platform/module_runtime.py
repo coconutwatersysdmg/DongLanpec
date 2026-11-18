@@ -42,20 +42,24 @@ def main():
     context = UiContext(args.context)
     setup(context)
     if args.snapshot or args.probe: os.environ["QT_QPA_PLATFORM"] = "offscreen"
-    from PyQt5.QtCore import Qt, QTimer, QUrl
-    from PyQt5.QtGui import QColor, QFont, QFontDatabase, QDesktopServices, QPixmap
+    from PyQt5.QtCore import Qt, QTimer, QSignalBlocker, pyqtSignal
+    from PyQt5.QtGui import QColor
     from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
         QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView, QPushButton, QLabel,
-        QLineEdit, QPlainTextEdit, QDialog, QSplitter, QMessageBox, QFileDialog, QScrollArea)
+        QLineEdit, QPlainTextEdit, QDialog, QSplitter, QMessageBox, QFileDialog, QScrollArea, QToolButton)
+    from platform_core.ui_theme import (enable_high_dpi, apply_theme, fit_initial_window, FlowLayout,
+        scale_legacy_page, clamp_ui_scale)
+    from platform_core.embedded_view import EmbeddedModuleView
+    from platform_core.evidence_view import EvidenceActions
+    enable_high_dpi()
     app = QApplication(sys.argv[:1])
     app.setStyle("Fusion")
-    for filename in ("msyh.ttc", "msyhbd.ttc"):
-        font = Path("C:/Windows/Fonts") / filename
-        if font.is_file(): QFontDatabase.addApplicationFont(str(font))
-    app.setFont(QFont("Microsoft YaHei", 10))
-    app.setStyleSheet("QWidget{font-family:'Microsoft YaHei';font-size:13px;color:#25334a;} QMainWindow,QDialog{background:#fff;} QLineEdit,QPlainTextEdit,QTableWidget{background:#fff;border:1px solid #e2e8f0;border-radius:6px;} QPushButton{background:#fff;border:1px solid #d8e0ea;border-radius:6px;padding:7px 13px;} QPushButton:hover{background:#edf4ff;color:#2563eb;} QPushButton:disabled{color:#a3adbc;background:#f1f5f9;} QHeaderView::section{background:#f8fafc;border:0;border-bottom:1px solid #e2e8f0;padding:8px;} QTabWidget::pane{border:1px solid #e2e8f0;} QTabBar::tab{padding:9px 15px;background:#f8fafc;} QTabBar::tab:selected{background:#fff;color:#2563eb;} QLabel#muted{color:#768398;}")
+    ui_scale = clamp_ui_scale(os.environ.get('ENGINEERING_UI_SCALE', 1.0))
+    apply_theme(app, ui_scale)
 
     class Records(QTableWidget):
+        rows_refreshed = pyqtSignal()
+
         def __init__(self, rows, columns):
             super().__init__()
             self.rows, self.columns = deepcopy(rows), columns
@@ -64,10 +68,14 @@ def main():
             self.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
             self.horizontalHeader().setStretchLastSection(True)
             self.setAlternatingRowColors(True)
+            self.verticalHeader().setDefaultSectionSize(round(42*ui_scale))
+            self.verticalHeader().setMinimumSectionSize(round(32*ui_scale))
+            self.verticalHeader().setSectionResizeMode(QHeaderView.Interactive)
             self.setSelectionBehavior(self.SelectRows)
             self.populate()
 
         def populate(self):
+            blocker = QSignalBlocker(self)
             self.setRowCount(len(self.rows))
             for i, record in enumerate(self.rows):
                 for j, (_, key, editable) in enumerate(self.columns):
@@ -80,7 +88,25 @@ def main():
                     if record.get("errors"): item.setBackground(QColor("#fff1f2"))
                     self.setItem(i, j, item)
             self.resizeColumnsToContents()
-            for j in range(self.columnCount()): self.setColumnWidth(j, min(380, max(125, self.columnWidth(j))))
+            self.fit_columns()
+            del blocker
+            self.rows_refreshed.emit()
+
+        def has_edits(self, index):
+            for column, (_, key, editable) in enumerate(self.columns):
+                if not editable: continue
+                value = self.rows[index]
+                for part in key if isinstance(key, tuple) else (key,):
+                    value = value.get(part, {}) if isinstance(value, dict) else ''
+                if value == {} or value is None: value = ''
+                text = json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else str(value)
+                if self.item(index, column).text().strip() != text.strip(): return True
+            return False
+
+        def fit_columns(self):
+            self.resizeColumnsToContents()
+            for j in range(self.columnCount()):
+                self.setColumnWidth(j, min(round(380*ui_scale), max(round(125*ui_scale), self.columnWidth(j))))
 
         def collect(self):
             values = deepcopy(self.rows)
@@ -96,18 +122,21 @@ def main():
     class Editor(QMainWindow):
         def __init__(self):
             super().__init__()
+            if args.embed: self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
             self.setWindowTitle("模块结果")
-            self.resize(1040, 720)
+            fit_initial_window(self, (1200, 820))
+            self.setMinimumSize(540, 380)
             self.module = context.info["module"]
             if self.module == "tube_bundle":
                 # 编辑器窗口被主平台按容器尺寸嵌入：下限要小，装不下的部分交给内部滚动区，
                 # 否则窗口比宿主还大，最大化/还原后内容会跑到可视区外面。
-                self.setMinimumSize(760, 460)
-                self.resize(1320, 940)
+                self.setMinimumSize(540, 380)
+                fit_initial_window(self, (1320, 940))
             self.data = context.data
             self.tables = {}
             self.attachments = []
             self.native = None
+            self.material_source_values = {}
             self.confirmed = False
             root = QWidget()
             self.setCentralWidget(root)
@@ -118,16 +147,26 @@ def main():
             row = QHBoxLayout()
             name = self.data["product"].get("设备位号") or "产品"
             title = QLabel(name + " · " + dict(project="项目定义", conditions="条件数据", elements="元件与材料", nozzles="管口数据", tube_bundle="管束设计")[self.module])
-            title.setStyleSheet("font-size:17px;font-weight:600;")
+            title.setObjectName('sectionTitle')
+            title.setWordWrap(True)
             row.addWidget(title, 1)
             self.evidence = QPushButton("查看依据")
-            self.evidence.clicked.connect(self.show_evidence)
             row.addWidget(self.evidence)
+            self.reference = QPushButton("产品原文（参考）")
+            row.addWidget(self.reference)
+            self.evidence_actions = EvidenceActions(self, self.evidence, self.reference,
+                self.selected_evidence, self.evidence_data)
             add = QPushButton("补充资料")
             add.clicked.connect(self.add_files)
             row.addWidget(add)
             layout.addLayout(row)
             self.tabs = QTabWidget()
+            self.tabs.setUsesScrollButtons(True)
+            self.tabs.setMinimumHeight(round(300*ui_scale))
+            self.tabs.currentChanged.connect(self.evidence_actions.refresh)
+            self.content_splitter = QSplitter(Qt.Vertical)
+            self.content_splitter.setHandleWidth(8)
+            self.content_splitter.setChildrenCollapsible(False)
             if self.module == "tube_bundle":
                 # 管束页本身有最小宽度（参数表 360 + 图形 + 数量表），窗口变小时
                 # 用滚动区兜住，而不是把内容压扁或顶出窗口。
@@ -135,9 +174,10 @@ def main():
                 self.tabs_scroll.setWidgetResizable(True)
                 self.tabs_scroll.setFrameShape(QScrollArea.NoFrame)
                 self.tabs_scroll.setWidget(self.tabs)
-                layout.addWidget(self.tabs_scroll, 1)
+                self.content_splitter.addWidget(self.tabs_scroll)
             else:
-                layout.addWidget(self.tabs, 1)
+                self.content_splitter.addWidget(self.tabs)
+            layout.addWidget(self.content_splitter, 1)
             self.command = QLineEdit()
             self.command.setPlaceholderText("输入本模块操作，例如：把 1 的外伸高度改成 180")
             self.command.returnPressed.connect(self.execute)
@@ -152,14 +192,20 @@ def main():
                 layout.addLayout(command_row)
             self.output = QPlainTextEdit()
             self.output.setReadOnly(True)
-            self.output.setMaximumHeight(64 if self.module == "tube_bundle" else 95)
+            self.output.setMinimumHeight(65)
             self.output.setPlaceholderText("校验结果、操作回执与依据说明")
-            layout.addWidget(self.output)
-            if self.module == "tube_bundle":
-                # 回执框平时不占高度：只有真的有校验结果/操作回执时才展开
-                self.output.hide()
-                self.output.textChanged.connect(self._sync_output_visibility)
-            actions = QHBoxLayout()
+            self.content_splitter.addWidget(self.output)
+            self.content_splitter.setSizes([510, 100])
+            self.receipt_toggle = QToolButton()
+            self.receipt_toggle.setText("操作回执")
+            self.receipt_toggle.setCheckable(True)
+            self.receipt_toggle.toggled.connect(self.output.setVisible)
+            self.output.textChanged.connect(
+                lambda: self.receipt_toggle.setChecked(True) if self.output.toPlainText().strip() else None
+            )
+            self.output.hide()
+            actions = FlowLayout()
+            actions.addWidget(self.receipt_toggle)
             if self.module == "tube_bundle":
                 actions.addWidget(self.command, 1)
                 actions.addWidget(execute)
@@ -176,9 +222,8 @@ def main():
                 keep = QPushButton("保留本阶段")
                 keep.clicked.connect(lambda: self.safe(self.keep))
                 actions.addWidget(keep)
-            actions.addStretch()
             self.save = QPushButton("保存并继续审核")
-            self.save.setStyleSheet("background:#2563eb;color:#fff;border:0;padding:9px 20px;")
+            self.save.setObjectName('send')
             self.save.clicked.connect(lambda: self.safe(self.publish))
             actions.addWidget(self.save)
             layout.addLayout(actions)
@@ -189,6 +234,7 @@ def main():
                 # 布管页自己有“需要修改/保留/选中状态”的底栏，这行说明只占高度
                 self.status.hide()
             self.safe(self.build)
+            self.evidence_actions.refresh()
 
         def _sync_output_visibility(self):
             text = self.output.toPlainText().strip()
@@ -218,8 +264,29 @@ def main():
         def add_table(self, key, label, rows, columns):
             table = Records(rows, columns)
             self.tables[key] = table
+            self.evidence_actions.bind_table(table)
             self.tabs.addTab(table, label)
             return table
+
+        def selected_evidence(self):
+            table = self.tabs.currentWidget()
+            if not isinstance(table, Records) or table.currentRow() < 0: return None, False
+            index = table.currentRow()
+            current = table.collect()[index]
+            if table.currentColumn() >= 0:
+                current['_selected_field'] = table.columns[table.currentColumn()][1]
+            return current, table.has_edits(index)
+
+        def evidence_data(self):
+            data = self.data
+            if self.module == 'project' and self.tables.get('products') is self.tabs.currentWidget():
+                table = self.tables['products']
+                if table.currentRow() >= 0:
+                    identity = table.rows[table.currentRow()].get('_platform_product_id')
+                    if identity not in context.products: return dict(product_source={}, sources=[])
+                    try: data = context.read_data(identity)
+                    except (OSError, ValueError): return dict(product_source={}, sources=[])
+            return dict(data, additional_sources=self.attachments)
 
         def build(self):
             source = self.data["product_source"]["path"]
@@ -230,7 +297,7 @@ def main():
                     if key == "ndt_rows": columns += [("壳程 · 等级/比例/级别", ("values", "shell"), True), ("管程 · 等级/比例/级别", ("values", "tube"), True)]
                     elif key == "paint_rows": columns += [(k, ("values", k), True) for k in ("用途", "油漆类别", "颜色", "干膜厚度（μm）", "涂漆面积", "备注")]
                     else: columns += [("数值", "value", True)]
-                    columns += [("来源页", "page", False), ("依据说明", "reason", False)]
+                    columns += [("文件页", "page", False), ("依据说明", "reason", False)]
                     self.add_table(key, title, (self.data.get("conditions") or {}).get(key, []), columns)
                 self.command.hide()
                 self.command_button.hide()
@@ -277,20 +344,30 @@ def main():
                 for index, stage in enumerate(STAGES):
                     page = self.native._ensure_page(index)
                     page.setStyleSheet("")
-                    self.tabs.addTab(page, stage)
+                    scale_legacy_page(page, ui_scale)
+                    scroll = QScrollArea()
+                    scroll.setWidgetResizable(True)
+                    scroll.setWidget(page)
+                    self.tabs.addTab(scroll, stage)
                 self.native.headless = True
                 self.native._render_stage = lambda index: self.tabs.setCurrentIndex(index)
                 self.native.final_save = lambda: self.output.setPlainText("四个阶段已保留，可保存并继续审核。")
                 self.native.append_chat = lambda role, text, **kwargs: self.output.setPlainText(str(text))
                 self.tabs.currentChanged.connect(lambda index: setattr(self.native.session, "current_index", index))
+                self.tabs.currentChanged.connect(lambda index: scale_legacy_page(self.native.pages[index], ui_scale))
                 self.native._refresh_stage_buttons = lambda: None
                 self.command.setPlaceholderText("保留几何、参数联动和图形操作；也可输入原管束参数修改指令")
 
         def material_table(self):
             rows = []
             for change in self.state.changes:
+                identity = (change.intent.raw_name, change.intent.所属部件, change.intent.是否定义, change.intent.有无覆层)
+                extracted = self.material_source_values.setdefault(identity,
+                    {k: getattr(change.intent, k, '') for k in ('材料类型', '材料牌号', '材料标准', '供货状态')})
                 rows.append(dict(元件=change.intent.raw_name, **{k: change.new_values.get(k) or getattr(change.intent, k, "") for k in ("材料类型", "材料牌号", "材料标准", "供货状态")},
-                                 校验="通过" if change.ok else "；".join(change.reasons), 映射="、".join(m.element_name for m in change.mapped), evidence=deepcopy(change.intent.evidence.__dict__) if change.intent.evidence else {}))
+                                 校验="通过" if change.ok else "；".join(change.reasons), 映射="、".join(m.element_name for m in change.mapped),
+                                 _source_values=deepcopy(extracted), review_origin='human' if self.state.user_text.strip() else '',
+                                 evidence=deepcopy(change.intent.evidence.__dict__) if change.intent.evidence else {}))
             if "materials" in self.tables:
                 table = self.tables["materials"]
                 table.rows = rows
@@ -481,6 +558,8 @@ def main():
                     import api
                     value = api.run_condition_agent(managed[0], equipment_tag=self.data["product"].get("设备位号"), save_record=False)
                     if value.get("status") != "ok": raise ValueError(value.get("error", "条件读取失败"))
+                    from platform_core.source_evidence import bind_condition_sources
+                    value = bind_condition_sources(value, managed[0])
                     for key, table in self.tables.items():
                         table.rows = value.get(key, table.collect())
                         table.populate()
@@ -489,49 +568,47 @@ def main():
 
         def export(self):
             def action():
-                path, _ = QFileDialog.getSaveFileName(self, "导出模块草稿", self.module + "-draft.json", "JSON (*.json)")
+                from platform_core.export_settings import default_save_file
+                workspace = Path(__file__).resolve().parent / 'workspace'
+                initial = default_save_file(workspace, self.module + '-draft.json')
+                path, _ = QFileDialog.getSaveFileName(self, "导出模块草稿", initial, "JSON (*.json)")
                 if path: atomic_json(path, dict(scope="module-draft", full_product_generated=False, payload=self.payload()))
             self.safe(action)
 
-        def show_evidence(self):
-            table = self.tabs.currentWidget()
-            row = table.collect()[table.currentRow()] if isinstance(table, Records) and table.currentRow() >= 0 else {}
-            evidence = row.get("evidence") or {}
-            source = row.get("source_path") or evidence.get("file_path") or self.data["product_source"]["path"]
-            page_no = row.get("page") or evidence.get("page") or 1
-            dialog = QDialog(self)
-            dialog.setWindowTitle("字段依据与原文")
-            dialog.resize(960, 720)
-            layout = QVBoxLayout(dialog)
-            text = QPlainTextEdit(json.dumps(row or self.data["product_source"], ensure_ascii=False, indent=2))
-            text.setReadOnly(True)
-            text.setMaximumHeight(170)
-            layout.addWidget(text)
-            image_label = QLabel()
-            scroll = QScrollArea()
-            scroll.setWidget(image_label)
-            scroll.setWidgetResizable(True)
-            layout.addWidget(scroll, 1)
-            if str(source).lower().endswith(".pdf"):
-                try:
-                    import fitz
-                    from PyQt5.QtGui import QImage
-                    with fitz.open(source) as doc:
-                        page = doc[max(0, min(int(page_no)-1, len(doc)-1))]
-                        bbox = evidence.get("bbox")
-                        if bbox: page.draw_rect(fitz.Rect(bbox), color=(1, 0, 0), width=1.5)
-                        pix = page.get_pixmap(matrix=fitz.Matrix(1.1, 1.1), alpha=False)
-                        img = QImage(pix.samples, pix.width, pix.height, pix.stride, QImage.Format_RGB888).copy()
-                        image_label.setPixmap(QPixmap.fromImage(img))
-                except Exception as exc: image_label.setText(str(exc))
-            else: image_label.setText("当前文件可通过外部查看器打开：\n" + str(source))
-            button = QPushButton("打开托管原文")
-            button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(source))))
-            layout.addWidget(button)
-            dialog.exec_()
-
     window = Editor()
+    apply_theme(app, ui_scale)
+    embedded_view = EmbeddedModuleView(window, window.tabs, lambda value: emit('view-metrics', **value)) if args.embed else None
+    def apply_editor_scale(scale):
+        nonlocal ui_scale
+        ui_scale = scale
+        apply_theme(app, ui_scale)
+        window.setMinimumSize(round(540*scale), round(380*scale))
+        window.tabs.setMinimumHeight(round(300*scale))
+        for table in window.tables.values():
+            table.verticalHeader().setDefaultSectionSize(round(42*scale))
+            table.fit_columns()
+        if window.native:
+            for page in window.native.pages.values(): scale_legacy_page(page, scale)
+
+    def sync_viewport():
+        path = context.session/'viewport.json'
+        if not embedded_view or not path.is_file(): return False
+        try: return embedded_view.sync_viewport(json.loads(path.read_text(encoding='utf-8')), apply_editor_scale)
+        except (OSError, ValueError): return False
+
+    last_appearance = None
     def poll():
+        nonlocal last_appearance, ui_scale
+        appearance = context.session / 'appearance.json'
+        coordinated = sync_viewport()
+        if not coordinated and appearance.is_file():
+            try:
+                stamp = appearance.read_text(encoding='utf-8')
+                if stamp != last_appearance:
+                    value = json.loads(stamp)
+                    apply_editor_scale(clamp_ui_scale(value['scale']))
+                    last_appearance = stamp
+            except (OSError, ValueError, KeyError): pass
         ack = context.acknowledge()
         if ack:
             window.save.setEnabled(True)
@@ -541,6 +618,14 @@ def main():
             command = json.loads(path.read_text(encoding="utf-8"))
             path.unlink()
             if command.get("action") == "attached":
+                if embedded_view and command.get('parent_handle'):
+                    try:
+                        embedded_view.attach(command['parent_handle'])
+                        sync_viewport()
+                    except (RuntimeError, ValueError, TypeError) as exc:
+                        emit('failed', error='模块容器连接未完成：'+str(exc))
+                        app.exit(1)
+                        return
                 window.setWindowOpacity(1)
                 emit("attached", module=window.module)
             elif command.get("action") == "execute":
@@ -579,6 +664,25 @@ def main():
             checks = []
             try:
                 module = window.module
+                from platform_core.source_evidence import field_evidence
+                from platform_core.evidence_view import evidence_dialog
+                evidence_checks = []
+                assert not window.evidence.isEnabled()
+                for key, table in window.tables.items():
+                    window.tabs.setCurrentWidget(table)
+                    for index in range(min(2, table.rowCount())):
+                        table.setCurrentCell(index, 0)
+                        app.processEvents()
+                        row, changed = window.selected_evidence()
+                        assert not changed, 'Untouched row was treated as edited'
+                        evidence = field_evidence(window.evidence_data(), row, changed)
+                        assert window.evidence.isEnabled() == (evidence['kind'] in ('basis', 'document'))
+                        dialog = evidence_dialog(window, evidence, row)
+                        if evidence['kind'] in ('missing', 'invalid', 'basis'):
+                            assert dialog.findChild(QPushButton, 'openEvidenceFile') is None
+                        dialog.close()
+                        evidence_checks.append(dict(table=key, row=index, kind=evidence['kind'],
+                            page=evidence.get('page'), original_page=evidence.get('original_page')))
                 if module == "project":
                     table = window.tables["products"]
                     index = next(i for i, column in enumerate(table.columns) if column[1] == "产品名称")
@@ -611,7 +715,7 @@ def main():
                     checks.append("four-unified-stages-and-unconfirmed-draft")
                 assert (context.session / "update.json").is_file(), window.output.toPlainText()
                 result = dict(ok=True, module=module, checks=checks, old_workbench_visible=False,
-                              private_port=context.config["port"], context=str(context.path))
+                              private_port=context.config["port"], context=str(context.path), evidence_checks=evidence_checks)
                 assert window.native is None or not window.native.isVisible()
                 atomic_json(context.session / "unified-interaction.json", result)
                 app.quit()
@@ -625,13 +729,14 @@ def main():
                 window.tabs.setCurrentIndex(args.stage)
                 app.processEvents()
             window.grab().save(args.snapshot)
-            # 记下页签区实际可用尺寸和是否出现滚动条：嵌入宿主后内容是否“显示不全”
-            # 靠这几个数值判断，比只看截图可靠。
             scroll = getattr(window, "tabs_scroll", None)
             atomic_json(context.session / "unified-snapshot.json", dict(
                 ok=True, module=window.module,
                 tables={k: t.rowCount() for k, t in window.tables.items()},
                 old_workbench_visible=False,
+                font_points=window.font().pointSizeF(), device_pixel_ratio=window.devicePixelRatioF(),
+                content_size=[window.tabs.width(), window.tabs.height()],
+                row_heights={k: t.verticalHeader().defaultSectionSize() for k, t in window.tables.items()},
                 page_size=[window.tabs.width(), window.tabs.height()],
                 page_minimum=[window.tabs.minimumSizeHint().width(), window.tabs.minimumSizeHint().height()],
                 scrollbars=dict(horizontal=scroll.horizontalScrollBar().isVisible(),
@@ -639,7 +744,9 @@ def main():
             ))
             app.quit()
         QTimer.singleShot(400, capture)
-    else: emit("ready", handle=int(window.winId()), module=window.module, product_id=context.product_id)
+    else:
+        emit("ready", handle=int(window.winId()), module=window.module, product_id=context.product_id,
+            view=embedded_view.metrics() if embedded_view else None)
     return app.exec_()
 
 

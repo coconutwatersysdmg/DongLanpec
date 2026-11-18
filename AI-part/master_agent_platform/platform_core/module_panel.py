@@ -3,10 +3,11 @@ from pathlib import Path
 import json
 
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtWidgets import QLabel, QTextBrowser, QPushButton
+from PyQt5.QtWidgets import QLabel, QTextBrowser, QPushButton, QSplitter
 
 from .evidence_ui import EvidencePanel
 from .fabric import BASE
+from .ui_theme import read_scale, FlowLayout
 
 
 class ModulePanel(EvidencePanel):
@@ -21,12 +22,26 @@ class ModulePanel(EvidencePanel):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setStyleSheet("QWidget#modulePanel{background:#ffffff;border-radius:10px;}")
         self.runtime = BASE / "module_runtime.py"
+        self.embedded_minimum = (520, 360)
+        self.ui_scale = read_scale(self.workspace)
         self.layout().itemAt(0).widget().setText("结果按产品和模块组织。可查看来源、直接编辑、校验，并把修改送回同一审核循环。")
         self.open_button.setText("编辑模块数据")
         self.status.setText("生成结果后选择产品与模块。")
         self.preview = QTextBrowser()
         self.preview.setMinimumHeight(170)
-        self.layout().insertWidget(3, self.preview)
+        self.layout().removeWidget(self.windows)
+        self.content_splitter = QSplitter(Qt.Vertical)
+        self.content_splitter.setHandleWidth(8)
+        self.content_splitter.addWidget(self.preview)
+        self.content_splitter.addWidget(self.windows)
+        self.layout().addWidget(self.content_splitter, 1)
+        # The selectors wrap on small screens and at larger text scales.
+        old_row = self.layout().takeAt(1)
+        selectors = FlowLayout()
+        while old_row.count(): selectors.addItem(old_row.takeAt(0))
+        self.product.setMinimumContentsLength(12)
+        self.product.setSizeAdjustPolicy(self.product.AdjustToMinimumContentsLengthWithIcon)
+        self.layout().insertLayout(1, selectors)
         self.product.currentIndexChanged.connect(self.refresh_preview)
         self.module.currentIndexChanged.connect(self.refresh_preview)
         self.module.setItemText(0, "项目定义")
@@ -41,6 +56,13 @@ class ModulePanel(EvidencePanel):
         self.windows.hide()
         self.setMaximumHeight(16777215)
         self.setMinimumHeight(340)
+
+    def set_ui_scale(self, scale):
+        self.ui_scale = scale
+        from .private_database import atomic_json
+        for session in self.sessions:
+            try: atomic_json(session['path'] / 'appearance.json', dict(scale=scale))
+            except OSError as exc: self.message.emit('模块字号暂未同步：'+str(exc))
 
     def set_summary(self, summary):
         super().set_summary(summary)
@@ -82,6 +104,9 @@ class ModulePanel(EvidencePanel):
         else:
             self.setMaximumHeight(16777215)
             self.setMinimumHeight(420)
+        card = self.parentWidget()
+        if hasattr(card, 'set_content_height') and not card.user_sized:
+            card.set_content_height(max(660, card.expanded_height))
         super().launch(path)
 
     def set_focus(self, active):
@@ -145,8 +170,18 @@ class ModulePanel(EvidencePanel):
 
     def attach(self, session, handle):
         super().attach(session, handle)
+        self.set_ui_scale(self.ui_scale)
         self.status.setText("模块数据已载入，可编辑、查看依据、校验及保存。")
         self.preview.hide()
+
+    def update_view_metrics(self, session, value):
+        super().update_view_metrics(session, value)
+        card = self.parentWidget()
+        scroll = session.get('scroll')
+        if scroll and hasattr(card, 'set_content_height') and not card.user_sized:
+            minimum_height = session['container'].minimumHeight()
+            needed = minimum_height+self.height()-scroll.viewport().height()+8
+            if needed > card.expanded_height: card.set_content_height(needed)
 
     def failed(self, message):
         super().failed(message.replace("原窗口", "模块编辑器").replace("原界面", "模块"))

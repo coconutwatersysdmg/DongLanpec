@@ -10,17 +10,24 @@ import sqlite3
 import re
 import datetime as dt
 
-from PyQt5.QtCore import Qt, QThread, QTimer, QUrl, pyqtSignal
-from PyQt5.QtGui import QDesktopServices
-from PyQt5.QtWidgets import (QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QFrame,
+from PyQt5.QtCore import Qt, QPoint, QSize, QThread, QTimer, QUrl, pyqtSignal
+from PyQt5.QtGui import QDesktopServices, QIcon
+from PyQt5.QtWidgets import (QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QFrame, QSplitter, QComboBox,
     QLabel, QPushButton, QListWidget, QTextBrowser, QPlainTextEdit, QScrollArea,
-    QStackedWidget, QTreeWidget, QTreeWidgetItem, QLineEdit, QFileDialog, QMessageBox, QToolButton)
+    QStackedWidget, QTreeWidget, QTreeWidgetItem, QLineEdit, QFileDialog, QMessageBox, QToolButton, QMenu,
+    QActionGroup)
 
 from .fabric import BASE, Fabric
 from .orchestrator import Orchestrator
 from .presentation import ExecutionPanel, DataSpacePanel
 from .run_view import duration
 from .module_panel import ModulePanel
+from .export_settings import ExportSettingsDialog, default_save_file, export_task_drafts
+from .ui_theme import (apply_theme, read_scale, save_scale, fit_initial_window,
+    ResizableCard, FlowLayout, WorkspaceSurface, ZOOM_PERCENTAGES)
+
+SECTIONS = ("对话", "模块结果", "数据空间", "运行记录", "待审核")
+COLLAPSED_SIDEBAR_WIDTH = 60
 
 
 class Worker(QThread):
@@ -64,33 +71,16 @@ class DatabaseWorker(QThread):
         except Exception as exc: self.failure.emit(str(exc))
 
 
-STYLE = """
-QWidget{font-family:'Microsoft YaHei';font-size:13px;color:#26354a;}
-QMainWindow{background:#fff;} QWidget#sidebar{background:#f5f7fa;border-right:1px solid #e8edf3;}
-QLabel#brand{font-size:19px;font-weight:700;color:#16335b;} QLabel#sectionTitle{font-size:20px;font-weight:600;}
-QLabel#muted{color:#8390a2;} QLabel#badge{color:#3467a7;background:#edf4ff;padding:5px 10px;border-radius:9px;}
-QPushButton{background:#fff;border:1px solid #e0e7ef;border-radius:8px;padding:9px 13px;}
-QPushButton:hover{background:#edf4ff;color:#2563eb;border-color:#b6cff7;}
-QPushButton:disabled{color:#9ba6b6;background:#f5f7fa;}
-QPushButton#nav{text-align:left;background:transparent;border:0;padding:12px 14px;}
-QPushButton#send{background:#2563eb;color:#fff;border:0;font-weight:600;}
-QFrame#composer{background:#f8fafc;border:1px solid #dfe6ef;border-radius:15px;}
-QPlainTextEdit#prompt{border:0;background:transparent;font-size:14px;padding:6px;}
-QTextBrowser,QPlainTextEdit,QTreeWidget,QListWidget{background:#fff;border:1px solid #e5ebf2;border-radius:8px;padding:8px;}
-QTextBrowser#conversation{border:0;} QFrame#userBubble{background:#edf4ff;border-radius:12px;}
-QFrame#assistantBubble{background:#fff;border:1px solid #e8edf4;border-radius:12px;}
-QTabWidget::pane{border:1px solid #e5ebf2;border-radius:8px;} QTabBar::tab{padding:9px 14px;background:#f8fafc;}
-QTabBar::tab:selected{background:#fff;color:#2563eb;} QComboBox{padding:8px;border:1px solid #dfe6ef;border-radius:7px;background:#fff;}
-QScrollArea{border:0;background:#fff;} QWidget#threadSurface{background:#fff;} QGraphicsView{border:1px solid #e5ebf2;border-radius:8px;}
-"""
-
-
 class ChatWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("工程 Agent · 数据空间与产品生成")
-        self.resize(1480, 960)
+        fit_initial_window(self)
+        self.setMinimumSize(880, 600)
         self.workspace = BASE / "workspace"
+        self.settings_workspace = self.workspace
+        self.ui_scale = read_scale(self.workspace)
+        self.sidebar_manual = False
         self.fabric = Fabric(self.workspace)
         self.inputs, self.knowledge, self.worker = [], [], None
         self.database_worker, self.close_after_database = None, False
@@ -103,34 +93,43 @@ class ChatWindow(QMainWindow):
         self.history_ids = []
         self.pending_new_chat = False
         self.current_section = 0
-        central = QWidget()
+        self.layout_timer = QTimer(self)
+        self.layout_timer.setSingleShot(True)
+        self.layout_timer.timeout.connect(self.adjust_layout)
+        self.layout_closing = False
+        central = WorkspaceSurface()
         self.setCentralWidget(central)
         root = QHBoxLayout(central)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
+        self.shell_splitter = QSplitter(Qt.Horizontal)
+        self.shell_splitter.setHandleWidth(7)
+        root.addWidget(self.shell_splitter)
+        icons = Path(__file__).with_name('icons')
+        self.sidebar_panel = QWidget()
+        self.sidebar_panel.setObjectName('sidebar')
+        self.sidebar_panel.setMinimumWidth(210)
+        self.sidebar_panel.setMaximumWidth(340)
+        self.expanded_sidebar_width = 232
+        sidebar_layout = QVBoxLayout(self.sidebar_panel)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.setSpacing(0)
         sidebar = QWidget()
-        sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(230)
+        sidebar.setObjectName("sidebarContent")
+        sidebar.setMinimumWidth(200)
+        sidebar.setMaximumWidth(320)
         side = QVBoxLayout(sidebar)
-        side.setContentsMargins(16, 25, 16, 18)
+        side.setContentsMargins(16, 20, 16, 16)
         brand = QLabel("工程 Agent")
         brand.setObjectName("brand")
+        brand.setWordWrap(True)
         side.addWidget(brand)
-        subtitle = QLabel("产品数据 · 从输入到审核")
-        subtitle.setObjectName("muted")
-        side.addWidget(subtitle)
-        side.addSpacing(20)
+        side.addSpacing(10)
         self.new_chat_button = QPushButton("＋  新建对话")
+        self.new_chat_button.setObjectName("newChat")
         self.new_chat_button.clicked.connect(self.new_chat)
         side.addWidget(self.new_chat_button)
-        self.nav_buttons = []
-        for index, label in enumerate(("对话", "模块结果", "数据空间", "运行记录", "待审核")):
-            button = QPushButton(label)
-            button.setObjectName("nav")
-            button.clicked.connect(lambda _, i=index: self.navigate(i))
-            side.addWidget(button)
-            self.nav_buttons.append(button)
-        side.addSpacing(20)
+        side.addSpacing(12)
         label = QLabel("最近任务")
         label.setObjectName("muted")
         side.addWidget(label)
@@ -140,35 +139,100 @@ class ChatWindow(QMainWindow):
         self.history.setTextElideMode(Qt.ElideRight)
         self.history.itemClicked.connect(self.select_history)
         side.addWidget(self.history, 1)
-        load = QPushButton("载入任务结果")
-        load.clicked.connect(self.load_result)
-        side.addWidget(load)
-        local = QLabel("独立数据空间\n本地规则与模块服务")
-        local.setObjectName("muted")
-        side.addWidget(local)
-        root.addWidget(sidebar)
-        body = QWidget()
+        sidebar_scroll = QScrollArea()
+        sidebar_scroll.setWidgetResizable(True)
+        sidebar_scroll.setWidget(sidebar)
+        sidebar_scroll.setMinimumWidth(210)
+        self.sidebar = sidebar_scroll
+        sidebar_layout.addWidget(sidebar_scroll, 1)
+        sidebar_layout.addStretch(0)
+        footer = QHBoxLayout()
+        footer.setContentsMargins(12, 8, 12, 12)
+        self.navigation_button = QToolButton()
+        self.navigation_button.setObjectName('navigationButton')
+        self.navigation_button.setIcon(QIcon(str(icons / 'workspace-menu.svg')))
+        self.navigation_button.setIconSize(QSize(19, 19))
+        self.navigation_button.setFixedSize(36, 36)
+        self.navigation_button.setAccessibleName("工作台菜单")
+        self.navigation_button.setToolTip("工作台菜单")
+        self.navigation_button.clicked.connect(self.show_navigation_menu)
+        footer.addWidget(self.navigation_button)
+        footer.addStretch(1)
+        sidebar_layout.addLayout(footer)
+        self.navigation_menu = QMenu(self.navigation_button)
+        group = QActionGroup(self.navigation_menu)
+        self.nav_actions = []
+        for index, label in enumerate(SECTIONS):
+            action = self.navigation_menu.addAction(label)
+            action.setCheckable(True)
+            group.addAction(action)
+            action.triggered.connect(lambda _, i=index: self.navigate(i))
+            self.nav_actions.append(action)
+        self.navigation_menu.addSeparator()
+        self.load_result_action = self.navigation_menu.addAction("载入任务结果", self.load_result)
+        self.shell_splitter.addWidget(self.sidebar_panel)
+        body = self.body_surface = WorkspaceSurface()
         body_layout = QVBoxLayout(body)
         self.body_layout = body_layout
         self.body_margins = (28, 18, 28, 20)
         body_layout.setContentsMargins(*self.body_margins)
+        self.header_surface = WorkspaceSurface()
+        header_layout = QVBoxLayout(self.header_surface)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.addWidget(self.header_surface)
         header = QHBoxLayout()
+        self.sidebar_button = QToolButton()
+        self.sidebar_button.setObjectName('sidebarButton')
+        self.sidebar_button.setIconSize(QSize(19, 19))
+        self.sidebar_button.setMinimumSize(34, 34)
+        self.sidebar_icons = {
+            True: QIcon(str(icons / 'sidebar-collapse.svg')),
+            False: QIcon(str(icons / 'sidebar-expand.svg')),
+        }
+        self.sidebar_button.clicked.connect(self.toggle_sidebar)
+        header.addWidget(self.sidebar_button)
         self.page_title = QLabel("对话")
         self.page_title.setObjectName("sectionTitle")
-        header.addWidget(self.page_title, 1)
+        header.addWidget(self.page_title)
+        header.addStretch(1)
+        header.addWidget(QLabel("字号"))
+        self.font_zoom = QComboBox()
+        for percent in ZOOM_PERCENTAGES:
+            self.font_zoom.addItem(f"{percent}%", percent/100)
+        closest = min(ZOOM_PERCENTAGES, key=lambda percent: abs(percent - self.ui_scale*100))
+        self.ui_scale = closest / 100
+        self.font_zoom.setCurrentIndex(self.font_zoom.findData(self.ui_scale))
+        self.font_zoom.setToolTip("调整整个工作台和模块编辑器的字号；屏幕 DPI 缩放由系统自动适配")
+        self.font_zoom.currentIndexChanged.connect(self.change_scale)
+        header.addWidget(self.font_zoom)
+        self.settings_button = QToolButton()
+        self.settings_button.setObjectName('settingsButton')
+        self.settings_button.setIcon(QIcon(str(icons / 'settings.svg')))
+        self.settings_button.setIconSize(QSize(19, 19))
+        self.settings_button.setAccessibleName('设置')
+        self.settings_button.setToolTip('设置')
+        self.settings_button.clicked.connect(self.show_settings)
+        header.addWidget(self.settings_button)
+        header_layout.addLayout(header)
+        badges = FlowLayout()
         self.clock_label = QLabel("尚未运行")
-        self.clock_label.setObjectName("muted")
-        header.addWidget(self.clock_label)
+        self.clock_label.setObjectName("clock")
+        self.clock_label.hide()
+        badges.addWidget(self.clock_label)
         self.data_badge = QLabel("数据空间 · 本地托管")
         self.data_badge.setObjectName("badge")
-        header.addWidget(self.data_badge)
-        body_layout.addLayout(header)
+        badges.addWidget(self.data_badge)
+        header_layout.addLayout(badges)
         self.state = QLabel("等待提交文件")
         self.state.setObjectName("muted")
-        body_layout.addWidget(self.state)
+        self.state.setWordWrap(True)
+        header_layout.addWidget(self.state)
         self.pages = QStackedWidget()
         body_layout.addWidget(self.pages, 1)
-        root.addWidget(body, 1)
+        self.shell_splitter.addWidget(body)
+        self.shell_splitter.setChildrenCollapsible(False)
+        self.shell_splitter.setStretchFactor(1, 1)
+        self.set_sidebar_visible(True)
         self.build_chat()
         self.module_panel = ModulePanel(self.workspace, self)
         self.evidence = self.module_panel  # internal lifecycle compatibility only
@@ -188,7 +252,8 @@ class ChatWindow(QMainWindow):
         )
         self.focus_exit.clicked.connect(self.toggle_chat_view)
         self.focus_exit.hide()
-        self.module_card, self.module_toggle = self.inline_card("模块结果", self.module_panel, self.focus_exit)
+        self.module_host_layout.addWidget(self.focus_exit, 0, Qt.AlignRight)
+        self.module_card, self.module_toggle = self.inline_card("模块结果", self.module_panel)
         self.pages.addWidget(QWidget())  # Navigation index remains a chat anchor.
         self.data_space = DataSpacePanel()
         self.data_space.open_file.connect(lambda path: QDesktopServices.openUrl(QUrl.fromLocalFile(path)))
@@ -198,20 +263,109 @@ class ChatWindow(QMainWindow):
         execution_layout.setContentsMargins(0, 0, 0, 0)
         self.execution = ExecutionPanel()
         execution_layout.addWidget(self.execution, 1)
-        execution_layout.addWidget(QLabel("调用事件"))
         self.log = QTextBrowser()
-        self.log.setMaximumHeight(90)
-        execution_layout.addWidget(self.log)
-        execution_page.setFixedHeight(860)
+        self.log.setMinimumHeight(70)
+        trace_splitter = QSplitter(Qt.Vertical)
+        execution_layout.removeWidget(self.execution)
+        trace_splitter.addWidget(self.execution)
+        trace_splitter.addWidget(self.log)
+        trace_splitter.setSizes([580, 110])
+        trace_splitter.setHandleWidth(8)
+        execution_layout.addWidget(trace_splitter)
+        self.log.hide()
+        self.events_toggle = QToolButton()
+        self.events_toggle.setText('展开调用事件')
+        self.events_toggle.setCheckable(True)
+        def show_events(visible):
+            self.log.setVisible(visible)
+            self.events_toggle.setText('收起调用事件' if visible else '展开调用事件')
+        self.events_toggle.toggled.connect(show_events)
+        execution_layout.addWidget(self.events_toggle, 0, Qt.AlignLeft)
         self.execution_card, self.execution_toggle = self.inline_card("运行记录", execution_page)
         self.pages.addWidget(QWidget())
         self.build_review()
-        self.setStyleSheet(STYLE)
+        apply_theme(self, self.ui_scale)
+        self.execution.set_ui_scale(self.ui_scale)
+        self.module_panel.set_ui_scale(self.ui_scale)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
         self.timer.start(600)
         self.load_history()
         self.navigate(0)
+        self.layout_timer.start(0)
+
+    def toggle_sidebar(self):
+        self.sidebar_manual = True
+        self.set_sidebar_visible(self.sidebar.isHidden())
+
+    def set_sidebar_visible(self, visible):
+        if not visible and not self.sidebar.isHidden():
+            self.expanded_sidebar_width = max(self.sidebar_panel.minimumWidth(), self.sidebar_panel.width())
+        self.sidebar.setVisible(visible)
+        if visible:
+            self.sidebar_panel.setMaximumWidth(340)
+            self.sidebar_panel.setMinimumWidth(210)
+            width = self.expanded_sidebar_width
+        else:
+            self.sidebar_panel.setFixedWidth(COLLAPSED_SIDEBAR_WIDTH)
+            width = COLLAPSED_SIDEBAR_WIDTH
+        self.shell_splitter.handle(1).setEnabled(visible)
+        self.shell_splitter.setSizes([width, self.width() - width])
+        self.sidebar_button.setIcon(self.sidebar_icons[visible])
+        label = "收起侧栏" if visible else "展开侧栏"
+        self.sidebar_button.setToolTip(label)
+        self.sidebar_button.setAccessibleName(label)
+
+    def show_navigation_menu(self):
+        menu = self.navigation_menu
+        menu.setAttribute(Qt.WA_NoMouseReplay)
+        point = QPoint(0, -menu.sizeHint().height() - 6)
+        menu.popup(self.navigation_button.mapToGlobal(point))
+
+    def adapt_sidebar(self):
+        if hasattr(self, 'sidebar') and not self.sidebar_manual:
+            body = self.shell_splitter.widget(1)
+            required = (body.minimumSizeHint().width() if body else 700)+self.sidebar.minimumWidth()+24
+            visible = self.width() >= max(1020, required)
+            if self.sidebar.isHidden() == visible:
+                self.set_sidebar_visible(visible)
+                self.centralWidget().layout().invalidate()
+                self.layout().invalidate()
+
+    def change_scale(self):
+        self.ui_scale = self.font_zoom.currentData() or 1.0
+        save_scale(self.settings_workspace, self.ui_scale)
+        self.setUpdatesEnabled(False)
+        try:
+            apply_theme(self, self.ui_scale)
+            if hasattr(self, "execution"):
+                self.execution.set_ui_scale(self.ui_scale)
+                self.module_panel.set_ui_scale(self.ui_scale)
+        finally: self.setUpdatesEnabled(True)
+        self.layout_timer.start(0)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, 'layout_timer') and not self.layout_closing: self.layout_timer.start(0)
+
+    def adjust_layout(self):
+        if self.layout_closing: return
+        if hasattr(self, "body_layout"):
+            margin = 16 if self.width() < 1200 else 28
+            current = self.body_layout.contentsMargins()
+            if (current.left(), current.top(), current.right(), current.bottom()) != (margin, 16, margin, 16):
+                self.body_layout.setContentsMargins(margin, 16, margin, 16)
+        self.adapt_sidebar()
+        for name in ("module_card", "execution_card"):
+            card = getattr(self, name, None)
+            if card and not card.user_sized:
+                if name == "module_card" and card.parent() is getattr(self, "module_host", None):
+                    height = max(440, self.module_host.height() - 70)
+                else:
+                    height = max(440, int(self.height()*.66))
+                if height != card.expanded_height: card.set_content_height(height)
+        self.body_surface.update()
+        self.header_surface.update()
 
     def make_orchestrator(self, *args, **kwargs): return Orchestrator(*args, **kwargs)
 
@@ -254,42 +408,108 @@ class ChatWindow(QMainWindow):
         self.chat_scroll = scroll
         scroll.setWidgetResizable(True)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        conversation = QWidget()
+        conversation = WorkspaceSurface()
+        self.conversation = conversation
         conversation.setObjectName("threadSurface")
         self.chat_layout = QVBoxLayout(conversation)
-        self.chat_layout.setContentsMargins(12, 20, 12, 20)
-        self.chat_layout.setSpacing(18)
-        self.welcome = QLabel("准备好你的工程文件\n\n描述要整理的产品数据，加入输入文件与知识资料。\n平台会识别全部产品、分发任务，并把必需缺项集中送审。")
-        self.welcome.setAlignment(Qt.AlignCenter)
-        self.welcome.setStyleSheet("font-size:18px;color:#61728a;padding:38px;")
+        self.chat_layout.setContentsMargins(8, 14, 8, 14)
+        self.chat_layout.setSpacing(12)
+        self.welcome = QFrame()
+        hero = QVBoxLayout(self.welcome)
+        hero.setContentsMargins(14, 22, 14, 12)
+        hero.setSpacing(10)
+        heading = QLabel("从工程资料生成产品数据")
+        heading.setObjectName("heroTitle")
+        heading.setWordWrap(True)
+        hero.addWidget(heading)
+        explanation = QLabel("添加文件并描述任务，结果和审核记录会显示在对话中。")
+        explanation.setWordWrap(True)
+        explanation.setObjectName("muted")
+        hero.addWidget(explanation)
+        examples = FlowLayout()
+        self.shortcut_buttons = {}
+        for action, text in (("products", "整理全部产品"), ("review", "核对参数与来源"),
+                             ("execution", "查看执行图")):
+            button = QPushButton(text)
+            button.clicked.connect(lambda _, key=action: self.execute_shortcut(key))
+            self.shortcut_buttons[action] = button
+            examples.addWidget(button)
+        hero.addLayout(examples)
         self.chat_layout.addWidget(self.welcome)
         self.report = QTextBrowser()
         self.report.setObjectName("conversation")
-        self.report.setMinimumHeight(220)
+        self.report.setMinimumHeight(200)
         self.report_frame = QFrame()
         self.report_frame.setObjectName("assistantBubble")
         report_layout = QVBoxLayout(self.report_frame)
-        report_title = QLabel("工程 Agent · 任务结果")
-        report_title.setStyleSheet("font-weight:600;font-size:14px;padding:5px;")
+        report_title = QLabel("任务结果")
+        report_title.setStyleSheet("font-weight:600;padding:5px;")
         report_layout.addWidget(report_title)
         report_layout.addWidget(self.report)
+        result_actions = FlowLayout()
+        self.export_output = QPushButton("导出审核草稿")
+        self.export_output.setEnabled(False)
+        self.export_output.clicked.connect(self.save_output)
+        result_actions.addWidget(self.export_output)
+        self.open_output = QPushButton("打开结果目录")
+        self.open_output.setEnabled(False)
+        self.open_output.clicked.connect(self.show_output)
+        result_actions.addWidget(self.open_output)
+        report_layout.addLayout(result_actions)
         self.report_frame.hide()
         self.chat_layout.addWidget(self.report_frame)
         self.chat_layout.addStretch()
         scroll.setWidget(conversation)
-        self.conversation = conversation
-        layout.addWidget(scroll, 1)
-        # 模块结果卡展开编辑器时，里面装的是子进程的原生窗口（QWindow 容器）：
-        # 原生窗口不参与 QScrollArea 的裁剪与滚动，放进滚动区就会在最大化/还原后
-        # 与输入区互相压住、并在旧位置留下残影。所以编辑器活动期间把卡片搬到这里，
-        # 这块区域不滚动、按窗口高度自适应。
-        self.module_host = QWidget()
-        self.module_host_layout = QVBoxLayout(self.module_host)
-        self.module_host_layout.setContentsMargins(0, 0, 0, 0)
-        self.module_host_layout.setSpacing(0)
-        layout.addWidget(self.module_host, 3)
-        self.module_host.hide()
-        self.chat_page_layout = layout
+        self.chat_splitter = QSplitter(Qt.Vertical)
+        self.chat_splitter.setHandleWidth(8)
+        self.chat_splitter.setChildrenCollapsible(False)
+        self.chat_splitter.addWidget(scroll)
+        self.composer_area = WorkspaceSurface()
+        dock = QVBoxLayout(self.composer_area)
+        dock.setContentsMargins(0, 4, 0, 0)
+        self.attachments = QLabel()
+        self.attachments.setObjectName("muted")
+        self.attachments.setWordWrap(True)
+        self.attachments.hide()
+        dock.addWidget(self.attachments)
+        composer = QFrame()
+        composer.setObjectName("composer")
+        compose = QVBoxLayout(composer)
+        compose.setContentsMargins(12, 10, 12, 10)
+        self.prompt = QPlainTextEdit()
+        self.prompt.setObjectName("prompt")
+        self.prompt.setPlaceholderText("描述任务，例如：整理全部产品并复核缺项")
+        self.prompt.setMinimumHeight(64)
+        compose.addWidget(self.prompt, 1)
+        row = QHBoxLayout()
+        self.attachment_button = QToolButton()
+        self.attachment_button.setText("＋ 附件")
+        self.attachment_button.setPopupMode(QToolButton.InstantPopup)
+        menu = QMenu(self.attachment_button)
+        menu.addAction("添加输入文件", self.add_inputs)
+        menu.addAction("添加知识资料", self.add_knowledge)
+        menu.addSeparator()
+        self.clear_attachments = menu.addAction("清空附件", self.clear_selection)
+        self.clear_attachments.setEnabled(False)
+        self.attachment_button.setMenu(menu)
+        row.addWidget(self.attachment_button)
+        row.addStretch(1)
+        self.cancel = QPushButton("停止")
+        self.cancel.clicked.connect(self.cancel_task)
+        self.cancel.setEnabled(False)
+        self.cancel.hide()
+        row.addWidget(self.cancel)
+        self.begin = QPushButton("发送  ↑")
+        self.begin.setObjectName("send")
+        self.begin.clicked.connect(self.send)
+        row.addWidget(self.begin)
+        compose.addLayout(row)
+        dock.addWidget(composer, 1)
+        hint = QLabel("当前输出为可追溯的审核草稿；完整产品包和正式计算输入仍需完成工程规则与映射。")
+        hint.setObjectName("muted")
+        hint.setWordWrap(True)
+        self.hint = hint
+        dock.addWidget(hint)
         quick_bar = QWidget()
         self.quick_bar = quick_bar
         quick = QHBoxLayout(quick_bar)
@@ -299,75 +519,46 @@ class ChatWindow(QMainWindow):
             button.clicked.connect(lambda _, i=index: self.navigate(i))
             quick.addWidget(button)
         quick.addStretch()
-        self.open_output = QPushButton("打开结果目录")
-        self.open_output.setEnabled(False)
-        self.open_output.clicked.connect(self.show_output)
-        quick.addWidget(self.open_output)
-        layout.addWidget(quick_bar)
-        self.attachments = QLabel("尚未选择文件")
-        self.attachments.setObjectName("muted")
-        self.attachments.setWordWrap(True)
-        layout.addWidget(self.attachments)
-        composer = QFrame()
-        composer.setObjectName("composer")
-        compose = QVBoxLayout(composer)
-        compose.setContentsMargins(12, 10, 12, 10)
-        self.prompt = QPlainTextEdit()
-        self.prompt.setObjectName("prompt")
-        self.prompt.setPlaceholderText("例如：整理这些输入文件中的全部产品，生成计算前数据，优先自动审核缺项…")
-        self.prompt.setMaximumHeight(90)
-        compose.addWidget(self.prompt)
-        row = QHBoxLayout()
-        for label, callback in (("＋ 输入文件", self.add_inputs), ("＋ 知识资料", self.add_knowledge), ("清空附件", self.clear_selection)):
-            button = QPushButton(label)
-            button.clicked.connect(callback)
-            row.addWidget(button)
-        row.addStretch()
-        self.cancel = QPushButton("停止")
-        self.cancel.clicked.connect(self.cancel_task)
-        self.cancel.setEnabled(False)
-        row.addWidget(self.cancel)
-        self.begin = QPushButton("发送并执行  ↑")
-        self.begin.setObjectName("send")
-        self.begin.clicked.connect(self.send)
-        row.addWidget(self.begin)
-        compose.addLayout(row)
-        layout.addWidget(composer)
-        hint = QLabel("当前输出为可追溯的审核草稿；完整产品包和正式计算输入仍需完成工程规则与映射。")
-        hint.setObjectName("muted")
-        hint.setWordWrap(True)
-        self.hint = hint
-        layout.addWidget(hint)
+        dock.addWidget(quick_bar)
+        self.chat_splitter.addWidget(self.composer_area)
+        self.chat_splitter.setStretchFactor(0, 1)
+        self.chat_splitter.setSizes([690, 150])
+        self.module_host = QWidget()
+        self.module_host_layout = QVBoxLayout(self.module_host)
+        self.module_host_layout.setContentsMargins(0, 0, 0, 0)
+        self.module_host_layout.setSpacing(0)
+        self.chat_page_layout = QSplitter(Qt.Vertical)
+        self.chat_page_layout.setChildrenCollapsible(False)
+        self.chat_page_layout.addWidget(self.chat_splitter)
+        self.chat_page_layout.addWidget(self.module_host)
+        self.chat_page_layout.setStretchFactor(0, 1)
+        self.chat_page_layout.setStretchFactor(1, 3)
+        self.module_host.hide()
+        layout.addWidget(self.chat_page_layout, 1)
         self.pages.addWidget(page)
 
     def inline_card(self, title, content, extra=None):
-        card = QFrame()
-        card.setObjectName("assistantBubble")
-        layout = QVBoxLayout(card)
-        toggle = QToolButton()
-        toggle.setText(title)
-        toggle.setCheckable(True)
-        toggle.setChecked(True)
-        toggle.setArrowType(Qt.DownArrow)
-        toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        toggle.setStyleSheet("font-weight:600;font-size:15px;padding:8px;border:0;")
-        def expanded(checked):
-            content.setVisible(checked)
-            toggle.setArrowType(Qt.DownArrow if checked else Qt.RightArrow)
-        toggle.toggled.connect(expanded)
-        if extra is None:
-            layout.addWidget(toggle)
-        else:
-            header = QHBoxLayout()
-            header.setContentsMargins(0, 0, 8, 0)
-            header.addWidget(toggle)
-            header.addStretch()
-            header.addWidget(extra, 0, Qt.AlignVCenter)
-            layout.addLayout(header)
-        layout.addWidget(content)
+        card = ResizableCard(title, content, max(440, int(self.height()*.66)))
+        if extra is not None:
+            card.extra = extra
+        card.enlarge.toggled.connect(lambda large: self.focus_card(card, large))
         self.chat_layout.insertWidget(self.chat_layout.count()-1, card)
         card.hide()
-        return card, toggle
+        return card, card.toggle
+
+    def focus_card(self, card, large):
+        if large:
+            previous = getattr(self, 'focused_card', None)
+            if previous and previous is not card: previous.enlarge.setChecked(False)
+            self.focused_card = card
+            self.composer_area.hide()
+            def fit_content():
+                card.set_content_height(max(440, self.chat_scroll.viewport().height()-110))
+                self.scroll_to_card(card)
+            QTimer.singleShot(0, fit_content)
+        elif getattr(self, 'focused_card', None) is card:
+            self.focused_card = None
+            self.composer_area.show()
 
     def scroll_to_card(self, card):
         if card.parent() is not getattr(self, "conversation", None):
@@ -385,16 +576,18 @@ class ChatWindow(QMainWindow):
             self.module_toggle.setChecked(True)
             self.module_card.show()
             host.show()
-            self.chat_page_layout.setStretchFactor(self.chat_scroll, 0)
-            self.chat_page_layout.setStretchFactor(host, 10)
+            self.module_card.set_content_height(max(440, host.height() - 70))
+            self.chat_splitter.hide()
+            self.chat_visible = False
+            self.chat_page_layout.setSizes([0, max(1, self.height())])
         else:
             if self.module_card.parent() is host:
                 self.chat_layout.insertWidget(self.chat_layout.count() - 1, self.module_card)
             host.hide()
             self.chat_scroll.setMaximumHeight(16777215)
-            self.chat_page_layout.setStretchFactor(self.chat_scroll, 1)
-            self.chat_page_layout.setStretchFactor(host, 3)
-        self.set_chat_visible(not active)
+            self.chat_splitter.show()
+            self.chat_visible = True
+            self.chat_page_layout.setSizes([max(1, self.height()), 0])
         self.focus_exit.setText("展开对话")
         self.focus_exit.setVisible(bool(active))
 
@@ -406,26 +599,18 @@ class ChatWindow(QMainWindow):
         工作区高度，需要边看图边对话时再点“对话区”放出来。
         """
         self.chat_visible = bool(show)
-        self.chat_scroll.setVisible(show)
-        self.state.setVisible(show)
-        self.quick_bar.setVisible(show)
-        self.attachments.setVisible(show)
-        self.hint.setVisible(show)
-        if hasattr(self, "body_layout"):
-            self.body_layout.setContentsMargins(*(self.body_margins if show else (16, 10, 16, 10)))
-        if hasattr(self, "prompt"):
-            self.prompt.setMaximumHeight(90 if show else 56)
+        self.chat_splitter.setVisible(show)
+        if self.module_host.isVisible():
+            self.chat_page_layout.setSizes([
+                max(1, self.height()) * (3 if show else 0),
+                max(1, self.height()) * 10,
+            ])
 
     def toggle_chat_view(self):
         show = not getattr(self, "chat_visible", True)
         self.set_chat_visible(show)
         self.focus_exit.setText("收起对话" if show else "展开对话")
         self.focus_exit.setToolTip("收起上方对话区，把整块工作区让给编辑器" if show else "展开上方对话区，边看图边对话")
-        host = getattr(self, "module_host", None)
-        if host is not None and host.isVisible():
-            # 编辑器还在：对话区按需占一部分高度，编辑器始终拿大头
-            self.chat_page_layout.setStretchFactor(self.chat_scroll, 3 if show else 0)
-            self.chat_page_layout.setStretchFactor(host, 10)
 
     def build_review(self):
         panel = QWidget()
@@ -455,13 +640,8 @@ class ChatWindow(QMainWindow):
     def navigate(self, index):
         self.current_section = index
         self.pages.setCurrentIndex(0 if index in (1, 3) else index)
-        self.page_title.setText(
-            "模块结果" if index == 1 else
-            "对话" if index in (0, 3) else
-            ("对话", "模块结果", "数据空间", "运行记录", "待审核")[index]
-        )
-        for i, button in enumerate(self.nav_buttons):
-            button.setStyleSheet("background:#e8effa;color:#245bac;font-weight:600;" if i == index else "")
+        self.page_title.setText("对话" if index in (1, 3) else SECTIONS[index])
+        self.nav_actions[index].setChecked(True)
         if index == 2 and self.active_run_id:
             self.data_space.bind(self.workspace, self.active_run_id)
         if index in (1, 3):
@@ -513,12 +693,36 @@ class ChatWindow(QMainWindow):
         self.update_attachments()
 
     def update_attachments(self):
-        self.attachments.setText("　".join(["输入："+Path(p).name for p in self.inputs] + ["知识："+Path(p).name for p in self.knowledge]) or "尚未选择文件")
+        files = ["输入："+Path(p).name for p in self.inputs] + ["知识："+Path(p).name for p in self.knowledge]
+        self.attachments.setText("　".join(files[:3]) + (f"　等 {len(files)} 份资料" if len(files) > 3 else ""))
+        self.attachments.setToolTip("\n".join(files))
+        self.attachments.setVisible(bool(files))
+        self.clear_attachments.setEnabled(bool(files))
 
     def clear_selection(self):
         if self.worker: return
         self.inputs, self.knowledge = [], []
         self.update_attachments()
+
+    def execute_shortcut(self, action):
+        if action == 'execution':
+            self.navigate(3)
+            return
+        if self.worker or self.database_worker or self.module_panel.busy or self.pending_new_chat: return
+        if action == 'review' and self.last_result:
+            self.welcome.hide()
+            self.bubble('user', '核对必需参数与来源')
+            self.navigate(3)
+            self.recheck_current()
+            return
+        if not self.inputs:
+            self.add_inputs()
+            if not self.inputs: return
+        goal = ('整理输入文件中的全部产品，并核对必需参数与来源。' if action == 'review'
+                else '整理输入文件中的全部产品。')
+        self.welcome.hide()
+        self.bubble('user', goal)
+        self.start(goal)
 
     def send(self):
         if self.worker or self.database_worker or self.module_panel.busy or self.pending_new_chat: return
@@ -590,12 +794,19 @@ class ChatWindow(QMainWindow):
 
     def controls(self, *args):
         busy = self.worker is not None or self.database_worker is not None or self.module_panel.busy or self.pending_new_chat
+        for action, button in self.shortcut_buttons.items():
+            button.setEnabled(action == 'execution' or not busy)
         self.begin.setEnabled(not busy)
         self.cancel.setEnabled(self.worker is not None)
+        self.cancel.setVisible(self.worker is not None)
+        self.attachment_button.setEnabled(not busy)
+        self.export_output.setEnabled(not busy and bool(self.last_result and any(
+            p.get('draft_path') for p in self.last_result.get('products', []))))
         self.submit_review.setEnabled(bool(self.review_editors) and not busy)
         self.recheck_button.setEnabled(bool(self.last_result) and not busy)
         self.new_chat_button.setEnabled(not self.pending_new_chat)
         self.history.setEnabled(not busy)
+        self.load_result_action.setEnabled(not busy)
         self.module_panel.closing = self.pending_new_chat
         self.module_panel.refresh_controls()
 
@@ -608,6 +819,7 @@ class ChatWindow(QMainWindow):
         if self.started_at is not None:
             self.elapsed_value = time.monotonic()-self.started_at
             self.clock_label.setText("本轮运行 " + duration(self.elapsed_value))
+            self.clock_label.show()
         engine = getattr(self.worker, "engine", None) if self.worker else None
         run_id = getattr(engine, "run_id", None)
         if run_id and self.active_run_id != run_id:
@@ -667,11 +879,13 @@ class ChatWindow(QMainWindow):
                     self.review_tree.setItemWidget(row, 4, editor)
                     self.review_editors.append((product["id"], gap["id"], editor))
                 parent.setExpanded(True)
-        lines += ["", "能力说明："] + [c["message"] for c in result.get("capabilities", [])]
-        lines += ["", "可在模块结果中继续编辑与校验，在数据空间中查看文件和知识关联，在运行记录中查看真实调用路径。"]
+        limitations = [c["message"] for c in result.get("capabilities", [])]
+        if limitations:
+            lines += ["", "能力说明"] + limitations
         self.report.setPlainText("\n".join(lines))
         self.report.document().setTextWidth(max(500, self.width()-370))
-        self.report.setFixedHeight(min(470, max(220, int(self.report.document().size().height()+24))))
+        self.report.setMinimumHeight(200)
+        self.report.setMaximumHeight(440)
         for card in (self.report_frame, self.module_card, self.execution_card):
             if card is self.module_card and card.parent() is getattr(self, "module_host", None):
                 continue  # 编辑器正在使用：卡片留在不滚动的模块工作区
@@ -685,10 +899,11 @@ class ChatWindow(QMainWindow):
         self.scroll_to_card(self.report_frame)
         self.welcome.hide()
         self.open_output.setEnabled(bool(self.last_output))
-        self.nav_buttons[4].setText("待审核" + (f"  {count}" if count else ""))
+        self.nav_actions[4].setText("待审核" + (f"  {count}" if count else ""))
         if self.started_at is None:
             timing = self.fabric.execution(self.active_run_id)
             self.clock_label.setText("累计执行 " + duration(timing["elapsed_seconds"]) if timing["sessions"] else "任务耗时合计 " + duration(timing["task_seconds"]) if timing["tasks"] else "运行时间未记录")
+        self.clock_label.show()
         self.controls()
         self.persist_chat()
         self.load_history()
@@ -722,6 +937,7 @@ class ChatWindow(QMainWindow):
         if self.started_at is not None:
             self.elapsed_value = time.monotonic()-self.started_at
             self.clock_label.setText("本轮用时 " + duration(self.elapsed_value))
+            self.clock_label.show()
         self.started_at = None
         self.worker.deleteLater()
         self.worker = None
@@ -780,11 +996,31 @@ class ChatWindow(QMainWindow):
         if self.worker or self.database_worker or self.module_panel.busy or self.pending_new_chat: return
         path, _ = QFileDialog.getOpenFileName(self, "载入任务结果", str(self.workspace / "runs"), "任务结果 (summary.json)")
         if path:
-            try: self.on_complete(json.loads(Path(path).read_text(encoding="utf-8")))
+            try:
+                self.on_complete(json.loads(Path(path).read_text(encoding="utf-8")))
+                self.navigate(0)
             except Exception as exc: QMessageBox.warning(self, "任务结果", str(exc))
 
     def show_output(self):
         if self.last_output: QDesktopServices.openUrl(QUrl.fromLocalFile(self.last_output))
+
+    def show_settings(self):
+        dialog = ExportSettingsDialog(self.settings_workspace, self)
+        dialog.exec_()
+        dialog.deleteLater()
+
+    def save_output(self):
+        if not self.last_result or not self.export_output.isEnabled():
+            return
+        try:
+            filename = f"审核草稿-{self.last_result['run_id'][:8]}.zip"
+            initial = default_save_file(self.settings_workspace, filename)
+            path, _ = QFileDialog.getSaveFileName(self, '导出审核草稿', initial, 'ZIP 压缩包 (*.zip)')
+            if path:
+                export_task_drafts(self.last_result, path)
+                self.state.setText('审核草稿已导出')
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, '导出审核草稿', str(exc))
 
     def new_chat(self):
         if self.pending_new_chat: return
@@ -818,6 +1054,7 @@ class ChatWindow(QMainWindow):
         self.host_module_card(False)  # 编辑器已全部关闭，模块卡搬回聊天流
         self.module_card.hide()
         self.execution_card.hide()
+        for card in (self.module_card, self.execution_card): card.enlarge.setChecked(False)
         self.welcome.show()
         self.last_result, self.active_run_id, self.last_output = None, None, None
         self.module_panel.reset()
@@ -825,7 +1062,7 @@ class ChatWindow(QMainWindow):
         self.data_space.clear()
         self.review_tree.clear()
         self.review_editors = []
-        self.nav_buttons[4].setText("待审核")
+        self.nav_actions[4].setText("待审核")
         self.log.clear()
         self.history.clearSelection()
         self.history.setCurrentRow(-1)
@@ -833,11 +1070,11 @@ class ChatWindow(QMainWindow):
         self.open_output.setEnabled(False)
         self.state.setText("等待提交文件")
         self.clock_label.setText("尚未运行")
+        self.clock_label.hide()
         self.prompt.clear()
         self.inputs, self.knowledge = [], []
         self.update_attachments()
         self.navigate(0)
-        self.bubble("assistant", "新对话已开始。请加入输入文件和本次知识资料。已有任务仍可从最近任务查看。")
         self.controls()
 
     def closeEvent(self, event):
@@ -853,8 +1090,10 @@ class ChatWindow(QMainWindow):
             self.state.setText("正在保存模块工作副本，编辑器关闭后可退出")
             event.ignore()
         else:
+            self.layout_closing = True
+            self.layout_timer.stop()
             self.timer.stop()
             self.module_panel.timer.stop()
             self.execution.flush_layout()
-            self.execution.save_timer.stop()
+            self.execution.stop_updates()
             event.accept()
