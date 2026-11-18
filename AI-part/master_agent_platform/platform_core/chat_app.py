@@ -10,10 +10,10 @@ import sqlite3
 import re
 import datetime as dt
 
-from PyQt5.QtCore import Qt, QPoint, QSize, QThread, QTimer, QUrl, pyqtSignal
+from PyQt5.QtCore import Qt, QEvent, QPoint, QSize, QThread, QTimer, QUrl, pyqtSignal
 from PyQt5.QtGui import QDesktopServices, QIcon
-from PyQt5.QtWidgets import (QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QFrame, QSplitter, QComboBox,
-    QLabel, QPushButton, QListWidget, QTextBrowser, QPlainTextEdit, QScrollArea,
+from PyQt5.QtWidgets import (QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QFrame, QSplitter,
+    QLabel, QPushButton, QListWidget, QListWidgetItem, QTextBrowser, QPlainTextEdit, QScrollArea,
     QStackedWidget, QTreeWidget, QTreeWidgetItem, QLineEdit, QFileDialog, QMessageBox, QToolButton, QMenu,
     QActionGroup)
 
@@ -22,9 +22,10 @@ from .orchestrator import Orchestrator
 from .presentation import ExecutionPanel, DataSpacePanel
 from .run_view import duration
 from .module_panel import ModulePanel
+from .chat_widgets import message_row, RecentChatDelegate
 from .export_settings import ExportSettingsDialog, default_save_file, export_task_drafts
 from .ui_theme import (apply_theme, read_scale, save_scale, fit_initial_window,
-    ResizableCard, FlowLayout, WorkspaceSurface, ZOOM_PERCENTAGES)
+    ResizableCard, FlowLayout, WorkspaceSurface, WorkspaceComboBox, ZOOM_PERCENTAGES)
 
 SECTIONS = ("对话", "模块结果", "数据空间", "运行记录", "待审核")
 COLLAPSED_SIDEBAR_WIDTH = 60
@@ -96,7 +97,11 @@ class ChatWindow(QMainWindow):
         self.layout_timer = QTimer(self)
         self.layout_timer.setSingleShot(True)
         self.layout_timer.timeout.connect(self.adjust_layout)
+        self.composer_timer = QTimer(self)
+        self.composer_timer.setSingleShot(True)
+        self.composer_timer.timeout.connect(self.align_composer_to_viewport)
         self.layout_closing = False
+        self.layout_window = None
         central = WorkspaceSurface()
         self.setCentralWidget(central)
         root = QHBoxLayout(central)
@@ -136,8 +141,11 @@ class ChatWindow(QMainWindow):
         self.history = QListWidget()
         self.history.setStyleSheet("background:transparent;border:0;padding:0;")
         self.history.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.history.setTextElideMode(Qt.ElideRight)
+        self.history.setUniformItemSizes(True)
+        self.history.setMouseTracking(True)
+        self.history.setItemDelegate(RecentChatDelegate(self.history))
         self.history.itemClicked.connect(self.select_history)
+        self.history.itemActivated.connect(self.select_history)
         side.addWidget(self.history, 1)
         sidebar_scroll = QScrollArea()
         sidebar_scroll.setWidgetResizable(True)
@@ -196,7 +204,7 @@ class ChatWindow(QMainWindow):
         header.addWidget(self.page_title)
         header.addStretch(1)
         header.addWidget(QLabel("字号"))
-        self.font_zoom = QComboBox()
+        self.font_zoom = WorkspaceComboBox()
         for percent in ZOOM_PERCENTAGES:
             self.font_zoom.addItem(f"{percent}%", percent/100)
         closest = min(ZOOM_PERCENTAGES, key=lambda percent: abs(percent - self.ui_scale*100))
@@ -346,7 +354,45 @@ class ChatWindow(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if hasattr(self, 'layout_timer') and not self.layout_closing: self.layout_timer.start(0)
+        self.schedule_layout()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        handle = self.windowHandle()
+        if handle is not None and handle is not self.layout_window:
+            self.layout_window = handle
+            handle.screenChanged.connect(self.schedule_layout)
+        self.schedule_layout()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.WindowStateChange:
+            self.schedule_layout()
+
+    def eventFilter(self, watched, event):
+        if not self.layout_closing and (event.type() == QEvent.Show or (
+                event.type() == QEvent.Resize and event.size().width() != event.oldSize().width())):
+            self.composer_timer.start(0)
+        return super().eventFilter(watched, event)
+
+    def schedule_layout(self, *_):
+        if hasattr(self, 'layout_timer') and not self.layout_closing:
+            self.layout_timer.start(0)
+
+    def align_composer_to_viewport(self):
+        viewport = self.chat_scroll.viewport()
+        if not viewport.isVisible() or not self.composer_area.isVisible():
+            return
+        # The input and messages must use the same usable width, after the
+        # scrollbar, sidebar and window decoration have finished resizing.
+        left = viewport.mapTo(self, QPoint()).x() - self.composer_area.mapTo(self, QPoint()).x()
+        right = self.composer_area.width() - left - viewport.width()
+        transcript = self.chat_layout.contentsMargins()
+        current = self.composer_layout.getContentsMargins()
+        margins = (max(0, transcript.left()+left), current[1],
+                   max(0, transcript.right()+right), current[3])
+        if margins != current:
+            self.composer_layout.setContentsMargins(*margins)
 
     def adjust_layout(self):
         if self.layout_closing: return
@@ -356,6 +402,7 @@ class ChatWindow(QMainWindow):
             if (current.left(), current.top(), current.right(), current.bottom()) != (margin, 16, margin, 16):
                 self.body_layout.setContentsMargins(margin, 16, margin, 16)
         self.adapt_sidebar()
+        self.align_composer_to_viewport()
         for name in ("module_card", "execution_card"):
             card = getattr(self, name, None)
             if card and not card.user_sized:
@@ -413,10 +460,10 @@ class ChatWindow(QMainWindow):
         conversation.setObjectName("threadSurface")
         self.chat_layout = QVBoxLayout(conversation)
         self.chat_layout.setContentsMargins(8, 14, 8, 14)
-        self.chat_layout.setSpacing(12)
-        self.welcome = QFrame()
+        self.chat_layout.setSpacing(16)
+        self.welcome = QWidget()
         hero = QVBoxLayout(self.welcome)
-        hero.setContentsMargins(14, 22, 14, 12)
+        hero.setContentsMargins(14, 48, 14, 18)
         hero.setSpacing(10)
         heading = QLabel("从工程资料生成产品数据")
         heading.setObjectName("heroTitle")
@@ -465,8 +512,10 @@ class ChatWindow(QMainWindow):
         self.chat_splitter.setChildrenCollapsible(False)
         self.chat_splitter.addWidget(scroll)
         self.composer_area = WorkspaceSurface()
-        dock = QVBoxLayout(self.composer_area)
-        dock.setContentsMargins(0, 4, 0, 0)
+        scroll.viewport().installEventFilter(self)
+        self.composer_area.installEventFilter(self)
+        dock = self.composer_layout = QVBoxLayout(self.composer_area)
+        dock.setContentsMargins(8, 4, 8, 0)
         self.attachments = QLabel()
         self.attachments.setObjectName("muted")
         self.attachments.setWordWrap(True)
@@ -563,7 +612,11 @@ class ChatWindow(QMainWindow):
     def scroll_to_card(self, card):
         if card.parent() is not getattr(self, "conversation", None):
             return  # 已搬到不滚动的模块工作区，不需要也不应该滚动聊天区
-        QTimer.singleShot(0, lambda: self.chat_scroll.verticalScrollBar().setValue(max(0, card.y()-12)))
+        def scroll():
+            if card.isVisible() and card.parent() is self.conversation:
+                position = card.mapTo(self.chat_scroll.widget(), QPoint()).y()
+                self.chat_scroll.verticalScrollBar().setValue(max(0, position-12))
+        QTimer.singleShot(0, scroll)
 
     def host_module_card(self, active):
         """编辑器活动期间把“模块结果”卡搬到不滚动的工作区，关闭后再搬回聊天流。"""
@@ -659,22 +712,13 @@ class ChatWindow(QMainWindow):
             self.navigate(1)
 
     def bubble(self, role, text, persist=True):
-        frame = QFrame()
-        frame.setObjectName("userBubble" if role == "user" else "assistantBubble")
-        layout = QVBoxLayout(frame)
-        title = QLabel("你" if role == "user" else "工程 Agent")
-        title.setStyleSheet("font-weight:600;")
-        label = QLabel(text)
-        label.setTextFormat(Qt.PlainText)
-        label.setWordWrap(True)
-        label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        layout.addWidget(title)
-        layout.addWidget(label)
-        self.chat_layout.insertWidget(self.chat_layout.count()-1, frame)
-        self.bubbles.append(frame)
+        row = message_row(role, text)
+        self.chat_layout.insertWidget(self.chat_layout.count()-1, row)
+        self.bubbles.append(row)
         self.messages.append(dict(role=role, text=text))
-        if persist: self.persist_chat()
-        QTimer.singleShot(0, lambda: self.chat_scroll.verticalScrollBar().setValue(self.chat_scroll.verticalScrollBar().maximum()))
+        if persist:
+            self.persist_chat()
+            QTimer.singleShot(0, lambda: self.chat_scroll.ensureWidgetVisible(row, 0, 12) if row.isVisible() else None)
 
     def persist_chat(self):
         from .private_database import atomic_json
@@ -840,7 +884,8 @@ class ChatWindow(QMainWindow):
             self.workspace = Path(self.last_output).parent.parent
             self.fabric = Fabric(self.workspace)
             self.module_panel.workspace = self.workspace
-        if self.worker is None and previous_run != self.active_run_id:
+        restoring_chat = self.worker is None and previous_run != self.active_run_id
+        if restoring_chat:
             self.restore_chat(self.active_run_id)
         self.module_panel.set_summary(result)
         self.execution.bind(self.workspace, self.active_run_id)
@@ -883,7 +928,6 @@ class ChatWindow(QMainWindow):
         if limitations:
             lines += ["", "能力说明"] + limitations
         self.report.setPlainText("\n".join(lines))
-        self.report.document().setTextWidth(max(500, self.width()-370))
         self.report.setMinimumHeight(200)
         self.report.setMaximumHeight(440)
         for card in (self.report_frame, self.module_card, self.execution_card):
@@ -896,7 +940,10 @@ class ChatWindow(QMainWindow):
         self.module_toggle.setText(f"模块结果 · {len(result.get('products', []))} 个产品")
         self.module_card.show()
         self.execution_card.show()
-        self.scroll_to_card(self.report_frame)
+        if restoring_chat and self.bubbles:
+            self.scroll_to_card(self.bubbles[0])
+        else:
+            self.scroll_to_card(self.report_frame)
         self.welcome.hide()
         self.open_output.setEnabled(bool(self.last_output))
         self.nav_actions[4].setText("待审核" + (f"  {count}" if count else ""))
@@ -913,13 +960,14 @@ class ChatWindow(QMainWindow):
         for path in (self.workspace / "conversations").glob("*.json"):
             try:
                 value = json.loads(path.read_text(encoding="utf-8"))
-                if value.get("run_id") == run_id and value.get("messages"):
+                if value.get("run_id") == run_id and value.get("id") and isinstance(value.get("messages"), list):
                     records.append((path.stat().st_mtime, value))
             except (OSError, ValueError): continue
         for frame in self.bubbles:
             self.chat_layout.removeWidget(frame)
             frame.deleteLater()
         self.bubbles, self.messages = [], []
+        self.chat_id = uuid.uuid4().hex
         if records:
             value = max(records, key=lambda item: item[0])[1]
             self.chat_id = value["id"]
@@ -980,14 +1028,28 @@ class ChatWindow(QMainWindow):
             request, summary = json.loads(row["request"]), json.loads(row["summary"])
             if request.get("purpose"): continue
             title = request.get("user_goal") or (Path(request.get("input_files", ["工程任务"])[0]).name if request.get("input_files") else "工程任务")
-            self.history.addItem(title[:23] + "\n" + str(len(summary.get("products", []))) + " 个产品 · " + row["id"][:8])
+            title = ' '.join(title.split()) or '工程任务'
+            detail = f"{len(summary.get('products', []))} 个产品 · {row['id'][:8]}"
+            item = QListWidgetItem(title)
+            item.setData(Qt.UserRole, row["id"])
+            item.setData(Qt.UserRole+1, detail)
+            item.setToolTip(title + '\n' + detail)
+            self.history.addItem(item)
             self.history_ids.append(row["id"])
+            if row["id"] == self.active_run_id:
+                self.history.setCurrentItem(item)
+        if self.history.currentItem() is not None:
+            self.history.scrollToItem(self.history.currentItem())
 
     def select_history(self, item):
         if self.worker or self.database_worker or self.module_panel.busy or self.pending_new_chat: return
-        index = self.history.row(item)
-        if index < 0 or index >= len(self.history_ids): return
-        path = self.workspace / "runs" / self.history_ids[index] / "summary.json"
+        run_id = item.data(Qt.UserRole)
+        if run_id not in self.history_ids:
+            return
+        if run_id == self.active_run_id and self.last_result:
+            self.navigate(0)
+            return
+        path = self.workspace / "runs" / run_id / "summary.json"
         if path.is_file():
             self.on_complete(json.loads(path.read_text(encoding="utf-8")))
             self.navigate(0)
@@ -1092,6 +1154,7 @@ class ChatWindow(QMainWindow):
         else:
             self.layout_closing = True
             self.layout_timer.stop()
+            self.composer_timer.stop()
             self.timer.stop()
             self.module_panel.timer.stop()
             self.execution.flush_layout()

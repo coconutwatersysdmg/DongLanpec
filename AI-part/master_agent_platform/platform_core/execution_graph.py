@@ -7,7 +7,7 @@ import threading
 
 from PyQt5.QtCore import Qt, QPointF, QTimer, QSaveFile, QIODevice, QLockFile
 from PyQt5.QtGui import QColor, QBrush, QPen, QFont, QFontMetrics, QPainter, QPainterPath, QPolygonF
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox,
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGraphicsScene, QGraphicsView, QGraphicsRectItem, QGraphicsTextItem, QGraphicsPathItem,
     QGraphicsPolygonItem, QGraphicsSimpleTextItem, QSplitter, QPlainTextEdit, QTreeWidget,
     QTreeWidgetItem, QCheckBox)
@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushBut
 from .fabric import Fabric
 from .graph_model import execution_graph, review_cycles
 from .run_view import duration
-from .ui_theme import FlowLayout
+from .ui_theme import FlowLayout, WorkspaceComboBox
 
 COLORS = {"running": ("#eff6ff", "#2563eb"), "failed": ("#fff1f2", "#e11d48"),
           "processing_failed": ("#fff1f2", "#e11d48"), "cancelled": ("#f1f5f9", "#64748b"),
@@ -218,7 +218,8 @@ class ExecutionPanel(QWidget):
         self.heading = QLabel("实际执行路径")
         self.heading.setObjectName("sectionTitle")
         row.addWidget(self.heading)
-        self.filter = QComboBox()
+        self.filter = WorkspaceComboBox()
+        self.filter.setAccessibleName("筛选产品")
         self.filter.addItem("全部产品", "")
         self.filter.currentIndexChanged.connect(lambda: self.refresh(True))
         row.addWidget(self.filter)

@@ -39,8 +39,6 @@ class ModulePanel(EvidencePanel):
         old_row = self.layout().takeAt(1)
         selectors = FlowLayout()
         while old_row.count(): selectors.addItem(old_row.takeAt(0))
-        self.product.setMinimumContentsLength(12)
-        self.product.setSizeAdjustPolicy(self.product.AdjustToMinimumContentsLengthWithIcon)
         self.layout().insertLayout(1, selectors)
         self.product.currentIndexChanged.connect(self.refresh_preview)
         self.module.currentIndexChanged.connect(self.refresh_preview)
