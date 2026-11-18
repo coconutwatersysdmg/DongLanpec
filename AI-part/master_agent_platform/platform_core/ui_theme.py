@@ -37,7 +37,6 @@ def theme(scale=1.0):
     QMainWindow,QDialog{background:#f7f9fd;}
     QWidget#sidebar{background:#eef2f8;border-right:1px solid #e0e7f1;}
     QLabel#brand{font-size:BRANDpt;font-weight:700;color:#182b50;}
-    QLabel#brandMark{font-size:BRANDpt;font-weight:700;color:white;background:#5363e8;border-radius:12px;padding:8px 12px;}
     QLabel#sectionTitle{font-size:TITLEpt;font-weight:700;color:#172b4d;}
     QLabel#heroTitle{font-size:HEROpt;font-weight:700;color:#182b50;}
     QLabel#muted{color:#64748b;} QLabel#eyebrow{color:#62728a;font-weight:600;}
@@ -53,8 +52,13 @@ def theme(scale=1.0):
     QPlainTextEdit#prompt{border:0;background:transparent;padding:5px;}
     QFrame#assistantBubble{background:#fff;border:1px solid #e0e7f2;border-radius:14px;}
     QFrame#userBubble{background:#eef2ff;border:1px solid #dde4ff;border-radius:14px;}
-    QFrame#hero{background:qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #f0f3ff,stop:1 #f7fbff);border:1px solid #e1e7f6;border-radius:18px;}
-    QLabel#heroIcon{color:#6574df;font-weight:600;}
+    QToolButton#settingsButton{background:transparent;border-color:transparent;padding:7px;}
+    QToolButton#settingsButton:hover,QToolButton#settingsButton:focus{background:#eef2ff;border-color:#dce4f2;}
+    QMenu{background:#fff;border:1px solid #dce4f2;border-radius:8px;padding:5px;}
+    QMenu::item{padding:7px 15px;border-radius:5px;}
+    QMenu::item:selected{background:#edf1ff;color:#4357c8;}
+    QMenu::item:disabled{color:#95a0b2;}
+    QMenu::separator{height:1px;background:#e6ebf4;margin:3px 5px;}
     QTextBrowser,QPlainTextEdit,QTreeWidget,QListWidget,QTableWidget,QLineEdit,QComboBox{
         background:#fff;border:1px solid #dde5f0;border-radius:8px;padding:7px;selection-background-color:#e7edff;selection-color:#243f91;}
     QTextBrowser#conversation{border:0;} QTreeWidget::item,QListWidget::item{padding:6px 3px;}

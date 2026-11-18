@@ -95,7 +95,9 @@ class ResponsiveUiTests(unittest.TestCase):
             QTest.qWait(20)
             self.assertLessEqual(self.window.minimumSizeHint().width(), width)
             self.assertLessEqual(self.window.minimumSizeHint().height(), height)
-            for widget in (self.window.begin, self.window.cancel, self.window.font_zoom):
+            self.assertTrue(self.window.cancel.isHidden())
+            for widget in (self.window.begin, self.window.attachment_button, self.window.font_zoom,
+                           self.window.settings_button):
                 rect = widget.rect()
                 corner = widget.mapTo(self.window, rect.bottomRight())
                 self.assertLess(corner.x(), self.window.width())

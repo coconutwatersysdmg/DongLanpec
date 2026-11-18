@@ -535,7 +535,10 @@ def main():
 
         def export(self):
             def action():
-                path, _ = QFileDialog.getSaveFileName(self, "导出模块草稿", self.module + "-draft.json", "JSON (*.json)")
+                from platform_core.export_settings import default_save_file
+                workspace = Path(__file__).resolve().parent / 'workspace'
+                initial = default_save_file(workspace, self.module + '-draft.json')
+                path, _ = QFileDialog.getSaveFileName(self, "导出模块草稿", initial, "JSON (*.json)")
                 if path: atomic_json(path, dict(scope="module-draft", full_product_generated=False, payload=self.payload()))
             self.safe(action)
 

@@ -4,14 +4,16 @@ import tempfile
 import time
 import unittest
 from unittest.mock import patch
+from zipfile import ZipFile
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 import fitz
-from PyQt5.QtCore import Qt, QPoint, QRect, QSize
+from PyQt5.QtCore import Qt, QPoint, QRect, QSize, QTimer
 from PyQt5.QtGui import QImage, QPainter, QPixmap, QRegion
 from PyQt5.QtTest import QTest
 from PyQt5.QtWidgets import QApplication, QLabel, QWidget, QVBoxLayout, QComboBox, QListView
 from platform_core import chat_app
+from platform_core.export_settings import ExportSettingsDialog, default_save_directory, default_save_file
 from platform_core.graph_model import review_cycles
 from platform_core.ui_theme import FlowLayout, WorkspaceSurface, PopupItemDelegate, scale_legacy_page
 from test_batch_products import SimulatedOrchestrator
@@ -52,7 +54,9 @@ class ActionLayoutTests(unittest.TestCase):
         with patch.object(chat_app.QFileDialog, 'getOpenFileNames', return_value=([str(self.source)], '')) as chooser:
             self.window.shortcut_buttons['products'].click()
         chooser.assert_called_once()
+        self.assertFalse(self.window.cancel.isHidden())
         self.wait_finished()
+        self.assertTrue(self.window.cancel.isHidden())
         self.assertEqual(self.window.last_result['processed_products'], 3)
         self.assertEqual(self.window.prompt.toPlainText(), '保留未发送的输入')
         self.assertGreater(len(self.window.execution.tasks), 0)
@@ -79,6 +83,73 @@ class ActionLayoutTests(unittest.TestCase):
         self.assertEqual(self.window.current_section, 3)
         self.assertFalse(self.window.execution_card.isHidden())
         self.assertIsNone(self.window.worker)
+
+    def test_gear_saves_a_directory_that_the_task_export_uses(self):
+        directory = self.home / '结果目录'
+        directory.mkdir()
+        self.assertEqual(self.window.settings_button.text(), '')
+        self.assertFalse(self.window.settings_button.icon().pixmap(19, 19).isNull())
+
+        def configure():
+            dialog = self.app.activeModalWidget()
+            with patch.object(chat_app.QFileDialog, 'getExistingDirectory', return_value=str(directory)):
+                dialog.browse()
+            dialog.accept()
+
+        QTimer.singleShot(0, configure)
+        self.window.settings_button.click()
+        saved = default_save_directory(self.window.settings_workspace)
+        self.assertEqual(saved, directory.resolve())
+        reopened = ExportSettingsDialog(self.window.settings_workspace)
+        reopened.restore_defaults()
+        reopened.reject()
+        self.assertEqual(default_save_directory(self.window.settings_workspace), saved)
+
+        engine = SimulatedOrchestrator(self.home / 'workspace')
+        engine._mirror_evidence = lambda *args: None
+        summary = engine.run([self.source])
+        self.window.on_complete(summary)
+        output = directory / '三个产品的审核草稿.zip'
+        with patch.object(chat_app.QFileDialog, 'getSaveFileName', return_value=(str(output), '')) as chooser:
+            self.window.export_output.click()
+        self.assertEqual(Path(chooser.call_args.args[2]).parent, saved)
+        with ZipFile(output) as archive:
+            entries = archive.namelist()
+            self.assertEqual(len(entries), 3)
+            for name, product in zip(entries, summary['products']):
+                self.assertEqual(archive.read(name), Path(product['draft_path']).read_bytes())
+
+    def test_settings_allow_restoring_default_and_hold_invalid_folder(self):
+        workspace = self.window.settings_workspace
+        dialog = ExportSettingsDialog(workspace)
+        try:
+            dialog.directory.setText(str(self.home / 'missing'))
+            dialog.accept()
+            self.assertEqual(dialog.result(), dialog.Rejected)
+            self.assertFalse(dialog.message.isHidden())
+            dialog.restore_defaults()
+            dialog.accept()
+            self.assertEqual(dialog.result(), dialog.Accepted)
+            self.assertEqual(Path(default_save_file(workspace, 'conditions-draft.json')),
+                             workspace / 'exports' / 'conditions-draft.json')
+            self.assertTrue((workspace / 'exports').is_dir())
+        finally:
+            dialog.close()
+
+    def test_attachment_menu_preserves_file_kinds_and_clear_action(self):
+        actions = self.window.attachment_button.menu().actions()
+        self.assertTrue(self.window.attachments.isHidden())
+        self.assertFalse(self.window.clear_attachments.isEnabled())
+        with patch.object(chat_app.QFileDialog, 'getOpenFileNames', return_value=([str(self.source)], '')):
+            actions[0].trigger()
+        with patch.object(chat_app.QFileDialog, 'getOpenFileNames', return_value=([str(self.home / 'notes.txt')], '')):
+            actions[1].trigger()
+        self.assertEqual(self.window.inputs, [str(self.source)])
+        self.assertEqual(len(self.window.knowledge), 1)
+        self.assertFalse(self.window.attachments.isHidden())
+        self.window.clear_attachments.trigger()
+        self.assertTrue(self.window.attachments.isHidden())
+        self.assertEqual((self.window.inputs, self.window.knowledge), ([], []))
 
     def test_wrapped_flow_labels_reserve_their_full_height(self):
         host = QWidget()
