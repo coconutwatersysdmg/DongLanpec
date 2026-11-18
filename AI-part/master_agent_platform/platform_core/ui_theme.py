@@ -49,7 +49,7 @@ def theme(scale=1.0):
     css = """
     QWidget{font-family:'Microsoft YaHei UI','Microsoft YaHei';font-size:BASEpt;color:#24324b;}
     QMainWindow,QDialog{background:#f7f9fd;}
-    QWidget#sidebar{background:#eef2f8;border-right:1px solid #e0e7f1;}
+    QWidget#sidebar,QWidget#sidebarContent{background:#eef2f8;}
     QLabel#brand{font-size:BRANDpt;font-weight:700;color:#182b50;}
     QLabel#sectionTitle{font-size:TITLEpt;font-weight:700;color:#172b4d;}
     QLabel#heroTitle{font-size:HEROpt;font-weight:700;color:#182b50;}
@@ -65,9 +65,12 @@ def theme(scale=1.0):
     QPlainTextEdit#prompt{border:0;background:transparent;padding:5px;}
     QFrame#assistantBubble{background:#fff;border:1px solid #e0e7f2;border-radius:14px;}
     QFrame#userBubble{background:#eef2ff;border:1px solid #dde4ff;border-radius:14px;}
-    QToolButton#settingsButton,QToolButton#sidebarButton{background:transparent;border-color:transparent;padding:7px;}
+    QToolButton#settingsButton,QToolButton#sidebarButton,QToolButton#navigationButton{
+        background:transparent;border-color:transparent;padding:7px;}
     QToolButton#settingsButton:hover,QToolButton#settingsButton:focus,
-    QToolButton#sidebarButton:hover,QToolButton#sidebarButton:focus{background:#eef2ff;border-color:#dce4f2;}
+    QToolButton#sidebarButton:hover,QToolButton#sidebarButton:focus,
+    QToolButton#navigationButton:hover,QToolButton#navigationButton:focus{
+        background:#edf1ff;border-color:#dce4f2;}
     QMenu{background:#fff;border:1px solid #dce4f2;border-radius:8px;padding:5px;}
     QMenu::item{padding:7px 15px;border-radius:5px;}
     QMenu::item:selected{background:#edf1ff;color:#4357c8;}

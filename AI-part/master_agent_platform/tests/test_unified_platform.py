@@ -98,7 +98,7 @@ class UnifiedPlatformTests(unittest.TestCase):
         window = run.MainWindow()
         window.on_complete(self.summary)
         try:
-            labels = [action.text() for action in window.navigation_button.menu().actions()]
+            labels = [action.text() for action in window.navigation_menu.actions()]
             self.assertIn("数据空间", labels)
             self.assertIn("模块结果", labels)
             self.assertIn("运行记录", labels)

@@ -88,6 +88,11 @@ class ActionLayoutTests(unittest.TestCase):
         self.window.resize(1280, 820)
         self.window.show()
         QTest.qWait(15)
+        button = self.window.navigation_button
+        self.assertEqual(button.text(), '')
+        self.assertFalse(button.icon().pixmap(19, 19).isNull())
+        expanded_position = button.mapTo(self.window, QPoint())
+        self.assertGreater(expanded_position.y(), self.window.height() - 60)
         collapse = self.window.sidebar_button.icon()
         self.assertFalse(collapse.pixmap(19, 19).isNull())
         self.assertEqual(self.window.sidebar_button.toolTip(), "收起侧栏")
@@ -97,7 +102,21 @@ class ActionLayoutTests(unittest.TestCase):
         self.assertFalse(expand.pixmap(19, 19).isNull())
         self.assertNotEqual(expand.cacheKey(), collapse.cacheKey())
         self.assertEqual(self.window.sidebar_button.toolTip(), "展开侧栏")
-        self.assertTrue(self.window.navigation_button.isVisible())
+        self.assertTrue(button.isVisible())
+        self.app.processEvents()
+        self.assertEqual(button.mapTo(self.window, QPoint()), expanded_position)
+        self.assertEqual(self.window.body_surface.x(),
+                         self.window.sidebar_panel.width() + self.window.shell_splitter.handleWidth())
+        menu = self.window.navigation_menu
+        try:
+            button.click()
+            self.app.processEvents()
+            self.assertTrue(menu.isVisible())
+            self.assertLess(menu.geometry().bottom(), button.mapToGlobal(QPoint()).y())
+            QTest.mouseClick(menu, Qt.LeftButton, pos=menu.actionGeometry(self.window.nav_actions[2]).center())
+            self.assertEqual(self.window.current_section, 2)
+        finally:
+            menu.close()
         for index, action in enumerate(self.window.nav_actions):
             action.trigger()
             self.assertEqual(self.window.current_section, index)

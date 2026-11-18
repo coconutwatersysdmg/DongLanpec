@@ -10,7 +10,7 @@ import sqlite3
 import re
 import datetime as dt
 
-from PyQt5.QtCore import Qt, QSize, QThread, QTimer, QUrl, pyqtSignal
+from PyQt5.QtCore import Qt, QPoint, QSize, QThread, QTimer, QUrl, pyqtSignal
 from PyQt5.QtGui import QDesktopServices, QIcon
 from PyQt5.QtWidgets import (QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QFrame, QSplitter, QComboBox,
     QLabel, QPushButton, QListWidget, QTextBrowser, QPlainTextEdit, QScrollArea,
@@ -27,6 +27,7 @@ from .ui_theme import (apply_theme, read_scale, save_scale, fit_initial_window,
     ResizableCard, FlowLayout, WorkspaceSurface, ZOOM_PERCENTAGES)
 
 SECTIONS = ("对话", "模块结果", "数据空间", "运行记录", "待审核")
+COLLAPSED_SIDEBAR_WIDTH = 60
 
 
 class Worker(QThread):
@@ -104,8 +105,17 @@ class ChatWindow(QMainWindow):
         self.shell_splitter = QSplitter(Qt.Horizontal)
         self.shell_splitter.setHandleWidth(7)
         root.addWidget(self.shell_splitter)
-        sidebar = self.sidebar = QWidget()
-        sidebar.setObjectName("sidebar")
+        icons = Path(__file__).with_name('icons')
+        self.sidebar_panel = QWidget()
+        self.sidebar_panel.setObjectName('sidebar')
+        self.sidebar_panel.setMinimumWidth(210)
+        self.sidebar_panel.setMaximumWidth(340)
+        self.expanded_sidebar_width = 232
+        sidebar_layout = QVBoxLayout(self.sidebar_panel)
+        sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        sidebar_layout.setSpacing(0)
+        sidebar = QWidget()
+        sidebar.setObjectName("sidebarContent")
         sidebar.setMinimumWidth(200)
         sidebar.setMaximumWidth(320)
         side = QVBoxLayout(sidebar)
@@ -133,9 +143,34 @@ class ChatWindow(QMainWindow):
         sidebar_scroll.setWidgetResizable(True)
         sidebar_scroll.setWidget(sidebar)
         sidebar_scroll.setMinimumWidth(210)
-        sidebar_scroll.setMaximumWidth(340)
         self.sidebar = sidebar_scroll
-        self.shell_splitter.addWidget(sidebar_scroll)
+        sidebar_layout.addWidget(sidebar_scroll, 1)
+        sidebar_layout.addStretch(0)
+        footer = QHBoxLayout()
+        footer.setContentsMargins(12, 8, 12, 12)
+        self.navigation_button = QToolButton()
+        self.navigation_button.setObjectName('navigationButton')
+        self.navigation_button.setIcon(QIcon(str(icons / 'workspace-menu.svg')))
+        self.navigation_button.setIconSize(QSize(19, 19))
+        self.navigation_button.setFixedSize(36, 36)
+        self.navigation_button.setAccessibleName("工作台菜单")
+        self.navigation_button.setToolTip("工作台菜单")
+        self.navigation_button.clicked.connect(self.show_navigation_menu)
+        footer.addWidget(self.navigation_button)
+        footer.addStretch(1)
+        sidebar_layout.addLayout(footer)
+        self.navigation_menu = QMenu(self.navigation_button)
+        group = QActionGroup(self.navigation_menu)
+        self.nav_actions = []
+        for index, label in enumerate(SECTIONS):
+            action = self.navigation_menu.addAction(label)
+            action.setCheckable(True)
+            group.addAction(action)
+            action.triggered.connect(lambda _, i=index: self.navigate(i))
+            self.nav_actions.append(action)
+        self.navigation_menu.addSeparator()
+        self.load_result_action = self.navigation_menu.addAction("载入任务结果", self.load_result)
+        self.shell_splitter.addWidget(self.sidebar_panel)
         body = self.body_surface = WorkspaceSurface()
         body_layout = QVBoxLayout(body)
         self.body_layout = body_layout
@@ -149,34 +184,15 @@ class ChatWindow(QMainWindow):
         self.sidebar_button.setObjectName('sidebarButton')
         self.sidebar_button.setIconSize(QSize(19, 19))
         self.sidebar_button.setMinimumSize(34, 34)
-        icons = Path(__file__).with_name('icons')
         self.sidebar_icons = {
             True: QIcon(str(icons / 'sidebar-collapse.svg')),
             False: QIcon(str(icons / 'sidebar-expand.svg')),
         }
-        self.set_sidebar_visible(True)
         self.sidebar_button.clicked.connect(self.toggle_sidebar)
         header.addWidget(self.sidebar_button)
         self.page_title = QLabel("对话")
         self.page_title.setObjectName("sectionTitle")
         header.addWidget(self.page_title)
-        self.navigation_button = QToolButton()
-        self.navigation_button.setText("菜单")
-        self.navigation_button.setAccessibleName("工作台菜单")
-        self.navigation_button.setPopupMode(QToolButton.InstantPopup)
-        menu = QMenu(self.navigation_button)
-        group = QActionGroup(menu)
-        self.nav_actions = []
-        for index, label in enumerate(SECTIONS):
-            action = menu.addAction(label)
-            action.setCheckable(True)
-            group.addAction(action)
-            action.triggered.connect(lambda _, i=index: self.navigate(i))
-            self.nav_actions.append(action)
-        menu.addSeparator()
-        self.load_result_action = menu.addAction("载入任务结果", self.load_result)
-        self.navigation_button.setMenu(menu)
-        header.addWidget(self.navigation_button)
         header.addStretch(1)
         header.addWidget(QLabel("字号"))
         self.font_zoom = QComboBox()
@@ -215,7 +231,7 @@ class ChatWindow(QMainWindow):
         self.shell_splitter.addWidget(body)
         self.shell_splitter.setChildrenCollapsible(False)
         self.shell_splitter.setStretchFactor(1, 1)
-        self.shell_splitter.setSizes([232, 1200])
+        self.set_sidebar_visible(True)
         self.build_chat()
         self.module_panel = ModulePanel(self.workspace, self)
         self.evidence = self.module_panel  # internal lifecycle compatibility only
@@ -269,11 +285,28 @@ class ChatWindow(QMainWindow):
         self.set_sidebar_visible(self.sidebar.isHidden())
 
     def set_sidebar_visible(self, visible):
+        if not visible and not self.sidebar.isHidden():
+            self.expanded_sidebar_width = max(self.sidebar_panel.minimumWidth(), self.sidebar_panel.width())
         self.sidebar.setVisible(visible)
+        if visible:
+            self.sidebar_panel.setMaximumWidth(340)
+            self.sidebar_panel.setMinimumWidth(210)
+            width = self.expanded_sidebar_width
+        else:
+            self.sidebar_panel.setFixedWidth(COLLAPSED_SIDEBAR_WIDTH)
+            width = COLLAPSED_SIDEBAR_WIDTH
+        self.shell_splitter.handle(1).setEnabled(visible)
+        self.shell_splitter.setSizes([width, self.width() - width])
         self.sidebar_button.setIcon(self.sidebar_icons[visible])
         label = "收起侧栏" if visible else "展开侧栏"
         self.sidebar_button.setToolTip(label)
         self.sidebar_button.setAccessibleName(label)
+
+    def show_navigation_menu(self):
+        menu = self.navigation_menu
+        menu.setAttribute(Qt.WA_NoMouseReplay)
+        point = QPoint(0, -menu.sizeHint().height() - 6)
+        menu.popup(self.navigation_button.mapToGlobal(point))
 
     def adapt_sidebar(self):
         if hasattr(self, 'sidebar') and not self.sidebar_manual:
