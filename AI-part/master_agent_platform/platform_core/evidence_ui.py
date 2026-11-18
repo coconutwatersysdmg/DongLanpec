@@ -9,7 +9,7 @@ import sys
 from PyQt5.QtCore import QEvent, QPoint, QProcess, QProcessEnvironment, QRect, QSize, QThread, QTimer, Qt, pyqtSignal
 from PyQt5.QtGui import QWindow
 from PyQt5.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QPushButton, QSizePolicy,
-                             QTabWidget, QVBoxLayout, QWidget)
+                             QScrollArea, QTabWidget, QVBoxLayout, QWidget)
 
 from .fabric import BASE
 from .private_database import atomic_json

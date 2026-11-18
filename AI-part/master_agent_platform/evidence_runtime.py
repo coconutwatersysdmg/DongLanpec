@@ -210,6 +210,7 @@ def create_window(context):
             return old_product(identity)
         repository.product = select
         window = DesignWindow(repository=repository)
+        window._platform_extracted_parameters = (data.get("tube_structure") or {}).get("mapped_parameters", {})
         window._boot_session(context.product_id)
         def capture():
             session = window.session

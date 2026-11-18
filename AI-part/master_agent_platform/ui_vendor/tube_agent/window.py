@@ -1572,6 +1572,11 @@ class DesignWindow(QMainWindow):
                 {"R2": sheet_values.get("R2", 8.0)}
             )["布管限定圆 DL"]
             params["布管限定圆 DL"]["source"] = "联动计算"
+        for name, extracted in getattr(self, "_platform_extracted_parameters", {}).items():
+            value = extracted.get("value")
+            if name in params and value not in (None, ""):
+                params[name]["value"] = str(value)
+                params[name]["source"] = "输入文件提取"
         page = TubeLayoutPage(
             params,
             self.session.product_type,

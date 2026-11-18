@@ -93,20 +93,8 @@ class ModulePanel(EvidencePanel):
 
     def launch(self, path):
         self.windows.show()
-        info = json.loads(Path(path).read_text(encoding="utf-8"))
-        # 面板只申请“够用”的高度：编辑器本身（子进程窗口）按容器尺寸自适应，
-        # 以前给 1050 会让聊天页总高度超过窗口，模块行和输入区互相压住。
-        if info.get("module") == "tube_bundle":
-            # 面板不再硬性要求一个很高的下限（那会把整个聊天页顶出窗口），
-            # 改由工作区按窗口高度分配；同时进入专注视图，把对话区收起来。
-            self.setMinimumHeight(340)
-            self.editor_focus_requested.emit(True)
-        else:
-            self.setMaximumHeight(16777215)
-            self.setMinimumHeight(420)
-        card = self.parentWidget()
-        if hasattr(card, 'set_content_height') and not card.user_sized:
-            card.set_content_height(max(660, card.expanded_height))
+        self.setMaximumHeight(16777215)
+        self.setMinimumHeight(420)
         super().launch(path)
 
     def set_focus(self, active):
@@ -160,10 +148,20 @@ class ModulePanel(EvidencePanel):
             lines = [f"管口实例 {len(section.get('nozzles', []))} 个", "可修改字段、使用增删改指令、查看原文和导出模块 JSON。"]
         elif module == "tube_bundle":
             section = data.get("tube_bundle")
-            lines = ["管板型式 → 布管 → 管-板连接 → 轴向设计", "已返回几何结果" if section else "尚未形成已确认几何结果；可在统一设计页操作并校验。"]
+            structure = data.get("tube_structure")
+            if structure and structure.get("status") == "extracted":
+                extracted = sum(field.get("state") in ("found", "ambiguous") for field in structure.get("fields", []))
+                structure_line = f"结构参数识别 {extracted} 项，映射到布管参数表 {len(structure.get('mapped_parameters', {}))} 项"
+            elif structure and structure.get("status") == "not_found":
+                structure_line = "本产品页未找到结构参数表"
+            else:
+                structure_line = "结构参数提取未成功或未执行"
+            lines = [structure_line, "管板型式 → 布管 → 管-板连接 → 轴向设计",
+                     "已返回几何结果" if section else "尚未形成已确认几何结果；可在统一设计页操作并校验。"]
         else:
             lines = [f"本次识别 {len(self.summary['products'])} 个产品", "项目信息、产品清单及来源页可以统一核对和编辑。"]
-        caps = [c.get("message", "") for c in data.get("capabilities", []) if c.get("module") == module]
+        cap_modules = {module, "tube_structure"} if module == "tube_bundle" else {module}
+        caps = [c.get("message", "") for c in data.get("capabilities", []) if c.get("module") in cap_modules]
         self.preview.setHtml("<h3>" + escape(self.module.currentText()) + "</h3>" + "".join("<p>" + escape(line) + "</p>" for line in lines)
                              + ("<p style='color:#91602d'>" + escape("；".join(caps)) + "</p>" if caps else "")
                             + "<p style='color:#778397'>所有数值均以当前产品快照和字段依据为准。</p>")
@@ -174,28 +172,14 @@ class ModulePanel(EvidencePanel):
         self.status.setText("模块数据已载入，可编辑、查看依据、校验及保存。")
         self.preview.hide()
 
-    def update_view_metrics(self, session, value):
-        super().update_view_metrics(session, value)
-        card = self.parentWidget()
-        scroll = session.get('scroll')
-        if scroll and hasattr(card, 'set_content_height') and not card.user_sized:
-            minimum_height = session['container'].minimumHeight()
-            needed = minimum_height+self.height()-scroll.viewport().height()+8
-            if needed > card.expanded_height: card.set_content_height(needed)
-
     def failed(self, message):
         super().failed(message.replace("原窗口", "模块编辑器").replace("原界面", "模块"))
 
     def process_finished(self, session, code):
         super().process_finished(session, code)
         self.status.setText("编辑已关闭，当前工作副本已保留。" if code == 0 else "模块服务异常退出，操作记录已保留。")
-        if session["info"]["module"] == "tube_bundle" and not any(
-            item["info"]["module"] == "tube_bundle" for item in self.sessions
-        ):
-            self.editor_focus_requested.emit(False)
         if not self.sessions:
-            # 所有编辑器都关掉了：把“模块结果”卡搬回聊天流
-            self.editor_focus_requested.emit(False)
+            # 所有编辑器都关掉了：把“模块结果”卡还原到聊天流状态
             self.preview.show()
             self.windows.hide()
             self.setMaximumHeight(16777215)

@@ -242,7 +242,7 @@ class Orchestrator:
         atomic_json(directory / "product-source-map.json", source_map)
         data = dict(project=discovery.get("project", {}), product=dict(product, platform_product_id=identity),
             sources=sources, foundation=foundation, conditions=None, elements=None, nozzles=None,
-            tube_bundle=None, tube_parameters=tube_parameters, product_source=source_map,
+            tube_structure=None, tube_bundle=None, tube_parameters=tube_parameters, product_source=source_map,
             knowledge_references=[s["id"] for s in sources[len(primary):]], knowledge=knowledge,
             status="draft", scope="pre-strength-calculation", capabilities=[], deferred_steps=[])
         if not foundation.get("template_candidates"):
@@ -252,6 +252,8 @@ class Orchestrator:
                 ("elements", dict(agent="elements", paths=[str(split_path)], tag=product.get("设备位号", ""),
                                   form=form, element_names=foundation["element_names"]))]
         if source_suffix == ".pdf":
+            jobs.append(("tube_structure", dict(agent="tube_structure", path=str(split_path),
+                                                original_page_start=start)))
             jobs.append(("nozzles", dict(agent="nozzles", path=str(split_path))))
         else:
             data["capabilities"].append(dict(code="NOZZLE_FORMAT_NOT_SUPPORTED", scope="capability", module="nozzles",
@@ -314,7 +316,8 @@ class Orchestrator:
             data_space_resource=space_receipt["resource_id"], data_space_version=space_receipt["version"],
             deferred=review["deferred"], review_rounds=review["rounds"], capabilities=data["capabilities"],
             source_pages=data["product_source"]["original_pages"],
-            adapter_outputs=[name for name in ("conditions", "elements", "nozzles", "tube_bundle") if data.get(name) is not None])
+            adapter_outputs=[name for name in ("conditions", "elements", "nozzles", "tube_structure", "tube_bundle")
+                             if data.get(name) is not None])
 
     def _summarize(self, summary):
         products = summary["products"]

@@ -207,8 +207,9 @@ def main():
             actions = FlowLayout()
             actions.addWidget(self.receipt_toggle)
             if self.module == "tube_bundle":
-                actions.addWidget(self.command, 1)
-                actions.addWidget(execute)
+                command_bar = QWidget()
+                command_bar.setLayout(command_row)
+                actions.addWidget(command_bar)
             export = QPushButton("导出当前模块 JSON")
             export.clicked.connect(self.export)
             actions.addWidget(export)

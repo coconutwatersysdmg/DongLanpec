@@ -8,9 +8,10 @@ from unittest.mock import patch
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from PyQt5.QtCore import QSize
 from PyQt5.QtGui import QWindow
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QLabel, QScrollArea
 from PyQt5.QtTest import QTest
 from platform_core.embedded_view import EmbeddedModuleView, EmbeddedHostViewport, host_minimum, PROTOCOL
+from platform_core.evidence_ui import EvidencePanel
 from platform_core.module_panel import ModulePanel
 
 
@@ -160,6 +161,71 @@ class EmbeddedViewTests(unittest.TestCase):
                 panel.timer.stop()
                 panel.close()
                 container.close()
+
+    def test_native_module_attach_builds_scroll_area(self):
+        with tempfile.TemporaryDirectory() as folder:
+            panel = EvidencePanel(Path(folder))
+            page = QWidget()
+            layout = QVBoxLayout(page)
+            placeholder = QLabel("loading")
+            layout.addWidget(placeholder)
+            session = dict(page=page, layout=layout, placeholder=placeholder, view_metrics={},
+                           path=Path(folder), info={"module": "tube_bundle"}, ready=False)
+            try:
+                with patch("platform_core.evidence_ui.os.name", "nt"), \
+                        patch.dict(os.environ, {"QT_QPA_PLATFORM": "windows"}), \
+                        patch("platform_core.evidence_ui.QWindow.fromWinId", return_value=QWindow()):
+                    panel.attach(session, 123)
+                self.assertIsInstance(session["scroll"], QScrollArea)
+            finally:
+                panel.timer.stop()
+                panel.close()
+                page.close()
+                if session.get("foreign"):
+                    session["foreign"].setParent(None)
+
+    def test_tube_editor_uses_the_regular_scrollable_module_card(self):
+        with tempfile.TemporaryDirectory() as folder:
+            panel = ModulePanel(Path(folder))
+            focus_requests = []
+            panel.editor_focus_requested.connect(focus_requests.append)
+            try:
+                with patch("platform_core.evidence_ui.EvidencePanel.launch"):
+                    panel.launch(Path(folder) / "context.json")
+                self.assertEqual(focus_requests, [])
+                self.assertEqual(panel.minimumHeight(), 420)
+            finally:
+                panel.timer.stop()
+                panel.close()
+
+    def test_tube_viewport_metrics_do_not_expand_the_chat_card(self):
+        class Card(QWidget):
+            def __init__(self):
+                super().__init__()
+                self.user_sized = False
+                self.expanded_height = 400
+                self.height_requests = []
+
+            def set_content_height(self, height):
+                self.height_requests.append(height)
+
+        with tempfile.TemporaryDirectory() as folder:
+            card = Card()
+            panel = ModulePanel(Path(folder), card)
+            container = QWidget()
+            scroll = QScrollArea()
+            try:
+                panel.update_view_metrics(
+                    dict(container=container, scroll=scroll),
+                    dict(protocol=PROTOCOL, dpr=panel.devicePixelRatioF(), minimum=[1400, 1000]),
+                )
+                self.assertEqual(card.height_requests, [])
+            finally:
+                panel.timer.stop()
+                panel.close()
+                card.close()
+                container.close()
+                scroll.close()
 
 
 if __name__ == '__main__': unittest.main()

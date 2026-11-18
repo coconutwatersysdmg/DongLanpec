@@ -170,6 +170,7 @@ class Fabric:
             "conditions": ("设计压力", "设计温度", "规范", "检验", "腐蚀", "涂漆"),
             "elements": ("材料", "壁厚", "封头", "法兰", "管板", "覆层"),
             "nozzles": ("管口", "法兰", "载荷", "定位", "方位"),
+            "tube_structure": (),
             "tube_bundle": ("布管", "管间距", "折流板", "管程", "拉杆", "管板")
         }
         terms = queries[module]

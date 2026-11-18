@@ -62,6 +62,10 @@ def run(request):
         data, notes = parse_path(str(path), ApiConfig(allow_local_path=True, allow_root=str(path.parent)),
                                  with_azimuth=True)
         return dict(data=data, notes=notes)
+    if agent == "tube_structure":
+        from tube_agent.bundle.structure_extract import extract_structure_parameters
+        return extract_structure_parameters(request["path"],
+            original_page_start=request.get("original_page_start", 1))
     if agent == "tube_bundle":
         sys.path.insert(0, str(BASE / "vendor" / "tube_agent"))
         from bundle.engine import compute, check_geometry, HE_TYPE_BY_PRODUCT

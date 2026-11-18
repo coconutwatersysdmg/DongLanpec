@@ -45,6 +45,18 @@ class EvidenceData:
         cur.execute("INSERT INTO " + quote(database) + "." + quote(table) + " (" + ",".join(quote(c) for c in columns)
                     + ") VALUES (" + ",".join(["%s"] * len(columns)) + ")", [values[c] for c in columns])
 
+    @staticmethod
+    def _tube_default_rows(data):
+        mapped = (data.get("tube_structure") or {}).get("mapped_parameters", {})
+        rows = []
+        for original in data.get("foundation", {}).get("tube_defaults", []):
+            row = dict(original)
+            extracted = mapped.get(row["参数名"])
+            if extracted and extracted.get("value") not in (None, ""):
+                row["参数值"] = extracted["value"]
+            rows.append(row)
+        return rows
+
     def ensure_product(self, run_id, data):
         product = data["product"]
         identity = product["platform_product_id"]
@@ -69,7 +81,7 @@ class EvidenceData:
                     预定义配置=data.get("foundation", {}).get("predefined_config_name", "默认")))
                 self._seed_conditions(cur, identity, data)
                 self._seed_elements(cur, identity, data)
-                for row in data.get("foundation", {}).get("tube_defaults", []):
+                for row in self._tube_default_rows(data):
                     self._insert(cur, ACTIVITY, "产品设计活动表_布管参数表", dict(产品ID=identity, 参数名=row["参数名"], 参数值=row.get("参数值"), 单位=row.get("单位")))
                 self._seed_nozzles(cur, identity, data)
         (folder.parent / "id.csv").write_text(project_id, encoding="utf-8")
