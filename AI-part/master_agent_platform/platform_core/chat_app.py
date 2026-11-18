@@ -10,7 +10,7 @@ import sqlite3
 import re
 import datetime as dt
 
-from PyQt5.QtCore import Qt, QPoint, QSize, QThread, QTimer, QUrl, pyqtSignal
+from PyQt5.QtCore import Qt, QEvent, QPoint, QSize, QThread, QTimer, QUrl, pyqtSignal
 from PyQt5.QtGui import QDesktopServices, QIcon
 from PyQt5.QtWidgets import (QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QFrame, QSplitter,
     QLabel, QPushButton, QListWidget, QListWidgetItem, QTextBrowser, QPlainTextEdit, QScrollArea,
@@ -97,7 +97,11 @@ class ChatWindow(QMainWindow):
         self.layout_timer = QTimer(self)
         self.layout_timer.setSingleShot(True)
         self.layout_timer.timeout.connect(self.adjust_layout)
+        self.composer_timer = QTimer(self)
+        self.composer_timer.setSingleShot(True)
+        self.composer_timer.timeout.connect(self.align_composer_to_viewport)
         self.layout_closing = False
+        self.layout_window = None
         central = WorkspaceSurface()
         self.setCentralWidget(central)
         root = QHBoxLayout(central)
@@ -336,7 +340,43 @@ class ChatWindow(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if hasattr(self, 'layout_timer') and not self.layout_closing: self.layout_timer.start(0)
+        self.schedule_layout()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        handle = self.windowHandle()
+        if handle is not None and handle is not self.layout_window:
+            self.layout_window = handle
+            handle.screenChanged.connect(self.schedule_layout)
+        self.schedule_layout()
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() == QEvent.WindowStateChange:
+            self.schedule_layout()
+
+    def eventFilter(self, watched, event):
+        if not self.layout_closing and (event.type() == QEvent.Show or (
+                event.type() == QEvent.Resize and event.size().width() != event.oldSize().width())):
+            self.composer_timer.start(0)
+        return super().eventFilter(watched, event)
+
+    def schedule_layout(self, *_):
+        if hasattr(self, 'layout_timer') and not self.layout_closing:
+            self.layout_timer.start(0)
+
+    def align_composer_to_viewport(self):
+        viewport = self.chat_scroll.viewport()
+        if not viewport.isVisible() or not self.composer_area.isVisible():
+            return
+        # The input and messages must use the same usable width, after the
+        # scrollbar, sidebar and window decoration have finished resizing.
+        left = viewport.mapTo(self, QPoint()).x() - self.composer_area.mapTo(self, QPoint()).x()
+        right = self.composer_area.width() - left - viewport.width()
+        margins = (max(0, self.chat_layout.contentsMargins().left()+left), 0,
+                   max(0, self.chat_layout.contentsMargins().right()+right), 0)
+        if margins != self.composer_layout.getContentsMargins():
+            self.composer_layout.setContentsMargins(*margins)
 
     def adjust_layout(self):
         if self.layout_closing: return
@@ -346,6 +386,7 @@ class ChatWindow(QMainWindow):
             if (current.left(), current.top(), current.right(), current.bottom()) != (margin, 16, margin, 16):
                 self.body_layout.setContentsMargins(margin, 16, margin, 16)
         self.adapt_sidebar()
+        self.align_composer_to_viewport()
         for name in ("module_card", "execution_card"):
             card = getattr(self, name, None)
             if card and not card.user_sized:
@@ -455,13 +496,12 @@ class ChatWindow(QMainWindow):
         self.chat_splitter.setChildrenCollapsible(False)
         self.chat_splitter.addWidget(scroll)
         self.composer_area = WorkspaceSurface()
+        scroll.viewport().installEventFilter(self)
+        self.composer_area.installEventFilter(self)
         composer_lane = QWidget()
-        composer_layout = QVBoxLayout(self.composer_area)
-        composer_layout.setContentsMargins(8, 0, 8, 0)
-        composer_layout.addWidget(centered_row(composer_lane))
-        scrollbar = scroll.verticalScrollBar()
-        scrollbar.rangeChanged.connect(lambda low, high: composer_layout.setContentsMargins(
-            8, 0, 8 + (scrollbar.sizeHint().width() if high > low else 0), 0))
+        self.composer_layout = QVBoxLayout(self.composer_area)
+        self.composer_layout.setContentsMargins(8, 0, 8, 0)
+        self.composer_layout.addWidget(centered_row(composer_lane))
         dock = QVBoxLayout(composer_lane)
         dock.setContentsMargins(0, 4, 0, 0)
         self.attachments = QLabel()
@@ -1015,6 +1055,7 @@ class ChatWindow(QMainWindow):
         else:
             self.layout_closing = True
             self.layout_timer.stop()
+            self.composer_timer.stop()
             self.timer.stop()
             self.module_panel.timer.stop()
             self.execution.flush_layout()

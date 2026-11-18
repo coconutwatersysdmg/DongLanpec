@@ -9,7 +9,7 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from PyQt5.QtCore import QPoint, QPointF, QEvent, Qt
 from PyQt5.QtGui import QMouseEvent
 from PyQt5.QtTest import QTest
-from PyQt5.QtWidgets import QApplication, QPushButton, QWidget, QLineEdit, QTableWidget
+from PyQt5.QtWidgets import QApplication, QPushButton, QWidget, QLineEdit, QTableWidget, QFrame
 from platform_core import chat_app
 from platform_core.graph_model import execution_graph
 from platform_core.ui_theme import FlowLayout, ResizableCard, read_scale, scale_legacy_page
@@ -111,6 +111,25 @@ class ResponsiveUiTests(unittest.TestCase):
                 self.assertLess(corner.x(), self.window.width())
                 self.assertLess(corner.y(), self.window.height())
             self.assertAlmostEqual(self.window.prompt.font().pointSizeF(), 12 * scale, places=1)
+
+    def test_composer_uses_the_actual_viewport_width_even_when_scroll_range_is_unchanged(self):
+        window = self.window
+        window.resize(1440, 880)
+        window.show()
+        window.welcome.hide()
+        window.bubble('assistant', '请加入设备资料。', persist=False)
+        message = window.bubbles[0].findChild(QFrame, 'assistantMessage')
+        composer = window.composer_area.findChild(QFrame, 'composer')
+
+        def center(widget):
+            return widget.mapTo(window, QPoint()).x() + widget.width()/2
+
+        for policy in (Qt.ScrollBarAlwaysOn, Qt.ScrollBarAlwaysOff):
+            window.chat_scroll.setVerticalScrollBarPolicy(policy)
+            QTest.qWait(20)
+            self.assertEqual(window.chat_scroll.verticalScrollBar().maximum(), 0)
+            self.assertLessEqual(abs(center(composer)-center(message)), 1)
+            self.assertLessEqual(abs(center(composer)-center(window.chat_scroll.viewport())), 1)
 
     def test_agent_ownership_comes_from_receipts_and_rules_are_named_as_services(self):
         tasks = [dict(id='t', product_id='p', product='P', label='抽取', agent='conditions', state='succeeded'),
