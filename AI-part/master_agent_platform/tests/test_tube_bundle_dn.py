@@ -28,7 +28,7 @@ class TubeBundleDnTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_current_condition_dn_overrides_saved_value_and_prefers_tube_side(self):
+    def test_current_condition_dn_overrides_saved_value_and_prefers_shell_side(self):
         upstream = {
             "公称直径": {"value": "900", "unit": "mm", "source": "设计数据表"},
         }
@@ -43,8 +43,35 @@ class TubeBundleDnTests(unittest.TestCase):
 
         result = with_condition_input_dn(upstream, data)
 
-        self.assertEqual(result["公称直径"]["value"], "700")
+        # 布管外圆是壳体截面：双径产品（如 BKU500/900）必须取壳程，
+        # 否则外圆会被管程的大直径画得过大。
+        self.assertEqual(result["公称直径"]["value"], "800")
         self.assertEqual(result["公称直径"]["source"], "条件输入")
+
+    def test_dual_diameter_bku_uses_shell_dn_for_outer_circle(self):
+        """BKU500/900：壳程 500、管程 900，布管外圆必须按壳程 500 画。"""
+        upstream = {"公称直径": {"value": "1200", "source": "设计数据表"}}
+        data = {"conditions": {"design_rows": [
+            {"param": "公称直径*", "side": "shell", "value": "500", "unit": "mm"},
+            {"param": "公称直径*", "side": "tube", "value": "900", "unit": "mm"},
+        ]}}
+        result = with_condition_input_dn(upstream, data)
+        self.assertEqual(result["公称直径"]["value"], "500")
+
+        # 用最小必需入参即可验证 DN 传递（build_input 会从 FALLBACK_INPUT 补齐其它键）
+        params = {"公称直径 DN": result["公称直径"]}
+        payload = build_input(params, "BKU", {})
+        self.assertEqual(float(payload["LB_DN"]), 500.0)
+        self.assertEqual(LayoutResult(input_json=payload, raw={}, master_centers=[]).big_r_wai, 250.0)
+
+    def test_shell_missing_falls_back_to_tube(self):
+        upstream = {}
+        data = {"conditions": {"design_rows": [
+            {"param": "公称直径*", "value": "900", "unit": "mm"},  # 无 side
+            {"param": "公称直径*", "side": "tube", "value": "700", "unit": "mm"},
+        ]}}
+        result = with_condition_input_dn(upstream, data)
+        self.assertEqual(result["公称直径"]["value"], "700")
 
     def test_empty_condition_dn_preserves_saved_data(self):
         upstream = {"公称直径": {"value": "900", "source": "设计数据表"}}

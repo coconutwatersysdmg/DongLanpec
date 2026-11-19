@@ -402,7 +402,9 @@ def param_combo_stylesheet(disabled: bool = False, border: str | None = None) ->
     # 与 min/max height 控制。若在这里写死 font-size:10pt/min-height:22px，
     # 缩放到 0.6（行高仅 25px）时下拉框会被重新撑破单元格（点「布管」重绘后尤其明显）。
     base = (
-        f"background-color: #ffffff;border: 1px solid {line_color};"
+        # border-radius 必须显式写 0：源程序参数表下拉框是直角，不写的话
+        # 会继承全局 theme()/combo_style() 的 border-radius:8px 变成胶囊状。
+        f"background-color: #ffffff;border: 1px solid {line_color};border-radius: 0px;"
         f"color: {PARAM_COMBO_TEXT};"
         "padding: 1px 16px 1px 4px;"
     )
@@ -472,7 +474,8 @@ class ParamComboBox(QComboBox):
     """参数表里的下拉框：禁用滚轮（正式程序 NoWheelComboBox），样式照搬参数表。
 
     editable=True 时就是“下拉列表 + 手工输入”两用（换热管外径 do、公称长度 LN
-    在正式程序里就是这么做的）。文字默认右对齐——参数值列整列右对齐。
+    在正式程序里就是这么做的）。文字左对齐——与源程序参数表“参数值”列一致
+    （My_Piping.py 里该列是 AlignLeft，含纯文本单元格）。
     """
 
     def __init__(self, parent=None, editable: bool = False):
@@ -484,7 +487,7 @@ class ParamComboBox(QComboBox):
         if line is not None:
             line.setReadOnly(not editable)
             line.setFrame(False)
-            line.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            line.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         apply_param_combo_style(self, disabled=False)
 
     def wheelEvent(self, event):  # noqa: N802 - Qt API

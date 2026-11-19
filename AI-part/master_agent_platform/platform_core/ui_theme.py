@@ -176,6 +176,37 @@ def style_combo_popup(combo):
     combo.setProperty('workspacePopup', True)
 
 
+def style_param_combo_popup(combo):
+    """参数表下拉框的弹出列表：与源程序 buguan_param_table_style 一致。
+
+    源程序（DongLanpec/modules/buguan/buguan_ziyong）里参数表下拉框的弹出列表是
+    白底、1px #CCCCCC 直角边框、选中 #d9e6f7。平台默认的 style_combo_popup 是
+    9px 圆角 + 6px 圆角选中项，套到参数表上会和源程序对不上。
+    """
+    try:
+        view = combo.view()
+        view.setFrameShape(QFrame.NoFrame)
+        view.window().setStyleSheet(
+            "QFrame{background:#ffffff;border:1px solid #CCCCCC;border-radius:0px;}"
+            "QListView{background:#ffffff;border:0;padding:0px;outline:0;"
+            "color:#1f1f1f;selection-background-color:#d9e6f7;selection-color:#1f1f1f;}"
+            "QListView::item{padding:2px 8px;border:0;border-radius:0px;color:#1f1f1f;}"
+            "QListView::item:selected,QListView::item:hover{"
+            "background:#d9e6f7;color:#1f1f1f;}"
+        )
+        combo.setMaxVisibleItems(12)
+        # 弹出列表按最长选项撑宽，长文本（如「机械强度胀接加密封焊管孔结构」）
+        # 不会被下拉框宽度截断——源程序也是这个表现。
+        try:
+            metrics = combo.fontMetrics()
+            widest = max((metrics.horizontalAdvance(combo.itemText(i)) for i in range(combo.count())), default=0)
+            view.setMinimumWidth(max(combo.width(), widest + 28))
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 class WorkspaceComboBox(QComboBox):
     """Keep a compact field while giving long choices room in the popup."""
     def __init__(self, parent=None):
@@ -262,14 +293,17 @@ def scale_legacy_page(root, scale):
         widget.setFont(font)
         if isinstance(widget, (QLineEdit, QComboBox)):
             in_table = _is_table_editor(widget)
-            if isinstance(widget, QComboBox) and not in_table:
-                widget.setStyleSheet(combo_style())
-                style_combo_popup(widget)
-            elif isinstance(widget, QComboBox) and in_table:
-                # 表格内的下拉框必须保持方角紧凑：否则会继承全局 theme() 里的
-                # combo_style()（border-radius:8px / padding / min-height），在
-                # 60% 字号、行高仅 25px 时被撑破单元格。这里显式清除圆角与
-                # 写死的字号/最小高度，字号交给上面的 12*scale，高度交给 min/max。
+            if isinstance(widget, QComboBox):
+                # 下拉框统一对齐源程序（DongLanpec/modules/buguan/buguan_ziyong 的
+                # buguan_param_table_style.py / ui_style.py）：1px #CCCCCC 直角边框、
+                # 白底、右侧 10x6 小灰箭头、文字左边距 4px。表内的行内下拉框和页头
+                # 的「管板类型 / 管板连接方式」选择框都按这个来，视觉才统一。
+                #
+                # 圆角必须显式写成 0px，不能只把 border-radius 删掉——删掉后会继承
+                # 全局 theme() 里 combo_style() 的 border-radius:8px，下拉框会变成
+                # 胶囊状（与源程序的直角样式对不上）。
+                # 字号/最小高度不写死，交给上面的 12*scale 与下面的 min/max 控制，
+                # 否则 60% 字号、行高仅 25px 时会被撑破单元格。
                 css = widget.styleSheet()
                 css = re.sub(r'border-radius\s*:\s*[^;}]+;?', '', css, flags=re.I)
                 css = re.sub(r'font-size\s*:\s*[^;}]+;?', '', css, flags=re.I)
@@ -277,8 +311,9 @@ def scale_legacy_page(root, scale):
                 css = re.sub(r'padding\s*:\s*[^;}]+;?', 'padding:1px 16px 1px 4px;', css, flags=re.I)
                 if 'QComboBox' not in css:
                     css = "QComboBox{background:#ffffff;border:1px solid #CCCCCC;padding:1px 16px 1px 4px;}" + css
+                css = re.sub(r'QComboBox\s*\{', 'QComboBox{border-radius:0px;', css, count=1)
                 widget.setStyleSheet(css)
-                style_combo_popup(widget)
+                style_param_combo_popup(widget)
             if widget.maximumWidth() == widget.minimumWidth():
                 widget.setMaximumWidth(16777215)
             if not in_table:

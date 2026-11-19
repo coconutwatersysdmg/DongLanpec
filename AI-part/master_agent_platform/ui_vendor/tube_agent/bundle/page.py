@@ -745,7 +745,7 @@ class TubeLayoutPage(QWidget):
                 editor = self._make_editor(name, spec, data)
                 if editor is None:
                     item = QTableWidgetItem(normalize_param_value(name, data.get("value"), self.parameters))
-                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                    item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
                     flags = Qt.ItemIsSelectable | Qt.ItemIsEnabled
                     if not spec.readonly and name != "公称直径 DN":
                         flags |= Qt.ItemIsEditable

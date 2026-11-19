@@ -39,7 +39,10 @@ def canonical_nozzles(data):
 
 def with_condition_input_dn(upstream, data):
     rows = (data.get("conditions") or {}).get("design_rows") or []
-    for side in ("tube", "shell"):
+    # 布管外圆是壳体截面，公称直径应取壳程（shell）。BKU/BKM 这类双径
+    # 产品（如 BKU500/900）壳程 500、管程 900，取管程会把外圆画得过大。
+    # 单径产品两侧相同，不受影响；只有 shell 缺值时才退回 tube。
+    for side in ("shell", "tube"):
         row = next(
             (row for row in rows
              if str(row.get("param", "")).replace("*", "").strip() == "公称直径"
