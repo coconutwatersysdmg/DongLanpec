@@ -598,8 +598,14 @@ def main():
         except (OSError, ValueError): return False
 
     last_appearance = None
+    # 嵌入模式下延迟显示编辑器：先让父进程完成窗口句柄嵌入（setParent），
+    # 再 show，避免完整编辑器（四个阶段页 / 参数表 / 图形）在嵌入前以独立
+    # 顶层窗口在屏幕上闪现。snapshot / probe / 独立运行模式不受影响。
+    embed_pending_show = args.embed and not args.snapshot and not args.probe
+    embed_shown = False
+
     def poll():
-        nonlocal last_appearance, ui_scale
+        nonlocal last_appearance, ui_scale, embed_shown
         appearance = context.session / 'appearance.json'
         coordinated = sync_viewport()
         if not coordinated and appearance.is_file():
@@ -627,7 +633,12 @@ def main():
                         emit('failed', error='模块容器连接未完成：'+str(exc))
                         app.exit(1)
                         return
-                window.setWindowOpacity(1)
+                # 嵌入完成后再显示：此时窗口已成为宿主的子窗口，位置/尺寸
+                # 已被 sync_viewport 校准，不会再以独立窗体闪现。
+                if not embed_shown:
+                    window.setWindowOpacity(1)
+                    window.show()
+                    embed_shown = True
                 emit("attached", module=window.module)
             elif command.get("action") == "execute":
                 window.command.setText(command.get("text", ""))
@@ -651,7 +662,7 @@ def main():
     timer = QTimer(window)
     timer.timeout.connect(poll)
     timer.start(250)
-    if args.embed and not args.snapshot and not args.probe: window.setWindowOpacity(0)
+    if embed_pending_show: window.setWindowOpacity(0)
     if args.size:
         try:
             width, height = (int(part) for part in args.size.lower().split("x"))
@@ -659,7 +670,20 @@ def main():
             window.resize(width, height)
         except ValueError:
             pass
-    window.show()
+    if embed_pending_show:
+        # 等待父进程发 attached 后再由 poll() 显示。加超时兜底：若握手异常，
+        # 窗口仍要显示出来，绝不能让用户面对空白编辑器且无法操作。
+        def _reveal_timeout():
+            nonlocal embed_shown
+            if not embed_shown:
+                window.setWindowOpacity(1)
+                window.show()
+                embed_shown = True
+                # 通知父进程撤占位符：握手虽异常，也不能让用户卡在载入中。
+                emit("attached", module=window.module)
+        QTimer.singleShot(5000, _reveal_timeout)
+    else:
+        window.show()
     if args.probe:
         def probe():
             checks = []

@@ -179,7 +179,12 @@ class EvidencePanel(QWidget):
             if value["kind"] == "ready":
                 session['view_metrics'] = value.get('view') or {}
                 self.attach(session, value["handle"])
-            elif value["kind"] == "attached": session["attached"] = True
+            elif value["kind"] == "attached":
+                session["attached"] = True
+                # 子窗口已嵌入并显示，此刻才撤掉占位符，衔接无空白。
+                placeholder = session.get("placeholder")
+                if placeholder is not None:
+                    placeholder.hide()
             elif value['kind'] == 'view-metrics': self.update_view_metrics(session, value)
             elif value["kind"] == "module-result" and hasattr(self, "reply"):
                 self.reply.emit(value.get("text", ""))
@@ -222,7 +227,9 @@ class EvidencePanel(QWidget):
                     lambda: getattr(self, 'ui_scale', 1.0), self.failed)
                 session['viewport_publisher'] = publisher
                 publisher.publish()
-            session["placeholder"].hide()
+            # 占位符延后到子进程 emit "attached"（子窗口已嵌入并显示）时再隐藏，
+            # 避免出现「占位消失但子窗口还没 show」的中间空白/闪动。
+            # 详见 read_output 里 kind == "attached" 分支。
             # 容器尺寸变化时同步外部窗口几何：最大化/还原后不会再留下旧位置的残影。
             container.installEventFilter(self)
         else:

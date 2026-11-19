@@ -218,8 +218,11 @@ class StagePage(QWidget):
         else:
             body.addWidget(self.table, 42)
             body.addWidget(preview, 58)
-        preview.setVisible(self.SHOW_GRAPHICS)
+        # 必须先挂进布局树再设置可见性：若在 preview 还没有父控件时调用
+        # setVisible(True)，Qt 会把它当成独立顶层窗口 show 一次，嵌入前会
+        # 在屏幕上闪现一个窗格（主窗口的 opacity=0 盖不住独立顶层窗口）。
         root.addLayout(body, 1)
+        preview.setVisible(self.SHOW_GRAPHICS)
 
         self.issue_label = QLabel("")
         self.issue_label.setWordWrap(True)
