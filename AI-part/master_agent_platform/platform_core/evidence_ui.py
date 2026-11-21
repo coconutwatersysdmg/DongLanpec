@@ -142,6 +142,9 @@ class EvidencePanel(QWidget):
     def launch(self, path):
         path = Path(path)
         info = json.loads(path.read_text(encoding="utf-8"))
+        # 管束设计是唯一需要图形化操作的模块：嵌入对话卡片时三栏页面会被裁切，
+        # 因此单独以最大化独立窗口打开。其余模块仍照旧嵌入卡片。
+        standalone = info.get("module") == "tube_bundle"
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -152,18 +155,38 @@ class EvidencePanel(QWidget):
         environment = QProcessEnvironment.systemEnvironment()
         environment.insert("PYTHONIOENCODING", "utf-8")
         environment.insert("ENGINEERING_UI_SCALE", str(getattr(self, 'ui_scale', 1.0)))
+        if standalone:
+            environment.insert("DONG_LANPEC_STANDALONE", "1")
         process.setProcessEnvironment(environment)
         session = dict(process=process, path=path.parent, page=page, layout=layout, placeholder=placeholder,
-                       info=info, buffer=b"", container=None, foreign=None, ready=False)
+                       info=info, buffer=b"", container=None, foreign=None, ready=False,
+                       standalone=standalone)
         self.sessions.append(session)
         product = info["products"][info["product_id"]]["product"]
         module_label = self.module.itemText(self.module.findData(info["module"])) or LABELS[info["module"]]
-        index = self.windows.addTab(page, (product.get("设备位号") or "产品") + " · " + module_label)
-        self.windows.setCurrentIndex(index)
+        if standalone:
+            # 卡片里放一个说明页，避免 windows 空白让人以为没反应。
+            notice = QLabel(
+                "管束设计已在新窗口打开（最大化），请在那个窗口里查看和编辑图形。\n"
+                "完成操作后点该窗口的「保存到平台并继续审核」回流结果；关闭窗口即结束本次编辑。"
+            )
+            notice.setAlignment(Qt.AlignCenter)
+            notice.setWordWrap(True)
+            session["notice"] = notice
+            self.windows.addTab(notice, (product.get("设备位号") or "产品") + " · " + module_label)
+            self.windows.setCurrentIndex(self.windows.count() - 1)
+        else:
+            index = self.windows.addTab(page, (product.get("设备位号") or "产品") + " · " + module_label)
+            self.windows.setCurrentIndex(index)
         process.readyReadStandardOutput.connect(lambda: self.read_output(session))
         process.finished.connect(lambda code, status: self.process_finished(session, code))
         process.errorOccurred.connect(lambda error: self.failed("模块服务启动异常：" + process.errorString()))
-        process.start(sys.executable, [str(getattr(self, "runtime", BASE / "evidence_runtime.py")), str(path), "--embed"])
+        args_list = [str(getattr(self, "runtime", BASE / "evidence_runtime.py")), str(path)]
+        if not standalone:
+            args_list.append("--embed")
+        process.start(sys.executable, args_list)
+        if standalone:
+            self.status.setText("管束设计已在新窗口打开（最大化），可完整查看和编辑图形。")
 
     def read_output(self, session):
         chunk = bytes(session["process"].readAllStandardOutput())
@@ -178,6 +201,11 @@ class EvidencePanel(QWidget):
             except ValueError: continue
             if value["kind"] == "ready":
                 session['view_metrics'] = value.get('view') or {}
+                # 独立窗口模块（如管束设计）不嵌入卡片：跳过 attach，
+                # 子进程自己 showMaximized()，用户拿到完整画布。
+                if session.get("standalone"):
+                    session["attached"] = True
+                    continue
                 self.attach(session, value["handle"])
             elif value["kind"] == "attached":
                 session["attached"] = True
@@ -262,7 +290,7 @@ class EvidencePanel(QWidget):
 
     def close_tab(self, index):
         page = self.windows.widget(index)
-        session = next((s for s in self.sessions if s["page"] is page), None)
+        session = next((s for s in self.sessions if s["page"] is page or s.get("notice") is page), None)
         if session:
             if any(s is session for s, path in self.queue) or self.busy:
                 self.failed("正在保存或审核，请等待回执后关闭编辑器。")
@@ -275,8 +303,12 @@ class EvidencePanel(QWidget):
         # Detach the foreign handle before deleting its host widgets.
         if session["foreign"]:
             session["foreign"].setParent(None)
-        index = self.windows.indexOf(session["page"])
+        # 独立窗口模式：卡片里显示的是 notice 占位页，按它移除 tab。
+        tab_widget = session.get("notice") or session["page"]
+        index = self.windows.indexOf(tab_widget)
         if index >= 0: self.windows.removeTab(index)
+        if session.get("notice") is not None:
+            session["notice"].deleteLater()
         session["page"].deleteLater()
         self.sessions.remove(session)
         session["process"].deleteLater()

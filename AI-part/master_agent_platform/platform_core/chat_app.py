@@ -15,7 +15,7 @@ from PyQt5.QtGui import QDesktopServices, QIcon
 from PyQt5.QtWidgets import (QWidget, QMainWindow, QVBoxLayout, QHBoxLayout, QFrame, QSplitter,
     QLabel, QPushButton, QListWidget, QListWidgetItem, QTextBrowser, QPlainTextEdit, QScrollArea,
     QStackedWidget, QTreeWidget, QTreeWidgetItem, QLineEdit, QFileDialog, QMessageBox, QToolButton, QMenu,
-    QActionGroup)
+    QActionGroup, QApplication)
 
 from .fabric import BASE, Fabric
 from .orchestrator import Orchestrator
@@ -261,7 +261,8 @@ class ChatWindow(QMainWindow):
         self.focus_exit.clicked.connect(self.toggle_chat_view)
         self.focus_exit.hide()
         self.module_host_layout.addWidget(self.focus_exit, 0, Qt.AlignRight)
-        self.module_card, self.module_toggle = self.inline_card("模块结果", self.module_panel)
+        self.module_card, self.module_toggle = self.inline_card(
+            "模块结果", self.module_panel, default_height=self._module_card_height())
         self.pages.addWidget(QWidget())  # Navigation index remains a chat anchor.
         self.data_space = DataSpacePanel()
         self.data_space.open_file.connect(lambda path: QDesktopServices.openUrl(QUrl.fromLocalFile(path)))
@@ -408,6 +409,8 @@ class ChatWindow(QMainWindow):
             if card and not card.user_sized:
                 if name == "module_card" and card.parent() is getattr(self, "module_host", None):
                     height = max(440, self.module_host.height() - 70)
+                elif name == "module_card":
+                    height = self._module_card_height()
                 else:
                     height = max(440, int(self.height()*.66))
                 if height != card.expanded_height: card.set_content_height(height)
@@ -586,8 +589,21 @@ class ChatWindow(QMainWindow):
         layout.addWidget(self.chat_page_layout, 1)
         self.pages.addWidget(page)
 
-    def inline_card(self, title, content, extra=None):
-        card = ResizableCard(title, content, max(440, int(self.height()*.66)))
+    def _module_card_height(self):
+        """模块结果卡的默认内容高度。
+
+        管束设计这类三栏页面（参数表/图形/数据表 + 底部按钮栏）需要约 600px 以上，
+        440px 会把图形和数据表裁掉。用屏幕可用高度推算，避免依赖构造期尚未定型的
+        self.height()。用户手动拖拽/放大过（user_sized）后此值不再生效。
+        """
+        screen = QApplication.primaryScreen()
+        avail_h = screen.availableGeometry().height() if screen is not None else 900
+        return max(720, min(int(avail_h * 0.80), 1000))
+
+    def inline_card(self, title, content, extra=None, default_height=None):
+        if default_height is None:
+            default_height = max(440, int(self.height()*.66))
+        card = ResizableCard(title, content, default_height)
         if extra is not None:
             card.extra = extra
         card.enlarge.toggled.connect(lambda large: self.focus_card(card, large))

@@ -71,6 +71,7 @@ FIELD_MAPPINGS = (
     ("baffle_cut_size", "折流板要求切口率", "切口尺寸的 % 直径值直接对应百分比。"),
     ("baffle_spacing", "折流/支持板间距", "原值为 mm，直接对应。"),
     ("shell_id", "壳体内直径 Dis", "仅当原文是单个尺寸时才自动映射；复合尺寸保留待确认。"),
+    ("tube_count", "目标换热管数", "管子数/台（Tube quantities/unit）：最终换热管孔数，供自动布置反算删管数。"),
 )
 
 

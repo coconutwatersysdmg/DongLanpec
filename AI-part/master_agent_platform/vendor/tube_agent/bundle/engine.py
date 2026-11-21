@@ -65,10 +65,8 @@ def tie_rod_diameter(parameters: dict) -> str:
         return "10"
     if 14 < do < 25:
         return "12"
-    if 25 <= do <= 32:
+    if 25 <= do <= 57:
         return "16"
-    if 32 < do < 57:
-        return "20"
     return "12"
 
 

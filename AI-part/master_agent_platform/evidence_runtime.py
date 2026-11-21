@@ -339,7 +339,12 @@ def main():
     timer.timeout.connect(poll)
     timer.start(250)
     if args.embed and not args.snapshot: window.setWindowOpacity(0)
-    window.show()
+    # 独立弹出模式（由平台传 standalone=1）：不嵌入卡片，直接最大化，
+    # 让管束这类需要图形化操作的模块拿到完整画布与全部按钮栏。
+    if os.environ.get("DONG_LANPEC_STANDALONE") == "1" and not args.embed:
+        window.showMaximized()
+    else:
+        window.show()
     if args.snapshot:
         def snapshot():
             try:

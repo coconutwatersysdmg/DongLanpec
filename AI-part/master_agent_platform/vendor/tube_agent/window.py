@@ -1152,14 +1152,24 @@ class ComponentCoordinateCard(QFrame):
 
 
 def apply_extracted_parameters(parameters: dict, extracted: dict) -> None:
+    from bundle.params import PARAM_ORDER
     condition_fields = {"公称直径", "公称直径 DN", "DN"}
     for name, row in (extracted or {}).items():
         if name in condition_fields:
             continue
         value = row.get("value")
-        if name in parameters and value not in (None, ""):
+        if value in (None, ""):
+            continue
+        if name in parameters:
             parameters[name]["value"] = str(value)
             parameters[name]["source"] = "输入文件提取"
+        elif name in PARAM_ORDER:
+            # 内部参数（如「目标换热管数」）不在数据库参数表里，_merge_defaults 不会建行。
+            # 但它是自动布置方案的输入，必须注入；否则页面按 PARAM_ORDER 补成空值，方案被跳过。
+            parameters[name] = {
+                "value": str(value), "unit": (row.get("unit") or ""),
+                "source": "输入文件提取", "editable": True,
+            }
 
 
 class DesignWindow(QMainWindow):
@@ -1584,6 +1594,25 @@ class DesignWindow(QMainWindow):
         page.parameters_changed.connect(lambda _values: self._on_stage_edited("管板型式"))
         return page
 
+    def _show_layout_basis(self, text: str) -> None:
+        """弹出「布置依据」窗口：说明自动布置元件与删管是按 GB/T 151 哪些规则算的。"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("布置依据（GB/T 151-2026）")
+        dialog.resize(720, 520)
+        layout = QVBoxLayout(dialog)
+        title = QLabel("自动布置方案依据")
+        title.setStyleSheet("font-size:12pt;font-weight:600;padding:4px 2px;")
+        layout.addWidget(title)
+        browser = QPlainTextEdit()
+        browser.setReadOnly(True)
+        browser.setPlainText(text or "（暂无依据）")
+        browser.setStyleSheet("font-family:'Microsoft YaHei UI';font-size:9pt;line-height:150%;")
+        layout.addWidget(browser)
+        close = QPushButton("关闭")
+        close.clicked.connect(dialog.accept)
+        layout.addWidget(close, 0, Qt.AlignRight)
+        dialog.exec_()
+
     def _build_layout_page(self) -> TubeLayoutPage:
         existing = self.pages.get(1)
         if isinstance(existing, TubeLayoutPage):
@@ -1616,6 +1645,7 @@ class DesignWindow(QMainWindow):
         page.status_message.connect(self.notify)
         page.state_changed.connect(lambda _info: self._on_stage_edited("布管"))
         page.pane_fullscreen_requested.connect(self.set_preview_pane_fullscreen)
+        page.basis_requested.connect(self._show_layout_basis)
         return page
 
     def _build_connection_page(self) -> TubeConnectionStage:

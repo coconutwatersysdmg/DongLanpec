@@ -343,6 +343,7 @@ class TubeLayoutPage(QWidget):
     status_message = pyqtSignal(str)
     selected_count_changed = pyqtSignal(int)
     pane_fullscreen_requested = pyqtSignal(bool)
+    basis_requested = pyqtSignal(str)  # 用户点「依据」：把布置依据文字交给上层弹窗展示
 
     def __init__(self, parameters: dict, product_type: str, defaults: dict | None = None,
                  center_distance_rows: list[list[str]] | None = None, sheet_form: dict | None = None,
@@ -395,6 +396,104 @@ class TubeLayoutPage(QWidget):
         self._linkage_fixes: list[str] = []
         self._apply_linkage("公称直径 DN")
         self.recompute(first=True)
+        # GB/T 151 自动布置方案：文件提取到「目标换热管数」时，切到布管页即已布好。
+        # 只在首次创建页面时应用一次；用户手动点「布管」会清掉自动痕迹并复位，
+        # 之后可从聊天指令「重新生成布置方案」再触发。
+        self._auto_plan_applied = False
+        self._auto_plan_basis = ""
+        self._auto_plan_summary: dict = {}
+        self.auto_apply_plan()
+
+    # ------------------------------------------------------- 自动布置方案（GB/T 151）
+    def _target_tubes(self) -> int:
+        """目标换热管数：内部参数，来自文件提取的「管子数/台」。"""
+        row = self.parameters.get("目标换热管数") or {}
+        value = row.get("value") if isinstance(row, dict) else row
+        try:
+            return int(float(str(value).strip()))
+        except (TypeError, ValueError):
+            return 0
+
+    def auto_apply_plan(self, force: bool = False) -> dict:
+        """按 GB/T 151 规则自动布置元件 + 删管到目标数，静默落地（不弹确认框）。
+
+        触发：页面创建完成（切到布管页图已布好）；或聊天指令强制重生成。
+        幂等：默认已应用过就不再重复；force=True 时先清旧痕迹再重来。
+        """
+        if self.result is None:
+            return {"ok": False, "message": "当前还没有布管结果，无法生成方案"}
+        target = self._target_tubes()
+        if not target:
+            return {"ok": False, "message": "未提取到目标换热管数，跳过自动布置"}
+        if self._auto_plan_applied and not force:
+            return {"ok": True, "message": "已应用过自动方案，跳过"}
+        if force:
+            # 重新生成：先按当前参数恢复满布管孔、清掉上一次自动布置的元件，
+            # 否则会在已删/已占的孔上二次删管，换热管数越算越少。
+            self.recompute(reason="重新生成布置方案")
+            target = self._target_tubes()
+
+        from .placement import parse_placements, parse_hole_ops
+        from .rule_plan import build_plan
+
+        total = len(self.result.master_centers)
+        plan = build_plan(self.parameters, self.product_type, total, target)
+        items, bad = parse_placements(plan["placements"])
+        ops, bad_ops = parse_hole_ops(plan["hole_ops"])
+
+        # 顺序：先删管（按满布孔算，避免元件占孔影响 region=outline 的选点），
+        # 再布元件（元件落在删后的剩余孔上），最后按实际占孔核一次目标数。
+        del_res = self.apply_hole_ops(ops) if ops else {"ok": True}
+        place_res = self.apply_placement_plan(items) if items else {"ok": True}
+
+        self._auto_plan_basis = "\n".join(plan["basis"])
+        self._auto_plan_summary = dict(plan["summary"])
+
+        # 落地后精确核对：差额用二次删管/补管修正（region=outline 从外缘取）。
+        # 注意：删管时元件已占的孔不在当前管孔池里，outline 只作用于未占孔，
+        # 因此二次校正不会误删元件所在孔。
+        actual = len(self.current_centers())
+        if actual != target:
+            delta = target - actual  # >0 需补管，<0 需再删
+            fix_op = {
+                "op": "restore" if delta > 0 else "delete",
+                "region": "outline", "count": abs(delta), "rows": 1,
+            }
+            parsed, _ = parse_hole_ops([fix_op])
+            if parsed:
+                self.apply_hole_ops(parsed)
+            self._auto_plan_basis += (
+                f"\n【数量校正】首次落地 {actual} 根，目标 {target} 根，"
+                f"{'补' if delta > 0 else '再删'} {abs(delta)} 根后重新核对。"
+            )
+
+        final = len(self.current_centers())
+        self._auto_plan_applied = True
+        self._auto_plan_summary["actual_tubes"] = final
+        ok = final == target
+        msg = (
+            f"已按 GB/T 151 自动布置：元件 {len(items)} 类、"
+            f"换热管 {final}/{target} 根" + ("" if ok else "（数量不符，请查看依据）")
+        )
+        self.status_message.emit(msg)
+        return {"ok": ok, "message": msg, "items": len(items), "actual": final,
+                "target": target, "rejected": bad + bad_ops}
+
+    def _on_manual_recompute(self) -> None:
+        """用户手动点「布管」：清掉自动方案痕迹，按当前参数重新布管。"""
+        self._auto_plan_applied = False
+        self._auto_plan_basis = ""
+        self.recompute(reason="用户点击布管")
+
+    def _emit_basis(self) -> None:
+        text = self._auto_plan_basis
+        if not text:
+            text = (
+                "当前尚未生成自动布置方案。\n"
+                "若上游文件提供了「管子数/台」，切到布管页会自动按 GB/T 151-2026 "
+                "布置元件并把换热管数凑到该值；也可在聊天里说「重新生成布置方案」。"
+            )
+        self.basis_requested.emit(text)
 
     # ------------------------------------------------------------------ UI
     def _build_ui(self) -> None:
@@ -550,8 +649,18 @@ class TubeLayoutPage(QWidget):
             "QPushButton{background:#2f6fe4;color:#fff;border:none;border-radius:7px;padding:6px 16px;font-weight:600;}"
             "QPushButton:hover{background:#2a63cc;}"
         )
-        self.pipe_button.clicked.connect(lambda: self.recompute(reason="用户点击布管"))
+        self.pipe_button.clicked.connect(self._on_manual_recompute)
         action_bar.addWidget(self.pipe_button)
+        # 「依据」：弹出窗口说明当前自动布置是按哪些标准规则、什么参数算出来的。
+        self.basis_button = QPushButton("依据")
+        self.basis_button.setCursor(Qt.PointingHandCursor)
+        self.basis_button.setToolTip("查看当前元件布置与删管的依据（GB/T 151-2026）")
+        self.basis_button.setStyleSheet(
+            "QPushButton{background:#fff;border:1px solid #c9d6ea;border-radius:7px;padding:5px 12px;color:#2f6fe4;}"
+            "QPushButton:hover{background:#eef4ff;}"
+        )
+        self.basis_button.clicked.connect(self._emit_basis)
+        action_bar.addWidget(self.basis_button)
         self.fullscreen_button = None
         for text, slot in (("撤销", self.undo), ("全屏", self.toggle_fullscreen)):
             button = QPushButton(text)
@@ -1177,6 +1286,24 @@ class TubeLayoutPage(QWidget):
         return str(int(number)) if number.is_integer() else f"{number:.1f}"
 
     # ------------------------------------------------------ 计算 + 绘制
+    def _heal_tube_pass_form(self) -> None:
+        """纠正上游提取带来的「管程分程形式」与程数不一致（如 4 管程配 2.1）。"""
+        try:
+            row = self.parameters.get("管程分程形式") or {}
+            current = str(row.get("value") or "").strip()
+            if not current:
+                return
+            from bundle.params import spec_for
+            forms = list(spec_for("管程分程形式", self.product_type, self.parameters).options or ())
+            if not forms:
+                from bundle.params import TUBE_PATTERN_BY_PASS
+                forms = list(TUBE_PATTERN_BY_PASS.get(
+                    str(self.parameters.get("管程程数", {}).get("value", "")).strip(), ()))
+            if forms and current not in forms:
+                self.set_parameter("管程分程形式", forms[0], "联动计算", run_linkage=False)
+        except Exception:
+            pass
+
     def recompute(self, reason: str = "", first: bool = False, keep_components: bool = False) -> bool:
         # 正式程序点“布管”会清空全部元件（拉杆/挡板/防冲板/滑道…）再重算，
         # 这里保持一致：不保留上一次布置的元件，避免旧元件挂在新管孔上。
@@ -1211,6 +1338,10 @@ class TubeLayoutPage(QWidget):
                 or not comp.get("center")
                 or tuple(comp["center"]) in known
             ]
+        # 分程形式自愈：上游数据表里「管程分程形式」可能与「管程程数」不一致
+        # （实测 1906：程数=4 但提取到 2.1），校验会据此标红。这里在校验前先按
+        # 当前管程数的合法集合纠正一次，与用户手改程数时的联动逻辑保持一致。
+        self._heal_tube_pass_form()
         self.issues = engine.check_geometry(self.parameters, result)
         self.rebuild_scene()
         self.refresh_hole_table()

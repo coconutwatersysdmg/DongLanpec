@@ -493,6 +493,26 @@ class ParamComboBox(QComboBox):
     def wheelEvent(self, event):  # noqa: N802 - Qt API
         event.ignore()                        # 正式程序：滚轮不切选项
 
+    def showPopup(self):  # noqa: N802 - Qt API
+        """展开列表时按最长选项撑宽，避免长文本（如「转角正方形排列（45°）」）被截断。
+
+        复用平台 ui_theme.style_param_combo_popup 同一逻辑；该样式只在建页时套一次，
+        而参数表 combo 每次 rebuild 都是新对象，因此在控件自身 showPopup 里兜底。
+        只改弹出视图宽度，不动表格列宽与控件本身尺寸。
+        """
+        view = self.view()
+        if view is not None and self.count():
+            try:
+                metrics = self.fontMetrics()
+                widest = max(
+                    metrics.horizontalAdvance(self.itemText(i))
+                    for i in range(self.count())
+                )
+                view.setMinimumWidth(max(self.width(), widest + 28))
+            except Exception:
+                pass
+        super().showPopup()
+
     def mousePressEvent(self, event):  # noqa: N802 - Qt API
         line = self.lineEdit()
         if event.button() == Qt.LeftButton and line is not None and line.isReadOnly():
