@@ -121,21 +121,22 @@ class TubeItem(_Selectable, QGraphicsEllipseItem):
 
 
 class GhostTubeItem(TubeItem):
-    """已被删除的换热管孔：照正式程序 delete_centers（My_Piping.py:19104）
-    用**白色实心圆**（QPen/QBrush 都是 QColor(255,255,255)、pen 宽 3）把孔盖掉，
-    看起来这里就没有管孔——正式程序从不画"已删管"的标记圆，用户明确要求一致。
-    仍可点选恢复，选中时同管类 = 淡蓝实心圆、无金边。
+    """已被删除的换热管孔：**什么都不画**（未选中时）。
+
+    正式程序删管 = 从 current_centers 里移除该圆心 + 重新布管时不再画这个圆；
+    圆心连线用的是满布理论孔，所以删管后 × 连线仍然穿过原位。它并没有"已删管"
+    的标记图元——白色实心圆只是 delete_centers 为了盖住旧蓝色圆面临时补的占位，
+    平台每轮 rebuild_scene 清空重画，不需要这层遮盖。用户 2026-11-22 明确：
+    删掉的管孔啥也不绘制，圆心连线保留，所以这里 paint 在未选中时直接 return。
+
+    仍可点选恢复：QGraphicsEllipseItem 的 shape() 按 rect 命中，选中时画淡蓝实心。
     """
 
     item_kind = "tube"
 
     def __init__(self, center, radius, controller=None):
         super().__init__(center, radius, controller)
-        pen = QPen(QColor(255, 255, 255))   # 源程序白色 pen
-        pen.setWidthF(3.0)                   # 源程序 delete_centers 宽 3
-        self.base_pen = pen
-        self.base_brush = QBrush(QColor(255, 255, 255))  # 白色实心覆盖
-        # 必须盖在圆心连线(z=0.5)之上，否则蓝色×穿过白圆，删掉的孔还能看见连线。
+        # 选中标记要盖住圆心连线(z=0.5)，未选中不绘制，z 高不影响画面。
         self.setZValue(1.0)
         self.setToolTip(
             f"已删除的换热管孔 ({self.center[0]:.2f}, {self.center[1]:.2f})，点一下可选中恢复"
@@ -144,10 +145,7 @@ class GhostTubeItem(TubeItem):
     def paint(self, painter, option, widget=None):  # noqa: N802 - Qt API
         if self.is_selected:
             _paint_circle_selected(painter, self.rect())
-        else:
-            painter.setPen(self.base_pen)
-            painter.setBrush(self.base_brush)
-            painter.drawEllipse(self.rect())
+        # 未选中：什么都不画，露出下面满布理论孔的圆心连线
 
 
 class RodItem(_Selectable, QGraphicsEllipseItem):

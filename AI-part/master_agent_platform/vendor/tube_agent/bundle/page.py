@@ -418,13 +418,17 @@ class TubeLayoutPage(QWidget):
     def _symmetric_trim_to_target(self, target: int) -> int:
         """把换热管数对称地调到 target，返回实际增删的根数。
 
-        规则（GB/T 151 + 正式程序 judge_linkage_x/y）：
+        规则（GB/T 151 + 正式程序 judge_linkage_x/y + 用户约定俗成的设计规则）：
         · 2 管程：镜像轴 = 水平中心线，管孔按 (x, -y) 成对；
         · 4/6 管程：镜像轴 = 竖直中心线，管孔按 (-x, y) 成对；
-        · 删管：按到圆心的距离**从大到小**成对删（先删最外圈，保留中间行）；
+        · 删管：**首先删 0°/180° 方向（竖直中心线、x≈0）的管孔**，这是设计惯例；
+          同一方向内再按到圆心距离从大到小（先删外圈），成对删；
         · 补管：按距离从小到大成对补（先补最内圈）；
         · 轴线上（y≈0 或 x≈0）自己镜像自己的管孔，作为单点最后处理，
           保证奇偶差额也能精确到位。
+
+        图上角度约定（见正式程序布管图）：0°=正上、90°=正右、180°=正下、270°=正左。
+        所以"0°/180° 的管"是位于竖直中心线附近的管孔，即 |x| 小者。
         """
         if self.result is None:
             return 0
@@ -461,19 +465,24 @@ class TubeLayoutPage(QWidget):
         if delta == 0:
             return 0
 
-        # 每组当前有几个活孔（0/1/2），按半径从外到内（删）或从内到外（补）排序
-        def group_alive(g):
-            return sum(1 for c in g if (round(c[0], 6), round(c[1], 6)) in alive)
-        ordered = sorted(groups.values(), key=lambda g: max(radius(c) for c in g),
-                         reverse=(delta < 0))
+        # 用户约定俗成的设计规则：凑数删管**首先删 0°/180° 方向**（竖直中心线
+        # x≈0）的换热管，同一方向内再由外向内。组内的镜像点共享 |x|，所以按
+        # (|x| 小优先, 半径大优先) 排序即可；补管走反序。
+        def group_axis_distance(g):
+            return min(abs(c[0]) for c in g)
+
+        ordered = sorted(
+            groups.values(),
+            key=lambda g: (group_axis_distance(g), -max(radius(c) for c in g)),
+        )
 
         changed = 0
-        if delta < 0:  # 删管：成对从外缘删
+        if delta < 0:  # 删管：先 0°/180°，同列由外向内，成对删
             need = -delta
             for g in ordered:
                 if need <= 0:
                     break
-                for c in sorted(g, key=radius, reverse=True):
+                for c in sorted(g, key=lambda p: (abs(p[0]), -radius(p))):
                     if need <= 0:
                         break
                     k = (round(c[0], 6), round(c[1], 6))
@@ -482,12 +491,12 @@ class TubeLayoutPage(QWidget):
                         alive.discard(k)
                         need -= 1
                         changed += 1
-        else:  # 补管：成对从内向外恢复
+        else:  # 补管：反序成对恢复（远离 0°/180° 的列优先、同列由内向外）
             need = delta
-            for g in ordered:
+            for g in reversed(ordered):
                 if need <= 0:
                     break
-                for c in sorted(g, key=radius):
+                for c in sorted(g, key=lambda p: (abs(p[0]), radius(p))):
                     if need <= 0:
                         break
                     k = (round(c[0], 6), round(c[1], 6))
@@ -546,15 +555,20 @@ class TubeLayoutPage(QWidget):
         # 只有拉杆/挡管占孔 + 目标差额，一次对称删管到位。
         actual = len(self.current_centers())
         if actual != target:
-            # 对称删管：按管程镜像成对取管，从 0°/180° 外缘一圈一圈删（保留中间行），
-            # 而不是 region=outline 的"每行最左最右"——后者会只删两端、把中间行掏空，
-            # 得到上[10,9,1,2..]、下[10,9,0,0..]这种上下不对称的怪表（用户反馈）。
+            # 对称删管：按用户约定俗成的设计规则，首先删 0°/180° 方向（竖直中心线
+            # x≈0）的换热管，同列再由外向内，按管程镜像成对删；不用 region=outline
+            # 的"每行最左最右"（那种会把中间行掏空、上下不对称）。
             changed = self._symmetric_trim_to_target(target)
             self._auto_plan_basis += (
                 f"\n【数量校正】元件落地后 {actual} 根，目标 {target} 根，"
                 f"{'补' if target > actual else '删'} {abs(target - actual)} 根"
-                f"（实际调整 {changed} 根）：按管程镜像对称、从 0°/180° 外缘逐对"
-                f"{'补回' if target > actual else '删除'}，保持上下/左右对称。"
+                f"（实际调整 {changed} 根）：按管程镜像对称，"
+                + (
+                    "从远离 0°/180° 的列由内向外逐对补回"
+                    if target > actual else
+                    "首先删除 0°/180°（竖直中心线）附近的管孔、同列由外向内逐对删除"
+                )
+                + "，保持上下/左右对称。"
             )
 
         final = len(self.current_centers())

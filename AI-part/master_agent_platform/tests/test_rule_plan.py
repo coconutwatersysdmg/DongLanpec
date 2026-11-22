@@ -42,17 +42,17 @@ def test_tie_rod_count_table_7_42(dn, dm, expected):
     assert count == expected, basis
 
 
-def test_tie_rod_count_min_four():
-    """用户约定：拉杆 >= 标准数量且不少于 4 根。"""
+def test_tie_rod_count_exceeds_standard_and_diagonal():
+    """用户约定：拉杆数量超过标准，四象限 y=±x 对角线附近均匀布置。"""
     params = P(**{
         "换热管外径 do": 25, "公称直径 DN": 900, "拉杆形式": "螺纹拉杆",
         "换热管中心距 S": 32, "折流/支持板间距": 200, "目标换热管数": 1700,
     })
     plan = rp.build_plan(params, "BEM", 1800, 1700)
     rod = next(p for p in plan["placements"] if p["kind"] == "rod")
-    assert rod["count"] >= plan["summary"]["rod_std_count"]
-    assert rod["count"] >= 4
-    assert rod["region"] == "edge_symmetric"  # 尽量均匀外缘
+    assert rod["count"] > plan["summary"]["rod_std_count"]  # 严格超过标准数量
+    assert rod["count"] >= 8  # 四象限每象限至少 2 根
+    assert rod["region"] == "diagonal"  # y=x / y=-x 对角线附近
 
 
 # ---- 删管总账 ----

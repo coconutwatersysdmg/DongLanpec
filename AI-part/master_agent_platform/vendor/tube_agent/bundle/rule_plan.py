@@ -151,17 +151,30 @@ def build_plan(parameters: dict, product_type: str, total_holes: int,
     pitch = _num(parameters, "换热管中心距 S")
     baffle_gap = _num(parameters, "折流/支持板间距")
 
-    # --- 拉杆（用户约定：>= 标准数量，尽量均匀外缘）---
+    # --- 拉杆（用户约定：数量超过标准，四个象限 y=±x 对角线附近均匀布置）---
+    # 标准 7.8.5.2：拉杆总截面积 >= 表 7-42 即可，直径/数量可变；7.8.5.4 要求均匀布置。
+    # 用户 2026-11-22 明确的工业设计约定：数量超过标准数量、尽量均匀布置，
+    # 位置基本在四个象限 y=x / y=-x 对角线附近（不是贴着水平轴/壳壁正侧）。
     dm, rod_d_basis = tie_rod_diameter_mm(parameters)
     std_count, rod_n_basis = tie_rod_required_count(dn, dm)
-    rod_count = max(std_count, 4)  # 底线：数量不少于 4 根（表 7-42 说明）
-    rod_reason = rod_n_basis + f"；取 >= 标准数量且不少于 4 根 -> {rod_count} 根"
+    # 超过标准 = 标准数再多加一组 4 象限镜像（+4 根）；底线不少于 8 根，
+    # 保证四个象限每象限至少 2 根，才是"超过标准且均匀"。
+    rod_count = max(std_count + 4, 8)
+    rod_reason = (
+        rod_n_basis
+        + f"；标准是最低要求（7.8.5.2 总截面积不低于表值即可、数量可变），"
+        f"按用户约定超过标准数量再 +4 根（四个象限各加一组镜像）-> {rod_count} 根"
+    )
     placements.append({
-        "kind": "rod", "count": rod_count, "region": "edge_symmetric",
+        "kind": "rod", "count": rod_count, "region": "diagonal",
         "options": {"拉杆直径": str(dm), "拉杆形式": _text(parameters, "拉杆形式", "螺纹拉杆")},
         "note": rod_reason,
     })
-    basis.append(f"【拉杆】{rod_d_basis}；{rod_reason}；均匀布置在管束外边缘（7.8.5.4）。")
+    basis.append(
+        f"【拉杆】{rod_d_basis}；{rod_reason}；"
+        f"按四个象限 y=x / y=-x 对角线附近均匀布置（7.8.5.4 均匀布置要求，"
+        f"具体角度为用户设计约定，非标准硬性规定）。"
+    )
 
     # --- 旁路挡板 ---
     # 厚度优先用元件库/参数表实值（配置库 2.12.2.1 默认 6mm），为 0 时再按 min(6,折流板厚)。
@@ -246,8 +259,9 @@ def build_plan(parameters: dict, product_type: str, total_holes: int,
             basis.append(
                 f"【删管】目标换热管数 {target} 根（文件提取：管子数/台）。"
                 f"先布置有依据的元件（拉杆/挡管占孔约 {occupying} 孔），"
-                f"再按实际管孔数与目标的差额，从 0°/180° 外缘对称逐对删管，"
-                f"直到实际换热管数 = {target} 根；不布置防冲板/滑道，也不会补回已删的管。"
+                f"再按实际管孔数与目标的差额，首先删除 0°/180°（竖直中心线附近）"
+                f"的管孔、同列由外向内对称逐对删，直到实际换热管数 = {target} 根；"
+                f"不布置防冲板/滑道，也不会补回已删的管。"
             )
 
     return {

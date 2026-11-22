@@ -61,6 +61,12 @@ REGION_ALIASES = {
     "外围": "edge_symmetric",
     "对称": "edge_symmetric",
     "edge_symmetric": "edge_symmetric",
+    "对角线": "diagonal",
+    "对角线附近": "diagonal",
+    "四象限对角线": "diagonal",
+    "象限对角线": "diagonal",
+    "y=x": "diagonal",
+    "diagonal": "diagonal",
     "靠近壳壁": "near_shell",
     "靠壳壁": "near_shell",
     "近壳壁": "near_shell",
@@ -94,6 +100,7 @@ REGION_ALIASES = {
 
 REGION_LABEL = {
     "edge_symmetric": "靠壳壁，按分程对称展开",
+    "diagonal": "四个象限 y=x / y=-x 对角线附近，数量超过标准、均匀布置",
     "outline": "布管外轮廓的全部管孔",
     "near_shell": "取最靠壳壁的一圈管孔",
     "uniform": "沿周向均布",
@@ -108,8 +115,8 @@ REGION_LABEL = {
 # 元件支持的位置规则；第一个是默认值。
 # 参照管数（见 ANCHORS）决定这里的“位置”指“一个管孔”还是“一对相邻管孔”。
 KIND_REGIONS = {
-    "rod": ("edge_symmetric", "outline", "near_shell", "uniform", "top", "bottom", "left", "right", "any"),
-    "free_rod": ("edge_symmetric", "outline", "near_shell", "uniform", "any"),
+    "rod": ("diagonal", "edge_symmetric", "outline", "near_shell", "uniform", "top", "bottom", "left", "right", "any"),
+    "free_rod": ("diagonal", "edge_symmetric", "outline", "near_shell", "uniform", "any"),
     "block_tube": ("uniform", "any", "near_shell", "top", "bottom"),
     "bypass": ("near_shell", "uniform", "top", "bottom", "left", "right", "any"),
     "center_baffle": ("uniform", "any", "top", "bottom"),
@@ -431,6 +438,18 @@ def pick_centers(pool, count: int, region: str) -> list[tuple[float, float]]:
         return []
     if region == "selected":
         return candidates[:count]
+    if region == "diagonal":
+        # 用户明确的工业设计约定：拉杆超过标准数量、尽量均匀布置，
+        # 基本落在四个象限的 y=x / y=-x（极角 45/135/225/315°）附近。
+        # 这里先把全池按"离最近对角线的角偏差"排序，偏差越小越靠对角线；
+        # 同偏差带内半径大的优先（外缘），再由 _linkage_expand 做 4 象限镜像，
+        # 就得到分布在四象限对角线附近、而不是水平轴 / 壳壁正侧的拉杆。
+        def diagonal_score(c):
+            angle = _angle(c)
+            deviation = min(_angular_distance(angle, d) for d in (45.0, 135.0, 225.0, 315.0))
+            return (round(deviation, 6), -_radius(c))
+
+        return sorted(candidates, key=diagonal_score)[:count]
     window = SECTOR_WINDOWS.get(region)
     if window is not None:
         scoped = [c for c in candidates if _in_window(_angle(c), window)]
