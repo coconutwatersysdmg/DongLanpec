@@ -541,18 +541,18 @@ class TubeLayoutPage(QWidget):
         self._auto_plan_basis = "\n".join(plan["basis"])
         self._auto_plan_summary = dict(plan["summary"])
 
-        # 第二步：元件落地后再数实际管孔，差额才用删管/补管修正。
-        # 元件已把干涉管从 current_centers() 里去掉，这里只用剩余的真实管孔，
-        # 不会再误删元件所在孔，也不会让元件"无管可删"。
+        # 第二步：元件落地后再数实际管孔，差额用对称删管修正到目标。
+        # 本版不布置防冲板/滑道，所以不会有"元件删管→为凑数又补回"的反复；
+        # 只有拉杆/挡管占孔 + 目标差额，一次对称删管到位。
         actual = len(self.current_centers())
         if actual != target:
-            # 对称删/补：按管程镜像成对取管，从 0°/180° 外缘一圈一圈删（保留中间行），
+            # 对称删管：按管程镜像成对取管，从 0°/180° 外缘一圈一圈删（保留中间行），
             # 而不是 region=outline 的"每行最左最右"——后者会只删两端、把中间行掏空，
             # 得到上[10,9,1,2..]、下[10,9,0,0..]这种上下不对称的怪表（用户反馈）。
             changed = self._symmetric_trim_to_target(target)
             self._auto_plan_basis += (
-                f"\n【数量校正】元件落地后 {actual} 根（含元件干涉删管），目标 {target} 根，"
-                f"{'补' if target > actual else '再删'} {abs(target - actual)} 根"
+                f"\n【数量校正】元件落地后 {actual} 根，目标 {target} 根，"
+                f"{'补' if target > actual else '删'} {abs(target - actual)} 根"
                 f"（实际调整 {changed} 根）：按管程镜像对称、从 0°/180° 外缘逐对"
                 f"{'补回' if target > actual else '删除'}，保持上下/左右对称。"
             )

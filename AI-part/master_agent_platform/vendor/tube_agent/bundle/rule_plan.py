@@ -203,55 +203,14 @@ def build_plan(parameters: dict, product_type: str, total_holes: int,
             })
             basis.append(f"【中间挡板】U 形管、{passes} 管程，分程隔板槽背面短路宽度较大需设置（7.8.3.4.1）；{cb_reason}；避开折流板缺口区，伸出 <=50mm。")
 
-    # --- 防冲板（占位 + 干涉删管）---
-    # 形式取元件库/参数表实值（源程序配置库 2.17.x + 参数表「防冲板形式」，
-    # 元件库默认「圆弧形」）；之前硬编码「平板形」与源程序不符。
-    imp_form = _text(parameters, "防冲板形式", "") or "圆弧形"
-    placements.append({
-        "kind": "impingement", "count": 1, "region": "top",
-        "options": {"防冲板形式": imp_form},
-        "note": f"按壳程进口设置防冲板（形式 {imp_form}，取元件库/参数表实值）；干涉的换热管由程序自动删（6.2 节）",
-    })
-    basis.append(f"【防冲板】形式取元件库/参数表实值 {imp_form}；按壳程进口设置，与换热管干涉的管孔自动删除（详见 6.2 节）。")
-
-    # --- 滑道 ---
-    # 参数优先级（与源程序一致）：元件库/参数表里的真实值 > 表 7-44 推荐值。
-    # 源程序滑道截面由配置库 2.14.3.1 + 参数表「滑道高度/厚度」决定；之前 AI 版
-    # 无条件用表 7-44 覆盖了元件库的值（如元件库 150/10 被改成 30/6），这是错的。
-    slide_form = _text(parameters, "滑道形式", "") or "板式滑道"
-    lib_h = _num(parameters, "滑道高度")
-    lib_t = _num(parameters, "滑道厚度")
-    slip_key = min(SLIPWAY_SIZE_TABLE, key=lambda k: abs(k - dn)) if SLIPWAY_SIZE_TABLE else 0
-    slip_row = SLIPWAY_SIZE_TABLE.get(slip_key)
-    slide_opts = {"滑道形式": slide_form}
-    if lib_h and lib_h > 0 and lib_t and lib_t > 0:
-        h, thick = lib_h, lib_t
-        slip_basis = (
-            f"滑道截面取元件库/参数表实值：高 {h:g}mm、厚 {thick:g}mm"
-            f"（形式 {slide_form}，配置库 2.14.3.1）"
-        )
-        if slip_row:
-            _, _, _, rec_h = slip_row
-            slip_basis += f"；表 7-44 对 DN={dn:g} 推荐高度 {rec_h}mm，供校核参考"
-    elif slip_row:
-        mass, t_ci, t_hi, h = slip_row
-        material_hi = "高合金钢" in _text(parameters, "换热管材料", "")
-        thick = t_hi if material_hi else t_ci
-        slip_basis = (
-            f"参数表未给滑道截面，按表 7-44 取 DN={dn:g} 截面"
-            f"（高 {h}mm、厚 {thick}mm）；底面高出折流板外缘 0.5~1.0mm（7.8.6.2）"
-        )
-        if mass > 40000:
-            slip_basis += "；管束质量较大，宜采用滚轮式滑道（表 7-44 注）"
-    else:
-        h, thick = 150.0, 10.0
-        slip_basis = "参数表与表 7-44 均未覆盖，取滑道高 150mm、厚 10mm，请人工确认"
-    slide_opts.update({"滑道高度": str(h), "滑道厚度": str(thick)})
-    placements.append({
-        "kind": "slide", "count": 1, "region": "any",
-        "options": slide_opts, "note": slip_basis,
-    })
-    basis.append(f"【滑道】{slip_basis}。")
+    # --- 防冲板 / 滑道：本版自动方案不再布置 ---
+    # 用户 2026-11-22 明确：防冲板与滑道的位置/形式都是程序"凭空生成"的，正式程序里
+    # 这两类元件都是用户手动选参照管/手动放的，没有可靠依据自动定。更关键的是它们的
+    # 干涉删管量（两条滑道整行删 ~90 根）远超目标差额（满布128→目标114 只删14根），
+    # 自动方案为了凑目标数只能把元件删掉的管又补回来，结果适得其反。
+    # 因此这版自动方案只做：有标准依据的元件（拉杆/挡管/中间挡板/吊环）+ 按目标差额
+    # 对称删管。防冲板、滑道等拿到明确需求后再单独做。
+    basis.append("【防冲板/滑道】位置与形式需人工按壳程进口/支承条件确定，自动方案不凭空布置；待明确需求后单独处理。")
 
     # --- 吊环螺钉（可抽管束固定管板）---
     screw_count = _num(parameters, "吊环螺钉数量", 0) or 0
@@ -263,7 +222,7 @@ def build_plan(parameters: dict, product_type: str, total_holes: int,
         basis.append(f"【吊环螺钉】可抽管束固定管板设吊环螺钉孔 {int(screw_count)} 个（7.17.2）。")
 
     # --- 删管：凑到目标换热管数 ---
-    # 占孔元件：拉杆 + 挡管 + 径向孔（防冲板/滑道干涉删管落地后按实际算）
+    # 占孔元件：拉杆 + 挡管 + 径向孔（防冲板/滑道本版不布置，不再有干涉删管）
     occupying = sum(
         p["count"] for p in placements
         if p["kind"] in {"rod", "free_rod", "block_tube", "radial_hole"}
@@ -272,10 +231,10 @@ def build_plan(parameters: dict, product_type: str, total_holes: int,
     hole_ops: list[dict] = []
     if target and target > 0:
         delete_est = total_holes - occupying - target
-        # 流程（用户 2026-11-22 明确要求）：**先布置元件**——防冲板、滑道、拉杆按几何
-        # 删掉各自干涉/占孔的换热管；再数实际管孔数，只有还没对齐目标时才补删。
-        # 因此这里的 delete_est 只是"若元件不删管"的粗估，不作为最终删管数落地；
-        # 真正差额由 auto_apply_plan 在元件落地后按 current_centers() 实算。
+        # 流程（用户 2026-11-22 明确要求）：管数优先。防冲板/滑道本版不自动布置，
+        # 拉杆/挡管占孔后，由 auto_apply_plan 按实际管孔数对称删管到目标数。
+        # 这里的 delete_est 只是粗估，不作为最终删管数落地；真正差额由
+        # auto_apply_plan 在元件落地后按 current_centers() 实算，绝不再补回删掉的管。
         if delete_est < 0:
             # 目标比满布还多：元件删管后只会更少，无论如何都凑不齐，提前警示。
             basis.append(
@@ -286,9 +245,9 @@ def build_plan(parameters: dict, product_type: str, total_holes: int,
         else:
             basis.append(
                 f"【删管】目标换热管数 {target} 根（文件提取：管子数/台）。"
-                f"先布置元件：防冲板/滑道按几何删掉干涉管，拉杆/挡管占孔（约 {occupying} 孔）；"
-                f"元件落地后再数实际管孔，差额从 0°/180° 外缘对称逐行删/补，"
-                f"直到实际换热管数 = {target} 根。"
+                f"先布置有依据的元件（拉杆/挡管占孔约 {occupying} 孔），"
+                f"再按实际管孔数与目标的差额，从 0°/180° 外缘对称逐对删管，"
+                f"直到实际换热管数 = {target} 根；不布置防冲板/滑道，也不会补回已删的管。"
             )
 
     return {
