@@ -263,7 +263,7 @@ def build_plan(parameters: dict, product_type: str, total_holes: int,
         basis.append(f"【吊环螺钉】可抽管束固定管板设吊环螺钉孔 {int(screw_count)} 个（7.17.2）。")
 
     # --- 删管：凑到目标换热管数 ---
-    # 占孔元件：拉杆 + 挡管 + 径向孔（防冲板干涉另算，落地后按实际办）
+    # 占孔元件：拉杆 + 挡管 + 径向孔（防冲板/滑道干涉删管落地后按实际算）
     occupying = sum(
         p["count"] for p in placements
         if p["kind"] in {"rod", "free_rod", "block_tube", "radial_hole"}
@@ -271,25 +271,25 @@ def build_plan(parameters: dict, product_type: str, total_holes: int,
     target = target_tubes if target_tubes is not None else int(_num(parameters, "目标换热管数", 0) or 0)
     hole_ops: list[dict] = []
     if target and target > 0:
-        # 精确差额在落地后由实际占孔数再核一次；这里先按已算出的占孔估。
         delete_est = total_holes - occupying - target
-        if delete_est > 0:
-            hole_ops.append({
-                "op": "delete", "region": "outline", "count": int(delete_est), "rows": 1,
-                "note": f"目标换热管 {target} 根：满布 {total_holes} - 元件占孔 {occupying} - 删管 {int(delete_est)} = {target}",
-            })
-            basis.append(
-                f"【删管】目标换热管数 {target} 根（文件提取：管子数/台），"
-                f"满布 {total_holes} 孔 - 元件占孔 {occupying} - 删 {int(delete_est)} = {target}；"
-                f"从管束外缘 0°/180° 两侧逐行删除，保持对称。"
-            )
-        elif delete_est < 0:
+        # 流程（用户 2026-11-22 明确要求）：**先布置元件**——防冲板、滑道、拉杆按几何
+        # 删掉各自干涉/占孔的换热管；再数实际管孔数，只有还没对齐目标时才补删。
+        # 因此这里的 delete_est 只是"若元件不删管"的粗估，不作为最终删管数落地；
+        # 真正差额由 auto_apply_plan 在元件落地后按 current_centers() 实算。
+        if delete_est < 0:
+            # 目标比满布还多：元件删管后只会更少，无论如何都凑不齐，提前警示。
             basis.append(
                 f"【删管】目标 {target} 根，但满布 {total_holes} 孔减去元件占孔 {occupying} "
-                f"仍不足（差 {-delete_est} 根），无法删管达成，请人工确认目标数或布管参数。"
+                f"仍不足（差 {-delete_est} 根），元件干涉删管后缺口更大，"
+                f"无法删/补管达成，请人工确认目标数或布管参数。"
             )
         else:
-            basis.append(f"【删管】满布 {total_holes} 孔 - 元件占孔 {occupying} = {target}，无需删管。")
+            basis.append(
+                f"【删管】目标换热管数 {target} 根（文件提取：管子数/台）。"
+                f"先布置元件：防冲板/滑道按几何删掉干涉管，拉杆/挡管占孔（约 {occupying} 孔）；"
+                f"元件落地后再数实际管孔，差额从 0°/180° 外缘对称逐行删/补，"
+                f"直到实际换热管数 = {target} 根。"
+            )
 
     return {
         "placements": placements,

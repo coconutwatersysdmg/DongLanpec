@@ -301,16 +301,21 @@ class FoldedPlateItem(_Selectable, QGraphicsPathItem):
         self.setToolTip(f"{label}（轮廓线宽 = 板厚 {self.thickness:g} mm）")
 
     def paint(self, painter, option, widget=None):  # noqa: N802 - Qt API
+        # 先画防冲板本体（深蓝、宽 = 板厚），选中时也要保留，不能被选中色整条替换：
+        # 用户 2026-11-22 反馈"选中一个防冲板变成全部涂成金色"就是本体被顶掉导致的。
+        painter.setPen(self.base_pen)
+        painter.setBrush(QBrush(Qt.NoBrush))
+        painter.drawPath(self.path())
         if self.is_selected:
+            # 正式程序 selected_pen = QPen(QColor(255,215,0), 3, SolidLine, RoundCap, RoundJoin)：
+            # 叠加在原件之上的**固定 3px 细金线**选中标记，而不是把板厚宽的本体换成金色。
             pen = QPen(SELECTED_PEN_COLOR)
-            pen.setWidthF(max(self.thickness, 1.0) + 2.0)
-            pen.setCapStyle(Qt.FlatCap)
+            pen.setWidthF(3.0)
+            pen.setCapStyle(Qt.RoundCap)
+            pen.setJoinStyle(Qt.RoundJoin)
             painter.setPen(pen)
             painter.setBrush(QBrush(Qt.NoBrush))
-        else:
-            painter.setPen(self.base_pen)
-            painter.setBrush(QBrush(Qt.NoBrush))
-        painter.drawPath(self.path())
+            painter.drawPath(self.path())
 
 
 class RadialHoleItem(_Selectable, QGraphicsPathItem):

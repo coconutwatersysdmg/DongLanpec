@@ -440,19 +440,21 @@ class TubeLayoutPage(QWidget):
         total = len(self.result.master_centers)
         plan = build_plan(self.parameters, self.product_type, total, target)
         items, bad = parse_placements(plan["placements"])
-        ops, bad_ops = parse_hole_ops(plan["hole_ops"])
+        # 注意：plan["hole_ops"] 是按"元件还没删管"预估的删管数，**不能直接落地**。
+        # 用户 2026-11-22 明确要求：先布置元件（防冲板/滑道/拉杆的干涉删管自然发生），
+        # 再看实际管孔数是否已经等于目标，没对齐才从外缘补删。旧版反过来（先删管再布
+        # 元件），元件全落在已删的孔上，防冲板/滑道一根干涉管都删不到，这是错的。
+        _, bad_ops = parse_hole_ops(plan["hole_ops"])
 
-        # 顺序：先删管（按满布孔算，避免元件占孔影响 region=outline 的选点），
-        # 再布元件（元件落在删后的剩余孔上），最后按实际占孔核一次目标数。
-        del_res = self.apply_hole_ops(ops) if ops else {"ok": True}
+        # 第一步：先布置全部元件。防冲板/滑道按几何删掉干涉管，拉杆/挡管占孔。
         place_res = self.apply_placement_plan(items) if items else {"ok": True}
 
         self._auto_plan_basis = "\n".join(plan["basis"])
         self._auto_plan_summary = dict(plan["summary"])
 
-        # 落地后精确核对：差额用二次删管/补管修正（region=outline 从外缘取）。
-        # 注意：删管时元件已占的孔不在当前管孔池里，outline 只作用于未占孔，
-        # 因此二次校正不会误删元件所在孔。
+        # 第二步：元件落地后再数实际管孔，差额才用删管/补管修正。
+        # 元件已把干涉管从 current_centers() 里去掉，这里只用剩余的真实管孔，
+        # 不会再误删元件所在孔，也不会让元件"无管可删"。
         actual = len(self.current_centers())
         if actual != target:
             delta = target - actual  # >0 需补管，<0 需再删
@@ -464,8 +466,9 @@ class TubeLayoutPage(QWidget):
             if parsed:
                 self.apply_hole_ops(parsed)
             self._auto_plan_basis += (
-                f"\n【数量校正】首次落地 {actual} 根，目标 {target} 根，"
-                f"{'补' if delta > 0 else '再删'} {abs(delta)} 根后重新核对。"
+                f"\n【数量校正】元件落地后 {actual} 根（含元件干涉删管），目标 {target} 根，"
+                f"{'补' if delta > 0 else '再删'} {abs(delta)} 根后重新核对；"
+                f"删管从 0°/180° 外缘对称逐行取。"
             )
 
         final = len(self.current_centers())
@@ -1611,10 +1614,13 @@ class TubeLayoutPage(QWidget):
         spacing = float(result.S or 0.0)
         if spacing <= 0:
             return
-        centers = list(self.current_centers())
+        # 源程序 connect_center 用的是 self.global_centers（所有理论管孔），不是删管后的
+        # current_centers。删管后大量相邻关系断裂，连线会稀疏甚至消失。这里必须用满布孔。
+        centers = list(result.master_centers)
         if len(centers) < 2:
             return
-        tolerance = max(1.0, spacing * 0.05)
+        # 源程序判据是 S-1 <= dist <= S+1，固定 ±1，不按百分比放大。
+        tolerance = 1.0
         grid_size = max(spacing * 1.2, 1e-6)
         grid: dict[tuple[int, int], list[int]] = {}
         for index, (x, y) in enumerate(centers):
@@ -1639,14 +1645,14 @@ class TubeLayoutPage(QWidget):
                             path.lineTo(x1, -y1)
         if path.isEmpty():
             return
-        # 半透明蓝：既能看到“圆心连线”，又不至于在孔数多时盖住管孔圆圈
-        pen = QPen(QColor(0, 60, 235, 140))
-        pen.setWidthF(0.9)
-        pen.setCosmetic(True)
+        # 源程序 connect_center：pen = QPen(QColor(0,0,255)), width=1，不透明，
+        # 且不设 z（默认在上层），连线穿过管孔圆心形成 × 网格，是可见的参考线。
+        pen = QPen(QColor(0, 0, 255))
+        pen.setWidthF(1.0)
         item = QGraphicsPathItem(path)
         item.setPen(pen)
-        # 连线画在管孔下面：网格退为背景参考线，管孔圆圈仍然清晰可辨
-        item.setZValue(-1)
+        # 画在管孔之上、元件之下：连线可见但不遮挡防冲板/滑道/拉杆。
+        item.setZValue(0.5)
         self.scene.addItem(item)
 
     # ------------------------------------------------------ 元件绘制
