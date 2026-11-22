@@ -543,6 +543,18 @@ def pick_pairs(pool, count: int, region: str = "any", orient: str = "row", min_s
 
     if region == "top":
         return [c["centre"] for c in symmetric_first(desc, True)[:count]]
+    if region in {"top_inner", "bottom_inner"}:
+        # 防冲板专用：板体几何相对参照管往壳壁方向展开（正式程序
+        # `arc_local_axes` 局部 +y 指向圆外、`build_flat_plate` 顶部连线再外移 do/2），
+        # 所以参照管不能取最外一行——否则整块板落在管束外，一根干涉管都压不到，
+        # 弦外弓形（`collect_extra_impingement_delete_centers`）也因为外侧已无管而为空。
+        # 从外往里错开一行，板正好压在最外行上，与正式程序用户手选第二行参照管等价。
+        # 这里不能再过 symmetric_first：它会按"是否跨中心线"重排，把内圈抬到前面。
+        # desc/asc 本身已按 axis_value（顶部/底部）排好，直接跳掉最外一行即可。
+        rows = desc if region == "top_inner" else asc
+        if len(rows) > 1:
+            rows = rows[1:]
+        return [c["centre"] for c in rows[:max(1, count)]]
     if region == "bottom":
         return [c["centre"] for c in symmetric_first(asc, False)[:count]]
     if region in {"left", "right"}:

@@ -164,14 +164,18 @@ def build_plan(parameters: dict, product_type: str, total_holes: int,
     basis.append(f"【拉杆】{rod_d_basis}；{rod_reason}；均匀布置在管束外边缘（7.8.5.4）。")
 
     # --- 旁路挡板 ---
+    # 厚度优先用元件库/参数表实值（配置库 2.12.2.1 默认 6mm），为 0 时再按 min(6,折流板厚)。
     bp_count, bp_reason = bypass_pair_count(baffle_gap, pitch)
     if bp_count > 0:
+        lib_bp_t = _num(parameters, "旁路挡板厚度") or 0.0
+        bp_thick = lib_bp_t if lib_bp_t > 0 else min(6.0, _num(parameters, "折流板厚度", 6.0) or 6.0)
+        src_note = "元件库实值" if lib_bp_t > 0 else "min(6mm,折流板厚)（7.8.3.2.3）"
         placements.append({
             "kind": "bypass", "count": bp_count, "region": "near_shell",
-            "options": {"旁路挡板厚度": str(min(6, _num(parameters, "折流板厚度", 6.0) or 6.0))},
+            "options": {"旁路挡板厚度": str(bp_thick)},
             "note": bp_reason,
         })
-        basis.append(f"【旁路挡板】{bp_reason}；厚度 min(6mm, 折流板厚)（7.8.3.2.3）；最外侧距切口端面 <=75mm（7.8.3.2.1）。")
+        basis.append(f"【旁路挡板】{bp_reason}；厚度取 {src_note} = {bp_thick:g}mm；最外侧距切口端面 <=75mm（7.8.3.2.1）。")
 
     # --- 挡管（分程隔板槽背面）---
     bt_count, bt_reason = periodic_count(baffle_gap, pitch)
@@ -199,33 +203,50 @@ def build_plan(parameters: dict, product_type: str, total_holes: int,
             })
             basis.append(f"【中间挡板】U 形管、{passes} 管程，分程隔板槽背面短路宽度较大需设置（7.8.3.4.1）；{cb_reason}；避开折流板缺口区，伸出 <=50mm。")
 
-    # --- 防冲板（占位 + 干涉删管，沿用现有可由 options 指定形式）---
-    # 这里只给一条基础意图，形式由用户在卡片上改；干涉删管由 apply 时算。
+    # --- 防冲板（占位 + 干涉删管）---
+    # 形式取元件库/参数表实值（源程序配置库 2.17.x + 参数表「防冲板形式」，
+    # 元件库默认「圆弧形」）；之前硬编码「平板形」与源程序不符。
+    imp_form = _text(parameters, "防冲板形式", "") or "圆弧形"
     placements.append({
-        "kind": "impingement", "count": 1, "region": "any",
-        "options": {"防冲板形式": _text(parameters, "防冲板形式", "平板形")},
-        "note": "按壳程进口设置防冲板；干涉的换热管由程序自动删（6.2 节）",
+        "kind": "impingement", "count": 1, "region": "top",
+        "options": {"防冲板形式": imp_form},
+        "note": f"按壳程进口设置防冲板（形式 {imp_form}，取元件库/参数表实值）；干涉的换热管由程序自动删（6.2 节）",
     })
-    basis.append("【防冲板】按壳程进口设置，与换热管干涉的管孔自动删除（详见 6.2 节）。")
+    basis.append(f"【防冲板】形式取元件库/参数表实值 {imp_form}；按壳程进口设置，与换热管干涉的管孔自动删除（详见 6.2 节）。")
 
-    # --- 滑道（截面按表 7-44）---
+    # --- 滑道 ---
+    # 参数优先级（与源程序一致）：元件库/参数表里的真实值 > 表 7-44 推荐值。
+    # 源程序滑道截面由配置库 2.14.3.1 + 参数表「滑道高度/厚度」决定；之前 AI 版
+    # 无条件用表 7-44 覆盖了元件库的值（如元件库 150/10 被改成 30/6），这是错的。
+    slide_form = _text(parameters, "滑道形式", "") or "板式滑道"
+    lib_h = _num(parameters, "滑道高度")
+    lib_t = _num(parameters, "滑道厚度")
     slip_key = min(SLIPWAY_SIZE_TABLE, key=lambda k: abs(k - dn)) if SLIPWAY_SIZE_TABLE else 0
     slip_row = SLIPWAY_SIZE_TABLE.get(slip_key)
-    slide_opts = {"滑道形式": _text(parameters, "滑道形式", "板式滑道")}
-    slip_basis = f"滑道沿壳体内壁布置（7.8.6）"
-    if slip_row:
+    slide_opts = {"滑道形式": slide_form}
+    if lib_h and lib_h > 0 and lib_t and lib_t > 0:
+        h, thick = lib_h, lib_t
+        slip_basis = (
+            f"滑道截面取元件库/参数表实值：高 {h:g}mm、厚 {thick:g}mm"
+            f"（形式 {slide_form}，配置库 2.14.3.1）"
+        )
+        if slip_row:
+            _, _, _, rec_h = slip_row
+            slip_basis += f"；表 7-44 对 DN={dn:g} 推荐高度 {rec_h}mm，供校核参考"
+    elif slip_row:
         mass, t_ci, t_hi, h = slip_row
         material_hi = "高合金钢" in _text(parameters, "换热管材料", "")
         thick = t_hi if material_hi else t_ci
-        slide_opts.update({"滑道高度": str(h), "滑道厚度": str(thick)})
         slip_basis = (
-            f"DN={dn:g} 取表 7-44 截面（高 {h}mm、厚 {thick}mm）；"
-            f"底面高出折流板外缘 0.5~1.0mm（7.8.6.2）"
+            f"参数表未给滑道截面，按表 7-44 取 DN={dn:g} 截面"
+            f"（高 {h}mm、厚 {thick}mm）；底面高出折流板外缘 0.5~1.0mm（7.8.6.2）"
         )
         if mass > 40000:
             slip_basis += "；管束质量较大，宜采用滚轮式滑道（表 7-44 注）"
     else:
-        slip_basis += "；表 7-44 未覆盖该 DN，沿用参数表默认高/厚"
+        h, thick = 150.0, 10.0
+        slip_basis = "参数表与表 7-44 均未覆盖，取滑道高 150mm、厚 10mm，请人工确认"
+    slide_opts.update({"滑道高度": str(h), "滑道厚度": str(thick)})
     placements.append({
         "kind": "slide", "count": 1, "region": "any",
         "options": slide_opts, "note": slip_basis,

@@ -67,6 +67,7 @@ from .items import (
     GhostTubeItem,
     RadialHoleItem,
     RodItem,
+    ScrewRingItem,
     TubeItem,
 )
 from .params import (
@@ -1669,6 +1670,14 @@ class TubeLayoutPage(QWidget):
                 item.component_index = index
                 self.scene.addItem(item)
                 self._component_items[index] = item
+            elif kind == "screw_ring" and center:
+                # 吊环螺钉：源程序 = 蓝色空心圆 + 井字弦，不是矩形块
+                radius = (component.get("size", (24.0, 24.0))[0] or 24.0) / 2.0
+                item = ScrewRingItem(center, radius, self)
+                item.apply_selected(index in self.selected_components)
+                item.component_index = index
+                self.scene.addItem(item)
+                self._component_items[index] = item
             elif component.get("points"):
                 # 防冲板三种形式都是“有厚度的折线”：A-P-Q-B（圆弧形/焊接式）
                 # 或两点直线（平板形），线宽 = 防冲板厚度，与正式程序画法一致。
@@ -1686,7 +1695,7 @@ class TubeLayoutPage(QWidget):
                 item.component_index = index
                 self.scene.addItem(item)
                 self._component_items[index] = item
-            elif kind in {"bypass", "center_baffle", "impingement", "impingement_folded", "slide", "screw_ring"} and center:
+            elif kind in {"bypass", "center_baffle", "impingement", "impingement_folded", "slide"} and center:
                 width, height = component.get("size", (40.0, 8.0))
                 color = {
                     "bypass": BYPASS_COLOR,
@@ -1694,7 +1703,6 @@ class TubeLayoutPage(QWidget):
                     "impingement": IMPINGE_COLOR,
                     "impingement_folded": IMPINGE_COLOR,
                     "slide": SLIDE_COLOR,
-                    "screw_ring": QColor(150, 100, 40),
                 }[kind]
                 plot = self._plot(center)
                 rect = QRectF(plot[0] - width / 2, plot[1] - height / 2, width, height)
@@ -3038,6 +3046,13 @@ class TubeLayoutPage(QWidget):
                     angle,
                 )
             region = item.region if item.region not in {"any", "uniform"} else "top"
+            # 防冲板几何相对参照管往壳壁方向展开，参照管取最外行会让整块板落在
+            # 管束之外、删不到任何管（用户反馈"上面一行没删"）。从外向内错开一行，
+            # 与正式程序用户手选第二行参照管等价。
+            region = {
+                "top": "top_inner",
+                "bottom": "bottom_inner",
+            }.get(region, region)
             out["pairs"] = pick_pairs(pool, item.count, region, "row", min_span=min_span)
             out["tubes"] = [c for pair in out["pairs"] for c in pair]
             return out
@@ -3924,6 +3939,68 @@ class TubeLayoutPage(QWidget):
             })
         return items
 
+    def _slide_delete_centers(self, geometry: dict) -> list[tuple[float, float]]:
+        """滑道覆盖的换热管孔（数学坐标）——照抄正式程序 slipway.py 干涉删管。
+
+        正式程序 `check_tube_slide_interference`（My_Piping.py:2071 `_tube_intersects_slide_rect`）：
+        管心到滑道矩形（底面贴基准圆、向内延伸 height、宽 thickness）任一边距离
+        ≤ do/2 + clearance 即干涉，clearance = bridge_k × 名义孔桥宽度（k 默认 1.0）。
+        再由 `slipway.py:1594-1608` 按干涉管所在的整行 y 扩展删除。
+        """
+        if self.result is None:
+            return []
+        from .placement import nominal_bridge_width
+        from .impingement import _dist_to_segment
+
+        do = self._float("换热管外径 do") or 0.0
+        bridge = nominal_bridge_width(do)
+        limit = do / 2.0 + bridge  # bridge_k 默认 1.0
+
+        cx, cy = float(geometry["center"][0]), float(geometry["center"][1])
+        height, thickness = float(geometry["size"][0]), float(geometry["size"][1])
+        angle = math.radians(float(geometry.get("angle") or 0.0))
+        # 滑道局部矩形：中心 (0,0)，长 height（径向，沿 angle 方向），宽 thickness（切向）
+        ux, uy = math.cos(angle), math.sin(angle)      # 径向单位向量
+        vx, vy = -uy, ux                               # 切向单位向量
+        corners = []
+        for a, b in ((height / 2, thickness / 2), (height / 2, -thickness / 2),
+                     (-height / 2, -thickness / 2), (-height / 2, thickness / 2)):
+            corners.append((cx + a * ux + b * vx, cy + a * uy + b * vy))
+        edges = [(corners[i], corners[(i + 1) % 4]) for i in range(4)]
+
+        def hits_rect(px, py):
+            inside = True
+            for (x1, y1), (x2, y2) in edges:
+                cross = (x2 - x1) * (py - y1) - (y2 - y1) * (px - x1)
+                # 矩形按顶点顺序，法向同号表示在内侧
+                if cross < -1e-9:
+                    inside = False
+                    break
+            if inside:
+                return True
+            return any(
+                _dist_to_segment(px, py, x1, y1, x2, y2) <= limit
+                for (x1, y1), (x2, y2) in edges
+            )
+
+        pool = list(self.result.master_centers)
+        # 完全照正式程序 slipway.py:1454-1482 / 1594-1650：
+        #   ① 先算与滑道矩形真正干涉的管（管心到矩形任一边 ≤ do/2+clearance）；
+        #   ② 收集这些干涉管的 y 行键（round 6 位，避免浮点漏行）；
+        #   ③ 把该 y 行上的**所有**管孔整行删掉，而不只是几何压到的那几根；
+        #   ④ 再按管程程数做镜像联动。
+        # 之前"只删矩形∩管心的管"是错的：滑道是一整条，它跨过的每一行都装不下管，
+        # 正式程序整行删除。用户 2026-11-22 反馈"删的啥啊，应该整行删"。
+        interfering = [(x, y) for (x, y) in pool if hits_rect(x, y)]
+        if not interfering:
+            return []
+        y_keys = {round(float(y), 6) for (_, y) in interfering}
+        whole_rows = [
+            (x, y) for (x, y) in pool if round(float(y), 6) in y_keys
+        ]
+        # judge_linkage_x / judge_linkage_y：按管程补镜像，与防冲板删管一致
+        return self._linkage_mirror_centers(whole_rows)
+
     def _screw_ring_geometries(self, count: int) -> list[dict]:
         """吊环螺钉不选管：按数量 + 起始方位角沿管板外圆均布。"""
         count = max(1, int(count))
@@ -4004,6 +4081,10 @@ class TubeLayoutPage(QWidget):
             # 3) 不选管的元件：滑道 / 吊环螺钉
             if kind == "slide":
                 for geometry in self._slide_geometries():
+                    # 源程序 slipway.py：滑道压到的换热管孔要删掉（整行 y）。
+                    deleted = self._slide_delete_centers(geometry)
+                    geometry["deleted"] = deleted
+                    self.removed.update(deleted)
                     self.components.append(dict(geometry, kind="slide"))
                     row["placed"] += 1
                 rows.append(row)
@@ -4143,6 +4224,20 @@ class TubeLayoutPage(QWidget):
             if kind == "bypass":
                 centers = self._resolve_item(item, pool)["tubes"]
                 targets = self._linkage_expand(centers, pool) if self._symmetry else centers
+                # 源程序里旁路挡板在折流板缺口侧、滑道在壳体底部，两者不重叠。
+                # 自动选点按 near_shell 会挑到最外圈（含底部滑道位置），这里把落在
+                # 滑道方位扇区内的参照管剔除，避免旁路挡板与滑道画在一起。
+                slide_angles = [math.radians(float(g.get("angle") or 0.0))
+                                for g in self._slide_geometries()]
+                if slide_angles:
+                    def _near_slide(pt):
+                        px, py = float(pt[0]), float(pt[1])
+                        if math.hypot(px, py) < 1e-6:
+                            return False
+                        a = math.atan2(py, px)
+                        return any(abs(math.atan2(math.sin(a - sa), math.cos(a - sa))) < math.radians(18)
+                                   for sa in slide_angles)
+                    targets = [p for p in targets if not _near_slide(p)]
                 widths: list[float] = []
                 for center in targets:
                     geometry = self._bypass_geometry(center, pool)
