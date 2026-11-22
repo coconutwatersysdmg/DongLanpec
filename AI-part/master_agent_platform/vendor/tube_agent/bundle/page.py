@@ -50,7 +50,11 @@ from PyQt5.QtWidgets import (
 )
 
 from . import engine, geometry, impingement
-from .hole_table import HoleDistributionTable
+from .hole_table import (
+    GRAPH_ROW_HIGHLIGHT,
+    TABLE_ROW_HIGHLIGHT,
+    HoleDistributionTable,
+)
 from .items import (
     BLOCK_TUBE_COLOR,
     BYPASS_COLOR,
@@ -372,6 +376,10 @@ class TubeLayoutPage(QWidget):
         self.components: list[dict] = []
         self.selected: set[tuple[float, float]] = set()
         self.selected_components: set[int] = set()
+        # 最后一次选中来自哪里：图形=黄底(graph)，右侧表=蓝底(table)。
+        # 正式程序 highlight_right_table_row(黄) 与 on_row_selection_changed(蓝) 分开处理，
+        # 不能把两个方向的底色混成同一种。
+        self._selection_source = "graph"
         # 对称分布（正式程序 My_Piping.symmetric_checkbox，默认勾选）：
         # 勾选 = 4 象限镜像；不勾 = 只按管程程数做单轴镜像（2 管程左右、4/6 管程上下）
         self._symmetry = True
@@ -379,11 +387,16 @@ class TubeLayoutPage(QWidget):
         self._undo: list[dict] = []
         self._tube_items: dict[tuple[float, float], TubeItem] = {}
         self._ghost_items: dict[tuple[float, float], GhostTubeItem] = {}
+        self._rod_items: dict[tuple[float, float], RodItem] = {}
         self._component_items: dict[int, object] = {}
         self._rows_pos: list[list[tuple[float, float]]] = []
         self._rows_neg: list[list[tuple[float, float]]] = []
         self._cols_right: list[list[tuple[float, float]]] = []
         self._cols_left: list[list[tuple[float, float]]] = []
+        self._rows_pos_all: list[list[tuple[float, float]]] = []
+        self._rows_neg_all: list[list[tuple[float, float]]] = []
+        self._cols_right_all: list[list[tuple[float, float]]] = []
+        self._cols_left_all: list[list[tuple[float, float]]] = []
         self._editors: dict[str, QWidget] = {}
         self._suppress_commit = False
         self.graphics_expanded = False
@@ -1542,6 +1555,7 @@ class TubeLayoutPage(QWidget):
         scene = self.scene
         scene.clear()
         self._tube_items.clear()
+        self._rod_items.clear()
         self._component_items.clear()
         if self.result is None:
             return
@@ -1770,7 +1784,9 @@ class TubeLayoutPage(QWidget):
                     item = BlockTubeItem(center, radius, self)
                 # 普通拉杆和换热管同性质：选中状态记在 self.selected 的坐标里
                 if kind == "rod":
-                    item.apply_selected(tuple(center) in self.selected)
+                    center_key = (float(center[0]), float(center[1]))
+                    item.apply_selected(center_key in self.selected)
+                    self._rod_items[center_key] = item
                 else:
                     item.apply_selected(index in self.selected_components)
                 item.component_index = index
@@ -1850,13 +1866,43 @@ class TubeLayoutPage(QWidget):
         return path
 
     # ------------------------------------------------------ 数量表同步
+    def _all_centers_for_selection(self) -> list[tuple[float, float]]:
+        """表格整行选中/框选的圆心全集：活换热管 + 已删管位 + 普通拉杆。
+
+        正式程序 on_row_selection_changed 用 `global_centers`（满布理论孔）定位整行，
+        所以删掉的管孔位置照样能被表选中；普通拉杆 single click 又和换热管共用
+        `selected_centers`，所以也要一起进来。右侧数量统计仍只用 `current_centers()`。
+        """
+        if self.result is None:
+            return []
+        out: list[tuple[float, float]] = []
+        seen: set[tuple[float, float]] = set()
+        for center in list(self.current_centers()) + list(self.removed_centers()):
+            key = (round(float(center[0]), 6), round(float(center[1]), 6))
+            if key not in seen:
+                seen.add(key)
+                out.append((float(center[0]), float(center[1])))
+        for component in self.components:
+            if component.get("kind") != "rod" or not component.get("center"):
+                continue
+            center = component["center"]
+            key = (round(float(center[0]), 6), round(float(center[1]), 6))
+            if key not in seen:
+                seen.add(key)
+                out.append((float(center[0]), float(center[1])))
+        return out
+
     def _groupings(self) -> None:
         if self.result is None:
             return
         master = self.result.master_centers
         centers = self.current_centers()
+        # 数量表只统计活换热管；选中/高亮另存一份"所有圆心"的分组。
         self._rows_pos, self._rows_neg = geometry.group_centers_by_y(centers, master)
         self._cols_right, self._cols_left = geometry.group_centers_by_x(centers, master)
+        all_centers = self._all_centers_for_selection()
+        self._rows_pos_all, self._rows_neg_all = geometry.group_centers_by_y(all_centers, master)
+        self._cols_right_all, self._cols_left_all = geometry.group_centers_by_x(all_centers, master)
 
     def refresh_hole_table(self) -> None:
         if self.result is None:
@@ -1867,19 +1913,22 @@ class TubeLayoutPage(QWidget):
         else:
             first, second = self._cols_right, self._cols_left
         self.hole_table.set_data(first, second, total=len(self.current_centers()))
-        self.hole_table.set_selected_count(len(self.selected))
+        tube_count = self._selected_tube_count()
+        self.hole_table.set_selected_count(tube_count)
         # 表格重建后把“图形里仍选中的管孔”对应的行重新高亮
         self._sync_table_highlight()
         self.selection_label.setText(self._selection_text())
-        self.selected_count_changed.emit(len(self.selected))
+        self.selected_count_changed.emit(tube_count)
 
     def on_table_rows_selected(self, rows: list[int]) -> None:
         if self.result is None:
             return
+        # 这次是"表 → 图"，表格整行底色保持淡蓝（图 → 表才是淡黄）。
+        self._selection_source = "table"
         if self.hole_table.by_row:
-            first, second = self._rows_pos, self._rows_neg
+            first, second = self._rows_pos_all, self._rows_neg_all
         else:
-            first, second = self._cols_right, self._cols_left
+            first, second = self._cols_right_all, self._cols_left_all
         centers: list[tuple[float, float]] = []
         for row in rows:
             if row < len(first):
@@ -1889,17 +1938,20 @@ class TubeLayoutPage(QWidget):
         self.select_centers(centers)
         if centers:
             self.status_message.emit(
-                f"已选中{_describe_rows(rows)}，共 {len(self.selected)} 个换热管孔"
+                f"已选中{_describe_rows(rows)}，{self._selection_text()}"
             )
         else:
             self.status_message.emit("已取消筛选，恢复显示全部管孔")
 
     def select_centers(self, centers: list[tuple[float, float]], additive: bool = False) -> None:
         if not additive:
-            for center, item in self._tube_items.items():
+            for item in self._tube_items.values():
                 if item.is_selected:
                     item.apply_selected(False)
-            for center, item in self._ghost_items.items():
+            for item in self._ghost_items.values():
+                if item.is_selected:
+                    item.apply_selected(False)
+            for item in self._rod_items.values():
                 if item.is_selected:
                     item.apply_selected(False)
             for index in list(self.selected_components):
@@ -1909,47 +1961,69 @@ class TubeLayoutPage(QWidget):
             self.selected_components.clear()
             self._clear_selection_state()
         for center in centers:
-            if center in self._tube_items:
-                self.selected.add(center)
-                self._tube_items[center].apply_selected(True)
-            elif center in self._ghost_items:
-                self.selected.add(center)
-                self._ghost_items[center].apply_selected(True)
+            key = (float(center[0]), float(center[1]))
+            if key in self._tube_items:
+                self.selected.add(key)
+                self._tube_items[key].apply_selected(True)
+            elif key in self._ghost_items:
+                self.selected.add(key)
+                self._ghost_items[key].apply_selected(True)
+            elif key in self._rod_items:
+                # 普通拉杆与换热管同样进 selected，淡蓝实心（My_Piping.py 967~1038）
+                self.selected.add(key)
+                self._rod_items[key].apply_selected(True)
         self._after_selection_changed()
 
+    def _selected_tube_count(self) -> int:
+        """“选中换热管数”只数当前仍活着的管孔；拉杆/已删管位不算（用户约定）。"""
+        return sum(1 for center in self.selected if center in self._tube_items)
+
     def _selection_text(self) -> str:
-        """底部选中提示：照正式程序，1 个给绝对坐标、2 个给中心距。"""
+        """底部选中提示：先报所有圆心，再分类；1/2 个活管时照正式程序给坐标/中心距。"""
         if not self.selected:
-            return "未选中管孔"
+            return "未选中圆心"
+        tubes = self._selected_tube_count()
+        rods = sum(1 for center in self.selected if center in self._rod_items)
         deleted = sum(1 for center in self.selected if center in self._ghost_items)
-        suffix = f"（含 {deleted} 个已删除管孔）" if deleted else ""
-        if len(self.selected) == 1:
+        parts = []
+        if tubes:
+            parts.append(f"换热管 {tubes}")
+        if rods:
+            parts.append(f"拉杆 {rods}")
+        if deleted:
+            parts.append(f"已删管位 {deleted}")
+        head = f"已选中 {len(self.selected)} 个圆心（{'、'.join(parts)}）"
+        if tubes == 1 and rods == 0 and deleted == 0:
             (x, y), = self.selected
-            return f"已选中 1 个管孔  X {float(x):.1f}  Y {float(y):.1f}{suffix}"
-        if len(self.selected) == 2:
+            return f"已选中 1 个换热管  X {float(x):.1f}  Y {float(y):.1f}"
+        if tubes == 2 and rods == 0 and deleted == 0:
             (x1, y1), (x2, y2) = sorted(self.selected)
             span = math.hypot(float(x2) - float(x1), float(y2) - float(y1))
-            return f"已选中 2 个管孔，中心距 {span:.1f} mm{suffix}"
-        return f"已选中 {len(self.selected)} 个管孔{suffix}"
+            return f"已选中 2 个换热管，中心距 {span:.1f} mm"
+        return head
 
     def _clear_selection_state(self) -> None:
         self.selected.clear()
         self.selected_components.clear()
 
     def _after_selection_changed(self) -> None:
+        tube_count = self._selected_tube_count()
         self._sync_table_highlight()
-        self.hole_table.set_selected_count(len(self.selected))
+        self.hole_table.set_selected_count(tube_count)
         self.selection_label.setText(self._selection_text())
-        self.selected_count_changed.emit(len(self.selected))
+        self.selected_count_changed.emit(tube_count)
 
     def _sync_table_highlight(self) -> None:
         if not self.selected:
-            self.hole_table.highlight_for_selection([])
+            if self._selection_source == "table":
+                self.hole_table.highlight_for_table_selection([])
+            else:
+                self.hole_table.highlight_for_selection([])
             return
         if self.hole_table.by_row:
-            first, second = self._rows_pos, self._rows_neg
+            first, second = self._rows_pos_all, self._rows_neg_all
         else:
-            first, second = self._cols_right, self._cols_left
+            first, second = self._cols_right_all, self._cols_left_all
         rows: list[int] = []
         for index in range(max(len(first), len(second))):
             group = []
@@ -1959,7 +2033,10 @@ class TubeLayoutPage(QWidget):
                 group.extend(second[index])
             if any(center in self.selected for center in group):
                 rows.append(index)
-        self.hole_table.highlight_for_selection(rows)
+        if self._selection_source == "table":
+            self.hole_table.highlight_for_table_selection(rows)
+        else:
+            self.hole_table.highlight_for_selection(rows)
 
     # ------------------------------------------------------ 图形交互
     def item_clicked(self, item, modifiers) -> None:
@@ -1972,8 +2049,8 @@ class TubeLayoutPage(QWidget):
         """
         kind = getattr(item, "item_kind", "")
         if kind in {"tube", "rod"}:
-            center = item.center
-            deleted = center in self._ghost_items
+            self._selection_source = "graph"
+            center = (float(item.center[0]), float(item.center[1]))
             if center in self.selected:
                 self.selected.discard(center)
                 item.apply_selected(False)
@@ -1981,9 +2058,9 @@ class TubeLayoutPage(QWidget):
                 self.selected.add(center)
                 item.apply_selected(True)
             self._after_selection_changed()
-            if deleted:
+            if center in self._ghost_items:
                 self.status_message.emit(
-                    f"已选中 {len(self.selected)} 个已删除管孔（可让我“恢复选中的换热管”）"
+                    f"已选中 {len(self.selected)} 个圆心，{self._selection_text()}"
                 )
             return
         index = getattr(item, "component_index", None)
@@ -2210,15 +2287,19 @@ class TubeLayoutPage(QWidget):
         self.status_message.emit(f"已更新{COMPONENT_LABEL.get(kind, '元件')}参数")
 
     def on_rubber_band(self, rect: QRectF) -> None:
+        # 普通拉杆在正式程序里和换热管共用 selected_centers，所以框选也要带上。
         picked = [
-            center for center in list(self._tube_items) + list(self._ghost_items)
+            center for center in self._all_centers_for_selection()
             if rect.contains(QPointF(center[0], -center[1]))
         ]
         if not picked:
             return
+        self._selection_source = "graph"
         additive = bool(QApplication.keyboardModifiers() & Qt.ControlModifier)
         self.select_centers(picked, additive=additive)
-        self.status_message.emit(f"框选到 {len(picked)} 个换热管孔，共选中 {len(self.selected)} 个")
+        self.status_message.emit(
+            f"框选到 {len(picked)} 个圆心，{self._selection_text()}"
+        )
 
     def clear_selection(self) -> None:
         """右键取消筛选：清掉表格选中行、图形选中与元件选中（正式程序同款）。"""
@@ -2227,6 +2308,9 @@ class TubeLayoutPage(QWidget):
             if item.is_selected:
                 item.apply_selected(False)
         for item in self._ghost_items.values():
+            if item.is_selected:
+                item.apply_selected(False)
+        for item in self._rod_items.values():
             if item.is_selected:
                 item.apply_selected(False)
         self._clear_selection_state()

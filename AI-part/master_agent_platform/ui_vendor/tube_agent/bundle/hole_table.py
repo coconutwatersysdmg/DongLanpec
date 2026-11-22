@@ -3,7 +3,9 @@
 - 表头按“按行/按列”切换：`至水平中心线行号 / 管孔数量(上) / 管孔数量(下)`
   或 `至竖直中心线列号 / 管孔数量(左) / 管孔数量(右)`。
 - 点击任意单元格 → 整行选中（正式程序 on_row_selection_changed 的整行选中）。
-- 选中行背景使用正式程序相同的淡蓝色 RGB(173,216,230)。
+- 两个方向的底色不同，照搬正式程序：
+  · 图形里选中管孔 → highlight_right_table_row：淡黄 QColor(255,225,120)；
+  · 右侧表格里选中整行 → on_row_selection_changed：淡蓝 QBrush(173,216,230)。
 - 表格只读，行高亮与图形选中双向同步。
 """
 from __future__ import annotations
@@ -22,7 +24,10 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
-ROW_HIGHLIGHT = QColor(173, 216, 230)  # 正式程序整行高亮色
+# 正式程序两处高亮色：图选表=淡黄(highlight_right_table_row:2570)，
+# 表选图=淡蓝(on_row_selection_changed:24394)。不要合并成同一个色。
+TABLE_ROW_HIGHLIGHT = QColor(173, 216, 230)
+GRAPH_ROW_HIGHLIGHT = QColor(255, 225, 120)
 HEADERS_BY_ROW = ("至水平中心线行号", "管孔数量(上)", "管孔数量(下)")
 HEADERS_BY_COL = ("至竖直中心线列号", "管孔数量(左)", "管孔数量(右)")
 
@@ -170,25 +175,30 @@ class HoleDistributionTable(QWidget):
             return
         indexes = self.table.selectedIndexes()
         selected_rows = sorted({index.row() for index in indexes})
-        self._paint_rows(selected_rows)
+        self._paint_rows(selected_rows, TABLE_ROW_HIGHLIGHT)
         # 空列表也要发：Ctrl 取消最后一行时图形中的选中要一起清掉
         self.rows_selected.emit(selected_rows)
 
-    def _paint_rows(self, rows: list[int]) -> None:
+    def _paint_rows(self, rows: list[int], color: QColor) -> None:
         self._updating = True
         try:
+            brush = QBrush(color)
             for row in range(self.table.rowCount()):
-                brush = QBrush(ROW_HIGHLIGHT) if row in rows else QBrush(Qt.NoBrush)
+                row_brush = brush if row in rows else QBrush(Qt.NoBrush)
                 for col in range(self.table.columnCount()):
                     item = self.table.item(row, col)
                     if item is not None:
-                        item.setBackground(brush)
+                        item.setBackground(row_brush)
         finally:
             self._updating = False
 
     def highlight_for_selection(self, highlighted_rows: list[int]) -> None:
-        """图形选中变化 → 表格高亮对应行（不改变表格的选中行，避免来回触发）。"""
-        self._paint_rows(highlighted_rows)
+        """图形选中变化 → 表格高亮对应行：淡黄（正式程序 highlight_right_table_row）。"""
+        self._paint_rows(highlighted_rows, GRAPH_ROW_HIGHLIGHT)
+
+    def highlight_for_table_selection(self, rows: list[int]) -> None:
+        """表格自身选中行 → 淡蓝（正式程序 on_row_selection_changed）。"""
+        self._paint_rows(rows, TABLE_ROW_HIGHLIGHT)
 
     def visible_row_numbers(self) -> list[int]:
         return list(range(self.table.rowCount()))
