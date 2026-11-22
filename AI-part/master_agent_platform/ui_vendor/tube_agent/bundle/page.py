@@ -415,6 +415,95 @@ class TubeLayoutPage(QWidget):
         except (TypeError, ValueError):
             return 0
 
+    def _symmetric_trim_to_target(self, target: int) -> int:
+        """把换热管数对称地调到 target，返回实际增删的根数。
+
+        规则（GB/T 151 + 正式程序 judge_linkage_x/y）：
+        · 2 管程：镜像轴 = 水平中心线，管孔按 (x, -y) 成对；
+        · 4/6 管程：镜像轴 = 竖直中心线，管孔按 (-x, y) 成对；
+        · 删管：按到圆心的距离**从大到小**成对删（先删最外圈，保留中间行）；
+        · 补管：按距离从小到大成对补（先补最内圈）；
+        · 轴线上（y≈0 或 x≈0）自己镜像自己的管孔，作为单点最后处理，
+          保证奇偶差额也能精确到位。
+        """
+        if self.result is None:
+            return 0
+        passes = self._param_text("管程程数")
+        axis = "y" if passes == "2" else "x" if passes in {"4", "6"} else None
+        master = [tuple(c) for c in self.result.master_centers]
+        alive = {(round(x, 6), round(y, 6)) for x, y in self.current_centers()}
+        occupied = {
+            (round(float(c["center"][0]), 6), round(float(c["center"][1]), 6))
+            for c in self.components if c.get("center")
+        }
+
+        def mirror(c):
+            x, y = c
+            return (x, -y) if axis == "y" else (-x, y)
+
+        # 按镜像把管孔配成若干"组"：{代表: [该组当前在/不在的点]}
+        key_of = {}
+        for c in master:
+            k = (round(c[0], 6), round(c[1], 6))
+            mk = (round(mirror(c)[0], 6), round(mirror(c)[1], 6))
+            # 用有序对做组键，保证 c 与其镜像落到同一组
+            key_of[k] = min(k, mk)
+        groups: dict[tuple, list[tuple]] = {}
+        for c in master:
+            k = (round(c[0], 6), round(c[1], 6))
+            groups.setdefault(key_of[k], []).append(c)
+
+        def radius(c):
+            return math.hypot(c[0], c[1])
+
+        current = len(alive)
+        delta = target - current
+        if delta == 0:
+            return 0
+
+        # 每组当前有几个活孔（0/1/2），按半径从外到内（删）或从内到外（补）排序
+        def group_alive(g):
+            return sum(1 for c in g if (round(c[0], 6), round(c[1], 6)) in alive)
+        ordered = sorted(groups.values(), key=lambda g: max(radius(c) for c in g),
+                         reverse=(delta < 0))
+
+        changed = 0
+        if delta < 0:  # 删管：成对从外缘删
+            need = -delta
+            for g in ordered:
+                if need <= 0:
+                    break
+                for c in sorted(g, key=radius, reverse=True):
+                    if need <= 0:
+                        break
+                    k = (round(c[0], 6), round(c[1], 6))
+                    if k in alive and k not in occupied:
+                        self.removed.add(c)
+                        alive.discard(k)
+                        need -= 1
+                        changed += 1
+        else:  # 补管：成对从内向外恢复
+            need = delta
+            for g in ordered:
+                if need <= 0:
+                    break
+                for c in sorted(g, key=radius):
+                    if need <= 0:
+                        break
+                    k = (round(c[0], 6), round(c[1], 6))
+                    if k not in alive and k in self.removed and k not in occupied:
+                        for existing in [p for p in self.removed
+                                         if (round(p[0], 6), round(p[1], 6)) == k]:
+                            self.removed.discard(existing)
+                        alive.add(k)
+                        need -= 1
+                        changed += 1
+
+        if changed:
+            self.rebuild_scene()
+            self.refresh_hole_table()
+        return changed
+
     def auto_apply_plan(self, force: bool = False) -> dict:
         """按 GB/T 151 规则自动布置元件 + 删管到目标数，静默落地（不弹确认框）。
 
@@ -457,18 +546,15 @@ class TubeLayoutPage(QWidget):
         # 不会再误删元件所在孔，也不会让元件"无管可删"。
         actual = len(self.current_centers())
         if actual != target:
-            delta = target - actual  # >0 需补管，<0 需再删
-            fix_op = {
-                "op": "restore" if delta > 0 else "delete",
-                "region": "outline", "count": abs(delta), "rows": 1,
-            }
-            parsed, _ = parse_hole_ops([fix_op])
-            if parsed:
-                self.apply_hole_ops(parsed)
+            # 对称删/补：按管程镜像成对取管，从 0°/180° 外缘一圈一圈删（保留中间行），
+            # 而不是 region=outline 的"每行最左最右"——后者会只删两端、把中间行掏空，
+            # 得到上[10,9,1,2..]、下[10,9,0,0..]这种上下不对称的怪表（用户反馈）。
+            changed = self._symmetric_trim_to_target(target)
             self._auto_plan_basis += (
                 f"\n【数量校正】元件落地后 {actual} 根（含元件干涉删管），目标 {target} 根，"
-                f"{'补' if delta > 0 else '再删'} {abs(delta)} 根后重新核对；"
-                f"删管从 0°/180° 外缘对称逐行取。"
+                f"{'补' if target > actual else '再删'} {abs(target - actual)} 根"
+                f"（实际调整 {changed} 根）：按管程镜像对称、从 0°/180° 外缘逐对"
+                f"{'补回' if target > actual else '删除'}，保持上下/左右对称。"
             )
 
         final = len(self.current_centers())

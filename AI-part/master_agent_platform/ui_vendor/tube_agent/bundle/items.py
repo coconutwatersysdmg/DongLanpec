@@ -121,19 +121,25 @@ class TubeItem(_Selectable, QGraphicsEllipseItem):
 
 
 class GhostTubeItem(TubeItem):
-    """已被删除的换热管孔：照正式程序 delete_huanreguan / build_huanreguan 恢复时
-    画的深蓝空心圆（QColor(0,0,80), NoBrush，My_Piping.py:33877 / 22383），
-    而不是红色虚线圆。仍可点选恢复，选中时同普通换热管 = 淡蓝实心圆、无金边。
+    """已被删除的换热管孔：正式程序在删管位置画**红色虚线空心圆**
+    （My_Piping.py:32017 壳程 highlight：QColor(255,0,0), DashLine, width=2）。
+    必须和普通换热管（深蓝实线空心圆）明显区分，否则删了管看图也看不出来
+    （用户 2026-11-22 反馈"滑道/防冲板没删管，或删了没画出来"的根因）。
+    仍可点选恢复，选中时同管类 = 淡蓝实心圆、无金边。
     """
 
     item_kind = "tube"
+    DELETED_PEN_COLOR = QColor(255, 0, 0)   # 源程序壳程删管 highlight 红色
 
     def __init__(self, center, radius, controller=None):
         super().__init__(center, radius, controller)
-        pen = QPen(TUBE_PEN_COLOR)   # 深蓝空心，和普通换热管孔一致
-        pen.setWidthF(1.0)
+        pen = QPen(self.DELETED_PEN_COLOR)
+        pen.setWidthF(2.0)
+        pen.setStyle(Qt.DashLine)          # 虚线空心圆，和正常管孔一眼可分
         self.base_pen = pen
-        self.setZValue(-0.5)
+        # 必须盖在圆心连线(z=0.5)之上，否则蓝色×穿过红虚线圆，删管标记被淹没。
+        # 正常换热管 z=0；删管标记 z=1 保证红虚线清晰可见。
+        self.setZValue(1.0)
         self.setToolTip(
             f"已删除的换热管孔 ({self.center[0]:.2f}, {self.center[1]:.2f})，点一下可选中恢复"
         )
