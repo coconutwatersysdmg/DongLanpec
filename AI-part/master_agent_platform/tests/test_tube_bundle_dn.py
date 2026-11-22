@@ -135,7 +135,7 @@ class TubeBundleDnTests(unittest.TestCase):
         finally:
             page.close()
 
-    def test_table_combos_remain_compact_after_pipe_button_click(self):
+    def test_table_combos_follow_source_row_height_after_pipe_button_click(self):
         with patch("bundle.page.engine.compute", side_effect=LayoutError("test")):
             page = TubeLayoutPage({"公称直径 DN": {"value": "900"}}, "AEU")
             try:
@@ -155,9 +155,18 @@ class TubeBundleDnTests(unittest.TestCase):
                     )
                     if cell.isEmpty():
                         continue
-                    self.assertTrue(cell.contains(editor.geometry()), name)
+                    # visualRect 去掉了表格 1px 边框，源程序按 rowHeight-4 给高度，
+                    # 底部可能比 visualRect 多 1px；这里放宽 1px 容差。
+                    self.assertTrue(
+                        cell.adjusted(-1, -1, 1, 1).contains(editor.geometry()), name
+                    )
+                    # 正式程序 `_update_tube_pass_form_combo_icon_size`：
+                    # 下拉框高度 = 行高 - 4，文字在整行里垂直居中。旧断言
+                    # “≤ 行高 70%”会把文字挤到单元格底部裁掉，这里按源程序修。
+                    expected = max(18, page.param_table.rowHeight(row) - 4)
                     self.assertLessEqual(
-                        editor.height(), round(cell.height() * 0.7), name
+                        abs(editor.height() - expected), 1,
+                        f"{name}: editor={editor.height()}, minmax=({editor.minimumHeight()},{editor.maximumHeight()}), row={page.param_table.rowHeight(row)}, expected={expected}",
                     )
             finally:
                 page.close()

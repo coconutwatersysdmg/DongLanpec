@@ -910,6 +910,29 @@ class TubeLayoutPage(QWidget):
         table.setColumnWidth(1, col1_width)
         table.setColumnWidth(2, col2_width)
         table.setColumnWidth(3, unit_width)
+        self._apply_uniform_param_table_row_heights()
+
+    def _apply_uniform_param_table_row_heights(self) -> None:
+        """照原程序布管后的 `_apply_uniform_param_table_row_heights` 统一行高。
+
+        原程序 `_update_tube_pass_form_combo_icon_size` 把表内下拉框高度设成
+        `max(28, 行高-4)`；平台缩放后行高可能小于 32，这里按 `行高-4`（下限 18）
+        收口，保证下拉文字垂直居中、不被单元格底部裁掉。
+        """
+        table = getattr(self, "param_table", None)
+        if table is None:
+            return
+        row_h = int(table.verticalHeader().defaultSectionSize() or PARAM_ROW_HEIGHT)
+        if row_h <= 0:
+            row_h = PARAM_ROW_HEIGHT
+        combo_h = max(18, row_h - 4)
+        for row in range(table.rowCount()):
+            table.setRowHeight(row, row_h)
+            editor = table.cellWidget(row, 2)
+            if isinstance(editor, QComboBox):
+                editor.setFixedHeight(combo_h)
+                editor.update()
+
 
     def _place_symmetry_check(self) -> None:
         """勾选框贴在图形区右上角（正式程序 checkbox_container 同款位置）。"""
@@ -1427,6 +1450,9 @@ class TubeLayoutPage(QWidget):
         # 撤销/回放时用 keep_components=True 把快照里的元件保住。
         had_components = len(self.components)
         self._push_undo()
+        # QComboBox 在表格重新布局后会按 sizeHint 把 minimumHeight 收回去，
+        # 事件循环空转一轮再按源程序口径钉一次高度（正式程序在布管末尾也会重刷）。
+        QTimer.singleShot(0, self._apply_uniform_param_table_row_heights)
         if not keep_components:
             self.components.clear()
             self._clear_selection_state()
@@ -1462,6 +1488,8 @@ class TubeLayoutPage(QWidget):
         self.issues = engine.check_geometry(self.parameters, result)
         self.rebuild_scene()
         self.refresh_hole_table()
+        # 正式程序布管完成时会重新统一参数表行高/下拉高度，避免重绘后文字贴底。
+        self._apply_uniform_param_table_row_heights()
         self.show_issues()
         if result.note:
             self.status_message.emit("布管数据已校正：" + result.note)
@@ -2799,63 +2827,135 @@ class TubeLayoutPage(QWidget):
         self.refresh_hole_table()
         self.status_message.emit(f"已恢复 {restored} 个换热管孔")
 
-    def delete_selected(self) -> None:
-        """删除选中：先按“对称分布”把选点展开，再删拉杆/挡管图元与换热管。
+    @staticmethod
+    def _component_match_keys(component: dict) -> set[tuple[float, float]]:
+        """元件用于“镜像匹配”的坐标：中心、参照管锚点、参照管对。
 
-        照抄正式程序 `on_del_click`：勾选了对称分布就按 4 象限展开（未勾选时按
-        管程程数做单轴镜像），拉杆/挡管这些占孔元件在正式程序里也是先删图元、
-        再把对应的换热管删掉（component/lagan.delete_selected_lagans 末尾
-        `delete_huanreguan(coords_to_remove)`）。
+        正式程序各类元件删除函数（lagan.py / center_dangban.py / side_dangban.py /
+        slipway.py）都是按创建时的参照点做对称扩展再找图元，平台也照这个口径。
         """
+        keys: set[tuple[float, float]] = set()
+        for name in ("center", "anchor"):
+            point = component.get(name)
+            if point:
+                keys.add((round(float(point[0]), 6), round(float(point[1]), 6)))
+        for name in ("pair", "points"):
+            for point in component.get(name) or ():
+                if point and len(point) >= 2:
+                    keys.add((round(float(point[0]), 6), round(float(point[1]), 6)))
+        return keys
+
+    def _expand_absolute_centers(self, centers) -> list[tuple[float, float]]:
+        """把绝对坐标按“对称分布”展开，不做管孔存在性过滤（元件中心不一定在管孔上）。
+
+        与正式程序 `_abs_mirror_targets`（component/lagan.py:243）同规则：
+        对称开 → 四象限；关 + AEU/BEU/AKU/BKU → 2 管程关于水平中心线、4/6 关于竖直；
+        其它 → 只删自身。
+        """
+        if self._symmetry:
+            variants = ((1, 1), (-1, 1), (1, -1), (-1, -1))
+        elif self.product_type in {"AEU", "BEU", "AKU", "BKU"}:
+            passes = str(self._param_text("管程程数") or "").strip()
+            if passes == "2":
+                variants = ((1, 1), (1, -1))
+            elif passes in {"4", "6"}:
+                variants = ((1, 1), (-1, 1))
+            else:
+                variants = ((1, 1),)
+        else:
+            variants = ((1, 1),)
+        out: list[tuple[float, float]] = []
+        seen: set[tuple[float, float]] = set()
+        for center in centers:
+            x, y = float(center[0]), float(center[1])
+            for sx, sy in variants:
+                key = (round(x * sx, 6), round(y * sy, 6))
+                if key not in seen:
+                    seen.add(key)
+                    out.append((float(x * sx), float(y * sy)))
+        return out
+
+    def delete_selected(self) -> None:
+        """删除选中：管孔/拉杆坐标和元件都先按“对称分布”展开再删。
+
+        照抄正式程序 `on_del_click` + 各元件 `delete_selected_*`：对称开时四象限
+        镜像，关时按 AEU/BEU/AKU/BKU 管程做单轴镜像。占孔元件（拉杆/挡管）删除
+        后对应的管孔保持删除；元件自己压掉的管孔则随元件删除恢复。
+        """
+        if not self.selected and not self.selected_components:
+            self.status_message.emit("请先选择要删除的管孔或元件")
+            return
+
+        self._push_undo()
+        hole_targets: set[tuple[float, float]] = set()
         if self.selected:
-            self._push_undo()
-            targets = self._linkage_expand(sorted(self.selected))
-            target_set = set(targets)
-            kept: list[dict] = []
-            removed_components = 0
-            for component in self.components:
-                center = component.get("center")
-                if (
-                    component.get("kind") in {"rod", "free_rod", "block_tube"}
-                    and center
-                    and (float(center[0]), float(center[1])) in target_set
-                ):
-                    removed_components += 1
-                    continue
-                kept.append(component)
-            self.components = kept
-            # 元件删掉后它们原来的孔位又被放出来了：这些点按“删孔”处理
-            self.removed |= target_set
-            self._clear_selection_state()
-            self.selected_components.clear()
-            self.rebuild_scene()
-            self.refresh_hole_table()
-            extra = f"（含 {removed_components} 个拉杆/挡管图元）" if removed_components else ""
-            self.status_message.emit(
-                f"已删除 {len(target_set)} 个管孔{extra}，管孔数量已刷新"
-            )
-            return
+            hole_targets = {
+                (round(float(c[0]), 6), round(float(c[1]), 6))
+                for c in self._linkage_expand(sorted(self.selected))
+            }
+
+        component_targets: set[tuple[float, float]] = set()
         if self.selected_components:
-            self._push_undo()
-            kept = []
-            labels = []
-            for index, component in enumerate(self.components):
-                if index in self.selected_components:
-                    if (
-                        component["kind"] in {"rod", "free_rod", "block_tube"}
-                        and component.get("center")
-                    ):
-                        self.removed.discard(tuple(component["center"]))
-                    labels.append(COMPONENT_LABEL.get(component["kind"], "元件"))
-                    continue
+            seeds: set[tuple[float, float]] = set()
+            for index in sorted(self.selected_components):
+                if 0 <= index < len(self.components):
+                    seeds |= self._component_match_keys(self.components[index])
+            component_targets = {
+                (round(c[0], 6), round(c[1], 6))
+                for c in self._expand_absolute_centers(seeds)
+            }
+
+        hole_kinds = {"rod", "free_rod", "block_tube"}
+        kept: list[dict] = []
+        removed_labels: list[str] = []
+        restore: set[tuple[float, float]] = set()
+        for index, component in enumerate(self.components):
+            keys = self._component_match_keys(component)
+            by_hole = (
+                index in self.selected_components
+                or any(
+                    component.get("kind") in hole_kinds and key in hole_targets
+                    for key in keys
+                )
+            )
+            by_symmetry = bool(component_targets & keys)
+            if not (by_hole or by_symmetry):
                 kept.append(component)
-            self.components = kept
-            self.selected_components.clear()
-            self.rebuild_scene()
-            self.refresh_hole_table()
-            self.status_message.emit(f"已删除 {len(labels)} 个元件（{'、'.join(labels)}）")
-            return
-        self.status_message.emit("请先选择要删除的管孔或元件")
+                continue
+            removed_labels.append(COMPONENT_LABEL.get(component["kind"], "元件"))
+            # 占孔元件删除后孔位仍按“删管”处理（lagan.py:432 delete_huanreguan）
+            if component.get("kind") in hole_kinds:
+                hole_targets |= keys & {
+                    (round(float(c[0]), 6), round(float(c[1]), 6))
+                    for c in self.result.master_centers
+                } if self.result else set()
+            # 板/滑道被删时，它压掉的管孔随元件恢复
+            for center in component.get("deleted") or ():
+                restore |= {
+                    (round(c[0], 6), round(c[1], 6))
+                    for c in self._expand_absolute_centers([center])
+                }
+        self.components = kept
+        self.removed |= hole_targets
+        # 还有别的元件压着同一管孔时不能恢复
+        still_covered: set[tuple[float, float]] = set()
+        for component in kept:
+            for center in component.get("deleted") or ():
+                still_covered |= {
+                    (round(c[0], 6), round(c[1], 6))
+                    for c in self._expand_absolute_centers([center])
+                }
+        self.removed -= (restore - hole_targets) - still_covered
+        self._clear_selection_state()
+        self.selected_components.clear()
+        self.rebuild_scene()
+        self.refresh_hole_table()
+        bits = []
+        if hole_targets:
+            bits.append(f"已删除 {len(hole_targets)} 个管孔")
+        if removed_labels:
+            bits.append(f"{len(removed_labels)} 个元件（{'、'.join(removed_labels)}）")
+        self.status_message.emit("、".join(bits) + "，管孔数量已刷新" if bits else "没有需要删除的对象")
 
     def toggle_fullscreen(self) -> None:
         """请求主窗口放大整个布管预览窗格，而非进入系统全屏。"""

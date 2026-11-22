@@ -319,10 +319,20 @@ def scale_legacy_page(root, scale):
             if not in_table:
                 widget.setMinimumWidth(max(90, widget.fontMetrics().horizontalAdvance('000000')+24))
             if widget.maximumHeight() == widget.minimumHeight(): widget.setMaximumHeight(16777215)
-            minimum_height = 26 if in_table else 32
-            widget.setMinimumHeight(round(minimum_height*scale))
-            if in_table:
-                widget.setMaximumHeight(max(22, round(28*scale)))
+            table, row = _table_editor_location(widget)
+            if table is not None and _is_param_table(table):
+                # 正式程序 `_update_tube_pass_form_combo_icon_size`：
+                # 参数表下拉框高度 = 行高 - 4，文字在行内垂直居中。
+                # 之前按 max(28*scale) 压住高度，42*scale 的行高里就留出一大截空白，
+                # 点「布管」重绘后表现为下拉框文字贴底/被裁切（用户截图）。
+                row_h = table.rowHeight(row) if row >= 0 else 0
+                combo_h = max(18, row_h - 4)
+                widget.setFixedHeight(combo_h)
+            else:
+                minimum_height = 26 if in_table else 32
+                widget.setMinimumHeight(round(minimum_height*scale))
+                if in_table:
+                    widget.setMaximumHeight(max(22, round(28*scale)))
         elif isinstance(widget, QTableWidget):
             widget.verticalHeader().setDefaultSectionSize(round(42*scale))
             for row in range(widget.rowCount()): widget.setRowHeight(row, round(42*scale))
@@ -354,6 +364,28 @@ def _is_table_editor(widget):
             return True
         parent = parent.parentWidget()
     return False
+
+
+def _table_editor_location(widget):
+    """返回控件所在的 (QTableWidget, row)；不在表里则 (None, -1)。"""
+    parent = widget.parentWidget()
+    while parent is not None:
+        if isinstance(parent, QTableWidget):
+            for row in range(parent.rowCount()):
+                for column in range(parent.columnCount()):
+                    if parent.cellWidget(row, column) is widget:
+                        return parent, row
+            return parent, -1
+        parent = parent.parentWidget()
+    return None, -1
+
+
+def _is_param_table(table):
+    """只给左侧 4 列参数表用源程序的行高-4 规则，别影响别的对话框表。"""
+    if table is None or table.columnCount() < 2:
+        return False
+    header = table.horizontalHeaderItem(1)
+    return header is not None and header.text() == '参数名称'
 
 
 class FlowLayout(QLayout):
