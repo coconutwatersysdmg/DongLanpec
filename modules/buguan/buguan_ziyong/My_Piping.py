@@ -32693,36 +32693,55 @@ class TubeLayoutEditor(QMainWindow):
         # 一打开弹窗即根据当前数据计算“折流板切口与中心线间距a”并显示
         if show_single_bow_params:
             try:
-                di_str = get_param_value("壳体内直径 Dis")
                 od_str = get_param_value("折流/支持板外径")
                 rate_str = get_param_value("折流板要求切口率")
-                di = float(di_str) if di_str else None
                 baffle_diameter = float(od_str) if od_str else None
                 cut_rate = float(rate_str) if rate_str else None
                 if (
-                    di is not None
-                    and di > 0
-                    and baffle_diameter is not None
+                    baffle_diameter is not None
                     and baffle_diameter > 0
                     and cut_rate is not None
                     and 0 <= cut_rate <= 50
                 ):
                     baffle_radius = baffle_diameter / 2.0
-                    cut_size = (cut_rate / 100.0) * di
+                    # 与弹窗联动、主表联动保持同一公式：切口尺寸按折流/支持板外径计算。
+                    # 此处原先用壳体内直径 Dis 做基数，与其余路径不一致，导致首次打开算错。
+                    cut_size = (cut_rate / 100.0) * baffle_diameter
                     new_spacing = baffle_radius - cut_size
                     if new_spacing < 0:
                         new_spacing = 0.0
                     elif new_spacing > baffle_radius:
                         new_spacing = baffle_radius
-                    # 如果主参数表里已经有用户设置的 a，则不覆盖，避免出现 405 -> 404.9 这类小数重算偏移
+
                     current_a_str = get_param_value("折流板切口与中心线间距a")
+                    current_a = None
+                    if current_a_str:
+                        try:
+                            current_a = float(current_a_str)
+                        except (TypeError, ValueError):
+                            current_a = None
+
+                    # 主表已有 a 时是否沿用旧值：
+                    # 1) 用户手工输入的整数 a（如 405）必须保留，否则重算会显示成 404.9；
+                    #    写回主表时这类值不会同步回写切口率，可能与当前理论值差得较远，
+                    #    因此用“整数值”识别并保护。
+                    # 2) 与理论值在精度容差内一致时也保留，避免 0.1 的小数抖动。
+                    # 3) 其余情况（如外径已改但 a 仍是旧值）按当前外径/切口率重算。
+                    tolerance = max(0.5, baffle_diameter * 0.0005 + 0.1)
+                    keep_existing = (
+                        current_a is not None
+                        and (
+                            current_a.is_integer()
+                            or abs(current_a - new_spacing) <= tolerance
+                        )
+                    )
+
                     for r in range(table.rowCount()):
                         name_item = table.item(r, 0)
                         if name_item and name_item.text().strip() == "折流板切口与中心线间距a":
                             value_item = table.item(r, 1)
-                            if value_item:
-                                if not current_a_str:
-                                    value_item.setText(f"{new_spacing:.1f}")
+                            if value_item and not keep_existing:
+                                value_item.setText(f"{new_spacing:.1f}")
                             break
             except Exception as e:
                 print(f"[show_baffle_info] 打开时计算折流板切口与中心线间距a失败: {e}")
